@@ -14,7 +14,7 @@ pre-commit:
       run: npx prettier --check {staged_files}
     ts-lint:
       glob: "*.{ts,tsx}"
-      run: test -f package.json && npx eslint {staged_files} || true
+      run: test -f package.json && npx eslint {staged_files}
     no-secrets:
       run: |
         STAGED=$(git diff --cached --name-only | grep -v '^docs/')

@@ -7,6 +7,11 @@ COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 PATTERNS=(
   "rm -rf /"
   "rm -rf ~"
+  "rm -rf *"
+  "rm -rf ."
+  "rm -rf src"
+  "rm -rf node_modules"
+  "rm -rf target"
   "DROP DATABASE"
   "DROP TABLE"
   "TRUNCATE"
