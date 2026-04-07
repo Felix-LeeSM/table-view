@@ -12,7 +12,9 @@ PATTERNS=(
   "TRUNCATE"
   "git push --force"
   "git reset --hard"
-  ":(){:|:&};:"
+  "dd if="
+  "mkfs"
+  "> /dev/sda"
 )
 
 for pattern in "${PATTERNS[@]}"; do

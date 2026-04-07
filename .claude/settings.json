@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Edit(*.env*)|Write(*.env*)",
+            "if": "Edit(*.env)|Edit(*.env.*)|Write(*.env)|Write(*.env.*)",
             "command": "echo 'BLOCKED: Editing .env files is not allowed. Use .env.local for local overrides.' >&2 && exit 1"
           },
           {

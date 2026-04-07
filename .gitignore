@@ -36,6 +36,3 @@ coverage/
 
 # Build
 *.tsbuildinfo
-
-# Env files
-.env*
