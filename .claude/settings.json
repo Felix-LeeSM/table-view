@@ -1,0 +1,60 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(*.env*)|Write(*.env*)",
+            "command": "echo 'BLOCKED: Editing .env files is not allowed. Use .env.local for local overrides.' >&2 && exit 1"
+          },
+          {
+            "type": "command",
+            "if": "Edit(*.claude/settings.local.json)|Write(*.claude/settings.local.json)",
+            "command": "echo 'BLOCKED: Editing local settings is not allowed.' >&2 && exit 1"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-bash.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(*.rs)|Write(*.rs)",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\"/src-tauri && cargo fmt 2>/dev/null || true",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "if": "Edit(*.ts)|Edit(*.tsx)|Write(*.ts)|Write(*.tsx)",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && npx prettier --write $(echo \"$TOOL_INPUT\" | jq -r '.file_path' | sed \"s|^$CLAUDE_PROJECT_DIR/||\") 2>/dev/null || true",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "osascript -e 'display notification \"View Table 작업 완료\" with title \"Claude Code\"' 2>/dev/null || true",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

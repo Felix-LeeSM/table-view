@@ -1,0 +1,41 @@
+# Rust
+target/
+**/*.rs.bk
+*.pdb
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Tauri
+src-tauri/target/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code (local-only)
+.claude/settings.local.json
+.claude/org.settings.local.json
+
+# Test
+coverage/
+
+# Build
+*.tsbuildinfo
+
+# Env files
+.env*

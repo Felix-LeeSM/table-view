@@ -1,0 +1,49 @@
+min_version: 1.7.0
+
+pre-commit:
+  parallel: true
+  commands:
+    rust-format:
+      glob: "*.rs"
+      run: cd src-tauri && cargo fmt --check
+    rust-clippy:
+      glob: "*.rs"
+      run: cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
+    ts-format:
+      glob: "*.{ts,tsx}"
+      run: npx prettier --check {staged_files}
+    ts-lint:
+      glob: "*.{ts,tsx}"
+      run: npx eslint {staged_files}
+    no-secrets:
+      run: |
+        STAGED=$(git diff --cached --name-only | grep -v '^docs/')
+        if [ -n "$STAGED" ] && echo "$STAGED" | xargs grep -lE '(password|secret|api_key|token)\s*=\s*["\x27][^"\x27]{8,}' 2>/dev/null; then
+          echo "WARNING: Possible hardcoded secrets detected in staged files"
+          exit 1
+        fi
+
+pre-push:
+  commands:
+    rust-test:
+      tags: test rust
+      run: cd src-tauri && cargo test --all
+    ts-test:
+      tags: test frontend
+      run: npm run test -- --run
+    tauri-check:
+      tags: build
+      run: cd src-tauri && cargo check
+
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        MSG=$(cat {1})
+        if ! echo "$MSG" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .{1,100}"; then
+          echo "ERROR: Conventional Commits 형식이어야 합니다:"
+          echo "  type(scope): description"
+          echo "  Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          echo "  Example: feat(connection): add connection test button"
+          exit 1
+        fi
