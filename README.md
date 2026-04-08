@@ -70,13 +70,16 @@ postgresql://postgres:postgres@localhost:5432/viewtable_test
 pnpm tauri dev
 ```
 
+개발 실행이 뜨면 사이드바에서 연결을 만들고, 스키마를 불러오고, 테이블 데이터를 탭으로 열어볼 수 있습니다.
+
 ## 빌드 상태
 
 2026년 4월 8일 기준 확인 상태:
 
 - `pnpm build`는 정상 동작합니다
 - `pnpm tauri build --debug`는 macOS용 `.app` 번들까지 생성합니다
-- 생성된 앱 경로: `src-tauri/target/debug/bundle/macos/View Table.app`
+- 확인 경로: `src-tauri/target/debug/bundle/macos/View Table.app`
+- 생성된 `.app` 번들을 기준으로 로컬 실행 확인을 진행할 수 있습니다
 - 현재 DMG 패키징 단계는 `bundle_dmg.sh`에서 실패하고 있어, 배포 패키지 흐름은 아직 정리되지 않았습니다
 
 즉, 지금 기준으로는 `pnpm tauri dev`로 실행하는 개발 흐름은 가능하고, macOS에서는 debug `.app` 번들도 생성되지만, 최종 설치 패키지 배포 상태는 아닙니다.
@@ -91,8 +94,11 @@ pnpm lint
 pnpm format
 pnpm tauri dev
 pnpm tauri build
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
+cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration
 ```
+
+`schema_integration`은 로컬 PostgreSQL(`localhost:5432`, `viewtable_test`)이 실행 중이어야 통과합니다.
 
 ## 저장과 보안
 

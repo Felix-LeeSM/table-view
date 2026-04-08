@@ -135,24 +135,24 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F2.3: 테이블 구조 (Columns)
 - **Done when:**
-  - [ ] "Structure" 탭에서 컬럼 목록 표시: Name, Type, Nullable, Default, Comment
-  - [ ] Primary Key 컬럼에 키 아이콘 표시
-  - [ ] Foreign Key 컬럼에 FK 아이콘 및 참조 테이블 정보 표시
+  - [x] "Structure" 탭에서 컬럼 목록 표시: Name, Type, Nullable, Default, Comment
+  - [x] Primary Key 컬럼에 키 아이콘 표시
+  - [x] Foreign Key 컬럼에 FK 아이콘 및 참조 테이블 정보 표시
   - [ ] 컬럼 추가/수정/삭제 가능 (ALTER TABLE 실행)
   - [ ] 변경 사항 preview 후 실행 (Code Review)
 
 #### F2.4: 인덱스 뷰
 - **Done when:**
-  - [ ] 테이블 Structure 탭에 Indexes 서브탭 존재
-  - [ ] 인덱스 목록: Name, Columns, Type (B-tree, Hash, etc.), Unique
+  - [x] 테이블 Structure 탭에 Indexes 서브탭 존재
+  - [x] 인덱스 목록: Name, Columns, Type (B-tree, Hash, etc.), Unique
   - [ ] 인덱스 생성/삭제 가능
   - [ ] CREATE INDEX SQL 미리보기
 
 #### F2.5: 제약조건 뷰
 - **Done when:**
-  - [ ] Constraints 서브탭에서 제약조건 목록 표시
-  - [ ] 유형별 분류: Primary Key, Foreign Key, Unique, Check, Not Null
-  - [ ] FK의 참조 대상(referenced table/column) 표시
+  - [x] Constraints 서브탭에서 제약조건 목록 표시
+  - [x] 유형별 분류: Primary Key, Foreign Key, Unique, Check, Not Null
+  - [x] FK의 참조 대상(referenced table/column) 표시
   - [ ] 제약조건 추가/삭제 가능
 
 #### F2.6: 뷰(Views) 탐색
@@ -206,11 +206,12 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F3.4: 필터링
 - **Done when:**
-  - [ ] 행 필터(Cmd+F): 특정 컬럼의 값으로 행 필터링
-  - [ ] 다중 조건 필터 (AND/OR 조합)
-  - [ ] 연산자: =, !=, >, <, >=, <=, LIKE, IN, IS NULL, IS NOT NULL
+  - [x] 행 필터(Cmd+F): 특정 컬럼의 값으로 행 필터링
+  - [x] 다중 조건 필터 (AND 조합)
+  - [x] 연산자: =, !=, >, <, >=, <=, LIKE, IS NULL, IS NOT NULL
+  - [ ] 다중 조건 필터 (OR 조합)
   - [ ] 필터 조건이 생성하는 WHERE 절 SQL 미리보기
-  - [ ] 필터 초기화 버튼
+  - [x] 필터 초기화 버튼
   - [ ] 컬럼 헤더 우클릭 → "Filter by this column" 빠른 필터
 
 #### F3.5: 정렬
