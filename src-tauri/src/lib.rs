@@ -23,6 +23,10 @@ pub fn run() {
             commands::connection::save_group,
             commands::connection::delete_group,
             commands::connection::move_connection_to_group,
+            commands::schema::list_schemas,
+            commands::schema::list_tables,
+            commands::schema::get_table_columns,
+            commands::schema::query_table_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

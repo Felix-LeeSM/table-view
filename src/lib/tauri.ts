@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig, ConnectionGroup } from "../types/connection";
+import type {
+  ColumnInfo,
+  SchemaInfo,
+  TableData,
+  TableInfo,
+} from "../types/schema";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke<ConnectionConfig[]>("list_connections");
@@ -55,5 +61,47 @@ export async function moveConnectionToGroup(
   return invoke("move_connection_to_group", {
     connectionId,
     groupId,
+  });
+}
+
+// Schema exploration
+export async function listSchemas(connectionId: string): Promise<SchemaInfo[]> {
+  return invoke<SchemaInfo[]>("list_schemas", { connectionId });
+}
+
+export async function listTables(
+  connectionId: string,
+  schema: string,
+): Promise<TableInfo[]> {
+  return invoke<TableInfo[]>("list_tables", { connectionId, schema });
+}
+
+export async function getTableColumns(
+  connectionId: string,
+  table: string,
+  schema: string,
+): Promise<ColumnInfo[]> {
+  return invoke<ColumnInfo[]>("get_table_columns", {
+    connectionId,
+    table,
+    schema,
+  });
+}
+
+export async function queryTableData(
+  connectionId: string,
+  table: string,
+  schema: string,
+  page?: number,
+  pageSize?: number,
+  orderBy?: string,
+): Promise<TableData> {
+  return invoke<TableData>("query_table_data", {
+    connectionId,
+    table,
+    schema,
+    page: page ?? null,
+    pageSize: pageSize ?? null,
+    orderBy: orderBy ?? null,
   });
 }

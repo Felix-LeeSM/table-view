@@ -4,8 +4,10 @@ export interface Tab {
   id: string;
   title: string;
   connectionId: string;
-  type: "query" | "table";
+  type: "query" | "structure" | "data";
   closable: boolean;
+  schema?: string;
+  table?: string;
 }
 
 interface TabState {
@@ -27,7 +29,10 @@ export const useTabStore = create<TabState>((set) => ({
     tabCounter++;
     set((state) => {
       const exists = state.tabs.find(
-        (t) => t.connectionId === tab.connectionId && t.type === tab.type,
+        (t) =>
+          t.connectionId === tab.connectionId &&
+          t.type === tab.type &&
+          t.table === tab.table,
       );
       if (exists) {
         return { activeTabId: exists.id };

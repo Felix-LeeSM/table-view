@@ -1,6 +1,7 @@
 import TabBar from "./TabBar";
 import { useTabStore } from "../stores/tabStore";
 import { Database } from "lucide-react";
+import DataGrid from "./DataGrid";
 
 export default function MainArea() {
   const tabs = useTabStore((s) => s.tabs);
@@ -11,13 +12,19 @@ export default function MainArea() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <TabBar />
-      <div className="flex flex-1 items-center justify-center bg-(--color-bg-primary)">
-        {activeTab ? (
-          <div className="p-4 text-(--color-text-secondary)">
+      <div className="flex flex-1 overflow-hidden bg-(--color-bg-primary)">
+        {activeTab?.type === "data" && activeTab.table && activeTab.schema ? (
+          <DataGrid
+            connectionId={activeTab.connectionId}
+            table={activeTab.table}
+            schema={activeTab.schema}
+          />
+        ) : activeTab ? (
+          <div className="flex flex-1 items-center justify-center p-4 text-(--color-text-secondary)">
             Connected to: {activeTab.title}
           </div>
         ) : (
-          <div className="flex flex-col items-center text-(--color-text-muted)">
+          <div className="flex flex-1 flex-col items-center justify-center text-(--color-text-muted)">
             <Database size={48} className="mb-3" />
             <p className="text-lg">View Table</p>
             <p className="mt-1 text-sm">

@@ -4,11 +4,17 @@ import { useConnectionStore } from "../stores/connectionStore";
 import { useTheme } from "../hooks/useTheme";
 import ConnectionList from "./ConnectionList";
 import ConnectionDialog from "./ConnectionDialog";
+import SchemaTree from "./SchemaTree";
 
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const connections = useConnectionStore((s) => s.connections);
+  const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { theme, setTheme } = useTheme();
+
+  const connectedIds = connections
+    .filter((c) => activeStatuses[c.id]?.type === "connected")
+    .map((c) => c.id);
 
   const cycleTheme = () => {
     const next =
@@ -51,7 +57,12 @@ export default function Sidebar() {
               </p>
             </div>
           ) : (
-            <ConnectionList />
+            <>
+              <ConnectionList />
+              {connectedIds.map((id) => (
+                <SchemaTree key={id} connectionId={id} />
+              ))}
+            </>
           )}
         </div>
 
