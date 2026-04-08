@@ -70,32 +70,32 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F1.1: 연결 생성
 - **Done when:**
-  - [ ] "New Connection" 버튼/메뉴로 연결 생성 다이얼로그 열림
-  - [ ] 입력 필드: Name, Host, Port, User, Password, Database
-  - [ ] PostgreSQL 기본값 자동 설정 (Port: 5432)
-  - [ ] "Test Connection" 버튼으로 연결 가능 여부 확인
-  - [ ] 테스트 성공 시 "Connection successful" 녹색 표시
-  - [ ] 테스트 실패 시 에러 메시지 표시 (연결 거부, 인증 실패 등)
-  - [ ] "Save" 시 유효한 연결만 저장됨
-  - [ ] 동일 이름 연결 생성 시 경고
-  - [ ] 비밀번호는 로컬 파일에 암호화(OsRng + AES-256-GCM) 저장
+  - [x] "New Connection" 버튼/메뉴로 연결 생성 다이얼로그 열림
+  - [x] 입력 필드: Name, Host, Port, User, Password, Database
+  - [x] PostgreSQL 기본값 자동 설정 (Port: 5432)
+  - [x] "Test Connection" 버튼으로 연결 가능 여부 확인
+  - [x] 테스트 성공 시 "Connection successful" 녹색 표시
+  - [x] 테스트 실패 시 에러 메시지 표시 (연결 거부, 인증 실패 등)
+  - [x] "Save" 시 유효한 연결만 저장됨
+  - [x] 동일 이름 연결 생성 시 경고
+  - [x] 비밀번호는 로컬 파일에 암호화(OsRng + AES-256-GCM) 저장
   - [ ] URL 형태(`postgresql://user:pass@host:port/db`)로 import 가능
 
 #### F1.2: 연결 목록 및 그룹핑
 - **Done when:**
-  - [ ] 저장된 모든 연결이 사이드바에 목록으로 표시됨
-  - [ ] 연결을 폴더(그룹)로 정리 가능 (예: "Production", "Development")
+  - [x] 저장된 모든 연결이 사이드바에 목록으로 표시됨
+  - [x] 연결을 폴더(그룹)로 정리 가능 (예: "Production", "Development")
   - [ ] 드래그앤드롭으로 연결을 그룹 간 이동 가능
-  - [ ] 그룹 생성/수정/삭제 가능
-  - [ ] 빈 그룹도 유지 가능
+  - [x] 그룹 생성/수정/삭제 가능
+  - [x] 빈 그룹도 유지 가능
 
 #### F1.3: 연결 수정 및 삭제
 - **Done when:**
-  - [ ] 연결 우클릭 → "Edit"으로 수정 다이얼로그 열림
-  - [ ] 기존 값이 폼에 프리필되어 표시됨
-  - [ ] "Test Connection" 후 저장 가능
-  - [ ] 연결 우클릭 → "Delete"로 삭제 (확인 다이얼로그 포함)
-  - [ ] 활성 연결 삭제 시 연결 먼저 종료 후 삭제
+  - [x] 연결 우클릭 → "Edit"으로 수정 다이얼로그 열림
+  - [x] 기존 값이 폼에 프리필되어 표시됨
+  - [x] "Test Connection" 후 저장 가능
+  - [x] 연결 우클릭 → "Delete"로 삭제 (확인 다이얼로그 포함)
+  - [x] 활성 연결 삭제 시 연결 먼저 종료 후 삭제
 
 #### F1.4: 연결 태그 및 색상
 - **Done when:**
@@ -106,9 +106,9 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F1.5: 연결 상태 관리
 - **Done when:**
-  - [ ] 연결 더블클릭 또는 "Connect" 버튼으로 활성화
-  - [ ] 활성 연결은 녹색 인디케이터로 표시
-  - [ ] 연결 해제(disconnect) 가능
+  - [x] 연결 더블클릭 또는 "Connect" 버튼으로 활성화
+  - [x] 활성 연결은 녹색 인디케이터로 표시
+  - [x] 연결 해제(disconnect) 가능
   - [ ] 연결 끊김 시 자동 감지 및 재연결 시도
   - [ ] 연결 타임아웃 설정 가능 (기본 300초)
   - [ ] Keep-alive ping (기본 30초 간격)으로 유휴 연결 유지
@@ -328,9 +328,9 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F5.4: 테마
 - **Done when:**
-  - [ ] Light / Dark 테마 지원
-  - [ ] 시스템 설정 따르기 (Auto)
-  - [ ] 테마 변경이 즉시 적용됨
+  - [x] Light / Dark 테마 지원
+  - [x] 시스템 설정 따르기 (Auto)
+  - [x] 테마 변경이 즉시 적용됨
 
 ---
 
@@ -351,9 +351,18 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 | PostgreSQL Adapter 구현 | — | P0 |
 
 **Phase 1 Done when:**
-- [ ] 앱 실행 시 연결 목록 사이드바 표시
-- [ ] 새 연결 생성 → 테스트 → 저장 → 사이드바에 표시 → 연결/해제 동작
-- [ ] Rust에서 `trait DbAdapter` 정의되고 PostgreSQL 구현체 존재
+- [x] 앱 실행 시 연결 목록 사이드바 표시
+- [x] 새 연결 생성 → 테스트 → 저장 → 사이드바에 표시 → 연결/해제 동작
+- [x] Rust에서 `trait DbAdapter` 정의되고 PostgreSQL 구현체 존재
+
+**Phase 1 미흡 항목 (Phase 5 또는 후속 처리):**
+- [ ] F1.1: URL 형태(`postgresql://user:pass@host:port/db`) import
+- [ ] F1.2: 드래그앤드롭으로 연결 그룹 간 이동 (현재: 우클릭 메뉴로만 이동)
+- [ ] F1.2: 그룹 Rename 다이얼로그 (현재: TODO stub)
+- [ ] F1.5: 연결 끊김 자동 감지 및 재연결
+- [ ] F1.5: 연결 타임아웃 설정 (기본 300초)
+- [ ] F1.5: Keep-alive ping (기본 30초 간격)
+- [x] F5.4: Light/Dark 테마 + 시스템 설정 따르기 (Phase 1에서 선제 구현)
 
 ### Phase 2: Schema & Data Exploration
 > 스키마 탐색과 데이터 조회
