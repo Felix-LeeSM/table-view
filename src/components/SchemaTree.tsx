@@ -9,16 +9,19 @@ import {
 import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
 
+const EMPTY_SCHEMAS: never[] = [];
+
 interface SchemaTreeProps {
   connectionId: string;
 }
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
-  const schemas = useSchemaStore((s) => s.schemas[connectionId] ?? []);
-  const tables = useSchemaStore((s) => s.tables);
+  const schemas =
+    useSchemaStore((s) => s.schemas[connectionId]) ?? EMPTY_SCHEMAS;
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
   const addTab = useTabStore((s) => s.addTab);
+  const tables = useSchemaStore((s) => s.tables);
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
     new Set(),
   );
