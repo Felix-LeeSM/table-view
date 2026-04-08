@@ -36,6 +36,10 @@ pub struct ConnectionConfig {
     pub database: String,
     pub group_id: Option<String>,
     pub color: Option<String>,
+    #[serde(default)]
+    pub connection_timeout: Option<u32>,
+    #[serde(default)]
+    pub keep_alive_interval: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -16,6 +16,8 @@ export interface ConnectionConfig {
   database: string;
   group_id: string | null;
   color: string | null;
+  connection_timeout?: number;
+  keep_alive_interval?: number;
 }
 
 export interface ConnectionGroup {

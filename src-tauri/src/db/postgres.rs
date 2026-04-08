@@ -50,9 +50,10 @@ impl PostgresAdapter {
 
     pub async fn connect_pool(&self, config: &ConnectionConfig) -> Result<(), AppError> {
         let options = Self::connect_options(config);
+        let timeout_secs = config.connection_timeout.unwrap_or(300);
         let pool = PgPoolOptions::new()
             .max_connections(5)
-            .acquire_timeout(std::time::Duration::from_secs(10))
+            .acquire_timeout(std::time::Duration::from_secs(timeout_secs.min(30) as u64))
             .connect_with(options)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
@@ -73,7 +74,6 @@ impl PostgresAdapter {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn ping(&self) -> Result<(), AppError> {
         let guard = self.pool.lock().await;
         let pool = guard

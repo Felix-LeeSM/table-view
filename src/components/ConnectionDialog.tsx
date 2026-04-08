@@ -356,6 +356,59 @@ export default function ConnectionDialog({
                 />
               </div>
 
+              {/* Advanced Settings */}
+              <div className="border-t border-(--color-border) pt-3">
+                <details>
+                  <summary className="cursor-pointer text-xs font-medium text-(--color-text-muted) hover:text-(--color-text-secondary)">
+                    Advanced Settings
+                  </summary>
+                  <div className="mt-2 space-y-3">
+                    <div>
+                      <label htmlFor="conn-timeout" className={labelClass}>
+                        Connection Timeout (seconds)
+                      </label>
+                      <input
+                        id="conn-timeout"
+                        className={inputClass}
+                        type="number"
+                        min={5}
+                        max={600}
+                        value={form.connection_timeout ?? 300}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            connection_timeout:
+                              parseInt(e.target.value, 10) || 300,
+                          }))
+                        }
+                        placeholder="300"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="conn-keepalive" className={labelClass}>
+                        Keep-Alive Interval (seconds)
+                      </label>
+                      <input
+                        id="conn-keepalive"
+                        className={inputClass}
+                        type="number"
+                        min={5}
+                        max={300}
+                        value={form.keep_alive_interval ?? 30}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            keep_alive_interval:
+                              parseInt(e.target.value, 10) || 30,
+                          }))
+                        }
+                        placeholder="30"
+                      />
+                    </div>
+                  </div>
+                </details>
+              </div>
+
               {/* Test Result */}
               {testResult && (
                 <div

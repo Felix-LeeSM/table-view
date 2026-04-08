@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
 import type {
   ConnectionConfig,
   ConnectionGroup,
@@ -28,6 +29,7 @@ interface ConnectionState {
     connectionId: string,
     groupId: string | null,
   ) => Promise<void>;
+  initEventListeners: () => Promise<void>;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
@@ -144,5 +146,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         c.id === connectionId ? { ...c, group_id: groupId } : c,
       ),
     }));
+  },
+
+  initEventListeners: async () => {
+    await listen<{ id: string; status: ConnectionStatus }>(
+      "connection-status-changed",
+      (event) => {
+        const { id, status } = event.payload;
+        set((state) => ({
+          activeStatuses: { ...state.activeStatuses, [id]: status },
+        }));
+      },
+    );
   },
 }));

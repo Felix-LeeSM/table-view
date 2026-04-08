@@ -6,11 +6,13 @@ import { useConnectionStore } from "./stores/connectionStore";
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
   const loadGroups = useConnectionStore((s) => s.loadGroups);
+  const initEventListeners = useConnectionStore((s) => s.initEventListeners);
 
   useEffect(() => {
     loadConnections();
     loadGroups();
-  }, [loadConnections, loadGroups]);
+    initEventListeners();
+  }, [loadConnections, loadGroups, initEventListeners]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-(--color-bg-primary)">
