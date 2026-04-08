@@ -84,3 +84,88 @@ pub fn decrypt(encrypted: &str, key: &[u8]) -> Result<String, AppError> {
 
     String::from_utf8(plaintext).map_err(|e| AppError::Encryption(e.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Generate a deterministic 32-byte key for testing.
+    fn test_key() -> Vec<u8> {
+        vec![42u8; 32]
+    }
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let key = test_key();
+        let plaintext = "my-secret-password";
+        let encrypted = encrypt(plaintext, &key).unwrap();
+        let decrypted = decrypt(&encrypted, &key).unwrap();
+        assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn encrypt_produces_different_ciphertexts() {
+        let key = test_key();
+        let plaintext = "same-input";
+        let encrypted1 = encrypt(plaintext, &key).unwrap();
+        let encrypted2 = encrypt(plaintext, &key).unwrap();
+        // Different nonces should produce different ciphertexts
+        assert_ne!(encrypted1, encrypted2);
+        // But both decrypt to the same plaintext
+        assert_eq!(decrypt(&encrypted1, &key).unwrap(), plaintext);
+        assert_eq!(decrypt(&encrypted2, &key).unwrap(), plaintext);
+    }
+
+    #[test]
+    fn decrypt_with_wrong_key_fails() {
+        let key1 = test_key();
+        let key2 = vec![99u8; 32];
+        let encrypted = encrypt("secret", &key1).unwrap();
+        let result = decrypt(&encrypted, &key2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decrypt_with_invalid_base64_fails() {
+        let key = test_key();
+        let result = decrypt("not-valid-base64!!!", &key);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decrypt_with_too_short_ciphertext_fails() {
+        let key = test_key();
+        // base64 of 8 bytes (< 12 byte nonce)
+        let short = BASE64.encode([0u8; 8]);
+        let result = decrypt(&short, &key);
+        assert!(result.is_err());
+        match result {
+            Err(AppError::Encryption(msg)) => assert!(msg.contains("too short")),
+            _ => panic!("Expected Encryption error"),
+        }
+    }
+
+    #[test]
+    fn encrypt_empty_string() {
+        let key = test_key();
+        let encrypted = encrypt("", &key).unwrap();
+        let decrypted = decrypt(&encrypted, &key).unwrap();
+        assert_eq!("", decrypted);
+    }
+
+    #[test]
+    fn encrypt_unicode_string() {
+        let key = test_key();
+        let plaintext = "비밀번호🔐pwd";
+        let encrypted = encrypt(plaintext, &key).unwrap();
+        let decrypted = decrypt(&encrypted, &key).unwrap();
+        assert_eq!(plaintext, decrypted);
+    }
+
+    #[test]
+    fn encrypt_invalid_key_length_fails() {
+        let short_key = vec![0u8; 16];
+        let result = encrypt("test", &short_key);
+        assert!(result.is_err());
+    }
+}

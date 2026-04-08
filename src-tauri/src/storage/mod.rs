@@ -12,6 +12,12 @@ use tracing::{debug, info};
 static STORAGE_LOCK: LazyLock<std::sync::Mutex<()>> = LazyLock::new(|| std::sync::Mutex::new(()));
 
 fn app_data_dir() -> Result<PathBuf, AppError> {
+    // Allow tests to override data directory via env var
+    if let Ok(dir) = std::env::var("VIEWTABLE_TEST_DATA_DIR") {
+        let dir = PathBuf::from(dir);
+        fs::create_dir_all(&dir)?;
+        return Ok(dir);
+    }
     let dir = dirs::data_local_dir()
         .or_else(dirs::data_dir)
         .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;

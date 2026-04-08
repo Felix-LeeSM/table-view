@@ -1,8 +1,9 @@
+pub mod models;
+pub mod storage;
+
 mod commands;
 mod db;
 mod error;
-mod models;
-mod storage;
 
 use commands::connection::AppState;
 

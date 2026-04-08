@@ -58,3 +58,30 @@ export function createEmptyConnection(): ConnectionConfig {
     color: null,
   };
 }
+
+export function parseConnectionUrl(
+  url: string,
+): Partial<ConnectionConfig> | null {
+  try {
+    const parsed = new URL(url);
+    const dbTypeMap: Record<string, DatabaseType> = {
+      postgresql: "postgresql",
+      postgres: "postgresql",
+      mysql: "mysql",
+      mongodb: "mongodb",
+      redis: "redis",
+    };
+    const dbType = dbTypeMap[parsed.protocol.replace(":", "")];
+    if (!dbType) return null;
+    return {
+      db_type: dbType,
+      host: parsed.hostname || "localhost",
+      port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
+      user: decodeURIComponent(parsed.username),
+      password: decodeURIComponent(parsed.password),
+      database: parsed.pathname.replace(/^\//, ""),
+    };
+  } catch {
+    return null;
+  }
+}

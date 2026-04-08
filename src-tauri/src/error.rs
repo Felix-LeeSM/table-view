@@ -41,3 +41,59 @@ impl From<sqlx::Error> for AppError {
         AppError::Database(err.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_display_formats() {
+        assert_eq!(
+            AppError::Connection("refused".into()).to_string(),
+            "Connection error: refused"
+        );
+        assert_eq!(
+            AppError::Storage("file not found".into()).to_string(),
+            "Storage error: file not found"
+        );
+        assert_eq!(
+            AppError::Encryption("bad key".into()).to_string(),
+            "Encryption error: bad key"
+        );
+        assert_eq!(
+            AppError::Validation("empty name".into()).to_string(),
+            "Validation error: empty name"
+        );
+        assert_eq!(
+            AppError::NotFound("id-123".into()).to_string(),
+            "Not found: id-123"
+        );
+    }
+
+    #[test]
+    fn error_serialize_to_string() {
+        let err = AppError::Connection("timeout".into());
+        let json = serde_json::to_string(&err).unwrap();
+        assert_eq!(json, "\"Connection error: timeout\"");
+    }
+
+    #[test]
+    fn io_error_converts_to_app_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file missing");
+        let app_err: AppError = io_err.into();
+        match app_err {
+            AppError::Io(_) => {}
+            other => panic!("Expected Io variant, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn serde_error_converts_to_app_error() {
+        let serde_err: serde_json::Error = serde_json::from_str::<i32>("not a number").unwrap_err();
+        let app_err: AppError = serde_err.into();
+        match app_err {
+            AppError::Serde(_) => {}
+            other => panic!("Expected Serde variant, got {:?}", other),
+        }
+    }
+}
