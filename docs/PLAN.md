@@ -79,13 +79,13 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
   - [x] "Save" 시 유효한 연결만 저장됨
   - [x] 동일 이름 연결 생성 시 경고
   - [x] 비밀번호는 로컬 파일에 암호화(OsRng + AES-256-GCM) 저장
-  - [ ] URL 형태(`postgresql://user:pass@host:port/db`)로 import 가능
+  - [x] URL 형태(`postgresql://user:pass@host:port/db`)로 import 가능
 
 #### F1.2: 연결 목록 및 그룹핑
 - **Done when:**
   - [x] 저장된 모든 연결이 사이드바에 목록으로 표시됨
   - [x] 연결을 폴더(그룹)로 정리 가능 (예: "Production", "Development")
-  - [ ] 드래그앤드롭으로 연결을 그룹 간 이동 가능
+  - [x] 드래그앤드롭으로 연결을 그룹 간 이동 가능
   - [x] 그룹 생성/수정/삭제 가능
   - [x] 빈 그룹도 유지 가능
 
@@ -356,9 +356,9 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [x] Rust에서 `trait DbAdapter` 정의되고 PostgreSQL 구현체 존재
 
 **Phase 1 미흡 항목 (Phase 5 또는 후속 처리):**
-- [ ] F1.1: URL 형태(`postgresql://user:pass@host:port/db`) import
-- [ ] F1.2: 드래그앤드롭으로 연결 그룹 간 이동 (현재: 우클릭 메뉴로만 이동)
-- [ ] F1.2: 그룹 Rename 다이얼로그 (현재: TODO stub)
+- [x] F1.1: URL 형태(`postgresql://user:pass@host:port/db`) import
+- [x] F1.2: 드래그앤드롭으로 연결 그룹 간 이동 (현재: 우클릭 메뉴로만 이동)
+- [x] F1.2: 그룹 Rename 다이얼로그 (현재: TODO stub)
 - [ ] F1.5: 연결 끊김 자동 감지 및 재연결
 - [ ] F1.5: 연결 타임아웃 설정 (기본 300초)
 - [ ] F1.5: Keep-alive ping (기본 30초 간격)
