@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig, ConnectionGroup } from "../types/connection";
 import type {
   ColumnInfo,
+  ConstraintInfo,
+  FilterCondition,
+  IndexInfo,
   SchemaInfo,
   TableData,
   TableInfo,
@@ -95,6 +98,7 @@ export async function queryTableData(
   page?: number,
   pageSize?: number,
   orderBy?: string,
+  filters?: FilterCondition[],
 ): Promise<TableData> {
   return invoke<TableData>("query_table_data", {
     connectionId,
@@ -103,5 +107,30 @@ export async function queryTableData(
     page: page ?? null,
     pageSize: pageSize ?? null,
     orderBy: orderBy ?? null,
+    filters: filters ?? null,
+  });
+}
+
+export async function getTableIndexes(
+  connectionId: string,
+  table: string,
+  schema: string,
+): Promise<IndexInfo[]> {
+  return invoke<IndexInfo[]>("get_table_indexes", {
+    connectionId,
+    table,
+    schema,
+  });
+}
+
+export async function getTableConstraints(
+  connectionId: string,
+  table: string,
+  schema: string,
+): Promise<ConstraintInfo[]> {
+  return invoke<ConstraintInfo[]>("get_table_constraints", {
+    connectionId,
+    table,
+    schema,
   });
 }

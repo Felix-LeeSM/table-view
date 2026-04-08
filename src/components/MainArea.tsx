@@ -2,6 +2,7 @@ import TabBar from "./TabBar";
 import { useTabStore } from "../stores/tabStore";
 import { Database } from "lucide-react";
 import DataGrid from "./DataGrid";
+import StructurePanel from "./StructurePanel";
 
 export default function MainArea() {
   const tabs = useTabStore((s) => s.tabs);
@@ -15,6 +16,14 @@ export default function MainArea() {
       <div className="flex flex-1 overflow-hidden bg-(--color-bg-primary)">
         {activeTab?.type === "data" && activeTab.table && activeTab.schema ? (
           <DataGrid
+            connectionId={activeTab.connectionId}
+            table={activeTab.table}
+            schema={activeTab.schema}
+          />
+        ) : activeTab?.type === "structure" &&
+          activeTab.table &&
+          activeTab.schema ? (
+          <StructurePanel
             connectionId={activeTab.connectionId}
             table={activeTab.table}
             schema={activeTab.schema}

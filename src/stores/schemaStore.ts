@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type {
   ColumnInfo,
+  ConstraintInfo,
+  FilterCondition,
+  IndexInfo,
   SchemaInfo,
   TableData,
   TableInfo,
@@ -20,6 +23,16 @@ interface SchemaState {
     table: string,
     schema: string,
   ) => Promise<ColumnInfo[]>;
+  getTableIndexes: (
+    connectionId: string,
+    table: string,
+    schema: string,
+  ) => Promise<IndexInfo[]>;
+  getTableConstraints: (
+    connectionId: string,
+    table: string,
+    schema: string,
+  ) => Promise<ConstraintInfo[]>;
   queryTableData: (
     connectionId: string,
     table: string,
@@ -27,6 +40,7 @@ interface SchemaState {
     page?: number,
     pageSize?: number,
     orderBy?: string,
+    filters?: FilterCondition[],
   ) => Promise<TableData>;
   clearSchema: (connectionId: string) => void;
 }
@@ -64,6 +78,14 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     return tauri.getTableColumns(connectionId, table, schema);
   },
 
+  getTableIndexes: async (connectionId, table, schema) => {
+    return tauri.getTableIndexes(connectionId, table, schema);
+  },
+
+  getTableConstraints: async (connectionId, table, schema) => {
+    return tauri.getTableConstraints(connectionId, table, schema);
+  },
+
   queryTableData: async (
     connectionId,
     table,
@@ -71,6 +93,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     page,
     pageSize,
     orderBy,
+    filters,
   ) => {
     return tauri.queryTableData(
       connectionId,
@@ -79,6 +102,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       page,
       pageSize,
       orderBy,
+      filters,
     );
   },
 

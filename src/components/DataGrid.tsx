@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Filter } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
-import type { TableData } from "../types/schema";
+import FilterBar from "./FilterBar";
+import type { FilterCondition, TableData } from "../types/schema";
 
 interface DataGridProps {
   connectionId: string;
@@ -22,11 +23,16 @@ export default function DataGrid({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterCondition[]>([]);
+  const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const activeFilters =
+        appliedFilters.length > 0 ? appliedFilters : undefined;
       const result = await queryTableData(
         connectionId,
         table,
@@ -34,13 +40,22 @@ export default function DataGrid({
         page,
         PAGE_SIZE,
         sortColumn ?? undefined,
+        activeFilters,
       );
       setData(result);
     } catch (e) {
       setError(String(e));
     }
     setLoading(false);
-  }, [connectionId, table, schema, page, sortColumn, queryTableData]);
+  }, [
+    connectionId,
+    table,
+    schema,
+    page,
+    sortColumn,
+    appliedFilters,
+    queryTableData,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -53,16 +68,23 @@ export default function DataGrid({
     setPage(1);
   };
 
+  const handleApplyFilters = () => {
+    setAppliedFilters(filters);
+    setPage(1);
+  };
+
+  const activeFilterCount = appliedFilters.length;
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-(--color-border) px-3 py-1.5">
-        <div className="text-xs text-(--color-text-secondary)">
+        <div className="flex items-center gap-2 text-xs text-(--color-text-secondary)">
           {data ? (
             <>
               {data.total_count.toLocaleString()} rows
               {sortColumn && (
-                <span className="ml-2 text-(--color-text-muted)">
+                <span className="text-(--color-text-muted)">
                   Sorted by {sortColumn}
                 </span>
               )}
@@ -71,30 +93,60 @@ export default function DataGrid({
             `${schema}.${table}`
           )}
         </div>
-        {data && totalPages > 1 && (
-          <div className="flex items-center gap-2">
-            <button
-              className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              aria-label="Previous page"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="text-xs text-(--color-text-muted)">
-              {page} / {totalPages}
-            </span>
-            <button
-              className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              aria-label="Next page"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            className={`relative rounded p-1 hover:bg-(--color-bg-tertiary) ${
+              showFilters
+                ? "text-(--color-accent)"
+                : "text-(--color-text-muted)"
+            }`}
+            onClick={() => setShowFilters((prev) => !prev)}
+            aria-label="Toggle filters"
+            title="Toggle filters"
+          >
+            <Filter size={14} />
+            {activeFilterCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-(--color-accent) text-[8px] font-bold text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          {data && totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-xs text-(--color-text-muted)">
+                {page} / {totalPages}
+              </span>
+              <button
+                className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Next page"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Filter bar */}
+      {showFilters && (
+        <FilterBar
+          columns={data?.columns ?? []}
+          filters={filters}
+          onFiltersChange={setFilters}
+          onApply={handleApplyFilters}
+          onClose={() => setShowFilters(false)}
+        />
+      )}
 
       {/* Content */}
       {error && (

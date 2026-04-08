@@ -57,6 +57,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   };
 
   const handleTableClick = (tableName: string, schemaName: string) => {
+    // Add "data" tab (active)
     addTab({
       id: "",
       title: `${schemaName}.${tableName}`,
@@ -66,6 +67,28 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       schema: schemaName,
       table: tableName,
     });
+    // Add "structure" tab (not active — data tab stays focused)
+    addTab({
+      id: "",
+      title: `${schemaName}.${tableName}`,
+      connectionId,
+      type: "structure",
+      closable: true,
+      schema: schemaName,
+      table: tableName,
+    });
+    // Switch back to the data tab since addTab for structure will activate it
+    const dataTabId = useTabStore
+      .getState()
+      .tabs.find(
+        (t) =>
+          t.connectionId === connectionId &&
+          t.type === "data" &&
+          t.table === tableName,
+      )?.id;
+    if (dataTabId) {
+      useTabStore.getState().setActiveTab(dataTabId);
+    }
   };
 
   return (

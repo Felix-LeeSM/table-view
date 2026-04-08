@@ -123,6 +123,7 @@ describe("schemaStore", () => {
       1,
       50,
       "id",
+      undefined,
     );
     expect(data.total_count).toBe(1);
     expect(data.rows).toHaveLength(1);

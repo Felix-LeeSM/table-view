@@ -1,5 +1,5 @@
 import { useTabStore } from "../stores/tabStore";
-import { X } from "lucide-react";
+import { X, Table2, Columns3 } from "lucide-react";
 
 export default function TabBar() {
   const tabs = useTabStore((s) => s.tabs);
@@ -34,6 +34,18 @@ export default function TabBar() {
             }
           }}
         >
+          {tab.type === "data" && (
+            <Table2
+              size={12}
+              className="flex-shrink-0 text-(--color-text-muted)"
+            />
+          )}
+          {tab.type === "structure" && (
+            <Columns3
+              size={12}
+              className="flex-shrink-0 text-(--color-text-muted)"
+            />
+          )}
           <span className="max-w-[120px] truncate">{tab.title}</span>
           {tab.closable && (
             <button
