@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { ConnectionConfig, ConnectionStatus } from "../types/connection";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useTabStore } from "../stores/tabStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import ConnectionDialog from "./ConnectionDialog";
 import { Database, Plug, Unplug, Pencil, Trash2 } from "lucide-react";
+
+/** Module-level drag state shared between ConnectionItem, ConnectionGroup, ConnectionList */
+export let draggedConnectionId: string | null = null;
 
 interface ConnectionItemProps {
   connection: ConnectionConfig;
@@ -37,6 +40,8 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
 }
 
 export default function ConnectionItem({ connection }: ConnectionItemProps) {
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -108,9 +113,13 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
   return (
     <>
       <div
-        className="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--color-bg-tertiary)"
+        ref={dragRef}
+        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--color-bg-tertiary) ${
+          dragging ? "opacity-40" : ""
+        }`}
         role="button"
         tabIndex={0}
+        draggable
         aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "error" ? "error" : "disconnected"}`}
         onDoubleClick={handleDoubleClick}
         onKeyDown={(e) => {
@@ -119,6 +128,16 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
         onContextMenu={(e) => {
           e.preventDefault();
           setContextMenu({ x: e.clientX, y: e.clientY });
+        }}
+        onDragStart={(e) => {
+          draggedConnectionId = connection.id;
+          setDragging(true);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", connection.id);
+        }}
+        onDragEnd={() => {
+          draggedConnectionId = null;
+          setDragging(false);
         }}
       >
         <StatusIndicator status={status} />
