@@ -4,4 +4,7 @@ pub mod schema;
 pub use connection::{
     ConnectionConfig, ConnectionGroup, ConnectionStatus, DatabaseType, StorageData,
 };
-pub use schema::{ColumnInfo, SchemaInfo, TableData, TableInfo};
+pub use schema::{
+    ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, IndexInfo, SchemaInfo, TableData,
+    TableInfo,
+};

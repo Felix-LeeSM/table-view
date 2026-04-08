@@ -32,6 +32,44 @@ pub struct TableData {
     pub page_size: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IndexInfo {
+    pub name: String,
+    pub columns: Vec<String>,
+    pub index_type: String,
+    pub is_unique: bool,
+    pub is_primary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConstraintInfo {
+    pub name: String,
+    pub constraint_type: String,
+    pub columns: Vec<String>,
+    pub reference_table: Option<String>,
+    pub reference_columns: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FilterOperator {
+    Eq,
+    Neq,
+    Gt,
+    Lt,
+    Gte,
+    Lte,
+    Like,
+    IsNull,
+    IsNotNull,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterCondition {
+    pub column: String,
+    pub operator: FilterOperator,
+    pub value: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

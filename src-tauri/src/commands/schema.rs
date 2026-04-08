@@ -1,6 +1,6 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
-use crate::models::{TableData, TableInfo};
+use crate::models::{FilterCondition, TableData, TableInfo};
 
 #[tauri::command]
 pub async fn list_schemas(
@@ -42,6 +42,7 @@ pub async fn get_table_columns(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn query_table_data(
     state: tauri::State<'_, AppState>,
     connection_id: String,
@@ -50,6 +51,7 @@ pub async fn query_table_data(
     page: Option<i32>,
     page_size: Option<i32>,
     order_by: Option<String>,
+    filters: Option<Vec<FilterCondition>>,
 ) -> Result<TableData, AppError> {
     let connections = state.active_connections.lock().await;
     let adapter = connections
@@ -62,6 +64,35 @@ pub async fn query_table_data(
             page.unwrap_or(1),
             page_size.unwrap_or(100),
             order_by.as_deref(),
+            filters.as_deref(),
         )
         .await
+}
+
+#[tauri::command]
+pub async fn get_table_indexes(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    table: String,
+    schema: String,
+) -> Result<Vec<crate::models::IndexInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.get_table_indexes(&table, &schema).await
+}
+
+#[tauri::command]
+pub async fn get_table_constraints(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    table: String,
+    schema: String,
+) -> Result<Vec<crate::models::ConstraintInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.get_table_constraints(&table, &schema).await
 }

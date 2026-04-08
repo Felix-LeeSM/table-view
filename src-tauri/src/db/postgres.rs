@@ -4,7 +4,10 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::error::AppError;
-use crate::models::{ColumnInfo, ConnectionConfig, SchemaInfo, TableData, TableInfo};
+use crate::models::{
+    ColumnInfo, ConnectionConfig, ConstraintInfo, FilterCondition, FilterOperator, IndexInfo,
+    SchemaInfo, TableData, TableInfo,
+};
 
 pub struct PostgresAdapter {
     pool: Mutex<Option<PgPool>>,
@@ -241,6 +244,7 @@ impl PostgresAdapter {
         page: i32,
         page_size: i32,
         order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
     ) -> Result<TableData, AppError> {
         let guard = self.pool.lock().await;
         let pool = guard
@@ -257,9 +261,58 @@ impl PostgresAdapter {
             table.replace('"', "\"\"")
         );
 
+        // Build WHERE clause from filters with parameterized values
+        let mut where_clause = String::new();
+        let mut param_values: Vec<String> = Vec::new();
+        if let Some(filters) = filters {
+            if !filters.is_empty() {
+                let valid_columns: std::collections::HashSet<&str> =
+                    columns.iter().map(|c| c.name.as_str()).collect();
+                let mut conditions: Vec<String> = Vec::new();
+                for f in filters {
+                    if !valid_columns.contains(f.column.as_str()) {
+                        continue;
+                    }
+                    let quoted_col = format!("\"{}\"", f.column.replace('"', "\"\""));
+                    match &f.operator {
+                        FilterOperator::IsNull => {
+                            conditions.push(format!("{} IS NULL", quoted_col));
+                        }
+                        FilterOperator::IsNotNull => {
+                            conditions.push(format!("{} IS NOT NULL", quoted_col));
+                        }
+                        _ => {
+                            let op = match f.operator {
+                                FilterOperator::Eq => "=",
+                                FilterOperator::Neq => "<>",
+                                FilterOperator::Gt => ">",
+                                FilterOperator::Lt => "<",
+                                FilterOperator::Gte => ">=",
+                                FilterOperator::Lte => "<=",
+                                FilterOperator::Like => "LIKE",
+                                _ => unreachable!(),
+                            };
+                            if let Some(val) = &f.value {
+                                let param_idx = param_values.len() + 1;
+                                conditions.push(format!("{} {} ${}", quoted_col, op, param_idx));
+                                param_values.push(val.clone());
+                            }
+                        }
+                    }
+                }
+                if !conditions.is_empty() {
+                    where_clause = format!(" WHERE {}", conditions.join(" AND "));
+                }
+            }
+        }
+
         // Count total
-        let count_sql = format!("SELECT COUNT(*) FROM {}", qualified_table);
-        let (total,): (i64,) = sqlx::query_as(&count_sql)
+        let count_sql = format!("SELECT COUNT(*) FROM {}{}", qualified_table, where_clause);
+        let mut count_query = sqlx::query_as::<_, (i64,)>(&count_sql);
+        for val in &param_values {
+            count_query = count_query.bind(val);
+        }
+        let (total,) = count_query
             .fetch_one(pool)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
@@ -276,11 +329,15 @@ impl PostgresAdapter {
         }
 
         let data_sql = format!(
-            "SELECT row_to_json(q)::text FROM (SELECT * FROM {}{} LIMIT {} OFFSET {}) q",
-            qualified_table, order_clause, page_size, offset
+            "SELECT row_to_json(q)::text FROM (SELECT * FROM {}{}{} LIMIT {} OFFSET {}) q",
+            qualified_table, where_clause, order_clause, page_size, offset
         );
 
-        let json_rows: Vec<(String,)> = sqlx::query_as(&data_sql)
+        let mut data_query = sqlx::query_as::<_, (String,)>(&data_sql);
+        for val in &param_values {
+            data_query = data_query.bind(val);
+        }
+        let json_rows: Vec<(String,)> = data_query
             .fetch_all(pool)
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
@@ -381,6 +438,147 @@ impl PostgresAdapter {
                     fk_reference,
                 }
             })
+            .collect())
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub async fn get_table_indexes(
+        &self,
+        table: &str,
+        schema: &str,
+    ) -> Result<Vec<IndexInfo>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let rows: Vec<(String, String, bool, bool, String)> = sqlx::query_as(
+            "SELECT i.relname AS index_name,
+                    a.attname AS column_name,
+                    idx.indisunique AS is_unique,
+                    idx.indisprimary AS is_primary,
+                    am.amname AS index_method
+             FROM pg_index idx
+             JOIN pg_class t ON t.oid = idx.indrelid
+             JOIN pg_class i ON i.oid = idx.indexrelid
+             JOIN pg_am am ON am.oid = i.relam
+             JOIN pg_namespace n ON n.oid = t.relnamespace
+             JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(idx.indkey)
+             WHERE n.nspname = $1 AND t.relname = $2
+             ORDER BY i.relname, a.attnum",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let mut index_map: std::collections::BTreeMap<String, (bool, bool, String, Vec<String>)> =
+            std::collections::BTreeMap::new();
+
+        for (index_name, column_name, is_unique, is_primary, index_method) in rows {
+            let entry = index_map.entry(index_name).or_insert((
+                is_unique,
+                is_primary,
+                index_method,
+                Vec::new(),
+            ));
+            entry.3.push(column_name);
+        }
+
+        Ok(index_map
+            .into_iter()
+            .map(
+                |(name, (is_unique, is_primary, index_type, columns))| IndexInfo {
+                    name,
+                    columns,
+                    index_type,
+                    is_unique,
+                    is_primary,
+                },
+            )
+            .collect())
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub async fn get_table_constraints(
+        &self,
+        table: &str,
+        schema: &str,
+    ) -> Result<Vec<ConstraintInfo>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let rows: Vec<(
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = sqlx::query_as(
+            "SELECT tc.constraint_name,
+                    tc.constraint_type,
+                    kcu.column_name,
+                    ccu_ref.table_name AS ref_table,
+                    ccu_ref.column_name AS ref_column
+             FROM information_schema.table_constraints tc
+             LEFT JOIN information_schema.key_column_usage kcu
+               ON tc.constraint_name = kcu.constraint_name
+               AND tc.table_schema = kcu.table_schema
+             LEFT JOIN information_schema.constraint_column_usage ccu_ref
+               ON tc.constraint_name = ccu_ref.constraint_name
+               AND tc.table_schema = ccu_ref.table_schema
+               AND tc.constraint_type = 'FOREIGN KEY'
+             WHERE tc.table_schema = $1
+               AND tc.table_name = $2
+               AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')
+             ORDER BY tc.constraint_name, kcu.ordinal_position",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let mut constraint_map: std::collections::BTreeMap<
+            String,
+            (String, Vec<String>, Option<String>, Vec<String>),
+        > = std::collections::BTreeMap::new();
+
+        for (name, ctype, column, ref_table, ref_column) in rows {
+            let entry =
+                constraint_map
+                    .entry(name)
+                    .or_insert((ctype, Vec::new(), ref_table, Vec::new()));
+            if let Some(col) = column {
+                if !entry.1.contains(&col) {
+                    entry.1.push(col);
+                }
+            }
+            if let Some(rc) = ref_column {
+                if !entry.3.contains(&rc) {
+                    entry.3.push(rc);
+                }
+            }
+        }
+
+        Ok(constraint_map
+            .into_iter()
+            .map(
+                |(name, (constraint_type, columns, reference_table, ref_cols))| ConstraintInfo {
+                    name,
+                    constraint_type,
+                    columns,
+                    reference_table,
+                    reference_columns: if ref_cols.is_empty() {
+                        None
+                    } else {
+                        Some(ref_cols)
+                    },
+                },
+            )
             .collect())
     }
 }

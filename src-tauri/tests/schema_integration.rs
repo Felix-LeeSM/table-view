@@ -195,7 +195,7 @@ async fn test_query_table_data() {
 
     // Query page 1, page_size 2
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 2, None)
+        .query_table_data(&table_name, "public", 1, 2, None, None)
         .await
         .expect("query_table_data failed");
 
@@ -207,7 +207,7 @@ async fn test_query_table_data() {
 
     // Query page 2
     let data_page2 = adapter
-        .query_table_data(&table_name, "public", 2, 2, None)
+        .query_table_data(&table_name, "public", 2, 2, None, None)
         .await
         .expect("query_table_data page 2 failed");
     assert_eq!(data_page2.rows.len(), 1, "Expected 1 row on page 2");
@@ -243,7 +243,7 @@ async fn test_query_table_data_ordering() {
 
     // Query ordered by label ASC
     let data = adapter
-        .query_table_data(&table_name, "public", 1, 50, Some("label"))
+        .query_table_data(&table_name, "public", 1, 50, Some("label"), None)
         .await
         .expect("query_table_data with ordering failed");
 
