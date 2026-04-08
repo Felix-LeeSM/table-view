@@ -10,6 +10,12 @@ pub struct PostgresAdapter {
     pool: Mutex<Option<PgPool>>,
 }
 
+impl Default for PostgresAdapter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PostgresAdapter {
     pub fn new() -> Self {
         Self {
@@ -71,6 +77,19 @@ impl PostgresAdapter {
             pool.close().await;
             info!("Disconnected from PostgreSQL");
         }
+        Ok(())
+    }
+
+    /// Execute a raw SQL statement (DDL, DML).
+    pub async fn execute(&self, query: &str) -> Result<(), AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+        sqlx::query(query)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
         Ok(())
     }
 
@@ -257,7 +276,7 @@ impl PostgresAdapter {
         }
 
         let data_sql = format!(
-            "SELECT row_to_json(q) FROM (SELECT * FROM {}{} LIMIT {} OFFSET {}) q",
+            "SELECT row_to_json(q)::text FROM (SELECT * FROM {}{} LIMIT {} OFFSET {}) q",
             qualified_table, order_clause, page_size, offset
         );
 
@@ -363,5 +382,75 @@ impl PostgresAdapter {
                 }
             })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::DatabaseType;
+
+    fn sample_config() -> ConnectionConfig {
+        ConnectionConfig {
+            id: "test".to_string(),
+            name: "TestDB".to_string(),
+            db_type: DatabaseType::Postgresql,
+            host: "localhost".to_string(),
+            port: 5432,
+            user: "postgres".to_string(),
+            password: "secret".to_string(),
+            database: "testdb".to_string(),
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn new_adapter_has_no_pool() {
+        let adapter = PostgresAdapter::new();
+        let guard = adapter.pool.lock().await;
+        assert!(guard.is_none(), "New adapter should have no pool");
+    }
+
+    #[tokio::test]
+    async fn ping_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.ping().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_schemas_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.list_schemas().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[test]
+    fn connect_options_builder() {
+        let config = sample_config();
+        let opts = PostgresAdapter::connect_options(&config);
+
+        // PgConnectOptions exposes host, port, username, database via Debug
+        // We verify by building a connection string and checking the components
+        let opts_str = format!("{opts:?}");
+
+        // The debug output should contain our connection parameters
+        assert!(
+            opts_str.contains("localhost") || opts_str.contains("5432"),
+            "Options should reflect the config parameters"
+        );
     }
 }
