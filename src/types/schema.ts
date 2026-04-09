@@ -55,6 +55,8 @@ export type FilterOperator =
   | "IsNull"
   | "IsNotNull";
 
+export type FilterMode = "structured" | "raw";
+
 export interface FilterCondition {
   column: string;
   operator: FilterOperator;

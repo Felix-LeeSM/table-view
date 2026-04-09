@@ -52,6 +52,7 @@ pub async fn query_table_data(
     page_size: Option<i32>,
     order_by: Option<String>,
     filters: Option<Vec<FilterCondition>>,
+    raw_where: Option<String>,
 ) -> Result<TableData, AppError> {
     let connections = state.active_connections.lock().await;
     let adapter = connections
@@ -65,6 +66,7 @@ pub async fn query_table_data(
             page_size.unwrap_or(100),
             order_by.as_deref(),
             filters.as_deref(),
+            raw_where.as_deref(),
         )
         .await
 }

@@ -99,6 +99,7 @@ export async function queryTableData(
   pageSize?: number,
   orderBy?: string,
   filters?: FilterCondition[],
+  rawWhere?: string,
 ): Promise<TableData> {
   return invoke<TableData>("query_table_data", {
     connectionId,
@@ -108,6 +109,7 @@ export async function queryTableData(
     pageSize: pageSize ?? null,
     orderBy: orderBy ?? null,
     filters: filters ?? null,
+    rawWhere: rawWhere ?? null,
   });
 }
 

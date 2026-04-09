@@ -202,6 +202,7 @@ impl PostgresAdapter {
         self.get_table_columns_inner(pool, table, schema).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn query_table_data(
         &self,
         table: &str,
@@ -210,6 +211,7 @@ impl PostgresAdapter {
         page_size: i32,
         order_by: Option<&str>,
         filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
     ) -> Result<TableData, AppError> {
         let guard = self.pool.lock().await;
         let pool = guard
@@ -226,63 +228,95 @@ impl PostgresAdapter {
             table.replace('"', "\"\"")
         );
 
-        // Build WHERE clause from filters with parameterized values
-        let mut where_clause = String::new();
-        let mut param_values: Vec<String> = Vec::new();
-        if let Some(filters) = filters {
-            if !filters.is_empty() {
-                let valid_columns: std::collections::HashSet<&str> =
-                    columns.iter().map(|c| c.name.as_str()).collect();
-                // Build column-name -> data_type lookup for O(1) type casts
-                let col_types: std::collections::HashMap<&str, &str> = columns
-                    .iter()
-                    .map(|c| (c.name.as_str(), c.data_type.as_str()))
-                    .collect();
-                let mut conditions: Vec<String> = Vec::new();
-                for f in filters {
-                    if !valid_columns.contains(f.column.as_str()) {
-                        continue;
-                    }
-                    let quoted_col = format!("\"{}\"", f.column.replace('"', "\"\""));
-                    match &f.operator {
-                        FilterOperator::IsNull => {
-                            conditions.push(format!("{} IS NULL", quoted_col));
-                        }
-                        FilterOperator::IsNotNull => {
-                            conditions.push(format!("{} IS NOT NULL", quoted_col));
-                        }
-                        _ => {
-                            let op = match f.operator {
-                                FilterOperator::Eq => "=",
-                                FilterOperator::Neq => "<>",
-                                FilterOperator::Gt => ">",
-                                FilterOperator::Lt => "<",
-                                FilterOperator::Gte => ">=",
-                                FilterOperator::Lte => "<=",
-                                FilterOperator::Like => "LIKE",
-                                _ => unreachable!(),
-                            };
-                            if let Some(val) = &f.value {
-                                let param_idx = param_values.len() + 1;
-                                let cast_suffix = col_types
-                                    .get(f.column.as_str())
-                                    .and_then(|dt| pg_cast_type(dt))
-                                    .map(|t| format!("::{}", t))
-                                    .unwrap_or_default();
-                                conditions.push(format!(
-                                    "{} {} ${}{}",
-                                    quoted_col, op, param_idx, cast_suffix
-                                ));
-                                param_values.push(val.clone());
-                            }
-                        }
-                    }
-                }
-                if !conditions.is_empty() {
-                    where_clause = format!(" WHERE {}", conditions.join(" AND "));
+        // Validate raw_where if provided
+        let raw_where_trimmed = raw_where.map(|rw| rw.trim()).filter(|rw| !rw.is_empty());
+
+        if let Some(rw) = &raw_where_trimmed {
+            // Reject semicolons to prevent multi-statement injection
+            if rw.contains(';') {
+                return Err(AppError::Validation(
+                    "Raw WHERE clause must not contain semicolons".into(),
+                ));
+            }
+            // Reject dangerous statements at the start of the clause
+            let upper = rw.to_uppercase();
+            let dangerous_starts = [
+                "DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "TRUNCATE", "GRANT",
+                "REVOKE",
+            ];
+            for keyword in &dangerous_starts {
+                if upper.starts_with(keyword) {
+                    return Err(AppError::Validation(format!(
+                        "Raw WHERE clause must not start with {}",
+                        keyword
+                    )));
                 }
             }
         }
+
+        // Build WHERE clause: raw_where takes precedence over structured filters
+        let (where_clause, param_values) = if let Some(rw) = &raw_where_trimmed {
+            (format!(" WHERE {}", rw), Vec::<String>::new())
+        } else {
+            // Build WHERE clause from filters with parameterized values
+            let mut where_clause = String::new();
+            let mut param_values: Vec<String> = Vec::new();
+            if let Some(filters) = filters {
+                if !filters.is_empty() {
+                    let valid_columns: std::collections::HashSet<&str> =
+                        columns.iter().map(|c| c.name.as_str()).collect();
+                    // Build column-name -> data_type lookup for O(1) type casts
+                    let col_types: std::collections::HashMap<&str, &str> = columns
+                        .iter()
+                        .map(|c| (c.name.as_str(), c.data_type.as_str()))
+                        .collect();
+                    let mut conditions: Vec<String> = Vec::new();
+                    for f in filters {
+                        if !valid_columns.contains(f.column.as_str()) {
+                            continue;
+                        }
+                        let quoted_col = format!("\"{}\"", f.column.replace('"', "\"\""));
+                        match &f.operator {
+                            FilterOperator::IsNull => {
+                                conditions.push(format!("{} IS NULL", quoted_col));
+                            }
+                            FilterOperator::IsNotNull => {
+                                conditions.push(format!("{} IS NOT NULL", quoted_col));
+                            }
+                            _ => {
+                                let op = match f.operator {
+                                    FilterOperator::Eq => "=",
+                                    FilterOperator::Neq => "<>",
+                                    FilterOperator::Gt => ">",
+                                    FilterOperator::Lt => "<",
+                                    FilterOperator::Gte => ">=",
+                                    FilterOperator::Lte => "<=",
+                                    FilterOperator::Like => "LIKE",
+                                    _ => unreachable!(),
+                                };
+                                if let Some(val) = &f.value {
+                                    let param_idx = param_values.len() + 1;
+                                    let cast_suffix = col_types
+                                        .get(f.column.as_str())
+                                        .and_then(|dt| pg_cast_type(dt))
+                                        .map(|t| format!("::{}", t))
+                                        .unwrap_or_default();
+                                    conditions.push(format!(
+                                        "{} {} ${}{}",
+                                        quoted_col, op, param_idx, cast_suffix
+                                    ));
+                                    param_values.push(val.clone());
+                                }
+                            }
+                        }
+                    }
+                    if !conditions.is_empty() {
+                        where_clause = format!(" WHERE {}", conditions.join(" AND "));
+                    }
+                }
+            }
+            (where_clause, param_values)
+        };
 
         // Count total
         let count_sql = format!("SELECT COUNT(*) FROM {}{}", qualified_table, where_clause);

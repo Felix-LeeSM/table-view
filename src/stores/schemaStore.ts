@@ -41,6 +41,7 @@ interface SchemaState {
     pageSize?: number,
     orderBy?: string,
     filters?: FilterCondition[],
+    rawWhere?: string,
   ) => Promise<TableData>;
   clearSchema: (connectionId: string) => void;
 }
@@ -94,6 +95,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     pageSize,
     orderBy,
     filters,
+    rawWhere,
   ) => {
     return tauri.queryTableData(
       connectionId,
@@ -103,6 +105,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       pageSize,
       orderBy,
       filters,
+      rawWhere,
     );
   },
 

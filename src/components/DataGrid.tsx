@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Filter, Key } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import FilterBar from "./FilterBar";
-import type { FilterCondition, TableData } from "../types/schema";
+import type { FilterCondition, FilterMode, TableData } from "../types/schema";
 
 interface DataGridProps {
   connectionId: string;
@@ -31,6 +31,9 @@ export default function DataGrid({
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
   const [showQuery, setShowQuery] = useState(true);
+  const [filterMode, setFilterMode] = useState<FilterMode>("structured");
+  const [rawSql, setRawSql] = useState("");
+  const [appliedRawSql, setAppliedRawSql] = useState("");
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   // Reset column widths when table/schema changes
@@ -149,6 +152,8 @@ export default function DataGrid({
     setLoading(true);
     setError(null);
     try {
+      const activeRaw =
+        appliedRawSql.trim().length > 0 ? appliedRawSql.trim() : undefined;
       const activeFilters =
         appliedFilters.length > 0 ? appliedFilters : undefined;
       const result = await queryTableData(
@@ -158,14 +163,24 @@ export default function DataGrid({
         page,
         PAGE_SIZE,
         sort ? `${sort.column} ${sort.direction}` : undefined,
-        activeFilters,
+        activeRaw ? undefined : activeFilters, // raw_where takes precedence
+        activeRaw,
       );
       setData(result);
     } catch (e) {
       setError(String(e));
     }
     setLoading(false);
-  }, [connectionId, table, schema, page, sort, appliedFilters, queryTableData]);
+  }, [
+    connectionId,
+    table,
+    schema,
+    page,
+    sort,
+    appliedFilters,
+    appliedRawSql,
+    queryTableData,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -185,16 +200,24 @@ export default function DataGrid({
   };
 
   const handleApplyFilters = () => {
-    setAppliedFilters(filters);
+    if (filterMode === "raw") {
+      setAppliedRawSql(rawSql);
+      setAppliedFilters([]);
+    } else {
+      setAppliedFilters(filters);
+      setAppliedRawSql("");
+    }
     setPage(1);
   };
 
   const handleClearAllFilters = () => {
     setAppliedFilters([]);
+    setAppliedRawSql("");
     setPage(1);
   };
 
-  const activeFilterCount = appliedFilters.length;
+  const activeFilterCount =
+    appliedRawSql.trim().length > 0 ? 1 : appliedFilters.length;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -267,6 +290,10 @@ export default function DataGrid({
           onApply={handleApplyFilters}
           onClose={() => setShowFilters(false)}
           onClearAll={handleClearAllFilters}
+          filterMode={filterMode}
+          rawSql={rawSql}
+          onFilterModeChange={setFilterMode}
+          onRawSqlChange={setRawSql}
         />
       )}
 
