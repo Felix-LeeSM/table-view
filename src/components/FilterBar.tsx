@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import type {
   ColumnInfo,
@@ -63,6 +64,24 @@ export default function FilterBar({
 
   const opInfo = (op: FilterOperator) =>
     OPERATORS.find((o) => o.value === op) ?? OPERATORS[0]!;
+
+  // Auto-create one empty filter when columns arrive and no filters exist yet.
+  // The ref guard ensures this only fires once, even if columns update later.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- onFiltersChange is stable; columns tracked by length
+  const autoCreatedRef = useRef(false);
+  useEffect(() => {
+    if (!autoCreatedRef.current && filters.length === 0 && columns.length > 0) {
+      autoCreatedRef.current = true;
+      onFiltersChange([
+        {
+          column: columns[0]!.name,
+          operator: "Eq",
+          value: "",
+          id: crypto.randomUUID(),
+        },
+      ]);
+    }
+  }, [columns.length, filters.length]);
 
   return (
     <div className="border-b border-(--color-border) bg-(--color-bg-secondary) px-3 py-2">

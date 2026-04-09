@@ -5,10 +5,11 @@ function makeTab(overrides: Partial<Tab> & { id: string }): Tab {
   return {
     title: "Test Tab",
     connectionId: "conn1",
-    type: "data",
+    type: "table",
     closable: true,
     schema: "public",
     table: "users",
+    subView: "records",
     ...overrides,
   };
 }
@@ -25,33 +26,30 @@ describe("tabStore", () => {
     const state = useTabStore.getState();
     expect(state.tabs).toHaveLength(1);
     expect(state.tabs[0]!.connectionId).toBe("conn1");
-    expect(state.tabs[0]!.type).toBe("data");
+    expect(state.tabs[0]!.type).toBe("table");
     expect(state.activeTabId).not.toBeNull();
     expect(state.activeTabId).toBe(state.tabs[0]!.id);
   });
 
-  it("activates existing tab for same connection+type+table", () => {
+  it("activates existing tab for same connection+table", () => {
     const tab1 = makeTab({
       id: "t1",
       connectionId: "conn1",
-      type: "data",
       table: "users",
     });
     const tab2 = makeTab({
       id: "t2",
       connectionId: "conn1",
-      type: "data",
       table: "orders",
     });
 
     useTabStore.getState().addTab(tab1);
     useTabStore.getState().addTab(tab2);
 
-    // Now try to add tab1 again (same connection+type+table)
+    // Now try to add tab1 again (same connection+table)
     const tab1_dup = makeTab({
       id: "t3",
       connectionId: "conn1",
-      type: "data",
       table: "users",
     });
     useTabStore.getState().addTab(tab1_dup);
@@ -115,5 +113,42 @@ describe("tabStore", () => {
     useTabStore.getState().setActiveTab(firstTabId);
 
     expect(useTabStore.getState().activeTabId).toBe(firstTabId);
+  });
+
+  it("changes subView on a tab", () => {
+    const tab = makeTab({ id: "t1", table: "users", subView: "records" });
+    useTabStore.getState().addTab(tab);
+
+    const stateBefore = useTabStore.getState();
+    expect(stateBefore.tabs[0]!.subView).toBe("records");
+
+    useTabStore.getState().setSubView(stateBefore.tabs[0]!.id, "structure");
+
+    const state = useTabStore.getState();
+    expect(state.tabs[0]!.subView).toBe("structure");
+  });
+
+  it("subView persists when switching between tabs", () => {
+    const tab1 = makeTab({ id: "t1", table: "users", subView: "records" });
+    const tab2 = makeTab({ id: "t2", table: "orders", subView: "records" });
+
+    useTabStore.getState().addTab(tab1);
+    useTabStore.getState().addTab(tab2);
+
+    const stateBefore = useTabStore.getState();
+    // Change subView on first tab to structure
+    useTabStore.getState().setSubView(stateBefore.tabs[0]!.id, "structure");
+
+    // Switch to second tab
+    useTabStore.getState().setActiveTab(stateBefore.tabs[1]!.id);
+
+    // Switch back to first tab
+    useTabStore.getState().setActiveTab(stateBefore.tabs[0]!.id);
+
+    const state = useTabStore.getState();
+    // First tab should still have "structure" subView
+    expect(state.tabs[0]!.subView).toBe("structure");
+    // Second tab should still have "records" subView
+    expect(state.tabs[1]!.subView).toBe("records");
   });
 });

@@ -66,52 +66,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   };
 
   const handleTableClick = (tableName: string, schemaName: string) => {
-    // If a data tab already exists for this connection + table, just activate it
-    const existingDataTab = useTabStore
-      .getState()
-      .tabs.find(
-        (t) =>
-          t.connectionId === connectionId &&
-          t.type === "data" &&
-          t.table === tableName,
-      );
-    if (existingDataTab) {
-      useTabStore.getState().setActiveTab(existingDataTab.id);
-      return;
-    }
-
-    // Add "data" tab (active)
     addTab({
-      id: "",
       title: `${schemaName}.${tableName}`,
       connectionId,
-      type: "data",
+      type: "table",
       closable: true,
       schema: schemaName,
       table: tableName,
+      subView: "records",
     });
-    // Add "structure" tab (not active — data tab stays focused)
-    addTab({
-      id: "",
-      title: `${schemaName}.${tableName}`,
-      connectionId,
-      type: "structure",
-      closable: true,
-      schema: schemaName,
-      table: tableName,
-    });
-    // Switch back to the data tab since addTab for structure will activate it
-    const dataTabId = useTabStore
-      .getState()
-      .tabs.find(
-        (t) =>
-          t.connectionId === connectionId &&
-          t.type === "data" &&
-          t.table === tableName,
-      )?.id;
-    if (dataTabId) {
-      useTabStore.getState().setActiveTab(dataTabId);
-    }
   };
 
   return (
