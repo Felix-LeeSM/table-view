@@ -22,6 +22,7 @@ export default function StructurePanel({
   const [constraints, setConstraints] = useState<ConstraintInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasFetched, setHasFetched] = useState(false);
 
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const getTableIndexes = useSchemaStore((s) => s.getTableIndexes);
@@ -45,6 +46,7 @@ export default function StructurePanel({
       setError(String(e));
     }
     setLoading(false);
+    setHasFetched(true);
   }, [
     connectionId,
     table,
@@ -58,6 +60,10 @@ export default function StructurePanel({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    setHasFetched(false);
+  }, [activeSubTab]);
 
   const subTabs: { key: SubTab; label: string }[] = [
     { key: "columns", label: "Columns" },
@@ -122,8 +128,11 @@ export default function StructurePanel({
                 <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
                   Default
                 </th>
-                <th className="border-b border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
                   Ref
+                </th>
+                <th className="border-b border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                  Comment
                 </th>
               </tr>
             </thead>
@@ -169,8 +178,11 @@ export default function StructurePanel({
                   <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
                     {col.default_value ?? "\u2014"}
                   </td>
-                  <td className="max-w-[200px] truncate px-3 py-1 text-xs text-blue-400">
+                  <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-blue-400">
                     {col.fk_reference ?? "\u2014"}
+                  </td>
+                  <td className="max-w-[200px] truncate px-3 py-1 text-xs text-(--color-text-muted)">
+                    {col.comment ?? "\u2014"}
                   </td>
                 </tr>
               ))}
@@ -282,6 +294,7 @@ export default function StructurePanel({
       )}
 
       {!loading &&
+        hasFetched &&
         error === null &&
         ((activeSubTab === "columns" && columns.length === 0) ||
           (activeSubTab === "indexes" && indexes.length === 0) ||

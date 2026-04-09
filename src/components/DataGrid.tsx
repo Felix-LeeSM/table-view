@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Filter } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import FilterBar from "./FilterBar";
@@ -22,10 +22,38 @@ export default function DataGrid({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sort, setSort] = useState<{
+    column: string;
+    direction: "ASC" | "DESC";
+  } | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
+
+  // Cmd+F (Mac) / Ctrl+F (other) toggles the filter bar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "f" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowFilters((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const prevPropsRef = useRef({ connectionId, table, schema });
+  useEffect(() => {
+    const prev = prevPropsRef.current;
+    if (
+      prev.connectionId !== connectionId ||
+      prev.table !== table ||
+      prev.schema !== schema
+    ) {
+      setPage(1);
+      prevPropsRef.current = { connectionId, table, schema };
+    }
+  }, [connectionId, table, schema]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -39,7 +67,7 @@ export default function DataGrid({
         schema,
         page,
         PAGE_SIZE,
-        sortColumn ?? undefined,
+        sort ? `${sort.column} ${sort.direction}` : undefined,
         activeFilters,
       );
       setData(result);
@@ -47,15 +75,7 @@ export default function DataGrid({
       setError(String(e));
     }
     setLoading(false);
-  }, [
-    connectionId,
-    table,
-    schema,
-    page,
-    sortColumn,
-    appliedFilters,
-    queryTableData,
-  ]);
+  }, [connectionId, table, schema, page, sort, appliedFilters, queryTableData]);
 
   useEffect(() => {
     fetchData();
@@ -64,12 +84,23 @@ export default function DataGrid({
   const totalPages = data ? Math.ceil(data.total_count / PAGE_SIZE) : 0;
 
   const handleSort = (columnName: string) => {
-    setSortColumn((prev) => (prev === columnName ? null : columnName));
+    setSort((prev) => {
+      if (!prev || prev.column !== columnName)
+        return { column: columnName, direction: "ASC" };
+      if (prev.direction === "ASC")
+        return { column: columnName, direction: "DESC" };
+      return null;
+    });
     setPage(1);
   };
 
   const handleApplyFilters = () => {
     setAppliedFilters(filters);
+    setPage(1);
+  };
+
+  const handleClearAllFilters = () => {
+    setAppliedFilters([]);
     setPage(1);
   };
 
@@ -83,9 +114,9 @@ export default function DataGrid({
           {data ? (
             <>
               {data.total_count.toLocaleString()} rows
-              {sortColumn && (
+              {sort && (
                 <span className="text-(--color-text-muted)">
-                  Sorted by {sortColumn}
+                  Sorted by {sort.column} {sort.direction}
                 </span>
               )}
             </>
@@ -145,6 +176,7 @@ export default function DataGrid({
           onFiltersChange={setFilters}
           onApply={handleApplyFilters}
           onClose={() => setShowFilters(false)}
+          onClearAll={handleClearAllFilters}
         />
       )}
 
@@ -189,8 +221,10 @@ export default function DataGrid({
                       <span className="text-[10px] text-(--color-text-muted)">
                         {col.data_type}
                       </span>
-                      {sortColumn === col.name && (
-                        <span className="text-(--color-accent)">&#9650;</span>
+                      {sort?.column === col.name && (
+                        <span className="text-(--color-accent)">
+                          {sort.direction === "ASC" ? "\u25B2" : "\u25BC"}
+                        </span>
                       )}
                     </div>
                   </th>

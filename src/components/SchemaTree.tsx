@@ -57,6 +57,20 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   };
 
   const handleTableClick = (tableName: string, schemaName: string) => {
+    // If a data tab already exists for this connection + table, just activate it
+    const existingDataTab = useTabStore
+      .getState()
+      .tabs.find(
+        (t) =>
+          t.connectionId === connectionId &&
+          t.type === "data" &&
+          t.table === tableName,
+      );
+    if (existingDataTab) {
+      useTabStore.getState().setActiveTab(existingDataTab.id);
+      return;
+    }
+
     // Add "data" tab (active)
     addTab({
       id: "",

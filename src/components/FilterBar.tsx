@@ -11,6 +11,7 @@ interface FilterBarProps {
   onFiltersChange: (filters: FilterCondition[]) => void;
   onApply: () => void;
   onClose: () => void;
+  onClearAll: () => void;
 }
 
 const OPERATORS: {
@@ -35,6 +36,7 @@ export default function FilterBar({
   onFiltersChange,
   onApply,
   onClose,
+  onClearAll,
 }: FilterBarProps) {
   const addFilter = () => {
     const firstCol = columns[0]?.name ?? "";
@@ -56,6 +58,7 @@ export default function FilterBar({
 
   const clearAll = () => {
     onFiltersChange([]);
+    onClearAll();
   };
 
   const opInfo = (op: FilterOperator) =>

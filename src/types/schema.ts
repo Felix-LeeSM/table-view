@@ -16,6 +16,7 @@ export interface ColumnInfo {
   is_primary_key: boolean;
   is_foreign_key: boolean;
   fk_reference: string | null;
+  comment: string | null;
 }
 
 export interface IndexInfo {
