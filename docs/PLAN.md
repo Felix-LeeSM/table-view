@@ -135,7 +135,8 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F2.3: 테이블 구조 (Columns)
 - **Done when:**
-  - [x] "Structure" 탭에서 컬럼 목록 표시: Name, Type, Nullable, Default, Comment
+  - [x] "Structure" 탭에서 컬럼 목록 표시: Name, Type, Nullable, Default
+  - [ ] Comment 컬럼 표시 (col_description 필요)
   - [x] Primary Key 컬럼에 키 아이콘 표시
   - [x] Foreign Key 컬럼에 FK 아이콘 및 참조 테이블 정보 표시
   - [ ] 컬럼 추가/수정/삭제 가능 (ALTER TABLE 실행)
@@ -151,7 +152,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 #### F2.5: 제약조건 뷰
 - **Done when:**
   - [x] Constraints 서브탭에서 제약조건 목록 표시
-  - [x] 유형별 분류: Primary Key, Foreign Key, Unique, Check, Not Null
+  - [x] 유형별 분류: Primary Key, Foreign Key, Unique, Check (NOT NULL은 Columns 탭 Nullable 컬럼으로 확인)
   - [x] FK의 참조 대상(referenced table/column) 표시
   - [ ] 제약조건 추가/삭제 가능
 
@@ -206,7 +207,8 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F3.4: 필터링
 - **Done when:**
-  - [x] 행 필터(Cmd+F): 특정 컬럼의 값으로 행 필터링
+  - [x] 행 필터: 특정 컬럼의 값으로 행 필터링 (버튼 토글)
+  - [ ] Cmd+F 단축키로 필터바 토글
   - [x] 다중 조건 필터 (AND 조합)
   - [x] 연산자: =, !=, >, <, >=, <=, LIKE, IS NULL, IS NOT NULL
   - [ ] 다중 조건 필터 (OR 조합)
@@ -385,7 +387,8 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [x] 연결 시 사이드바에 DB → Schema → Tables 트리 전개
 - [x] 테이블 선택 시 Structure 탭과 Data 탭 열림
 - [x] Data 탭에서 페이지네이션된 데이터 그리드 표시
-- [x] 컬럼 정렬 및 기본 필터 동작
+- [x] 컬럼 정렬 (ASC 전용) 및 기본 필터 동작
+- [ ] ASC/DESC 토글, 다중 컬럼 정렬
 
 ### Phase 3: Query Editor
 > 쿼리 작성 및 실행 환경
