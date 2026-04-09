@@ -216,6 +216,23 @@ impl PostgresAdapter {
 
         let fk_map: std::collections::HashMap<String, String> = fk_rows.into_iter().collect();
 
+        // Get column comments via col_description()
+        let comment_rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT a.attname AS column_name, col_description(c.oid, a.attnum) AS comment \
+             FROM pg_class c \
+             JOIN pg_namespace n ON n.oid = c.relnamespace \
+             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped \
+             WHERE n.nspname = $1 AND c.relname = $2",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let comment_map: std::collections::HashMap<String, Option<String>> =
+            comment_rows.into_iter().collect();
+
         Ok(rows
             .into_iter()
             .map(|(name, data_type, is_nullable, default_value)| {
@@ -224,6 +241,7 @@ impl PostgresAdapter {
                     Some(ref_str) => (true, Some(ref_str.clone())),
                     None => (false, None),
                 };
+                let comment = comment_map.get(&name).and_then(|c| c.clone()).or(None);
                 ColumnInfo {
                     name,
                     data_type,
@@ -232,6 +250,7 @@ impl PostgresAdapter {
                     is_primary_key: is_pk,
                     is_foreign_key: is_fk,
                     fk_reference,
+                    comment,
                 }
             })
             .collect())
@@ -321,10 +340,21 @@ impl PostgresAdapter {
         let offset = (page - 1).max(0) * page_size;
 
         let mut order_clause = String::new();
-        if let Some(col) = &order_by {
-            let valid_col = columns.iter().any(|c| c.name.as_str() == *col);
+        if let Some(order_by) = &order_by {
+            // Parse "column_name ASC" or "column_name DESC" format
+            let parts: Vec<&str> = order_by.split_whitespace().collect();
+            let (col_name, direction) = match parts.as_slice() {
+                [col, dir] if *dir == "ASC" || *dir == "DESC" => (*col, *dir),
+                [col] => (*col, "ASC"),
+                _ => (*order_by, "ASC"),
+            };
+            let valid_col = columns.iter().any(|c| c.name.as_str() == col_name);
             if valid_col {
-                order_clause = format!(" ORDER BY \"{}\" ASC", col.replace('"', "\"\""));
+                order_clause = format!(
+                    " ORDER BY \"{}\" {}",
+                    col_name.replace('"', "\"\""),
+                    direction
+                );
             }
         }
 
@@ -420,6 +450,23 @@ impl PostgresAdapter {
 
         let fk_map: std::collections::HashMap<String, String> = fk_rows.into_iter().collect();
 
+        // Get column comments via col_description()
+        let comment_rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT a.attname AS column_name, col_description(c.oid, a.attnum) AS comment \
+             FROM pg_class c \
+             JOIN pg_namespace n ON n.oid = c.relnamespace \
+             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped \
+             WHERE n.nspname = $1 AND c.relname = $2",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let comment_map: std::collections::HashMap<String, Option<String>> =
+            comment_rows.into_iter().collect();
+
         Ok(rows
             .into_iter()
             .map(|(name, data_type, is_nullable, default_value)| {
@@ -428,6 +475,7 @@ impl PostgresAdapter {
                     Some(ref_str) => (true, Some(ref_str.clone())),
                     None => (false, None),
                 };
+                let comment = comment_map.get(&name).and_then(|c| c.clone()).or(None);
                 ColumnInfo {
                     name,
                     data_type,
@@ -436,6 +484,7 @@ impl PostgresAdapter {
                     is_primary_key: is_pk,
                     is_foreign_key: is_fk,
                     fk_reference,
+                    comment,
                 }
             })
             .collect())

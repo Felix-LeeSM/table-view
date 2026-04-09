@@ -21,6 +21,7 @@ pub struct ColumnInfo {
     pub is_primary_key: bool,
     pub is_foreign_key: bool,
     pub fk_reference: Option<String>,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,6 +121,7 @@ mod tests {
             is_primary_key: true,
             is_foreign_key: false,
             fk_reference: None,
+            comment: Some("Primary user identifier".to_string()),
         };
         let json = serde_json::to_string(&col).unwrap();
         let deserialized: ColumnInfo = serde_json::from_str(&json).unwrap();
@@ -133,6 +135,10 @@ mod tests {
         assert!(deserialized.is_primary_key);
         assert!(!deserialized.is_foreign_key);
         assert!(deserialized.fk_reference.is_none());
+        assert_eq!(
+            deserialized.comment,
+            Some("Primary user identifier".to_string())
+        );
     }
 
     #[test]
@@ -145,6 +151,7 @@ mod tests {
             is_primary_key: false,
             is_foreign_key: false,
             fk_reference: None,
+            comment: None,
         };
         let json = serde_json::to_string(&col).unwrap();
         let deserialized: ColumnInfo = serde_json::from_str(&json).unwrap();
@@ -154,6 +161,7 @@ mod tests {
         assert!(!deserialized.is_foreign_key);
         assert!(deserialized.default_value.is_none());
         assert!(deserialized.fk_reference.is_none());
+        assert!(deserialized.comment.is_none());
     }
 
     #[test]
@@ -168,6 +176,7 @@ mod tests {
                     is_primary_key: true,
                     is_foreign_key: false,
                     fk_reference: None,
+                    comment: None,
                 },
                 ColumnInfo {
                     name: "name".to_string(),
@@ -177,6 +186,7 @@ mod tests {
                     is_primary_key: false,
                     is_foreign_key: false,
                     fk_reference: None,
+                    comment: Some("User display name".to_string()),
                 },
             ],
             rows: vec![

@@ -270,3 +270,65 @@ async fn test_query_table_data_ordering() {
 
     adapter.disconnect_pool().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_query_table_data_ordering_desc() {
+    let adapter = setup_adapter().await;
+    let table_name = unique_table_name("ordered_desc");
+
+    // Create and populate table
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (id SERIAL PRIMARY KEY, label TEXT NOT NULL)"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (label) VALUES ('charlie'), ('alpha'), ('bravo')"
+        ))
+        .await
+        .expect("Failed to insert data");
+
+    // Query ordered by label DESC using "label DESC" format
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, Some("label DESC"), None)
+        .await
+        .expect("query_table_data with DESC ordering failed");
+
+    assert_eq!(data.rows.len(), 3);
+
+    // First row should be "charlie" for DESC
+    let first_label = data.rows[0][1].as_str().unwrap_or("");
+    assert_eq!(
+        first_label, "charlie",
+        "First row should be 'charlie' when ordered by label DESC"
+    );
+
+    let last_label = data.rows[2][1].as_str().unwrap_or("");
+    assert_eq!(
+        last_label, "alpha",
+        "Last row should be 'alpha' when ordered by label DESC"
+    );
+
+    // Verify backward-compatible single-word still defaults to ASC
+    let data_asc = adapter
+        .query_table_data(&table_name, "public", 1, 50, Some("label"), None)
+        .await
+        .expect("query_table_data with default ASC ordering failed");
+
+    let asc_first = data_asc.rows[0][1].as_str().unwrap_or("");
+    assert_eq!(
+        asc_first, "alpha",
+        "First row should be 'alpha' when ordered by label (default ASC)"
+    );
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}
