@@ -11,6 +11,7 @@ interface DataGridProps {
 }
 
 const PAGE_SIZE = 100;
+const MIN_COL_WIDTH = 60;
 
 export default function DataGrid({
   connectionId,
@@ -30,6 +31,94 @@ export default function DataGrid({
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
   const [showQuery, setShowQuery] = useState(true);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+
+  // Reset column widths when table/schema changes
+  useEffect(() => {
+    setColumnWidths({});
+  }, [connectionId, table, schema]);
+
+  const getColumnWidth = useCallback(
+    (colName: string) => columnWidths[colName] ?? 150,
+    [columnWidths],
+  );
+
+  // Resize drag handler — writes directly to DOM during drag for perf,
+  // commits final width to React state on mouseup only.
+  const tableRef = useRef<HTMLTableElement>(null);
+  const resizingRef = useRef<{
+    colName: string;
+    startX: number;
+    startWidth: number;
+    colIdx: number;
+  } | null>(null);
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, colName: string, colIdx: number) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const currentWidth = columnWidths[colName] ?? 150;
+      resizingRef.current = {
+        colName,
+        startX: e.clientX,
+        startWidth: currentWidth,
+        colIdx,
+      };
+
+      const applyWidth = (width: number) => {
+        if (!tableRef.current) return;
+        const w = `${width}px`;
+        // Update th + all td cells in this column directly via DOM
+        const th = tableRef.current.querySelector(
+          `th:nth-child(${colIdx + 1})`,
+        ) as HTMLElement | null;
+        if (th) th.style.width = w;
+        const cells = tableRef.current.querySelectorAll(
+          `td:nth-child(${colIdx + 1})`,
+        );
+        cells.forEach((td) => {
+          (td as HTMLElement).style.width = w;
+        });
+      };
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!resizingRef.current) return;
+        const delta = moveEvent.clientX - resizingRef.current.startX;
+        const newWidth = Math.max(
+          MIN_COL_WIDTH,
+          resizingRef.current.startWidth + delta,
+        );
+        applyWidth(newWidth);
+      };
+
+      const handleMouseUp = () => {
+        if (resizingRef.current) {
+          // Commit final width to React state
+          const finalWidth = tableRef.current?.querySelector(
+            `th:nth-child(${resizingRef.current.colIdx + 1})`,
+          ) as HTMLElement | null;
+          const w = finalWidth
+            ? parseInt(finalWidth.style.width, 10)
+            : resizingRef.current.startWidth;
+          setColumnWidths((prev) => ({
+            ...prev,
+            [resizingRef.current!.colName]: w,
+          }));
+        }
+        resizingRef.current = null;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [columnWidths],
+  );
 
   // Cmd+F (Mac) / Ctrl+F (other) toggles the filter bar
   useEffect(() => {
@@ -202,13 +291,17 @@ export default function DataGrid({
 
       {data && !loading && (
         <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full border-collapse text-sm" ref={tableRef}>
             <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
               <tr>
-                {data.columns.map((col) => (
+                {data.columns.map((col, colIdx) => (
                   <th
                     key={col.name}
-                    className="cursor-pointer border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                    className="relative cursor-pointer border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                    style={{
+                      width: getColumnWidth(col.name),
+                      minWidth: MIN_COL_WIDTH,
+                    }}
                     onClick={() => handleSort(col.name)}
                     title={`Sort by ${col.name}`}
                   >
@@ -222,16 +315,24 @@ export default function DataGrid({
                           />
                         </span>
                       )}
-                      <span>{col.name}</span>
-                      <span className="text-[10px] text-(--color-text-muted)">
-                        {col.data_type}
-                      </span>
+                      <span className="truncate">{col.name}</span>
                       {sort?.column === col.name && (
-                        <span className="text-(--color-accent)">
+                        <span className="shrink-0 text-(--color-accent)">
                           {sort.direction === "ASC" ? "\u25B2" : "\u25BC"}
                         </span>
                       )}
                     </div>
+                    <div className="mt-0.5 text-[10px] text-(--color-text-muted)">
+                      {col.data_type}
+                    </div>
+                    {/* Resize handle */}
+                    <div
+                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-(--color-accent) active:bg-(--color-accent)"
+                      onMouseDown={(e) =>
+                        handleResizeStart(e, col.name, colIdx)
+                      }
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   </th>
                 ))}
               </tr>
@@ -245,7 +346,13 @@ export default function DataGrid({
                   {(row as unknown[]).map((cell, cellIdx) => (
                     <td
                       key={cellIdx}
-                      className="max-w-[300px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)"
+                      className="whitespace-normal break-words border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)"
+                      style={{
+                        width: getColumnWidth(
+                          data.columns[cellIdx]?.name ?? "",
+                        ),
+                        minWidth: MIN_COL_WIDTH,
+                      }}
                       title={cell == null ? "NULL" : String(cell)}
                     >
                       {cell == null ? (
