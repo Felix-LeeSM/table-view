@@ -332,3 +332,70 @@ async fn test_query_table_data_ordering_desc() {
 
     adapter.disconnect_pool().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_get_table_columns_with_comments() {
+    let adapter = setup_adapter().await;
+    let table_name = unique_table_name("comments");
+
+    // Create table with known columns
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id SERIAL PRIMARY KEY, \
+             name TEXT NOT NULL, \
+             email TEXT)"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    // Add a comment on the "name" column only
+    adapter
+        .execute(&format!(
+            "COMMENT ON COLUMN \"{table_name}\".name IS 'User display name'"
+        ))
+        .await
+        .expect("Failed to add column comment");
+
+    // Fetch columns and verify comment field
+    let columns = adapter
+        .get_table_columns(&table_name, "public")
+        .await
+        .expect("get_table_columns failed");
+
+    // The "name" column should carry the comment
+    let name_col = columns
+        .iter()
+        .find(|c| c.name == "name")
+        .expect("name column missing");
+    assert_eq!(
+        name_col.comment,
+        Some("User display name".to_string()),
+        "Expected comment on 'name' column"
+    );
+
+    // The "id" column should have no comment
+    let id_col = columns
+        .iter()
+        .find(|c| c.name == "id")
+        .expect("id column missing");
+    assert_eq!(id_col.comment, None, "Expected no comment on 'id' column");
+
+    // The "email" column should also have no comment
+    let email_col = columns
+        .iter()
+        .find(|c| c.name == "email")
+        .expect("email column missing");
+    assert_eq!(
+        email_col.comment, None,
+        "Expected no comment on 'email' column"
+    );
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}

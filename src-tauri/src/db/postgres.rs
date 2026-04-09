@@ -168,92 +168,7 @@ impl PostgresAdapter {
             .as_ref()
             .ok_or_else(|| AppError::Connection("Not connected".into()))?;
 
-        // Get column info from information_schema
-        let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
-            "SELECT column_name, data_type, is_nullable, column_default \
-             FROM information_schema.columns \
-             WHERE table_schema = $1 AND table_name = $2 \
-             ORDER BY ordinal_position",
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
-
-        // Get primary key columns
-        let pk_rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT kcu.column_name \
-             FROM information_schema.table_constraints tc \
-             JOIN information_schema.key_column_usage kcu \
-               ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema \
-             WHERE tc.table_schema = $1 AND tc.table_name = $2 AND tc.constraint_type = 'PRIMARY KEY'",
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
-
-        let pk_columns: std::collections::HashSet<String> =
-            pk_rows.into_iter().map(|(col,)| col).collect();
-
-        // Get foreign key references
-        let fk_rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT kcu.column_name, ccu.table_name || '.' || ccu.column_name \
-             FROM information_schema.table_constraints tc \
-             JOIN information_schema.key_column_usage kcu \
-               ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema \
-             JOIN information_schema.constraint_column_usage ccu \
-               ON tc.constraint_name = ccu.constraint_name AND tc.table_schema = ccu.table_schema \
-             WHERE tc.table_schema = $1 AND tc.table_name = $2 AND tc.constraint_type = 'FOREIGN KEY'",
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
-
-        let fk_map: std::collections::HashMap<String, String> = fk_rows.into_iter().collect();
-
-        // Get column comments via col_description()
-        let comment_rows: Vec<(String, Option<String>)> = sqlx::query_as(
-            "SELECT a.attname AS column_name, col_description(c.oid, a.attnum) AS comment \
-             FROM pg_class c \
-             JOIN pg_namespace n ON n.oid = c.relnamespace \
-             JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped \
-             WHERE n.nspname = $1 AND c.relname = $2",
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| AppError::Connection(e.to_string()))?;
-
-        let comment_map: std::collections::HashMap<String, Option<String>> =
-            comment_rows.into_iter().collect();
-
-        Ok(rows
-            .into_iter()
-            .map(|(name, data_type, is_nullable, default_value)| {
-                let is_pk = pk_columns.contains(&name);
-                let (is_fk, fk_reference) = match fk_map.get(&name) {
-                    Some(ref_str) => (true, Some(ref_str.clone())),
-                    None => (false, None),
-                };
-                let comment = comment_map.get(&name).and_then(|c| c.clone()).or(None);
-                ColumnInfo {
-                    name,
-                    data_type,
-                    nullable: is_nullable == "YES",
-                    default_value,
-                    is_primary_key: is_pk,
-                    is_foreign_key: is_fk,
-                    fk_reference,
-                    comment,
-                }
-            })
-            .collect())
+        self.get_table_columns_inner(pool, table, schema).await
     }
 
     pub async fn query_table_data(
@@ -475,7 +390,7 @@ impl PostgresAdapter {
                     Some(ref_str) => (true, Some(ref_str.clone())),
                     None => (false, None),
                 };
-                let comment = comment_map.get(&name).and_then(|c| c.clone()).or(None);
+                let comment = comment_map.get(&name).and_then(Option::clone);
                 ColumnInfo {
                     name,
                     data_type,
