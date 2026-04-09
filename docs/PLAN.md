@@ -214,8 +214,8 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
   - [ ] 다중 조건 필터 (OR 조합)
   - [ ] 필터 조건이 생성하는 WHERE 절 SQL 미리보기
   - [x] 필터 초기화 버튼
-  - [ ] Raw SQL 필터 모드 (사용자가 WHERE 절 조건 직접 입력)
-  - [ ] 필터 값 타입 캐스팅 (bigint, integer 등 숫자 컬럼에 문자열 바인딩 시 자동 캐스트)
+  - [x] Raw SQL 필터 모드 (사용자가 WHERE 절 조건 직접 입력)
+  - [x] 필터 값 타입 캐스팅 (bigint, integer 등 숫자 컬럼에 문자열 바인딩 시 자동 캐스트)
   - [ ] 컬럼 헤더 우클릭 → "Filter by this column" 빠른 필터
 
 #### F3.5: 정렬
@@ -315,7 +315,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
   - [ ] Cmd+S: Commit changes
   - [ ] Cmd+P: Quick Open (테이블/뷰/함수 검색)
   - [x] Cmd+F: 필터
-  - [ ] Cmd+R / F5: 컨텍스트 새로고침
+  - [x] Cmd+R / F5: 컨텍스트 새로고침
   - [ ] Cmd+Return: 쿼리 실행
   - [ ] Cmd+.: 쿼리 취소
   - [ ] Cmd+,: 설정 열기
