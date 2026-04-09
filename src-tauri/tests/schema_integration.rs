@@ -1,5 +1,5 @@
 use view_table_lib::db::postgres::PostgresAdapter;
-use view_table_lib::models::{ConnectionConfig, DatabaseType};
+use view_table_lib::models::{ConnectionConfig, DatabaseType, FilterCondition, FilterOperator};
 
 fn test_config() -> ConnectionConfig {
     ConnectionConfig {
@@ -390,6 +390,167 @@ async fn test_get_table_columns_with_comments() {
         email_col.comment, None,
         "Expected no comment on 'email' column"
     );
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_query_table_data_with_filter_bigint() {
+    let adapter = setup_adapter().await;
+    let table_name = unique_table_name("filter_bigint");
+
+    // Create table with a BIGINT column
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id BIGINT PRIMARY KEY, \
+             name TEXT NOT NULL)"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (id, name) VALUES \
+             (1, 'alice'), (2, 'bob'), (3, 'charlie')"
+        ))
+        .await
+        .expect("Failed to insert data");
+
+    // Filter by bigint column with Eq operator
+    let filters = vec![FilterCondition {
+        column: "id".to_string(),
+        operator: FilterOperator::Eq,
+        value: Some("2".to_string()),
+    }];
+
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, None, Some(&filters))
+        .await
+        .expect("query_table_data with bigint filter failed");
+
+    assert_eq!(
+        data.rows.len(),
+        1,
+        "Expected 1 row for id=2 filter, got {}",
+        data.rows.len()
+    );
+    assert_eq!(data.total_count, 1, "Expected total_count = 1");
+    let name_val = data.rows[0][1].as_str().unwrap_or("");
+    assert_eq!(name_val, "bob", "Filtered row should be 'bob'");
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_query_table_data_with_filter_text() {
+    let adapter = setup_adapter().await;
+    let table_name = unique_table_name("filter_text");
+
+    // Create table with a TEXT column
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id SERIAL PRIMARY KEY, \
+             name TEXT NOT NULL)"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (name) VALUES \
+             ('alice'), ('bob'), ('charlie'), ('david')"
+        ))
+        .await
+        .expect("Failed to insert data");
+
+    // Filter by text column with LIKE operator
+    let filters = vec![FilterCondition {
+        column: "name".to_string(),
+        operator: FilterOperator::Like,
+        value: Some("%li%".to_string()),
+    }];
+
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, None, Some(&filters))
+        .await
+        .expect("query_table_data with text LIKE filter failed");
+
+    // Should match 'alice' and 'charlie' (both contain 'li')
+    assert_eq!(
+        data.rows.len(),
+        2,
+        "Expected 2 rows for LIKE '%li%' filter, got {}",
+        data.rows.len()
+    );
+    assert_eq!(data.total_count, 2, "Expected total_count = 2");
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_query_table_data_with_filter_integer() {
+    let adapter = setup_adapter().await;
+    let table_name = unique_table_name("filter_int");
+
+    // Create table with an INTEGER (SERIAL) column
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id SERIAL PRIMARY KEY, \
+             score INTEGER NOT NULL, \
+             label TEXT NOT NULL)"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (score, label) VALUES \
+             (10, 'low'), (50, 'mid'), (90, 'high'), (100, 'top')"
+        ))
+        .await
+        .expect("Failed to insert data");
+
+    // Filter by integer column with Gt (>) operator
+    let filters = vec![FilterCondition {
+        column: "score".to_string(),
+        operator: FilterOperator::Gt,
+        value: Some("50".to_string()),
+    }];
+
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, None, Some(&filters))
+        .await
+        .expect("query_table_data with integer Gt filter failed");
+
+    // Should match score 90 and 100
+    assert_eq!(
+        data.rows.len(),
+        2,
+        "Expected 2 rows for score > 50 filter, got {}",
+        data.rows.len()
+    );
+    assert_eq!(data.total_count, 2, "Expected total_count = 2");
 
     // Clean up
     adapter

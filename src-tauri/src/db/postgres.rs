@@ -9,6 +9,37 @@ use crate::models::{
     SchemaInfo, TableData, TableInfo,
 };
 
+/// Maps PostgreSQL `data_type` strings (from `information_schema.columns`) to
+/// the corresponding cast target type name. Returns `None` for text-like types
+/// where no cast is needed (binding as `text` is fine).
+fn pg_cast_type(data_type: &str) -> Option<&'static str> {
+    match data_type {
+        // Integer types
+        "bigint" => Some("bigint"),
+        "integer" => Some("integer"),
+        "smallint" => Some("smallint"),
+        // Numeric / decimal
+        "numeric" | "decimal" => Some("numeric"),
+        // Floating-point
+        "real" => Some("real"),
+        "double precision" => Some("double precision"),
+        // Boolean
+        "boolean" => Some("boolean"),
+        // UUID
+        "uuid" => Some("uuid"),
+        // Date / time
+        "date" => Some("date"),
+        "timestamp without time zone" => Some("timestamp"),
+        "timestamp with time zone" => Some("timestamptz"),
+        "time without time zone" => Some("time"),
+        "time with time zone" => Some("timetz"),
+        // Text-like: no cast needed
+        "text" | "varchar" | "character varying" | "char" | "character" | "name" => None,
+        // Unknown types: no cast
+        _ => None,
+    }
+}
+
 pub struct PostgresAdapter {
     pool: Mutex<Option<PgPool>>,
 }
@@ -202,6 +233,11 @@ impl PostgresAdapter {
             if !filters.is_empty() {
                 let valid_columns: std::collections::HashSet<&str> =
                     columns.iter().map(|c| c.name.as_str()).collect();
+                // Build column-name -> data_type lookup for O(1) type casts
+                let col_types: std::collections::HashMap<&str, &str> = columns
+                    .iter()
+                    .map(|c| (c.name.as_str(), c.data_type.as_str()))
+                    .collect();
                 let mut conditions: Vec<String> = Vec::new();
                 for f in filters {
                     if !valid_columns.contains(f.column.as_str()) {
@@ -228,7 +264,15 @@ impl PostgresAdapter {
                             };
                             if let Some(val) = &f.value {
                                 let param_idx = param_values.len() + 1;
-                                conditions.push(format!("{} {} ${}", quoted_col, op, param_idx));
+                                let cast_suffix = col_types
+                                    .get(f.column.as_str())
+                                    .and_then(|dt| pg_cast_type(dt))
+                                    .map(|t| format!("::{}", t))
+                                    .unwrap_or_default();
+                                conditions.push(format!(
+                                    "{} {} ${}{}",
+                                    quoted_col, op, param_idx, cast_suffix
+                                ));
                                 param_values.push(val.clone());
                             }
                         }

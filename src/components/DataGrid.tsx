@@ -353,12 +353,20 @@ export default function DataGrid({
                         ),
                         minWidth: MIN_COL_WIDTH,
                       }}
-                      title={cell == null ? "NULL" : String(cell)}
+                      title={
+                        cell == null
+                          ? "NULL"
+                          : typeof cell === "object" && cell !== null
+                            ? JSON.stringify(cell, null, 2)
+                            : String(cell)
+                      }
                     >
                       {cell == null ? (
                         <span className="italic text-(--color-text-muted)">
                           NULL
                         </span>
+                      ) : typeof cell === "object" && cell !== null ? (
+                        JSON.stringify(cell, null, 2)
                       ) : (
                         String(cell)
                       )}
