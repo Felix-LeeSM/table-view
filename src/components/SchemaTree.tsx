@@ -37,6 +37,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     loadSchemas(connectionId).finally(() => setLoadingSchemas(false));
   }, [connectionId, loadSchemas]);
 
+  // Listen for context-aware refresh events (Cmd+R / F5)
+  useEffect(() => {
+    const handler = () => handleRefresh();
+    window.addEventListener("refresh-schema", handler);
+    return () => window.removeEventListener("refresh-schema", handler);
+  }, [connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleExpandSchema = async (schemaName: string) => {
     const newExpanded = new Set(expandedSchemas);
     if (newExpanded.has(schemaName)) {

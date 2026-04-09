@@ -57,6 +57,13 @@ export default function StructurePanel({
     getTableConstraints,
   ]);
 
+  // Listen for context-aware refresh events (Cmd+R / F5)
+  useEffect(() => {
+    const handler = () => fetchData();
+    window.addEventListener("refresh-structure", handler);
+    return () => window.removeEventListener("refresh-structure", handler);
+  }, [fetchData]);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);

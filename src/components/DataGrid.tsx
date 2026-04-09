@@ -182,6 +182,13 @@ export default function DataGrid({
     queryTableData,
   ]);
 
+  // Listen for context-aware refresh events (Cmd+R / F5)
+  useEffect(() => {
+    const handler = () => fetchData();
+    window.addEventListener("refresh-data", handler);
+    return () => window.removeEventListener("refresh-data", handler);
+  }, [fetchData]);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);

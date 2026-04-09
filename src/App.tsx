@@ -30,6 +30,40 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Cmd+R / Ctrl+R / F5 — context-aware refresh
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isRefresh =
+        (e.key === "r" && (e.metaKey || e.ctrlKey)) || e.key === "F5";
+      if (!isRefresh) return;
+
+      // Skip if focus is inside a text input, textarea, or select
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      e.preventDefault();
+
+      const { activeTabId, tabs } = useTabStore.getState();
+      const activeTab = activeTabId
+        ? tabs.find((t) => t.id === activeTabId)
+        : null;
+
+      if (activeTab && activeTab.type === "table") {
+        // Table tab active — dispatch based on subview
+        if (activeTab.subView === "records") {
+          window.dispatchEvent(new CustomEvent("refresh-data"));
+        } else if (activeTab.subView === "structure") {
+          window.dispatchEvent(new CustomEvent("refresh-structure"));
+        }
+      } else {
+        // No table tab active — refresh schema tree for active connections
+        window.dispatchEvent(new CustomEvent("refresh-schema"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-(--color-bg-primary)">
       <Sidebar />
