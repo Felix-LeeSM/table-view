@@ -104,7 +104,6 @@ export default function FilterBar({
   // Auto-create one empty filter when columns arrive and no filters exist yet.
   // The ref guard ensures this only fires once, even if columns update later.
   const autoCreatedRef = useRef(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- onFiltersChange is stable; columns tracked by length
   useEffect(() => {
     if (!autoCreatedRef.current && filters.length === 0 && columns.length > 0) {
       autoCreatedRef.current = true;
@@ -117,6 +116,7 @@ export default function FilterBar({
         },
       ]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onFiltersChange is stable; columns tracked by length
   }, [columns.length, filters.length]);
 
   return (
