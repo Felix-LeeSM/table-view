@@ -58,4 +58,5 @@ export interface FilterCondition {
   column: string;
   operator: FilterOperator;
   value: string | null;
+  id: string;
 }

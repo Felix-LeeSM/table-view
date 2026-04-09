@@ -42,7 +42,7 @@ export default function FilterBar({
     const firstCol = columns[0]?.name ?? "";
     onFiltersChange([
       ...filters,
-      { column: firstCol, operator: "Eq", value: "" },
+      { column: firstCol, operator: "Eq", value: "", id: crypto.randomUUID() },
     ]);
   };
 
@@ -80,7 +80,7 @@ export default function FilterBar({
       </div>
 
       {filters.map((filter, index) => (
-        <div key={index} className="mb-1.5 flex items-center gap-2">
+        <div key={filter.id} className="mb-1.5 flex items-center gap-2">
           {/* Column selector */}
           <select
             className="rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"

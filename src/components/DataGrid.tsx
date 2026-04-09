@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Filter, Key } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import FilterBar from "./FilterBar";
 import type { FilterCondition, TableData } from "../types/schema";
@@ -213,8 +213,12 @@ export default function DataGrid({
                   >
                     <div className="flex items-center gap-1">
                       {col.is_primary_key && (
-                        <span className="text-amber-500" title="Primary Key">
-                          &#128273;
+                        <span title="Primary Key">
+                          <Key
+                            size={12}
+                            className="shrink-0 text-amber-500"
+                            aria-label="Primary Key"
+                          />
                         </span>
                       )}
                       <span>{col.name}</span>

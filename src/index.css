@@ -61,7 +61,6 @@ body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   overflow: hidden;
-  user-select: none;
 }
 
 #root {

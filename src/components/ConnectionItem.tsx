@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import type { ConnectionConfig, ConnectionStatus } from "../types/connection";
 import { useConnectionStore } from "../stores/connectionStore";
-import { useTabStore } from "../stores/tabStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import ConnectionDialog from "./ConnectionDialog";
 import { Database, Plug, Unplug, Pencil, Trash2 } from "lucide-react";
@@ -55,30 +54,14 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
     (s) => s.disconnectFromDatabase,
   );
   const removeConnection = useConnectionStore((s) => s.removeConnection);
-  const addTab = useTabStore((s) => s.addTab);
 
   const status = activeStatuses[connection.id] ?? { type: "disconnected" };
   const isConnected = status.type === "connected";
 
   const handleDoubleClick = async () => {
-    if (isConnected) {
-      addTab({
-        id: "",
-        title: connection.name,
-        connectionId: connection.id,
-        type: "query",
-        closable: true,
-      });
-    } else {
+    if (!isConnected) {
       try {
         await connectToDatabase(connection.id);
-        addTab({
-          id: "",
-          title: connection.name,
-          connectionId: connection.id,
-          type: "query",
-          closable: true,
-        });
       } catch {
         // Error shown via store
       }
@@ -141,10 +124,7 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
         }}
       >
         <StatusIndicator status={status} />
-        <Database
-          size={14}
-          className="flex-shrink-0 text-(--color-text-muted)"
-        />
+        <Database size={14} className="shrink-0 text-(--color-text-muted)" />
         <span className="truncate text-sm text-(--color-text-primary)">
           {connection.name}
         </span>

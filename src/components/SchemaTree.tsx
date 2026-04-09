@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -27,6 +27,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   );
   const [loadingSchemas, setLoadingSchemas] = useState(false);
   const [loadingTables, setLoadingTables] = useState<Set<string>>(new Set());
+  const autoLoadedRef = useRef<string | null>(null);
+
+  // Auto-load schemas on mount or when connectionId changes
+  useEffect(() => {
+    if (autoLoadedRef.current === connectionId) return;
+    autoLoadedRef.current = connectionId;
+    setLoadingSchemas(true);
+    loadSchemas(connectionId).finally(() => setLoadingSchemas(false));
+  }, [connectionId, loadSchemas]);
 
   const handleExpandSchema = async (schemaName: string) => {
     const newExpanded = new Set(expandedSchemas);
@@ -125,15 +134,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         </button>
       </div>
 
-      {schemas.length === 0 && (
-        <button
-          className="px-3 py-1 text-left text-xs text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
-          onClick={handleRefresh}
-        >
-          Click to load schemas
-        </button>
-      )}
-
       {schemas.map((schema) => {
         const isExpanded = expandedSchemas.has(schema.name);
         const tableKey = `${connectionId}:${schema.name}`;
@@ -190,7 +190,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   >
                     <Table2
                       size={12}
-                      className="flex-shrink-0 text-(--color-text-muted)"
+                      className="shrink-0 text-(--color-text-muted)"
                     />
                     <span className="truncate text-xs text-(--color-text-primary)">
                       {table.name}

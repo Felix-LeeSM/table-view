@@ -147,7 +147,8 @@ export default function StructurePanel({
                       <span title="Primary Key">
                         <Key
                           size={12}
-                          className="flex-shrink-0 text-amber-500"
+                          className="shrink-0 text-amber-500"
+                          aria-label="Primary Key"
                         />
                       </span>
                     )}
@@ -155,7 +156,7 @@ export default function StructurePanel({
                       <span title="Foreign Key">
                         <Link2
                           size={12}
-                          className="flex-shrink-0 text-blue-500"
+                          className="shrink-0 text-(--color-accent)"
                         />
                       </span>
                     )}
@@ -178,7 +179,7 @@ export default function StructurePanel({
                   <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
                     {col.default_value ?? "\u2014"}
                   </td>
-                  <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-blue-400">
+                  <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-(--color-accent)">
                     {col.fk_reference ?? "\u2014"}
                   </td>
                   <td className="max-w-[200px] truncate px-3 py-1 text-xs text-(--color-text-muted)">
@@ -228,7 +229,7 @@ export default function StructurePanel({
                   <td className="flex items-center gap-2 px-3 py-1 text-xs">
                     {idx.is_primary && (
                       <span className="flex items-center gap-0.5 text-amber-500">
-                        <Key size={10} /> PK
+                        <Key size={10} aria-hidden="true" /> PK
                       </span>
                     )}
                     {idx.is_unique && !idx.is_primary && (
@@ -281,7 +282,7 @@ export default function StructurePanel({
                   <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-secondary)">
                     {c.columns.join(", ")}
                   </td>
-                  <td className="px-3 py-1 text-xs text-blue-400">
+                  <td className="px-3 py-1 text-xs text-(--color-accent)">
                     {c.reference_table
                       ? `${c.reference_table}(${(c.reference_columns ?? []).join(", ")})`
                       : "\u2014"}

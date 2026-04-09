@@ -28,10 +28,6 @@ export default function MainArea() {
             table={activeTab.table}
             schema={activeTab.schema}
           />
-        ) : activeTab ? (
-          <div className="flex flex-1 items-center justify-center p-4 text-(--color-text-secondary)">
-            Connected to: {activeTab.title}
-          </div>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-(--color-text-muted)">
             <Database size={48} className="mb-3" />
