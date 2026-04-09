@@ -26,7 +26,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="flex h-full w-[250px] flex-shrink-0 flex-col border-r border-(--color-border) bg-(--color-bg-sidebar)">
+      <div className="flex h-full w-62.5 shrink-0 flex-col border-r border-(--color-border) bg-(--color-bg-sidebar)">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-(--color-border) px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-(--color-text-muted)">

@@ -41,6 +41,7 @@ export interface TableData {
   total_count: number;
   page: number;
   page_size: number;
+  executed_query: string;
 }
 
 export type FilterOperator =

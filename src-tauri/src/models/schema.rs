@@ -31,6 +31,7 @@ pub struct TableData {
     pub total_count: i64,
     pub page: i32,
     pub page_size: i32,
+    pub executed_query: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,6 +197,7 @@ mod tests {
             total_count: 2,
             page: 1,
             page_size: 50,
+            executed_query: "SELECT * FROM \"public\".\"users\" LIMIT 50 OFFSET 0".to_string(),
         };
         let json = serde_json::to_string(&data).unwrap();
         let deserialized: TableData = serde_json::from_str(&json).unwrap();
@@ -204,6 +206,10 @@ mod tests {
         assert_eq!(deserialized.total_count, 2);
         assert_eq!(deserialized.page, 1);
         assert_eq!(deserialized.page_size, 50);
+        assert_eq!(
+            deserialized.executed_query,
+            "SELECT * FROM \"public\".\"users\" LIMIT 50 OFFSET 0"
+        );
         // Verify row values roundtrip
         assert_eq!(deserialized.rows[0][0], serde_json::json!(1));
         assert_eq!(deserialized.rows[1][1], serde_json::json!("Bob"));

@@ -278,6 +278,8 @@ impl PostgresAdapter {
             qualified_table, where_clause, order_clause, page_size, offset
         );
 
+        let executed_query = data_sql.clone();
+
         let mut data_query = sqlx::query_as::<_, (String,)>(&data_sql);
         for val in &param_values {
             data_query = data_query.bind(val);
@@ -310,6 +312,7 @@ impl PostgresAdapter {
             total_count: total,
             page,
             page_size,
+            executed_query,
         })
     }
 

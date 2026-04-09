@@ -29,6 +29,7 @@ export default function DataGrid({
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
+  const [showQuery, setShowQuery] = useState(true);
 
   // Cmd+F (Mac) / Ctrl+F (other) toggles the filter bar
   useEffect(() => {
@@ -270,6 +271,35 @@ export default function DataGrid({
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Executed query bar */}
+      {data && (
+        <div className="border-t border-(--color-border)">
+          <button
+            className="flex w-full items-center gap-1 px-3 py-1 text-xs text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+            onClick={() => setShowQuery(!showQuery)}
+            aria-expanded={showQuery}
+            aria-label={showQuery ? "Hide query" : "Show query"}
+          >
+            <ChevronRight
+              size={10}
+              className={`transition-transform ${showQuery ? "rotate-90" : ""}`}
+            />
+            <span>Query</span>
+          </button>
+          {showQuery && (
+            <div
+              className="max-h-32 overflow-auto bg-(--color-bg-secondary) px-3 py-1.5"
+              role="region"
+              aria-label="Executed SQL query"
+            >
+              <code className="whitespace-pre-wrap break-all text-xs text-(--color-text-secondary)">
+                {data.executed_query}
+              </code>
+            </div>
+          )}
         </div>
       )}
     </div>
