@@ -63,3 +63,33 @@ export interface FilterCondition {
   value: string | null;
   id: string;
 }
+
+/**
+ * Validate a raw SQL WHERE clause for dangerous patterns.
+ * Returns an error message string if validation fails, or null if the input is safe.
+ */
+export function validateRawSql(sql: string): string | null {
+  const trimmed = sql.trim();
+  if (!trimmed) return null;
+  if (trimmed.includes(";")) {
+    return "Raw WHERE clause must not contain semicolons";
+  }
+  const upper = trimmed.toUpperCase();
+  const dangerous = [
+    "DROP",
+    "DELETE",
+    "INSERT",
+    "UPDATE",
+    "ALTER",
+    "CREATE",
+    "TRUNCATE",
+    "GRANT",
+    "REVOKE",
+  ];
+  for (const kw of dangerous) {
+    if (upper.startsWith(kw)) {
+      return `Raw WHERE clause must not start with ${kw}`;
+    }
+  }
+  return null;
+}

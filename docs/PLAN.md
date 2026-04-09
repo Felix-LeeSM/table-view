@@ -360,6 +360,8 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [x] 앱 실행 시 연결 목록 사이드바 표시
 - [x] 새 연결 생성 → 테스트 → 저장 → 사이드바에 표시 → 연결/해제 동작
 - [x] Rust에서 `trait DbAdapter` 정의되고 PostgreSQL 구현체 존재
+- [x] connectionStore/tabStore/연결 URL 파싱 단위·스토어 테스트 통과 (`pnpm test`)
+- [x] 로컬 PostgreSQL 테스트 DB가 준비된 환경에서 Rust 단위·통합 테스트 통과 (`cargo test`)
 
 **Phase 1 미흡 항목 (Phase 5 또는 후속 처리):**
 - [x] F1.1: URL 형태(`postgresql://user:pass@host:port/db`) import
@@ -392,6 +394,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [x] Data 탭에서 페이지네이션된 데이터 그리드 표시
 - [x] 컬럼 정렬 (ASC 전용) 및 기본 필터 동작
 - [x] ASC/DESC 정렬 토글
+- [x] FilterBar/DataGrid/schemaStore/raw SQL 검증 단위·컴포넌트·스토어 테스트 통과 (`pnpm test`)
 - [ ] 다중 컬럼 정렬
 
 ### Phase 3: Query Editor
@@ -410,6 +413,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [ ] 결과 그리드에 데이터 표시
 - [ ] 여러 탭에서 서로 다른 연결로 동시 작업
 - [ ] 장시간 쿼리 취소 가능
+- [ ] Query Editor/결과 그리드/다중 탭/쿼리 취소 테스트 통과 (`pnpm test`)
 
 ### Phase 4: Editing & Polish
 > 인라인 편집, UX 개선
@@ -430,6 +434,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [ ] 행 추가/삭제 → Commit 전 SQL 미리보기 → 실행
 - [ ] Light/Dark 테마 전환 동작
 - [ ] 핵심 단축키 모두 동작
+- [ ] 인라인 편집/행 조작/SQL 미리보기/테마·단축키 회귀 테스트 통과 (`pnpm test`)
 
 ### Phase 5: Extended Features (이후)
 > Phase 1-4 완료 후 점진적 추가

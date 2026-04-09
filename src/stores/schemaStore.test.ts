@@ -26,6 +26,28 @@ vi.mock("../lib/tauri", () => ({
       },
     ]),
   ),
+  getTableIndexes: vi.fn(() =>
+    Promise.resolve([
+      {
+        name: "users_pkey",
+        columns: ["id"],
+        index_type: "btree",
+        is_unique: true,
+        is_primary: true,
+      },
+    ]),
+  ),
+  getTableConstraints: vi.fn(() =>
+    Promise.resolve([
+      {
+        name: "users_pkey",
+        constraint_type: "PRIMARY KEY",
+        columns: ["id"],
+        reference_table: null,
+        reference_columns: null,
+      },
+    ]),
+  ),
   queryTableData: vi.fn(() =>
     Promise.resolve({
       columns: [
@@ -44,6 +66,7 @@ vi.mock("../lib/tauri", () => ({
       total_count: 1,
       page: 1,
       page_size: 50,
+      executed_query: "SELECT * FROM public.users LIMIT 50 OFFSET 0",
     }),
   ),
 }));
@@ -130,5 +153,108 @@ describe("schemaStore", () => {
     );
     expect(data.total_count).toBe(1);
     expect(data.rows).toHaveLength(1);
+  });
+
+  it("delegates getTableIndexes", async () => {
+    const { getTableIndexes } = await import("../lib/tauri");
+    const indexes = await useSchemaStore
+      .getState()
+      .getTableIndexes("conn1", "users", "public");
+
+    expect(getTableIndexes).toHaveBeenCalledWith("conn1", "users", "public");
+    expect(indexes).toHaveLength(1);
+    expect(indexes[0]!.name).toBe("users_pkey");
+    expect(indexes[0]!.is_primary).toBe(true);
+  });
+
+  it("delegates getTableConstraints", async () => {
+    const { getTableConstraints } = await import("../lib/tauri");
+    const constraints = await useSchemaStore
+      .getState()
+      .getTableConstraints("conn1", "users", "public");
+
+    expect(getTableConstraints).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+    );
+    expect(constraints).toHaveLength(1);
+    expect(constraints[0]!.constraint_type).toBe("PRIMARY KEY");
+  });
+
+  it("passes filters to queryTableData", async () => {
+    const { queryTableData } = await import("../lib/tauri");
+    const filters = [
+      {
+        column: "name",
+        operator: "Eq" as const,
+        value: "Alice",
+        id: "f1",
+      },
+    ];
+
+    await useSchemaStore
+      .getState()
+      .queryTableData("conn1", "users", "public", 1, 50, undefined, filters);
+
+    expect(queryTableData).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      1,
+      50,
+      undefined,
+      filters,
+      undefined,
+    );
+  });
+
+  it("passes rawWhere to queryTableData", async () => {
+    const { queryTableData } = await import("../lib/tauri");
+
+    await useSchemaStore
+      .getState()
+      .queryTableData(
+        "conn1",
+        "users",
+        "public",
+        1,
+        50,
+        undefined,
+        undefined,
+        "id = 13",
+      );
+
+    expect(queryTableData).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      1,
+      50,
+      undefined,
+      undefined,
+      "id = 13",
+    );
+  });
+
+  it("clearSchema removes connection-related tables", async () => {
+    // Set up tables for multiple schemas of same connection
+    useSchemaStore.setState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        "conn1:private": [{ name: "secrets", schema: "private", row_count: 5 }],
+        "conn2:public": [{ name: "orders", schema: "public", row_count: 10 }],
+      },
+    });
+
+    useSchemaStore.getState().clearSchema("conn1");
+
+    const state = useSchemaStore.getState();
+    expect(state.schemas["conn1"]).toBeUndefined();
+    expect(state.tables["conn1:public"]).toBeUndefined();
+    expect(state.tables["conn1:private"]).toBeUndefined();
+    // Other connection should be unaffected
+    expect(state.tables["conn2:public"]).toHaveLength(1);
   });
 });

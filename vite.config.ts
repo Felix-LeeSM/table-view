@@ -17,6 +17,10 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
+    coverage: {
+      reporter: ["text", ["lcov", { projectDirectory: "src" }]],
+      include: ["src/**/*.{ts,tsx}"],
+    },
   },
   clearScreen: false,
   server: {
