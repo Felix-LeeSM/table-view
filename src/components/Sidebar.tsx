@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
   Plus,
   Database,
@@ -13,6 +13,10 @@ import ConnectionList from "./ConnectionList";
 import ConnectionDialog from "./ConnectionDialog";
 import SchemaTree from "./SchemaTree";
 import type { DatabaseType } from "../types/connection";
+
+const DEFAULT_SIDEBAR_WIDTH = 250;
+const MIN_SIDEBAR_WIDTH = 180;
+const MAX_SIDEBAR_WIDTH = 500;
 
 /** Mapping of DB type to display label and color */
 const DB_TYPE_META: Record<DatabaseType, { label: string; color: string }> = {
@@ -29,6 +33,45 @@ export default function Sidebar() {
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { theme, setTheme } = useTheme();
 
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      resizeRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        if (!resizeRef.current || !sidebarRef.current) return;
+        const delta = moveEvent.clientX - resizeRef.current.startX;
+        const newWidth = Math.max(
+          MIN_SIDEBAR_WIDTH,
+          Math.min(MAX_SIDEBAR_WIDTH, resizeRef.current.startWidth + delta),
+        );
+        sidebarRef.current.style.width = `${newWidth}px`;
+      };
+
+      const handleMouseUp = () => {
+        if (resizeRef.current && sidebarRef.current) {
+          const finalWidth = parseInt(sidebarRef.current.style.width, 10);
+          setSidebarWidth(finalWidth);
+        }
+        resizeRef.current = null;
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [sidebarWidth],
+  );
+
   const connectedIds = connections
     .filter((c) => activeStatuses[c.id]?.type === "connected")
     .map((c) => c.id);
@@ -43,7 +86,11 @@ export default function Sidebar() {
 
   return (
     <>
-      <div className="flex h-full w-62.5 shrink-0 flex-col border-r border-(--color-border) bg-(--color-bg-sidebar)">
+      <div
+        ref={sidebarRef}
+        className="relative flex h-full shrink-0 flex-col border-r border-(--color-border) bg-(--color-bg-sidebar)"
+        style={{ width: sidebarWidth }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-(--color-border) px-3 py-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-(--color-text-muted)">
@@ -113,6 +160,12 @@ export default function Sidebar() {
             <span className="capitalize">{theme}</span>
           </button>
         </div>
+
+        {/* Resize handle */}
+        <div
+          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-(--color-accent) active:bg-(--color-accent)"
+          onMouseDown={handleResizeMouseDown}
+        />
       </div>
 
       {showNewDialog && (

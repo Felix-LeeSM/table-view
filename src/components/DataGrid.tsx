@@ -340,7 +340,7 @@ export default function DataGrid({
             <tbody>
               {data.rows.map((row, rowIdx) => (
                 <tr
-                  key={rowIdx}
+                  key={`row-${page}-${rowIdx}`}
                   className="border-b border-(--color-border) hover:bg-(--color-bg-tertiary)"
                 >
                   {(row as unknown[]).map((cell, cellIdx) => (
