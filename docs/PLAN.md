@@ -136,7 +136,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 #### F2.3: 테이블 구조 (Columns)
 - **Done when:**
   - [x] "Structure" 탭에서 컬럼 목록 표시: Name, Type, Nullable, Default
-  - [ ] Comment 컬럼 표시 (col_description 필요)
+  - [x] Comment 컬럼 표시 (col_description)
   - [x] Primary Key 컬럼에 키 아이콘 표시
   - [x] Foreign Key 컬럼에 FK 아이콘 및 참조 테이블 정보 표시
   - [ ] 컬럼 추가/수정/삭제 가능 (ALTER TABLE 실행)
@@ -208,7 +208,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 #### F3.4: 필터링
 - **Done when:**
   - [x] 행 필터: 특정 컬럼의 값으로 행 필터링 (버튼 토글)
-  - [ ] Cmd+F 단축키로 필터바 토글
+  - [x] Cmd+F 단축키로 필터바 토글
   - [x] 다중 조건 필터 (AND 조합)
   - [x] 연산자: =, !=, >, <, >=, <=, LIKE, IS NULL, IS NOT NULL
   - [ ] 다중 조건 필터 (OR 조합)
@@ -218,7 +218,7 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 
 #### F3.5: 정렬
 - **Done when:**
-  - [ ] 컬럼 헤더 클릭으로 ASC/DESC 정렬 토글
+  - [x] 컬럼 헤더 클릭으로 ASC/DESC 정렬 토글
   - [ ] 다중 컬럼 정렬 지원 (Shift+Click)
   - [ ] 현재 정렬 상태가 컬럼 헤더에 화살표로 표시됨
 
@@ -388,7 +388,8 @@ TablePlus와 같은 로컬 데이터베이스 관리 도구를 만듭니다. 여
 - [x] 테이블 선택 시 Structure 탭과 Data 탭 열림
 - [x] Data 탭에서 페이지네이션된 데이터 그리드 표시
 - [x] 컬럼 정렬 (ASC 전용) 및 기본 필터 동작
-- [ ] ASC/DESC 토글, 다중 컬럼 정렬
+- [x] ASC/DESC 정렬 토글
+- [ ] 다중 컬럼 정렬
 
 ### Phase 3: Query Editor
 > 쿼리 작성 및 실행 환경
