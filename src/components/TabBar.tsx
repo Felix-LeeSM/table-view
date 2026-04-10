@@ -1,11 +1,16 @@
+import { X, Table2, Code2, Plus } from "lucide-react";
 import { useTabStore } from "../stores/tabStore";
-import { X, Table2 } from "lucide-react";
 
 export default function TabBar() {
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const removeTab = useTabStore((s) => s.removeTab);
+  const addQueryTab = useTabStore((s) => s.addQueryTab);
+
+  // Find the connectionId from the active tab to use for new query tabs.
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeConnectionId = activeTab?.connectionId ?? "";
 
   if (tabs.length === 0) return null;
 
@@ -34,7 +39,11 @@ export default function TabBar() {
             }
           }}
         >
-          <Table2 size={12} className="shrink-0 text-(--color-text-muted)" />
+          {tab.type === "query" ? (
+            <Code2 size={12} className="shrink-0 text-(--color-text-muted)" />
+          ) : (
+            <Table2 size={12} className="shrink-0 text-(--color-text-muted)" />
+          )}
           <span className="max-w-30 truncate">{tab.title}</span>
           {tab.closable && (
             <button
@@ -50,6 +59,18 @@ export default function TabBar() {
           )}
         </div>
       ))}
+
+      {/* New query tab button */}
+      {activeConnectionId && (
+        <button
+          className="flex items-center rounded px-2 py-1.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
+          aria-label="New Query Tab"
+          title="New Query Tab"
+          onClick={() => addQueryTab(activeConnectionId)}
+        >
+          <Plus size={14} />
+        </button>
+      )}
     </div>
   );
 }

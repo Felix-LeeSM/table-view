@@ -5,6 +5,7 @@ import {
   Table2,
   RefreshCw,
   Loader2,
+  Code2,
 } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
@@ -21,6 +22,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
   const addTab = useTabStore((s) => s.addTab);
+  const addQueryTab = useTabStore((s) => s.addQueryTab);
   const tables = useSchemaStore((s) => s.tables);
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
     new Set(),
@@ -90,18 +92,28 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         <span className="text-xs font-medium uppercase tracking-wider text-(--color-text-muted)">
           Schemas
         </span>
-        <button
-          className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
-          onClick={handleRefresh}
-          disabled={loadingSchemas}
-          aria-label="Refresh schemas"
-        >
-          {loadingSchemas ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <RefreshCw size={12} />
-          )}
-        </button>
+        <div className="flex gap-1">
+          <button
+            className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+            onClick={() => addQueryTab(connectionId)}
+            aria-label="New Query"
+            title="New Query"
+          >
+            <Code2 size={12} />
+          </button>
+          <button
+            className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+            onClick={handleRefresh}
+            disabled={loadingSchemas}
+            aria-label="Refresh schemas"
+          >
+            {loadingSchemas ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+          </button>
+        </div>
       </div>
 
       {schemas.map((schema) => {

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig, ConnectionGroup } from "../types/connection";
+import type { QueryResult } from "../types/query";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -135,4 +136,21 @@ export async function getTableConstraints(
     table,
     schema,
   });
+}
+
+// Query execution
+export async function executeQuery(
+  connectionId: string,
+  sql: string,
+  queryId: string,
+): Promise<QueryResult> {
+  return invoke<QueryResult>("execute_query", {
+    connectionId,
+    sql,
+    queryId,
+  });
+}
+
+export async function cancelQuery(queryId: string): Promise<string> {
+  return invoke<string>("cancel_query", { queryId });
 }

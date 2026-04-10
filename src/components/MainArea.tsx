@@ -1,15 +1,16 @@
 import TabBar from "./TabBar";
-import { useTabStore, type Tab, type TabSubView } from "../stores/tabStore";
+import { useTabStore, type TableTab, type TabSubView } from "../stores/tabStore";
 import { Database } from "lucide-react";
 import DataGrid from "./DataGrid";
 import StructurePanel from "./StructurePanel";
+import QueryTab from "./QueryTab";
 
 interface TableTabProps {
-  tab: Tab;
+  tab: TableTab;
   onSubViewChange: (subView: TabSubView) => void;
 }
 
-function TableTab({ tab, onSubViewChange }: TableTabProps) {
+function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
@@ -92,10 +93,12 @@ export default function MainArea() {
       <TabBar />
       <div className="flex flex-1 overflow-hidden bg-(--color-bg-primary)">
         {activeTab?.type === "table" && activeTab.table && activeTab.schema ? (
-          <TableTab
+          <TableTabView
             tab={activeTab}
             onSubViewChange={(subView) => setSubView(activeTab.id, subView)}
           />
+        ) : activeTab?.type === "query" ? (
+          <QueryTab tab={activeTab} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-(--color-text-muted)">
             <Database size={48} className="mb-3" />
