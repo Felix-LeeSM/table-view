@@ -339,7 +339,7 @@ export default function DataGrid({
         </div>
       )}
 
-      {loading && (
+      {loading && !data && (
         <div className="flex items-center justify-center py-8">
           <Loader2
             className="animate-spin text-(--color-text-muted)"
@@ -348,8 +348,16 @@ export default function DataGrid({
         </div>
       )}
 
-      {data && !loading && (
-        <div className="flex-1 overflow-auto">
+      {data && (
+        <div className="relative flex-1 overflow-auto">
+          {loading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-(--color-bg-primary)/60">
+              <Loader2
+                className="animate-spin text-(--color-text-muted)"
+                size={24}
+              />
+            </div>
+          )}
           <table className="w-full border-collapse text-sm" ref={tableRef}>
             <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
               <tr>

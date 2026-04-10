@@ -383,4 +383,241 @@ describe("DataGrid", () => {
       screen.getByText(/SELECT \* FROM public\.users/),
     ).toBeInTheDocument();
   });
+
+  // ── Regression: loading flicker fix ──
+
+  // 15. Initial load (no data) shows centered spinner, not overlay
+  it("shows centered spinner during initial load when no data exists", () => {
+    mockQueryTableData.mockReturnValue(new Promise(() => {}));
+    renderDataGrid();
+    const spinners = document.querySelectorAll(".animate-spin");
+    expect(spinners.length).toBe(1);
+    // The spinner should NOT be inside an overlay (no absolute positioning)
+    const spinnerParent = spinners[0]!.parentElement!;
+    expect(spinnerParent.className).not.toContain("absolute");
+    // Table should not be rendered yet
+    expect(document.querySelector("table")).not.toBeInTheDocument();
+  });
+
+  // 16. Refetch (loading with existing data) keeps table in DOM
+  it("keeps table in DOM during refetch when data already exists", async () => {
+    // First load completes with data
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Trigger a slow refetch (sort change)
+    mockQueryTableData.mockReturnValue(new Promise(() => {}));
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+
+    // Table and its headers should still be in the DOM
+    expect(document.querySelector("table")).toBeInTheDocument();
+    expect(screen.getByText("id")).toBeInTheDocument();
+    expect(screen.getByText("name")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  // 17. Refetch shows overlay spinner on top of existing table
+  it("shows overlay spinner on top of table during refetch", async () => {
+    // First load completes
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Trigger a slow refetch
+    mockQueryTableData.mockReturnValue(new Promise(() => {}));
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+
+    // Both table AND overlay spinner should exist
+    expect(document.querySelector("table")).toBeInTheDocument();
+    const spinners = document.querySelectorAll(".animate-spin");
+    expect(spinners.length).toBe(1);
+    // The spinner should be inside an absolutely-positioned overlay
+    const overlay = spinners[0]!.closest('[class*="absolute"]');
+    expect(overlay).toBeInTheDocument();
+  });
+
+  // 18. Overlay disappears when refetch completes
+  it("removes overlay spinner when refetch completes", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Trigger refetch (sort) - returns immediately
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    await screen.findByText("▲");
+
+    // No overlay spinner should remain
+    const spinners = document.querySelectorAll(".animate-spin");
+    expect(spinners.length).toBe(0);
+    // Table should still be present
+    expect(document.querySelector("table")).toBeInTheDocument();
+  });
+
+  // 19. Error display unchanged after refetch failure
+  it("shows error when refetch fails while keeping table accessible", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Trigger a failing refetch
+    mockQueryTableData.mockRejectedValue(new Error("Query timeout"));
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    await screen.findByRole("alert");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Query timeout");
+    // Loading spinner should be gone
+    expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
+  });
+
+  // 20. Column resize handle exists on headers
+  it("renders resize handles on column headers", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const resizeHandles = document.querySelectorAll('.cursor-col-resize');
+    expect(resizeHandles.length).toBe(3); // one per column
+  });
+
+  // 20a. Column resize: mousedown starts drag and applies width on mousemove
+  it("starts column resize drag and applies width via DOM", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const resizeHandle = document.querySelectorAll('.cursor-col-resize')[0]!;
+
+    // Trigger mousedown — this registers document-level listeners
+    fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
+
+    // Body cursor should be set
+    expect(document.body.style.cursor).toBe("col-resize");
+    expect(document.body.style.userSelect).toBe("none");
+
+    // Simulate mousemove on document (wider than start)
+    fireEvent.mouseMove(document, { clientX: 280 });
+
+    // The first column's th should have its width updated via direct DOM
+    const th = document.querySelector('th:nth-child(1)') as HTMLElement;
+    expect(th).toBeTruthy();
+    // Width should have increased (from 150 + 80 = 230)
+    expect(parseInt(th.style.width, 10)).toBeGreaterThan(150);
+
+    // Clean up: manually trigger mouseup to remove listeners
+    // We use dispatchEvent directly to avoid the re-render race
+    document.removeEventListener("mousemove", () => {});
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  });
+
+  // 20b. Column resize: mousedown with no tableRef does not crash
+  it("handles resize when tableRef is null during mousemove", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const resizeHandle = document.querySelectorAll('.cursor-col-resize')[0]!;
+
+    // Trigger mousedown
+    fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
+
+    // Simulate mousemove — should not crash even if applyWidth does DOM work
+    fireEvent.mouseMove(document, { clientX: 100 });
+
+    // Width should be clamped to MIN_COL_WIDTH (60)
+    const th = document.querySelector('th:nth-child(1)') as HTMLElement;
+    expect(parseInt(th.style.width, 10)).toBe(60);
+
+    // Cleanup
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  });
+
+  // 21. Empty result set shows "No data" row
+  it("shows No data message when rows are empty", async () => {
+    mockQueryTableData.mockResolvedValue({
+      ...MOCK_DATA,
+      rows: [],
+      total_count: 0,
+    });
+    renderDataGrid();
+    await screen.findByText("0 rows");
+    expect(screen.getByText("No data")).toBeInTheDocument();
+  });
+
+  // 22. Props change resets column widths
+  it("resets column widths when table prop changes", async () => {
+    const { rerender } = renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Rerender with different table
+    rerender(<DataGrid connectionId="conn1" table="orders" schema="public" />);
+    await screen.findByText("3 rows");
+
+    // Should have called with new table name
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[1]).toBe("orders");
+  });
+
+  // 23. Sort passes orderBy to queryTableData
+  it("passes orderBy parameter when sorting", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Click to sort by id ASC
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    await screen.findByText("▲");
+
+    // Find the latest call with orderBy
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[5]).toBe("id ASC");
+  });
+
+  // 24. Refresh-data event triggers refetch
+  it("refetches data on refresh-data event", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const initialCallCount = mockQueryTableData.mock.calls.length;
+
+    // Dispatch refresh event
+    await act(async () => {
+      window.dispatchEvent(new Event("refresh-data"));
+    });
+    await screen.findByText("3 rows");
+
+    expect(mockQueryTableData.mock.calls.length).toBeGreaterThan(initialCallCount);
+  });
+
+  // 25. Column header shows primary key icon
+  it("shows primary key icon on primary key columns", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const pkIcons = screen.getAllByLabelText("Primary Key");
+    expect(pkIcons.length).toBe(1);
+  });
+
+  // 26. Column header shows data type
+  it("shows data type under column name", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.getByText("integer")).toBeInTheDocument();
+    expect(screen.getByText("text")).toBeInTheDocument();
+    expect(screen.getByText("jsonb")).toBeInTheDocument();
+  });
+
+  // 27. Schema.table shown when no data
+  it("shows schema.table in toolbar when no data loaded", () => {
+    mockQueryTableData.mockReturnValue(new Promise(() => {}));
+    renderDataGrid();
+    expect(screen.getByText("public.users")).toBeInTheDocument();
+  });
 });

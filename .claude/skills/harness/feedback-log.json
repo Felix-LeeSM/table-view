@@ -6,7 +6,7 @@
     "sprint": null,
     "message": "로딩 시 화면 깜빡임, table head 위치 깨짐",
     "timestamp": "2026-04-10T13:24:26.854Z",
-    "status": "open"
+    "status": "resolved"
   },
   {
     "id": 2,
@@ -33,6 +33,15 @@
     "sprint": null,
     "message": "다중 DBMS 테스트 환경 부재",
     "timestamp": "2026-04-10T13:24:27.065Z",
+    "status": "open"
+  },
+  {
+    "id": 5,
+    "type": "eval_note",
+    "severity": "P3",
+    "sprint": null,
+    "message": "Sprint 5 PASS: DataGrid 로딩 깜빡임 수정, evaluator 8.0/10",
+    "timestamp": "2026-04-10T13:59:11.624Z",
     "status": "open"
   }
 ]
