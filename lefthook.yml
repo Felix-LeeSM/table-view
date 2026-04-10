@@ -30,7 +30,7 @@ pre-push:
       run: cd src-tauri && cargo test --all
     ts-test:
       tags: test frontend
-      run: npm run test -- --run
+      run: npm run test -- --run --coverage
     tauri-check:
       tags: build
       run: cd src-tauri && cargo check
