@@ -46,6 +46,22 @@
   - concrete evidence for each pass/fail decision
   - any missing or weak evidence as a finding
 
+## Test Requirements
+
+### Unit Tests (필수)
+- 각 AC 항목에 대응하는 최소 1개 테스트 작성
+- 에러/예외 케이스 최소 1개 테스트 작성
+
+### Coverage Target
+- 신규/수정 코드: 라인 70% 이상 권장
+- CI 전체 기준: 라인 40%, 함수 40%, 브랜치 35%
+
+### Scenario Tests (필수)
+- [ ] Happy path
+- [ ] 에러/예외 상황
+- [ ] 경계 조건 (빈 입력, 동시성, 대용량)
+- [ ] 기존 기능 회귀 없음
+
 ## Test Script / Repro Script
 
 1. 

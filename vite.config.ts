@@ -20,6 +20,11 @@ export default defineConfig(async () => ({
     coverage: {
       reporter: ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
+      thresholds: {
+        lines: 40,
+        functions: 40,
+        branches: 35,
+      },
     },
   },
   clearScreen: false,
