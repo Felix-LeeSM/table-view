@@ -1,13 +1,43 @@
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::PgPool;
+use sqlx::{Column, PgPool, Row};
+use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::error::AppError;
 use crate::models::{
     ColumnInfo, ConnectionConfig, ConstraintInfo, FilterCondition, FilterOperator, IndexInfo,
-    SchemaInfo, TableData, TableInfo,
+    QueryColumn, QueryResult, QueryType, SchemaInfo, TableData, TableInfo,
 };
+
+/// Strip leading SQL comments and whitespace so that query type detection
+/// works on `-- comment\nSELECT ...` and `/* block */ SELECT ...` inputs.
+fn strip_leading_comments(sql: &str) -> &str {
+    let mut s = sql.trim_start();
+    loop {
+        if s.starts_with("--") {
+            // Line comment: skip to end of line
+            if let Some(idx) = s.find('\n') {
+                s = s[idx + 1..].trim_start();
+            } else {
+                // Entire rest is a comment
+                return "";
+            }
+        } else if s.starts_with("/*") {
+            // Block comment: find closing */
+            if let Some(idx) = s.find("*/") {
+                s = s[idx + 2..].trim_start();
+            } else {
+                // Unclosed block comment
+                return "";
+            }
+        } else {
+            break;
+        }
+    }
+    s
+}
 
 /// Maps PostgreSQL `data_type` strings (from `information_schema.columns`) to
 /// the corresponding cast target type name. Returns `None` for text-like types
@@ -40,8 +70,9 @@ fn pg_cast_type(data_type: &str) -> Option<&'static str> {
     }
 }
 
+#[derive(Clone)]
 pub struct PostgresAdapter {
-    pool: Mutex<Option<PgPool>>,
+    pool: Arc<Mutex<Option<PgPool>>>,
 }
 
 impl Default for PostgresAdapter {
@@ -53,7 +84,7 @@ impl Default for PostgresAdapter {
 impl PostgresAdapter {
     pub fn new() -> Self {
         Self {
-            pool: Mutex::new(None),
+            pool: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -125,6 +156,166 @@ impl PostgresAdapter {
             .await
             .map_err(|e| AppError::Connection(e.to_string()))?;
         Ok(())
+    }
+
+    /// Execute an arbitrary SQL query and return the result.
+    /// Supports cancellation via CancellationToken.
+    ///
+    /// # Arguments
+    /// * `query` - The SQL query to execute
+    /// * `cancel_token` - Optional token to cancel the query execution
+    ///
+    /// # Returns
+    /// * `QueryResult` - Columns, rows, execution time, and query type
+    pub async fn execute_query(
+        &self,
+        query: &str,
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<QueryResult, AppError> {
+        let start = std::time::Instant::now();
+
+        // Detect query type from the SQL statement (strip comments first)
+        let stripped = strip_leading_comments(query);
+        let trimmed_query = stripped.to_uppercase();
+        let query_type = if trimmed_query.starts_with("SELECT")
+            || trimmed_query.starts_with("WITH")
+            || trimmed_query.starts_with("SHOW")
+            || trimmed_query.starts_with("EXPLAIN")
+        {
+            QueryType::Select
+        } else if trimmed_query.starts_with("INSERT")
+            || trimmed_query.starts_with("UPDATE")
+            || trimmed_query.starts_with("DELETE")
+        {
+            QueryType::Dml { rows_affected: 0 }
+        } else {
+            QueryType::Ddl
+        };
+
+        // Clone pool reference and release lock immediately
+        let pool = {
+            let guard = self.pool.lock().await;
+            guard
+                .as_ref()
+                .ok_or_else(|| AppError::Connection("Not connected".into()))?
+                .clone()
+        };
+
+        // Execute query based on type
+        let result = match query_type {
+            QueryType::Select => {
+                let query_future = async {
+                    // Execute the query and get rows
+                    let rows = sqlx::query(query).fetch_all(&pool).await?;
+
+                    // Extract column metadata from rows when available
+                    let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
+                        first_row
+                            .columns()
+                            .iter()
+                            .map(|col| QueryColumn {
+                                name: col.name().to_string(),
+                                data_type: col.type_info().to_string(),
+                            })
+                            .collect()
+                    } else {
+                        // For empty results, we cannot determine columns from the row data.
+                        // Return empty columns — the frontend handles this gracefully.
+                        Vec::new()
+                    };
+
+                    // Convert rows to JSON values
+                    let json_rows: Vec<Vec<serde_json::Value>> = rows
+                        .iter()
+                        .map(|row| {
+                            (0..row.columns().len())
+                                .map(|col_idx| {
+                                    // Try to get value as JSON, fall back to Null
+                                    row.try_get::<serde_json::Value, _>(col_idx)
+                                        .unwrap_or(serde_json::Value::Null)
+                                })
+                                .collect()
+                        })
+                        .collect();
+
+                    let total_count = json_rows.len() as i64;
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    Ok::<QueryResult, AppError>(QueryResult {
+                        columns,
+                        rows: json_rows,
+                        total_count,
+                        execution_time_ms,
+                        query_type: QueryType::Select,
+                    })
+                };
+
+                // Apply cancellation if token provided
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        result = query_future => result,
+                        _ = token.cancelled() => {
+                            return Err(AppError::Database("Query cancelled".into()));
+                        }
+                    }
+                } else {
+                    query_future.await
+                }
+            }
+            QueryType::Dml { .. } => {
+                let query_future = async {
+                    let result = sqlx::query(query).execute(&pool).await?;
+                    let rows_affected = result.rows_affected();
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    Ok::<QueryResult, AppError>(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        total_count: rows_affected as i64,
+                        execution_time_ms,
+                        query_type: QueryType::Dml { rows_affected },
+                    })
+                };
+
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        result = query_future => result,
+                        _ = token.cancelled() => {
+                            return Err(AppError::Database("Query cancelled".into()));
+                        }
+                    }
+                } else {
+                    query_future.await
+                }
+            }
+            QueryType::Ddl => {
+                let query_future = async {
+                    sqlx::query(query).execute(&pool).await?;
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    Ok::<QueryResult, AppError>(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms,
+                        query_type: QueryType::Ddl,
+                    })
+                };
+
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        result = query_future => result,
+                        _ = token.cancelled() => {
+                            return Err(AppError::Database("Query cancelled".into()));
+                        }
+                    }
+                } else {
+                    query_future.await
+                }
+            }
+        };
+
+        result
     }
 
     pub async fn ping(&self) -> Result<(), AppError> {
@@ -334,20 +525,29 @@ impl PostgresAdapter {
 
         let mut order_clause = String::new();
         if let Some(order_by) = &order_by {
-            // Parse "column_name ASC" or "column_name DESC" format
-            let parts: Vec<&str> = order_by.split_whitespace().collect();
-            let (col_name, direction) = match parts.as_slice() {
-                [col, dir] if *dir == "ASC" || *dir == "DESC" => (*col, *dir),
-                [col] => (*col, "ASC"),
-                _ => (*order_by, "ASC"),
-            };
-            let valid_col = columns.iter().any(|c| c.name.as_str() == col_name);
-            if valid_col {
-                order_clause = format!(
-                    " ORDER BY \"{}\" {}",
-                    col_name.replace('"', "\"\""),
-                    direction
-                );
+            // Parse comma-separated "column_name ASC, column_name DESC" format
+            let valid_columns: std::collections::HashSet<&str> =
+                columns.iter().map(|c| c.name.as_str()).collect();
+            let mut order_parts: Vec<String> = Vec::new();
+            for part in order_by.split(',') {
+                let part_trimmed = part.trim();
+                let parts: Vec<&str> = part_trimmed.split_whitespace().collect();
+                let (col_name, direction) = match parts.as_slice() {
+                    [col, dir] if *dir == "ASC" || *dir == "DESC" => (*col, *dir),
+                    [col] => (*col, "ASC"),
+                    _ => continue, // Skip invalid format
+                };
+                // Validate column name
+                if valid_columns.contains(col_name) {
+                    order_parts.push(format!(
+                        "\"{}\" {}",
+                        col_name.replace('"', "\"\""),
+                        direction
+                    ));
+                }
+            }
+            if !order_parts.is_empty() {
+                order_clause = format!(" ORDER BY {}", order_parts.join(", "));
             }
         }
 
@@ -695,5 +895,54 @@ mod tests {
             opts_str.contains("localhost") || opts_str.contains("5432"),
             "Options should reflect the config parameters"
         );
+    }
+
+    #[test]
+    fn strip_leading_comments_line_comment() {
+        assert_eq!(
+            strip_leading_comments("-- this is a comment\nSELECT 1"),
+            "SELECT 1"
+        );
+    }
+
+    #[test]
+    fn strip_leading_comments_block_comment() {
+        assert_eq!(strip_leading_comments("/* block */ SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_leading_comments_multiple_line_comments() {
+        assert_eq!(
+            strip_leading_comments("-- line 1\n-- line 2\nSELECT 1"),
+            "SELECT 1"
+        );
+    }
+
+    #[test]
+    fn strip_leading_comments_mixed_comments() {
+        assert_eq!(
+            strip_leading_comments("/* block */ -- line\nINSERT INTO t VALUES (1)"),
+            "INSERT INTO t VALUES (1)"
+        );
+    }
+
+    #[test]
+    fn strip_leading_comments_no_comment() {
+        assert_eq!(strip_leading_comments("SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_leading_comments_only_comment() {
+        assert_eq!(strip_leading_comments("-- just a comment"), "");
+    }
+
+    #[test]
+    fn strip_leading_comments_unclosed_block() {
+        assert_eq!(strip_leading_comments("/* never closed"), "");
+    }
+
+    #[test]
+    fn strip_leading_comments_whitespace_only() {
+        assert_eq!(strip_leading_comments("   "), "");
     }
 }

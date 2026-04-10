@@ -68,6 +68,11 @@ export interface FilterCondition {
  * Validate a raw SQL WHERE clause for dangerous patterns.
  * Returns an error message string if validation fails, or null if the input is safe.
  */
+export interface SortInfo {
+  column: string;
+  direction: "ASC" | "DESC";
+}
+
 export function validateRawSql(sql: string): string | null {
   const trimmed = sql.trim();
   if (!trimmed) return null;

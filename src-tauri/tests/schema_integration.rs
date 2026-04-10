@@ -560,3 +560,100 @@ async fn test_query_table_data_with_filter_integer() {
 
     adapter.disconnect_pool().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_query_table_data_multi_column_ordering() {
+    let adapter = setup_adapter().await;
+    let table_name = unique_table_name("multi_order");
+
+    // Create and populate table
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id SERIAL PRIMARY KEY, \
+             category TEXT NOT NULL, \
+             label TEXT NOT NULL)"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (category, label) VALUES \
+             ('B', 'charlie'), ('A', 'alpha'), ('B', 'bravo'), ('A', 'beta')"
+        ))
+        .await
+        .expect("Failed to insert data");
+
+    // Query ordered by category ASC, label ASC using "category ASC, label ASC" format
+    let data = adapter
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            Some("category ASC, label ASC"),
+            None,
+            None,
+        )
+        .await
+        .expect("query_table_data with multi-column ordering failed");
+
+    assert_eq!(data.rows.len(), 4);
+
+    // First row should be category='A', label='alpha'
+    let first_category = data.rows[0][1].as_str().unwrap_or("");
+    let first_label = data.rows[0][2].as_str().unwrap_or("");
+    assert_eq!(first_category, "A");
+    assert_eq!(first_label, "alpha");
+
+    // Second row should be category='A', label='beta'
+    let second_category = data.rows[1][1].as_str().unwrap_or("");
+    let second_label = data.rows[1][2].as_str().unwrap_or("");
+    assert_eq!(second_category, "A");
+    assert_eq!(second_label, "beta");
+
+    // Third row should be category='B', label='bravo'
+    let third_category = data.rows[2][1].as_str().unwrap_or("");
+    let third_label = data.rows[2][2].as_str().unwrap_or("");
+    assert_eq!(third_category, "B");
+    assert_eq!(third_label, "bravo");
+
+    // Fourth row should be category='B', label='charlie'
+    let fourth_category = data.rows[3][1].as_str().unwrap_or("");
+    let fourth_label = data.rows[3][2].as_str().unwrap_or("");
+    assert_eq!(fourth_category, "B");
+    assert_eq!(fourth_label, "charlie");
+
+    // Query with mixed directions: category ASC, label DESC
+    let data_desc = adapter
+        .query_table_data(
+            &table_name,
+            "public",
+            1,
+            50,
+            Some("category ASC, label DESC"),
+            None,
+            None,
+        )
+        .await
+        .expect("query_table_data with mixed direction ordering failed");
+
+    assert_eq!(data_desc.rows.len(), 4);
+
+    // First row should be category='A', label='beta' (reversed within category)
+    let first_label_desc = data_desc.rows[0][2].as_str().unwrap_or("");
+    assert_eq!(first_label_desc, "beta");
+
+    // Second row should be category='A', label='alpha'
+    let second_label_desc = data_desc.rows[1][2].as_str().unwrap_or("");
+    assert_eq!(second_label_desc, "alpha");
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}

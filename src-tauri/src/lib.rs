@@ -1,9 +1,8 @@
+pub mod commands;
 pub mod db;
+pub mod error;
 pub mod models;
 pub mod storage;
-
-mod commands;
-mod error;
 
 use commands::connection::AppState;
 
@@ -29,6 +28,8 @@ pub fn run() {
             commands::schema::query_table_data,
             commands::schema::get_table_indexes,
             commands::schema::get_table_constraints,
+            commands::query::execute_query,
+            commands::query::cancel_query,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

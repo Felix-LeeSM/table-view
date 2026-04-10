@@ -4,6 +4,7 @@ use std::time::Duration;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::db::postgres::PostgresAdapter;
@@ -21,6 +22,7 @@ pub struct AppState {
     pub active_connections: Mutex<HashMap<String, PostgresAdapter>>,
     pub connection_status: Mutex<HashMap<String, ConnectionStatus>>,
     pub keep_alive_handles: Mutex<HashMap<String, JoinHandle<()>>>,
+    pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
 }
 
 impl AppState {
@@ -29,7 +31,14 @@ impl AppState {
             active_connections: Mutex::new(HashMap::new()),
             connection_status: Mutex::new(HashMap::new()),
             keep_alive_handles: Mutex::new(HashMap::new()),
+            query_tokens: Mutex::new(HashMap::new()),
         }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

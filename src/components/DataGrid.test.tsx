@@ -152,7 +152,7 @@ describe("DataGrid", () => {
     expect(cellTexts).toContain(JSON.stringify([1, 2, 3], null, 2));
   });
 
-  // 7. Sort toggle — ASC → DESC → null
+  // 7. Sort toggle — ASC → DESC → null (single column)
   it("cycles sort: ASC → DESC → null on column header clicks", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -177,6 +177,98 @@ describe("DataGrid", () => {
       expect(screen.queryByText("▲")).not.toBeInTheDocument();
       expect(screen.queryByText("▼")).not.toBeInTheDocument();
     });
+  });
+
+  // 7a. Multi-column sort with Shift+Click
+  it("adds columns to sort list with Shift+Click", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // First column click (no shift) → single sort
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    // Check for sort indicator using the specific class
+    const sortIndicators = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    expect(sortIndicators.length).toBe(1);
+    expect(sortIndicators[0]!.textContent).toBe("1");
+    expect(await screen.findByText("▲")).toBeInTheDocument();
+
+    // Shift+Click on second column → add to sort list
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
+    });
+    // Should see two sort indicators (rank numbers)
+    const newSortIndicators = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    expect(newSortIndicators.length).toBe(2);
+    expect(newSortIndicators.some(n => n.textContent === "1")).toBe(true);
+    expect(newSortIndicators.some(n => n.textContent === "2")).toBe(true);
+  });
+
+  // 7b. Shift+Click toggles direction on existing sort column
+  it("toggles direction on Shift+Click for existing sort column", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Add first column with regular click
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    const sortIndicators1 = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    expect(sortIndicators1.length).toBe(1);
+    expect(sortIndicators1[0]!.textContent).toBe("1");
+    expect(await screen.findByText("▲")).toBeInTheDocument();
+
+    // Add second column with Shift+Click
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
+    });
+    const sortIndicators2 = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    expect(sortIndicators2.length).toBe(2);
+
+    // Shift+Click again on second column → toggle to DESC
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
+    });
+    expect(await screen.findByText("▼")).toBeInTheDocument();
+
+    // Shift+Click again → remove from sort list
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
+    });
+    await waitFor(() => {
+      const rankNumbers = screen.queryAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+      expect(rankNumbers.length).toBe(1); // Only id column should remain
+    });
+  });
+
+  // 7c. Regular click replaces all sorts with single column
+  it("replaces all sorts with single column on regular click", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Add multiple sorts with Shift+Click
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
+    });
+    let sortIndicators = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    expect(sortIndicators.length).toBe(2);
+
+    // Regular click on third column → replace all sorts
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by meta"));
+    });
+    // Only meta should be sorted
+    await waitFor(() => {
+      sortIndicators = screen.queryAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+      expect(sortIndicators.length).toBe(1); // Only one sort column
+    });
+    // Check that meta is now rank 1
+    sortIndicators = screen.queryAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    expect(sortIndicators[0]!.textContent).toBe("1");
   });
 
   // 8. Sort resets page to 1
@@ -236,8 +328,9 @@ describe("DataGrid", () => {
     await user.click(nextBtn);
 
     // Should have been called with page=2
-    const lastCall = mockQueryTableData.mock.calls.at(-1)!;
-    expect(lastCall![3]).toBe(2);
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[3]).toBe(2);
   });
 
   // 12. Props change resets page
@@ -250,9 +343,10 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
 
     // The latest call should be with page=1 for the new table
-    const lastCall = mockQueryTableData.mock.calls.at(-1)!;
-    expect(lastCall![1]).toBe("orders");
-    expect(lastCall![3]).toBe(1);
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[1]).toBe("orders");
+    expect(lastCall[3]).toBe(1);
   });
 
   // 13. Executed query bar toggles visibility

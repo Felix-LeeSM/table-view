@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Filter, Key } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import FilterBar from "./FilterBar";
-import type { FilterCondition, FilterMode, TableData } from "../types/schema";
+import type { FilterCondition, FilterMode, SortInfo, TableData } from "../types/schema";
 
 interface DataGridProps {
   connectionId: string;
@@ -23,10 +23,7 @@ export default function DataGrid({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sort, setSort] = useState<{
-    column: string;
-    direction: "ASC" | "DESC";
-  } | null>(null);
+  const [sorts, setSorts] = useState<SortInfo[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterCondition[]>([]);
   const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
@@ -156,13 +153,14 @@ export default function DataGrid({
         appliedRawSql.trim().length > 0 ? appliedRawSql.trim() : undefined;
       const activeFilters =
         appliedFilters.length > 0 ? appliedFilters : undefined;
+      const orderBy = sorts.length > 0 ? sorts.map(s => `${s.column} ${s.direction}`).join(", ") : undefined;
       const result = await queryTableData(
         connectionId,
         table,
         schema,
         page,
         PAGE_SIZE,
-        sort ? `${sort.column} ${sort.direction}` : undefined,
+        orderBy,
         activeRaw ? undefined : activeFilters, // raw_where takes precedence
         activeRaw,
       );
@@ -176,7 +174,7 @@ export default function DataGrid({
     table,
     schema,
     page,
-    sort,
+    sorts,
     appliedFilters,
     appliedRawSql,
     queryTableData,
@@ -195,14 +193,41 @@ export default function DataGrid({
 
   const totalPages = data ? Math.ceil(data.total_count / PAGE_SIZE) : 0;
 
-  const handleSort = (columnName: string) => {
-    setSort((prev) => {
-      if (!prev || prev.column !== columnName)
-        return { column: columnName, direction: "ASC" };
-      if (prev.direction === "ASC")
-        return { column: columnName, direction: "DESC" };
-      return null;
-    });
+  const handleSort = (columnName: string, shiftKey: boolean = false) => {
+    if (shiftKey) {
+      // Shift+Click: add to sort list, toggle direction, or remove
+      setSorts((prev) => {
+        const existingIndex = prev.findIndex(s => s.column === columnName);
+        if (existingIndex !== -1) {
+          // Column already in sort list - toggle direction or remove
+          const existing = prev[existingIndex]!;
+          if (existing.direction === "ASC") {
+            // Toggle to DESC
+            const newSorts = [...prev];
+            newSorts[existingIndex] = { column: columnName, direction: "DESC" };
+            return newSorts;
+          } else {
+            // Remove from sort list
+            const newSorts = prev.filter(s => s.column !== columnName);
+            return newSorts;
+          }
+        } else {
+          // Add new column to sort list
+          return [...prev, { column: columnName, direction: "ASC" }];
+        }
+      });
+    } else {
+      // Click: replace all sorts with this column (cycle ASC → DESC → none)
+      setSorts((prev) => {
+        if (prev.length === 0 || prev[0]!.column !== columnName) {
+          return [{ column: columnName, direction: "ASC" }];
+        }
+        if (prev[0]!.direction === "ASC") {
+          return [{ column: columnName, direction: "DESC" }];
+        }
+        return [];
+      });
+    }
     setPage(1);
   };
 
@@ -234,9 +259,9 @@ export default function DataGrid({
           {data ? (
             <>
               {data.total_count.toLocaleString()} rows
-              {sort && (
+              {sorts.length > 0 && (
                 <span className="text-(--color-text-muted)">
-                  Sorted by {sort.column} {sort.direction}
+                  Sorted by {sorts.map(s => `${s.column} ${s.direction}`).join(", ")}
                 </span>
               )}
             </>
@@ -328,47 +353,52 @@ export default function DataGrid({
           <table className="w-full border-collapse text-sm" ref={tableRef}>
             <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
               <tr>
-                {data.columns.map((col, colIdx) => (
-                  <th
-                    key={col.name}
-                    className="relative cursor-pointer border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
-                    style={{
-                      width: getColumnWidth(col.name),
-                      minWidth: MIN_COL_WIDTH,
-                    }}
-                    onClick={() => handleSort(col.name)}
-                    title={`Sort by ${col.name}`}
-                  >
-                    <div className="flex items-center gap-1">
-                      {col.is_primary_key && (
-                        <span title="Primary Key">
-                          <Key
-                            size={12}
-                            className="shrink-0 text-amber-500"
-                            aria-label="Primary Key"
-                          />
-                        </span>
-                      )}
-                      <span className="truncate">{col.name}</span>
-                      {sort?.column === col.name && (
-                        <span className="shrink-0 text-(--color-accent)">
-                          {sort.direction === "ASC" ? "\u25B2" : "\u25BC"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-[10px] text-(--color-text-muted)">
-                      {col.data_type}
-                    </div>
-                    {/* Resize handle */}
-                    <div
-                      className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-(--color-accent) active:bg-(--color-accent)"
-                      onMouseDown={(e) =>
-                        handleResizeStart(e, col.name, colIdx)
-                      }
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </th>
-                ))}
+                {data.columns.map((col, colIdx) => {
+                  const sortInfo = sorts.find(s => s.column === col.name);
+                  const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
+                  return (
+                    <th
+                      key={col.name}
+                      className="relative cursor-pointer border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                      style={{
+                        width: getColumnWidth(col.name),
+                        minWidth: MIN_COL_WIDTH,
+                      }}
+                      onClick={(e) => handleSort(col.name, e.shiftKey)}
+                      title={`Sort by ${col.name}`}
+                    >
+                      <div className="flex items-center gap-1">
+                        {col.is_primary_key && (
+                          <span title="Primary Key">
+                            <Key
+                              size={12}
+                              className="shrink-0 text-amber-500"
+                              aria-label="Primary Key"
+                            />
+                          </span>
+                        )}
+                        <span className="truncate">{col.name}</span>
+                        {sortInfo && (
+                          <span className="flex shrink-0 items-center gap-0.5 text-(--color-accent)">
+                            <span className="text-[10px] font-bold">{sortRank}</span>
+                            {sortInfo.direction === "ASC" ? "\u25B2" : "\u25BC"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-(--color-text-muted)">
+                        {col.data_type}
+                      </div>
+                      {/* Resize handle */}
+                      <div
+                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-(--color-accent) active:bg-(--color-accent)"
+                        onMouseDown={(e) =>
+                          handleResizeStart(e, col.name, colIdx)
+                        }
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
