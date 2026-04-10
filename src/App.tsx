@@ -30,6 +30,52 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Cmd+T / Ctrl+T — new query tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
+        e.preventDefault();
+        const { activeTabId, tabs } = useTabStore.getState();
+        const activeTab = activeTabId
+          ? tabs.find((t) => t.id === activeTabId)
+          : null;
+        const connectionId = activeTab?.connectionId ?? "";
+        if (connectionId) {
+          useTabStore.getState().addQueryTab(connectionId);
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+. / Ctrl+. — cancel running query
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ".") {
+        e.preventDefault();
+        const { activeTabId, tabs } = useTabStore.getState();
+        const activeTab = activeTabId
+          ? tabs.find((t) => t.id === activeTabId)
+          : null;
+        if (
+          activeTab &&
+          activeTab.type === "query" &&
+          activeTab.queryState.status === "running" &&
+          "queryId" in activeTab.queryState
+        ) {
+          window.dispatchEvent(
+            new CustomEvent("cancel-query", {
+              detail: { queryId: activeTab.queryState.queryId },
+            }),
+          );
+        }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Cmd+R / Ctrl+R / F5 — context-aware refresh
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

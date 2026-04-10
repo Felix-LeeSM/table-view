@@ -32,6 +32,12 @@ export default function TabBar() {
               : "text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
           }`}
           onClick={() => setActiveTab(tab.id)}
+          onAuxClick={(e) => {
+            if (e.button === 1) {
+              e.preventDefault();
+              removeTab(tab.id);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();

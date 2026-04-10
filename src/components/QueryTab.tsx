@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import type { QueryTab } from "../stores/tabStore";
 import { useTabStore } from "../stores/tabStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
@@ -72,6 +72,24 @@ export default function QueryTab({ tab }: QueryTabProps) {
       });
     }
   }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId]);
+
+  // Listen for cancel-query events (Cmd+.)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { queryId } = (e as CustomEvent<{ queryId: string }>).detail;
+      if (
+        tab.queryState.status === "running" &&
+        "queryId" in tab.queryState &&
+        tab.queryState.queryId === queryId
+      ) {
+        cancelQuery(queryId).catch(() => {
+          // Query may have already completed
+        });
+      }
+    };
+    window.addEventListener("cancel-query", handler);
+    return () => window.removeEventListener("cancel-query", handler);
+  }, [tab.id, tab.queryState]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
