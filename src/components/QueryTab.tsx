@@ -1,7 +1,8 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { QueryTab } from "../stores/tabStore";
 import { useTabStore } from "../stores/tabStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
+import { useSqlAutocomplete } from "../hooks/useSqlAutocomplete";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 
@@ -12,6 +13,7 @@ interface QueryTabProps {
 export default function QueryTab({ tab }: QueryTabProps) {
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const updateQueryState = useTabStore((s) => s.updateQueryState);
+  const schemaNamespace = useSqlAutocomplete(tab.connectionId);
 
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
@@ -91,19 +93,60 @@ export default function QueryTab({ tab }: QueryTabProps) {
     return () => window.removeEventListener("cancel-query", handler);
   }, [tab.id, tab.queryState]);
 
+  // Resizable split state
+  const containerRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<{ startY: number; startEditorPct: number } | null>(null);
+  const [editorPct, setEditorPct] = useState(50);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizeRef.current = { startY: e.clientY, startEditorPct: editorPct };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizeRef.current || !containerRef.current) return;
+      const containerHeight = containerRef.current.clientHeight;
+      const delta = moveEvent.clientY - resizeRef.current.startY;
+      const newPct = Math.max(
+        10,
+        Math.min(90, resizeRef.current.startEditorPct + (delta / containerHeight) * 100),
+      );
+      setEditorPct(newPct);
+    };
+
+    const handleMouseUp = () => {
+      resizeRef.current = null;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [editorPct]);
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden">
       {/* Editor area */}
-      <div className="flex-1 min-h-0 border-b border-(--color-border)" style={{ flex: "1 1 50%" }}>
+      <div className="min-h-0 overflow-hidden" style={{ flex: `0 0 ${editorPct}%` }}>
         <QueryEditor
           sql={tab.sql}
           onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
           onExecute={handleExecute}
+          schemaNamespace={schemaNamespace}
         />
       </div>
 
+      {/* Resize handle */}
+      <div
+        className="h-1 cursor-row-resize shrink-0 border-y border-(--color-border) hover:bg-(--color-accent) active:bg-(--color-accent)"
+        onMouseDown={handleResizeMouseDown}
+      />
+
       {/* Result area */}
-      <div className="flex-1 min-h-0" style={{ flex: "1 1 50%" }}>
+      <div className="min-h-0 flex-1 overflow-hidden">
         <QueryResultGrid queryState={tab.queryState} />
       </div>
     </div>

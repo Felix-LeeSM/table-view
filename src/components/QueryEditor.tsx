@@ -1,7 +1,7 @@
 import { useRef, useEffect } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
-import { sql as sqlLanguage, StandardSQL } from "@codemirror/lang-sql";
+import { sql as sqlLanguage, StandardSQL, type SQLNamespace } from "@codemirror/lang-sql";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput } from "@codemirror/language";
 import { autocompletion } from "@codemirror/autocomplete";
@@ -10,9 +10,10 @@ interface QueryEditorProps {
   sql: string;
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
+  schemaNamespace?: SQLNamespace;
 }
 
-export default function QueryEditor({ sql, onSqlChange, onExecute }: QueryEditorProps) {
+export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespace }: QueryEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -36,7 +37,7 @@ export default function QueryEditor({ sql, onSqlChange, onExecute }: QueryEditor
         highlightActiveLine(),
         indentOnInput(),
         bracketMatching(),
-        sqlLanguage({ dialect: StandardSQL }),
+        sqlLanguage({ dialect: StandardSQL, schema: schemaNamespace }),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         autocompletion(),
         keymap.of([
@@ -93,9 +94,9 @@ export default function QueryEditor({ sql, onSqlChange, onExecute }: QueryEditor
       view.destroy();
       viewRef.current = null;
     };
-    // We intentionally create the editor only once.
+    // Recreate editor when schemaNamespace changes (new tables loaded).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [schemaNamespace]);
 
   // Sync external sql changes into the editor (e.g. when switching tabs).
   useEffect(() => {
