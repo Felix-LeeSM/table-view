@@ -1,66 +1,65 @@
-# Sprint Execution Brief: Sprint 1 — Bug Fixes (B1-B4)
+# Sprint Execution Brief: sprint-1
 
 ## Objective
 
-Fix four usability bugs identified in the Phase 2 P1 review (docs/REVIEW-P2P1.md) to ensure clean user experience.
+임의 SQL을 실행하고 결과를 반환하는 Tauri 명령(`execute_query`)과 실행 중인 쿼리를 중단하는 명령(`cancel_query`)을 구현합니다. 이는 Phase 3(Query Editor)의 백엔드 기반입니다.
 
 ## Task Why
 
-These bugs cause visible UX issues: empty state flashing, stale pagination, redundant state updates, and filter state inconsistency. They should be fixed before adding new features in later sprints.
+Query Editor 기능을 위해서는 테이블 브라우저(`query_table_data`)와 달리 임의 SQL을 실행할 수 있는 백엔드 명령이 필요합니다. 또한 장시간 실행되는 쿼리를 중단할 수 있는 취소 메커니즘도 필요합니다.
 
 ## Scope Boundary
 
-- Only modify: `StructurePanel.tsx`, `DataGrid.tsx`, `SchemaTree.tsx`, `FilterBar.tsx`
-- Do NOT add new features (no sorting changes, no new columns, no keyboard shortcuts)
-- Do NOT modify Rust backend files
-- Do NOT modify PLAN.md (that is Sprint 2)
+- **IN**: Backend Tauri 명령, Rust 모델, 쿼리 실행/취소 로직, PostgreSQL 어댑터 메서드
+- **OUT**: Frontend UI (Sprint 2), CodeMirror (Sprint 2), 다중 탭 상태 (Sprint 3)
 
 ## Invariants
 
-1. `cargo test` passes (src-tauri/)
-2. `cargo clippy --all-targets --all-features -- -D warnings` passes (src-tauri/)
-3. `pnpm build` succeeds
-4. `pnpm test` passes
-5. StructurePanel must still show "No X found" after a successful fetch returns empty data
-6. DataGrid must still reset page to 1 when sort changes (existing handleSort behavior)
-7. FilterBar must still clear `filters` state via `onFiltersChange([])`
-8. No `any` types introduced
-9. No `console.log` debugging statements
+1. 기존 `query_table_data` 명령 동작 유지 (회귀 없음)
+2. Pool 락 패턴: 쿼리 실행 중 전체 pool을 락하지 않음 (pool clone 후 락 해제)
+3. 모든 에러가 `AppError::Database`로 반환
+4. `tokio_util::sync::CancellationToken` 사용
+5. `cargo fmt`, `cargo clippy` 준수
 
 ## Done Criteria
 
-1. **AC-01 (B1)**: StructurePanel does NOT render "No columns/indexes/constraints found" before the first fetchData() completes. After first fetch with empty data, it DOES show the empty state message.
-2. **AC-02 (B2)**: DataGrid resets `page` to 1 whenever `connectionId`, `table`, or `schema` props change.
-3. **AC-03 (B3)**: SchemaTree `handleTableClick` returns early (no state updates) when a data tab already exists for the same connectionId + tableName.
-4. **AC-04 (B4)**: FilterBar "Clear All" resets both `filters` and `appliedFilters` in DataGrid, and also resets page to 1.
+1. `execute_query` 명령이 SELECT 쿼리를 실행하고 컬럼/행/시간 반환
+2. `execute_query` 명령이 DML을 실행하고 rows_affected 반환
+3. `execute_query` 명령이 DDL을 실행하고 성공 메시지 반환
+4. `cancel_query` 명령이 실행 중인 쿼리 중단
+5. 에러가 `AppError::Database`로 반환
+6. 실행 시간(ms)이 항상 반환
 
 ## Verification Plan
 
-- Profile: mixed (command + static)
+- Profile: `api`
 - Required checks:
-  1. `pnpm build` — must succeed
-  2. `cargo clippy --all-targets --all-features -- -D warnings` (from src-tauri/) — no warnings
-  3. `cargo test` (from src-tauri/) — all tests pass
-  4. `pnpm test` — all tests pass
-  5. Static: StructurePanel.tsx contains `hasFetched` state or equivalent mechanism
-  6. Static: DataGrid.tsx contains useEffect that resets page on prop changes
-  7. Static: SchemaTree.tsx handleTableClick has early return guard
-  8. Static: FilterBar.tsx accepts onClearAll prop, DataGrid passes it
+  1. `cargo test` — 백엔드 테스트 통과
+  2. `cargo fmt --check` — 포맷 검증
+  3. `cargo clippy --all-targets --all-features -- -D warnings` — 린트 통과
+  4. `cargo check` — 컴파일 체크
 - Required evidence:
-  - Changed files with purpose
-  - All command outputs showing pass/fail
-  - Brief explanation of each fix
+  - query_integration.rs에서 SELECT/DML/DDL/취소 테스트 통과 로그
+  - 새 모델의 Serialize/Deserialize 동작 확인
 
 ## Evidence To Return
 
-- Changed files and purpose
-- Checks run and outcomes
-- Done criteria coverage with evidence
-- Assumptions made during implementation
-- Residual risk or verification gaps
+- Changed files with purpose:
+  - 각 파일이 왜 변경되었는지 설명
+- Checks run and outcomes:
+  - 실행한 테스트 명령어와 결과
+- Done criteria coverage with evidence:
+  - AC-01~AC-06 각각을 만족한다는 구체적 증거
+- Assumptions made during implementation:
+  - 구현 중 가정한 사항
+- Residual risk or verification gaps:
+  - 검증되지 않은 부분이나 잠재적 리스크
 
 ## References
 
 - Contract: `.claude/skills/harness/sprint-1/contract.md`
-- Review doc: `docs/REVIEW-P2P1.md`
-- Relevant files: `StructurePanel.tsx`, `DataGrid.tsx`, `SchemaTree.tsx`, `FilterBar.tsx`
+- Findings: (Evaluator가 작성할 예정)
+- Relevant files:
+  - `/home/felix/study/table-view/src-tauri/src/db/postgres.rs`
+  - `/home/felix/study/table-view/src-tauri/src/commands/connection.rs`
+  - `/home/felix/study/table-view/src-tauri/src/lib.rs`
