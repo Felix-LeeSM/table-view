@@ -311,3 +311,257 @@ pub fn move_connection_to_group(
 ) -> Result<(), AppError> {
     storage::move_connection_to_group(&connection_id, group_id.as_deref())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{ConnectionConfig, ConnectionGroup, DatabaseType};
+    use serial_test::serial;
+    use tempfile::TempDir;
+
+    fn setup_test_env() -> TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::env::set_var("VIEWTABLE_TEST_DATA_DIR", dir.path());
+        dir
+    }
+
+    fn cleanup_test_env() {
+        std::env::remove_var("VIEWTABLE_TEST_DATA_DIR");
+    }
+
+    fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
+        ConnectionConfig {
+            id: id.to_string(),
+            name: name.to_string(),
+            db_type: DatabaseType::Postgresql,
+            host: "localhost".to_string(),
+            port: 5432,
+            user: "postgres".to_string(),
+            password: "secret".to_string(),
+            database: "testdb".to_string(),
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+        }
+    }
+
+    fn sample_group(id: &str, name: &str) -> ConnectionGroup {
+        ConnectionGroup {
+            id: id.to_string(),
+            name: name.to_string(),
+            color: None,
+            collapsed: false,
+        }
+    }
+
+    // AC-11: save_connection validates empty name and empty host
+    #[test]
+    fn test_save_connection_rejects_empty_name() {
+        let conn = sample_connection("c1", "");
+        let result = save_connection(conn.clone(), None);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::Validation(msg) => assert!(msg.contains("name is required")),
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_save_connection_rejects_whitespace_name() {
+        let conn = sample_connection("c1", "   ");
+        let result = save_connection(conn, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_connection_rejects_empty_host() {
+        let mut conn = sample_connection("c1", "MyDB");
+        conn.host = String::new();
+        let result = save_connection(conn, None);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::Validation(msg) => assert!(msg.contains("Host is required")),
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_save_connection_rejects_whitespace_host() {
+        let mut conn = sample_connection("c1", "MyDB");
+        conn.host = "   ".to_string();
+        let result = save_connection(conn, None);
+        assert!(result.is_err());
+    }
+
+    // AC-12: save_connection with is_new=true generates UUID
+    #[test]
+    #[serial]
+    fn test_save_connection_generates_uuid_when_is_new() {
+        let _dir = setup_test_env();
+
+        let conn = sample_connection("placeholder-id", "MyDB");
+        let result = save_connection(conn, Some(true)).unwrap();
+
+        // UUID should differ from the placeholder id
+        assert_ne!(result.id, "placeholder-id");
+        // UUID should be a valid v4 format (36 chars with dashes)
+        assert_eq!(result.id.len(), 36);
+        assert!(result.id.contains('-'));
+
+        // The saved connection should be loadable with the new UUID
+        let loaded = storage::load_storage().unwrap();
+        assert_eq!(loaded.connections.len(), 1);
+        assert_eq!(loaded.connections[0].id, result.id);
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_save_connection_keeps_id_when_not_new() {
+        let _dir = setup_test_env();
+
+        let conn = sample_connection("my-custom-id", "MyDB");
+        let result = save_connection(conn, Some(false)).unwrap();
+
+        assert_eq!(result.id, "my-custom-id");
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_save_connection_keeps_id_when_is_new_is_none() {
+        let _dir = setup_test_env();
+
+        let conn = sample_connection("my-custom-id", "MyDB");
+        let result = save_connection(conn, None).unwrap();
+
+        assert_eq!(result.id, "my-custom-id");
+
+        cleanup_test_env();
+    }
+
+    // AC-13: list_groups returns groups from storage
+    #[test]
+    #[serial]
+    fn test_list_groups_returns_from_storage() {
+        let _dir = setup_test_env();
+
+        storage::save_group(sample_group("g1", "Production")).unwrap();
+        storage::save_group(sample_group("g2", "Development")).unwrap();
+
+        let groups = list_groups().unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].id, "g1");
+        assert_eq!(groups[0].name, "Production");
+        assert_eq!(groups[1].id, "g2");
+        assert_eq!(groups[1].name, "Development");
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_list_groups_returns_empty_when_no_groups() {
+        let _dir = setup_test_env();
+
+        let groups = list_groups().unwrap();
+        assert!(groups.is_empty());
+
+        cleanup_test_env();
+    }
+
+    // AC-14: save_group validates empty name
+    #[test]
+    fn test_save_group_rejects_empty_name() {
+        let group = sample_group("g1", "");
+        let result = save_group(group, None);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AppError::Validation(msg) => assert!(msg.contains("Group name is required")),
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_save_group_rejects_whitespace_name() {
+        let group = sample_group("g1", "   ");
+        let result = save_group(group, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_save_group_generates_uuid_when_is_new() {
+        let _dir = setup_test_env();
+
+        let group = sample_group("placeholder-id", "MyGroup");
+        let result = save_group(group, Some(true)).unwrap();
+
+        assert_ne!(result.id, "placeholder-id");
+        assert_eq!(result.id.len(), 36);
+        assert!(result.id.contains('-'));
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_list_connections_returns_from_storage() {
+        let _dir = setup_test_env();
+
+        storage::save_connection(sample_connection("c1", "DB1")).unwrap();
+        storage::save_connection(sample_connection("c2", "DB2")).unwrap();
+
+        let connections = list_connections().unwrap();
+        assert_eq!(connections.len(), 2);
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_delete_connection_command_removes_connection() {
+        let _dir = setup_test_env();
+
+        storage::save_connection(sample_connection("c1", "DB1")).unwrap();
+        delete_connection("c1".to_string()).unwrap();
+
+        let loaded = storage::load_storage().unwrap();
+        assert!(loaded.connections.is_empty());
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_delete_group_command_removes_group() {
+        let _dir = setup_test_env();
+
+        storage::save_group(sample_group("g1", "Group1")).unwrap();
+        delete_group("g1".to_string()).unwrap();
+
+        let loaded = storage::load_storage().unwrap();
+        assert!(loaded.groups.is_empty());
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_move_connection_to_group_command() {
+        let _dir = setup_test_env();
+
+        storage::save_group(sample_group("g1", "Group1")).unwrap();
+        storage::save_connection(sample_connection("c1", "DB1")).unwrap();
+
+        move_connection_to_group("c1".to_string(), Some("g1".to_string())).unwrap();
+
+        let loaded = storage::load_storage().unwrap();
+        assert_eq!(loaded.connections[0].group_id, Some("g1".to_string()));
+
+        cleanup_test_env();
+    }
+}
