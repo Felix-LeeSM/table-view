@@ -189,7 +189,9 @@ describe("DataGrid", () => {
       fireEvent.click(screen.getByTitle("Sort by id"));
     });
     // Check for sort indicator using the specific class
-    const sortIndicators = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    const sortIndicators = screen
+      .getAllByText(/^\d+$/)
+      .filter((el) => el.classList.contains("font-bold"));
     expect(sortIndicators.length).toBe(1);
     expect(sortIndicators[0]!.textContent).toBe("1");
     expect(await screen.findByText("▲")).toBeInTheDocument();
@@ -199,10 +201,12 @@ describe("DataGrid", () => {
       fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
     });
     // Should see two sort indicators (rank numbers)
-    const newSortIndicators = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    const newSortIndicators = screen
+      .getAllByText(/^\d+$/)
+      .filter((el) => el.classList.contains("font-bold"));
     expect(newSortIndicators.length).toBe(2);
-    expect(newSortIndicators.some(n => n.textContent === "1")).toBe(true);
-    expect(newSortIndicators.some(n => n.textContent === "2")).toBe(true);
+    expect(newSortIndicators.some((n) => n.textContent === "1")).toBe(true);
+    expect(newSortIndicators.some((n) => n.textContent === "2")).toBe(true);
   });
 
   // 7b. Shift+Click toggles direction on existing sort column
@@ -214,7 +218,9 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(screen.getByTitle("Sort by id"));
     });
-    const sortIndicators1 = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    const sortIndicators1 = screen
+      .getAllByText(/^\d+$/)
+      .filter((el) => el.classList.contains("font-bold"));
     expect(sortIndicators1.length).toBe(1);
     expect(sortIndicators1[0]!.textContent).toBe("1");
     expect(await screen.findByText("▲")).toBeInTheDocument();
@@ -223,7 +229,9 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
     });
-    const sortIndicators2 = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    const sortIndicators2 = screen
+      .getAllByText(/^\d+$/)
+      .filter((el) => el.classList.contains("font-bold"));
     expect(sortIndicators2.length).toBe(2);
 
     // Shift+Click again on second column → toggle to DESC
@@ -237,7 +245,9 @@ describe("DataGrid", () => {
       fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
     });
     await waitFor(() => {
-      const rankNumbers = screen.queryAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+      const rankNumbers = screen
+        .queryAllByText(/^\d+$/)
+        .filter((el) => el.classList.contains("font-bold"));
       expect(rankNumbers.length).toBe(1); // Only id column should remain
     });
   });
@@ -254,7 +264,9 @@ describe("DataGrid", () => {
     await act(async () => {
       fireEvent.click(screen.getByTitle("Sort by name"), { shiftKey: true });
     });
-    let sortIndicators = screen.getAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    let sortIndicators = screen
+      .getAllByText(/^\d+$/)
+      .filter((el) => el.classList.contains("font-bold"));
     expect(sortIndicators.length).toBe(2);
 
     // Regular click on third column → replace all sorts
@@ -263,11 +275,15 @@ describe("DataGrid", () => {
     });
     // Only meta should be sorted
     await waitFor(() => {
-      sortIndicators = screen.queryAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+      sortIndicators = screen
+        .queryAllByText(/^\d+$/)
+        .filter((el) => el.classList.contains("font-bold"));
       expect(sortIndicators.length).toBe(1); // Only one sort column
     });
     // Check that meta is now rank 1
-    sortIndicators = screen.queryAllByText(/^\d+$/).filter(el => el.classList.contains("font-bold"));
+    sortIndicators = screen
+      .queryAllByText(/^\d+$/)
+      .filter((el) => el.classList.contains("font-bold"));
     expect(sortIndicators[0]!.textContent).toBe("1");
   });
 
@@ -479,7 +495,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const resizeHandles = document.querySelectorAll('.cursor-col-resize');
+    const resizeHandles = document.querySelectorAll(".cursor-col-resize");
     expect(resizeHandles.length).toBe(3); // one per column
   });
 
@@ -488,7 +504,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const resizeHandle = document.querySelectorAll('.cursor-col-resize')[0]!;
+    const resizeHandle = document.querySelectorAll(".cursor-col-resize")[0]!;
 
     // Trigger mousedown — this registers document-level listeners
     fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
@@ -501,7 +517,7 @@ describe("DataGrid", () => {
     fireEvent.mouseMove(document, { clientX: 280 });
 
     // The first column's th should have its width updated via direct DOM
-    const th = document.querySelector('th:nth-child(1)') as HTMLElement;
+    const th = document.querySelector("th:nth-child(1)") as HTMLElement;
     expect(th).toBeTruthy();
     // Width should have increased (from 150 + 80 = 230)
     expect(parseInt(th.style.width, 10)).toBeGreaterThan(150);
@@ -518,7 +534,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const resizeHandle = document.querySelectorAll('.cursor-col-resize')[0]!;
+    const resizeHandle = document.querySelectorAll(".cursor-col-resize")[0]!;
 
     // Trigger mousedown
     fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
@@ -527,7 +543,7 @@ describe("DataGrid", () => {
     fireEvent.mouseMove(document, { clientX: 100 });
 
     // Width should be clamped to MIN_COL_WIDTH (60)
-    const th = document.querySelector('th:nth-child(1)') as HTMLElement;
+    const th = document.querySelector("th:nth-child(1)") as HTMLElement;
     expect(parseInt(th.style.width, 10)).toBe(60);
 
     // Cleanup
@@ -592,7 +608,9 @@ describe("DataGrid", () => {
     });
     await screen.findByText("3 rows");
 
-    expect(mockQueryTableData.mock.calls.length).toBeGreaterThan(initialCallCount);
+    expect(mockQueryTableData.mock.calls.length).toBeGreaterThan(
+      initialCallCount,
+    );
   });
 
   // 25. Column header shows primary key icon
@@ -619,5 +637,53 @@ describe("DataGrid", () => {
     mockQueryTableData.mockReturnValue(new Promise(() => {}));
     renderDataGrid();
     expect(screen.getByText("public.users")).toBeInTheDocument();
+  });
+
+  // 28. Race condition: stale response is ignored
+  it("ignores stale response when fetchData is called twice rapidly", async () => {
+    let resolveFirst: (value: TableData) => void;
+    const firstPromise = new Promise<TableData>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const staleData: TableData = {
+      ...MOCK_DATA,
+      total_count: 999,
+      rows: [[1, "STALE", null]],
+    };
+    const freshData: TableData = {
+      ...MOCK_DATA,
+      total_count: 42,
+      rows: [[1, "FRESH", null]],
+    };
+
+    // First call hangs (stale)
+    mockQueryTableData.mockReturnValueOnce(firstPromise);
+    // Second call resolves immediately (fresh)
+    mockQueryTableData.mockResolvedValueOnce(freshData);
+
+    renderDataGrid();
+
+    // Wait for the first call to start
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // Dispatch refresh-data to trigger a second fetchData while first is pending
+    await act(async () => {
+      window.dispatchEvent(new Event("refresh-data"));
+    });
+
+    // Resolve the stale (first) call after the fresh (second) call has already completed
+    await act(async () => {
+      resolveFirst!(staleData);
+    });
+
+    // The fresh data should be shown, NOT the stale data
+    await waitFor(() => {
+      expect(screen.getByText("42 rows")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("999 rows")).not.toBeInTheDocument();
+    expect(screen.queryByText("STALE")).not.toBeInTheDocument();
+    expect(screen.getByText("FRESH")).toBeInTheDocument();
   });
 });

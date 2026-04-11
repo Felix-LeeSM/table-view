@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Filter, Key } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import FilterBar from "./FilterBar";
-import type { FilterCondition, FilterMode, SortInfo, TableData } from "../types/schema";
+import type {
+  FilterCondition,
+  FilterMode,
+  SortInfo,
+  TableData,
+} from "../types/schema";
 
 interface DataGridProps {
   connectionId: string;
@@ -145,7 +150,9 @@ export default function DataGrid({
     }
   }, [connectionId, table, schema]);
 
+  const fetchIdRef = useRef(0);
   const fetchData = useCallback(async () => {
+    const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -153,7 +160,10 @@ export default function DataGrid({
         appliedRawSql.trim().length > 0 ? appliedRawSql.trim() : undefined;
       const activeFilters =
         appliedFilters.length > 0 ? appliedFilters : undefined;
-      const orderBy = sorts.length > 0 ? sorts.map(s => `${s.column} ${s.direction}`).join(", ") : undefined;
+      const orderBy =
+        sorts.length > 0
+          ? sorts.map((s) => `${s.column} ${s.direction}`).join(", ")
+          : undefined;
       const result = await queryTableData(
         connectionId,
         table,
@@ -164,11 +174,17 @@ export default function DataGrid({
         activeRaw ? undefined : activeFilters, // raw_where takes precedence
         activeRaw,
       );
-      setData(result);
+      if (fetchId === fetchIdRef.current) {
+        setData(result);
+      }
     } catch (e) {
-      setError(String(e));
+      if (fetchId === fetchIdRef.current) {
+        setError(String(e));
+      }
     }
-    setLoading(false);
+    if (fetchId === fetchIdRef.current) {
+      setLoading(false);
+    }
   }, [
     connectionId,
     table,
@@ -197,7 +213,7 @@ export default function DataGrid({
     if (shiftKey) {
       // Shift+Click: add to sort list, toggle direction, or remove
       setSorts((prev) => {
-        const existingIndex = prev.findIndex(s => s.column === columnName);
+        const existingIndex = prev.findIndex((s) => s.column === columnName);
         if (existingIndex !== -1) {
           // Column already in sort list - toggle direction or remove
           const existing = prev[existingIndex]!;
@@ -208,7 +224,7 @@ export default function DataGrid({
             return newSorts;
           } else {
             // Remove from sort list
-            const newSorts = prev.filter(s => s.column !== columnName);
+            const newSorts = prev.filter((s) => s.column !== columnName);
             return newSorts;
           }
         } else {
@@ -261,7 +277,8 @@ export default function DataGrid({
               {data.total_count.toLocaleString()} rows
               {sorts.length > 0 && (
                 <span className="text-(--color-text-muted)">
-                  Sorted by {sorts.map(s => `${s.column} ${s.direction}`).join(", ")}
+                  Sorted by{" "}
+                  {sorts.map((s) => `${s.column} ${s.direction}`).join(", ")}
                 </span>
               )}
             </>
@@ -362,7 +379,7 @@ export default function DataGrid({
             <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
               <tr>
                 {data.columns.map((col, colIdx) => {
-                  const sortInfo = sorts.find(s => s.column === col.name);
+                  const sortInfo = sorts.find((s) => s.column === col.name);
                   const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
                   return (
                     <th
@@ -388,7 +405,9 @@ export default function DataGrid({
                         <span className="truncate">{col.name}</span>
                         {sortInfo && (
                           <span className="flex shrink-0 items-center gap-0.5 text-(--color-accent)">
-                            <span className="text-[10px] font-bold">{sortRank}</span>
+                            <span className="text-[10px] font-bold">
+                              {sortRank}
+                            </span>
                             {sortInfo.direction === "ASC" ? "\u25B2" : "\u25BC"}
                           </span>
                         )}

@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
+import React from "react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
@@ -51,41 +58,55 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // AC-01: Auto-load on mount
   // -----------------------------------------------------------------------
-  it("calls loadSchemas with connectionId on mount", () => {
-    render(<SchemaTree connectionId="conn1" />);
+  it("calls loadSchemas with connectionId on mount", async () => {
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
     expect(mockLoadSchemas).toHaveBeenCalledWith("conn1");
   });
 
-  it("does not call loadSchemas again on re-render with same connectionId", () => {
-    const { rerender } = render(<SchemaTree connectionId="conn1" />);
+  it("does not call loadSchemas again on re-render with same connectionId", async () => {
+    let rerenderFn: (ui: React.ReactElement) => void;
+    await act(async () => {
+      const { rerender } = render(<SchemaTree connectionId="conn1" />);
+      rerenderFn = rerender;
+    });
     expect(mockLoadSchemas).toHaveBeenCalledTimes(1);
 
-    rerender(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      rerenderFn!(<SchemaTree connectionId="conn1" />);
+    });
     expect(mockLoadSchemas).toHaveBeenCalledTimes(1);
   });
 
   // -----------------------------------------------------------------------
   // AC-02: Schema list rendering
   // -----------------------------------------------------------------------
-  it("renders schema names from store", () => {
+  it("renders schema names from store", async () => {
     setSchemaStoreState({
       schemas: {
         conn1: [{ name: "public" }, { name: "analytics" }],
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
     expect(screen.getByText("public")).toBeInTheDocument();
     expect(screen.getByText("analytics")).toBeInTheDocument();
   });
 
-  it("renders nothing when schemas is empty", () => {
+  it("renders nothing when schemas is empty", async () => {
     setSchemaStoreState({ schemas: { conn1: [] } });
 
-    const { container } = render(<SchemaTree connectionId="conn1" />);
+    let container: HTMLElement;
+    await act(async () => {
+      const result = render(<SchemaTree connectionId="conn1" />);
+      container = result.container;
+    });
     // Header should still render but no schema items
     expect(screen.getByText("Schemas")).toBeInTheDocument();
-    expect(container.querySelectorAll("[aria-expanded]").length).toBe(0);
+    expect(container!.querySelectorAll("[aria-expanded]").length).toBe(0);
   });
 
   // -----------------------------------------------------------------------
@@ -97,7 +118,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     expect(schemaButton).toHaveAttribute("aria-expanded", "false");
@@ -115,7 +138,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
 
@@ -141,7 +166,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -154,10 +181,14 @@ describe("SchemaTree", () => {
   it("does not call loadTables when expanding a schema that already has cached tables", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
-      tables: { "conn1:public": [{ name: "users", schema: "public", row_count: null }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -178,7 +209,9 @@ describe("SchemaTree", () => {
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -200,7 +233,9 @@ describe("SchemaTree", () => {
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     // Expand the schema first
     const schemaButton = screen.getByLabelText("public schema");
@@ -229,11 +264,15 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // AC-06: "New Query" button -> addQueryTab
   // -----------------------------------------------------------------------
-  it("calls addQueryTab when New Query button is clicked", () => {
-    render(<SchemaTree connectionId="conn1" />);
+  it("calls addQueryTab when New Query button is clicked", async () => {
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const newQueryBtn = screen.getByLabelText("New Query");
-    fireEvent.click(newQueryBtn);
+    await act(async () => {
+      fireEvent.click(newQueryBtn);
+    });
 
     const state = useTabStore.getState();
     const queryTab = state.tabs.find((t) => t.type === "query");
@@ -244,7 +283,9 @@ describe("SchemaTree", () => {
   // AC-07: Refresh button -> reload schemas
   // -----------------------------------------------------------------------
   it("calls loadSchemas again when Refresh button is clicked", async () => {
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
     // One call from mount
     expect(mockLoadSchemas).toHaveBeenCalledTimes(1);
 
@@ -271,7 +312,9 @@ describe("SchemaTree", () => {
       tables: { "conn1:empty_schema": [] },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("empty_schema schema");
     await act(async () => {
@@ -288,11 +331,15 @@ describe("SchemaTree", () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
-        "conn1:public": [{ name: "big_table", schema: "public", row_count: 12345 }],
+        "conn1:public": [
+          { name: "big_table", schema: "public", row_count: 12345 },
+        ],
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -310,7 +357,9 @@ describe("SchemaTree", () => {
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -327,7 +376,9 @@ describe("SchemaTree", () => {
   // AC-10: refresh-schema custom event
   // -----------------------------------------------------------------------
   it("reloads schemas when refresh-schema window event is dispatched", async () => {
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
     expect(mockLoadSchemas).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -337,11 +388,17 @@ describe("SchemaTree", () => {
     expect(mockLoadSchemas).toHaveBeenCalledTimes(2);
   });
 
-  it("removes refresh-schema listener on unmount", () => {
-    const { unmount } = render(<SchemaTree connectionId="conn1" />);
+  it("removes refresh-schema listener on unmount", async () => {
+    let unmountFn: () => void;
+    await act(async () => {
+      const { unmount } = render(<SchemaTree connectionId="conn1" />);
+      unmountFn = unmount;
+    });
     expect(mockLoadSchemas).toHaveBeenCalledTimes(1);
 
-    unmount();
+    await act(async () => {
+      unmountFn!();
+    });
 
     // Dispatching after unmount should NOT trigger another load
     act(() => {
@@ -360,7 +417,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -376,7 +435,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -394,7 +455,9 @@ describe("SchemaTree", () => {
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     // Expand first
     const schemaButton = screen.getByLabelText("public schema");
@@ -424,7 +487,9 @@ describe("SchemaTree", () => {
       }),
     );
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     // While loading, the button should contain a spinner (Loader2)
     const refreshBtn = screen.getByLabelText("Refresh schemas");
@@ -449,7 +514,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -471,10 +538,12 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // Edge cases
   // -----------------------------------------------------------------------
-  it("works when schemas for connectionId is undefined (uses empty array)", () => {
+  it("works when schemas for connectionId is undefined (uses empty array)", async () => {
     setSchemaStoreState({ schemas: {} });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
     expect(screen.getByText("Schemas")).toBeInTheDocument();
   });
 
@@ -488,7 +557,9 @@ describe("SchemaTree", () => {
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("my_schema schema");
     await act(async () => {
@@ -512,11 +583,15 @@ describe("SchemaTree", () => {
       },
     });
 
-    const { rerender } = render(<SchemaTree connectionId="conn1" />);
+    let rerenderFn: (ui: React.ReactElement) => void;
+    await act(async () => {
+      const { rerender } = render(<SchemaTree connectionId="conn1" />);
+      rerenderFn = rerender;
+    });
     expect(mockLoadSchemas).toHaveBeenCalledWith("conn1");
 
     await act(async () => {
-      rerender(<SchemaTree connectionId="conn2" />);
+      rerenderFn!(<SchemaTree connectionId="conn2" />);
     });
 
     expect(mockLoadSchemas).toHaveBeenCalledWith("conn2");
@@ -529,11 +604,15 @@ describe("SchemaTree", () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
-        "conn1:public": [{ name: "empty_table", schema: "public", row_count: 0 }],
+        "conn1:public": [
+          { name: "empty_table", schema: "public", row_count: 0 },
+        ],
       },
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -555,7 +634,9 @@ describe("SchemaTree", () => {
       tables: {},
     });
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
@@ -574,7 +655,9 @@ describe("SchemaTree", () => {
     mockLoadSchemas.mockResolvedValueOnce(undefined); // mount call succeeds
     mockLoadSchemas.mockRejectedValueOnce(new Error("network error")); // refresh fails
 
-    render(<SchemaTree connectionId="conn1" />);
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
 
     await waitFor(() => {
       expect(screen.getByLabelText("Refresh schemas")).not.toBeDisabled();
