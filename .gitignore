@@ -36,4 +36,3 @@ coverage/
 
 # Build
 *.tsbuildinfo
-.husky/
