@@ -6,14 +6,16 @@ describe("View Table — Smoke Tests", () => {
   });
 
   it("renders the sidebar with Connections header", async () => {
-    const connectionsHeader = await $("text=Connections");
+    const connectionsHeader = await $(
+      '//span[normalize-space()="Connections"]',
+    );
     await connectionsHeader.waitForDisplayed({ timeout: 10000 });
     const text = await connectionsHeader.getText();
     expect(text).toContain("Connections");
   });
 
   it("shows empty state when no connections exist", async () => {
-    const emptyState = await $("text=No connections yet");
+    const emptyState = await $('//p[normalize-space()="No connections yet"]');
     await emptyState.waitForDisplayed({ timeout: 10000 });
     const text = await emptyState.getText();
     expect(text).toContain("No connections yet");

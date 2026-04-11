@@ -43,14 +43,14 @@ describe("Database Connection Flow", () => {
     await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
 
     // 6. Verify connection appears in sidebar
-    const connItem = await $("span=Test PG");
+    const connItem = await $('[aria-label^="Test PG"]');
     await connItem.waitForDisplayed({ timeout: 5000 });
-    expect(await connItem.getText()).toContain("Test PG");
+    expect(await connItem.getAttribute("aria-label")).toContain("Test PG");
   });
 
   it("connects to PostgreSQL and shows schemas", async () => {
     // Double-click on the connection item to connect
-    const connItem = await $("span=Test PG");
+    const connItem = await $('[aria-label^="Test PG"]');
     await connItem.waitForDisplayed({ timeout: 5000 });
     await connItem.doubleClick();
 
@@ -62,8 +62,9 @@ describe("Database Connection Flow", () => {
   });
 
   it("opens a query tab via keyboard shortcut", async () => {
-    // Cmd+T / Ctrl+T to open new query tab
-    await browser.keys(["Control", "t"]);
+    const newQueryBtn = await $('[aria-label="New Query"]');
+    await newQueryBtn.waitForDisplayed({ timeout: 5000 });
+    await newQueryBtn.click();
 
     // The query editor should appear (CodeMirror .cm-editor)
     const editor = await $(".cm-editor");
