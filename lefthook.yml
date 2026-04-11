@@ -11,10 +11,12 @@ pre-commit:
       run: cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
     ts-format:
       glob: "*.{ts,tsx}"
-      run: npx prettier --check {staged_files}
+      run: npx prettier --write {staged_files}
+      stage_fixed: true
     ts-lint:
       glob: "*.{ts,tsx}"
-      run: test -f package.json && npx eslint {staged_files}
+      run: npx eslint --fix {staged_files}
+      stage_fixed: true
     no-secrets:
       run: |
         STAGED=$(git diff --cached --name-only | grep -v '^docs/')
@@ -31,6 +33,9 @@ pre-push:
     ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage
+    ts-lint:
+      tags: lint frontend
+      run: npm run lint
     tauri-check:
       tags: build
       run: cd src-tauri && cargo check
