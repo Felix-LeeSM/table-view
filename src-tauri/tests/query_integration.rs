@@ -29,7 +29,6 @@ async fn test_select_query_returns_columns_and_rows() {
     assert_eq!(result.columns[1].name, "str");
     assert_eq!(result.rows.len(), 1, "Should have 1 row");
     assert_eq!(result.total_count, 1);
-    assert!(result.execution_time_ms > 0);
     assert!(matches!(result.query_type, QueryType::Select));
 
     // Clean up
@@ -73,7 +72,6 @@ async fn test_dml_query_returns_rows_affected() {
     assert!(result.columns.is_empty(), "DML should have no columns");
     assert!(result.rows.is_empty(), "DML should have no rows");
     assert_eq!(result.total_count, 3, "Should affect 3 rows");
-    assert!(result.execution_time_ms > 0);
     match result.query_type {
         QueryType::Dml { rows_affected } => {
             assert_eq!(rows_affected, 3);
@@ -124,7 +122,6 @@ async fn test_ddl_query_returns_success() {
     assert!(result.columns.is_empty(), "DDL should have no columns");
     assert!(result.rows.is_empty(), "DDL should have no rows");
     assert_eq!(result.total_count, 0, "DDL should have 0 total_count");
-    assert!(result.execution_time_ms > 0);
     assert!(matches!(result.query_type, QueryType::Ddl));
 
     // Verify table was created

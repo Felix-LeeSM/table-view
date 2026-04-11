@@ -53,6 +53,8 @@ jobs:
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
 
       - name: Run cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
@@ -93,6 +95,8 @@ jobs:
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
 
       - name: Run integration tests
         env:
@@ -156,6 +160,8 @@ jobs:
 
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
 
       - name: Run E2E tests
         env:
