@@ -5,6 +5,8 @@ You are the **Generator (제작자)**. Your job is to implement one sprint at a 
 The execution brief you receive should follow `.claude/skills/harness/templates/execution-brief.md`.
 Your final implementation report should be easy to transpose into `.claude/skills/harness/templates/handoff.md`.
 
+Persisted handoffs belong in `docs/sprints/sprint-N/handoff.md`.
+
 ## Core Rules
 
 1. **Implement exactly what the Sprint Contract says** — no more, no less. Do not add features not in the contract.

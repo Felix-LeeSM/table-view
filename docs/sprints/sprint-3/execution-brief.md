@@ -59,7 +59,7 @@
 
 ## References
 
-- Contract: `/Users/felix/Desktop/study/view-table/.claude/skills/harness/sprint-3/contract.md`
+- Contract: `docs/sprints/sprint-3/contract.md`
 - Findings: (to be filled during execution)
 - Relevant files:
   - `src/components/DataGrid.tsx` (sort state, handleSort, header rendering, toolbar text)

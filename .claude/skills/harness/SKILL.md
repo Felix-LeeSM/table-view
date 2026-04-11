@@ -18,6 +18,13 @@ You are an **orchestrator** managing three specialized agents to build the featu
 - `MAX_ATTEMPTS_PER_SPRINT`: 5
 - `PASS_THRESHOLD`: 7.0 (each dimension must score ≥ 7/10)
 
+## Artifact Storage
+
+- Prompts/templates: `.claude/skills/harness/`
+- Sprint artifacts: `docs/sprints/sprint-{{N}}/`
+- Files: `spec.md`, `contract.md`, `execution-brief.md`, `findings.md`, `handoff.md`
+- If `N` is unspecified, use the next unused project-wide sprint number.
+
 ## Workflow
 
 ### Phase 1: Planning (Planner 에이전트)
@@ -36,7 +43,7 @@ Wait for the spec output. Validate it contains:
 5. Data Flow
 6. Edge Cases
 
-If incomplete, re-run Planning once. Save the spec — it is the **master contract**.
+If incomplete, re-run Planning once. Save the spec to `docs/sprints/sprint-{{N}}/spec.md` — it is the **master contract**.
 
 ### Phase 2: Sprint N — Contract + Verification Plan (계약)
 
@@ -45,6 +52,8 @@ Before each sprint, establish the **sprint contract** and the **verification pla
 Use these canonical templates from the skill directory:
 - `.claude/skills/harness/templates/contract.md`
 - `.claude/skills/harness/templates/execution-brief.md`
+
+Write outputs to `docs/sprints/sprint-{{N}}/`; templates are shapes only.
 
 Spawn a **general-purpose Agent** with the contract task:
 - **Task**: "Given the master spec and sprint {{N}} scope, produce a **Sprint Contract** and **Verification Plan** — a concrete, testable agreement between the Generator and Evaluator for this sprint. Use `.claude/skills/harness/templates/contract.md` as the output shape."
@@ -118,6 +127,8 @@ After the contract is written, the orchestrator must normalize it into a **Sprin
 - Acceptance criteria coverage with evidence
 - Assumptions, risks, unresolved gaps
 ```
+
+Persist the contract as `docs/sprints/sprint-{{N}}/contract.md` and the brief as `docs/sprints/sprint-{{N}}/execution-brief.md`.
 
 ### Phase 3: Sprint N — Generation (Generator 에이전트)
 
@@ -204,11 +215,7 @@ After all sprints complete (or abort), present:
 ### Overall Score: {{average}}/10
 ```
 
-In addition, persist or summarize these sprint artifacts:
-- `contract.md`: agreed sprint scope and verification plan, shaped from `.claude/skills/harness/templates/contract.md`
-- `execution-brief.md`: normalized generator-facing task brief, shaped from `.claude/skills/harness/templates/execution-brief.md`
-- `findings.md`: evaluator findings and pass checklist, shaped from `.claude/skills/harness/templates/findings.md`
-- `handoff.md`: outcome, evidence, changed areas, residual risk, next sprint candidates, shaped from `.claude/skills/harness/templates/handoff.md`
+Also persist or summarize `contract.md`, `execution-brief.md`, `findings.md`, and `handoff.md` under `docs/sprints/sprint-{{N}}/`.
 
 ## Important Rules
 
@@ -220,3 +227,4 @@ In addition, persist or summarize these sprint artifacts:
 6. **Verification-first** — Before evaluation, run the explicit checks from the Verification Plan. Do not hardcode `pnpm build` as the universal gate.
 7. **Context discipline** — Pass only the sprint contract, execution brief, evidence packet, and relevant feedback to agents. Do not dump entire conversation history.
 8. **No worktree assumption** — Worktree isolation may be used by the caller, but the harness must not require it or assume a dedicated worktree command exists.
+9. **Artifact location** — Sprint artifacts belong in `docs/sprints/sprint-{{N}}/`.

@@ -5,6 +5,8 @@ You are the **Evaluator (평가자)**. Your job is to critically and rigorously 
 Your findings output should be directly transposable into `.claude/skills/harness/templates/findings.md`.
 Your final summary should also provide the evidence fields needed by `.claude/skills/harness/templates/handoff.md`.
 
+Persisted findings/handoffs belong in `docs/sprints/sprint-N/`.
+
 ## Core Rules
 
 1. **Be harsh but fair** — your job is to find problems, not to praise. Default to skepticism. "문제없음"이라고 관대하게 평가하지 마십시오.
@@ -120,8 +122,8 @@ Pick the rubric that matches the sprint.
 ## Handoff Artifacts
 
 The evaluator output must be usable as:
-- `findings.md`: findings, pass checklist, residual risk, using `.claude/skills/harness/templates/findings.md`
-- `handoff.md`: outcome summary and evidence links for the next sprint, using `.claude/skills/harness/templates/handoff.md`
+- `docs/sprints/sprint-N/findings.md`
+- `docs/sprints/sprint-N/handoff.md`
 
 If the Generator's evidence packet is missing required proof, treat that as a finding.
 

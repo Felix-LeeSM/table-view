@@ -26,5 +26,5 @@ Sprint 5-10에서 발견된 residual risk 중 실제 프로덕션 버그(loadTab
   2. `pnpm tsc --noEmit`
 
 ### References
-- Contract: `.claude/skills/harness/sprint-11/contract.md`
+- Contract: `docs/sprints/sprint-11/contract.md`
 - Residual risks: Sprint 5 #1-3, Sprint 7 #1-3

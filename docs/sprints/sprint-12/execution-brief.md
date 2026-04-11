@@ -52,7 +52,7 @@ User reported `act()` warnings appearing in test output (7+ instances in SchemaT
 
 ## References
 
-- Contract: `.claude/skills/harness/sprint-12/contract.md`
+- Contract: `docs/sprints/sprint-12/contract.md`
 - Relevant files:
   - `src/components/DataGrid.tsx` (lines 148-181: fetchData race condition)
   - `src/components/DataGrid.test.tsx` (existing tests)

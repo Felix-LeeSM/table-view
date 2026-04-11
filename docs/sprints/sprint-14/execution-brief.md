@@ -46,7 +46,7 @@ Storage/mod.rs handles all persistence (CRUD for connections/groups, password en
 
 ## References
 
-- Contract: `.claude/skills/harness/sprint-14/contract.md`
+- Contract: `docs/sprints/sprint-14/contract.md`
 - Relevant files:
   - `src-tauri/src/storage/mod.rs` — storage CRUD (0% test coverage)
   - `src-tauri/src/storage/crypto.rs` — encryption (has 9 tests, reference for patterns)

@@ -18,6 +18,7 @@ Phase 1-3 완료. Phase 4(Editing & Polish) 진행 중.
 |------|------|
 | [Architecture](architecture.md) | 시스템 구조, DB driver 추상화, 기술 결정 |
 | [RISKS](RISKS.md) | 잔여 위험 등록부 (20개 항목, 상태 추적) |
+| [Sprints](sprints/README.md) | harness sprint 실행 산출물 |
 
 ## 구현 계획
 

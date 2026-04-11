@@ -32,7 +32,7 @@ Sidebar는 사용자에게 직접 보이는 핵심 네비게이션 컴포넌트.
 - Assumptions, risks, unresolved gaps
 
 ### References
-- Contract: `.claude/skills/harness/sprint-8/contract.md`
+- Contract: `docs/sprints/sprint-8/contract.md`
 - Relevant files:
   - `src/components/Sidebar.tsx` (테스트 대상)
   - `src/stores/connectionStore.ts` (모킹 대상)

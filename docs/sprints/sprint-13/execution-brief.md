@@ -47,7 +47,7 @@ These are the two largest remaining 0% coverage files. ConnectionDialog handles 
 
 ## References
 
-- Contract: `.claude/skills/harness/sprint-13/contract.md`
+- Contract: `docs/sprints/sprint-13/contract.md`
 - Relevant files:
   - `src/components/ConnectionDialog.tsx` — component under test
   - `src/components/StructurePanel.tsx` — component under test

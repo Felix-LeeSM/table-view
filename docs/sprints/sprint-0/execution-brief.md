@@ -57,7 +57,7 @@ DataGrid 컴포넌트의 단일 컬럼 정렬 기능을 다중 컬럼 정렬로 
 
 ## References
 
-- Contract: `.claude/skills/harness/sprint-0/contract.md`
+- Contract: `docs/sprints/sprint-0/contract.md`
 - Findings: (Evaluator가 작성할 예정)
 - Relevant files:
   - `/home/felix/study/table-view/src/components/DataGrid.tsx`

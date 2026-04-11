@@ -57,7 +57,7 @@ Docker Compose 테스트 DB 플릿 구축, 공유 테스트 설정 모듈 생성
 
 ## References
 
-- Contract: `.claude/skills/harness/sprint-16/contract.md`
+- Contract: `docs/sprints/sprint-16/contract.md`
 - Relevant files:
   - `docker-compose.yml` — 현재 단일 PostgreSQL 서비스
   - `src-tauri/tests/schema_integration.rs` — 12개 통합 테스트 (panic on no DB)

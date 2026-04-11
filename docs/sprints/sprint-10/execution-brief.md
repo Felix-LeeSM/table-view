@@ -26,5 +26,5 @@ ConnectionGroup 컴포넌트 테스트 추가 (0% → 70%+)
   3. `pnpm tsc --noEmit`
 
 ### References
-- Contract: `.claude/skills/harness/sprint-10/contract.md`
+- Contract: `docs/sprints/sprint-10/contract.md`
 - Relevant files: `src/components/ConnectionGroup.tsx`

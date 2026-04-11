@@ -32,7 +32,7 @@ TEST_IMPROVE_PLAN Phase 1의 마지막 0% 컴포넌트. 전체 커버리지 52% 
 - Assumptions, risks, unresolved gaps
 
 ### References
-- Contract: `.claude/skills/harness/sprint-7/contract.md`
+- Contract: `docs/sprints/sprint-7/contract.md`
 - Relevant files:
   - `src/components/SchemaTree.tsx` (테스트 대상)
   - `src/stores/schemaStore.ts` (모킹 대상)

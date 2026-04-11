@@ -33,7 +33,7 @@ ConnectionList + ConnectionItem 컴포넌트 테스트 추가 (0% → 70%+)
 - Acceptance criteria coverage with evidence
 
 ### References
-- Contract: `.claude/skills/harness/sprint-9/contract.md`
+- Contract: `docs/sprints/sprint-9/contract.md`
 - Relevant files:
   - `src/components/ConnectionList.tsx`
   - `src/components/ConnectionItem.tsx`
