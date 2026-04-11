@@ -673,4 +673,481 @@ describe("SchemaTree", () => {
       expect(screen.getByLabelText("Refresh schemas")).not.toBeDisabled();
     });
   });
+
+  // =========================================================================
+  // NEW: Category headers
+  // =========================================================================
+
+  // AC-CAT-01: Category headers are rendered when schema is expanded
+  it("shows category headers (Tables, Views, Functions, Procedures) when schema is expanded", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    expect(screen.getByLabelText("Tables in public")).toBeInTheDocument();
+    expect(screen.getByLabelText("Views in public")).toBeInTheDocument();
+    expect(screen.getByLabelText("Functions in public")).toBeInTheDocument();
+    expect(screen.getByLabelText("Procedures in public")).toBeInTheDocument();
+  });
+
+  // AC-CAT-02: Tables category is expanded by default
+  it("shows Tables category as expanded by default", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    expect(screen.getByLabelText("Tables in public")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  // AC-CAT-03: Other categories are collapsed by default
+  it("shows Views, Functions, Procedures categories as collapsed by default", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    expect(screen.getByLabelText("Views in public")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByLabelText("Functions in public")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.getByLabelText("Procedures in public")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  // AC-CAT-04: Collapsing and re-expanding Tables category
+  it("collapses and re-expands Tables category on click", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Tables is expanded by default — collapse it
+    const tablesCategory = screen.getByLabelText("Tables in public");
+    expect(tablesCategory).toHaveAttribute("aria-expanded", "true");
+
+    await act(async () => {
+      fireEvent.click(tablesCategory);
+    });
+    expect(tablesCategory).toHaveAttribute("aria-expanded", "false");
+    // Table items should no longer be visible
+    expect(screen.queryByLabelText("users table")).not.toBeInTheDocument();
+
+    // Re-expand
+    await act(async () => {
+      fireEvent.click(tablesCategory);
+    });
+    expect(tablesCategory).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("users table")).toBeInTheDocument();
+  });
+
+  // AC-CAT-05: Expanding an empty category shows empty placeholder
+  it("shows 'No views' when Views category is expanded", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCategory = screen.getByLabelText("Views in public");
+    await act(async () => {
+      fireEvent.click(viewsCategory);
+    });
+
+    expect(screen.getByText("No views")).toBeInTheDocument();
+  });
+
+  it("shows 'No functions' when Functions category is expanded", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const functionsCategory = screen.getByLabelText("Functions in public");
+    await act(async () => {
+      fireEvent.click(functionsCategory);
+    });
+
+    expect(screen.getByText("No functions")).toBeInTheDocument();
+  });
+
+  it("shows 'No procedures' when Procedures category is expanded", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const proceduresCategory = screen.getByLabelText("Procedures in public");
+    await act(async () => {
+      fireEvent.click(proceduresCategory);
+    });
+
+    expect(screen.getByText("No procedures")).toBeInTheDocument();
+  });
+
+  // AC-CAT-06: Tables category shows table count badge
+  it("shows table count badge next to Tables category when there are tables", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [
+          { name: "users", schema: "public", row_count: null },
+          { name: "orders", schema: "public", row_count: null },
+          { name: "products", schema: "public", row_count: null },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("does not show count badge when there are zero tables", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // The "No tables" empty label should be shown since Tables is auto-expanded
+    expect(screen.getByText("No tables")).toBeInTheDocument();
+  });
+
+  // =========================================================================
+  // NEW: Selection highlighting
+  // =========================================================================
+
+  // AC-SEL-01: Clicking a schema selects it
+  it("highlights schema node when clicked", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    expect(schemaButton).toHaveClass("bg-(--color-bg-tertiary)");
+  });
+
+  // AC-SEL-02: Clicking a category selects it
+  it("highlights category header when clicked", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCategory = screen.getByLabelText("Views in public");
+    await act(async () => {
+      fireEvent.click(viewsCategory);
+    });
+
+    expect(viewsCategory).toHaveClass("bg-(--color-bg-tertiary)");
+  });
+
+  // AC-SEL-03: Clicking a table selects it (and deselects previous)
+  it("highlights table node when clicked and deselects schema", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Expand schema — schema becomes selected
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Click table — table becomes selected
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.click(tableItem);
+    });
+
+    expect(tableItem).toHaveClass("bg-(--color-accent)/10");
+    // Schema should no longer have selection highlight
+    expect(schemaButton).not.toHaveClass("bg-(--color-bg-tertiary)");
+  });
+
+  // =========================================================================
+  // NEW: Visual hierarchy and icons
+  // =========================================================================
+
+  // AC-VIS-01: Connection header has Database icon and connection ID
+  it("renders connection header with Database icon and connection ID", async () => {
+    await act(async () => {
+      render(<SchemaTree connectionId="my-connection" />);
+    });
+
+    expect(screen.getByText("my-connection")).toBeInTheDocument();
+  });
+
+  // AC-VIS-02: Schema node has FolderOpen icon
+  it("renders schema node with FolderOpen icon", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    // The FolderOpen SVG should be inside the schema row
+    const svgElements = schemaButton.querySelectorAll("svg.lucide-folder-open");
+    expect(svgElements.length).toBe(1);
+  });
+
+  // AC-VIS-03: Different indentation levels
+  it("applies different indentation to schema, category, and table levels", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Schema has px-3
+    expect(schemaButton).toHaveClass("px-3");
+
+    // Category has pl-6
+    const tablesCategory = screen.getByLabelText("Tables in public");
+    expect(tablesCategory).toHaveClass("pl-6");
+
+    // Table item has pl-10
+    const tableItem = screen.getByLabelText("users table");
+    expect(tableItem).toHaveClass("pl-10");
+  });
+
+  // =========================================================================
+  // NEW: Section separators between schemas
+  // =========================================================================
+
+  // AC-SEP-01: Separator between schemas
+  it("renders separator between multiple schemas", async () => {
+    setSchemaStoreState({
+      schemas: {
+        conn1: [{ name: "public" }, { name: "analytics" }],
+      },
+      tables: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // There should be a border-t separator element between schemas
+    const separators = document.querySelectorAll(
+      ".border-t.border-\\(--color-border\\)",
+    );
+    // Only separator between schemas (not the connection header border-b)
+    const sectionSeparators = Array.from(separators).filter(
+      (el) => el.classList.contains("mx-3") && el.classList.contains("my-0.5"),
+    );
+    expect(sectionSeparators.length).toBe(1);
+  });
+
+  it("does not render separator when there is only one schema", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const sectionSeparators = Array.from(
+      document.querySelectorAll(".border-t.border-\\(--color-border\\)"),
+    ).filter(
+      (el) => el.classList.contains("mx-3") && el.classList.contains("my-0.5"),
+    );
+    expect(sectionSeparators.length).toBe(0);
+  });
+
+  // =========================================================================
+  // NEW: Category keyboard interactions
+  // =========================================================================
+
+  it("toggles category on Enter key", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCategory = screen.getByLabelText("Views in public");
+    expect(viewsCategory).toHaveAttribute("aria-expanded", "false");
+
+    await act(async () => {
+      fireEvent.keyDown(viewsCategory, { key: "Enter" });
+    });
+
+    expect(viewsCategory).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("toggles category on Space key", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCategory = screen.getByLabelText("Views in public");
+    expect(viewsCategory).toHaveAttribute("aria-expanded", "false");
+
+    await act(async () => {
+      fireEvent.keyDown(viewsCategory, { key: " " });
+    });
+
+    expect(viewsCategory).toHaveAttribute("aria-expanded", "true");
+  });
+
+  // =========================================================================
+  // NEW: "Schemas" header label
+  // =========================================================================
+
+  it("renders 'Schemas' header label", async () => {
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    expect(screen.getByText("Schemas")).toBeInTheDocument();
+  });
 });
