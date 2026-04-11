@@ -17,6 +17,7 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
+    exclude: ["e2e/**", "node_modules/**"],
     coverage: {
       reporter: ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],

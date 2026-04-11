@@ -1,3 +1,5 @@
+mod common;
+
 use std::time::Duration;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -5,32 +7,14 @@ use view_table_lib::commands::connection::AppState;
 use view_table_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
 use view_table_lib::db::postgres::PostgresAdapter;
 use view_table_lib::error::AppError;
-use view_table_lib::models::{ConnectionConfig, DatabaseType, QueryType};
-
-/// Helper to create a test connection config
-fn test_config() -> ConnectionConfig {
-    ConnectionConfig {
-        id: "test-query-conn".to_string(),
-        name: "Test Query DB".to_string(),
-        db_type: DatabaseType::Postgresql,
-        host: "localhost".to_string(),
-        port: 5432,
-        user: "postgres".to_string(),
-        password: "postgres".to_string(),
-        database: "postgres".to_string(),
-        group_id: None,
-        color: None,
-        connection_timeout: Some(5),
-        keep_alive_interval: None,
-    }
-}
+use view_table_lib::models::{DatabaseType, QueryType};
 
 /// Integration test for SELECT query execution
 #[tokio::test]
 #[serial_test::serial]
 async fn test_select_query_returns_columns_and_rows() {
     // Skip if PostgreSQL is not available
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -60,7 +44,7 @@ async fn test_select_query_returns_columns_and_rows() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_dml_query_returns_rows_affected() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -131,7 +115,7 @@ async fn test_dml_query_returns_rows_affected() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_ddl_query_returns_success() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -173,7 +157,7 @@ async fn test_ddl_query_returns_success() {
 async fn test_query_cancellation_works() {
     use tokio_util::sync::CancellationToken;
 
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -228,7 +212,7 @@ async fn test_query_cancellation_works() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_query_error_returns_database_error() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -259,7 +243,7 @@ async fn test_query_error_returns_database_error() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_complex_select_query() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -338,7 +322,7 @@ async fn test_complex_select_query() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_empty_result_set() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -490,7 +474,7 @@ async fn test_cancel_unknown_query_returns_not_found() {
 /// Verify that CancellationToken actually cancels a spawned task.
 #[tokio::test]
 async fn test_cancellation_token_aborts_select() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -532,7 +516,7 @@ async fn test_cancellation_token_aborts_select() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_select_with_leading_comment() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");
@@ -556,7 +540,7 @@ async fn test_select_with_leading_comment() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_select_with_block_comment() {
-    let config = test_config();
+    let config = common::test_config(DatabaseType::Postgresql);
     let adapter = PostgresAdapter::new();
     if adapter.connect_pool(&config).await.is_err() {
         println!("Skipping test: PostgreSQL not available");

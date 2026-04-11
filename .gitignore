@@ -33,6 +33,8 @@ Thumbs.db
 
 # Test
 coverage/
+wdio-report/
+test-results/
 
 # Build
 *.tsbuildinfo

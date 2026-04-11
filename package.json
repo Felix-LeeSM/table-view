@@ -14,6 +14,8 @@
     "format:docs": "prettier --write README.md CLAUDE.md \"docs/**/*.md\" \".claude/**/*.md\"",
     "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
     "test": "vitest run",
+    "test:docker": "docker compose -f docker-compose.test.yml up -d && ./scripts/wait-for-test-db.sh && cd src-tauri && cargo test --test schema_integration --test query_integration; cd .. && docker compose -f docker-compose.test.yml down",
+    "test:e2e": "wdio run wdio.conf.ts",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -41,6 +43,10 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.3",
+    "@wdio/cli": "^9.27.0",
+    "@wdio/mocha-framework": "^9.27.0",
+    "@wdio/spec-reporter": "^9.27.0",
+    "@wdio/types": "^9.27.0",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
@@ -50,6 +56,7 @@
     "typescript": "~5.7.0",
     "typescript-eslint": "^8.58.0",
     "vite": "^6.0.0",
-    "vitest": "^4.1.3"
+    "vitest": "^4.1.3",
+    "webdriverio": "^9.27.0"
   }
 }

@@ -1,22 +1,6 @@
-use view_table_lib::db::postgres::PostgresAdapter;
-use view_table_lib::models::{ConnectionConfig, DatabaseType, FilterCondition, FilterOperator};
+mod common;
 
-fn test_config() -> ConnectionConfig {
-    ConnectionConfig {
-        id: "test".to_string(),
-        name: "TestDB".to_string(),
-        db_type: DatabaseType::Postgresql,
-        host: "localhost".to_string(),
-        port: 5432,
-        user: "postgres".to_string(),
-        password: "postgres".to_string(),
-        database: "viewtable_test".to_string(),
-        group_id: None,
-        color: None,
-        connection_timeout: None,
-        keep_alive_interval: None,
-    }
-}
+use view_table_lib::models::{DatabaseType, FilterCondition, FilterOperator};
 
 /// Helper: create a unique test table name to avoid collisions across tests.
 fn unique_table_name(prefix: &str) -> String {
@@ -30,18 +14,12 @@ fn unique_table_name(prefix: &str) -> String {
     )
 }
 
-async fn setup_adapter() -> PostgresAdapter {
-    let adapter = PostgresAdapter::new();
-    adapter
-        .connect_pool(&test_config())
-        .await
-        .expect("Failed to connect to test database");
-    adapter
-}
-
 #[tokio::test]
 async fn test_list_schemas() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let schemas = adapter.list_schemas().await.expect("list_schemas failed");
 
     assert!(
@@ -55,7 +33,10 @@ async fn test_list_schemas() {
 
 #[tokio::test]
 async fn test_list_tables_empty() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let tables = adapter
         .list_tables("public")
         .await
@@ -72,7 +53,10 @@ async fn test_list_tables_empty() {
 
 #[tokio::test]
 async fn test_create_table_and_list() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("users");
 
     // Create a test table
@@ -107,7 +91,10 @@ async fn test_create_table_and_list() {
 
 #[tokio::test]
 async fn test_get_table_columns() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("cols");
 
     // Create table with known columns
@@ -175,7 +162,10 @@ async fn test_get_table_columns() {
 
 #[tokio::test]
 async fn test_query_table_data() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("data");
 
     // Create and populate table
@@ -223,7 +213,10 @@ async fn test_query_table_data() {
 
 #[tokio::test]
 async fn test_query_table_data_ordering() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("ordered");
 
     // Create and populate table
@@ -273,7 +266,10 @@ async fn test_query_table_data_ordering() {
 
 #[tokio::test]
 async fn test_query_table_data_ordering_desc() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("ordered_desc");
 
     // Create and populate table
@@ -335,7 +331,10 @@ async fn test_query_table_data_ordering_desc() {
 
 #[tokio::test]
 async fn test_get_table_columns_with_comments() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("comments");
 
     // Create table with known columns
@@ -402,7 +401,10 @@ async fn test_get_table_columns_with_comments() {
 
 #[tokio::test]
 async fn test_query_table_data_with_filter_bigint() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("filter_bigint");
 
     // Create table with a BIGINT column
@@ -456,7 +458,10 @@ async fn test_query_table_data_with_filter_bigint() {
 
 #[tokio::test]
 async fn test_query_table_data_with_filter_text() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("filter_text");
 
     // Create table with a TEXT column
@@ -509,7 +514,10 @@ async fn test_query_table_data_with_filter_text() {
 
 #[tokio::test]
 async fn test_query_table_data_with_filter_integer() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("filter_int");
 
     // Create table with an INTEGER (SERIAL) column
@@ -563,7 +571,10 @@ async fn test_query_table_data_with_filter_integer() {
 
 #[tokio::test]
 async fn test_query_table_data_multi_column_ordering() {
-    let adapter = setup_adapter().await;
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
     let table_name = unique_table_name("multi_order");
 
     // Create and populate table

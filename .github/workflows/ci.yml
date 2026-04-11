@@ -54,3 +54,42 @@ jobs:
 
       - name: Run cargo tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
+
+  integration-tests:
+    name: Integration Tests (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: viewtable_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d viewtable_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run integration tests
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: testuser
+          PGPASSWORD: testpass
+          PGDATABASE: viewtable_test
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration

@@ -29,7 +29,7 @@ pre-push:
   commands:
     rust-test:
       tags: test rust
-      run: cd src-tauri && cargo test --all
+      run: cd src-tauri && cargo test --lib --test storage_integration
     ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage
