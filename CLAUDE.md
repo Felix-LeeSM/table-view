@@ -5,6 +5,11 @@
 View Table은 Tauri 2.0 + React + Rust 기반의 TablePlus-like 데이터베이스 관리 도구입니다.
 데스크톱 앱으로, 다중 DBMS(PostgreSQL, MySQL, SQLite, MongoDB 등)를 지원합니다.
 
+## 프로젝트 문서
+
+- **[`docs/PLAN.md`](docs/PLAN.md)** — 마스터 플랜. 프로젝트 목적(판단 기준), 현재 상태, 하위 문서 링크를 제공. 모든 구현 결정은 "TablePlus 사용자가 핵심 워크플로우에서 끊김 없이 전환 가능한가?" 기준으로 판단.
+- **[`docs/RISKS.md`](docs/RISKS.md)** — 잔여 위험 등록부. 스프린트 handoff를 재읽지 않아도 되는 단일 위험 추적 문서. 각 항목은 `active`/`resolved`/`deferred` 상태와 영역 태그를 가짐. 위험 해결 시 Resolution Log에 기록.
+
 ## 기술 스택
 
 | 영역 | 기술 |
