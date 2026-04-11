@@ -1,8 +1,9 @@
 //! Shared test utilities for integration tests.
 //!
-//! Provides per-DBMS connection configuration and a graceful adapter setup
+//! Provides per-DBMS connection configuration, a graceful adapter setup
 //! function that returns `None` (and prints a skip message) when the target
-//! database is unavailable, allowing tests to pass without Docker.
+//! database is unavailable, and a helper to enumerate which DBMS types have
+//! running instances.
 
 use view_table_lib::db::postgres::PostgresAdapter;
 use view_table_lib::models::{ConnectionConfig, DatabaseType};
@@ -58,7 +59,6 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
 /// Returns `Some(adapter)` on success, or `None` with a skip message when the
 /// database is unavailable. This pattern lets integration tests exit with code 0
 /// even when Docker is not running.
-#[allow(dead_code)]
 pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
     // Currently only PostgresAdapter exists in the codebase.
     assert!(
@@ -79,4 +79,26 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
             None
         }
     }
+}
+
+/// Return the list of DBMS types that are currently reachable.
+///
+/// Probes each supported DBMS by attempting a short-lived connection using
+/// [`test_config`]. Only types whose connection succeeds are included in the
+/// returned vec. This is useful for parameterised or conditional test
+/// selection in future multi-DBMS integration suites.
+#[allow(dead_code)]
+pub async fn available_dbms() -> Vec<DatabaseType> {
+    let candidates = vec![DatabaseType::Postgresql];
+    let mut available = Vec::new();
+
+    for db_type in candidates {
+        let config = test_config(db_type.clone());
+        let adapter = PostgresAdapter::new();
+        if adapter.connect_pool(&config).await.is_ok() {
+            available.push(db_type);
+        }
+    }
+
+    available
 }

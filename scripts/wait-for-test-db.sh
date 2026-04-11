@@ -30,7 +30,7 @@ start_time=$(date +%s)
 
 wait_for_postgres() {
     local host="${PGHOST:-localhost}"
-    local port="${PGPORT:-5432}"
+    local port="${PG_PORT:-${PGPORT:-5432}}"
     local user="${PGUSER:-testuser}"
     local db="${PGDATABASE:-viewtable_test}"
     echo "  Checking PostgreSQL at ${host}:${port} ..."
