@@ -500,4 +500,94 @@ describe("SchemaTree", () => {
     // loadTables should NOT be called since tables are already cached
     expect(mockLoadTables).not.toHaveBeenCalled();
   });
+
+  // -----------------------------------------------------------------------
+  // AC-03: connectionId change triggers new loadSchemas
+  // -----------------------------------------------------------------------
+  it("calls loadSchemas with new connectionId when connectionId changes", async () => {
+    setSchemaStoreState({
+      schemas: {
+        conn1: [{ name: "public" }],
+        conn2: [{ name: "dbo" }],
+      },
+    });
+
+    const { rerender } = render(<SchemaTree connectionId="conn1" />);
+    expect(mockLoadSchemas).toHaveBeenCalledWith("conn1");
+
+    await act(async () => {
+      rerender(<SchemaTree connectionId="conn2" />);
+    });
+
+    expect(mockLoadSchemas).toHaveBeenCalledWith("conn2");
+  });
+
+  // -----------------------------------------------------------------------
+  // AC-04: row_count edge case — zero
+  // -----------------------------------------------------------------------
+  it("displays '0' for row_count of 0", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "empty_table", schema: "public", row_count: 0 }],
+      },
+    });
+
+    render(<SchemaTree connectionId="conn1" />);
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // row_count: 0 passes the `!= null` check (0 != null is true)
+    expect(screen.getByText("0")).toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // AC-05: loadTables failure still clears loading state
+  // -----------------------------------------------------------------------
+  it("clears loading spinner when loadTables rejects", async () => {
+    mockLoadTables.mockRejectedValueOnce(new Error("network error"));
+
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {},
+    });
+
+    render(<SchemaTree connectionId="conn1" />);
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Wait for the rejected promise to settle and loading state to clear
+    await waitFor(() => {
+      const schemaRow = schemaButton.closest("div")!;
+      const spinners = schemaRow.querySelectorAll(".animate-spin");
+      expect(spinners.length).toBe(0);
+    });
+  });
+
+  it("clears loading spinner when loadSchemas rejects via refresh", async () => {
+    mockLoadSchemas.mockResolvedValueOnce(undefined); // mount call succeeds
+    mockLoadSchemas.mockRejectedValueOnce(new Error("network error")); // refresh fails
+
+    render(<SchemaTree connectionId="conn1" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Refresh schemas")).not.toBeDisabled();
+    });
+
+    const refreshBtn = screen.getByLabelText("Refresh schemas");
+    await act(async () => {
+      fireEvent.click(refreshBtn);
+    });
+
+    // After rejection, loading should be cleared
+    await waitFor(() => {
+      expect(screen.getByLabelText("Refresh schemas")).not.toBeDisabled();
+    });
+  });
 });

@@ -36,7 +36,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     if (autoLoadedRef.current === connectionId) return;
     autoLoadedRef.current = connectionId;
     setLoadingSchemas(true);
-    loadSchemas(connectionId).finally(() => setLoadingSchemas(false));
+    loadSchemas(connectionId)
+      .catch(() => {})
+      .finally(() => setLoadingSchemas(false));
   }, [connectionId, loadSchemas]);
 
   // Listen for context-aware refresh events (Cmd+R / F5)
@@ -59,19 +61,23 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     const key = `${connectionId}:${schemaName}`;
     if (!tables[key]) {
       setLoadingTables((prev) => new Set(prev).add(schemaName));
-      await loadTables(connectionId, schemaName);
-      setLoadingTables((prev) => {
-        const next = new Set(prev);
-        next.delete(schemaName);
-        return next;
-      });
+      loadTables(connectionId, schemaName)
+        .catch(() => {})
+        .finally(() =>
+          setLoadingTables((prev) => {
+            const next = new Set(prev);
+            next.delete(schemaName);
+            return next;
+          }),
+        );
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = () => {
     setLoadingSchemas(true);
-    await loadSchemas(connectionId);
-    setLoadingSchemas(false);
+    loadSchemas(connectionId)
+      .catch(() => {})
+      .finally(() => setLoadingSchemas(false));
   };
 
   const handleTableClick = (tableName: string, schemaName: string) => {
