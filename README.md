@@ -16,14 +16,17 @@ View Table은 Tauri 2, React, TypeScript, Rust로 만드는 로컬 데스크톱 
 - 연결 상태 표시, keep-alive, 자동 재연결 시도
 - 스키마/테이블 탐색
 - 탭 기반 테이블 데이터 조회
-- 페이지네이션과 단일 컬럼 정렬이 있는 데이터 그리드
+- 페이지네이션과 단일/다중 컬럼 정렬, 필터가 있는 데이터 그리드
+- SQL 에디터 (CodeMirror) 및 쿼리 실행
 - 비밀번호 로컬 암호화 저장
+- 다크/라이트/시스템 테마 전환
+- Docker 기반 통합 테스트 인프라 (PostgreSQL + MySQL)
+- CI 파이프라인 (frontend + Rust + 통합 + E2E)
 
 아직 없는 범위:
 
-- 실제 SQL 에디터/쿼리 실행 흐름
 - 행 편집, 고급 필터, DDL 작업
-- PostgreSQL 외 백엔드 지원
+- PostgreSQL 외 백엔드 지원 (MySQL, SQLite, MongoDB, Redis)
 
 상세 계획은 [`docs/PLAN.md`](./docs/PLAN.md)에 정리되어 있습니다.
 
@@ -94,11 +97,74 @@ pnpm lint
 pnpm format
 pnpm tauri dev
 pnpm tauri build
-cargo test --manifest-path src-tauri/Cargo.toml --lib --test storage_integration
-cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration
 ```
 
-`schema_integration`은 로컬 PostgreSQL(`localhost:5432`, `viewtable_test`)이 실행 중이어야 통과합니다.
+## 테스트
+
+### 프론트엔드 단위 테스트
+
+```bash
+pnpm test                    # Vitest 실행 (376개 테스트)
+pnpm test -- --coverage      # 커버리지 포함
+```
+
+### Rust 단위 테스트
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml --lib   # 84개 단위 테스트
+```
+
+### 통합 테스트 (Docker 필요)
+
+PostgreSQL 컨테이너를 띄운 후 실행:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+./scripts/wait-for-test-db.sh
+cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
+docker compose -f docker-compose.test.yml down
+```
+
+또는 한 명령으로:
+
+```bash
+pnpm test:docker
+```
+
+- `schema_integration`: 12개 테스트 (스키마, 컬럼, 인덱스, 필터, 정렬)
+- `query_integration`: 15개 테스트 (SELECT, DML, DDL, 취소, 에러)
+- Docker가 없어도 graceful skip으로 exit 0 반환
+
+포트 충돌 시 환경변수로 오버라이드:
+
+```bash
+PG_PORT=15432 pnpm test:docker
+```
+
+### E2E 테스트 (CI 전용)
+
+WebdriverIO + tauri-driver로 네이티브 Tauri 창을 테스트합니다:
+
+```bash
+pnpm test:e2e               # WebdriverIO 실행
+```
+
+로컬 실행에는 추가 의존성이 필요합니다:
+
+```bash
+./scripts/setup-e2e.sh      # 안내 출력
+```
+
+CI(GitHub Actions)에서는 `webkit2gtk-driver` + `xvfb` + `tauri-driver` + PostgreSQL service로 자동 실행됩니다.
+
+### 테스트 현황
+
+| 영역 | 도구 | 개수 | 비고 |
+|------|------|------|------|
+| Frontend | Vitest + RTL | 376 | 커버리지 86% |
+| Rust 단위 | cargo test | 84 | lib tests |
+| Rust 통합 | cargo test + Docker | 27 | schema(12) + query(15) |
+| E2E | WebdriverIO + tauri-driver | 10 | smoke(7) + connection(3) |
 
 ## 저장과 보안
 
