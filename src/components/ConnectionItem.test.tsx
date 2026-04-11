@@ -72,7 +72,6 @@ function setStoreState(overrides: {
   disconnectFromDatabase?: () => Promise<void>;
   removeConnection?: () => Promise<void>;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useConnectionStore.setState({
     connections: [],
     activeStatuses: {},
@@ -80,7 +79,7 @@ function setStoreState(overrides: {
     disconnectFromDatabase: vi.fn().mockResolvedValue(undefined),
     removeConnection: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as any);
+  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
 }
 
 // ---------------------------------------------------------------------------

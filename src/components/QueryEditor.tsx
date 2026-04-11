@@ -94,8 +94,6 @@ export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespa
       view.destroy();
       viewRef.current = null;
     };
-    // Recreate editor when schemaNamespace changes (new tables loaded).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schemaNamespace]);
 
   // Sync external sql changes into the editor (e.g. when switching tabs).

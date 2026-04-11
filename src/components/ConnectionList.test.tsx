@@ -72,13 +72,12 @@ function setStoreState(overrides: {
   groups?: { id: string; name: string; color: string | null; collapsed: boolean }[];
   moveConnectionToGroup?: () => Promise<void>;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useConnectionStore.setState({
     connections: [],
     groups: [],
     moveConnectionToGroup: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  } as any);
+  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
 }
 
 // ---------------------------------------------------------------------------

@@ -72,12 +72,11 @@ function setConnectionState(overrides: {
   connections?: ConnectionConfigLike[];
   activeStatuses?: Record<string, { type: string; message?: string }>;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useConnectionStore.setState({
     connections: [],
     activeStatuses: {},
     ...overrides,
-  } as any);
+  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
 }
 
 function resetTheme() {

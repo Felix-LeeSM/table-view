@@ -92,12 +92,11 @@ const mockUpdateGroup = vi.fn().mockResolvedValue(undefined);
 const mockMoveConnectionToGroup = vi.fn().mockResolvedValue(undefined);
 
 function setStoreState() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useConnectionStore.setState({
     removeGroup: mockRemoveGroup,
     updateGroup: mockUpdateGroup,
     moveConnectionToGroup: mockMoveConnectionToGroup,
-  } as any);
+  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
 }
 
 // ---------------------------------------------------------------------------

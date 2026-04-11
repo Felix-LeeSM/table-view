@@ -73,9 +73,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
         return state;
       });
     }
-  }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId]);
-
-  // Listen for cancel-query events (Cmd+.)
+  }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const handler = (e: Event) => {
       const { queryId } = (e as CustomEvent<{ queryId: string }>).detail;
