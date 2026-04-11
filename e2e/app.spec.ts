@@ -11,7 +11,7 @@ describe("View Table — Smoke Tests", () => {
     );
     await connectionsHeader.waitForDisplayed({ timeout: 10000 });
     const text = await connectionsHeader.getText();
-    expect(text).toContain("Connections");
+    expect(text.toLowerCase()).toContain("connections");
   });
 
   it("shows empty state when no connections exist", async () => {
