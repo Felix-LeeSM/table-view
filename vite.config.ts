@@ -21,11 +21,11 @@ export default defineConfig(async () => ({
       reporter: ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
       thresholds: {
-        // 전체 기준 — Sprint 7 이후 58%+ 달성
+        // Sprint 9 이후 70%+ 달성
         // perFile은 기존 0% 파일이 커버된 후 도입 예정
-        lines: 55,
-        functions: 53,
-        branches: 50,
+        lines: 68,
+        functions: 64,
+        branches: 60,
       },
     },
   },
