@@ -1,11 +1,17 @@
 import { expect } from "@wdio/globals";
 
 describe("Schema Tree Features", () => {
-  // Self-contained: create connection and connect before each test
+  // Self-contained: reuse or create connection and connect before each test
   beforeEach(async () => {
-    // Check if connection already exists from a previous test
+    // Wait for sidebar to be ready, then check if connection already exists
     const existingConn = await $('[aria-label^="Test PG"]');
-    const exists = await existingConn.isExisting();
+    let exists = false;
+    try {
+      await existingConn.waitForExist({ timeout: 5000 });
+      exists = true;
+    } catch {
+      exists = false;
+    }
 
     if (!exists) {
       // Create connection via dialog
@@ -44,14 +50,26 @@ describe("Schema Tree Features", () => {
       await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
     }
 
-    // Ensure connected: double-click to connect if not already
-    const connItem = await $('[aria-label^="Test PG"]');
-    await connItem.waitForDisplayed({ timeout: 5000 });
-    await connItem.doubleClick();
+    // Check if already connected (public schema visible)
+    const publicSchemaCheck = await $('[aria-label="public schema"]');
+    let alreadyConnected = false;
+    try {
+      await publicSchemaCheck.waitForDisplayed({ timeout: 3000 });
+      alreadyConnected = true;
+    } catch {
+      alreadyConnected = false;
+    }
 
-    // Wait for public schema to appear
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.waitForDisplayed({ timeout: 15000 });
+    if (!alreadyConnected) {
+      // Ensure connected: double-click to connect
+      const connItem = await $('[aria-label^="Test PG"]');
+      await connItem.waitForDisplayed({ timeout: 5000 });
+      await connItem.doubleClick();
+
+      // Wait for public schema to appear
+      const publicSchema = await $('[aria-label="public schema"]');
+      await publicSchema.waitForDisplayed({ timeout: 15000 });
+    }
   });
 
   it("shows categorized sections when schema is expanded", async () => {
