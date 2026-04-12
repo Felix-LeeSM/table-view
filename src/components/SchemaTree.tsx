@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -10,9 +10,13 @@ import {
   FolderOpen,
   Eye,
   LayoutGrid,
+  Columns3,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import type { TableInfo } from "../types/schema";
 
 const EMPTY_SCHEMAS: never[] = [];
@@ -57,6 +61,43 @@ function nodeIdToString(id: NodeId): string {
 /** Default expanded categories for a newly-opened schema. */
 const DEFAULT_EXPANDED = new Set<CategoryKey>(["tables"]);
 
+/** Context menu target types. */
+interface TableContextMenuTarget {
+  kind: "table";
+  tableName: string;
+  schemaName: string;
+  x: number;
+  y: number;
+}
+
+interface SchemaContextMenuTarget {
+  kind: "schema";
+  schemaName: string;
+  x: number;
+  y: number;
+}
+
+type ContextMenuTarget =
+  | TableContextMenuTarget
+  | SchemaContextMenuTarget
+  | null;
+
+/** Confirmation dialog state. */
+interface ConfirmDialog {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  danger: boolean;
+  onConfirm: () => void;
+}
+
+/** Rename dialog state. */
+interface RenameDialog {
+  tableName: string;
+  schemaName: string;
+  initialValue: string;
+}
+
 interface SchemaTreeProps {
   connectionId: string;
 }
@@ -66,6 +107,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     useSchemaStore((s) => s.schemas[connectionId]) ?? EMPTY_SCHEMAS;
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
+  const dropTable = useSchemaStore((s) => s.dropTable);
+  const renameTableAction = useSchemaStore((s) => s.renameTable);
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const tables = useSchemaStore((s) => s.tables);
@@ -79,7 +122,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [loadingSchemas, setLoadingSchemas] = useState(false);
   const [loadingTables, setLoadingTables] = useState<Set<string>>(new Set());
+  const [contextMenuTarget, setContextMenuTarget] =
+    useState<ContextMenuTarget>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
+    null,
+  );
+  const [renameDialog, setRenameDialog] = useState<RenameDialog | null>(null);
+  const [renameInput, setRenameInput] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [isOperating, setIsOperating] = useState(false);
   const autoLoadedRef = useRef<string | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-load schemas on mount or when connectionId changes
   useEffect(() => {
@@ -123,12 +176,35 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setLoadingSchemas(true);
     loadSchemas(connectionId)
       .catch(() => {})
       .finally(() => setLoadingSchemas(false));
-  };
+  }, [connectionId, loadSchemas]);
+
+  const handleRefreshSchema = useCallback(
+    (schemaName: string) => {
+      const key = `${connectionId}:${schemaName}`;
+      setLoadingTables((prev) => new Set(prev).add(schemaName));
+      // Clear cached tables to force a reload
+      useSchemaStore.setState((state) => {
+        const newTables = { ...state.tables };
+        delete newTables[key];
+        return { tables: newTables };
+      });
+      loadTables(connectionId, schemaName)
+        .catch(() => {})
+        .finally(() =>
+          setLoadingTables((prev) => {
+            const next = new Set(prev);
+            next.delete(schemaName);
+            return next;
+          }),
+        );
+    },
+    [connectionId, loadTables],
+  );
 
   const handleTableClick = (tableName: string, schemaName: string) => {
     setSelectedNodeId(
@@ -143,6 +219,78 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       table: tableName,
       subView: "records",
     });
+  };
+
+  const handleOpenStructure = (tableName: string, schemaName: string) => {
+    setSelectedNodeId(
+      nodeIdToString({ type: "table", schema: schemaName, table: tableName }),
+    );
+    addTab({
+      title: `${schemaName}.${tableName}`,
+      connectionId,
+      type: "table",
+      closable: true,
+      schema: schemaName,
+      table: tableName,
+      subView: "structure",
+    });
+  };
+
+  const handleDropTable = (tableName: string, schemaName: string) => {
+    setConfirmDialog({
+      title: "Drop Table",
+      message: `Are you sure you want to drop "${schemaName}.${tableName}"? This action cannot be undone.`,
+      confirmLabel: "Drop Table",
+      danger: true,
+      onConfirm: () => {
+        setIsOperating(true);
+        dropTable(connectionId, tableName, schemaName)
+          .catch(() => {})
+          .finally(() => {
+            setIsOperating(false);
+            setConfirmDialog(null);
+          });
+      },
+    });
+  };
+
+  const handleStartRename = (tableName: string, schemaName: string) => {
+    setRenameDialog({ tableName, schemaName, initialValue: tableName });
+    setRenameInput(tableName);
+    setRenameError(null);
+  };
+
+  const handleConfirmRename = () => {
+    if (!renameDialog) return;
+    const newName = renameInput.trim();
+
+    if (!newName) {
+      setRenameError("Table name must not be empty");
+      return;
+    }
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newName)) {
+      setRenameError(
+        "Table name must start with a letter or underscore and contain only alphanumeric characters and underscores",
+      );
+      return;
+    }
+    if (newName === renameDialog.tableName) {
+      setRenameDialog(null);
+      return;
+    }
+
+    setIsOperating(true);
+    renameTableAction(
+      connectionId,
+      renameDialog.tableName,
+      renameDialog.schemaName,
+      newName,
+    )
+      .catch(() => {})
+      .finally(() => {
+        setIsOperating(false);
+        setRenameDialog(null);
+      });
   };
 
   const toggleCategory = (schemaName: string, categoryKey: CategoryKey) => {
@@ -172,6 +320,57 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     const expanded = expandedCategories[schemaName] ?? DEFAULT_EXPANDED;
     return expanded.has(key);
   };
+
+  // Build context menu items based on target
+  const contextMenuItems: ContextMenuItem[] = contextMenuTarget
+    ? contextMenuTarget.kind === "table"
+      ? [
+          {
+            label: "Structure",
+            icon: <Columns3 size={14} />,
+            onClick: () =>
+              handleOpenStructure(
+                contextMenuTarget.tableName,
+                contextMenuTarget.schemaName,
+              ),
+          },
+          {
+            label: "Data",
+            icon: <Table2 size={14} />,
+            onClick: () =>
+              handleTableClick(
+                contextMenuTarget.tableName,
+                contextMenuTarget.schemaName,
+              ),
+          },
+          {
+            label: "Rename",
+            icon: <Pencil size={14} />,
+            onClick: () =>
+              handleStartRename(
+                contextMenuTarget.tableName,
+                contextMenuTarget.schemaName,
+              ),
+          },
+          {
+            label: "Drop",
+            icon: <Trash2 size={14} />,
+            danger: true,
+            onClick: () =>
+              handleDropTable(
+                contextMenuTarget.tableName,
+                contextMenuTarget.schemaName,
+              ),
+          },
+        ]
+      : [
+          {
+            label: "Refresh",
+            icon: <RefreshCw size={14} />,
+            onClick: () => handleRefreshSchema(contextMenuTarget.schemaName),
+          },
+        ]
+    : [];
 
   return (
     <div className="flex flex-col">
@@ -251,6 +450,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   handleExpandSchema(schema.name);
                   setSelectedNodeId(schemaId);
                 }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenuTarget({
+                  kind: "schema",
+                  schemaName: schema.name,
+                  x: e.clientX,
+                  y: e.clientY,
+                });
               }}
             >
               {isExpanded ? (
@@ -369,6 +577,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                         );
                                       }
                                     }}
+                                    onContextMenu={(e) => {
+                                      e.preventDefault();
+                                      setContextMenuTarget({
+                                        kind: "table",
+                                        tableName: item.name,
+                                        schemaName: schema.name,
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                      });
+                                    }}
                                   >
                                     <Table2
                                       size={12}
@@ -397,6 +615,121 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           </div>
         );
       })}
+
+      {/* Context menu */}
+      {contextMenuTarget && (
+        <ContextMenu
+          x={contextMenuTarget.x}
+          y={contextMenuTarget.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenuTarget(null)}
+        />
+      )}
+
+      {/* Drop table confirmation dialog */}
+      {confirmDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-label={confirmDialog.title}
+        >
+          <div className="w-80 rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
+            <h3 className="mb-2 text-sm font-semibold text-(--color-text-primary)">
+              {confirmDialog.title}
+            </h3>
+            <p className="mb-4 text-sm text-(--color-text-secondary)">
+              {confirmDialog.message}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                onClick={() => setConfirmDialog(null)}
+                disabled={isOperating}
+              >
+                Cancel
+              </button>
+              <button
+                className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
+                  confirmDialog.danger
+                    ? "bg-(--color-danger) hover:opacity-90"
+                    : "bg-(--color-accent) hover:opacity-90"
+                } ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
+                onClick={confirmDialog.onConfirm}
+                disabled={isOperating}
+                aria-label={confirmDialog.confirmLabel}
+              >
+                {isOperating ? "Dropping..." : confirmDialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename table dialog */}
+      {renameDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Rename Table"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRenameDialog(null);
+          }}
+        >
+          <div className="w-80 rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
+            <h3 className="mb-2 text-sm font-semibold text-(--color-text-primary)">
+              Rename Table
+            </h3>
+            <p className="mb-2 text-xs text-(--color-text-muted)">
+              {renameDialog.schemaName}.{renameDialog.tableName}
+            </p>
+            <input
+              ref={renameInputRef}
+              type="text"
+              className="mb-1 w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) focus:border-(--color-accent) focus:outline-none"
+              value={renameInput}
+              onChange={(e) => {
+                setRenameInput(e.target.value);
+                setRenameError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleConfirmRename();
+                }
+                if (e.key === "Escape") {
+                  setRenameDialog(null);
+                }
+              }}
+              autoFocus
+              aria-label="New table name"
+            />
+            {renameError && (
+              <p className="mb-2 text-xs text-(--color-danger)">
+                {renameError}
+              </p>
+            )}
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                onClick={() => setRenameDialog(null)}
+                disabled={isOperating}
+              >
+                Cancel
+              </button>
+              <button
+                className={`rounded bg-(--color-accent) px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
+                onClick={handleConfirmRename}
+                disabled={isOperating}
+                aria-label="Rename"
+              >
+                {isOperating ? "Renaming..." : "Rename"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

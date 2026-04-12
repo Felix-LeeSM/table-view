@@ -98,3 +98,32 @@ pub async fn get_table_constraints(
         .ok_or_else(|| AppError::Connection("Not connected".into()))?;
     adapter.get_table_constraints(&table, &schema).await
 }
+
+#[tauri::command]
+pub async fn drop_table(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    table: String,
+    schema: String,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.drop_table(&table, &schema).await
+}
+
+#[tauri::command]
+pub async fn rename_table(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    table: String,
+    schema: String,
+    new_name: String,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.rename_table(&table, &schema, &new_name).await
+}

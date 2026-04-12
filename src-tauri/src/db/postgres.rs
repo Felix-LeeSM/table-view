@@ -745,6 +745,96 @@ impl PostgresAdapter {
             .collect())
     }
 
+    /// Drop a table permanently. Uses parameterized schema validation but
+    /// table-safe quoting since table names cannot be bound as parameters.
+    pub async fn drop_table(&self, table: &str, schema: &str) -> Result<(), AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        // Verify the table exists first
+        let exists: Vec<(String,)> = sqlx::query_as(
+            "SELECT table_name FROM information_schema.tables \
+             WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if exists.is_empty() {
+            return Err(AppError::NotFound(format!(
+                "Table {}.{} not found",
+                schema, table
+            )));
+        }
+
+        let qualified = format!(
+            "\"{}\".\"{}\"",
+            schema.replace('"', "\"\""),
+            table.replace('"', "\"\"")
+        );
+        let sql = format!("DROP TABLE {}", qualified);
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!("Dropped table {}.{}", schema, table);
+        Ok(())
+    }
+
+    /// Rename a table. Validates the new name is a valid identifier.
+    pub async fn rename_table(
+        &self,
+        table: &str,
+        schema: &str,
+        new_name: &str,
+    ) -> Result<(), AppError> {
+        // Validate new name: non-empty, alphanumeric + underscores only
+        let trimmed = new_name.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::Validation(
+                "New table name must not be empty".into(),
+            ));
+        }
+        if !trimmed
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(AppError::Validation(
+                "New table name must contain only alphanumeric characters and underscores".into(),
+            ));
+        }
+        if trimmed.chars().next().is_none_or(|c| c.is_ascii_digit()) {
+            return Err(AppError::Validation(
+                "New table name must not start with a digit".into(),
+            ));
+        }
+
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let qualified_old = format!(
+            "\"{}\".\"{}\"",
+            schema.replace('"', "\"\""),
+            table.replace('"', "\"\"")
+        );
+        let quoted_new = format!("\"{}\"", trimmed.replace('"', "\"\""));
+        let sql = format!("ALTER TABLE {} RENAME TO {}", qualified_old, quoted_new);
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!("Renamed table {}.{} to {}", schema, table, trimmed);
+        Ok(())
+    }
+
     #[allow(clippy::type_complexity)]
     pub async fn get_table_constraints(
         &self,
@@ -944,5 +1034,91 @@ mod tests {
     #[test]
     fn strip_leading_comments_whitespace_only() {
         assert_eq!(strip_leading_comments("   "), "");
+    }
+
+    #[tokio::test]
+    async fn drop_table_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.drop_table("users", "public").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_table_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.rename_table("users", "public", "people").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_table_empty_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.rename_table("users", "public", "").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must not be empty"),
+            "Expected empty name validation error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_table_whitespace_only_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.rename_table("users", "public", "   ").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must not be empty"),
+            "Expected empty name validation error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_table_invalid_characters_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.rename_table("users", "public", "bad-name!").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("alphanumeric"),
+            "Expected alphanumeric validation error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_table_starts_with_digit_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.rename_table("users", "public", "123bad").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must not start with a digit"),
+            "Expected digit-start validation error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn rename_table_valid_name_passes_validation() {
+        let adapter = PostgresAdapter::new();
+        // This will fail at the connection stage, not validation
+        let result = adapter.rename_table("users", "public", "people").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        // Should fail with connection error, not validation
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected connection error for valid name, got: {err_msg}"
+        );
     }
 }

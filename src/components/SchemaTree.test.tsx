@@ -1150,4 +1150,521 @@ describe("SchemaTree", () => {
 
     expect(screen.getByText("Schemas")).toBeInTheDocument();
   });
+
+  // =========================================================================
+  // NEW: Context menu — table node
+  // =========================================================================
+
+  // Helper: expand schema so table items are visible
+  async function expandSchemaWithTables() {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+  }
+
+  // AC-CM-01: Right-clicking a table node shows context menu with correct items
+  it("shows context menu with Structure/Data/Rename/Drop on table right-click", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    // ContextMenu should render with the expected items
+    expect(screen.getByText("Structure")).toBeInTheDocument();
+    expect(screen.getByText("Data")).toBeInTheDocument();
+    expect(screen.getByText("Rename")).toBeInTheDocument();
+    expect(screen.getByText("Drop")).toBeInTheDocument();
+  });
+
+  // AC-CM-02: Context menu closes when onClose is called (click outside)
+  it("closes table context menu when close handler fires", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    expect(screen.getByText("Structure")).toBeInTheDocument();
+
+    // The ContextMenu component handles its own close-on-click-outside.
+    // Simulate by pressing Escape
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+
+    expect(screen.queryByText("Structure")).not.toBeInTheDocument();
+  });
+
+  // AC-CM-03: Structure opens tab with subView "structure"
+  it("opens tab with subView 'structure' when Structure menu item is clicked", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    // Click the Structure menu item
+    await act(async () => {
+      fireEvent.click(screen.getByText("Structure"));
+    });
+
+    const state = useTabStore.getState();
+    const tab = state.tabs.find((t) => t.type === "table");
+    expect(tab).toBeDefined();
+    if (tab && tab.type === "table") {
+      expect(tab.subView).toBe("structure");
+      expect(tab.table).toBe("users");
+      expect(tab.schema).toBe("public");
+    }
+  });
+
+  // AC-CM-04: Data opens tab with subView "records"
+  it("opens tab with subView 'records' when Data menu item is clicked", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Data"));
+    });
+
+    const state = useTabStore.getState();
+    const tab = state.tabs.find((t) => t.type === "table");
+    expect(tab).toBeDefined();
+    if (tab && tab.type === "table") {
+      expect(tab.subView).toBe("records");
+      expect(tab.table).toBe("users");
+    }
+  });
+
+  // AC-CM-05: Drop shows confirmation dialog
+  it("shows confirmation dialog when Drop menu item is clicked", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Drop"));
+    });
+
+    // Confirmation dialog should be visible
+    expect(
+      screen.getByRole("dialog", { name: "Drop Table" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Are you sure you want to drop/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/This action cannot be undone/),
+    ).toBeInTheDocument();
+  });
+
+  // AC-CM-06: Drop confirmation cancel closes dialog
+  it("closes drop confirmation dialog when Cancel is clicked", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Drop"));
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: "Drop Table" }),
+    ).toBeInTheDocument();
+
+    // Click Cancel (find the one inside the dialog)
+    const dialog = screen.getByRole("dialog", { name: "Drop Table" });
+    const cancelBtn = dialog.querySelector("button:not([aria-label])");
+    await act(async () => {
+      fireEvent.click(cancelBtn!);
+    });
+
+    // Dialog should be gone
+    expect(
+      screen.queryByRole("dialog", { name: "Drop Table" }),
+    ).not.toBeInTheDocument();
+  });
+
+  // AC-CM-07: Drop confirmation calls dropTable store action
+  it("calls dropTable when confirming drop dialog", async () => {
+    const mockDropTable = vi.fn().mockResolvedValue(undefined);
+    // Override the dropTable action in the store
+    useSchemaStore.setState({ dropTable: mockDropTable });
+
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Drop"));
+    });
+
+    // Click the confirm button inside the dialog
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Drop Table" }));
+    });
+
+    expect(mockDropTable).toHaveBeenCalledWith("conn1", "users", "public");
+  });
+
+  // AC-CM-08: Rename shows rename dialog
+  it("shows rename dialog when Rename menu item is clicked", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    // Rename dialog should be visible
+    expect(screen.getByText("Rename Table")).toBeInTheDocument();
+    expect(screen.getByText("public.users")).toBeInTheDocument();
+    expect(screen.getByLabelText("New table name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Rename")).toBeInTheDocument();
+  });
+
+  // AC-CM-09: Rename dialog pre-fills current name
+  it("pre-fills rename input with current table name", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    const input = screen.getByLabelText("New table name") as HTMLInputElement;
+    expect(input.value).toBe("users");
+  });
+
+  // AC-CM-10: Rename dialog cancel closes dialog
+  it("closes rename dialog when Cancel is clicked", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    expect(screen.getByText("Rename Table")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Cancel"));
+    });
+
+    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+  });
+
+  // AC-CM-11: Rename confirmation calls renameTable store action
+  it("calls renameTable when confirming rename dialog", async () => {
+    const mockRename = vi.fn().mockResolvedValue(undefined);
+    useSchemaStore.setState({ renameTable: mockRename });
+
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    // Change the name
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "people" } });
+    });
+
+    // Confirm
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Rename"));
+    });
+
+    expect(mockRename).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "people",
+    );
+  });
+
+  // AC-CM-12: Rename with Enter key
+  it("submits rename on Enter key", async () => {
+    const mockRename = vi.fn().mockResolvedValue(undefined);
+    useSchemaStore.setState({ renameTable: mockRename });
+
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "people" } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(mockRename).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "people",
+    );
+  });
+
+  // AC-CM-13: Rename dialog closes on Escape
+  it("closes rename dialog on Escape key", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Escape" });
+    });
+
+    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+  });
+
+  // AC-CM-14: Rename validation - empty name
+  it("shows error when renaming to empty string", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Rename"));
+    });
+
+    expect(
+      screen.getByText("Table name must not be empty"),
+    ).toBeInTheDocument();
+  });
+
+  // AC-CM-15: Rename validation - invalid characters
+  it("shows error when renaming to name with invalid characters", async () => {
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "bad-name!" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Rename"));
+    });
+
+    expect(
+      screen.getByText(/must start with a letter or underscore/),
+    ).toBeInTheDocument();
+  });
+
+  // AC-CM-16: Rename same name just closes dialog (no-op)
+  it("closes dialog without calling renameTable when name is unchanged", async () => {
+    const mockRename = vi.fn().mockResolvedValue(undefined);
+    useSchemaStore.setState({ renameTable: mockRename });
+
+    await expandSchemaWithTables();
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Rename"));
+    });
+
+    // Don't change the name, just click rename
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Rename"));
+    });
+
+    expect(mockRename).not.toHaveBeenCalled();
+    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+  });
+
+  // =========================================================================
+  // NEW: Context menu — schema node
+  // =========================================================================
+
+  // AC-CM-17: Right-clicking a schema node shows Refresh context menu
+  it("shows context menu with Refresh on schema right-click", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.contextMenu(schemaButton, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    expect(screen.getByText("Refresh")).toBeInTheDocument();
+    // Table context menu items should NOT be present
+    expect(screen.queryByText("Structure")).not.toBeInTheDocument();
+    expect(screen.queryByText("Drop")).not.toBeInTheDocument();
+  });
+
+  // AC-CM-18: Schema Refresh reloads tables for that schema
+  it("calls loadTables when schema Refresh is clicked", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.contextMenu(schemaButton, {
+        clientX: 100,
+        clientY: 200,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Refresh"));
+    });
+
+    // loadTables should be called for this specific schema
+    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "public");
+  });
 });

@@ -28,6 +28,8 @@ pub fn run() {
             commands::schema::query_table_data,
             commands::schema::get_table_indexes,
             commands::schema::get_table_constraints,
+            commands::schema::drop_table,
+            commands::schema::rename_table,
             commands::query::execute_query,
             commands::query::cancel_query,
         ])

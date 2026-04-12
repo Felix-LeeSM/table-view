@@ -154,3 +154,21 @@ export async function executeQuery(
 export async function cancelQuery(queryId: string): Promise<string> {
   return invoke<string>("cancel_query", { queryId });
 }
+
+// Table management
+export async function dropTable(
+  connectionId: string,
+  table: string,
+  schema: string,
+): Promise<void> {
+  return invoke("drop_table", { connectionId, table, schema });
+}
+
+export async function renameTable(
+  connectionId: string,
+  table: string,
+  schema: string,
+  newName: string,
+): Promise<void> {
+  return invoke("rename_table", { connectionId, table, schema, newName });
+}
