@@ -1,5 +1,26 @@
 import { expect } from "@wdio/globals";
 
+/**
+ * Expand a schema node only if it is not already expanded.
+ * Prevents the toggle issue: clicking an already-expanded node collapses it.
+ */
+async function ensureSchemaExpanded(selector: string) {
+  const schema = await $(selector);
+  await schema.waitForDisplayed({ timeout: 15000 });
+  const expanded = await schema.getAttribute("aria-expanded");
+  if (expanded !== "true") {
+    await schema.click();
+  }
+}
+
+/**
+ * Right-click an element.
+ * Uses click({ button: 'right' }) which has wider driver support than contextClick().
+ */
+async function rightClick(el: WebdriverIO.Element) {
+  await el.click({ button: "right" });
+}
+
 describe("Schema Tree Features", () => {
   // Self-contained: reuse or create connection and connect before each test
   beforeEach(async () => {
@@ -73,8 +94,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("shows categorized sections when schema is expanded", async () => {
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     // Schema should show category headers
     const tablesCategory = await $('[aria-label="Tables in public"]');
@@ -91,9 +111,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("displays tables under the Tables category", async () => {
-    // Expand schema
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     const tablesCategory = await $('[aria-label="Tables in public"]');
     await tablesCategory.waitForDisplayed({ timeout: 5000 });
@@ -105,8 +123,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("highlights a table when selected", async () => {
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     const tablesCategory = await $('[aria-label="Tables in public"]');
     await tablesCategory.waitForDisplayed({ timeout: 5000 });
@@ -123,8 +140,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("shows context menu on table right-click", async () => {
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     const tablesCategory = await $('[aria-label="Tables in public"]');
     await tablesCategory.waitForDisplayed({ timeout: 5000 });
@@ -133,7 +149,7 @@ describe("Schema Tree Features", () => {
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
     await firstTable.click();
-    await firstTable.contextClick();
+    await rightClick(firstTable);
 
     // Context menu should appear with expected options
     const structureOption = await $("span=Structure");
@@ -154,8 +170,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("opens table data tab from context menu", async () => {
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     const tablesCategory = await $('[aria-label="Tables in public"]');
     await tablesCategory.waitForDisplayed({ timeout: 5000 });
@@ -163,7 +178,7 @@ describe("Schema Tree Features", () => {
 
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
-    await firstTable.contextClick();
+    await rightClick(firstTable);
 
     const dataOption = await $("span=Data");
     await dataOption.waitForDisplayed({ timeout: 3000 });
@@ -177,7 +192,8 @@ describe("Schema Tree Features", () => {
 
   it("shows context menu on schema right-click with Refresh option", async () => {
     const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.contextClick();
+    await publicSchema.waitForDisplayed({ timeout: 5000 });
+    await rightClick(publicSchema);
 
     const refreshOption = await $("span=Refresh");
     await refreshOption.waitForDisplayed({ timeout: 3000 });
@@ -188,9 +204,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("renders search input in Tables category and filters tables", async () => {
-    // Expand the public schema
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     // Tables category should be expanded by default
     const tablesCategory = await $('[aria-label="Tables in public"]');
@@ -230,9 +244,7 @@ describe("Schema Tree Features", () => {
   });
 
   it("shows No matching tables when filter matches nothing", async () => {
-    // Expand the public schema
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.click();
+    await ensureSchemaExpanded('[aria-label="public schema"]');
 
     // Tables category should be expanded by default
     const tablesCategory = await $('[aria-label="Tables in public"]');
