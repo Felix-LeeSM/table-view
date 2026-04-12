@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { QueryTab } from "../stores/tabStore";
 import { useTabStore } from "../stores/tabStore";
+import { useQueryHistoryStore } from "../stores/queryHistoryStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
+import { splitSqlStatements } from "../lib/sqlUtils";
 import { useSqlAutocomplete } from "../hooks/useSqlAutocomplete";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
-import { Play, Square, Loader2 } from "lucide-react";
+import {
+  Play,
+  Square,
+  Loader2,
+  Clock,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 
 interface QueryTabProps {
   tab: QueryTab;
@@ -14,7 +24,11 @@ interface QueryTabProps {
 export default function QueryTab({ tab }: QueryTabProps) {
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const updateQueryState = useTabStore((s) => s.updateQueryState);
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
+  const historyEntries = useQueryHistoryStore((s) => s.entries);
   const schemaNamespace = useSqlAutocomplete(tab.connectionId);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
@@ -30,41 +44,114 @@ export default function QueryTab({ tab }: QueryTabProps) {
       return;
     }
 
+    const statements = splitSqlStatements(sql);
+    if (statements.length === 0) return;
+
+    // Single statement — use original behavior
+    if (statements.length === 1) {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+
+      try {
+        const result = await executeQuery(tab.connectionId, sql, queryId);
+        // Only update if this is still the active query (prevent stale overwrites)
+        useTabStore.setState((state) => {
+          const current = state.tabs.find((t) => t.id === tab.id);
+          if (
+            current &&
+            current.type === "query" &&
+            current.queryState.status === "running" &&
+            "queryId" in current.queryState &&
+            current.queryState.queryId === queryId
+          ) {
+            return {
+              tabs: state.tabs.map((t) =>
+                t.id === tab.id && t.type === "query"
+                  ? {
+                      ...t,
+                      queryState: { status: "completed" as const, result },
+                    }
+                  : t,
+              ),
+            };
+          }
+          return state;
+        });
+        addHistoryEntry({
+          sql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          connectionId: tab.connectionId,
+        });
+      } catch (err) {
+        useTabStore.setState((state) => {
+          const current = state.tabs.find((t) => t.id === tab.id);
+          if (
+            current &&
+            current.type === "query" &&
+            current.queryState.status === "running" &&
+            "queryId" in current.queryState &&
+            current.queryState.queryId === queryId
+          ) {
+            return {
+              tabs: state.tabs.map((t) =>
+                t.id === tab.id && t.type === "query"
+                  ? {
+                      ...t,
+                      queryState: {
+                        status: "error" as const,
+                        error: err instanceof Error ? err.message : String(err),
+                      },
+                    }
+                  : t,
+              ),
+            };
+          }
+          return state;
+        });
+        addHistoryEntry({
+          sql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          connectionId: tab.connectionId,
+        });
+      }
+      return;
+    }
+
+    // Multiple statements — execute sequentially
     const queryId = `${tab.id}-${Date.now()}`;
+    const startTime = Date.now();
     updateQueryState(tab.id, { status: "running", queryId });
 
-    try {
-      const result = await executeQuery(tab.connectionId, sql, queryId);
-      // Only update if this is still the active query (prevent stale overwrites)
-      useTabStore.setState((state) => {
-        const current = state.tabs.find((t) => t.id === tab.id);
-        if (
-          current &&
-          current.type === "query" &&
-          current.queryState.status === "running" &&
-          "queryId" in current.queryState &&
-          current.queryState.queryId === queryId
-        ) {
-          return {
-            tabs: state.tabs.map((t) =>
-              t.id === tab.id && t.type === "query"
-                ? { ...t, queryState: { status: "completed" as const, result } }
-                : t,
-            ),
-          };
-        }
-        return state;
-      });
-    } catch (err) {
-      useTabStore.setState((state) => {
-        const current = state.tabs.find((t) => t.id === tab.id);
-        if (
-          current &&
-          current.type === "query" &&
-          current.queryState.status === "running" &&
-          "queryId" in current.queryState &&
-          current.queryState.queryId === queryId
-        ) {
+    let lastResult: import("../types/query").QueryResult | null = null;
+    const errors: string[] = [];
+
+    for (const stmt of statements) {
+      const stmtQueryId = `${queryId}-${statements.indexOf(stmt)}`;
+      try {
+        const result = await executeQuery(tab.connectionId, stmt, stmtQueryId);
+        lastResult = result;
+      } catch (err) {
+        errors.push(
+          `Statement ${statements.indexOf(stmt) + 1}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    useTabStore.setState((state) => {
+      const current = state.tabs.find((t) => t.id === tab.id);
+      if (
+        current &&
+        current.type === "query" &&
+        current.queryState.status === "running" &&
+        "queryId" in current.queryState &&
+        current.queryState.queryId === queryId
+      ) {
+        if (errors.length > 0) {
           return {
             tabs: state.tabs.map((t) =>
               t.id === tab.id && t.type === "query"
@@ -72,16 +159,37 @@ export default function QueryTab({ tab }: QueryTabProps) {
                     ...t,
                     queryState: {
                       status: "error" as const,
-                      error: err instanceof Error ? err.message : String(err),
+                      error: errors.join("\n"),
                     },
                   }
                 : t,
             ),
           };
         }
-        return state;
-      });
-    }
+        return {
+          tabs: state.tabs.map((t) =>
+            t.id === tab.id && t.type === "query" && lastResult
+              ? {
+                  ...t,
+                  queryState: {
+                    status: "completed" as const,
+                    result: lastResult,
+                  },
+                }
+              : t,
+          ),
+        };
+      }
+      return state;
+    });
+
+    addHistoryEntry({
+      sql,
+      executedAt: Date.now(),
+      duration: Date.now() - startTime,
+      status: errors.length > 0 ? "error" : "success",
+      connectionId: tab.connectionId,
+    });
   }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const handler = (e: Event) => {
@@ -195,6 +303,60 @@ export default function QueryTab({ tab }: QueryTabProps) {
       <div className="min-h-0 flex-1 overflow-hidden">
         <QueryResultGrid queryState={tab.queryState} />
       </div>
+
+      {/* History panel */}
+      {historyEntries.length > 0 && (
+        <div className="border-t border-(--color-border) bg-(--color-bg-secondary)">
+          <button
+            className="flex w-full items-center gap-1 px-2 py-1 text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+            onClick={() => setHistoryExpanded((v) => !v)}
+          >
+            {historyExpanded ? (
+              <ChevronDown size={12} />
+            ) : (
+              <ChevronRight size={12} />
+            )}
+            <Clock size={12} />
+            <span>History ({historyEntries.length})</span>
+          </button>
+          {historyExpanded && (
+            <div className="max-h-40 overflow-y-auto">
+              {historyEntries.map((entry) => (
+                <button
+                  key={entry.id}
+                  className="flex w-full items-center gap-2 border-t border-(--color-border) px-3 py-1 text-left text-xs hover:bg-(--color-bg-tertiary)"
+                  onClick={() => updateQuerySql(tab.id, entry.sql)}
+                  aria-label={entry.sql}
+                >
+                  <span
+                    className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                      entry.status === "success"
+                        ? "bg-(--color-success)"
+                        : "bg-(--color-danger)"
+                    }`}
+                  />
+                  <span className="truncate font-mono text-(--color-text-primary)">
+                    {entry.sql}
+                  </span>
+                  <span className="ml-auto shrink-0 text-(--color-text-muted)">
+                    {entry.duration}ms
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-end border-t border-(--color-border) px-2 py-0.5">
+            <button
+              className="flex items-center gap-1 text-[10px] text-(--color-text-muted) hover:text-(--color-danger)"
+              onClick={clearHistory}
+              aria-label="Clear history"
+            >
+              <Trash2 size={10} />
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

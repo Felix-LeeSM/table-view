@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
 import { useTabStore, type QueryTab as QueryTabType } from "../stores/tabStore";
+import { useQueryHistoryStore } from "../stores/queryHistoryStore";
 import type { QueryResult } from "../types/query";
 
 const MOCK_RESULT: QueryResult = {
@@ -59,6 +60,7 @@ function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
 describe("QueryTab", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
+    useQueryHistoryStore.setState({ entries: [] });
     mockExecuteQuery.mockReset();
     mockCancelQuery.mockReset();
   });
@@ -245,5 +247,209 @@ describe("QueryTab", () => {
       "SELECT 1",
       expect.any(String),
     );
+  });
+
+  // ── Sprint 36: Multi-Statement Execution ──
+
+  it("executes multiple statements sequentially", async () => {
+    const secondResult: QueryResult = {
+      columns: [{ name: "n", data_type: "integer" }],
+      rows: [[42]],
+      total_count: 1,
+      execution_time_ms: 2,
+      query_type: "select",
+    };
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockResolvedValueOnce(secondResult);
+
+    const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    // Should be called twice — once for each statement
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(2);
+    });
+    expect(mockExecuteQuery).toHaveBeenNthCalledWith(
+      1,
+      "conn1",
+      "SELECT 1",
+      expect.any(String),
+    );
+    expect(mockExecuteQuery).toHaveBeenNthCalledWith(
+      2,
+      "conn1",
+      "SELECT 2",
+      expect.any(String),
+    );
+
+    // Final state should show the last result
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      if (updatedTab && updatedTab.type === "query") {
+        expect(updatedTab.queryState.status).toBe("completed");
+      }
+    });
+  });
+
+  it("combines errors from multi-statement execution", async () => {
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockRejectedValueOnce(new Error("Table not found"));
+
+    const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      if (updatedTab && updatedTab.type === "query") {
+        expect(updatedTab.queryState.status).toBe("error");
+        if (updatedTab.queryState.status === "error") {
+          expect(updatedTab.queryState.error).toContain("Table not found");
+        }
+      }
+    });
+  });
+
+  // ── Sprint 34: Query History ──
+
+  it("adds entry to history after successful query execution", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const history = useQueryHistoryStore.getState().entries;
+      expect(history).toHaveLength(1);
+      expect(history[0]!.sql).toBe("SELECT 1");
+      expect(history[0]!.status).toBe("success");
+      expect(history[0]!.connectionId).toBe("conn1");
+    });
+  });
+
+  it("adds entry to history after failed query execution", async () => {
+    mockExecuteQuery.mockRejectedValueOnce(new Error("Syntax error"));
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const history = useQueryHistoryStore.getState().entries;
+      expect(history).toHaveLength(1);
+      expect(history[0]!.sql).toBe("SELECT 1");
+      expect(history[0]!.status).toBe("error");
+    });
+  });
+
+  it("history panel shows entries with SQL and execution time", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    // Wait for history entry to be added
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+
+    // Expand the history panel
+    const historyToggle = screen.getByText(/History \(1\)/);
+    await act(async () => {
+      historyToggle.click();
+    });
+
+    // The history panel should show the SQL text
+    await waitFor(() => {
+      expect(screen.getByText("SELECT 1")).toBeInTheDocument();
+    });
+  });
+
+  it("clicking history item updates editor SQL", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    // Wait for history entry
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+
+    // Expand the history panel
+    const historyToggle = screen.getByText(/History \(1\)/);
+    await act(async () => {
+      historyToggle.click();
+    });
+
+    // Find and click the history item
+    const historyItem = screen.getByRole("button", { name: /SELECT 1/ });
+    await act(async () => {
+      historyItem.click();
+    });
+
+    // Check that the SQL was updated in the store
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("SELECT 1");
+    }
+  });
+
+  it("clear history removes all entries", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+
+    const clearBtn = screen.getByLabelText("Clear history");
+    await act(async () => {
+      clearBtn.click();
+    });
+
+    expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
   });
 });

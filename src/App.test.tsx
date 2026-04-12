@@ -149,4 +149,76 @@ describe("App global shortcuts", () => {
 
     window.removeEventListener("refresh-schema", handler);
   });
+
+  // ── Sprint 33: Extended Keyboard Shortcuts ──
+
+  it("Cmd+N dispatches new-connection event", () => {
+    const handler = vi.fn();
+    window.addEventListener("new-connection", handler);
+    render(<App />);
+
+    fireShortcut("n");
+    expect(handler).toHaveBeenCalled();
+
+    window.removeEventListener("new-connection", handler);
+  });
+
+  it("Cmd+S dispatches commit-changes event", () => {
+    const handler = vi.fn();
+    window.addEventListener("commit-changes", handler);
+    render(<App />);
+
+    fireShortcut("s");
+    expect(handler).toHaveBeenCalled();
+
+    window.removeEventListener("commit-changes", handler);
+  });
+
+  it("Cmd+P dispatches quick-open event", () => {
+    const handler = vi.fn();
+    window.addEventListener("quick-open", handler);
+    render(<App />);
+
+    fireShortcut("p");
+    expect(handler).toHaveBeenCalled();
+
+    window.removeEventListener("quick-open", handler);
+  });
+
+  it("Cmd+, dispatches open-settings event", () => {
+    const handler = vi.fn();
+    window.addEventListener("open-settings", handler);
+    render(<App />);
+
+    fireShortcut(",");
+    expect(handler).toHaveBeenCalled();
+
+    window.removeEventListener("open-settings", handler);
+  });
+
+  it("shortcuts are ignored when input is focused", () => {
+    const handler = vi.fn();
+    window.addEventListener("commit-changes", handler);
+    render(<App />);
+
+    // Simulate an input element as the event target
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    act(() => {
+      fireEvent(
+        input,
+        new KeyboardEvent("keydown", {
+          key: "s",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+
+    document.body.removeChild(input);
+    window.removeEventListener("commit-changes", handler);
+  });
 });

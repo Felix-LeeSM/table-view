@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
+import QuickOpen from "./components/QuickOpen";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 
@@ -76,6 +77,40 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Cmd+N / Ctrl+N — new connection
+  // Cmd+S / Ctrl+S — commit changes
+  // Cmd+P / Ctrl+P — quick open
+  // Cmd+, / Ctrl+, — settings
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+
+      const key = e.key;
+      let eventName: string | null = null;
+      if (key === "n") eventName = "new-connection";
+      else if (key === "s") eventName = "commit-changes";
+      else if (key === "p") eventName = "quick-open";
+      else if (key === ",") eventName = "open-settings";
+
+      if (!eventName) return;
+
+      // Skip if focus is inside a text input, textarea, select, or contenteditable
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        (e.target as HTMLElement)?.isContentEditable
+      )
+        return;
+
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent(eventName));
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Cmd+R / Ctrl+R / F5 — context-aware refresh
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -110,10 +145,37 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Navigate-table event — open a table tab from Quick Open
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { connectionId, schema, table } = (
+        e as CustomEvent<{
+          connectionId: string;
+          schema: string;
+          table: string;
+        }>
+      ).detail;
+      useTabStore
+        .getState()
+        .addTab({
+          type: "table",
+          connectionId,
+          schema,
+          table,
+          title: table,
+          closable: true,
+          subView: "records",
+        });
+    };
+    window.addEventListener("navigate-table", handler);
+    return () => window.removeEventListener("navigate-table", handler);
+  }, []);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-(--color-bg-primary)">
       <Sidebar />
       <MainArea />
+      <QuickOpen />
     </div>
   );
 }
