@@ -3,7 +3,7 @@ import type { QueryTab } from "../stores/tabStore";
 import { useTabStore } from "../stores/tabStore";
 import { useQueryHistoryStore } from "../stores/queryHistoryStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
-import { splitSqlStatements } from "../lib/sqlUtils";
+import { splitSqlStatements, formatSql } from "../lib/sqlUtils";
 import { useSqlAutocomplete } from "../hooks/useSqlAutocomplete";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
@@ -207,6 +207,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
     window.addEventListener("cancel-query", handler);
     return () => window.removeEventListener("cancel-query", handler);
   }, [tab.id, tab.queryState]);
+
+  // Format SQL event listener (Cmd+I)
+  useEffect(() => {
+    const handler = () => {
+      // Only format if this tab is the active tab
+      const { activeTabId } = useTabStore.getState();
+      if (activeTabId !== tab.id) return;
+      if (!tab.sql.trim()) return;
+      const formatted = formatSql(tab.sql);
+      updateQuerySql(tab.id, formatted);
+    };
+    window.addEventListener("format-sql", handler);
+    return () => window.removeEventListener("format-sql", handler);
+  }, [tab.id, tab.sql, updateQuerySql]);
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);

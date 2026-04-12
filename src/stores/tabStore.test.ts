@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   useTabStore,
   type TableTab,
@@ -395,6 +395,116 @@ describe("tabStore", () => {
 
       const state = useTabStore.getState();
       expect(state.tabs).toHaveLength(1);
+    });
+  });
+
+  // -- Sprint 38: Tab State Persistence --
+
+  describe("tab state persistence", () => {
+    let storage: Record<string, string>;
+
+    beforeEach(() => {
+      storage = {};
+      vi.useFakeTimers();
+      vi.stubGlobal("localStorage", {
+        getItem: vi.fn((key: string) => storage[key] ?? null),
+        setItem: vi.fn((key: string, value: string) => {
+          storage[key] = value;
+        }),
+        removeItem: vi.fn((key: string) => {
+          delete storage[key];
+        }),
+        clear: vi.fn(() => {
+          storage = {};
+        }),
+        get length() {
+          return Object.keys(storage).length;
+        },
+        key: vi.fn(() => null),
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("persists tabs to localStorage on change", () => {
+      useTabStore.getState().addQueryTab("conn1");
+
+      // Advance past debounce timer
+      vi.advanceTimersByTime(300);
+
+      // The store should have called setItem
+      const setItemCalls = (localStorage.setItem as ReturnType<typeof vi.fn>)
+        .mock.calls;
+      const lastCall = setItemCalls[setItemCalls.length - 1];
+      expect(lastCall).toBeDefined();
+      if (lastCall) {
+        expect(lastCall[0]).toBe("view-table-tabs");
+        const parsed = JSON.parse(lastCall[1]);
+        expect(parsed.tabs).toHaveLength(1);
+      }
+    });
+
+    it("loads persisted tabs on initialization", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "query",
+            id: "query-1",
+            title: "Query 1",
+            connectionId: "conn1",
+            closable: true,
+            sql: "SELECT 1",
+            queryState: { status: "idle" },
+          },
+        ],
+        activeTabId: "query-1",
+      };
+      storage["view-table-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.activeTabId).toBe("query-1");
+    });
+
+    it("resets query state to idle when loading persisted tabs", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "query",
+            id: "query-1",
+            title: "Query 1",
+            connectionId: "conn1",
+            closable: true,
+            sql: "SELECT 1",
+            queryState: { status: "running", queryId: "old-qid" },
+          },
+        ],
+        activeTabId: "query-1",
+      };
+      storage["view-table-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      const qt = state.tabs[0];
+      if (qt && qt.type === "query") {
+        expect(qt.queryState).toEqual({ status: "idle" });
+      }
+    });
+
+    it("handles corrupted localStorage gracefully", () => {
+      storage["view-table-tabs"] = "not valid json{{{";
+
+      // Should not throw
+      expect(() => useTabStore.getState().loadPersistedTabs()).not.toThrow();
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toEqual([]);
+      expect(state.activeTabId).toBeNull();
     });
   });
 });

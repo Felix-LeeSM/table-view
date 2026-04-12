@@ -1,0 +1,123 @@
+import { useEffect, useState } from "react";
+import { Search, Trash2, X } from "lucide-react";
+import { useQueryHistoryStore } from "../stores/queryHistoryStore";
+
+function truncateSql(sql: string, maxLen: number): string {
+  if (sql.length <= maxLen) return sql;
+  return sql.slice(0, maxLen) + "...";
+}
+
+function formatRelativeTime(timestamp: number): string {
+  const diffMs = Date.now() - timestamp;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
+export default function QueryLog() {
+  const [isVisible, setIsVisible] = useState(false);
+  const [search, setSearch] = useState("");
+  const entries = useQueryHistoryStore((s) => s.entries);
+  const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
+
+  useEffect(() => {
+    const handler = () => {
+      setIsVisible((prev) => !prev);
+    };
+    window.addEventListener("toggle-query-log", handler);
+    return () => window.removeEventListener("toggle-query-log", handler);
+  }, []);
+
+  if (!isVisible) return null;
+
+  const filtered = entries.filter((e) =>
+    e.sql.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const handleEntryClick = (sql: string) => {
+    window.dispatchEvent(new CustomEvent("insert-sql", { detail: { sql } }));
+  };
+
+  return (
+    <div
+      data-testid="query-log-panel"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-(--color-border) bg-(--color-bg-secondary)"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-1.5">
+        <span className="text-xs font-medium text-(--color-text-primary)">
+          Query Log
+        </span>
+        <div className="flex flex-1 items-center gap-1.5">
+          <Search size={12} className="shrink-0 text-(--color-text-muted)" />
+          <input
+            type="text"
+            className="flex-1 bg-transparent text-xs text-(--color-text-primary) outline-none placeholder:text-(--color-text-muted)"
+            placeholder="Search queries..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button
+          className="flex items-center gap-1 rounded bg-(--color-bg-tertiary) px-2 py-0.5 text-xs text-(--color-text-muted) hover:text-(--color-text-primary)"
+          onClick={clearHistory}
+          aria-label="Clear history"
+        >
+          <Trash2 size={12} />
+          Clear
+        </button>
+        <button
+          className="text-(--color-text-muted) hover:text-(--color-text-primary)"
+          onClick={() => setIsVisible(false)}
+        >
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Entries */}
+      <div className="max-h-[200px] overflow-auto">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-4 text-center text-xs text-(--color-text-muted)">
+            {entries.length === 0
+              ? "No queries executed yet"
+              : "No matching queries"}
+          </div>
+        ) : (
+          filtered.map((entry) => (
+            <button
+              key={entry.id}
+              className="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-(--color-bg-tertiary)"
+              onClick={() => handleEntryClick(entry.sql)}
+            >
+              {/* Status dot */}
+              <span
+                className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                  entry.status === "success" ? "bg-green-500" : "bg-red-500"
+                }`}
+                title={entry.status}
+              />
+              {/* SQL text */}
+              <span className="flex-1 truncate text-(--color-text-primary)">
+                {truncateSql(entry.sql, 80)}
+              </span>
+              {/* Timestamp */}
+              <span className="shrink-0 text-(--color-text-muted)">
+                {formatRelativeTime(entry.executedAt)}
+              </span>
+              {/* Duration badge */}
+              <span className="shrink-0 rounded bg-(--color-bg-tertiary) px-2 py-0.5 text-(--color-text-muted)">
+                {entry.duration}ms
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

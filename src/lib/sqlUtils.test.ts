@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitSqlStatements } from "./sqlUtils";
+import { splitSqlStatements, formatSql } from "./sqlUtils";
 
 describe("splitSqlStatements", () => {
   it("splits simple statements", () => {
@@ -66,5 +66,61 @@ INSERT INTO t (col) VALUES ('a;b')`;
     expect(result[0]).toContain("test;value");
     expect(result[1]).toContain("DELETE FROM logs");
     expect(result[2]).toContain("a;b");
+  });
+});
+
+// -- Sprint 40: SQL Formatting --
+
+describe("formatSql", () => {
+  it("formats simple SELECT query", () => {
+    const result = formatSql("select id, name from users where id > 10");
+    expect(result).toContain("SELECT");
+    expect(result).toContain("FROM");
+    expect(result).toContain("WHERE");
+    // Should have newlines before major keywords
+    expect(result).toMatch(/SELECT[\s\S]+FROM[\s\S]+WHERE/);
+  });
+
+  it("formats query with JOIN", () => {
+    const result = formatSql(
+      "select u.id, o.total from users u join orders o on u.id = o.user_id where o.total > 100",
+    );
+    expect(result).toContain("JOIN");
+    expect(result).toContain("ON");
+    expect(result).toContain("WHERE");
+  });
+
+  it("formats query with subquery", () => {
+    const result = formatSql(
+      "select * from users where id in (select user_id from orders)",
+    );
+    expect(result).toContain("SELECT");
+    expect(result).toContain("FROM");
+    expect(result).toContain("WHERE");
+    expect(result).toContain("IN");
+  });
+
+  it("uppercase keywords", () => {
+    const result = formatSql(
+      "select id from users where name = 'test' and active = 1",
+    );
+    expect(result).toContain("SELECT");
+    expect(result).toContain("FROM");
+    expect(result).toContain("WHERE");
+    expect(result).toContain("AND");
+  });
+
+  it("handles already formatted SQL", () => {
+    const sql = "SELECT id\nFROM users\nWHERE id > 1";
+    const result = formatSql(sql);
+    // Should still be valid and contain keywords
+    expect(result).toContain("SELECT");
+    expect(result).toContain("FROM");
+    expect(result).toContain("WHERE");
+  });
+
+  it("handles empty string", () => {
+    expect(formatSql("")).toBe("");
+    expect(formatSql("   ")).toBe("");
   });
 });

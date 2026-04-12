@@ -221,4 +221,17 @@ describe("App global shortcuts", () => {
     document.body.removeChild(input);
     window.removeEventListener("commit-changes", handler);
   });
+
+  // -- Sprint 40: SQL Formatting shortcut --
+
+  it("Cmd+I dispatches format-sql event", () => {
+    const handler = vi.fn();
+    window.addEventListener("format-sql", handler);
+    render(<App />);
+
+    fireShortcut("i");
+    expect(handler).toHaveBeenCalled();
+
+    window.removeEventListener("format-sql", handler);
+  });
 });

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import QuickOpen from "./components/QuickOpen";
+import QueryLog from "./components/QueryLog";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 
@@ -145,6 +146,18 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Cmd+I / Ctrl+I — format SQL
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("format-sql"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Navigate-table event — open a table tab from Quick Open
   useEffect(() => {
     const handler = (e: Event) => {
@@ -155,17 +168,15 @@ export default function App() {
           table: string;
         }>
       ).detail;
-      useTabStore
-        .getState()
-        .addTab({
-          type: "table",
-          connectionId,
-          schema,
-          table,
-          title: table,
-          closable: true,
-          subView: "records",
-        });
+      useTabStore.getState().addTab({
+        type: "table",
+        connectionId,
+        schema,
+        table,
+        title: table,
+        closable: true,
+        subView: "records",
+      });
     };
     window.addEventListener("navigate-table", handler);
     return () => window.removeEventListener("navigate-table", handler);
@@ -176,6 +187,7 @@ export default function App() {
       <Sidebar />
       <MainArea />
       <QuickOpen />
+      <QueryLog />
     </div>
   );
 }

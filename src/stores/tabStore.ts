@@ -35,6 +35,31 @@ export interface QueryTab {
 export type Tab = TableTab | QueryTab;
 
 // ---------------------------------------------------------------------------
+// Persistence helpers
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY = "view-table-tabs";
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function persistTabs(tabs: Tab[], activeTabId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    const data = JSON.stringify({ tabs, activeTabId });
+    window.localStorage.setItem(STORAGE_KEY, data);
+  } catch {
+    // localStorage may be unavailable (SSR, quota exceeded, etc.)
+  }
+}
+
+function debouncePersist(tabs: Tab[], activeTabId: string | null): void {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    persistTabs(tabs, activeTabId);
+    persistTimer = null;
+  }, 200);
+}
+
+// ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
@@ -53,6 +78,9 @@ interface TabState {
   addQueryTab: (connectionId: string) => void;
   updateQuerySql: (tabId: string, sql: string) => void;
   updateQueryState: (tabId: string, state: QueryState) => void;
+
+  // Persistence
+  loadPersistedTabs: () => void;
 }
 
 let tabCounter = 0;
@@ -169,4 +197,35 @@ export const useTabStore = create<TabState>((set) => ({
         t.id === tabId && t.type === "query" ? { ...t, queryState } : t,
       ),
     })),
+
+  loadPersistedTabs: () => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw) as {
+        tabs: Tab[];
+        activeTabId: string | null;
+      };
+      // Reset all query states to idle (can't resume running queries)
+      const tabs = data.tabs.map((t) => {
+        if (t.type === "query") {
+          return { ...t, queryState: { status: "idle" as const } };
+        }
+        // Reset preview flag on persisted tabs
+        if (t.type === "table") {
+          return { ...t, isPreview: false };
+        }
+        return t;
+      });
+      set({ tabs, activeTabId: data.activeTabId });
+    } catch {
+      // Corrupted localStorage — start fresh
+      set({ tabs: [], activeTabId: null });
+    }
+  },
 }));
+
+// Persist on every state change via subscribe
+useTabStore.subscribe((state) => {
+  debouncePersist(state.tabs, state.activeTabId);
+});
