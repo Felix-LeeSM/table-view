@@ -10,7 +10,8 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 ## 현재 상태
 
-Phase 1-3 완료. Phase 4(Editing & Polish) 진행 중.
+Phase 1-3 완료. Phase 4(Editing & Polish) 대부분 완료 (Sprint 24-40 PASS).
+미구현 항목: Duplicate Row, 다중 행 선택/복사, 행 컨텍스트 메뉴, 컬럼 드래그 순서 변경, BLOB 뷰어, SQL Uglify, 선택 영역 포맷팅, 스키마 하이라이트, 계층 아이콘 스타일.
 
 ## 문서 목차
 

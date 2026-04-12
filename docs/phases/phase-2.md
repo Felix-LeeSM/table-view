@@ -19,20 +19,20 @@
 
 - [x] 활성 연결의 데이터베이스 목록이 트리로 표시됨
 - [x] 데이터베이스 노드 확장 시 스키마 목록 표시 (PostgreSQL)
-- [ ] 스키마 노드 확장 시 객체 카테고리 표시: Tables, Views, Functions, Procedures
+- [x] 스키마 노드 확장 시 객체 카테고리 표시: Tables, Views, Functions, Procedures
 - [ ] 현재 선택된 데이터베이스/스키마 하이라이트
-- [ ] 우클릭 컨텍스트 메뉴: 새 객체 생성, 삭제, 새로고침
+- [ ] 우클릭 컨텍스트 메뉴: 새 객체 생성, 삭제, 새로고침 *(테이블 Drop/Rename/Structure/Data, 스키마 Refresh 구현됨 — 새 객체 생성 미구현)*
 - [ ] 연결 수준과 스키마/테이블 수준의 시각적 분리
 - [ ] 각 계층 레벨에 서로 다른 아이콘 스타일 적용
-- [ ] 스키마 섹션에 섹션 헤더 또는 구분자 표시
+- [x] 스키마 섹션에 섹션 헤더 또는 구분자 표시
 
 ## F2.2: 테이블 목록
 
 - [x] 선택한 스키마의 모든 테이블이 목록으로 표시됨
 - [x] 테이블 이름 옆에 row count 표시 (옵션)
 - [x] 테이블 클릭 시 데이터 탭 열림
-- [ ] 테이블 우클릭: Structure, Data, Drop, Rename
-- [ ] 테이블 이름으로 검색/필터링 가능
+- [x] 테이블 우클릭: Structure, Data, Drop, Rename
+- [x] 테이블 이름으로 검색/필터링 가능
 
 ## F2.3: 테이블 구조 (Columns)
 
@@ -40,22 +40,22 @@
 - [x] Comment 컬럼 표시 (col_description)
 - [x] Primary Key 컬럼에 키 아이콘 표시
 - [x] Foreign Key 컬럼에 FK 아이콘 및 참조 테이블 정보 표시
-- [ ] 컬럼 추가/수정/삭제 가능 (ALTER TABLE 실행)
-- [ ] 변경 사항 preview 후 실행 (Code Review)
+- [x] 컬럼 추가/수정/삭제 가능 (ALTER TABLE 실행)
+- [x] 변경 사항 preview 후 실행 (Code Review)
 
 ## F2.4: 인덱스 뷰
 
 - [x] 테이블 Structure 탭에 Indexes 서브탭 존재
 - [x] 인덱스 목록: Name, Columns, Type (B-tree, Hash, etc.), Unique
-- [ ] 인덱스 생성/삭제 가능
-- [ ] CREATE INDEX SQL 미리보기
+- [x] 인덱스 생성/삭제 가능
+- [x] CREATE INDEX SQL 미리보기
 
 ## F2.5: 제약조건 뷰
 
 - [x] Constraints 서브탭에서 제약조건 목록 표시
 - [x] 유형별 분류: Primary Key, Foreign Key, Unique, Check (NOT NULL은 Columns 탭 Nullable 컬럼으로 확인)
 - [x] FK의 참조 대상(referenced table/column) 표시
-- [ ] 제약조건 추가/삭제 가능
+- [x] 제약조건 추가/삭제 가능
 
 ## F3.1: 데이터 그리드 뷰
 
