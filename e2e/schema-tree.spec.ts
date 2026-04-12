@@ -26,21 +26,30 @@ async function ensureCategoryExpanded(selector: string) {
 }
 
 /**
- * Right-click an element by dispatching a contextmenu event.
- * tauri-driver does not support WebDriver click with button: 'right',
- * so we use browser.execute to dispatch the event directly.
+ * Right-click an element using W3C WebDriver Actions API.
+ * Falls back to dispatchEvent if actions API is not supported by tauri-driver.
  */
 async function rightClick(el: WebdriverIO.Element) {
-  await browser.execute((elem: HTMLElement) => {
-    const rect = elem.getBoundingClientRect();
-    const event = new MouseEvent("contextmenu", {
-      bubbles: true,
-      cancelable: true,
-      clientX: rect.x + rect.width / 2,
-      clientY: rect.y + rect.height / 2,
-    });
-    elem.dispatchEvent(event);
-  }, el);
+  try {
+    await browser
+      .action("pointer")
+      .move({ origin: el, x: 0, y: 0 })
+      .down({ button: 2 })
+      .up({ button: 2 })
+      .perform();
+  } catch {
+    // Fallback: dispatch a native contextmenu event via execute
+    await browser.execute((elem: HTMLElement) => {
+      const rect = elem.getBoundingClientRect();
+      const event = new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.x + rect.width / 2,
+        clientY: rect.y + rect.height / 2,
+      });
+      elem.dispatchEvent(event);
+    }, el);
+  }
 }
 
 describe("Schema Tree Features", () => {
@@ -150,8 +159,7 @@ describe("Schema Tree Features", () => {
     await firstTable.click();
 
     // After clicking, the table should be selected (highlighted)
-    const parentRow = await firstTable.parentElement();
-    const classes = await parentRow.getAttribute("class");
+    const classes = await firstTable.getAttribute("class");
     expect(classes).toContain("accent");
   });
 
@@ -262,7 +270,7 @@ describe("Schema Tree Features", () => {
     // Wait for the empty state
     await browser.pause(300);
 
-    const noMatchLabel = await $("span=No matching tables");
+    const noMatchLabel = await $("*=No matching tables");
     await noMatchLabel.waitForDisplayed({ timeout: 3000 });
     expect(await noMatchLabel.isDisplayed()).toBe(true);
 
