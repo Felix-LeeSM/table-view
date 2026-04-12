@@ -454,4 +454,14 @@ describe("Sidebar", () => {
     expect(container).toHaveStyle({ width: "300px" });
     unmount();
   });
+
+  // -----------------------------------------------------------------------
+  // select-none on root element
+  // -----------------------------------------------------------------------
+  it("has select-none class on root container to prevent text selection", () => {
+    render(<Sidebar />);
+
+    const container = getSidebarContainer();
+    expect(container.className).toContain("select-none");
+  });
 });

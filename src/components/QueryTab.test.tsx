@@ -69,7 +69,10 @@ describe("QueryTab", () => {
 
     expect(screen.getByTestId("mock-editor")).toBeInTheDocument();
     expect(screen.getByTestId("mock-result")).toBeInTheDocument();
-    expect(screen.getByTestId("mock-editor")).toHaveAttribute("data-sql", "SELECT 1");
+    expect(screen.getByTestId("mock-editor")).toHaveAttribute(
+      "data-sql",
+      "SELECT 1",
+    );
   });
 
   it("executes query and transitions to completed", async () => {
@@ -85,7 +88,11 @@ describe("QueryTab", () => {
     });
 
     // Should call executeQuery with correct args
-    expect(mockExecuteQuery).toHaveBeenCalledWith("conn1", "SELECT 1", expect.any(String));
+    expect(mockExecuteQuery).toHaveBeenCalledWith(
+      "conn1",
+      "SELECT 1",
+      expect.any(String),
+    );
 
     // Wait for async completion
     await waitFor(() => {
@@ -148,7 +155,9 @@ describe("QueryTab", () => {
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent("cancel-query", { detail: { queryId: "query-1-1234" } }),
+        new CustomEvent("cancel-query", {
+          detail: { queryId: "query-1-1234" },
+        }),
       );
     });
 
@@ -164,7 +173,9 @@ describe("QueryTab", () => {
 
     act(() => {
       window.dispatchEvent(
-        new CustomEvent("cancel-query", { detail: { queryId: "different-id" } }),
+        new CustomEvent("cancel-query", {
+          detail: { queryId: "different-id" },
+        }),
       );
     });
 
@@ -180,5 +191,59 @@ describe("QueryTab", () => {
     const outerContainer = editorWrapper.parentElement!;
     const resizeHandle = outerContainer.querySelector(".cursor-row-resize");
     expect(resizeHandle).toBeInTheDocument();
+  });
+
+  // ── Sprint 25: Query Editor Toolbar ──
+
+  it("renders Run button when idle", () => {
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+
+    const runBtn = screen.getByLabelText("Run query");
+    expect(runBtn).toBeInTheDocument();
+    expect(runBtn).not.toBeDisabled();
+  });
+
+  it("renders Cancel button when running", () => {
+    const tab = makeQueryTab({
+      queryState: { status: "running", queryId: "query-1-1234" },
+    });
+    render(<QueryTab tab={tab} />);
+
+    const cancelBtn = screen.getByLabelText("Cancel query");
+    expect(cancelBtn).toBeInTheDocument();
+  });
+
+  it("disables Run button when sql is empty", () => {
+    const tab = makeQueryTab({ sql: "" });
+    render(<QueryTab tab={tab} />);
+
+    const runBtn = screen.getByLabelText("Run query");
+    expect(runBtn).toBeDisabled();
+  });
+
+  it("shows shortcut hint on Run button", () => {
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+
+    expect(screen.getByText("\u2318\u23CE")).toBeInTheDocument();
+  });
+
+  it("Run button click triggers handleExecute", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const runBtn = screen.getByLabelText("Run query");
+    await act(async () => {
+      runBtn.click();
+    });
+
+    expect(mockExecuteQuery).toHaveBeenCalledWith(
+      "conn1",
+      "SELECT 1",
+      expect.any(String),
+    );
   });
 });

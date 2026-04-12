@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Filter, Key } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Loader2,
+  Filter,
+  Key,
+} from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import FilterBar from "./FilterBar";
 import type {
@@ -15,7 +23,8 @@ interface DataGridProps {
   schema: string;
 }
 
-const PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 100;
+const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 const MIN_COL_WIDTH = 60;
 
 export default function DataGrid({
@@ -26,6 +35,7 @@ export default function DataGrid({
   const queryTableData = useSchemaStore((s) => s.queryTableData);
   const [data, setData] = useState<TableData | null>(null);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sorts, setSorts] = useState<SortInfo[]>([]);
@@ -169,7 +179,7 @@ export default function DataGrid({
         table,
         schema,
         page,
-        PAGE_SIZE,
+        pageSize,
         orderBy,
         activeRaw ? undefined : activeFilters, // raw_where takes precedence
         activeRaw,
@@ -190,6 +200,7 @@ export default function DataGrid({
     table,
     schema,
     page,
+    pageSize,
     sorts,
     appliedFilters,
     appliedRawSql,
@@ -207,7 +218,7 @@ export default function DataGrid({
     fetchData();
   }, [fetchData]);
 
-  const totalPages = data ? Math.ceil(data.total_count / PAGE_SIZE) : 0;
+  const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
   const handleSort = (columnName: string, shiftKey: boolean = false) => {
     if (shiftKey) {
@@ -309,6 +320,14 @@ export default function DataGrid({
               <button
                 className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
                 disabled={page <= 1}
+                onClick={() => setPage(1)}
+                aria-label="First page"
+              >
+                <ChevronsLeft size={14} />
+              </button>
+              <button
+                className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+                disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Previous page"
               >
@@ -317,6 +336,24 @@ export default function DataGrid({
               <span className="text-xs text-(--color-text-muted)">
                 {page} / {totalPages}
               </span>
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                className="w-10 rounded border border-(--color-border) bg-(--color-bg-primary) px-1 py-0.5 text-xs text-(--color-text-primary) text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                aria-label="Jump to page"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const val = parseInt(
+                      (e.target as HTMLInputElement).value,
+                      10,
+                    );
+                    if (val >= 1 && val <= totalPages) {
+                      setPage(val);
+                    }
+                  }
+                }}
+              />
               <button
                 className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
                 disabled={page >= totalPages}
@@ -325,7 +362,32 @@ export default function DataGrid({
               >
                 <ChevronRight size={14} />
               </button>
+              <button
+                className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                aria-label="Last page"
+              >
+                <ChevronsRight size={14} />
+              </button>
             </div>
+          )}
+          {data && (
+            <select
+              className="rounded border border-(--color-border) bg-(--color-bg-primary) px-1 py-0.5 text-xs text-(--color-text-primary)"
+              value={pageSize}
+              aria-label="Page size"
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
           )}
         </div>
       </div>

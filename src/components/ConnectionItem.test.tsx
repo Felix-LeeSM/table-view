@@ -97,7 +97,9 @@ describe("ConnectionItem", () => {
   // -----------------------------------------------------------------------
   it("renders the connection name", () => {
     setStoreState({});
-    render(<ConnectionItem connection={makeConnection({ name: "My Prod DB" })} />);
+    render(
+      <ConnectionItem connection={makeConnection({ name: "My Prod DB" })} />,
+    );
 
     expect(screen.getByText("My Prod DB")).toBeInTheDocument();
   });
@@ -353,8 +355,12 @@ describe("ConnectionItem", () => {
     const deleteBtn = screen.getByText("Delete");
     fireEvent.click(deleteBtn);
 
-    expect(screen.getByRole("dialog", { name: /delete connection/i })).toBeInTheDocument();
-    expect(screen.getByText(/Are you sure you want to delete/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: /delete connection/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Are you sure you want to delete/),
+    ).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -514,9 +520,22 @@ describe("ConnectionItem", () => {
   it("shows db_type as title on the badge", () => {
     setStoreState({});
 
-    render(<ConnectionItem connection={makeConnection({ db_type: "mysql" })} />);
+    render(
+      <ConnectionItem connection={makeConnection({ db_type: "mysql" })} />,
+    );
 
     const badge = screen.getByText("MY");
     expect(badge).toHaveAttribute("title", "mysql");
+  });
+
+  // -----------------------------------------------------------------------
+  // select-none on root element
+  // -----------------------------------------------------------------------
+  it("has select-none class on root element to prevent text selection", () => {
+    setStoreState({});
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const item = screen.getByRole("button", { name: /Test DB/ });
+    expect(item.className).toContain("select-none");
   });
 });

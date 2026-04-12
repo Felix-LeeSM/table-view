@@ -376,7 +376,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     : [];
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col select-none">
       {/* Connection header with Database icon */}
       <div className="flex items-center gap-1.5 border-b border-(--color-border) px-3 py-1.5">
         <Database size={13} className="shrink-0 text-(--color-accent)" />

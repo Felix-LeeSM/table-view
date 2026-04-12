@@ -20,7 +20,7 @@ export default function ConnectionList() {
 
   return (
     <div
-      className={`py-1 ${dropActive ? "bg-(--color-accent)/5" : ""}`}
+      className={`py-1 select-none ${dropActive ? "bg-(--color-accent)/5" : ""}`}
       onDragOver={(e) => {
         if (draggedConnectionId) {
           e.preventDefault();

@@ -128,7 +128,10 @@ describe("ConnectionGroup", () => {
     render(
       <ConnectionGroup
         group={makeGroup()}
-        connections={[makeConnection(), makeConnection({ id: "conn-2", name: "DB 2" })]}
+        connections={[
+          makeConnection(),
+          makeConnection({ id: "conn-2", name: "DB 2" }),
+        ]}
       />,
     );
 
@@ -136,9 +139,7 @@ describe("ConnectionGroup", () => {
   });
 
   it("renders zero count when no connections", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     expect(screen.getByText("(0)")).toBeInTheDocument();
   });
@@ -240,9 +241,7 @@ describe("ConnectionGroup", () => {
   // AC-05: Right-click shows context menu
   // -----------------------------------------------------------------------
   it("shows context menu on right-click", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
@@ -256,9 +255,7 @@ describe("ConnectionGroup", () => {
   // AC-06: Rename menu item triggers inline rename input
   // -----------------------------------------------------------------------
   it("shows rename input when Rename menu item is clicked", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
@@ -276,7 +273,10 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   it("calls updateGroup with new name on Enter key", async () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     // Trigger rename via context menu
@@ -300,7 +300,10 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   it("cancels rename on Escape key without calling updateGroup", () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -321,7 +324,10 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   it("does not call updateGroup when rename value is empty", async () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -339,7 +345,10 @@ describe("ConnectionGroup", () => {
 
   it("does not call updateGroup when rename value is the same as current name", async () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -359,9 +368,7 @@ describe("ConnectionGroup", () => {
   // AC-10: Delete Group calls removeGroup
   // -----------------------------------------------------------------------
   it("calls removeGroup when Delete Group menu item is clicked", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
@@ -378,9 +385,7 @@ describe("ConnectionGroup", () => {
   it("calls moveConnectionToGroup on drop when draggedConnectionId is set", async () => {
     _draggedConnectionId = "conn-42";
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.drop(header, {
@@ -395,9 +400,7 @@ describe("ConnectionGroup", () => {
   it("uses dataTransfer fallback when draggedConnectionId is null", async () => {
     _draggedConnectionId = null;
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.drop(header, {
@@ -405,16 +408,17 @@ describe("ConnectionGroup", () => {
     });
 
     await waitFor(() => {
-      expect(mockMoveConnectionToGroup).toHaveBeenCalledWith("fallback-conn-id", "g1");
+      expect(mockMoveConnectionToGroup).toHaveBeenCalledWith(
+        "fallback-conn-id",
+        "g1",
+      );
     });
   });
 
   it("does not call moveConnectionToGroup when no connection id is available", () => {
     _draggedConnectionId = null;
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.drop(header, {
@@ -430,9 +434,7 @@ describe("ConnectionGroup", () => {
   it("sets drop active styling on dragOver when draggedConnectionId is set", () => {
     _draggedConnectionId = "conn-1";
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     const classBefore = header.className;
@@ -448,9 +450,7 @@ describe("ConnectionGroup", () => {
   it("does not set drop active when no connection is being dragged", () => {
     _draggedConnectionId = null;
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     const classBefore = header.className;
@@ -465,9 +465,7 @@ describe("ConnectionGroup", () => {
   it("resets drop active styling on dragLeave", () => {
     _draggedConnectionId = "conn-1";
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
 
@@ -483,9 +481,7 @@ describe("ConnectionGroup", () => {
   it("resets drop active styling on drop", async () => {
     _draggedConnectionId = "conn-1";
 
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
 
@@ -543,9 +539,7 @@ describe("ConnectionGroup", () => {
   // Click during renaming does not toggle collapse
   // -----------------------------------------------------------------------
   it("does not toggle collapse when clicking during rename", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
 
@@ -592,7 +586,10 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   it("calls updateGroup on blur with new name", async () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -612,7 +609,10 @@ describe("ConnectionGroup", () => {
 
   it("does not call updateGroup on blur with same name", async () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -649,9 +649,7 @@ describe("ConnectionGroup", () => {
   // Rename input stopPropagation on click
   // -----------------------------------------------------------------------
   it("stops click propagation on rename input so collapse is not toggled", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
@@ -669,9 +667,7 @@ describe("ConnectionGroup", () => {
   // Context menu closes via onClose callback
   // -----------------------------------------------------------------------
   it("closes context menu when onClose is called", () => {
-    render(
-      <ConnectionGroup group={makeGroup()} connections={[]} />,
-    );
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
     fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
@@ -687,7 +683,10 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   it("trims whitespace from rename value before submitting", async () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -726,7 +725,10 @@ describe("ConnectionGroup", () => {
   // -----------------------------------------------------------------------
   it("pre-fills rename input with current group name", () => {
     render(
-      <ConnectionGroup group={makeGroup({ name: "Production" })} connections={[]} />,
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
     );
 
     const header = screen.getByRole("button");
@@ -735,5 +737,18 @@ describe("ConnectionGroup", () => {
 
     const input = screen.getByRole("textbox") as HTMLInputElement;
     expect(input.value).toBe("Production");
+  });
+
+  // -----------------------------------------------------------------------
+  // select-none on root element
+  // -----------------------------------------------------------------------
+  it("has select-none class on root element to prevent text selection", () => {
+    const { container } = render(
+      <ConnectionGroup group={makeGroup()} connections={[]} />,
+    );
+
+    const rootDiv = container.firstElementChild as HTMLElement;
+    expect(rootDiv).toBeTruthy();
+    expect(rootDiv.className).toContain("select-none");
   });
 });

@@ -1,5 +1,6 @@
 import { X, Table2, Code2, Plus } from "lucide-react";
 import { useTabStore } from "../stores/tabStore";
+import { useConnectionStore } from "../stores/connectionStore";
 
 export default function TabBar() {
   const tabs = useTabStore((s) => s.tabs);
@@ -7,6 +8,7 @@ export default function TabBar() {
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const removeTab = useTabStore((s) => s.removeTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const connections = useConnectionStore((s) => s.connections);
 
   // Find the connectionId from the active tab to use for new query tabs.
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -16,7 +18,7 @@ export default function TabBar() {
 
   return (
     <div
-      className="flex items-center border-b border-(--color-border) bg-(--color-bg-secondary)"
+      className="flex items-center border-b border-(--color-border) bg-(--color-bg-secondary) select-none"
       role="tablist"
       aria-label="Open connections"
     >
@@ -45,6 +47,15 @@ export default function TabBar() {
             }
           }}
         >
+          <span
+            className="inline-block h-2 w-2 shrink-0 rounded-full"
+            style={{
+              backgroundColor:
+                connections.find((c) => c.id === tab.connectionId)?.color ??
+                "var(--color-accent)",
+            }}
+            aria-label="Connection color"
+          />
           {tab.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-(--color-text-muted)" />
           ) : (

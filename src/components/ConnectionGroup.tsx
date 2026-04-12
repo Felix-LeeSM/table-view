@@ -69,7 +69,7 @@ export default function ConnectionGroup({
   return (
     <>
       <div
-        className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-(--color-text-muted) hover:bg-(--color-bg-tertiary) ${
+        className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-(--color-text-muted) hover:bg-(--color-bg-tertiary) select-none ${
           dropActive
             ? "bg-(--color-accent)/10 outline outline-1 outline-(--color-accent)"
             : ""

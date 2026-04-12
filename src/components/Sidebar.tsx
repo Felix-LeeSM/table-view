@@ -88,7 +88,7 @@ export default function Sidebar() {
     <>
       <div
         ref={sidebarRef}
-        className="relative flex h-full shrink-0 flex-col border-r border-(--color-border) bg-(--color-bg-sidebar)"
+        className="relative flex h-full shrink-0 flex-col select-none border-r border-(--color-border) bg-(--color-bg-sidebar)"
         style={{ width: sidebarWidth }}
       >
         {/* Header */}

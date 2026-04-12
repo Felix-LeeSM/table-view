@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import TabBar from "./TabBar";
 import { useTabStore, type TableTab } from "../stores/tabStore";
+import { useConnectionStore } from "../stores/connectionStore";
+import type { ConnectionConfig } from "../types/connection";
 
 function addTableTab(overrides: Partial<Omit<TableTab, "id">> = {}) {
   useTabStore.getState().addTab({
@@ -26,6 +28,13 @@ function fireAuxClick(element: Element, button: number) {
 describe("TabBar", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
+    useConnectionStore.setState({
+      connections: [],
+      groups: [],
+      activeStatuses: {},
+      loading: false,
+      error: null,
+    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
   });
 
   it("renders nothing when no tabs", () => {
@@ -131,5 +140,79 @@ describe("TabBar", () => {
     // Second tab should be the query tab
     const queryTab = tabs[1]!;
     expect(queryTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("has select-none class on root element to prevent text selection", () => {
+    addTableTab({ title: "Users", table: "users" });
+
+    render(<TabBar />);
+    const tablist = screen.getByRole("tablist");
+    expect(tablist.className).toContain("select-none");
+  });
+
+  // ── Sprint 28: Tab Connection Color Display ──
+
+  function makeConnection(
+    overrides: Partial<ConnectionConfig> = {},
+  ): ConnectionConfig {
+    return {
+      id: "conn1",
+      name: "Test DB",
+      db_type: "postgresql",
+      host: "localhost",
+      port: 5432,
+      user: "postgres",
+      password: "",
+      database: "testdb",
+      group_id: null,
+      color: null,
+      ...overrides,
+    };
+  }
+
+  it("renders color dot for tab with connection color", () => {
+    useConnectionStore.setState({
+      connections: [makeConnection({ id: "conn1", color: "red" })],
+    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    render(<TabBar />);
+
+    const dot = screen.getByLabelText("Connection color");
+    expect(dot).toBeInTheDocument();
+    expect((dot as HTMLElement).style.backgroundColor).toBe("red");
+  });
+
+  it("renders default color dot when no color specified", () => {
+    useConnectionStore.setState({
+      connections: [makeConnection({ id: "conn1", color: null })],
+    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    render(<TabBar />);
+
+    const dot = screen.getByLabelText("Connection color");
+    expect(dot).toBeInTheDocument();
+    expect((dot as HTMLElement).style.backgroundColor).toBe(
+      "var(--color-accent)",
+    );
+  });
+
+  it("renders different colors for different connections", () => {
+    useConnectionStore.setState({
+      connections: [
+        makeConnection({ id: "conn1", color: "red" }),
+        makeConnection({ id: "conn2", color: "blue" }),
+      ],
+    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
+    render(<TabBar />);
+
+    const dots = screen.getAllByLabelText("Connection color");
+    expect(dots).toHaveLength(2);
+    expect((dots[0] as HTMLElement).style.backgroundColor).toBe("red");
+    expect((dots[1] as HTMLElement).style.backgroundColor).toBe("blue");
   });
 });

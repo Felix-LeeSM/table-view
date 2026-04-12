@@ -110,7 +110,7 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
     <>
       <div
         ref={dragRef}
-        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--color-bg-tertiary) ${
+        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--color-bg-tertiary) select-none ${
           dragging ? "opacity-40" : ""
         }`}
         role="button"

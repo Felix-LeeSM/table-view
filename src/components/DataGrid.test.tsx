@@ -686,4 +686,111 @@ describe("DataGrid", () => {
     expect(screen.queryByText("STALE")).not.toBeInTheDocument();
     expect(screen.getByText("FRESH")).toBeInTheDocument();
   });
+
+  // ── Sprint 26: Pagination Enhancement ──
+
+  // 29. Page size selector renders
+  it("renders page size selector", async () => {
+    const bigData: TableData = { ...MOCK_DATA, total_count: 250 };
+    mockQueryTableData.mockResolvedValue(bigData);
+    renderDataGrid();
+    await screen.findByText("250 rows");
+
+    const select = screen.getByLabelText("Page size") as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe("100");
+  });
+
+  // 30. Changes page size when selector changes
+  it("changes page size when selector changes", async () => {
+    const bigData: TableData = { ...MOCK_DATA, total_count: 500 };
+    mockQueryTableData.mockResolvedValue(bigData);
+    renderDataGrid();
+    await screen.findByText("500 rows");
+
+    const select = screen.getByLabelText("Page size");
+    await act(async () => {
+      fireEvent.change(select, { target: { value: "300" } });
+    });
+
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[4]).toBe(300);
+  });
+
+  // 31. Renders first/last page buttons
+  it("renders first and last page buttons", async () => {
+    const bigData: TableData = { ...MOCK_DATA, total_count: 500 };
+    mockQueryTableData.mockResolvedValue(bigData);
+    renderDataGrid();
+    await screen.findByText("500 rows");
+
+    expect(screen.getByLabelText("First page")).toBeInTheDocument();
+    expect(screen.getByLabelText("Last page")).toBeInTheDocument();
+  });
+
+  // 32. First page button goes to page 1
+  it("first page button goes to page 1", async () => {
+    const bigData: TableData = { ...MOCK_DATA, total_count: 500, page: 3 };
+    mockQueryTableData.mockResolvedValue(bigData);
+    renderDataGrid();
+    await screen.findByText("500 rows");
+
+    // Go to page 3 first
+    const nextBtn = screen.getByLabelText("Next page");
+    await act(async () => {
+      fireEvent.click(nextBtn);
+    });
+    await act(async () => {
+      fireEvent.click(nextBtn);
+    });
+
+    // Click first page
+    const firstBtn = screen.getByLabelText("First page");
+    await act(async () => {
+      fireEvent.click(firstBtn);
+    });
+
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[3]).toBe(1);
+  });
+
+  // 33. Last page button goes to last page
+  it("last page button goes to last page", async () => {
+    const bigData: TableData = { ...MOCK_DATA, total_count: 500 };
+    mockQueryTableData.mockResolvedValue(bigData);
+    renderDataGrid();
+    await screen.findByText("500 rows");
+
+    const lastBtn = screen.getByLabelText("Last page");
+    await act(async () => {
+      fireEvent.click(lastBtn);
+    });
+
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    // totalPages = ceil(500/100) = 5
+    expect(lastCall[3]).toBe(5);
+  });
+
+  // 34. Jump to page input works
+  it("jump to page input works", async () => {
+    const bigData: TableData = { ...MOCK_DATA, total_count: 500 };
+    mockQueryTableData.mockResolvedValue(bigData);
+    renderDataGrid();
+    await screen.findByText("500 rows");
+
+    const jumpInput = screen.getByLabelText("Jump to page") as HTMLInputElement;
+    expect(jumpInput).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.change(jumpInput, { target: { value: "3" } });
+      fireEvent.keyDown(jumpInput, { key: "Enter" });
+    });
+
+    const calls = mockQueryTableData.mock.calls;
+    const lastCall = calls[calls.length - 1] as unknown[];
+    expect(lastCall[3]).toBe(3);
+  });
 });

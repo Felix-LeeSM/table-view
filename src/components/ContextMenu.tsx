@@ -68,7 +68,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       style={style}
       role="menu"
       aria-label="Context menu"
-      className={measured ? "" : "invisible"}
+      className={measured ? "select-none" : "select-none invisible"}
     >
       <div className="min-w-[160px] rounded-md border border-(--color-border) bg-(--color-bg-secondary) py-1 shadow-lg">
         {items.map((item) => (

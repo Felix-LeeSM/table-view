@@ -1904,4 +1904,17 @@ describe("SchemaTree", () => {
     ) as HTMLInputElement;
     expect(searchInput.placeholder).toBe("Filter tables...");
   });
+
+  // -----------------------------------------------------------------------
+  // select-none on root element
+  // -----------------------------------------------------------------------
+  it("has select-none class on root element to prevent text selection", async () => {
+    const { container } = await act(async () => {
+      return render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const rootDiv = container.firstElementChild as HTMLElement;
+    expect(rootDiv).toBeTruthy();
+    expect(rootDiv.className).toContain("select-none");
+  });
 });

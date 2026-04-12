@@ -58,7 +58,11 @@ function makeConnection(
   };
 }
 
-function makeGroup(overrides: { id: string; name: string; collapsed?: boolean }) {
+function makeGroup(overrides: {
+  id: string;
+  name: string;
+  collapsed?: boolean;
+}) {
   return {
     id: overrides.id,
     name: overrides.name,
@@ -69,7 +73,12 @@ function makeGroup(overrides: { id: string; name: string; collapsed?: boolean })
 
 function setStoreState(overrides: {
   connections?: ConnectionConfig[];
-  groups?: { id: string; name: string; color: string | null; collapsed: boolean }[];
+  groups?: {
+    id: string;
+    name: string;
+    color: string | null;
+    collapsed: boolean;
+  }[];
   moveConnectionToGroup?: () => Promise<void>;
 }) {
   useConnectionStore.setState({
@@ -133,8 +142,12 @@ describe("ConnectionList", () => {
 
     const { container } = render(<ConnectionList />);
 
-    expect(container.querySelectorAll("[data-testid='connection-item']")).toHaveLength(0);
-    expect(container.querySelectorAll("[data-testid='connection-group']")).toHaveLength(0);
+    expect(
+      container.querySelectorAll("[data-testid='connection-item']"),
+    ).toHaveLength(0);
+    expect(
+      container.querySelectorAll("[data-testid='connection-group']"),
+    ).toHaveLength(0);
   });
 
   // -----------------------------------------------------------------------
@@ -208,9 +221,7 @@ describe("ConnectionList", () => {
 
   it("does not show drag hint when groups exist", () => {
     setStoreState({
-      connections: [
-        makeConnection({ id: "c1", name: "DB", group_id: "g1" }),
-      ],
+      connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
       groups: [makeGroup({ id: "g1", name: "Group 1" })],
     });
 
@@ -387,5 +398,17 @@ describe("ConnectionList", () => {
     // dragLeave should reset
     fireEvent.dragLeave(dropZone);
     expect(dropZone.className).not.toBe(activeClass);
+  });
+
+  // -----------------------------------------------------------------------
+  // select-none on root element
+  // -----------------------------------------------------------------------
+  it("has select-none class on root element to prevent text selection", () => {
+    setStoreState({ connections: [], groups: [] });
+
+    const { container } = render(<ConnectionList />);
+    const rootDiv = container.firstElementChild as HTMLElement;
+    expect(rootDiv).toBeTruthy();
+    expect(rootDiv.className).toContain("select-none");
   });
 });

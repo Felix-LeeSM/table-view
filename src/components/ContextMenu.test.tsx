@@ -23,7 +23,9 @@ describe("ContextMenu", () => {
 
     expect(screen.getByRole("menu")).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
   });
 
   it("calls onClick and onClose when a menu item is clicked", () => {
@@ -67,10 +69,16 @@ describe("ContextMenu", () => {
 
   it("renders items with icons", () => {
     const itemsWithIcon: ContextMenuItem[] = [
-      { label: "Edit", icon: <span data-testid="icon">ICON</span>, onClick: vi.fn() },
+      {
+        label: "Edit",
+        icon: <span data-testid="icon">ICON</span>,
+        onClick: vi.fn(),
+      },
     ];
 
-    render(<ContextMenu x={100} y={100} items={itemsWithIcon} onClose={onClose} />);
+    render(
+      <ContextMenu x={100} y={100} items={itemsWithIcon} onClose={onClose} />,
+    );
 
     expect(screen.getByTestId("icon")).toBeInTheDocument();
   });
@@ -86,5 +94,12 @@ describe("ContextMenu", () => {
     onClose.mockClear();
     fireEvent.mouseDown(document.body);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("has select-none class on outer div to prevent text selection", () => {
+    render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
+
+    const menu = screen.getByRole("menu");
+    expect(menu.className).toContain("select-none");
   });
 });
