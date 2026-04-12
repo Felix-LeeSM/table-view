@@ -14,11 +14,33 @@ async function ensureSchemaExpanded(selector: string) {
 }
 
 /**
- * Right-click an element.
- * Uses click({ button: 'right' }) which has wider driver support than contextClick().
+ * Expand a category node only if it is not already expanded.
+ */
+async function ensureCategoryExpanded(selector: string) {
+  const cat = await $(selector);
+  await cat.waitForDisplayed({ timeout: 5000 });
+  const expanded = await cat.getAttribute("aria-expanded");
+  if (expanded !== "true") {
+    await cat.click();
+  }
+}
+
+/**
+ * Right-click an element by dispatching a contextmenu event.
+ * tauri-driver does not support WebDriver click with button: 'right',
+ * so we use browser.execute to dispatch the event directly.
  */
 async function rightClick(el: WebdriverIO.Element) {
-  await el.click({ button: "right" });
+  await browser.execute((elem: HTMLElement) => {
+    const rect = elem.getBoundingClientRect();
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.x + rect.width / 2,
+      clientY: rect.y + rect.height / 2,
+    });
+    elem.dispatchEvent(event);
+  }, el);
 }
 
 describe("Schema Tree Features", () => {
@@ -112,10 +134,7 @@ describe("Schema Tree Features", () => {
 
   it("displays tables under the Tables category", async () => {
     await ensureSchemaExpanded('[aria-label="public schema"]');
-
-    const tablesCategory = await $('[aria-label="Tables in public"]');
-    await tablesCategory.waitForDisplayed({ timeout: 5000 });
-    await tablesCategory.click();
+    await ensureCategoryExpanded('[aria-label="Tables in public"]');
 
     // Look for any table item within the schema
     const tableItems = await $$('[aria-label$=" table"]');
@@ -124,10 +143,7 @@ describe("Schema Tree Features", () => {
 
   it("highlights a table when selected", async () => {
     await ensureSchemaExpanded('[aria-label="public schema"]');
-
-    const tablesCategory = await $('[aria-label="Tables in public"]');
-    await tablesCategory.waitForDisplayed({ timeout: 5000 });
-    await tablesCategory.click();
+    await ensureCategoryExpanded('[aria-label="Tables in public"]');
 
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
@@ -141,10 +157,7 @@ describe("Schema Tree Features", () => {
 
   it("shows context menu on table right-click", async () => {
     await ensureSchemaExpanded('[aria-label="public schema"]');
-
-    const tablesCategory = await $('[aria-label="Tables in public"]');
-    await tablesCategory.waitForDisplayed({ timeout: 5000 });
-    await tablesCategory.click();
+    await ensureCategoryExpanded('[aria-label="Tables in public"]');
 
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
@@ -171,10 +184,7 @@ describe("Schema Tree Features", () => {
 
   it("opens table data tab from context menu", async () => {
     await ensureSchemaExpanded('[aria-label="public schema"]');
-
-    const tablesCategory = await $('[aria-label="Tables in public"]');
-    await tablesCategory.waitForDisplayed({ timeout: 5000 });
-    await tablesCategory.click();
+    await ensureCategoryExpanded('[aria-label="Tables in public"]');
 
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
@@ -205,11 +215,7 @@ describe("Schema Tree Features", () => {
 
   it("renders search input in Tables category and filters tables", async () => {
     await ensureSchemaExpanded('[aria-label="public schema"]');
-
-    // Tables category should be expanded by default
-    const tablesCategory = await $('[aria-label="Tables in public"]');
-    await tablesCategory.waitForDisplayed({ timeout: 5000 });
-    await tablesCategory.click();
+    await ensureCategoryExpanded('[aria-label="Tables in public"]');
 
     // Search input should be visible when there are tables
     const searchInput = await $('[aria-label="Filter tables in public"]');
@@ -245,11 +251,7 @@ describe("Schema Tree Features", () => {
 
   it("shows No matching tables when filter matches nothing", async () => {
     await ensureSchemaExpanded('[aria-label="public schema"]');
-
-    // Tables category should be expanded by default
-    const tablesCategory = await $('[aria-label="Tables in public"]');
-    await tablesCategory.waitForDisplayed({ timeout: 5000 });
-    await tablesCategory.click();
+    await ensureCategoryExpanded('[aria-label="Tables in public"]');
 
     const searchInput = await $('[aria-label="Filter tables in public"]');
     await searchInput.waitForDisplayed({ timeout: 5000 });
