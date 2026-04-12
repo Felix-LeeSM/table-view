@@ -69,6 +69,17 @@ vi.mock("../lib/tauri", () => ({
       executed_query: "SELECT * FROM public.users LIMIT 50 OFFSET 0",
     }),
   ),
+  executeQuery: vi.fn(() =>
+    Promise.resolve({
+      columns: [{ name: "id", data_type: "integer" }],
+      rows: [[1]],
+      total_count: 1,
+      execution_time_ms: 3,
+      query_type: "select",
+    }),
+  ),
+  dropTable: vi.fn(() => Promise.resolve()),
+  renameTable: vi.fn(() => Promise.resolve()),
 }));
 
 describe("schemaStore", () => {
@@ -256,5 +267,181 @@ describe("schemaStore", () => {
     expect(state.tables["conn1:private"]).toBeUndefined();
     // Other connection should be unaffected
     expect(state.tables["conn2:public"]).toHaveLength(1);
+  });
+
+  it("delegates executeQuery", async () => {
+    const { executeQuery } = await import("../lib/tauri");
+    (executeQuery as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      columns: [{ name: "id", data_type: "integer" }],
+      rows: [[1]],
+      total_count: 1,
+      execution_time_ms: 3,
+      query_type: "select",
+    });
+
+    const result = await useSchemaStore
+      .getState()
+      .executeQuery("conn1", "SELECT 1", "q1");
+
+    expect(executeQuery).toHaveBeenCalledWith("conn1", "SELECT 1", "q1");
+    expect(result.total_count).toBe(1);
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it("dropTable refreshes table list on success", async () => {
+    const { dropTable, listTables } = await import("../lib/tauri");
+
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [
+          { name: "users", schema: "public", row_count: 10 },
+          { name: "orders", schema: "public", row_count: 5 },
+        ],
+      },
+    });
+
+    (listTables as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { name: "orders", schema: "public", row_count: 5 },
+    ]);
+
+    await useSchemaStore.getState().dropTable("conn1", "users", "public");
+
+    expect(dropTable).toHaveBeenCalledWith("conn1", "users", "public");
+    expect(listTables).toHaveBeenCalledWith("conn1", "public");
+    const state = useSchemaStore.getState();
+    expect(state.tables["conn1:public"]).toHaveLength(1);
+    expect(state.tables["conn1:public"]![0]!.name).toBe("orders");
+  });
+
+  it("dropTable removes table optimistically when refresh fails", async () => {
+    const { dropTable, listTables } = await import("../lib/tauri");
+
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [
+          { name: "users", schema: "public", row_count: 10 },
+          { name: "orders", schema: "public", row_count: 5 },
+        ],
+      },
+    });
+
+    (listTables as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Refresh failed"),
+    );
+
+    await useSchemaStore.getState().dropTable("conn1", "users", "public");
+
+    expect(dropTable).toHaveBeenCalledWith("conn1", "users", "public");
+    const state = useSchemaStore.getState();
+    // Optimistically removed from cache
+    expect(state.tables["conn1:public"]).toHaveLength(1);
+    expect(state.tables["conn1:public"]![0]!.name).toBe("orders");
+  });
+
+  it("dropTable handles missing cache key gracefully", async () => {
+    const { dropTable, listTables } = await import("../lib/tauri");
+
+    useSchemaStore.setState({ tables: {} });
+
+    (listTables as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Refresh failed"),
+    );
+
+    await useSchemaStore.getState().dropTable("conn1", "users", "public");
+
+    expect(dropTable).toHaveBeenCalledWith("conn1", "users", "public");
+    const state = useSchemaStore.getState();
+    // No crash, table list stays empty for this key
+    expect(state.tables["conn1:public"]).toHaveLength(0);
+  });
+
+  it("renameTable refreshes table list on success", async () => {
+    const { renameTable, listTables } = await import("../lib/tauri");
+
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 10 }],
+      },
+    });
+
+    (listTables as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { name: "people", schema: "public", row_count: 10 },
+    ]);
+
+    await useSchemaStore
+      .getState()
+      .renameTable("conn1", "users", "public", "people");
+
+    expect(renameTable).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "people",
+    );
+    expect(listTables).toHaveBeenCalledWith("conn1", "public");
+    const state = useSchemaStore.getState();
+    expect(state.tables["conn1:public"]![0]!.name).toBe("people");
+  });
+
+  it("renameTable updates table name optimistically when refresh fails", async () => {
+    const { renameTable, listTables } = await import("../lib/tauri");
+
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 10 }],
+      },
+    });
+
+    (listTables as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Refresh failed"),
+    );
+
+    await useSchemaStore
+      .getState()
+      .renameTable("conn1", "users", "public", "people");
+
+    expect(renameTable).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "people",
+    );
+    const state = useSchemaStore.getState();
+    expect(state.tables["conn1:public"]![0]!.name).toBe("people");
+  });
+
+  it("renameTable handles missing cache key gracefully", async () => {
+    const { renameTable, listTables } = await import("../lib/tauri");
+
+    useSchemaStore.setState({ tables: {} });
+
+    (listTables as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Refresh failed"),
+    );
+
+    await useSchemaStore
+      .getState()
+      .renameTable("conn1", "users", "public", "people");
+
+    expect(renameTable).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "people",
+    );
+    const state = useSchemaStore.getState();
+    // No crash, empty array mapped to empty array
+    expect(state.tables["conn1:public"]).toHaveLength(0);
+  });
+
+  it("handles loadTables error", async () => {
+    const { listTables } = await import("../lib/tauri");
+    (listTables as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Schema not found"),
+    );
+
+    await useSchemaStore.getState().loadTables("conn1", "missing");
+    const state = useSchemaStore.getState();
+    expect(state.error).toContain("Schema not found");
   });
 });

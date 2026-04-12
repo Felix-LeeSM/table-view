@@ -191,4 +191,161 @@ describe("QueryLog", () => {
 
     expect(screen.queryByTestId("query-log-panel")).not.toBeInTheDocument();
   });
+
+  it("closes panel when X button is clicked", () => {
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    expect(screen.getByTestId("query-log-panel")).toBeInTheDocument();
+
+    const closeBtn = screen.getByTestId("icon-x").closest("button")!;
+    act(() => {
+      closeBtn.click();
+    });
+
+    expect(screen.queryByTestId("query-log-panel")).not.toBeInTheDocument();
+  });
+
+  it("shows empty message when no queries executed yet", () => {
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    expect(screen.getByText("No queries executed yet")).toBeInTheDocument();
+  });
+
+  it("shows no matching queries message when search has no results", async () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT * FROM users",
+          executedAt: now,
+          duration: 100,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    const searchInput = screen.getByPlaceholderText("Search queries...");
+
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "nonexistent" } });
+    });
+
+    expect(screen.getByText("No matching queries")).toBeInTheDocument();
+  });
+
+  it("truncates long SQL strings", () => {
+    const longSql = "A".repeat(100);
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: longSql,
+          executedAt: now,
+          duration: 100,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    // The displayed text should be truncated (80 chars + "...")
+    const truncatedText = "A".repeat(80) + "...";
+    expect(screen.getByText(truncatedText)).toBeInTheDocument();
+  });
+
+  it("displays relative time for entries", () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT 1",
+          executedAt: now - 10000, // 10 seconds ago
+          duration: 50,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    // 10s ago should show "10s ago"
+    expect(screen.getByText("10s ago")).toBeInTheDocument();
+  });
+
+  it("displays duration for entries", () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT 1",
+          executedAt: now,
+          duration: 250,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    expect(screen.getByText("250ms")).toBeInTheDocument();
+  });
+
+  it("shows just now for very recent entries", () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT 1",
+          executedAt: now - 1000, // 1 second ago
+          duration: 50,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    expect(screen.getByText("just now")).toBeInTheDocument();
+  });
 });

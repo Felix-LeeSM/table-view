@@ -201,4 +201,160 @@ describe("connectionStore", () => {
     expect(useConnectionStore.getState().groups).toHaveLength(0);
     expect(useConnectionStore.getState().connections[0]!.group_id).toBeNull();
   });
+
+  it("disconnects before removing a connected connection", async () => {
+    const { disconnectFromDatabase, deleteConnection } =
+      await import("../lib/tauri");
+
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "c1",
+          name: "DB",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          password: "",
+          database: "db",
+          group_id: null,
+          color: null,
+        },
+      ],
+      activeStatuses: { c1: { type: "connected" } },
+    });
+
+    await useConnectionStore.getState().removeConnection("c1");
+
+    // Should have disconnected first, then deleted
+    expect(disconnectFromDatabase).toHaveBeenCalledWith("c1");
+    expect(deleteConnection).toHaveBeenCalledWith("c1");
+    expect(useConnectionStore.getState().connections).toHaveLength(0);
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toBeUndefined();
+  });
+
+  it("does not disconnect when removing a non-connected connection", async () => {
+    const { disconnectFromDatabase } = await import("../lib/tauri");
+
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "c1",
+          name: "DB",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          password: "",
+          database: "db",
+          group_id: null,
+          color: null,
+        },
+      ],
+      activeStatuses: { c1: { type: "disconnected" } },
+    });
+
+    await useConnectionStore.getState().removeConnection("c1");
+
+    // Should NOT have called disconnect for a disconnected connection
+    expect(disconnectFromDatabase).not.toHaveBeenCalled();
+  });
+
+  it("handles loadConnections error", async () => {
+    const { listConnections } = await import("../lib/tauri");
+    (listConnections as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Network error"),
+    );
+
+    await useConnectionStore.getState().loadConnections();
+    const state = useConnectionStore.getState();
+    expect(state.error).toContain("Network error");
+    expect(state.loading).toBe(false);
+  });
+
+  it("handles loadGroups error", async () => {
+    const { listGroups } = await import("../lib/tauri");
+    (listGroups as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Server error"),
+    );
+
+    await useConnectionStore.getState().loadGroups();
+    const state = useConnectionStore.getState();
+    expect(state.error).toContain("Server error");
+  });
+
+  it("delegates testConnection", async () => {
+    const { testConnection } = await import("../lib/tauri");
+    const config = {
+      id: "c1",
+      name: "DB",
+      db_type: "postgresql" as const,
+      host: "localhost",
+      port: 5432,
+      user: "postgres",
+      password: "",
+      database: "db",
+      group_id: null,
+      color: null,
+    };
+
+    const result = await useConnectionStore.getState().testConnection(config);
+
+    expect(testConnection).toHaveBeenCalledWith(config);
+    expect(result).toBe("Connection successful");
+  });
+
+  it("adds group and returns saved group with id", async () => {
+    const group = {
+      id: "",
+      name: "NewGroup",
+      color: null,
+      collapsed: false,
+    };
+
+    const saved = await useConnectionStore.getState().addGroup(group);
+    expect(saved.id).toBe("new-gid");
+    expect(useConnectionStore.getState().groups).toHaveLength(1);
+    expect(useConnectionStore.getState().groups[0]!.name).toBe("NewGroup");
+  });
+
+  it("updates group", async () => {
+    useConnectionStore.setState({
+      groups: [{ id: "g1", name: "Old", color: null, collapsed: false }],
+    });
+
+    await useConnectionStore.getState().updateGroup({
+      id: "g1",
+      name: "Updated",
+      color: "#ff0000",
+      collapsed: true,
+    });
+
+    expect(useConnectionStore.getState().groups[0]!.name).toBe("Updated");
+    expect(useConnectionStore.getState().groups[0]!.color).toBe("#ff0000");
+    expect(useConnectionStore.getState().groups[0]!.collapsed).toBe(true);
+  });
+
+  it("initEventListeners registers connection-status-changed listener", async () => {
+    const { listen } = await import("@tauri-apps/api/event");
+
+    await useConnectionStore.getState().initEventListeners();
+
+    expect(listen).toHaveBeenCalledWith(
+      "connection-status-changed",
+      expect.any(Function),
+    );
+
+    // Simulate event callback to exercise the handler branch
+    const handler = (listen as ReturnType<typeof vi.fn>).mock
+      .calls[0]![1] as (event: {
+      payload: { id: string; status: { type: string } };
+    }) => void;
+
+    handler({ payload: { id: "c1", status: { type: "connected" } } });
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "connected",
+    });
+  });
 });

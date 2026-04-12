@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import FilterBar from "./FilterBar";
 import type { ColumnInfo, FilterCondition } from "../types/schema";
@@ -235,5 +235,171 @@ describe("FilterBar", () => {
     await user.click(screen.getByText("Apply"));
     expect(screen.getByText(/must not start with DROP/)).toBeInTheDocument();
     expect(onApply).not.toHaveBeenCalled();
+  });
+
+  // 14. Close button calls onClose
+  it("calls onClose when close button is clicked", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderFilterBar({ onClose });
+
+    await user.click(screen.getByLabelText("Close filter bar"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // 15. Filter mode toggle switches to raw mode
+  it("calls onFilterModeChange when Raw SQL button is clicked", async () => {
+    const user = userEvent.setup();
+    const onFilterModeChange = vi.fn();
+    renderFilterBar({ onFilterModeChange });
+
+    await user.click(screen.getByText("Raw SQL"));
+    expect(onFilterModeChange).toHaveBeenCalledWith("raw");
+  });
+
+  // 16. Filter mode toggle switches to structured mode
+  it("calls onFilterModeChange when Structured button is clicked", async () => {
+    const user = userEvent.setup();
+    const onFilterModeChange = vi.fn();
+    renderFilterBar({ filterMode: "raw", onFilterModeChange });
+
+    await user.click(screen.getByText("Structured"));
+    expect(onFilterModeChange).toHaveBeenCalledWith("structured");
+  });
+
+  // 17. Value input Enter triggers onApply
+  it("calls onApply when Enter is pressed in value input", async () => {
+    const onApply = vi.fn();
+    const filterWithValue: FilterCondition = {
+      column: "id",
+      operator: "Eq",
+      value: "42",
+      id: "test-uuid-1",
+    };
+    renderFilterBar({ filters: [filterWithValue], onApply });
+
+    const input = screen.getByPlaceholderText("Value...");
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(onApply).toHaveBeenCalledTimes(1);
+  });
+
+  // 18. Column selector change updates filter
+  it("updates column when column select is changed", async () => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    renderFilterBar({ onFiltersChange });
+
+    const selects = screen.getAllByRole("combobox");
+    const columnSelect = selects[0]!;
+    await user.selectOptions(columnSelect, "name");
+
+    expect(onFiltersChange).toHaveBeenCalledTimes(1);
+    const updated = onFiltersChange.mock.calls[0]![0] as FilterCondition[];
+    expect(updated[0]!.column).toBe("name");
+  });
+
+  // 19. Switching from IS NULL to Eq sets value to empty string
+  it("sets value to empty string when switching from IS NULL to Eq", async () => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    const isNullFilter: FilterCondition = {
+      column: "id",
+      operator: "IsNull",
+      value: null,
+      id: "test-uuid-1",
+    };
+    renderFilterBar({ filters: [isNullFilter], onFiltersChange });
+
+    const selects = screen.getAllByRole("combobox");
+    const operatorSelect = selects[1]!;
+    await user.selectOptions(operatorSelect, "Eq");
+
+    expect(onFiltersChange).toHaveBeenCalledTimes(1);
+    const updated = onFiltersChange.mock.calls[0]![0] as FilterCondition[];
+    expect(updated[0]!.operator).toBe("Eq");
+    expect(updated[0]!.value).toBe("");
+  });
+
+  // 20. Value input change updates filter
+  it("updates value when typing in value input", async () => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    renderFilterBar({ onFiltersChange });
+
+    const input = screen.getByPlaceholderText("Value...");
+    await user.type(input, "4");
+
+    // Should have been called for each character typed
+    const lastCall = onFiltersChange.mock.calls[
+      onFiltersChange.mock.calls.length - 1
+    ]![0] as FilterCondition[];
+    expect(lastCall[0]!.value).toBe("4");
+  });
+
+  // 21. Raw SQL Clear button resets state
+  it("clears raw SQL and calls onClearAll when Clear is clicked in raw mode", async () => {
+    const user = userEvent.setup();
+    const onRawSqlChange = vi.fn();
+    const onClearAll = vi.fn();
+    renderFilterBar({
+      filterMode: "raw",
+      rawSql: "some text",
+      onRawSqlChange,
+      onClearAll,
+    });
+
+    await user.click(screen.getByText("Clear"));
+
+    expect(onRawSqlChange).toHaveBeenCalledWith("");
+    expect(onClearAll).toHaveBeenCalledTimes(1);
+  });
+
+  // 22. Raw SQL input change calls onRawSqlChange
+  it("calls onRawSqlChange when typing in raw SQL input", async () => {
+    const user = userEvent.setup();
+    const onRawSqlChange = vi.fn();
+    renderFilterBar({ filterMode: "raw", rawSql: "", onRawSqlChange });
+
+    const input = screen.getByPlaceholderText(/e\.g\./);
+    await user.type(input, "a");
+
+    expect(onRawSqlChange).toHaveBeenCalled();
+  });
+
+  // 23. No Clear All or Apply when filters are empty in structured mode
+  it("hides Clear All and Apply buttons when no filters exist", () => {
+    // Don't provide empty filters with columns to avoid auto-creation effect
+    renderFilterBar({ filters: [], columns: [] });
+    expect(screen.queryByText("Clear All")).not.toBeInTheDocument();
+    // The structured Apply button (separate from raw mode)
+    // With 0 filters, structured mode Apply should be hidden
+    const applyButtons = screen.queryAllByText("Apply");
+    expect(applyButtons).toHaveLength(0);
+  });
+
+  // 24. Value input clears to null when emptied
+  it("sets value to null when value input is cleared", async () => {
+    const user = userEvent.setup();
+    const onFiltersChange = vi.fn();
+    const filterWithValue: FilterCondition = {
+      column: "id",
+      operator: "Eq",
+      value: "abc",
+      id: "test-uuid-1",
+    };
+    renderFilterBar({ filters: [filterWithValue], onFiltersChange });
+
+    const input = screen.getByPlaceholderText("Value...");
+    // Clear the input by triple-clicking and typing empty
+    await user.tripleClick(input);
+    await user.keyboard("{Backspace}");
+
+    const lastCall = onFiltersChange.mock.calls[
+      onFiltersChange.mock.calls.length - 1
+    ]![0] as FilterCondition[];
+    expect(lastCall[0]!.value).toBeNull();
   });
 });

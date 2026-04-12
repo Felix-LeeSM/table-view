@@ -44,6 +44,18 @@ vi.mock("../hooks/useSqlAutocomplete", () => ({
   useSqlAutocomplete: () => ({}),
 }));
 
+vi.mock("../lib/sqlUtils", () => ({
+  splitSqlStatements: (sql: string) => {
+    // Simple split by semicolons for testing
+    const parts = sql
+      .split(";")
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+    return parts.length > 0 ? parts : [];
+  },
+  formatSql: (sql: string) => sql.toUpperCase(),
+}));
+
 function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
   return {
     type: "query",
@@ -451,5 +463,217 @@ describe("QueryTab", () => {
     });
 
     expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+  });
+
+  // ── Format SQL event ──
+
+  it("formats SQL on format-sql event when tab is active", async () => {
+    const tab = makeQueryTab({ sql: "select * from users" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("format-sql"));
+    });
+
+    // Check that the SQL was formatted (our mock uppercases it)
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("SELECT * FROM USERS");
+    }
+  });
+
+  it("ignores format-sql event when tab is not active", () => {
+    const tab = makeQueryTab({ sql: "select * from users" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "other-tab" });
+    render(<QueryTab tab={tab} />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("format-sql"));
+    });
+
+    // SQL should remain unchanged
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("select * from users");
+    }
+  });
+
+  it("ignores format-sql event when SQL is empty", () => {
+    const tab = makeQueryTab({ sql: "   " });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("format-sql"));
+    });
+
+    // SQL should remain unchanged (whitespace-only)
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("   ");
+    }
+  });
+
+  // ── Cancel button ──
+
+  it("calls cancelQuery when Cancel button is clicked during running state", async () => {
+    mockCancelQuery.mockResolvedValueOnce("Cancelled");
+    const tab = makeQueryTab({
+      queryState: { status: "running", queryId: "query-1-1234" },
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const cancelBtn = screen.getByLabelText("Cancel query");
+    await act(async () => {
+      cancelBtn.click();
+    });
+
+    expect(mockCancelQuery).toHaveBeenCalledWith("query-1-1234");
+  });
+
+  it("handles cancelQuery failure gracefully", async () => {
+    mockCancelQuery.mockRejectedValueOnce(new Error("Already completed"));
+    const tab = makeQueryTab({
+      queryState: { status: "running", queryId: "query-1-1234" },
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const cancelBtn = screen.getByLabelText("Cancel query");
+    // Should not throw
+    await act(async () => {
+      cancelBtn.click();
+    });
+
+    expect(mockCancelQuery).toHaveBeenCalledWith("query-1-1234");
+  });
+
+  it("handles cancel-query event when cancelQuery rejects", async () => {
+    mockCancelQuery.mockRejectedValueOnce(new Error("Already done"));
+    const tab = makeQueryTab({
+      queryState: { status: "running", queryId: "query-1-1234" },
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    // Should not throw even though cancelQuery rejects
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("cancel-query", {
+          detail: { queryId: "query-1-1234" },
+        }),
+      );
+    });
+
+    expect(mockCancelQuery).toHaveBeenCalledWith("query-1-1234");
+  });
+
+  // ── Multi-statement history recording ──
+
+  it("records error history when some multi-statements fail", async () => {
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockRejectedValueOnce(new Error("Table not found"));
+
+    const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const history = useQueryHistoryStore.getState().entries;
+      expect(history).toHaveLength(1);
+      expect(history[0]!.status).toBe("error");
+      expect(history[0]!.sql).toBe("SELECT 1; DROP TABLE nope");
+    });
+  });
+
+  it("records success history for all-success multi-statements", async () => {
+    const secondResult: QueryResult = {
+      columns: [{ name: "n", data_type: "integer" }],
+      rows: [[42]],
+      total_count: 1,
+      execution_time_ms: 2,
+      query_type: "select",
+    };
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockResolvedValueOnce(secondResult);
+
+    const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const history = useQueryHistoryStore.getState().entries;
+      expect(history).toHaveLength(1);
+      expect(history[0]!.status).toBe("success");
+      expect(history[0]!.sql).toBe("SELECT 1; SELECT 2");
+    });
+  });
+
+  // ── Error with non-Error object ──
+
+  it("handles non-Error rejection in single statement", async () => {
+    mockExecuteQuery.mockRejectedValueOnce("string error");
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      if (updatedTab && updatedTab.type === "query") {
+        expect(updatedTab.queryState.status).toBe("error");
+        if (updatedTab.queryState.status === "error") {
+          expect(updatedTab.queryState.error).toBe("string error");
+        }
+      }
+    });
+  });
+
+  it("handles non-Error rejection in multi-statement execution", async () => {
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockRejectedValueOnce("raw error");
+
+    const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      if (updatedTab && updatedTab.type === "query") {
+        expect(updatedTab.queryState.status).toBe("error");
+        if (updatedTab.queryState.status === "error") {
+          expect(updatedTab.queryState.error).toContain("raw error");
+        }
+      }
+    });
   });
 });
