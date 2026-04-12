@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import TabBar from "./TabBar";
 import { useTabStore, type TableTab } from "../stores/tabStore";
 
@@ -17,7 +17,10 @@ function addTableTab(overrides: Partial<Omit<TableTab, "id">> = {}) {
 }
 
 function fireAuxClick(element: Element, button: number) {
-  fireEvent(element, new MouseEvent("auxclick", { bubbles: true, button, cancelable: true }));
+  fireEvent(
+    element,
+    new MouseEvent("auxclick", { bubbles: true, button, cancelable: true }),
+  );
 }
 
 describe("TabBar", () => {
@@ -78,7 +81,9 @@ describe("TabBar", () => {
 
     // Click the first tab (second tab is currently active)
     const usersTab = screen.getByText("Users").closest("[role='tab']")!;
-    fireEvent.click(usersTab);
+    act(() => {
+      fireEvent.click(usersTab);
+    });
 
     expect(useTabStore.getState().activeTabId).toBe(firstTabId);
   });
@@ -88,7 +93,9 @@ describe("TabBar", () => {
 
     render(<TabBar />);
     const closeBtn = screen.getByLabelText("Close Users");
-    fireEvent.click(closeBtn);
+    act(() => {
+      fireEvent.click(closeBtn);
+    });
 
     expect(useTabStore.getState().tabs).toHaveLength(0);
   });
@@ -105,7 +112,9 @@ describe("TabBar", () => {
 
     render(<TabBar />);
     const addBtn = screen.getByLabelText("New Query Tab");
-    fireEvent.click(addBtn);
+    act(() => {
+      fireEvent.click(addBtn);
+    });
 
     const state = useTabStore.getState();
     expect(state.tabs).toHaveLength(2);

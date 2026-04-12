@@ -1,18 +1,48 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import MainArea from "./MainArea";
-import { useTabStore, type TableTab, type QueryTab as QueryTabType } from "../stores/tabStore";
+import {
+  useTabStore,
+  type TableTab,
+  type QueryTab as QueryTabType,
+} from "../stores/tabStore";
 
 // Mock child components to isolate MainArea routing logic
 vi.mock("./DataGrid", () => ({
-  default: ({ connectionId, table, schema }: { connectionId: string; table: string; schema: string }) => (
-    <div data-testid="mock-datagrid" data-connection={connectionId} data-table={table} data-schema={schema} />
+  default: ({
+    connectionId,
+    table,
+    schema,
+  }: {
+    connectionId: string;
+    table: string;
+    schema: string;
+  }) => (
+    <div
+      data-testid="mock-datagrid"
+      data-connection={connectionId}
+      data-table={table}
+      data-schema={schema}
+    />
   ),
 }));
 
 vi.mock("./StructurePanel", () => ({
-  default: ({ connectionId, table, schema }: { connectionId: string; table: string; schema: string }) => (
-    <div data-testid="mock-structure" data-connection={connectionId} data-table={table} data-schema={schema} />
+  default: ({
+    connectionId,
+    table,
+    schema,
+  }: {
+    connectionId: string;
+    table: string;
+    schema: string;
+  }) => (
+    <div
+      data-testid="mock-structure"
+      data-connection={connectionId}
+      data-table={table}
+      data-schema={schema}
+    />
   ),
 }));
 
@@ -59,7 +89,9 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     expect(screen.getByText("View Table")).toBeInTheDocument();
-    expect(screen.getByText("Select a connection from the sidebar to get started")).toBeInTheDocument();
+    expect(
+      screen.getByText("Select a connection from the sidebar to get started"),
+    ).toBeInTheDocument();
   });
 
   it("shows database icon in empty state", () => {
@@ -88,9 +120,18 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     expect(screen.getByTestId("mock-datagrid")).toBeInTheDocument();
-    expect(screen.getByTestId("mock-datagrid")).toHaveAttribute("data-table", "users");
-    expect(screen.getByTestId("mock-datagrid")).toHaveAttribute("data-schema", "public");
-    expect(screen.getByTestId("mock-datagrid")).toHaveAttribute("data-connection", "conn1");
+    expect(screen.getByTestId("mock-datagrid")).toHaveAttribute(
+      "data-table",
+      "users",
+    );
+    expect(screen.getByTestId("mock-datagrid")).toHaveAttribute(
+      "data-schema",
+      "public",
+    );
+    expect(screen.getByTestId("mock-datagrid")).toHaveAttribute(
+      "data-connection",
+      "conn1",
+    );
   });
 
   it("renders StructurePanel for a table tab with structure subView", () => {
@@ -100,7 +141,10 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     expect(screen.getByTestId("mock-structure")).toBeInTheDocument();
-    expect(screen.getByTestId("mock-structure")).toHaveAttribute("data-table", "users");
+    expect(screen.getByTestId("mock-structure")).toHaveAttribute(
+      "data-table",
+      "users",
+    );
   });
 
   it("renders sub-tab bar with Records and Structure tabs for table tab", () => {
@@ -151,7 +195,9 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     const structureTab = screen.getByRole("tab", { name: "Structure" });
-    fireEvent.click(structureTab);
+    act(() => {
+      fireEvent.click(structureTab);
+    });
 
     const state = useTabStore.getState();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
@@ -168,7 +214,9 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     const recordsTab = screen.getByRole("tab", { name: "Records" });
-    fireEvent.click(recordsTab);
+    act(() => {
+      fireEvent.click(recordsTab);
+    });
 
     const state = useTabStore.getState();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
@@ -185,7 +233,9 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     const recordsTab = screen.getByRole("tab", { name: "Records" });
-    fireEvent.keyDown(recordsTab, { key: "ArrowRight" });
+    act(() => {
+      fireEvent.keyDown(recordsTab, { key: "ArrowRight" });
+    });
 
     const state = useTabStore.getState();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
@@ -201,7 +251,9 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     const structureTab = screen.getByRole("tab", { name: "Structure" });
-    fireEvent.keyDown(structureTab, { key: "ArrowLeft" });
+    act(() => {
+      fireEvent.keyDown(structureTab, { key: "ArrowLeft" });
+    });
 
     const state = useTabStore.getState();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);

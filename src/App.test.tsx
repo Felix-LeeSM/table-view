@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
-import { fireEvent } from "@testing-library/react";
+import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
 import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
 
@@ -63,15 +62,17 @@ function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
 }
 
 function fireShortcut(key: string, metaKey = true) {
-  fireEvent(
-    document,
-    new KeyboardEvent("keydown", {
-      key,
-      metaKey,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
+  act(() => {
+    fireEvent(
+      document,
+      new KeyboardEvent("keydown", {
+        key,
+        metaKey,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
 }
 
 describe("App global shortcuts", () => {
