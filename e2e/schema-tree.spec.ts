@@ -95,4 +95,74 @@ describe("Schema Tree Features", () => {
     // Close menu
     await browser.keys("Escape");
   });
+
+  it("renders search input in Tables category and filters tables", async () => {
+    // Expand the public schema
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.waitForDisplayed({ timeout: 15000 });
+    await publicSchema.click();
+
+    // Tables category should be expanded by default
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+
+    // Search input should be visible when there are tables
+    const searchInput = await $('[aria-label="Filter tables in public"]');
+    await searchInput.waitForDisplayed({ timeout: 5000 });
+    expect(await searchInput.isDisplayed()).toBe(true);
+
+    // Get initial table count
+    const tablesBeforeFilter = await $$('[aria-label$=" table"]');
+    expect(tablesBeforeFilter.length).toBeGreaterThan(0);
+
+    // Type a filter
+    await searchInput.setValue("user");
+
+    // Wait for filtering to apply
+    await browser.pause(300);
+
+    // Some tables should be filtered out
+    const tablesAfterFilter = await $$('[aria-label$=" table"]');
+    expect(tablesAfterFilter.length).toBeLessThan(tablesBeforeFilter.length);
+
+    // Clear the filter using the X button
+    const clearButton = await $('[aria-label="Clear table filter in public"]');
+    await clearButton.waitForDisplayed({ timeout: 3000 });
+    await clearButton.click();
+
+    // Wait for clearing
+    await browser.pause(300);
+
+    // All tables should be visible again
+    const tablesAfterClear = await $$('[aria-label$=" table"]');
+    expect(tablesAfterClear.length).toBe(tablesBeforeFilter.length);
+  });
+
+  it("shows No matching tables when filter matches nothing", async () => {
+    // Expand the public schema
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.waitForDisplayed({ timeout: 15000 });
+    await publicSchema.click();
+
+    // Tables category should be expanded by default
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+
+    const searchInput = await $('[aria-label="Filter tables in public"]');
+    await searchInput.waitForDisplayed({ timeout: 5000 });
+
+    // Type something that won't match any table
+    await searchInput.setValue("zzz_nonexistent_table_xyz");
+
+    // Wait for the empty state
+    await browser.pause(300);
+
+    const noMatchLabel = await $("span=No matching tables");
+    await noMatchLabel.waitForDisplayed({ timeout: 3000 });
+    expect(await noMatchLabel.isDisplayed()).toBe(true);
+
+    // Clear the filter
+    const clearButton = await $('[aria-label="Clear table filter in public"]');
+    await clearButton.click();
+  });
 });

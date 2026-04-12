@@ -13,6 +13,8 @@ import {
   Columns3,
   Trash2,
   Pencil,
+  X,
+  Search,
 } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
@@ -133,6 +135,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const [isOperating, setIsOperating] = useState(false);
   const autoLoadedRef = useRef<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
 
   // Auto-load schemas on mount or when connectionId changes
   useEffect(() => {
@@ -497,8 +500,21 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                     const isCatSelected = selectedNodeId === categoryId;
 
                     // For "tables" category, show actual tables. Others are empty.
-                    const items: TableInfo[] =
+                    const unfilteredItems: TableInfo[] =
                       cat.key === "tables" ? schemaTables : [];
+                    const searchValue =
+                      cat.key === "tables"
+                        ? (tableSearch[schema.name] ?? "")
+                        : "";
+                    const searchLower = searchValue.toLowerCase();
+                    const items: TableInfo[] =
+                      cat.key === "tables"
+                        ? searchLower
+                          ? unfilteredItems.filter((t) =>
+                              t.name.toLowerCase().includes(searchLower),
+                            )
+                          : unfilteredItems
+                        : [];
 
                     return (
                       <div key={cat.key}>
@@ -541,9 +557,49 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                         {/* Category content */}
                         {catExpanded && (
                           <div>
+                            {/* Search input for Tables category */}
+                            {cat.key === "tables" &&
+                              unfilteredItems.length > 0 && (
+                                <div className="flex items-center gap-1 px-8 py-0.5">
+                                  <Search
+                                    size={11}
+                                    className="shrink-0 text-(--color-text-muted)"
+                                  />
+                                  <input
+                                    type="text"
+                                    className="min-w-0 flex-1 rounded border border-(--color-border) bg-(--color-bg-primary) px-1.5 py-0.5 text-[11px] text-(--color-text-primary) placeholder:text-(--color-text-muted) focus:border-(--color-accent) focus:outline-none"
+                                    placeholder="Filter tables..."
+                                    value={searchValue}
+                                    onChange={(e) =>
+                                      setTableSearch((prev) => ({
+                                        ...prev,
+                                        [schema.name]: e.target.value,
+                                      }))
+                                    }
+                                    aria-label={`Filter tables in ${schema.name}`}
+                                  />
+                                  {searchValue && (
+                                    <button
+                                      className="shrink-0 rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+                                      onClick={() =>
+                                        setTableSearch((prev) => {
+                                          const next = { ...prev };
+                                          delete next[schema.name];
+                                          return next;
+                                        })
+                                      }
+                                      aria-label={`Clear table filter in ${schema.name}`}
+                                    >
+                                      <X size={11} />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             {items.length === 0 ? (
                               <div className="px-10 py-1 text-[11px] italic text-(--color-text-muted)">
-                                {cat.emptyLabel}
+                                {cat.key === "tables" && searchValue
+                                  ? "No matching tables"
+                                  : cat.emptyLabel}
                               </div>
                             ) : (
                               items.map((item) => {
