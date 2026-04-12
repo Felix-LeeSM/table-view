@@ -1,6 +1,9 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
-use crate::models::{FilterCondition, TableData, TableInfo};
+use crate::models::{
+    AddConstraintRequest, AlterTableRequest, CreateIndexRequest, DropConstraintRequest,
+    DropIndexRequest, FilterCondition, SchemaChangeResult, TableData, TableInfo,
+};
 
 #[tauri::command]
 pub async fn list_schemas(
@@ -126,4 +129,64 @@ pub async fn rename_table(
         .get(&connection_id)
         .ok_or_else(|| AppError::Connection("Not connected".into()))?;
     adapter.rename_table(&table, &schema, &new_name).await
+}
+
+#[tauri::command]
+pub async fn alter_table(
+    state: tauri::State<'_, AppState>,
+    request: AlterTableRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.alter_table(&request).await
+}
+
+#[tauri::command]
+pub async fn create_index(
+    state: tauri::State<'_, AppState>,
+    request: CreateIndexRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.create_index(&request).await
+}
+
+#[tauri::command]
+pub async fn drop_index(
+    state: tauri::State<'_, AppState>,
+    request: DropIndexRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.drop_index(&request).await
+}
+
+#[tauri::command]
+pub async fn add_constraint(
+    state: tauri::State<'_, AppState>,
+    request: AddConstraintRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.add_constraint(&request).await
+}
+
+#[tauri::command]
+pub async fn drop_constraint(
+    state: tauri::State<'_, AppState>,
+    request: DropConstraintRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.drop_constraint(&request).await
 }

@@ -7,8 +7,10 @@ use tracing::info;
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, ConnectionConfig, ConstraintInfo, FilterCondition, FilterOperator, IndexInfo,
-    QueryColumn, QueryResult, QueryType, SchemaInfo, TableData, TableInfo,
+    AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnInfo, ConnectionConfig,
+    ConstraintDefinition, ConstraintInfo, CreateIndexRequest, DropConstraintRequest,
+    DropIndexRequest, FilterCondition, FilterOperator, IndexInfo, QueryColumn, QueryResult,
+    QueryType, SchemaChangeResult, SchemaInfo, TableData, TableInfo,
 };
 
 /// Strip leading SQL comments and whitespace so that query type detection
@@ -37,6 +39,42 @@ fn strip_leading_comments(sql: &str) -> &str {
         }
     }
     s
+}
+
+/// Validate a SQL identifier (table name, column name, index name, constraint name)
+/// to prevent SQL injection. Only allows `[a-zA-Z_][a-zA-Z0-9_]*`.
+fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(AppError::Validation(format!("{} must not be empty", label)));
+    }
+    let mut chars = trimmed.chars();
+    let first = chars.next().expect("checked non-empty");
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return Err(AppError::Validation(format!(
+            "{} must start with a letter or underscore",
+            label
+        )));
+    }
+    for ch in chars {
+        if !ch.is_ascii_alphanumeric() && ch != '_' {
+            return Err(AppError::Validation(format!(
+                "{} must contain only alphanumeric characters and underscores",
+                label
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Quote a SQL identifier with double quotes, escaping internal double quotes.
+fn quote_identifier(name: &str) -> String {
+    format!("\"{}\"", name.replace('"', "\"\""))
+}
+
+/// Build a qualified table reference: `"schema"."table"`.
+fn qualified_table(schema: &str, table: &str) -> String {
+    format!("{}.{}", quote_identifier(schema), quote_identifier(table))
 }
 
 /// Maps PostgreSQL `data_type` strings (from `information_schema.columns`) to
@@ -835,6 +873,342 @@ impl PostgresAdapter {
         Ok(())
     }
 
+    // ── Schema change operations ──────────────────────────────────────
+
+    /// ALTER TABLE: add, modify, or drop columns in batch.
+    /// If `preview_only` is true, returns the generated SQL without executing.
+    pub async fn alter_table(
+        &self,
+        req: &AlterTableRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+
+        if req.changes.is_empty() {
+            return Err(AppError::Validation(
+                "At least one column change is required".into(),
+            ));
+        }
+
+        // Validate all column names in changes
+        for change in &req.changes {
+            match change {
+                ColumnChange::Add { name, .. } => validate_identifier(name, "Column name")?,
+                ColumnChange::Modify { name, .. } => validate_identifier(name, "Column name")?,
+                ColumnChange::Drop { name } => validate_identifier(name, "Column name")?,
+            }
+        }
+
+        let qualified = qualified_table(&req.schema, &req.table);
+
+        let mut parts: Vec<String> = Vec::new();
+
+        for change in &req.changes {
+            match change {
+                ColumnChange::Add {
+                    name,
+                    data_type,
+                    nullable,
+                    default_value,
+                } => {
+                    let mut sql = format!("ADD COLUMN {} {}", quote_identifier(name), data_type);
+                    if !nullable {
+                        sql.push_str(" NOT NULL");
+                    }
+                    if let Some(default) = default_value {
+                        sql.push_str(&format!(" DEFAULT {}", default));
+                    }
+                    parts.push(sql);
+                }
+                ColumnChange::Modify {
+                    name,
+                    new_data_type,
+                    new_nullable,
+                    new_default_value,
+                } => {
+                    let quoted_name = quote_identifier(name);
+                    if let Some(dt) = new_data_type {
+                        parts.push(format!("ALTER COLUMN {} TYPE {}", quoted_name, dt));
+                    }
+                    if let Some(nullable) = new_nullable {
+                        if *nullable {
+                            parts.push(format!("ALTER COLUMN {} DROP NOT NULL", quoted_name));
+                        } else {
+                            parts.push(format!("ALTER COLUMN {} SET NOT NULL", quoted_name));
+                        }
+                    }
+                    if let Some(default) = new_default_value {
+                        parts.push(format!(
+                            "ALTER COLUMN {} SET DEFAULT {}",
+                            quoted_name, default
+                        ));
+                    }
+                }
+                ColumnChange::Drop { name } => {
+                    parts.push(format!("DROP COLUMN {}", quote_identifier(name)));
+                }
+            }
+        }
+
+        let sql = format!("ALTER TABLE {} {}", qualified, parts.join(", "));
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!("Altered table {}.{}", req.schema, req.table);
+        Ok(SchemaChangeResult { sql })
+    }
+
+    /// Create an index on a table.
+    /// Supports index types: btree, hash, gist, gin, brin.
+    /// If `preview_only` is true, returns the generated SQL without executing.
+    pub async fn create_index(
+        &self,
+        req: &CreateIndexRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+        validate_identifier(&req.index_name, "Index name")?;
+
+        if req.columns.is_empty() {
+            return Err(AppError::Validation(
+                "At least one column is required for an index".into(),
+            ));
+        }
+
+        for col in &req.columns {
+            validate_identifier(col, "Index column name")?;
+        }
+
+        // Validate index type
+        let valid_index_types = ["btree", "hash", "gist", "gin", "brin"];
+        let index_type_lower = req.index_type.to_lowercase();
+        if !valid_index_types.contains(&index_type_lower.as_str()) {
+            return Err(AppError::Validation(format!(
+                "Index type must be one of: {}",
+                valid_index_types.join(", ")
+            )));
+        }
+
+        let qualified = qualified_table(&req.schema, &req.table);
+        let columns: Vec<String> = req.columns.iter().map(|c| quote_identifier(c)).collect();
+
+        let unique = if req.is_unique { "UNIQUE " } else { "" };
+        let sql = format!(
+            "CREATE {}INDEX {} ON {} USING {} ({})",
+            unique,
+            quote_identifier(&req.index_name),
+            qualified,
+            index_type_lower,
+            columns.join(", ")
+        );
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!(
+            "Created index {} on {}.{}",
+            req.index_name, req.schema, req.table
+        );
+        Ok(SchemaChangeResult { sql })
+    }
+
+    /// Drop an index.
+    /// If `preview_only` is true, returns the generated SQL without executing.
+    pub async fn drop_index(&self, req: &DropIndexRequest) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.index_name, "Index name")?;
+
+        let if_exists = if req.if_exists { "IF EXISTS " } else { "" };
+        let sql = format!(
+            "DROP INDEX {}.{}{}",
+            quote_identifier(&req.schema),
+            if_exists,
+            quote_identifier(&req.index_name)
+        );
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!("Dropped index {}.{}", req.schema, req.index_name);
+        Ok(SchemaChangeResult { sql })
+    }
+
+    /// Add a constraint to a table.
+    /// Supports: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK.
+    /// If `preview_only` is true, returns the generated SQL without executing.
+    pub async fn add_constraint(
+        &self,
+        req: &AddConstraintRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+        validate_identifier(&req.constraint_name, "Constraint name")?;
+
+        let qualified = qualified_table(&req.schema, &req.table);
+        let constraint_name = quote_identifier(&req.constraint_name);
+
+        let constraint_sql = match &req.definition {
+            ConstraintDefinition::PrimaryKey { columns } => {
+                if columns.is_empty() {
+                    return Err(AppError::Validation(
+                        "Primary key requires at least one column".into(),
+                    ));
+                }
+                for col in columns {
+                    validate_identifier(col, "Primary key column name")?;
+                }
+                let cols: Vec<String> = columns.iter().map(|c| quote_identifier(c)).collect();
+                format!("PRIMARY KEY ({})", cols.join(", "))
+            }
+            ConstraintDefinition::ForeignKey {
+                columns,
+                reference_table,
+                reference_columns,
+            } => {
+                if columns.is_empty() {
+                    return Err(AppError::Validation(
+                        "Foreign key requires at least one column".into(),
+                    ));
+                }
+                for col in columns {
+                    validate_identifier(col, "Foreign key column name")?;
+                }
+                validate_identifier(reference_table, "Foreign key reference table name")?;
+                for col in reference_columns {
+                    validate_identifier(col, "Foreign key reference column name")?;
+                }
+                let cols: Vec<String> = columns.iter().map(|c| quote_identifier(c)).collect();
+                let ref_cols: Vec<String> = reference_columns
+                    .iter()
+                    .map(|c| quote_identifier(c))
+                    .collect();
+                format!(
+                    "FOREIGN KEY ({}) REFERENCES {} ({})",
+                    cols.join(", "),
+                    quote_identifier(reference_table),
+                    ref_cols.join(", ")
+                )
+            }
+            ConstraintDefinition::Unique { columns } => {
+                if columns.is_empty() {
+                    return Err(AppError::Validation(
+                        "Unique constraint requires at least one column".into(),
+                    ));
+                }
+                for col in columns {
+                    validate_identifier(col, "Unique constraint column name")?;
+                }
+                let cols: Vec<String> = columns.iter().map(|c| quote_identifier(c)).collect();
+                format!("UNIQUE ({})", cols.join(", "))
+            }
+            ConstraintDefinition::Check { expression } => {
+                if expression.trim().is_empty() {
+                    return Err(AppError::Validation(
+                        "Check constraint expression must not be empty".into(),
+                    ));
+                }
+                format!("CHECK ({})", expression)
+            }
+        };
+
+        let sql = format!(
+            "ALTER TABLE {} ADD CONSTRAINT {} {}",
+            qualified, constraint_name, constraint_sql
+        );
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!(
+            "Added constraint {} on {}.{}",
+            req.constraint_name, req.schema, req.table
+        );
+        Ok(SchemaChangeResult { sql })
+    }
+
+    /// Drop a constraint from a table.
+    /// If `preview_only` is true, returns the generated SQL without executing.
+    pub async fn drop_constraint(
+        &self,
+        req: &DropConstraintRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+        validate_identifier(&req.constraint_name, "Constraint name")?;
+
+        let qualified = qualified_table(&req.schema, &req.table);
+        let sql = format!(
+            "ALTER TABLE {} DROP CONSTRAINT {}",
+            qualified,
+            quote_identifier(&req.constraint_name)
+        );
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        sqlx::query(&sql)
+            .execute(pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        info!(
+            "Dropped constraint {} from {}.{}",
+            req.constraint_name, req.schema, req.table
+        );
+        Ok(SchemaChangeResult { sql })
+    }
+
     #[allow(clippy::type_complexity)]
     pub async fn get_table_constraints(
         &self,
@@ -1120,5 +1494,723 @@ mod tests {
             err_msg.contains("Not connected"),
             "Expected connection error for valid name, got: {err_msg}"
         );
+    }
+
+    // ── validate_identifier tests ─────────────────────────────────────
+
+    #[test]
+    fn validate_identifier_valid_names() {
+        assert!(validate_identifier("users", "test").is_ok());
+        assert!(validate_identifier("_private", "test").is_ok());
+        assert!(validate_identifier("table_1", "test").is_ok());
+        assert!(validate_identifier("CamelCase", "test").is_ok());
+    }
+
+    #[test]
+    fn validate_identifier_empty_fails() {
+        let result = validate_identifier("", "Table name");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must not be empty"));
+    }
+
+    #[test]
+    fn validate_identifier_whitespace_only_fails() {
+        let result = validate_identifier("   ", "Column name");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must not be empty"));
+    }
+
+    #[test]
+    fn validate_identifier_starts_with_digit_fails() {
+        let result = validate_identifier("1table", "Table name");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must start with a letter or underscore"));
+    }
+
+    #[test]
+    fn validate_identifier_special_chars_fails() {
+        let result = validate_identifier("bad-name", "Table name");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must contain only alphanumeric characters and underscores"));
+    }
+
+    #[test]
+    fn validate_identifier_with_space_fails() {
+        let result = validate_identifier("bad name", "Table name");
+        assert!(result.is_err());
+    }
+
+    // ── quote_identifier tests ────────────────────────────────────────
+
+    #[test]
+    fn quote_identifier_simple() {
+        assert_eq!(quote_identifier("users"), "\"users\"");
+    }
+
+    #[test]
+    fn quote_identifier_with_embedded_quote() {
+        assert_eq!(quote_identifier("my\"table"), "\"my\"\"table\"");
+    }
+
+    // ── qualified_table tests ─────────────────────────────────────────
+
+    #[test]
+    fn qualified_table_format() {
+        assert_eq!(qualified_table("public", "users"), "\"public\".\"users\"");
+    }
+
+    // ── alter_table tests ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn alter_table_preview_only_returns_sql() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Add {
+                name: "email".to_string(),
+                data_type: "varchar(255)".to_string(),
+                nullable: false,
+                default_value: None,
+            }],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_ok());
+        let schema_result = result.unwrap();
+        assert_eq!(
+            schema_result.sql,
+            "ALTER TABLE \"public\".\"users\" ADD COLUMN \"email\" varchar(255) NOT NULL"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_preview_add_with_default() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Add {
+                name: "created_at".to_string(),
+                data_type: "timestamp".to_string(),
+                nullable: true,
+                default_value: Some("now()".to_string()),
+            }],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_ok());
+        let schema_result = result.unwrap();
+        assert_eq!(
+            schema_result.sql,
+            "ALTER TABLE \"public\".\"users\" ADD COLUMN \"created_at\" timestamp DEFAULT now()"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_preview_modify_column() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "age".to_string(),
+                new_data_type: Some("bigint".to_string()),
+                new_nullable: Some(false),
+                new_default_value: Some("0".to_string()),
+            }],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_ok());
+        let schema_result = result.unwrap();
+        assert_eq!(
+            schema_result.sql,
+            "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"age\" TYPE bigint, ALTER COLUMN \"age\" SET NOT NULL, ALTER COLUMN \"age\" SET DEFAULT 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_preview_drop_column() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Drop {
+                name: "legacy".to_string(),
+            }],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_ok());
+        let schema_result = result.unwrap();
+        assert_eq!(
+            schema_result.sql,
+            "ALTER TABLE \"public\".\"users\" DROP COLUMN \"legacy\""
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_preview_batch_changes() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![
+                ColumnChange::Add {
+                    name: "email".to_string(),
+                    data_type: "text".to_string(),
+                    nullable: true,
+                    default_value: None,
+                },
+                ColumnChange::Drop {
+                    name: "old_col".to_string(),
+                },
+            ],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_ok());
+        let schema_result = result.unwrap();
+        assert_eq!(
+            schema_result.sql,
+            "ALTER TABLE \"public\".\"users\" ADD COLUMN \"email\" text, DROP COLUMN \"old_col\""
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_empty_changes_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("At least one column change"));
+    }
+
+    #[tokio::test]
+    async fn alter_table_invalid_table_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "bad table!".to_string(),
+            changes: vec![ColumnChange::Add {
+                name: "email".to_string(),
+                data_type: "text".to_string(),
+                nullable: true,
+                default_value: None,
+            }],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn alter_table_invalid_column_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Add {
+                name: "bad column!".to_string(),
+                data_type: "text".to_string(),
+                nullable: true,
+                default_value: None,
+            }],
+            preview_only: true,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn alter_table_without_connection_fails_non_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Add {
+                name: "email".to_string(),
+                data_type: "text".to_string(),
+                nullable: true,
+                default_value: None,
+            }],
+            preview_only: false,
+        };
+        let result = adapter.alter_table(&req).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── create_index tests ────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn create_index_preview_btree() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            index_name: "idx_users_email".to_string(),
+            columns: vec!["email".to_string()],
+            index_type: "btree".to_string(),
+            is_unique: true,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "CREATE UNIQUE INDEX \"idx_users_email\" ON \"public\".\"users\" USING btree (\"email\")"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_index_preview_hash_non_unique() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            index_name: "idx_users_data".to_string(),
+            columns: vec!["data".to_string()],
+            index_type: "hash".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "CREATE INDEX \"idx_users_data\" ON \"public\".\"users\" USING hash (\"data\")"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_index_preview_multi_column() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            index_name: "idx_orders_composite".to_string(),
+            columns: vec!["user_id".to_string(), "created_at".to_string()],
+            index_type: "btree".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "CREATE INDEX \"idx_orders_composite\" ON \"public\".\"orders\" USING btree (\"user_id\", \"created_at\")"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_index_all_types_accepted() {
+        let adapter = PostgresAdapter::new();
+        for itype in &["btree", "hash", "gist", "gin", "brin"] {
+            let req = CreateIndexRequest {
+                connection_id: "conn1".to_string(),
+                schema: "public".to_string(),
+                table: "users".to_string(),
+                index_name: "idx_test".to_string(),
+                columns: vec!["col1".to_string()],
+                index_type: itype.to_string(),
+                is_unique: false,
+                preview_only: true,
+            };
+            assert!(
+                adapter.create_index(&req).await.is_ok(),
+                "Failed for type {}",
+                itype
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn create_index_invalid_type_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            index_name: "idx_test".to_string(),
+            columns: vec!["col1".to_string()],
+            index_type: "invalid_type".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Index type must be one of"));
+    }
+
+    #[tokio::test]
+    async fn create_index_empty_columns_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            index_name: "idx_test".to_string(),
+            columns: vec![],
+            index_type: "btree".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("At least one column"));
+    }
+
+    #[tokio::test]
+    async fn create_index_invalid_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            index_name: "bad name!".to_string(),
+            columns: vec!["col1".to_string()],
+            index_type: "btree".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn create_index_without_connection_fails_non_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            index_name: "idx_test".to_string(),
+            columns: vec!["col1".to_string()],
+            index_type: "btree".to_string(),
+            is_unique: false,
+            preview_only: false,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── drop_index tests ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn drop_index_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = DropIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            index_name: "idx_users_email".to_string(),
+            if_exists: false,
+            preview_only: true,
+        };
+        let result = adapter.drop_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "DROP INDEX \"public\".\"idx_users_email\""
+        );
+    }
+
+    #[tokio::test]
+    async fn drop_index_preview_if_exists() {
+        let adapter = PostgresAdapter::new();
+        let req = DropIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            index_name: "idx_users_email".to_string(),
+            if_exists: true,
+            preview_only: true,
+        };
+        let result = adapter.drop_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "DROP INDEX \"public\".IF EXISTS \"idx_users_email\""
+        );
+    }
+
+    #[tokio::test]
+    async fn drop_index_invalid_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = DropIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            index_name: "bad;name".to_string(),
+            if_exists: false,
+            preview_only: true,
+        };
+        let result = adapter.drop_index(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn drop_index_without_connection_fails_non_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = DropIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            index_name: "idx_test".to_string(),
+            if_exists: false,
+            preview_only: false,
+        };
+        let result = adapter.drop_index(&req).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── add_constraint tests ──────────────────────────────────────────
+
+    #[tokio::test]
+    async fn add_constraint_preview_primary_key() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "pk_users".to_string(),
+            definition: ConstraintDefinition::PrimaryKey {
+                columns: vec!["id".to_string()],
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"users\" ADD CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_constraint_preview_foreign_key() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            constraint_name: "fk_orders_user".to_string(),
+            definition: ConstraintDefinition::ForeignKey {
+                columns: vec!["user_id".to_string()],
+                reference_table: "users".to_string(),
+                reference_columns: vec!["id".to_string()],
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"orders\" ADD CONSTRAINT \"fk_orders_user\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\")"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_constraint_preview_unique() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "uq_users_email".to_string(),
+            definition: ConstraintDefinition::Unique {
+                columns: vec!["email".to_string()],
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"users\" ADD CONSTRAINT \"uq_users_email\" UNIQUE (\"email\")"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_constraint_preview_check() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "chk_users_age".to_string(),
+            definition: ConstraintDefinition::Check {
+                expression: "age >= 0".to_string(),
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"users\" ADD CONSTRAINT \"chk_users_age\" CHECK (age >= 0)"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_constraint_empty_pk_columns_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "pk_test".to_string(),
+            definition: ConstraintDefinition::PrimaryKey { columns: vec![] },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("at least one column"));
+    }
+
+    #[tokio::test]
+    async fn add_constraint_empty_check_expression_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "chk_test".to_string(),
+            definition: ConstraintDefinition::Check {
+                expression: "  ".to_string(),
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn add_constraint_invalid_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "bad;name".to_string(),
+            definition: ConstraintDefinition::Unique {
+                columns: vec!["email".to_string()],
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn add_constraint_without_connection_fails_non_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "uq_test".to_string(),
+            definition: ConstraintDefinition::Unique {
+                columns: vec!["email".to_string()],
+            },
+            preview_only: false,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── drop_constraint tests ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn drop_constraint_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = DropConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "uq_users_email".to_string(),
+            preview_only: true,
+        };
+        let result = adapter.drop_constraint(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"users\" DROP CONSTRAINT \"uq_users_email\""
+        );
+    }
+
+    #[tokio::test]
+    async fn drop_constraint_invalid_name_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = DropConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "bad;name".to_string(),
+            preview_only: true,
+        };
+        let result = adapter.drop_constraint(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn drop_constraint_without_connection_fails_non_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = DropConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            constraint_name: "uq_test".to_string(),
+            preview_only: false,
+        };
+        let result = adapter.drop_constraint(&req).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not connected"));
     }
 }

@@ -7,6 +7,10 @@ pub use connection::{
 };
 pub use query::{QueryColumn, QueryResult, QueryType};
 pub use schema::{
+    AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
+    CreateIndexRequest, DropConstraintRequest, DropIndexRequest, SchemaChangeResult,
+};
+pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, IndexInfo, SchemaInfo, TableData,
     TableInfo,
 };

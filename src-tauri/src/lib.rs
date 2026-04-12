@@ -30,6 +30,11 @@ pub fn run() {
             commands::schema::get_table_constraints,
             commands::schema::drop_table,
             commands::schema::rename_table,
+            commands::schema::alter_table,
+            commands::schema::create_index,
+            commands::schema::drop_index,
+            commands::schema::add_constraint,
+            commands::schema::drop_constraint,
             commands::query::execute_query,
             commands::query::cancel_query,
         ])

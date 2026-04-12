@@ -98,3 +98,93 @@ export function validateRawSql(sql: string): string | null {
   }
   return null;
 }
+
+// ── Schema change types ────────────────────────────────────────────────
+
+export type ColumnChange =
+  | {
+      type: "add";
+      name: string;
+      data_type: string;
+      nullable: boolean;
+      default_value: string | null;
+    }
+  | {
+      type: "modify";
+      name: string;
+      new_data_type: string | null;
+      new_nullable: boolean | null;
+      new_default_value: string | null;
+    }
+  | {
+      type: "drop";
+      name: string;
+    };
+
+export interface AlterTableRequest {
+  connection_id: string;
+  schema: string;
+  table: string;
+  changes: ColumnChange[];
+  preview_only?: boolean;
+}
+
+export interface CreateIndexRequest {
+  connection_id: string;
+  schema: string;
+  table: string;
+  index_name: string;
+  columns: string[];
+  index_type: string;
+  is_unique?: boolean;
+  preview_only?: boolean;
+}
+
+export interface DropIndexRequest {
+  connection_id: string;
+  schema: string;
+  index_name: string;
+  if_exists?: boolean;
+  preview_only?: boolean;
+}
+
+export type ConstraintDefinition =
+  | {
+      type: "primary_key";
+      columns: string[];
+    }
+  | {
+      type: "foreign_key";
+      columns: string[];
+      reference_table: string;
+      reference_columns: string[];
+    }
+  | {
+      type: "unique";
+      columns: string[];
+    }
+  | {
+      type: "check";
+      expression: string;
+    };
+
+export interface AddConstraintRequest {
+  connection_id: string;
+  schema: string;
+  table: string;
+  constraint_name: string;
+  definition: ConstraintDefinition;
+  preview_only?: boolean;
+}
+
+export interface DropConstraintRequest {
+  connection_id: string;
+  schema: string;
+  table: string;
+  constraint_name: string;
+  preview_only?: boolean;
+}
+
+export interface SchemaChangeResult {
+  sql: string;
+}
