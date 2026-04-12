@@ -1,13 +1,61 @@
 import { expect } from "@wdio/globals";
 
 describe("Schema Tree Features", () => {
-  // Prerequisite: connection.spec.ts must run first to create and connect
-  // This spec assumes a connected PostgreSQL with the "public" schema loaded.
+  // Self-contained: create connection and connect before each test
+  beforeEach(async () => {
+    // Check if connection already exists from a previous test
+    const existingConn = await $('[aria-label^="Test PG"]');
+    const exists = await existingConn.isExisting();
 
-  it("shows categorized sections when schema is expanded", async () => {
-    // Ensure we're connected — expand the public schema
+    if (!exists) {
+      // Create connection via dialog
+      const newBtn = await $('[aria-label="New Connection"]');
+      await newBtn.waitForDisplayed({ timeout: 10000 });
+      await newBtn.click();
+
+      const dialog = await $('[role="dialog"]');
+      await dialog.waitForDisplayed({ timeout: 5000 });
+
+      const nameInput = await $("#conn-name");
+      await nameInput.setValue("Test PG");
+
+      const hostInput = await $("#conn-host");
+      await hostInput.clearValue();
+      await hostInput.setValue("localhost");
+
+      const portInput = await $("#conn-port");
+      await portInput.clearValue();
+      await portInput.setValue("5432");
+
+      const userInput = await $("#conn-user");
+      await userInput.clearValue();
+      await userInput.setValue("testuser");
+
+      const passwordInput = await $("#conn-password");
+      await passwordInput.setValue("testpass");
+
+      const dbInput = await $("#conn-database");
+      await dbInput.clearValue();
+      await dbInput.setValue("viewtable_test");
+
+      const saveBtn = await $("button=Save");
+      await saveBtn.click();
+
+      await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
+    }
+
+    // Ensure connected: double-click to connect if not already
+    const connItem = await $('[aria-label^="Test PG"]');
+    await connItem.waitForDisplayed({ timeout: 5000 });
+    await connItem.doubleClick();
+
+    // Wait for public schema to appear
     const publicSchema = await $('[aria-label="public schema"]');
     await publicSchema.waitForDisplayed({ timeout: 15000 });
+  });
+
+  it("shows categorized sections when schema is expanded", async () => {
+    const publicSchema = await $('[aria-label="public schema"]');
     await publicSchema.click();
 
     // Schema should show category headers
@@ -25,26 +73,45 @@ describe("Schema Tree Features", () => {
   });
 
   it("displays tables under the Tables category", async () => {
-    // The Tables category should be expanded by default
+    // Expand schema
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.click();
+
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    await tablesCategory.click();
+
     // Look for any table item within the schema
     const tableItems = await $$('[aria-label$=" table"]');
-    // There should be at least system tables visible
     expect(tableItems.length).toBeGreaterThan(0);
   });
 
   it("highlights a table when selected", async () => {
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.click();
+
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    await tablesCategory.click();
+
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
     await firstTable.click();
 
     // After clicking, the table should be selected (highlighted)
-    // Selection applies accent color classes
     const parentRow = await firstTable.parentElement();
     const classes = await parentRow.getAttribute("class");
     expect(classes).toContain("accent");
   });
 
   it("shows context menu on table right-click", async () => {
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.click();
+
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    await tablesCategory.click();
+
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
     await firstTable.click();
@@ -69,6 +136,13 @@ describe("Schema Tree Features", () => {
   });
 
   it("opens table data tab from context menu", async () => {
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.click();
+
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    await tablesCategory.click();
+
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 5000 });
     await firstTable.contextClick();
@@ -85,7 +159,6 @@ describe("Schema Tree Features", () => {
 
   it("shows context menu on schema right-click with Refresh option", async () => {
     const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.waitForDisplayed({ timeout: 10000 });
     await publicSchema.contextClick();
 
     const refreshOption = await $("span=Refresh");
@@ -99,12 +172,12 @@ describe("Schema Tree Features", () => {
   it("renders search input in Tables category and filters tables", async () => {
     // Expand the public schema
     const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.waitForDisplayed({ timeout: 15000 });
     await publicSchema.click();
 
     // Tables category should be expanded by default
     const tablesCategory = await $('[aria-label="Tables in public"]');
     await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    await tablesCategory.click();
 
     // Search input should be visible when there are tables
     const searchInput = await $('[aria-label="Filter tables in public"]');
@@ -141,12 +214,12 @@ describe("Schema Tree Features", () => {
   it("shows No matching tables when filter matches nothing", async () => {
     // Expand the public schema
     const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.waitForDisplayed({ timeout: 15000 });
     await publicSchema.click();
 
     // Tables category should be expanded by default
     const tablesCategory = await $('[aria-label="Tables in public"]');
     await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    await tablesCategory.click();
 
     const searchInput = await $('[aria-label="Filter tables in public"]');
     await searchInput.waitForDisplayed({ timeout: 5000 });
