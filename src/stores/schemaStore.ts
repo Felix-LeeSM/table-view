@@ -8,6 +8,7 @@ import type {
   TableData,
   TableInfo,
 } from "../types/schema";
+import type { QueryResult } from "../types/query";
 import * as tauri from "../lib/tauri";
 
 interface SchemaState {
@@ -48,6 +49,11 @@ interface SchemaState {
     table: string,
     schema: string,
   ) => Promise<void>;
+  executeQuery: (
+    connectionId: string,
+    sql: string,
+    queryId: string,
+  ) => Promise<QueryResult>;
   renameTable: (
     connectionId: string,
     table: string,
@@ -141,6 +147,10 @@ export const useSchemaStore = create<SchemaState>((set) => ({
         };
       });
     }
+  },
+
+  executeQuery: async (connectionId, sql, queryId) => {
+    return tauri.executeQuery(connectionId, sql, queryId);
   },
 
   renameTable: async (connectionId, table, schema, newName) => {

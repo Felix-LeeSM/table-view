@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useTabStore, type TableTab, type QueryTab, type Tab } from "./tabStore";
+import {
+  useTabStore,
+  type TableTab,
+  type QueryTab,
+  type Tab,
+} from "./tabStore";
 import type { QueryState } from "../types/query";
 
-function makeTableTab(overrides: Partial<Omit<TableTab, "id">> & { id: string }): Omit<TableTab, "id"> {
+function makeTableTab(
+  overrides: Partial<Omit<TableTab, "id">> & { id: string },
+): Omit<TableTab, "id"> {
   return {
     title: "Test Tab",
     connectionId: "conn1",
@@ -52,7 +59,7 @@ describe("tabStore", () => {
     });
     const tab2 = makeTableTab({
       id: "t2",
-      connectionId: "conn1",
+      connectionId: "conn2",
       table: "orders",
     });
 
@@ -75,8 +82,16 @@ describe("tabStore", () => {
   });
 
   it("removes a tab", () => {
-    const tab1 = makeTableTab({ id: "t1", table: "users" });
-    const tab2 = makeTableTab({ id: "t2", table: "orders" });
+    const tab1 = makeTableTab({
+      id: "t1",
+      table: "users",
+      connectionId: "conn1",
+    });
+    const tab2 = makeTableTab({
+      id: "t2",
+      table: "orders",
+      connectionId: "conn2",
+    });
 
     useTabStore.getState().addTab(tab1);
     useTabStore.getState().addTab(tab2);
@@ -93,9 +108,21 @@ describe("tabStore", () => {
   });
 
   it("sets active tab to previous on remove", () => {
-    const tab1 = makeTableTab({ id: "t1", table: "users" });
-    const tab2 = makeTableTab({ id: "t2", table: "orders" });
-    const tab3 = makeTableTab({ id: "t3", table: "products" });
+    const tab1 = makeTableTab({
+      id: "t1",
+      table: "users",
+      connectionId: "conn1",
+    });
+    const tab2 = makeTableTab({
+      id: "t2",
+      table: "orders",
+      connectionId: "conn2",
+    });
+    const tab3 = makeTableTab({
+      id: "t3",
+      table: "products",
+      connectionId: "conn3",
+    });
 
     useTabStore.getState().addTab(tab1);
     useTabStore.getState().addTab(tab2);
@@ -113,8 +140,16 @@ describe("tabStore", () => {
   });
 
   it("sets active tab", () => {
-    const tab1 = makeTableTab({ id: "t1", table: "users" });
-    const tab2 = makeTableTab({ id: "t2", table: "orders" });
+    const tab1 = makeTableTab({
+      id: "t1",
+      table: "users",
+      connectionId: "conn1",
+    });
+    const tab2 = makeTableTab({
+      id: "t2",
+      table: "orders",
+      connectionId: "conn2",
+    });
 
     useTabStore.getState().addTab(tab1);
     useTabStore.getState().addTab(tab2);
@@ -142,8 +177,18 @@ describe("tabStore", () => {
   });
 
   it("subView persists when switching between tabs", () => {
-    const tab1 = makeTableTab({ id: "t1", table: "users", subView: "records" });
-    const tab2 = makeTableTab({ id: "t2", table: "orders", subView: "records" });
+    const tab1 = makeTableTab({
+      id: "t1",
+      table: "users",
+      subView: "records",
+      connectionId: "conn1",
+    });
+    const tab2 = makeTableTab({
+      id: "t2",
+      table: "orders",
+      subView: "records",
+      connectionId: "conn2",
+    });
 
     useTabStore.getState().addTab(tab1);
     useTabStore.getState().addTab(tab2);
@@ -208,7 +253,16 @@ describe("tabStore", () => {
       const stateBefore = useTabStore.getState();
       const tabId = stateBefore.tabs[0]!.id;
 
-      const newState: QueryState = { status: "completed", result: { columns: [], rows: [], total_count: 0, execution_time_ms: 5, query_type: "ddl" } };
+      const newState: QueryState = {
+        status: "completed",
+        result: {
+          columns: [],
+          rows: [],
+          total_count: 0,
+          execution_time_ms: 5,
+          query_type: "ddl",
+        },
+      };
       useTabStore.getState().updateQueryState(tabId, newState);
 
       const state = useTabStore.getState();
@@ -229,6 +283,118 @@ describe("tabStore", () => {
       const state = useTabStore.getState();
       expect(state.tabs[0]!.type).toBe("table");
       // Table tab should not have sql property modified
+    });
+  });
+
+  // -- Sprint 29: Preview Tab System ----------------------------------------
+
+  describe("preview tab system", () => {
+    it("new table tab is preview by default", () => {
+      const tab = makeTableTab({ id: "t1", table: "users" });
+      useTabStore.getState().addTab(tab);
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+    });
+
+    it("promoteTab sets isPreview to false", () => {
+      const tab = makeTableTab({ id: "t1", table: "users" });
+      useTabStore.getState().addTab(tab);
+
+      const state = useTabStore.getState();
+      const tabId = state.tabs[0]!.id;
+
+      useTabStore.getState().promoteTab(tabId);
+
+      const updated = useTabStore.getState();
+      expect(getTableTab(updated, 0).isPreview).toBe(false);
+    });
+
+    it("clicking another table replaces preview tab", () => {
+      const tab1 = makeTableTab({
+        id: "t1",
+        connectionId: "conn1",
+        table: "users",
+      });
+      useTabStore.getState().addTab(tab1);
+
+      const state1 = useTabStore.getState();
+      const firstTabId = state1.tabs[0]!.id;
+      expect(state1.tabs).toHaveLength(1);
+
+      // Add a different table for the same connection — should replace the preview tab
+      const tab2 = makeTableTab({
+        id: "t2",
+        connectionId: "conn1",
+        table: "orders",
+      });
+      useTabStore.getState().addTab(tab2);
+
+      const state2 = useTabStore.getState();
+      // Still 1 tab (the preview was replaced)
+      expect(state2.tabs).toHaveLength(1);
+      // It should be the new table
+      expect(getTableTab(state2, 0).table).toBe("orders");
+      // Old tab should be gone
+      expect(state2.tabs.find((t) => t.id === firstTabId)).toBeUndefined();
+    });
+
+    it("permanent tab is not replaced by new preview", () => {
+      const tab1 = makeTableTab({
+        id: "t1",
+        connectionId: "conn1",
+        table: "users",
+      });
+      useTabStore.getState().addTab(tab1);
+
+      const state1 = useTabStore.getState();
+      const tabId = state1.tabs[0]!.id;
+      // Promote to permanent
+      useTabStore.getState().promoteTab(tabId);
+
+      // Add a different table — should NOT replace the permanent tab
+      const tab2 = makeTableTab({
+        id: "t2",
+        connectionId: "conn1",
+        table: "orders",
+      });
+      useTabStore.getState().addTab(tab2);
+
+      const state2 = useTabStore.getState();
+      expect(state2.tabs).toHaveLength(2);
+      expect(getTableTab(state2, 0).table).toBe("users");
+      expect(getTableTab(state2, 1).table).toBe("orders");
+    });
+
+    it("preview tabs from different connections do not replace each other", () => {
+      const tab1 = makeTableTab({
+        id: "t1",
+        connectionId: "conn1",
+        table: "users",
+      });
+      useTabStore.getState().addTab(tab1);
+
+      const tab2 = makeTableTab({
+        id: "t2",
+        connectionId: "conn2",
+        table: "orders",
+      });
+      useTabStore.getState().addTab(tab2);
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+    });
+
+    it("promoteTab on non-existent tab is a no-op", () => {
+      const tab = makeTableTab({ id: "t1", table: "users" });
+      useTabStore.getState().addTab(tab);
+
+      // Should not throw
+      useTabStore.getState().promoteTab("non-existent-id");
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
     });
   });
 });

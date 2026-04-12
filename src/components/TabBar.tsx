@@ -1,5 +1,5 @@
 import { X, Table2, Code2, Plus } from "lucide-react";
-import { useTabStore } from "../stores/tabStore";
+import { useTabStore, type TableTab } from "../stores/tabStore";
 import { useConnectionStore } from "../stores/connectionStore";
 
 export default function TabBar() {
@@ -61,7 +61,11 @@ export default function TabBar() {
           ) : (
             <Table2 size={12} className="shrink-0 text-(--color-text-muted)" />
           )}
-          <span className="max-w-30 truncate">{tab.title}</span>
+          <span
+            className={`max-w-30 truncate${tab.type === "table" && (tab as TableTab).isPreview ? " italic opacity-70" : ""}`}
+          >
+            {tab.title}
+          </span>
           {tab.closable && (
             <button
               aria-label={`Close ${tab.title}`}

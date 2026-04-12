@@ -65,11 +65,21 @@ function createMockQueryTableData(overrides?: Partial<TableData>) {
 
 // We'll set up the store mock per-test so we can customise the return value
 const mockQueryTableData = createMockQueryTableData();
+const mockExecuteQuery = vi.fn(() =>
+  Promise.resolve({
+    columns: [],
+    rows: [],
+    total_count: 0,
+    execution_time_ms: 5,
+    query_type: "dml" as const,
+  }),
+);
 
 vi.mock("../stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       queryTableData: mockQueryTableData,
+      executeQuery: mockExecuteQuery,
     }),
 }));
 
@@ -83,6 +93,14 @@ describe("DataGrid", () => {
   beforeEach(() => {
     mockQueryTableData.mockReset();
     mockQueryTableData.mockResolvedValue({ ...MOCK_DATA });
+    mockExecuteQuery.mockReset();
+    mockExecuteQuery.mockResolvedValue({
+      columns: [],
+      rows: [],
+      total_count: 0,
+      execution_time_ms: 5,
+      query_type: "dml" as const,
+    });
   });
 
   // 1. Initial rendering — queryTableData called with correct args
@@ -792,5 +810,353 @@ describe("DataGrid", () => {
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
     expect(lastCall[3]).toBe(3);
+  });
+
+  // ── Sprint 30: Inline Cell Editing ──
+
+  // 35. Double-clicking a cell enters edit mode
+  it("double-clicking a cell enters edit mode", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!; // "Alice" cell (row 0, col 1)
+
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    // An input should appear inside the cell
+    const input = nameCell.querySelector("input");
+    expect(input).toBeInTheDocument();
+    expect((input as HTMLInputElement).value).toBe("Alice");
+  });
+
+  // 36. Enter saves edit and shows pending indicator
+  it("Enter saves edit and shows pending indicator", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!; // "Alice"
+
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    const input = nameCell.querySelector("input")!;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Bob" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    // Input should be gone
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+
+    // Cell should show the new value with yellow background indicator
+    expect(nameCell.textContent).toContain("Bob");
+    expect(nameCell.className).toContain("bg-yellow-500/20");
+
+    // Pending edit count should be shown
+    expect(screen.getByText(/1 edit/)).toBeInTheDocument();
+  });
+
+  // 37. Escape cancels edit
+  it("Escape cancels edit", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!; // "Alice"
+
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    const input = nameCell.querySelector("input")!;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Bob" } });
+      fireEvent.keyDown(input, { key: "Escape" });
+    });
+
+    // Input should be gone
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+
+    // Cell should still show original value
+    expect(nameCell.textContent).toContain("Alice");
+
+    // No yellow bg
+    expect(nameCell.className).not.toContain("bg-yellow-500/20");
+  });
+
+  // 38. Shows pending edit count in toolbar
+  it("shows pending edit count in toolbar", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // No pending edits initially
+    expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
+
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!;
+
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    const input = nameCell.querySelector("input")!;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Changed" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    // Should show edit count
+    expect(screen.getByText(/1 edit/)).toBeInTheDocument();
+  });
+
+  // 39. Clicking another cell while editing saves current edit
+  it("clicking another cell while editing saves current edit", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!; // "Alice"
+
+    // Start editing
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+
+    const input = nameCell.querySelector("input")!;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Bob" } });
+    });
+
+    // Click on another cell
+    const otherCell = cells[2]!; // meta column
+    await act(async () => {
+      fireEvent.click(otherCell);
+    });
+
+    // First cell should have saved the edit
+    expect(nameCell.querySelector("input")).not.toBeInTheDocument();
+    expect(nameCell.textContent).toContain("Bob");
+    expect(nameCell.className).toContain("bg-yellow-500/20");
+  });
+
+  // ── Sprint 31: Commit & SQL Preview ──
+
+  // Helper: make a pending edit
+  async function makePendingEdit() {
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!; // "Alice"
+    await act(async () => {
+      fireEvent.dblClick(nameCell);
+    });
+    const input = nameCell.querySelector("input")!;
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Bob" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+  }
+
+  // 40. Shows Commit button when there are pending edits
+  it("shows Commit button when there are pending edits", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // No commit button initially
+    expect(screen.queryByLabelText("Commit changes")).not.toBeInTheDocument();
+
+    await makePendingEdit();
+
+    expect(screen.getByLabelText("Commit changes")).toBeInTheDocument();
+  });
+
+  // 41. Shows Discard button when there are pending edits
+  it("shows Discard button when there are pending edits", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(screen.queryByLabelText("Discard changes")).not.toBeInTheDocument();
+
+    await makePendingEdit();
+
+    expect(screen.getByLabelText("Discard changes")).toBeInTheDocument();
+  });
+
+  // 42. Discard clears all pending edits
+  it("Discard clears all pending edits", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    await makePendingEdit();
+
+    expect(screen.getByText(/1 edit/)).toBeInTheDocument();
+
+    const discardBtn = screen.getByLabelText("Discard changes");
+    await act(async () => {
+      fireEvent.click(discardBtn);
+    });
+
+    // Pending edits should be cleared
+    expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
+    // Yellow bg should be gone
+    const cells = screen.getAllByRole("cell");
+    expect(cells[1]!.className).not.toContain("bg-yellow-500/20");
+  });
+
+  // 43. Commit shows SQL preview modal
+  it("Commit shows SQL preview modal", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    await makePendingEdit();
+
+    const commitBtn = screen.getByLabelText("Commit changes");
+    await act(async () => {
+      fireEvent.click(commitBtn);
+    });
+
+    // SQL preview modal should appear
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    // Should contain UPDATE SQL
+    expect(screen.getByText(/UPDATE/i)).toBeInTheDocument();
+  });
+
+  // 44. Commit executes SQL and refreshes data
+  it("Commit executes SQL and refreshes data", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    await makePendingEdit();
+
+    const commitBtn = screen.getByLabelText("Commit changes");
+    await act(async () => {
+      fireEvent.click(commitBtn);
+    });
+
+    // Find the execute/confirm button in the modal
+    const executeBtn = screen.getByLabelText("Execute SQL");
+    await act(async () => {
+      fireEvent.click(executeBtn);
+    });
+
+    // executeQuery should have been called
+    expect(mockExecuteQuery).toHaveBeenCalled();
+
+    // Pending edits should be cleared after commit
+    expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
+  });
+
+  // ── Sprint 32: Row Operations (Add/Delete) ──
+
+  // 45. Add Row button adds an empty row at the bottom
+  it("Add Row button adds an empty row at the bottom", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const addRowBtn = screen.getByLabelText("Add row");
+    await act(async () => {
+      fireEvent.click(addRowBtn);
+    });
+
+    // There should now be a 4th row (the new empty row)
+    const rows = screen.getAllByRole("row");
+    // Header row + 3 data rows + 1 new empty row = 5 rows (4 data + 1 header)
+    expect(rows.length).toBe(5); // including header row
+  });
+
+  // 46. clicking a row selects it
+  it("clicking a row selects it", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    // Click on first cell of first data row
+    const firstRowCell = cells[0]!;
+    await act(async () => {
+      fireEvent.click(firstRowCell);
+    });
+
+    // The row should have a selected indicator
+    const row = firstRowCell.closest("tr")!;
+    expect(row.className).toContain("bg-accent/20");
+  });
+
+  // 47. Delete Row button marks selected row for deletion
+  it("Delete Row button marks selected row for deletion", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Select a row first
+    const cells = screen.getAllByRole("cell");
+    const firstRowCell = cells[0]!;
+    await act(async () => {
+      fireEvent.click(firstRowCell);
+    });
+
+    // Click delete
+    const deleteRowBtn = screen.getByLabelText("Delete row");
+    await act(async () => {
+      fireEvent.click(deleteRowBtn);
+    });
+
+    // The row should have strikethrough style
+    const row = firstRowCell.closest("tr")!;
+    expect(row.className).toContain("line-through");
+  });
+
+  // 48. deleted row has strikethrough style
+  it("deleted row has strikethrough style", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Select and delete the first row
+    const cells = screen.getAllByRole("cell");
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Delete row"));
+    });
+
+    // All cells in that row should show strikethrough
+    const row = cells[0]!.closest("tr")!;
+    expect(row.className).toContain("line-through");
+  });
+
+  // 49. Discard clears pending row operations
+  it("Discard clears pending row operations", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Add a row
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Add row"));
+    });
+
+    // Delete a row
+    const cells = screen.getAllByRole("cell");
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Delete row"));
+    });
+
+    // Discard
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Discard changes"));
+    });
+
+    // Should be back to original state - 3 data rows + header
+    const rows = screen.getAllByRole("row");
+    expect(rows.length).toBe(4); // header + 3 data rows
+    // No strikethrough
+    const dataRows = rows.slice(1);
+    for (const row of dataRows) {
+      expect(row.className).not.toContain("line-through");
+    }
   });
 });

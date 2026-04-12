@@ -7,8 +7,13 @@ import {
   Loader2,
   Filter,
   Key,
+  Check,
+  X,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
+import { useTabStore } from "../stores/tabStore";
 import FilterBar from "./FilterBar";
 import type {
   FilterCondition,
@@ -33,6 +38,9 @@ export default function DataGrid({
   schema,
 }: DataGridProps) {
   const queryTableData = useSchemaStore((s) => s.queryTableData);
+  const executeQuery = useSchemaStore((s) => s.executeQuery);
+  const activeTabId = useTabStore((s) => s.activeTabId);
+  const promoteTab = useTabStore((s) => s.promoteTab);
   const [data, setData] = useState<TableData | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -48,10 +56,37 @@ export default function DataGrid({
   const [appliedRawSql, setAppliedRawSql] = useState("");
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
+  // Inline cell editing state
+  const [editingCell, setEditingCell] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [pendingEdits, setPendingEdits] = useState<Map<string, string>>(
+    new Map(),
+  );
+
+  // SQL preview modal state
+  const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
+
+  // Row operations state
+  const [selectedRowIdx, setSelectedRowIdx] = useState<number | null>(null);
+  const [pendingNewRows, setPendingNewRows] = useState<unknown[][]>([]);
+  const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
+    Set<string>
+  >(new Set());
+
   // Reset column widths when table/schema changes
   useEffect(() => {
     setColumnWidths({});
   }, [connectionId, table, schema]);
+
+  // Promote preview tab to permanent when user interacts (page change, filter)
+  useEffect(() => {
+    if (activeTabId) {
+      promoteTab(activeTabId);
+    }
+  }, [page, appliedFilters, appliedRawSql, activeTabId, promoteTab]);
 
   const getColumnWidth = useCallback(
     (colName: string) => columnWidths[colName] ?? 150,
@@ -220,6 +255,202 @@ export default function DataGrid({
 
   const totalPages = data ? Math.ceil(data.total_count / pageSize) : 0;
 
+  // -- Inline editing helpers --------------------------------------------------
+
+  const editKey = (row: number, col: number) => `${row}-${col}`;
+
+  const saveCurrentEdit = useCallback(() => {
+    if (!editingCell) return;
+    const key = editKey(editingCell.row, editingCell.col);
+    setPendingEdits((prev) => {
+      const next = new Map(prev);
+      next.set(key, editValue);
+      return next;
+    });
+    setEditingCell(null);
+    setEditValue("");
+  }, [editingCell, editValue]);
+
+  const cancelEdit = useCallback(() => {
+    setEditingCell(null);
+    setEditValue("");
+  }, []);
+
+  const handleStartEdit = useCallback(
+    (rowIdx: number, colIdx: number, currentValue: string) => {
+      // Save any existing edit first
+      if (editingCell) {
+        const key = editKey(editingCell.row, editingCell.col);
+        setPendingEdits((prev) => {
+          const next = new Map(prev);
+          next.set(key, editValue);
+          return next;
+        });
+      }
+      setEditingCell({ row: rowIdx, col: colIdx });
+      setEditValue(currentValue);
+    },
+    [editingCell, editValue],
+  );
+
+  // -- SQL generation for pending edits ----------------------------------------
+
+  const generateSql = useCallback((): string[] => {
+    if (!data) return [];
+    const pkCols = data.columns.filter((c) => c.is_primary_key);
+    const statements: string[] = [];
+
+    // UPDATE statements for cell edits
+    pendingEdits.forEach((newValue, key) => {
+      const [rowStr, colStr] = key.split("-");
+      const rowIdx = parseInt(rowStr!, 10);
+      const colIdx = parseInt(colStr!, 10);
+      const col = data.columns[colIdx];
+      if (!col) return;
+
+      const row = data.rows[rowIdx] as unknown[];
+      if (!row) return;
+
+      const qualifiedTable = schema ? `${schema}.${table}` : table;
+
+      let whereClause: string;
+      if (pkCols.length > 0) {
+        whereClause = pkCols
+          .map((pk) => {
+            const pkIdx = data.columns.indexOf(pk);
+            const pkVal = row[pkIdx];
+            return `${pk.name} = ${pkVal == null ? "NULL" : typeof pkVal === "string" ? `'${pkVal}'` : String(pkVal)}`;
+          })
+          .join(" AND ");
+      } else {
+        // Fallback: use all columns for WHERE
+        whereClause = data.columns
+          .map((c, i) => {
+            const val = row[i];
+            return `${c.name} = ${val == null ? "NULL" : typeof val === "string" ? `'${val}'` : String(val)}`;
+          })
+          .join(" AND ");
+      }
+
+      const escapedValue =
+        newValue === "" ? "NULL" : `'${newValue.replace(/'/g, "''")}'`;
+      statements.push(
+        `UPDATE ${qualifiedTable} SET ${col.name} = ${escapedValue} WHERE ${whereClause};`,
+      );
+    });
+
+    // DELETE statements for deleted rows
+    const qualifiedTable = schema ? `${schema}.${table}` : table;
+    pendingDeletedRowKeys.forEach((delKey) => {
+      // delKey format: "row-{page}-{rowIdx}"
+      const parts = delKey.split("-");
+      const rowIdx = parseInt(parts[2]!, 10);
+      const row = data.rows[rowIdx] as unknown[];
+      if (!row) return;
+
+      let whereClause: string;
+      if (pkCols.length > 0) {
+        whereClause = pkCols
+          .map((pk) => {
+            const pkIdx = data.columns.indexOf(pk);
+            const pkVal = row[pkIdx];
+            return `${pk.name} = ${pkVal == null ? "NULL" : typeof pkVal === "string" ? `'${pkVal}'` : String(pkVal)}`;
+          })
+          .join(" AND ");
+      } else {
+        whereClause = data.columns
+          .map((c, i) => {
+            const val = row[i];
+            return `${c.name} = ${val == null ? "NULL" : typeof val === "string" ? `'${val}'` : String(val)}`;
+          })
+          .join(" AND ");
+      }
+      statements.push(`DELETE FROM ${qualifiedTable} WHERE ${whereClause};`);
+    });
+
+    // INSERT statements for new rows
+    for (const newRow of pendingNewRows) {
+      const colList = data.columns.map((c) => c.name).join(", ");
+      const valList = (newRow as unknown[])
+        .map((v) =>
+          v == null ? "NULL" : typeof v === "string" ? `'${v}'` : String(v),
+        )
+        .join(", ");
+      statements.push(
+        `INSERT INTO ${qualifiedTable} (${colList}) VALUES (${valList});`,
+      );
+    }
+
+    return statements;
+  }, [
+    data,
+    pendingEdits,
+    pendingDeletedRowKeys,
+    pendingNewRows,
+    schema,
+    table,
+  ]);
+
+  const handleCommit = useCallback(() => {
+    const sqlStatements = generateSql();
+    if (sqlStatements.length === 0) return;
+    setSqlPreview(sqlStatements);
+  }, [generateSql]);
+
+  const handleExecuteCommit = useCallback(async () => {
+    if (!sqlPreview) return;
+    try {
+      for (const sql of sqlPreview) {
+        await executeQuery(connectionId, sql, `edit-${Date.now()}`);
+      }
+      setSqlPreview(null);
+      setPendingEdits(new Map());
+      setPendingNewRows([]);
+      setPendingDeletedRowKeys(new Set());
+      setSelectedRowIdx(null);
+      // Refresh data
+      fetchData();
+    } catch {
+      // Error handling is done via the fetchData flow
+    }
+  }, [sqlPreview, executeQuery, connectionId, fetchData]);
+
+  const handleDiscard = useCallback(() => {
+    setPendingEdits(new Map());
+    setEditingCell(null);
+    setEditValue("");
+    setPendingNewRows([]);
+    setPendingDeletedRowKeys(new Set());
+    setSelectedRowIdx(null);
+  }, []);
+
+  // Row operation helpers
+  const rowKeyFn = useCallback(
+    (rowIdx: number) => `row-${page}-${rowIdx}`,
+    [page],
+  );
+
+  const handleAddRow = useCallback(() => {
+    if (!data) return;
+    const emptyRow = data.columns.map(() => null);
+    setPendingNewRows((prev) => [...prev, emptyRow]);
+  }, [data]);
+
+  const handleDeleteRow = useCallback(() => {
+    if (selectedRowIdx === null) return;
+    setPendingDeletedRowKeys((prev) => {
+      const next = new Set(prev);
+      next.add(rowKeyFn(selectedRowIdx));
+      return next;
+    });
+    setSelectedRowIdx(null);
+  }, [selectedRowIdx, rowKeyFn]);
+
+  const hasPendingChanges =
+    pendingEdits.size > 0 ||
+    pendingNewRows.length > 0 ||
+    pendingDeletedRowKeys.size > 0;
+
   const handleSort = (columnName: string, shiftKey: boolean = false) => {
     if (shiftKey) {
       // Shift+Click: add to sort list, toggle direction, or remove
@@ -292,12 +523,71 @@ export default function DataGrid({
                   {sorts.map((s) => `${s.column} ${s.direction}`).join(", ")}
                 </span>
               )}
+              {pendingEdits.size > 0 && (
+                <span className="text-yellow-500">
+                  {pendingEdits.size} edit{pendingEdits.size !== 1 ? "s" : ""}
+                </span>
+              )}
+              {(pendingNewRows.length > 0 ||
+                pendingDeletedRowKeys.size > 0) && (
+                <span className="text-yellow-500">
+                  {pendingNewRows.length > 0 && `${pendingNewRows.length} new`}
+                  {pendingNewRows.length > 0 &&
+                    pendingDeletedRowKeys.size > 0 &&
+                    ", "}
+                  {pendingDeletedRowKeys.size > 0 &&
+                    `${pendingDeletedRowKeys.size} del`}
+                </span>
+              )}
+              {hasPendingChanges && (
+                <>
+                  <button
+                    className="flex items-center gap-1 rounded bg-green-600/20 px-2 py-0.5 text-xs text-green-400 hover:bg-green-600/30"
+                    onClick={handleCommit}
+                    aria-label="Commit changes"
+                    title="Commit changes"
+                  >
+                    <Check size={12} />
+                    Commit
+                  </button>
+                  <button
+                    className="flex items-center gap-1 rounded bg-red-600/20 px-2 py-0.5 text-xs text-red-400 hover:bg-red-600/30"
+                    onClick={handleDiscard}
+                    aria-label="Discard changes"
+                    title="Discard changes"
+                  >
+                    <X size={12} />
+                    Discard
+                  </button>
+                </>
+              )}
             </>
           ) : (
             `${schema}.${table}`
           )}
         </div>
         <div className="flex items-center gap-2">
+          {data && (
+            <>
+              <button
+                className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+                onClick={handleAddRow}
+                aria-label="Add row"
+                title="Add row"
+              >
+                <Plus size={14} />
+              </button>
+              <button
+                className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+                onClick={handleDeleteRow}
+                disabled={selectedRowIdx === null}
+                aria-label="Delete row"
+                title="Delete row"
+              >
+                <Trash2 size={14} />
+              </button>
+            </>
+          )}
           <button
             className={`relative rounded p-1 hover:bg-(--color-bg-tertiary) ${
               showFilters
@@ -491,43 +781,92 @@ export default function DataGrid({
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row, rowIdx) => (
-                <tr
-                  key={`row-${page}-${rowIdx}`}
-                  className="border-b border-(--color-border) hover:bg-(--color-bg-tertiary)"
-                >
-                  {(row as unknown[]).map((cell, cellIdx) => (
-                    <td
-                      key={cellIdx}
-                      className="whitespace-normal break-words border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)"
-                      style={{
-                        width: getColumnWidth(
-                          data.columns[cellIdx]?.name ?? "",
-                        ),
-                        minWidth: MIN_COL_WIDTH,
-                      }}
-                      title={
+              {data.rows.map((row, rowIdx) => {
+                const rk = rowKeyFn(rowIdx);
+                const isDeleted = pendingDeletedRowKeys.has(rk);
+                const isSelected = selectedRowIdx === rowIdx;
+                return (
+                  <tr
+                    key={rk}
+                    className={`border-b border-(--color-border) hover:bg-(--color-bg-tertiary)${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+                    onClick={() => setSelectedRowIdx(rowIdx)}
+                  >
+                    {(row as unknown[]).map((cell, cellIdx) => {
+                      const key = editKey(rowIdx, cellIdx);
+                      const isEditing =
+                        editingCell?.row === rowIdx &&
+                        editingCell?.col === cellIdx;
+                      const hasPendingEdit = pendingEdits.has(key);
+                      const cellStr =
                         cell == null
-                          ? "NULL"
+                          ? ""
                           : typeof cell === "object" && cell !== null
                             ? JSON.stringify(cell, null, 2)
-                            : String(cell)
-                      }
-                    >
-                      {cell == null ? (
-                        <span className="italic text-(--color-text-muted)">
-                          NULL
-                        </span>
-                      ) : typeof cell === "object" && cell !== null ? (
-                        JSON.stringify(cell, null, 2)
-                      ) : (
-                        String(cell)
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              {data.rows.length === 0 && (
+                            : String(cell);
+                      const displayValue = hasPendingEdit
+                        ? pendingEdits.get(key)!
+                        : cellStr;
+
+                      return (
+                        <td
+                          key={cellIdx}
+                          className={`whitespace-normal break-words border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
+                          style={{
+                            width: getColumnWidth(
+                              data.columns[cellIdx]?.name ?? "",
+                            ),
+                            minWidth: MIN_COL_WIDTH,
+                          }}
+                          title={
+                            cell == null
+                              ? "NULL"
+                              : typeof cell === "object" && cell !== null
+                                ? JSON.stringify(cell, null, 2)
+                                : String(cell)
+                          }
+                          onDoubleClick={() =>
+                            handleStartEdit(rowIdx, cellIdx, cellStr)
+                          }
+                          onClick={() => {
+                            if (editingCell) {
+                              saveCurrentEdit();
+                            }
+                          }}
+                        >
+                          {isEditing ? (
+                            <input
+                              className="w-full border-none bg-transparent p-0 text-xs text-(--color-text-primary) outline-none"
+                              value={editValue}
+                              autoFocus
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.stopPropagation();
+                                  saveCurrentEdit();
+                                } else if (e.key === "Escape") {
+                                  e.stopPropagation();
+                                  cancelEdit();
+                                }
+                              }}
+                            />
+                          ) : hasPendingEdit ? (
+                            displayValue
+                          ) : cell == null ? (
+                            <span className="italic text-(--color-text-muted)">
+                              NULL
+                            </span>
+                          ) : typeof cell === "object" && cell !== null ? (
+                            JSON.stringify(cell, null, 2)
+                          ) : (
+                            String(cell)
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              {data.rows.length === 0 && pendingNewRows.length === 0 && (
                 <tr>
                   <td
                     colSpan={data.columns.length}
@@ -537,6 +876,27 @@ export default function DataGrid({
                   </td>
                 </tr>
               )}
+              {pendingNewRows.map((newRow, newIdx) => (
+                <tr
+                  key={`new-row-${newIdx}`}
+                  className="border-b border-(--color-border) bg-yellow-500/5 hover:bg-(--color-bg-tertiary)"
+                >
+                  {(newRow as unknown[]).map((cell, cellIdx) => (
+                    <td
+                      key={cellIdx}
+                      className="whitespace-normal break-words border-r border-(--color-border) px-3 py-1 text-xs italic text-(--color-text-muted)"
+                      style={{
+                        width: getColumnWidth(
+                          data.columns[cellIdx]?.name ?? "",
+                        ),
+                        minWidth: MIN_COL_WIDTH,
+                      }}
+                    >
+                      {cell == null ? "NULL" : String(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -568,6 +928,55 @@ export default function DataGrid({
               </code>
             </div>
           )}
+        </div>
+      )}
+
+      {/* SQL Preview Modal */}
+      {sqlPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          role="dialog"
+          aria-label="SQL Preview"
+        >
+          <div className="w-[600px] max-h-[80vh] flex flex-col rounded-lg border border-(--color-border) bg-(--color-bg-primary) shadow-xl">
+            <div className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
+              <h3 className="text-sm font-semibold text-(--color-text-primary)">
+                SQL Preview
+              </h3>
+              <button
+                className="rounded p-1 hover:bg-(--color-bg-tertiary)"
+                onClick={() => setSqlPreview(null)}
+                aria-label="Close SQL preview"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              {sqlPreview.map((sql, i) => (
+                <pre
+                  key={i}
+                  className="mb-2 whitespace-pre-wrap break-all rounded bg-(--color-bg-secondary) p-2 text-xs text-(--color-text-secondary)"
+                >
+                  {sql}
+                </pre>
+              ))}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-(--color-border) px-4 py-3">
+              <button
+                className="rounded bg-(--color-bg-tertiary) px-3 py-1.5 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-secondary)"
+                onClick={() => setSqlPreview(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700"
+                onClick={handleExecuteCommit}
+                aria-label="Execute SQL"
+              >
+                Execute
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

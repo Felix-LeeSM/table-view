@@ -17,6 +17,8 @@ export interface TableTab {
   schema?: string;
   table?: string;
   subView: TabSubView;
+  /** When true, clicking another table in the same connection replaces this tab. */
+  isPreview?: boolean;
 }
 
 /** A tab that hosts the SQL query editor. */
@@ -45,6 +47,7 @@ interface TabState {
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   setSubView: (tabId: string, subView: TabSubView) => void;
+  promoteTab: (tabId: string) => void;
 
   // Query-tab actions
   addQueryTab: (connectionId: string) => void;
@@ -74,8 +77,31 @@ export const useTabStore = create<TabState>((set) => ({
       if (exists) {
         return { activeTabId: exists.id };
       }
+
+      // Check if there is a preview tab for the same connection to replace
+      const previewIdx = state.tabs.findIndex(
+        (t): t is TableTab =>
+          t.type === "table" &&
+          t.connectionId === tab.connectionId &&
+          t.isPreview === true,
+      );
+
+      if (previewIdx !== -1) {
+        const newId = `tab-${tabCounter}`;
+        const newTabs = [...state.tabs];
+        newTabs[previewIdx] = {
+          ...tab,
+          id: newId,
+          isPreview: true,
+        } as TableTab;
+        return { tabs: newTabs, activeTabId: newId };
+      }
+
       return {
-        tabs: [...state.tabs, { ...tab, id: `tab-${tabCounter}` }],
+        tabs: [
+          ...state.tabs,
+          { ...tab, id: `tab-${tabCounter}`, isPreview: true },
+        ],
         activeTabId: `tab-${tabCounter}`,
       };
     });
@@ -92,6 +118,13 @@ export const useTabStore = create<TabState>((set) => ({
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
+
+  promoteTab: (tabId) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId && t.type === "table" ? { ...t, isPreview: false } : t,
+      ),
+    })),
 
   setSubView: (tabId, subView) =>
     set((state) => ({

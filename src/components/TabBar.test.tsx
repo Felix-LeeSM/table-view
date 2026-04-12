@@ -43,8 +43,8 @@ describe("TabBar", () => {
   });
 
   it("renders tabs with titles", () => {
-    addTableTab({ title: "Users", table: "users" });
-    addTableTab({ title: "Orders", table: "orders" });
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
 
     render(<TabBar />);
     expect(screen.getByText("Users")).toBeInTheDocument();
@@ -52,8 +52,8 @@ describe("TabBar", () => {
   });
 
   it("closes tab on middle-click (auxclick button 1)", () => {
-    addTableTab({ title: "Users", table: "users" });
-    addTableTab({ title: "Orders", table: "orders" });
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
 
     render(<TabBar />);
 
@@ -68,8 +68,8 @@ describe("TabBar", () => {
   });
 
   it("does not close tab on right-click (auxclick button 2)", () => {
-    addTableTab({ title: "Users", table: "users" });
-    addTableTab({ title: "Orders", table: "orders" });
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
 
     render(<TabBar />);
 
@@ -80,8 +80,8 @@ describe("TabBar", () => {
   });
 
   it("activates tab on click", () => {
-    addTableTab({ title: "Users", table: "users" });
-    addTableTab({ title: "Orders", table: "orders" });
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
 
     render(<TabBar />);
 
@@ -214,5 +214,29 @@ describe("TabBar", () => {
     expect(dots).toHaveLength(2);
     expect((dots[0] as HTMLElement).style.backgroundColor).toBe("red");
     expect((dots[1] as HTMLElement).style.backgroundColor).toBe("blue");
+  });
+
+  // ── Sprint 29: Preview Tab Display ──
+
+  it("preview tab has italic title", () => {
+    addTableTab({ title: "Users", table: "users" });
+    // New tabs are preview by default
+
+    render(<TabBar />);
+    const titleEl = screen.getByText("Users");
+    expect(titleEl.className).toContain("italic");
+  });
+
+  it("permanent tab does not have italic title", () => {
+    addTableTab({ title: "Users", table: "users" });
+
+    // Promote the tab to permanent
+    const state = useTabStore.getState();
+    const tabId = state.tabs[0]!.id;
+    useTabStore.getState().promoteTab(tabId);
+
+    render(<TabBar />);
+    const titleEl = screen.getByText("Users");
+    expect(titleEl.className).not.toContain("italic");
   });
 });
