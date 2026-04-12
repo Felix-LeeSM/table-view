@@ -272,7 +272,7 @@ describe("Schema Tree Features", () => {
     // Wait for the empty state
     await browser.pause(300);
 
-    const noMatchLabel = await $("*=No matching tables");
+    const noMatchLabel = await $("//*[contains(text(),'No matching tables')]");
     await noMatchLabel.waitForDisplayed({ timeout: 3000 });
     expect(await noMatchLabel.isDisplayed()).toBe(true);
 
