@@ -1,4 +1,11 @@
-import { useEffect, useRef } from "react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+} from "./ui/alert-dialog";
 
 interface ConfirmDialogProps {
   title: string;
@@ -19,40 +26,18 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="w-80 rounded-lg bg-(--color-bg-secondary) p-4 shadow-xl outline-none"
-      >
-        <h3 className="text-sm font-semibold text-(--color-text-primary)">
-          {title}
-        </h3>
-        <p className="mt-2 text-sm text-(--color-text-secondary)">{message}</p>
-        <div className="mt-4 flex justify-end gap-2">
+    <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
+      <AlertDialogContent className="w-80 bg-(--color-bg-secondary) p-4">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="mt-2 text-sm text-(--color-text-secondary)">
+            {message}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="mt-4 flex justify-end gap-2">
           <button
             className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
             onClick={onCancel}
@@ -72,8 +57,8 @@ export default function ConfirmDialog({
           >
             {loading ? "Processing..." : confirmLabel}
           </button>
-        </div>
-      </div>
-    </div>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

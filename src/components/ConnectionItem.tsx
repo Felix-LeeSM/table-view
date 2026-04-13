@@ -5,6 +5,14 @@ import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import ConnectionDialog from "./ConnectionDialog";
 import { DB_TYPE_META } from "../lib/db-meta";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./ui/dialog";
+import {
   Database,
   Plug,
   Unplug,
@@ -207,23 +215,23 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
       )}
 
       {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-dialog-title"
+        <Dialog
+          open={showDeleteConfirm}
+          onOpenChange={(open) => !open && setShowDeleteConfirm(false)}
         >
-          <div className="w-80 rounded-lg bg-(--color-bg-secondary) p-4 shadow-xl">
-            <h3
-              id="delete-dialog-title"
-              className="text-sm font-semibold text-(--color-text-primary)"
-            >
-              Delete Connection
-            </h3>
-            <p className="mt-2 text-sm text-(--color-text-secondary)">
-              Are you sure you want to delete &quot;{connection.name}&quot;?
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
+          <DialogContent
+            className="w-80 bg-(--color-bg-secondary) p-4"
+            showCloseButton={false}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+                Delete Connection
+              </DialogTitle>
+              <DialogDescription className="mt-2 text-sm text-(--color-text-secondary)">
+                Are you sure you want to delete &quot;{connection.name}&quot;?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 flex justify-end gap-2">
               <button
                 className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
                 onClick={() => setShowDeleteConfirm(false)}
@@ -239,9 +247,9 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
               >
                 Delete
               </button>
-            </div>
-          </div>
-        </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );

@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "./ui/dialog";
 
 interface QuickOpenTable {
   name: string;
@@ -72,22 +79,16 @@ export default function QuickOpen() {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
-      }}
-    >
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50" />
-
-      {/* Modal */}
-      <div className="relative z-10 w-full max-w-lg rounded-lg border border-(--color-border) bg-(--color-bg-primary) shadow-xl">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent
+        className="w-full max-w-lg rounded-lg border border-(--color-border) bg-(--color-bg-primary) p-0 top-[20vh] translate-y-0"
+        showCloseButton={false}
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Quick Open Table</DialogTitle>
+          <DialogDescription>Search and navigate to a table</DialogDescription>
+        </DialogHeader>
         {/* Search input */}
         <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-2">
           <Search size={16} className="shrink-0 text-(--color-text-muted)" />
@@ -151,7 +152,7 @@ export default function QuickOpen() {
             ))
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

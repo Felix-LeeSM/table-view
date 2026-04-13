@@ -11,6 +11,14 @@ import {
   Eye,
   Play,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./ui/dialog";
 import { useSchemaStore } from "../stores/schemaStore";
 import * as tauri from "../lib/tauri";
 import type {
@@ -66,86 +74,69 @@ function SqlPreviewModal({
   onConfirm,
   onCancel,
 }: SqlPreviewModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
-
-  // Focus trap: focus the dialog on open
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Review SQL changes"
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="w-[520px] rounded-lg bg-(--color-bg-secondary) shadow-xl outline-none"
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent
+        className="w-[520px] bg-(--color-bg-secondary) p-0"
+        showCloseButton={false}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-          <h2 className="text-sm font-semibold text-(--color-text-primary)">
-            Review SQL Changes
-          </h2>
-          <button
-            className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
-            onClick={onCancel}
-            aria-label="Close dialog"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        <div className="rounded-lg bg-(--color-bg-secondary) shadow-xl">
+          {/* Header */}
+          <DialogHeader className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
+            <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+              Review SQL Changes
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Review and execute SQL changes
+            </DialogDescription>
+            <button
+              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              onClick={onCancel}
+              aria-label="Close dialog"
+            >
+              <X size={16} />
+            </button>
+          </DialogHeader>
 
-        {/* SQL content */}
-        <div className="px-4 py-3">
-          <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded border border-(--color-border) bg-(--color-bg-primary) p-3 text-xs font-mono text-(--color-text-primary)">
-            {sql || "-- No changes to preview"}
-          </pre>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
-            {error}
+          {/* SQL content */}
+          <div className="px-4 py-3">
+            <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded border border-(--color-border) bg-(--color-bg-primary) p-3 text-xs font-mono text-(--color-text-primary)">
+              {sql || "-- No changes to preview"}
+            </pre>
           </div>
-        )}
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-(--color-border) px-4 py-3">
-          <button
-            className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
-            onClick={onCancel}
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
-            onClick={onConfirm}
-            disabled={loading || !sql.trim()}
-          >
-            {loading ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Play size={14} />
-            )}
-            {loading ? "Executing..." : "Execute"}
-          </button>
+          {/* Error */}
+          {error && (
+            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <DialogFooter className="border-t border-(--color-border) px-4 py-3">
+            <button
+              className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
+              onClick={onConfirm}
+              disabled={loading || !sql.trim()}
+            >
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Play size={14} />
+              )}
+              {loading ? "Executing..." : "Execute"}
+            </button>
+          </DialogFooter>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -177,19 +168,6 @@ function CreateIndexModal({
   const [isUnique, setIsUnique] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
 
   const toggleColumn = (colName: string) => {
     setSelectedColumns((prev) =>
@@ -212,8 +190,6 @@ function CreateIndexModal({
         indexType,
         isUnique,
       });
-      // onSubmit handles preview_only=true first; the parent sets the SQL preview state
-      // We'll use a different approach: call the parent's preview handler and get SQL back
     } catch (e) {
       setError(String(e));
     }
@@ -221,141 +197,140 @@ function CreateIndexModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Create index"
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="w-[480px] rounded-lg bg-(--color-bg-secondary) shadow-xl outline-none"
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent
+        className="w-[480px] bg-(--color-bg-secondary) p-0"
+        showCloseButton={false}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-          <h2 className="text-sm font-semibold text-(--color-text-primary)">
-            Create Index
-          </h2>
-          <button
-            className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
-            onClick={onCancel}
-            aria-label="Close dialog"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <div className="px-4 py-3 space-y-3">
-          {/* Index Name */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-              Index Name
-            </label>
-            <input
-              className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-              value={indexName}
-              onChange={(e) => setIndexName(e.target.value)}
-              placeholder="idx_name"
-              aria-label="Index name"
-              autoFocus
-            />
-          </div>
-
-          {/* Columns */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-              Columns
-            </label>
-            <div className="max-h-[120px] overflow-auto rounded border border-(--color-border) bg-(--color-bg-primary) p-2">
-              {columns.map((col) => (
-                <label
-                  key={col.name}
-                  className="flex cursor-pointer items-center gap-2 px-1 py-0.5 text-xs text-(--color-text-primary) hover:bg-(--color-bg-tertiary) rounded"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedColumns.includes(col.name)}
-                    onChange={() => toggleColumn(col.name)}
-                    className="rounded border-(--color-border)"
-                  />
-                  {col.name}
-                  <span className="text-(--color-text-muted)">
-                    ({col.data_type})
-                  </span>
-                </label>
-              ))}
-              {columns.length === 0 && (
-                <span className="text-xs text-(--color-text-muted)">
-                  No columns available
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Index Type */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-              Index Type
-            </label>
-            <select
-              className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-              value={indexType}
-              onChange={(e) => setIndexType(e.target.value)}
-              aria-label="Index type"
+        <div className="rounded-lg bg-(--color-bg-secondary) shadow-xl">
+          {/* Header */}
+          <DialogHeader className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
+            <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+              Create Index
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a new index on this table
+            </DialogDescription>
+            <button
+              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              onClick={onCancel}
+              aria-label="Close dialog"
             >
-              {INDEX_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t.toUpperCase()}
-                </option>
-              ))}
-            </select>
+              <X size={16} />
+            </button>
+          </DialogHeader>
+
+          {/* Form */}
+          <div className="space-y-3 px-4 py-3">
+            {/* Index Name */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                Index Name
+              </label>
+              <input
+                className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                value={indexName}
+                onChange={(e) => setIndexName(e.target.value)}
+                placeholder="idx_name"
+                aria-label="Index name"
+                autoFocus
+              />
+            </div>
+
+            {/* Columns */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                Columns
+              </label>
+              <div className="max-h-[120px] overflow-auto rounded border border-(--color-border) bg-(--color-bg-primary) p-2">
+                {columns.map((col) => (
+                  <label
+                    key={col.name}
+                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-(--color-text-primary) hover:bg-(--color-bg-tertiary)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedColumns.includes(col.name)}
+                      onChange={() => toggleColumn(col.name)}
+                      className="rounded border-(--color-border)"
+                    />
+                    {col.name}
+                    <span className="text-(--color-text-muted)">
+                      ({col.data_type})
+                    </span>
+                  </label>
+                ))}
+                {columns.length === 0 && (
+                  <span className="text-xs text-(--color-text-muted)">
+                    No columns available
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Index Type */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                Index Type
+              </label>
+              <select
+                className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                value={indexType}
+                onChange={(e) => setIndexType(e.target.value)}
+                aria-label="Index type"
+              >
+                {INDEX_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Unique */}
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-(--color-text-primary)">
+              <input
+                type="checkbox"
+                checked={isUnique}
+                onChange={(e) => setIsUnique(e.target.checked)}
+                className="rounded border-(--color-border)"
+              />
+              Unique
+            </label>
           </div>
 
-          {/* Unique */}
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-(--color-text-primary)">
-            <input
-              type="checkbox"
-              checked={isUnique}
-              onChange={(e) => setIsUnique(e.target.checked)}
-              className="rounded border-(--color-border)"
-            />
-            Unique
-          </label>
-        </div>
+          {/* Error */}
+          {error && (
+            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
+              {error}
+            </div>
+          )}
 
-        {/* Error */}
-        {error && (
-          <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
-            {error}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-(--color-border) px-4 py-3">
-          <button
-            className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
-            onClick={onCancel}
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
-            onClick={handlePreview}
-            disabled={loading || !isValid}
-          >
-            {loading ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Eye size={14} />
-            )}
-            {loading ? "Previewing..." : "Preview SQL"}
-          </button>
+          {/* Footer */}
+          <DialogFooter className="border-t border-(--color-border) px-4 py-3">
+            <button
+              className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
+              onClick={handlePreview}
+              disabled={loading || !isValid}
+            >
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Eye size={14} />
+              )}
+              {loading ? "Previewing..." : "Preview SQL"}
+            </button>
+          </DialogFooter>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -388,19 +363,6 @@ function AddConstraintModal({
   const [checkExpression, setCheckExpression] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [onCancel]);
-
-  useEffect(() => {
-    dialogRef.current?.focus();
-  }, []);
 
   const toggleColumn = (colName: string) => {
     setSelectedColumns((prev) =>
@@ -469,181 +431,180 @@ function AddConstraintModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Add constraint"
-    >
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        className="w-[480px] rounded-lg bg-(--color-bg-secondary) shadow-xl outline-none"
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent
+        className="w-[480px] bg-(--color-bg-secondary) p-0"
+        showCloseButton={false}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-          <h2 className="text-sm font-semibold text-(--color-text-primary)">
-            Add Constraint
-          </h2>
-          <button
-            className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
-            onClick={onCancel}
-            aria-label="Close dialog"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Form */}
-        <div className="px-4 py-3 space-y-3">
-          {/* Constraint Name */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-              Constraint Name
-            </label>
-            <input
-              className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-              value={constraintName}
-              onChange={(e) => setConstraintName(e.target.value)}
-              placeholder="constraint_name"
-              aria-label="Constraint name"
-              autoFocus
-            />
-          </div>
-
-          {/* Constraint Type */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-              Type
-            </label>
-            <select
-              className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-              value={constraintType}
-              onChange={(e) => {
-                setConstraintType(e.target.value as ConstraintType);
-                setSelectedColumns([]);
-                setReferenceTable("");
-                setReferenceColumns("");
-                setCheckExpression("");
-              }}
-              aria-label="Constraint type"
+        <div className="rounded-lg bg-(--color-bg-secondary) shadow-xl">
+          {/* Header */}
+          <DialogHeader className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
+            <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+              Add Constraint
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a new constraint to this table
+            </DialogDescription>
+            <button
+              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              onClick={onCancel}
+              aria-label="Close dialog"
             >
-              <option value="primary_key">PRIMARY KEY</option>
-              <option value="unique">UNIQUE</option>
-              <option value="foreign_key">FOREIGN KEY</option>
-              <option value="check">CHECK</option>
-            </select>
-          </div>
+              <X size={16} />
+            </button>
+          </DialogHeader>
 
-          {/* Dynamic fields based on type */}
-          {needsColumns && (
+          {/* Form */}
+          <div className="space-y-3 px-4 py-3">
+            {/* Constraint Name */}
             <div>
               <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-                Columns
-              </label>
-              <div className="max-h-[120px] overflow-auto rounded border border-(--color-border) bg-(--color-bg-primary) p-2">
-                {columns.map((col) => (
-                  <label
-                    key={col.name}
-                    className="flex cursor-pointer items-center gap-2 px-1 py-0.5 text-xs text-(--color-text-primary) hover:bg-(--color-bg-tertiary) rounded"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedColumns.includes(col.name)}
-                      onChange={() => toggleColumn(col.name)}
-                      className="rounded border-(--color-border)"
-                    />
-                    {col.name}
-                    <span className="text-(--color-text-muted)">
-                      ({col.data_type})
-                    </span>
-                  </label>
-                ))}
-                {columns.length === 0 && (
-                  <span className="text-xs text-(--color-text-muted)">
-                    No columns available
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {needsReference && (
-            <>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-                  Reference Table
-                </label>
-                <input
-                  className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-                  value={referenceTable}
-                  onChange={(e) => setReferenceTable(e.target.value)}
-                  placeholder="reference_table"
-                  aria-label="Reference table"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-                  Reference Columns (comma-separated)
-                </label>
-                <input
-                  className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-                  value={referenceColumns}
-                  onChange={(e) => setReferenceColumns(e.target.value)}
-                  placeholder="id, name"
-                  aria-label="Reference columns"
-                />
-              </div>
-            </>
-          )}
-
-          {needsExpression && (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
-                Check Expression
+                Constraint Name
               </label>
               <input
                 className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
-                value={checkExpression}
-                onChange={(e) => setCheckExpression(e.target.value)}
-                placeholder="price > 0"
-                aria-label="Check expression"
+                value={constraintName}
+                onChange={(e) => setConstraintName(e.target.value)}
+                placeholder="constraint_name"
+                aria-label="Constraint name"
+                autoFocus
               />
             </div>
-          )}
-        </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
-            {error}
-          </div>
-        )}
+            {/* Constraint Type */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                Type
+              </label>
+              <select
+                className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                value={constraintType}
+                onChange={(e) => {
+                  setConstraintType(e.target.value as ConstraintType);
+                  setSelectedColumns([]);
+                  setReferenceTable("");
+                  setReferenceColumns("");
+                  setCheckExpression("");
+                }}
+                aria-label="Constraint type"
+              >
+                <option value="primary_key">PRIMARY KEY</option>
+                <option value="unique">UNIQUE</option>
+                <option value="foreign_key">FOREIGN KEY</option>
+                <option value="check">CHECK</option>
+              </select>
+            </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-(--color-border) px-4 py-3">
-          <button
-            className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
-            onClick={onCancel}
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
-            onClick={handlePreview}
-            disabled={loading || !isValid}
-          >
-            {loading ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Eye size={14} />
+            {/* Dynamic fields based on type */}
+            {needsColumns && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                  Columns
+                </label>
+                <div className="max-h-[120px] overflow-auto rounded border border-(--color-border) bg-(--color-bg-primary) p-2">
+                  {columns.map((col) => (
+                    <label
+                      key={col.name}
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-(--color-text-primary) hover:bg-(--color-bg-tertiary)"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedColumns.includes(col.name)}
+                        onChange={() => toggleColumn(col.name)}
+                        className="rounded border-(--color-border)"
+                      />
+                      {col.name}
+                      <span className="text-(--color-text-muted)">
+                        ({col.data_type})
+                      </span>
+                    </label>
+                  ))}
+                  {columns.length === 0 && (
+                    <span className="text-xs text-(--color-text-muted)">
+                      No columns available
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
-            {loading ? "Previewing..." : "Preview SQL"}
-          </button>
+
+            {needsReference && (
+              <>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                    Reference Table
+                  </label>
+                  <input
+                    className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                    value={referenceTable}
+                    onChange={(e) => setReferenceTable(e.target.value)}
+                    placeholder="reference_table"
+                    aria-label="Reference table"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                    Reference Columns (comma-separated)
+                  </label>
+                  <input
+                    className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                    value={referenceColumns}
+                    onChange={(e) => setReferenceColumns(e.target.value)}
+                    placeholder="id, name"
+                    aria-label="Reference columns"
+                  />
+                </div>
+              </>
+            )}
+
+            {needsExpression && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                  Check Expression
+                </label>
+                <input
+                  className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                  value={checkExpression}
+                  onChange={(e) => setCheckExpression(e.target.value)}
+                  placeholder="price > 0"
+                  aria-label="Check expression"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <DialogFooter className="border-t border-(--color-border) px-4 py-3">
+            <button
+              className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              onClick={onCancel}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
+              onClick={handlePreview}
+              disabled={loading || !isValid}
+            >
+              {loading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Eye size={14} />
+              )}
+              {loading ? "Previewing..." : "Preview SQL"}
+            </button>
+          </DialogFooter>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

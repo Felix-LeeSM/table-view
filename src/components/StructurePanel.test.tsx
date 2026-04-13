@@ -1306,7 +1306,7 @@ describe("StructurePanel", () => {
     });
 
     expect(
-      screen.getByRole("dialog", { name: "Create index" }),
+      screen.getByRole("dialog", { name: "Create Index" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Index name")).toBeInTheDocument();
     expect(screen.getByLabelText("Index type")).toBeInTheDocument();
@@ -1328,7 +1328,7 @@ describe("StructurePanel", () => {
 
     // The modal fetches columns and displays them with data type in parentheses
     // Use the dialog-scoped query to avoid conflicts with the table behind
-    const dialog = screen.getByRole("dialog", { name: "Create index" });
+    const dialog = screen.getByRole("dialog", { name: "Create Index" });
     expect(dialog).toBeInTheDocument();
     // The column checkboxes are present in the modal
     const checkboxes = dialog.querySelectorAll('input[type="checkbox"]');
@@ -1349,7 +1349,7 @@ describe("StructurePanel", () => {
     });
 
     expect(
-      screen.getByRole("dialog", { name: "Create index" }),
+      screen.getByRole("dialog", { name: "Create Index" }),
     ).toBeInTheDocument();
 
     await act(async () => {
@@ -1357,7 +1357,7 @@ describe("StructurePanel", () => {
     });
 
     expect(
-      screen.queryByRole("dialog", { name: "Create index" }),
+      screen.queryByRole("dialog", { name: "Create Index" }),
     ).not.toBeInTheDocument();
   });
 
@@ -1622,7 +1622,7 @@ describe("StructurePanel", () => {
     });
 
     expect(
-      screen.getByRole("dialog", { name: "Add constraint" }),
+      screen.getByRole("dialog", { name: "Add Constraint" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Constraint name")).toBeInTheDocument();
     expect(screen.getByLabelText("Constraint type")).toBeInTheDocument();
@@ -1690,7 +1690,7 @@ describe("StructurePanel", () => {
 
     // Default is UNIQUE, should show column checkboxes
     // Columns are fetched on opening the modal
-    const dialog = screen.getByRole("dialog", { name: "Add constraint" });
+    const dialog = screen.getByRole("dialog", { name: "Add Constraint" });
     expect(dialog).toBeInTheDocument();
     const checkboxes = dialog.querySelectorAll('input[type="checkbox"]');
     expect(checkboxes.length).toBeGreaterThanOrEqual(3);

@@ -16,6 +16,14 @@ import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
 import FilterBar from "./FilterBar";
 import { truncateCell } from "../lib/format";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./ui/dialog";
 import type {
   FilterCondition,
   FilterMode,
@@ -972,13 +980,19 @@ export default function DataGrid({
       )}
 
       {/* SQL Preview Modal */}
-      {sqlPreview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          role="dialog"
-          aria-label="SQL Preview"
+      <Dialog
+        open={!!sqlPreview}
+        onOpenChange={(open) => !open && setSqlPreview(null)}
+      >
+        <DialogContent
+          className="w-[600px] max-h-[80vh] bg-(--color-bg-primary) p-0"
+          showCloseButton={false}
         >
-          <div className="w-[600px] max-h-[80vh] flex flex-col rounded-lg border border-(--color-border) bg-(--color-bg-primary) shadow-xl">
+          <DialogHeader className="sr-only">
+            <DialogTitle>SQL Preview</DialogTitle>
+            <DialogDescription>Preview SQL before executing</DialogDescription>
+          </DialogHeader>
+          <div className="flex max-h-[80vh] flex-col rounded-lg border border-(--color-border) bg-(--color-bg-primary) shadow-xl">
             <div className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
               <h3 className="text-sm font-semibold text-(--color-text-primary)">
                 SQL Preview
@@ -992,7 +1006,7 @@ export default function DataGrid({
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {sqlPreview.map((sql, i) => (
+              {sqlPreview?.map((sql, i) => (
                 <pre
                   key={i}
                   className="mb-2 whitespace-pre-wrap break-all rounded bg-(--color-bg-secondary) p-2 text-xs text-(--color-text-secondary)"
@@ -1001,7 +1015,7 @@ export default function DataGrid({
                 </pre>
               ))}
             </div>
-            <div className="flex items-center justify-end gap-2 border-t border-(--color-border) px-4 py-3">
+            <DialogFooter className="border-t border-(--color-border) px-4 py-3">
               <button
                 className="rounded bg-(--color-bg-tertiary) px-3 py-1.5 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-secondary)"
                 onClick={() => setSqlPreview(null)}
@@ -1015,10 +1029,10 @@ export default function DataGrid({
               >
                 Execute
               </button>
-            </div>
+            </DialogFooter>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

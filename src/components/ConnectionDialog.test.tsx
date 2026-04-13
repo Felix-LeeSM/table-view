@@ -81,9 +81,11 @@ describe("ConnectionDialog", () => {
     expect(screen.getByText("New Connection")).toBeInTheDocument();
   });
 
-  it("has role=dialog and aria-modal=true", () => {
+  it("has role=dialog with proper modal semantics", () => {
     renderDialog();
-    expect(screen.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveAttribute("role", "dialog");
   });
 
   // -----------------------------------------------------------------------

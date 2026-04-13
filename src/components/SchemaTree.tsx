@@ -20,6 +20,14 @@ import { useSchemaStore } from "../stores/schemaStore";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useTabStore } from "../stores/tabStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./ui/dialog";
 import type { TableInfo } from "../types/schema";
 
 const EMPTY_SCHEMAS: never[] = [];
@@ -687,21 +695,24 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       )}
 
       {/* Drop table confirmation dialog */}
-      {confirmDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          role="dialog"
-          aria-modal="true"
-          aria-label={confirmDialog.title}
+      <Dialog
+        open={!!confirmDialog}
+        onOpenChange={(open) => !open && setConfirmDialog(null)}
+      >
+        <DialogContent
+          className="w-80 bg-(--color-bg-secondary) p-4"
+          showCloseButton={false}
         >
-          <div className="w-80 rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
-            <h3 className="mb-2 text-sm font-semibold text-(--color-text-primary)">
-              {confirmDialog.title}
-            </h3>
-            <p className="mb-4 text-sm text-(--color-text-secondary)">
-              {confirmDialog.message}
-            </p>
-            <div className="flex justify-end gap-2">
+          <div className="rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="mb-2 text-sm font-semibold text-(--color-text-primary)">
+                {confirmDialog?.title}
+              </DialogTitle>
+              <DialogDescription className="mb-4 text-sm text-(--color-text-secondary)">
+                {confirmDialog?.message}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex justify-end gap-2">
               <button
                 className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
                 onClick={() => setConfirmDialog(null)}
@@ -711,39 +722,39 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               </button>
               <button
                 className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
-                  confirmDialog.danger
+                  confirmDialog?.danger
                     ? "bg-(--color-danger) hover:opacity-90"
                     : "bg-(--color-accent) hover:opacity-90"
                 } ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
-                onClick={confirmDialog.onConfirm}
+                onClick={confirmDialog?.onConfirm}
                 disabled={isOperating}
-                aria-label={confirmDialog.confirmLabel}
+                aria-label={confirmDialog?.confirmLabel}
               >
-                {isOperating ? "Dropping..." : confirmDialog.confirmLabel}
+                {isOperating ? "Dropping..." : confirmDialog?.confirmLabel}
               </button>
-            </div>
+            </DialogFooter>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Rename table dialog */}
-      {renameDialog && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Rename Table"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setRenameDialog(null);
-          }}
+      <Dialog
+        open={!!renameDialog}
+        onOpenChange={(open) => !open && setRenameDialog(null)}
+      >
+        <DialogContent
+          className="w-80 bg-(--color-bg-secondary) p-4"
+          showCloseButton={false}
         >
-          <div className="w-80 rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
-            <h3 className="mb-2 text-sm font-semibold text-(--color-text-primary)">
-              Rename Table
-            </h3>
-            <p className="mb-2 text-xs text-(--color-text-muted)">
-              {renameDialog.schemaName}.{renameDialog.tableName}
-            </p>
+          <div className="rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="mb-2 text-sm font-semibold text-(--color-text-primary)">
+                Rename Table
+              </DialogTitle>
+              <DialogDescription className="mb-2 text-xs text-(--color-text-muted)">
+                {renameDialog?.schemaName}.{renameDialog?.tableName}
+              </DialogDescription>
+            </DialogHeader>
             <input
               ref={renameInputRef}
               type="text"
@@ -758,9 +769,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                   e.preventDefault();
                   handleConfirmRename();
                 }
-                if (e.key === "Escape") {
-                  setRenameDialog(null);
-                }
               }}
               autoFocus
               aria-label="New table name"
@@ -770,7 +778,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                 {renameError}
               </p>
             )}
-            <div className="mt-3 flex justify-end gap-2">
+            <DialogFooter className="mt-3 flex justify-end gap-2">
               <button
                 className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
                 onClick={() => setRenameDialog(null)}
@@ -786,10 +794,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               >
                 {isOperating ? "Renaming..." : "Rename"}
               </button>
-            </div>
+            </DialogFooter>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

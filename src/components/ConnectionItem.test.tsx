@@ -466,11 +466,10 @@ describe("ConnectionItem", () => {
       fireEvent.click(deleteBtn);
     });
 
+    const dialog = screen.getByRole("dialog", { name: /delete connection/i });
+    expect(dialog).toBeInTheDocument();
     expect(
-      screen.getByRole("dialog", { name: /delete connection/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Are you sure you want to delete/),
+      within(dialog).getByText(/Are you sure you want to delete/),
     ).toBeInTheDocument();
   });
 
