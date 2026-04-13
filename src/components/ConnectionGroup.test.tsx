@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import ConnectionGroup from "./ConnectionGroup";
 import { useConnectionStore } from "../stores/connectionStore";
 import type {
@@ -185,7 +191,9 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
     expect(header).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.click(header);
+    act(() => {
+      fireEvent.click(header);
+    });
     expect(header).toHaveAttribute("aria-expanded", "false");
   });
 
@@ -200,7 +208,9 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
     expect(header).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.click(header);
+    act(() => {
+      fireEvent.click(header);
+    });
     expect(header).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -244,7 +254,9 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
 
     expect(screen.getByTestId("context-menu")).toBeInTheDocument();
     expect(screen.getByTestId("menu-item-Rename")).toBeInTheDocument();
@@ -258,10 +270,14 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
 
     const renameBtn = screen.getByTestId("menu-item-Rename");
-    fireEvent.click(renameBtn);
+    act(() => {
+      fireEvent.click(renameBtn);
+    });
 
     // The context menu mock calls onClick then onClose
     // After clicking Rename, an input should appear
@@ -281,12 +297,20 @@ describe("ConnectionGroup", () => {
 
     // Trigger rename via context menu
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "Staging" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    act(() => {
+      fireEvent.change(input, { target: { value: "Staging" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
 
     await waitFor(() => {
       expect(mockUpdateGroup).toHaveBeenCalledWith(
@@ -307,12 +331,20 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "Staging" } });
-    fireEvent.keyDown(input, { key: "Escape" });
+    act(() => {
+      fireEvent.change(input, { target: { value: "Staging" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Escape" });
+    });
 
     expect(mockUpdateGroup).not.toHaveBeenCalled();
     // Input should be gone, original name should be visible
@@ -331,12 +363,20 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "   " } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    act(() => {
+      fireEvent.change(input, { target: { value: "   " } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
 
     await waitFor(() => {
       expect(mockUpdateGroup).not.toHaveBeenCalled();
@@ -352,12 +392,18 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
     // Value is already "Production" (set from group.name), just press Enter
-    fireEvent.keyDown(input, { key: "Enter" });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
 
     await waitFor(() => {
       expect(mockUpdateGroup).not.toHaveBeenCalled();
@@ -371,10 +417,14 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
 
     const deleteBtn = screen.getByTestId("menu-item-Delete Group");
-    fireEvent.click(deleteBtn);
+    act(() => {
+      fireEvent.click(deleteBtn);
+    });
 
     expect(mockRemoveGroup).toHaveBeenCalledWith("g1");
   });
@@ -388,8 +438,10 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.drop(header, {
-      dataTransfer: { getData: () => "" },
+    act(() => {
+      fireEvent.drop(header, {
+        dataTransfer: { getData: () => "" },
+      });
     });
 
     await waitFor(() => {
@@ -403,8 +455,10 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.drop(header, {
-      dataTransfer: { getData: () => "fallback-conn-id" },
+    act(() => {
+      fireEvent.drop(header, {
+        dataTransfer: { getData: () => "fallback-conn-id" },
+      });
     });
 
     await waitFor(() => {
@@ -421,8 +475,10 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.drop(header, {
-      dataTransfer: { getData: () => "" },
+    act(() => {
+      fireEvent.drop(header, {
+        dataTransfer: { getData: () => "" },
+      });
     });
 
     expect(mockMoveConnectionToGroup).not.toHaveBeenCalled();
@@ -439,8 +495,10 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
     const classBefore = header.className;
 
-    fireEvent.dragOver(header, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(header, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
 
     expect(header.className).not.toBe(classBefore);
@@ -455,8 +513,10 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
     const classBefore = header.className;
 
-    fireEvent.dragOver(header, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(header, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
 
     expect(header.className).toBe(classBefore);
@@ -469,12 +529,16 @@ describe("ConnectionGroup", () => {
 
     const header = screen.getByRole("button");
 
-    fireEvent.dragOver(header, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(header, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
     const activeClass = header.className;
 
-    fireEvent.dragLeave(header);
+    act(() => {
+      fireEvent.dragLeave(header);
+    });
     expect(header.className).not.toBe(activeClass);
   });
 
@@ -485,12 +549,16 @@ describe("ConnectionGroup", () => {
 
     const header = screen.getByRole("button");
 
-    fireEvent.dragOver(header, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(header, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
 
-    fireEvent.drop(header, {
-      dataTransfer: { getData: () => "" },
+    act(() => {
+      fireEvent.drop(header, {
+        dataTransfer: { getData: () => "" },
+      });
     });
 
     // After drop, the connection id exists so moveConnectionToGroup is called
@@ -516,7 +584,9 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
     expect(header).toHaveAttribute("aria-expanded", "true");
 
-    fireEvent.keyDown(header, { key: "Enter" });
+    act(() => {
+      fireEvent.keyDown(header, { key: "Enter" });
+    });
     expect(header).toHaveAttribute("aria-expanded", "false");
   });
 
@@ -531,7 +601,9 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
     expect(header).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.keyDown(header, { key: " " });
+    act(() => {
+      fireEvent.keyDown(header, { key: " " });
+    });
     expect(header).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -544,8 +616,12 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
 
     // Open rename mode
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     expect(screen.getByRole("textbox")).toBeInTheDocument();
 
@@ -553,7 +629,9 @@ describe("ConnectionGroup", () => {
 
     // Click on the input (which is inside the header) should not toggle
     const input = screen.getByRole("textbox");
-    fireEvent.click(input);
+    act(() => {
+      fireEvent.click(input);
+    });
 
     expect(header).toHaveAttribute("aria-expanded", ariaBefore);
   });
@@ -572,12 +650,18 @@ describe("ConnectionGroup", () => {
     const header = screen.getByRole("button");
 
     // Enter rename mode
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const ariaBefore = header.getAttribute("aria-expanded");
 
-    fireEvent.keyDown(header, { key: "Enter" });
+    act(() => {
+      fireEvent.keyDown(header, { key: "Enter" });
+    });
     expect(header).toHaveAttribute("aria-expanded", ariaBefore);
   });
 
@@ -593,12 +677,20 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "Staging" } });
-    fireEvent.blur(input);
+    act(() => {
+      fireEvent.change(input, { target: { value: "Staging" } });
+    });
+    act(() => {
+      fireEvent.blur(input);
+    });
 
     await waitFor(() => {
       expect(mockUpdateGroup).toHaveBeenCalledWith(
@@ -616,11 +708,17 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
-    fireEvent.blur(input);
+    act(() => {
+      fireEvent.blur(input);
+    });
 
     await waitFor(() => {
       expect(mockUpdateGroup).not.toHaveBeenCalled();
@@ -652,14 +750,20 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
     const ariaBefore = header.getAttribute("aria-expanded");
 
     // Clicking the input should not toggle collapse
-    fireEvent.click(input);
+    act(() => {
+      fireEvent.click(input);
+    });
     expect(header).toHaveAttribute("aria-expanded", ariaBefore);
   });
 
@@ -670,11 +774,15 @@ describe("ConnectionGroup", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
     expect(screen.getByTestId("context-menu")).toBeInTheDocument();
 
     // The mock menu calls onClose when any button is clicked
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
     expect(screen.queryByTestId("context-menu")).not.toBeInTheDocument();
   });
 
@@ -690,12 +798,20 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox");
-    fireEvent.change(input, { target: { value: "  Staging  " } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    act(() => {
+      fireEvent.change(input, { target: { value: "  Staging  " } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
 
     await waitFor(() => {
       expect(mockUpdateGroup).toHaveBeenCalledWith(
@@ -732,8 +848,12 @@ describe("ConnectionGroup", () => {
     );
 
     const header = screen.getByRole("button");
-    fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Rename"));
+    });
 
     const input = screen.getByRole("textbox") as HTMLInputElement;
     expect(input.value).toBe("Production");

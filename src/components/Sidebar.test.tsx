@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import Sidebar from "./Sidebar";
 import { useConnectionStore } from "../stores/connectionStore";
 
@@ -166,7 +166,9 @@ describe("Sidebar", () => {
     expect(screen.queryByTestId("connection-dialog")).not.toBeInTheDocument();
 
     const newBtn = screen.getByLabelText("New Connection");
-    fireEvent.click(newBtn);
+    act(() => {
+      fireEvent.click(newBtn);
+    });
 
     expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
   });
@@ -179,12 +181,16 @@ describe("Sidebar", () => {
 
     // Open dialog
     const newBtn = screen.getByLabelText("New Connection");
-    fireEvent.click(newBtn);
+    act(() => {
+      fireEvent.click(newBtn);
+    });
     expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
 
     // Close via dialog's onClose
     const closeBtn = screen.getByText("Close");
-    fireEvent.click(closeBtn);
+    act(() => {
+      fireEvent.click(closeBtn);
+    });
     expect(screen.queryByTestId("connection-dialog")).not.toBeInTheDocument();
   });
 
@@ -195,7 +201,9 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const themeBtn = screen.getByLabelText(/Theme:/);
-    fireEvent.click(themeBtn);
+    act(() => {
+      fireEvent.click(themeBtn);
+    });
 
     expect(mockSetTheme).toHaveBeenCalledWith("light");
   });
@@ -206,7 +214,9 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const themeBtn = screen.getByLabelText(/Theme:/);
-    fireEvent.click(themeBtn);
+    act(() => {
+      fireEvent.click(themeBtn);
+    });
 
     expect(mockSetTheme).toHaveBeenCalledWith("dark");
   });
@@ -217,7 +227,9 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const themeBtn = screen.getByLabelText(/Theme:/);
-    fireEvent.click(themeBtn);
+    act(() => {
+      fireEvent.click(themeBtn);
+    });
 
     expect(mockSetTheme).toHaveBeenCalledWith("system");
   });
@@ -352,7 +364,9 @@ describe("Sidebar", () => {
     const container = getSidebarContainer();
     const handle = getResizeHandle(container)!;
 
-    fireEvent.mouseDown(handle, { clientX: 250 });
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 250 });
+    });
 
     expect(document.body.style.cursor).toBe("col-resize");
     expect(document.body.style.userSelect).toBe("none");
@@ -367,8 +381,12 @@ describe("Sidebar", () => {
     // Initial width is 250
     expect(container).toHaveStyle({ width: "250px" });
 
-    fireEvent.mouseDown(handle, { clientX: 250 });
-    fireEvent.mouseMove(document, { clientX: 300 });
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 250 });
+    });
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 300 });
+    });
 
     // Width should increase by 50 (300 - 250), new width = 300
     expect(container).toHaveStyle({ width: "300px" });
@@ -380,9 +398,13 @@ describe("Sidebar", () => {
     const container = getSidebarContainer();
     const handle = getResizeHandle(container)!;
 
-    fireEvent.mouseDown(handle, { clientX: 250 });
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 250 });
+    });
     // Move far left to try to go below 180
-    fireEvent.mouseMove(document, { clientX: 0 });
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 0 });
+    });
 
     expect(container).toHaveStyle({ width: "180px" });
   });
@@ -393,9 +415,13 @@ describe("Sidebar", () => {
     const container = getSidebarContainer();
     const handle = getResizeHandle(container)!;
 
-    fireEvent.mouseDown(handle, { clientX: 250 });
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 250 });
+    });
     // Move far right to try to exceed 500
-    fireEvent.mouseMove(document, { clientX: 1000 });
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 1000 });
+    });
 
     expect(container).toHaveStyle({ width: "500px" });
   });
@@ -406,16 +432,24 @@ describe("Sidebar", () => {
     const container = getSidebarContainer();
     const handle = getResizeHandle(container)!;
 
-    fireEvent.mouseDown(handle, { clientX: 250 });
-    fireEvent.mouseMove(document, { clientX: 300 });
-    fireEvent.mouseUp(document);
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 250 });
+    });
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 300 });
+    });
+    act(() => {
+      fireEvent.mouseUp(document);
+    });
 
     expect(document.body.style.cursor).toBe("");
     expect(document.body.style.userSelect).toBe("");
 
     // After mouseup, further mousemove should not change width
     const widthAfterUp = container.style.width;
-    fireEvent.mouseMove(document, { clientX: 400 });
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 400 });
+    });
     expect(container.style.width).toBe(widthAfterUp);
   });
 
@@ -446,9 +480,15 @@ describe("Sidebar", () => {
     const container = getSidebarContainer();
     const handle = getResizeHandle(container)!;
 
-    fireEvent.mouseDown(handle, { clientX: 250 });
-    fireEvent.mouseMove(document, { clientX: 300 }); // +50
-    fireEvent.mouseUp(document);
+    act(() => {
+      fireEvent.mouseDown(handle, { clientX: 250 });
+    });
+    act(() => {
+      fireEvent.mouseMove(document, { clientX: 300 });
+    }); // +50
+    act(() => {
+      fireEvent.mouseUp(document);
+    });
 
     // Width should be committed to React state
     expect(container).toHaveStyle({ width: "300px" });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import ConnectionItem from "./ConnectionItem";
 import { useConnectionStore } from "../stores/connectionStore";
 import type { ConnectionConfig } from "../types/connection";
@@ -251,7 +251,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.doubleClick(item);
+    act(() => {
+      fireEvent.doubleClick(item);
+    });
 
     expect(mockConnect).toHaveBeenCalledWith("conn-1");
   });
@@ -268,7 +270,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.doubleClick(item);
+    act(() => {
+      fireEvent.doubleClick(item);
+    });
 
     expect(mockConnect).toHaveBeenCalledWith("conn-1");
   });
@@ -283,7 +287,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.doubleClick(item);
+    act(() => {
+      fireEvent.doubleClick(item);
+    });
 
     expect(mockConnect).not.toHaveBeenCalled();
   });
@@ -298,7 +304,11 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    expect(() => fireEvent.doubleClick(item)).not.toThrow();
+    expect(() =>
+      act(() => {
+        fireEvent.doubleClick(item);
+      }),
+    ).not.toThrow();
   });
 
   // -----------------------------------------------------------------------
@@ -310,7 +320,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     expect(screen.getByTestId("context-menu")).toBeInTheDocument();
   });
@@ -326,7 +338,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     expect(screen.getByText("Connect")).toBeInTheDocument();
   });
@@ -339,7 +353,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     expect(screen.getByText("Disconnect")).toBeInTheDocument();
   });
@@ -354,10 +370,14 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     const connectBtn = screen.getByText("Connect");
-    fireEvent.click(connectBtn);
+    act(() => {
+      fireEvent.click(connectBtn);
+    });
 
     expect(mockConnect).toHaveBeenCalledWith("conn-1");
   });
@@ -372,10 +392,14 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     const disconnectBtn = screen.getByText("Disconnect");
-    fireEvent.click(disconnectBtn);
+    act(() => {
+      fireEvent.click(disconnectBtn);
+    });
 
     expect(mockDisconnect).toHaveBeenCalledWith("conn-1");
   });
@@ -389,10 +413,14 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     const editBtn = screen.getByText("Edit");
-    fireEvent.click(editBtn);
+    act(() => {
+      fireEvent.click(editBtn);
+    });
 
     expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
   });
@@ -404,13 +432,19 @@ describe("ConnectionItem", () => {
 
     // Open the dialog via context menu
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByText("Edit"));
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByText("Edit"));
+    });
 
     expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
 
     // Close it
-    fireEvent.click(screen.getByTestId("dialog-close"));
+    act(() => {
+      fireEvent.click(screen.getByTestId("dialog-close"));
+    });
     expect(screen.queryByTestId("connection-dialog")).not.toBeInTheDocument();
   });
 
@@ -423,10 +457,14 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
 
     const deleteBtn = screen.getByText("Delete");
-    fireEvent.click(deleteBtn);
+    act(() => {
+      fireEvent.click(deleteBtn);
+    });
 
     expect(
       screen.getByRole("dialog", { name: /delete connection/i }),
@@ -447,13 +485,19 @@ describe("ConnectionItem", () => {
 
     // Open delete confirm
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByText("Delete"));
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
 
     // Find the actual Delete button inside the dialog
     const dialog = screen.getByRole("dialog");
     const deleteConfirmBtn = within(dialog).getAllByText("Delete").pop()!;
-    fireEvent.click(deleteConfirmBtn);
+    act(() => {
+      fireEvent.click(deleteConfirmBtn);
+    });
 
     expect(mockRemove).toHaveBeenCalledWith("conn-1");
   });
@@ -465,12 +509,18 @@ describe("ConnectionItem", () => {
 
     // Open delete confirm
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
-    fireEvent.click(screen.getByText("Delete"));
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
 
     // Click Cancel
     const dialog = screen.getByRole("dialog");
-    fireEvent.click(within(dialog).getByText("Cancel"));
+    act(() => {
+      fireEvent.click(within(dialog).getByText("Cancel"));
+    });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -488,7 +538,9 @@ describe("ConnectionItem", () => {
       effectAllowed: "",
       setData: vi.fn(),
     };
-    fireEvent.dragStart(item, { dataTransfer });
+    act(() => {
+      fireEvent.dragStart(item, { dataTransfer });
+    });
 
     // draggedConnectionId is a module-level export; after dragStart it should be set
     // We verify indirectly via the opacity change (dragging state)
@@ -507,10 +559,14 @@ describe("ConnectionItem", () => {
       effectAllowed: "",
       setData: vi.fn(),
     };
-    fireEvent.dragStart(item, { dataTransfer });
+    act(() => {
+      fireEvent.dragStart(item, { dataTransfer });
+    });
     expect(item.className).toContain("opacity-40");
 
-    fireEvent.dragEnd(item);
+    act(() => {
+      fireEvent.dragEnd(item);
+    });
     expect(item.className).not.toContain("opacity-40");
   });
 
@@ -527,7 +583,9 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.keyDown(item, { key: "Enter" });
+    act(() => {
+      fireEvent.keyDown(item, { key: "Enter" });
+    });
 
     expect(mockConnect).toHaveBeenCalledWith("conn-1");
   });
@@ -541,11 +599,15 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    act(() => {
+      fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+    });
     expect(screen.getByTestId("context-menu")).toBeInTheDocument();
 
     // The mock menu calls onClose when any button is clicked
-    fireEvent.click(screen.getByText("Edit"));
+    act(() => {
+      fireEvent.click(screen.getByText("Edit"));
+    });
     expect(screen.queryByTestId("context-menu")).not.toBeInTheDocument();
   });
 

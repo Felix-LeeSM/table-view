@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 function createItems(): ContextMenuItem[] {
@@ -31,7 +31,9 @@ describe("ContextMenu", () => {
   it("calls onClick and onClose when a menu item is clicked", () => {
     render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    act(() => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
+    });
 
     expect(items[0]!.onClick).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
@@ -40,7 +42,9 @@ describe("ContextMenu", () => {
   it("calls onClose when clicking outside the menu", () => {
     render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
 
-    fireEvent.mouseDown(document.body);
+    act(() => {
+      fireEvent.mouseDown(document.body);
+    });
 
     expect(onClose).toHaveBeenCalled();
   });
@@ -48,7 +52,9 @@ describe("ContextMenu", () => {
   it("calls onClose on Escape key", () => {
     render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
 
-    fireEvent.keyDown(document, { key: "Escape" });
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
 
     expect(onClose).toHaveBeenCalled();
   });
@@ -92,7 +98,9 @@ describe("ContextMenu", () => {
 
     // After unmount, clicking outside should NOT call onClose
     onClose.mockClear();
-    fireEvent.mouseDown(document.body);
+    act(() => {
+      fireEvent.mouseDown(document.body);
+    });
     expect(onClose).not.toHaveBeenCalled();
   });
 

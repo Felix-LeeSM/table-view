@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import ConnectionList from "./ConnectionList";
 import { useConnectionStore } from "../stores/connectionStore";
 import type { ConnectionConfig } from "../types/connection";
@@ -263,8 +263,10 @@ describe("ConnectionList", () => {
     const dropZone = container.firstElementChild as HTMLElement;
 
     // Simulate drop
-    fireEvent.drop(dropZone, {
-      dataTransfer: { getData: () => "fallback-id" },
+    act(() => {
+      fireEvent.drop(dropZone, {
+        dataTransfer: { getData: () => "fallback-id" },
+      });
     });
 
     expect(mockMove).toHaveBeenCalledWith("conn-2", null);
@@ -284,8 +286,10 @@ describe("ConnectionList", () => {
     const { container } = render(<ConnectionList />);
     const dropZone = container.firstElementChild as HTMLElement;
 
-    fireEvent.drop(dropZone, {
-      dataTransfer: { getData: () => "fallback-conn-id" },
+    act(() => {
+      fireEvent.drop(dropZone, {
+        dataTransfer: { getData: () => "fallback-conn-id" },
+      });
     });
 
     expect(mockMove).toHaveBeenCalledWith("fallback-conn-id", null);
@@ -305,8 +309,10 @@ describe("ConnectionList", () => {
     const { container } = render(<ConnectionList />);
     const dropZone = container.firstElementChild as HTMLElement;
 
-    fireEvent.drop(dropZone, {
-      dataTransfer: { getData: () => "" },
+    act(() => {
+      fireEvent.drop(dropZone, {
+        dataTransfer: { getData: () => "" },
+      });
     });
 
     expect(mockMove).not.toHaveBeenCalled();
@@ -328,8 +334,10 @@ describe("ConnectionList", () => {
 
     const classBefore = dropZone.className;
 
-    fireEvent.dragOver(dropZone, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(dropZone, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
 
     // Class should change to include the accent background
@@ -349,8 +357,10 @@ describe("ConnectionList", () => {
 
     const classBefore = dropZone.className;
 
-    fireEvent.dragOver(dropZone, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(dropZone, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
 
     // draggedConnectionId is null, so class should not change
@@ -390,13 +400,17 @@ describe("ConnectionList", () => {
     const dropZone = container.firstElementChild as HTMLElement;
 
     // Activate via dragOver
-    fireEvent.dragOver(dropZone, {
-      dataTransfer: { dropEffect: "" },
+    act(() => {
+      fireEvent.dragOver(dropZone, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
     const activeClass = dropZone.className;
 
     // dragLeave should reset
-    fireEvent.dragLeave(dropZone);
+    act(() => {
+      fireEvent.dragLeave(dropZone);
+    });
     expect(dropZone.className).not.toBe(activeClass);
   });
 

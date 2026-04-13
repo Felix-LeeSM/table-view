@@ -2,16 +2,16 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-12 (Sprint 23 완료 후 검증 완료)
+Last updated: 2026-04-12 (Sprint 40 + E2E 안정화 완료 후 검증)
 
 ## Summary
 
 | Status    | Count |
 |-----------|-------|
-| Active    | 12    |
-| Resolved  | 7     |
+| Active    | 14    |
+| Resolved  | 8     |
 | Deferred  | 1     |
-| **Total** | **20** |
+| **Total** | **23** |
 
 ---
 
@@ -39,6 +39,10 @@ Last updated: 2026-04-12 (Sprint 23 완료 후 검증 완료)
 | RISK-018 | MySQL 어댑터 미구현 (docker-compose에만 정의)                                          | active    | backend           | 16            | —                                                         |
 | RISK-019 | Schema integration 12개 테스트 CI에서 Docker DB 필요                                    | active    | ci                | 14–16         | CI passes with GitHub service containers; local-dev only  |
 | RISK-020 | E2E macOS 미지원 (tauri-driver WKWebView limitation)                                    | deferred  | ci                | 15            | —                                                         |
+| RISK-021 | CHECK constraint 표현식 raw SQL 전달 (DB 관리 도구이므로 의도적)                        | active    | backend           | 22            | By design — DB 관리 도구에서 raw SQL 의도적                |
+| RISK-022 | E2E 우클릭 미지원 (tauri-driver W3C Actions API 미구현) — 3개 context menu 테스트 skip  | active    | e2e               | E2E 안정화    | tauri-driver 한계; skip 처리                               |
+| RISK-023 | E2E 테스트 상태 격리 부족 (maxInstances: 1, 같은 앱 인스턴스 재사용)                      | active    | e2e               | E2E 안정화    | beforeEach에서 상태 복구 필요                              |
+| RISK-024 | fireEvent 호출 act() 미래핑 — React state update 경고 가능                              | resolved  | frontend/testing  | 24–40         | act() 래핑 적용 완료                                      |
 
 ---
 
@@ -87,3 +91,9 @@ Details for every resolved risk.
 - **Origin**: Sprint 0
 - **Resolved in**: Subsequent sprints
 - **Fix**: Type definitions and test setup file corrected to compile cleanly under strict mode.
+
+### RISK-024 — fireEvent 호출 act() 미래핑
+
+- **Origin**: Sprint 24–40 (테스트 코드 전반)
+- **Resolved in**: 2026-04-12
+- **Fix**: 5개 테스트 파일(ContextMenu, ConnectionGroup, ConnectionItem, Sidebar, ConnectionList)의 모든 fireEvent 호출을 `act(() => { ... })`로 래핑. React state update 경고 방지.
