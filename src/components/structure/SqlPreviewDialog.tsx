@@ -26,20 +26,20 @@ export default function SqlPreviewDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
-        className="w-[520px] bg-(--color-bg-secondary) p-0"
+        className="w-[520px] bg-secondary p-0"
         showCloseButton={false}
       >
-        <div className="rounded-lg bg-(--color-bg-secondary) shadow-xl">
+        <div className="rounded-lg bg-secondary shadow-xl">
           {/* Header */}
-          <DialogHeader className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-            <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+          <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
+            <DialogTitle className="text-sm font-semibold text-foreground">
               Review SQL Changes
             </DialogTitle>
             <DialogDescription className="sr-only">
               Review and execute SQL changes
             </DialogDescription>
             <button
-              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              className="rounded p-1 text-muted-foreground hover:bg-muted"
               onClick={onCancel}
               aria-label="Close dialog"
             >
@@ -49,29 +49,29 @@ export default function SqlPreviewDialog({
 
           {/* SQL content */}
           <div className="px-4 py-3">
-            <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded border border-(--color-border) bg-(--color-bg-primary) p-3 text-xs font-mono text-(--color-text-primary)">
+            <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
               {sql || "-- No changes to preview"}
             </pre>
           </div>
 
           {/* Error */}
           {error && (
-            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
+            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
 
           {/* Footer */}
-          <DialogFooter className="border-t border-(--color-border) px-4 py-3">
+          <DialogFooter className="border-t border-border px-4 py-3">
             <button
-              className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
               onClick={onCancel}
               disabled={loading}
             >
               Cancel
             </button>
             <button
-              className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
               onClick={onConfirm}
               disabled={loading || !sql.trim()}
             >

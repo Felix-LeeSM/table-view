@@ -112,7 +112,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       aria-label="Context menu"
       className={measured ? "select-none" : "select-none invisible"}
     >
-      <div className="min-w-[160px] rounded-md border border-(--color-border) bg-(--color-bg-secondary) py-1 shadow-lg">
+      <div className="min-w-[160px] rounded-md border border-border bg-secondary py-1 shadow-lg">
         {items.map((item, index) => (
           <button
             key={item.label}
@@ -123,13 +123,9 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
               item.disabled
                 ? "cursor-not-allowed opacity-40"
                 : index === activeIndex
-                  ? "bg-(--color-bg-tertiary) focus:bg-(--color-bg-tertiary)"
-                  : "hover:bg-(--color-bg-tertiary) focus:bg-(--color-bg-tertiary)"
-            } ${
-              item.danger
-                ? "text-(--color-danger)"
-                : "text-(--color-text-primary)"
-            }`}
+                  ? "bg-muted focus:bg-muted"
+                  : "hover:bg-muted focus:bg-muted"
+            } ${item.danger ? "text-destructive" : "text-foreground"}`}
             onClick={() => {
               if (item.disabled) return;
               item.onClick();

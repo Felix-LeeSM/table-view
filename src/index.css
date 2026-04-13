@@ -30,22 +30,6 @@
 }
 
 :root {
-  /* Original project palette */
-  --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-tertiary: #f1f5f9;
-  --color-bg-sidebar: #f8fafc;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-muted: #94a3b8;
-  --color-border: #e2e8f0;
-  --color-accent: #4f46e5;
-  --color-accent-hover: #4338ca;
-  --color-success: #22c55e;
-  --color-danger: #ef4444;
-  --color-danger-hover: #dc2626;
-
-  /* shadcn/ui semantic tokens — light */
   --background: #ffffff;
   --foreground: #0f172a;
   --card: #ffffff;
@@ -69,22 +53,6 @@
 }
 
 .dark {
-  /* Original project palette — dark */
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
-  --color-bg-sidebar: #1e293b;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #cbd5e1;
-  --color-text-muted: #64748b;
-  --color-border: #334155;
-  --color-accent: #818cf8;
-  --color-accent-hover: #6366f1;
-  --color-success: #4ade80;
-  --color-danger: #f87171;
-  --color-danger-hover: #ef4444;
-
-  /* shadcn/ui semantic tokens — dark */
   --background: #0f172a;
   --foreground: #f8fafc;
   --card: #0f172a;
@@ -109,22 +77,6 @@
 /* System preference detection — applied when no manual override is set */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    /* Original project palette — dark */
-    --color-bg-primary: #0f172a;
-    --color-bg-secondary: #1e293b;
-    --color-bg-tertiary: #334155;
-    --color-bg-sidebar: #1e293b;
-    --color-text-primary: #f8fafc;
-    --color-text-secondary: #cbd5e1;
-    --color-text-muted: #64748b;
-    --color-border: #334155;
-    --color-accent: #818cf8;
-    --color-accent-hover: #6366f1;
-    --color-success: #4ade80;
-    --color-danger: #f87171;
-    --color-danger-hover: #ef4444;
-
-    /* shadcn/ui semantic tokens — dark */
     --background: #0f172a;
     --foreground: #f8fafc;
     --card: #0f172a;
@@ -152,8 +104,8 @@ body {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background-color: var(--background);
+  color: var(--foreground);
   overflow: hidden;
 }
 

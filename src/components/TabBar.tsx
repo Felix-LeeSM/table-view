@@ -20,7 +20,7 @@ export default function TabBar() {
 
   return (
     <div
-      className="flex items-center border-b border-(--color-border) bg-(--color-bg-secondary) select-none"
+      className="flex items-center border-b border-border bg-secondary select-none"
       role="tablist"
       aria-label="Open connections"
     >
@@ -30,10 +30,10 @@ export default function TabBar() {
           role="tab"
           aria-selected={tab.id === activeTabId}
           tabIndex={tab.id === activeTabId ? 0 : -1}
-          className={`group flex items-center gap-1.5 border-r border-(--color-border) px-3 py-1.5 text-sm cursor-pointer select-none ${
+          className={`group flex items-center gap-1.5 border-r border-border px-3 py-1.5 text-sm cursor-pointer select-none ${
             tab.id === activeTabId
-              ? "bg-(--color-bg-primary) text-(--color-text-primary) border-b-2 border-b-(--color-accent)"
-              : "text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              ? "bg-background text-foreground border-b-2 border-b-primary"
+              : "text-secondary-foreground hover:bg-muted"
           }`}
           onClick={() => setActiveTab(tab.id)}
           onDoubleClick={() => {
@@ -59,7 +59,7 @@ export default function TabBar() {
             style={{
               backgroundColor:
                 connections.find((c) => c.id === tab.connectionId)?.color ??
-                "var(--color-accent)",
+                "var(--primary)",
             }}
             aria-label="Connection color"
             title={
@@ -67,9 +67,9 @@ export default function TabBar() {
             }
           />
           {tab.type === "query" ? (
-            <Code2 size={12} className="shrink-0 text-(--color-text-muted)" />
+            <Code2 size={12} className="shrink-0 text-muted-foreground" />
           ) : (
-            <Table2 size={12} className="shrink-0 text-(--color-text-muted)" />
+            <Table2 size={12} className="shrink-0 text-muted-foreground" />
           )}
           <span
             className={`max-w-30 truncate${tab.type === "table" && (tab as TableTab).isPreview ? " italic opacity-70" : ""}`}
@@ -98,7 +98,7 @@ export default function TabBar() {
         <Button
           variant="ghost"
           size="icon-xs"
-          className="text-(--color-text-muted) hover:text-(--color-text-secondary)"
+          className="text-muted-foreground hover:text-secondary-foreground"
           aria-label="New Query Tab"
           title="New Query Tab"
           onClick={() => addQueryTab(activeConnectionId)}

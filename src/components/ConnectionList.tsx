@@ -20,7 +20,7 @@ export default function ConnectionList() {
 
   return (
     <div
-      className={`py-1 select-none ${dropActive ? "bg-(--color-accent)/5" : ""}`}
+      className={`py-1 select-none ${dropActive ? "bg-primary/5" : ""}`}
       onDragOver={(e) => {
         if (draggedConnectionId) {
           e.preventDefault();
@@ -55,7 +55,7 @@ export default function ConnectionList() {
 
       {/* Group hint — show only when there are connections but no groups */}
       {connections.length > 0 && groups.length === 0 && (
-        <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] text-(--color-text-muted) opacity-60">
+        <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] text-muted-foreground opacity-60">
           <GripVertical size={10} />
           <span>Drag connections onto each other to create groups</span>
         </div>

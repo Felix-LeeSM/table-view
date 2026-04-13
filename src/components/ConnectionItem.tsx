@@ -34,7 +34,7 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
     return (
       <Loader2
         size={10}
-        className="shrink-0 animate-spin text-(--color-text-muted)"
+        className="shrink-0 animate-spin text-muted-foreground"
         aria-label="Connecting"
       />
     );
@@ -42,7 +42,7 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
   if (status.type === "connected") {
     return (
       <span
-        className="inline-block h-2 w-2 rounded-full bg-(--color-success)"
+        className="inline-block h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"
         aria-label="Connected"
       />
     );
@@ -50,7 +50,7 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
   if (status.type === "error") {
     return (
       <span
-        className="inline-block h-2 w-2 rounded-full bg-(--color-danger)"
+        className="inline-block h-2 w-2 rounded-full bg-destructive"
         title={status.message}
         aria-label={`Error: ${status.message}`}
       />
@@ -58,7 +58,7 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
   }
   return (
     <span
-      className="inline-block h-2 w-2 rounded-full bg-(--color-text-muted)"
+      className="inline-block h-2 w-2 rounded-full bg-muted-foreground"
       aria-label="Disconnected"
     />
   );
@@ -127,7 +127,7 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
     <>
       <div
         ref={dragRef}
-        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-(--color-bg-tertiary) select-none ${
+        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted select-none ${
           dragging ? "opacity-40" : ""
         }`}
         role="button"
@@ -154,8 +154,8 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
         }}
       >
         <StatusIndicator status={status} />
-        <Database size={14} className="shrink-0 text-(--color-text-muted)" />
-        <span className="truncate text-sm text-(--color-text-primary)">
+        <Database size={14} className="shrink-0 text-muted-foreground" />
+        <span className="truncate text-sm text-foreground">
           {connection.name}
         </span>
         <span
@@ -177,7 +177,7 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
           aria-label="Show error details"
         >
           <span className="shrink-0 w-2" />
-          <span className="truncate text-[10px] text-(--color-danger)">
+          <span className="truncate text-[10px] text-destructive">
             {errorMessage}
           </span>
         </button>
@@ -185,11 +185,11 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
       {errorMessage && showErrorDetail && (
         <div className="flex w-full items-start gap-2 px-3 py-0">
           <span className="shrink-0 w-2" />
-          <span className="break-all text-[10px] text-(--color-danger)">
+          <span className="break-all text-[10px] text-destructive">
             {errorMessage}
           </span>
           <button
-            className="shrink-0 rounded p-0.5 text-(--color-text-muted) hover:text-(--color-text-primary)"
+            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
             onClick={() => setShowErrorDetail(false)}
             aria-label="Hide error details"
           >
@@ -220,26 +220,26 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
           onOpenChange={(open) => !open && setShowDeleteConfirm(false)}
         >
           <DialogContent
-            className="w-80 bg-(--color-bg-secondary) p-4"
+            className="w-80 bg-secondary p-4"
             showCloseButton={false}
           >
             <DialogHeader>
-              <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+              <DialogTitle className="text-sm font-semibold text-foreground">
                 Delete Connection
               </DialogTitle>
-              <DialogDescription className="mt-2 text-sm text-(--color-text-secondary)">
+              <DialogDescription className="mt-2 text-sm text-secondary-foreground">
                 Are you sure you want to delete &quot;{connection.name}&quot;?
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="mt-4 flex justify-end gap-2">
               <button
-                className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 Cancel
               </button>
               <button
-                className="rounded bg-(--color-danger) px-3 py-1.5 text-sm text-white hover:bg-(--color-danger-hover)"
+                className="rounded bg-destructive px-3 py-1.5 text-sm text-white hover:bg-destructive/90"
                 onClick={async () => {
                   await removeConnection(connection.id);
                   setShowDeleteConfirm(false);

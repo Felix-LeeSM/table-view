@@ -51,7 +51,7 @@ function EditableColumnRow({
   const [defaultValue, setDefaultValue] = useState(col.default_value ?? "");
 
   const inputClass =
-    "w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-0.5 text-xs text-(--color-text-primary) outline-none focus:border-(--color-accent)";
+    "w-full rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:border-primary";
 
   const handleSave = () => {
     const hasDataTypeChange = dataType !== col.data_type;
@@ -80,10 +80,10 @@ function EditableColumnRow({
 
   return (
     <tr
-      className="group border-b border-(--color-border) hover:bg-(--color-bg-tertiary)"
+      className="group border-b border-border hover:bg-muted"
       onKeyDown={handleKeyDown}
     >
-      <td className="flex items-center gap-1.5 border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs">
         {col.is_primary_key && (
           <span title="Primary Key">
             <Key
@@ -95,12 +95,12 @@ function EditableColumnRow({
         )}
         {col.is_foreign_key && (
           <span title="Foreign Key">
-            <Link2 size={12} className="shrink-0 text-(--color-accent)" />
+            <Link2 size={12} className="shrink-0 text-primary" />
           </span>
         )}
-        <span className="text-(--color-text-primary)">{col.name}</span>
+        <span className="text-foreground">{col.name}</span>
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="border-r border-border px-3 py-1 text-xs">
         {isEditing ? (
           <input
             className={inputClass}
@@ -109,25 +109,25 @@ function EditableColumnRow({
             aria-label={`Data type for ${col.name}`}
           />
         ) : (
-          <span className="text-(--color-text-secondary)">{col.data_type}</span>
+          <span className="text-secondary-foreground">{col.data_type}</span>
         )}
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="border-r border-border px-3 py-1 text-xs">
         {isEditing ? (
           <input
             type="checkbox"
             checked={nullable}
             onChange={(e) => setNullable(e.target.checked)}
             aria-label={`Nullable for ${col.name}`}
-            className="rounded border-(--color-border)"
+            className="rounded border-border"
           />
         ) : nullable ? (
-          <span className="text-(--color-text-muted)">YES</span>
+          <span className="text-muted-foreground">YES</span>
         ) : (
-          <span className="font-medium text-(--color-text-primary)">NO</span>
+          <span className="font-medium text-foreground">NO</span>
         )}
       </td>
-      <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="max-w-[200px] truncate border-r border-border px-3 py-1 text-xs">
         {isEditing ? (
           <input
             className={inputClass}
@@ -137,23 +137,23 @@ function EditableColumnRow({
             placeholder="NULL"
           />
         ) : (
-          <span className="text-(--color-text-muted)">
+          <span className="text-muted-foreground">
             {col.default_value ?? "\u2014"}
           </span>
         )}
       </td>
-      <td className="max-w-[200px] truncate border-r border-(--color-border) px-3 py-1 text-xs text-(--color-accent)">
+      <td className="max-w-[200px] truncate border-r border-border px-3 py-1 text-xs text-primary">
         {col.fk_reference ?? "\u2014"}
       </td>
-      <td className="max-w-[200px] truncate px-3 py-1 text-xs text-(--color-text-muted)">
+      <td className="max-w-[200px] truncate px-3 py-1 text-xs text-muted-foreground">
         {col.comment ?? "\u2014"}
       </td>
-      <td className="w-20 border-l border-(--color-border) px-1 py-1 text-center">
+      <td className="w-20 border-l border-border px-1 py-1 text-center">
         <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {isEditing ? (
             <>
               <button
-                className="rounded p-1 text-(--color-success) hover:bg-(--color-bg-tertiary)"
+                className="rounded p-1 text-emerald-500 dark:text-emerald-400 hover:bg-muted"
                 onClick={handleSave}
                 aria-label={`Save changes for ${col.name}`}
                 title="Save"
@@ -161,7 +161,7 @@ function EditableColumnRow({
                 <Eye size={12} />
               </button>
               <button
-                className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted"
                 onClick={onCancelEdit}
                 aria-label={`Cancel editing ${col.name}`}
                 title="Cancel"
@@ -172,7 +172,7 @@ function EditableColumnRow({
           ) : (
             <>
               <button
-                className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-primary)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                 onClick={onStartEdit}
                 aria-label={`Edit column ${col.name}`}
                 title="Edit"
@@ -180,7 +180,7 @@ function EditableColumnRow({
                 <Pencil size={12} />
               </button>
               <button
-                className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-danger)"
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                 onClick={onDelete}
                 aria-label={`Delete column ${col.name}`}
                 title="Delete"
@@ -213,7 +213,7 @@ function NewColumnRow({
   onCancel,
 }: NewColumnRowProps) {
   const inputClass =
-    "w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-0.5 text-xs text-(--color-text-primary) outline-none focus:border-(--color-accent)";
+    "w-full rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:border-primary";
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") onConfirm();
@@ -222,10 +222,10 @@ function NewColumnRow({
 
   return (
     <tr
-      className="border-b border-(--color-border) bg-(--color-bg-tertiary)/50"
+      className="border-b border-border bg-muted/50"
       onKeyDown={handleKeyDown}
     >
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="border-r border-border px-3 py-1 text-xs">
         <input
           className={inputClass}
           value={draft.name}
@@ -235,7 +235,7 @@ function NewColumnRow({
           autoFocus
         />
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="border-r border-border px-3 py-1 text-xs">
         <input
           className={inputClass}
           value={draft.data_type}
@@ -244,16 +244,16 @@ function NewColumnRow({
           aria-label="New column data type"
         />
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="border-r border-border px-3 py-1 text-xs">
         <input
           type="checkbox"
           checked={draft.nullable}
           onChange={(e) => onUpdate({ nullable: e.target.checked })}
           aria-label="New column nullable"
-          className="rounded border-(--color-border)"
+          className="rounded border-border"
         />
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+      <td className="border-r border-border px-3 py-1 text-xs">
         <input
           className={inputClass}
           value={draft.default_value}
@@ -262,16 +262,16 @@ function NewColumnRow({
           aria-label="New column default value"
         />
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
+      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
         {"\u2014"}
       </td>
-      <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
+      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
         {"\u2014"}
       </td>
-      <td className="w-20 border-l border-(--color-border) px-1 py-1 text-center">
+      <td className="w-20 border-l border-border px-1 py-1 text-center">
         <div className="flex items-center justify-center gap-0.5">
           <button
-            className="rounded p-1 text-(--color-success) hover:bg-(--color-bg-tertiary)"
+            className="rounded p-1 text-emerald-500 dark:text-emerald-400 hover:bg-muted"
             onClick={onConfirm}
             disabled={!draft.name.trim() || !draft.data_type.trim()}
             aria-label="Confirm add column"
@@ -280,7 +280,7 @@ function NewColumnRow({
             <Eye size={12} />
           </button>
           <button
-            className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+            className="rounded p-1 text-muted-foreground hover:bg-muted"
             onClick={onCancel}
             aria-label="Cancel add column"
             title="Cancel"
@@ -485,7 +485,7 @@ export default function ColumnsEditor({
       {/* Action bar */}
       <div className="ml-auto flex items-center gap-1 pr-2">
         <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
           onClick={handleAddColumn}
           aria-label="Add column"
         >
@@ -494,7 +494,7 @@ export default function ColumnsEditor({
         </button>
         {pendingCount > 0 && (
           <button
-            className="flex items-center gap-1 rounded bg-(--color-accent) px-2 py-1 text-xs text-white hover:bg-(--color-accent-hover)"
+            className="flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs text-white hover:bg-primary/90"
             onClick={handleReviewSql}
             aria-label={`Review SQL (${pendingCount})`}
           >
@@ -508,27 +508,27 @@ export default function ColumnsEditor({
       {columns.length > 0 && (
         <div className="flex-1 overflow-auto">
           <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
+            <thead className="sticky top-0 z-10 bg-secondary">
               <tr>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Name
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Type
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Nullable
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Default
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Ref
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Comment
                 </th>
-                <th className="w-20 border-b border-(--color-border) px-1 py-1.5 text-center text-xs font-medium text-(--color-text-secondary)">
+                <th className="w-20 border-b border-border px-1 py-1.5 text-center text-xs font-medium text-secondary-foreground">
                   Actions
                 </th>
               </tr>
@@ -567,39 +567,39 @@ export default function ColumnsEditor({
                   return (
                     <tr
                       key={p.trackingId}
-                      className="border-b border-(--color-border) bg-green-500/5"
+                      className="border-b border-border bg-green-500/5"
                     >
-                      <td className="flex items-center gap-1.5 border-r border-(--color-border) px-3 py-1 text-xs text-green-600">
+                      <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs text-green-600">
                         {change.name}
                         <span className="rounded bg-green-500/10 px-1 py-0.5 text-[10px] font-medium">
                           new
                         </span>
                       </td>
-                      <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-secondary)">
+                      <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
                         {change.data_type}
                       </td>
-                      <td className="border-r border-(--color-border) px-3 py-1 text-xs">
+                      <td className="border-r border-border px-3 py-1 text-xs">
                         {change.nullable ? (
-                          <span className="text-(--color-text-muted)">YES</span>
+                          <span className="text-muted-foreground">YES</span>
                         ) : (
-                          <span className="font-medium text-(--color-text-primary)">
+                          <span className="font-medium text-foreground">
                             NO
                           </span>
                         )}
                       </td>
-                      <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
+                      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
                         {change.default_value ?? "\u2014"}
                       </td>
-                      <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
+                      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
                         {"\u2014"}
                       </td>
-                      <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-muted)">
+                      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
                         {"\u2014"}
                       </td>
-                      <td className="w-20 border-l border-(--color-border) px-1 py-1 text-center">
+                      <td className="w-20 border-l border-border px-1 py-1 text-center">
                         <div className="flex items-center justify-center gap-0.5">
                           <button
-                            className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-danger)"
+                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                             onClick={() => {
                               setPendingChanges((prev) =>
                                 prev.filter(
@@ -626,7 +626,7 @@ export default function ColumnsEditor({
       {columns.length === 0 &&
         pendingChanges.length === 0 &&
         newColumnDrafts.length === 0 && (
-          <div className="px-3 py-4 text-center text-xs text-(--color-text-muted)">
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             No columns found
           </div>
         )}

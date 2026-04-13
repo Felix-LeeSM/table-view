@@ -1,5 +1,9 @@
 import TabBar from "./TabBar";
-import { useTabStore, type TableTab, type TabSubView } from "../stores/tabStore";
+import {
+  useTabStore,
+  type TableTab,
+  type TabSubView,
+} from "../stores/tabStore";
 import { Database } from "lucide-react";
 import DataGrid from "./DataGrid";
 import StructurePanel from "./StructurePanel";
@@ -15,7 +19,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
       <div
-        className="flex items-center border-b border-(--color-border) bg-(--color-bg-secondary)"
+        className="flex items-center border-b border-border bg-secondary"
         role="tablist"
         aria-label="Table view"
       >
@@ -25,8 +29,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           tabIndex={tab.subView === "records" ? 0 : -1}
           className={`px-4 py-1.5 text-xs font-medium transition-colors ${
             tab.subView === "records"
-              ? "border-b-2 border-(--color-accent) text-(--color-text-primary)"
-              : "text-(--color-text-muted) hover:text-(--color-text-secondary)"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-secondary-foreground"
           }`}
           onClick={() => onSubViewChange("records")}
           onKeyDown={(e) => {
@@ -46,8 +50,8 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           tabIndex={tab.subView === "structure" ? 0 : -1}
           className={`px-4 py-1.5 text-xs font-medium transition-colors ${
             tab.subView === "structure"
-              ? "border-b-2 border-(--color-accent) text-(--color-text-primary)"
-              : "text-(--color-text-muted) hover:text-(--color-text-secondary)"
+              ? "border-b-2 border-primary text-foreground"
+              : "text-muted-foreground hover:text-secondary-foreground"
           }`}
           onClick={() => onSubViewChange("structure")}
           onKeyDown={(e) => {
@@ -91,7 +95,7 @@ export default function MainArea() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <TabBar />
-      <div className="flex flex-1 overflow-hidden bg-(--color-bg-primary)">
+      <div className="flex flex-1 overflow-hidden bg-background">
         {activeTab?.type === "table" && activeTab.table && activeTab.schema ? (
           <TableTabView
             tab={activeTab}
@@ -100,7 +104,7 @@ export default function MainArea() {
         ) : activeTab?.type === "query" ? (
           <QueryTab tab={activeTab} />
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center text-(--color-text-muted)">
+          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
             <Database size={48} className="mb-3" />
             <p className="text-lg">View Table</p>
             <p className="mt-1 text-sm">

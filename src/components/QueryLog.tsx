@@ -51,18 +51,16 @@ export default function QueryLog() {
   return (
     <div
       data-testid="query-log-panel"
-      className="fixed bottom-0 left-0 right-0 z-40 border-t border-(--color-border) bg-(--color-bg-secondary)"
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-secondary"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-1.5">
-        <span className="text-xs font-medium text-(--color-text-primary)">
-          Query Log
-        </span>
+      <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
+        <span className="text-xs font-medium text-foreground">Query Log</span>
         <div className="flex flex-1 items-center gap-1.5">
-          <Search size={12} className="shrink-0 text-(--color-text-muted)" />
+          <Search size={12} className="shrink-0 text-muted-foreground" />
           <Input
             type="text"
-            className="h-5 flex-1 border-0 bg-transparent text-xs shadow-none text-(--color-text-primary) placeholder:text-(--color-text-muted) focus-visible:ring-0"
+            className="h-5 flex-1 border-0 bg-transparent text-xs shadow-none text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
             placeholder="Search queries..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -71,7 +69,7 @@ export default function QueryLog() {
         <Button
           variant="ghost"
           size="xs"
-          className="gap-1 bg-(--color-bg-tertiary) text-(--color-text-muted) hover:text-(--color-text-primary)"
+          className="gap-1 bg-muted text-muted-foreground hover:text-foreground"
           onClick={() => setShowClearConfirm(true)}
           aria-label="Clear history"
         >
@@ -81,7 +79,7 @@ export default function QueryLog() {
         <Button
           variant="ghost"
           size="icon-xs"
-          className="text-(--color-text-muted) hover:text-(--color-text-primary)"
+          className="text-muted-foreground hover:text-foreground"
           onClick={() => setIsVisible(false)}
         >
           <X size={14} />
@@ -91,7 +89,7 @@ export default function QueryLog() {
       {/* Entries */}
       <div className="max-h-[200px] overflow-auto">
         {filtered.length === 0 ? (
-          <div className="px-3 py-4 text-center text-xs text-(--color-text-muted)">
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {entries.length === 0
               ? "No queries executed yet"
               : "No matching queries"}
@@ -100,28 +98,28 @@ export default function QueryLog() {
           filtered.map((entry) => (
             <button
               key={entry.id}
-              className="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-(--color-bg-tertiary)"
+              className="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-muted"
               onClick={() => handleEntryClick(entry.sql)}
             >
               {/* Status dot */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                   entry.status === "success"
-                    ? "bg-(--color-success)"
-                    : "bg-(--color-danger)"
+                    ? "bg-emerald-500 dark:bg-emerald-400"
+                    : "bg-destructive"
                 }`}
                 title={entry.status}
               />
               {/* SQL text */}
-              <span className="flex-1 truncate text-(--color-text-primary)">
+              <span className="flex-1 truncate text-foreground">
                 {truncateSql(entry.sql, 80)}
               </span>
               {/* Timestamp */}
-              <span className="shrink-0 text-(--color-text-muted)">
+              <span className="shrink-0 text-muted-foreground">
                 {formatRelativeTime(entry.executedAt)}
               </span>
               {/* Duration badge */}
-              <span className="shrink-0 rounded bg-(--color-bg-tertiary) px-2 py-0.5 text-(--color-text-muted)">
+              <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
                 {entry.duration}ms
               </span>
             </button>

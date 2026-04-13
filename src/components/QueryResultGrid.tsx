@@ -27,16 +27,16 @@ function ResultTable({ result }: { result: QueryResult }) {
   return (
     <div className="flex-1 overflow-auto">
       <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
+        <thead className="sticky top-0 z-10 bg-secondary">
           <tr>
             {result.columns.map((col) => (
               <th
                 key={col.name}
                 scope="col"
-                className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)"
+                className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
               >
                 <div>{col.name}</div>
-                <div className="mt-0.5 text-[10px] text-(--color-text-muted)">
+                <div className="mt-0.5 text-[10px] text-muted-foreground">
                   {col.data_type}
                 </div>
               </th>
@@ -47,18 +47,16 @@ function ResultTable({ result }: { result: QueryResult }) {
           {result.rows.map((row, rowIdx) => (
             <tr
               key={`row-${rowIdx}`}
-              className="border-b border-(--color-border) hover:bg-(--color-bg-tertiary)"
+              className="border-b border-border hover:bg-muted"
             >
               {row.map((cell, cellIdx) => (
                 <td
                   key={cellIdx}
-                  className="overflow-hidden border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)"
+                  className="overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground"
                   title={formatCell(cell)}
                 >
                   {cell == null ? (
-                    <span className="italic text-(--color-text-muted)">
-                      NULL
-                    </span>
+                    <span className="italic text-muted-foreground">NULL</span>
                   ) : (
                     <span className="line-clamp-3">
                       {truncateCell(formatCell(cell))}
@@ -72,7 +70,7 @@ function ResultTable({ result }: { result: QueryResult }) {
             <tr>
               <td
                 colSpan={result.columns.length || 1}
-                className="px-3 py-4 text-center text-xs text-(--color-text-muted)"
+                className="px-3 py-4 text-center text-xs text-muted-foreground"
               >
                 No data
               </td>
@@ -91,7 +89,7 @@ function DmlMessage({ result }: { result: QueryResult }) {
       ? qt.dml.rows_affected
       : result.total_count;
   return (
-    <div className="flex items-center justify-center py-8 text-sm text-(--color-text-secondary)">
+    <div className="flex items-center justify-center py-8 text-sm text-secondary-foreground">
       {rowsAffected.toLocaleString()} row{rowsAffected !== 1 ? "s" : ""}{" "}
       affected
     </div>
@@ -100,7 +98,7 @@ function DmlMessage({ result }: { result: QueryResult }) {
 
 function DdlMessage() {
   return (
-    <div className="flex items-center justify-center py-8 text-sm text-(--color-text-secondary)">
+    <div className="flex items-center justify-center py-8 text-sm text-secondary-foreground">
       Query executed successfully
     </div>
   );
@@ -112,10 +110,10 @@ export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center">
         <Loader2
-          className="mb-2 animate-spin text-(--color-text-muted)"
+          className="mb-2 animate-spin text-muted-foreground"
           size={24}
         />
-        <p className="text-sm text-(--color-text-muted)">Executing query...</p>
+        <p className="text-sm text-muted-foreground">Executing query...</p>
       </div>
     );
   }
@@ -126,7 +124,7 @@ export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
       <div className="flex flex-1 flex-col">
         <div
           role="alert"
-          className="border-b border-(--color-border) bg-(--color-bg-tertiary) px-3 py-2 text-sm text-(--color-danger)"
+          className="border-b border-border bg-muted px-3 py-2 text-sm text-destructive"
         >
           {queryState.error}
         </div>
@@ -140,7 +138,7 @@ export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Status bar */}
-        <div className="flex items-center justify-between border-b border-(--color-border) px-3 py-1.5 text-xs text-(--color-text-secondary)">
+        <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
           <span>
             {queryTypeLabel(result.query_type)}
             {result.query_type === "select" && (
@@ -151,7 +149,7 @@ export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
               </>
             )}
           </span>
-          <span className="text-(--color-text-muted)">
+          <span className="text-muted-foreground">
             {result.execution_time_ms} ms
           </span>
         </div>
@@ -167,7 +165,7 @@ export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
 
   // Idle state — prompt the user
   return (
-    <div className="flex flex-1 flex-col items-center justify-center text-(--color-text-muted)">
+    <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
       <p className="text-sm">Press Cmd+Return to execute the query</p>
     </div>
   );

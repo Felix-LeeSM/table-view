@@ -197,7 +197,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="flex h-screen w-screen overflow-hidden bg-(--color-bg-primary)">
+      <div className="flex h-screen w-screen overflow-hidden bg-background">
         <Sidebar />
         <MainArea />
         <QuickOpen />

@@ -390,14 +390,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   return (
     <div className="flex flex-col select-none">
       {/* Connection header with Database icon */}
-      <div className="flex items-center gap-1.5 border-b border-(--color-border) px-3 py-1.5">
-        <Database size={13} className="shrink-0 text-(--color-accent)" />
-        <span className="truncate text-xs font-semibold text-(--color-text-primary)">
+      <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
+        <Database size={13} className="shrink-0 text-primary" />
+        <span className="truncate text-xs font-semibold text-foreground">
           {connectionName || connectionId}
         </span>
         <div className="ml-auto flex gap-1">
           <button
-            className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
             onClick={() => addQueryTab(connectionId)}
             aria-label="New Query"
             title="New Query"
@@ -405,7 +405,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             <Code2 size={12} />
           </button>
           <button
-            className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
             onClick={handleRefresh}
             disabled={loadingSchemas}
             aria-label="Refresh schemas"
@@ -421,7 +421,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
       {/* "Schemas" header label */}
       <div className="px-3 py-1">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-(--color-text-muted)">
+        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           Schemas
         </span>
       </div>
@@ -441,15 +441,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           <div key={schema.name}>
             {/* Section separator between schemas */}
             {schemaIndex > 0 && (
-              <div className="mx-3 my-0.5 border-t border-(--color-border)" />
+              <div className="mx-3 my-0.5 border-t border-border" />
             )}
 
             {/* Schema row */}
             <div
-              className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-(--color-bg-tertiary) ${
+              className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
                 isSchemaSelected
-                  ? "bg-(--color-bg-tertiary) text-(--color-text-primary)"
-                  : "text-(--color-text-secondary)"
+                  ? "bg-muted text-foreground"
+                  : "text-secondary-foreground"
               }`}
               role="button"
               tabIndex={0}
@@ -483,7 +483,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               )}
               <FolderOpen
                 size={13}
-                className="shrink-0 text-(--color-text-muted)"
+                className="shrink-0 text-muted-foreground"
               />
               <span className="truncate">{schema.name}</span>
               {isLoadingTables && (
@@ -495,7 +495,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             {isExpanded && (
               <div>
                 {isLoadingTables && schemaTables.length === 0 ? (
-                  <div className="px-8 py-1 text-xs text-(--color-text-muted)">
+                  <div className="px-8 py-1 text-xs text-muted-foreground">
                     Loading...
                   </div>
                 ) : (
@@ -532,10 +532,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                       <div key={cat.key}>
                         {/* Category header */}
                         <div
-                          className={`flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-[11px] font-medium hover:bg-(--color-bg-tertiary) ${
+                          className={`flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-[11px] font-medium hover:bg-muted ${
                             isCatSelected
-                              ? "bg-(--color-bg-tertiary) text-(--color-text-primary)"
-                              : "text-(--color-text-secondary)"
+                              ? "bg-muted text-foreground"
+                              : "text-secondary-foreground"
                           }`}
                           role="button"
                           tabIndex={0}
@@ -556,11 +556,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           )}
                           <cat.Icon
                             size={12}
-                            className="shrink-0 text-(--color-text-muted)"
+                            className="shrink-0 text-muted-foreground"
                           />
                           <span>{cat.label}</span>
                           {cat.key === "tables" && schemaTables.length > 0 && (
-                            <span className="ml-auto text-[10px] text-(--color-text-muted)">
+                            <span className="ml-auto text-[10px] text-muted-foreground">
                               {schemaTables.length}
                             </span>
                           )}
@@ -575,11 +575,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 <div className="flex items-center gap-1 px-8 py-0.5">
                                   <Search
                                     size={11}
-                                    className="shrink-0 text-(--color-text-muted)"
+                                    className="shrink-0 text-muted-foreground"
                                   />
                                   <input
                                     type="text"
-                                    className="min-w-0 flex-1 rounded border border-(--color-border) bg-(--color-bg-primary) px-1.5 py-0.5 text-[11px] text-(--color-text-primary) placeholder:text-(--color-text-muted) focus:border-(--color-accent) focus:outline-none"
+                                    className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                                     placeholder="Filter tables..."
                                     value={searchValue}
                                     onChange={(e) =>
@@ -592,7 +592,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                   />
                                   {searchValue && (
                                     <button
-                                      className="shrink-0 rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+                                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
                                       onClick={() =>
                                         setTableSearch((prev) => {
                                           const next = { ...prev };
@@ -608,7 +608,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 </div>
                               )}
                             {items.length === 0 ? (
-                              <div className="px-10 py-1 text-[11px] italic text-(--color-text-muted)">
+                              <div className="px-10 py-1 text-[11px] italic text-muted-foreground">
                                 {cat.key === "tables" && searchValue
                                   ? "No matching tables"
                                   : cat.emptyLabel}
@@ -626,10 +626,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 return (
                                   <div
                                     key={item.name}
-                                    className={`flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-(--color-bg-tertiary) ${
+                                    className={`flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted ${
                                       isTableSelected
-                                        ? "bg-(--color-accent)/10 text-(--color-accent)"
-                                        : "text-(--color-text-primary)"
+                                        ? "bg-primary/10 text-primary"
+                                        : "text-foreground"
                                     }`}
                                     role="button"
                                     tabIndex={0}
@@ -658,13 +658,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                   >
                                     <Table2
                                       size={12}
-                                      className="shrink-0 text-(--color-text-muted)"
+                                      className="shrink-0 text-muted-foreground"
                                     />
                                     <span className="truncate text-xs">
                                       {item.name}
                                     </span>
                                     {item.row_count != null && (
-                                      <span className="ml-auto text-[10px] text-(--color-text-muted)">
+                                      <span className="ml-auto text-[10px] text-muted-foreground">
                                         {item.row_count.toLocaleString()}
                                       </span>
                                     )}
@@ -700,21 +700,21 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         onOpenChange={(open) => !open && setConfirmDialog(null)}
       >
         <DialogContent
-          className="w-80 bg-(--color-bg-secondary) p-4"
+          className="w-80 bg-secondary p-4"
           showCloseButton={false}
         >
-          <div className="rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
+          <div className="rounded-lg border border-border bg-secondary p-4 shadow-xl">
             <DialogHeader>
-              <DialogTitle className="mb-2 text-sm font-semibold text-(--color-text-primary)">
+              <DialogTitle className="mb-2 text-sm font-semibold text-foreground">
                 {confirmDialog?.title}
               </DialogTitle>
-              <DialogDescription className="mb-4 text-sm text-(--color-text-secondary)">
+              <DialogDescription className="mb-4 text-sm text-secondary-foreground">
                 {confirmDialog?.message}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex justify-end gap-2">
               <button
-                className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
                 onClick={() => setConfirmDialog(null)}
                 disabled={isOperating}
               >
@@ -723,8 +723,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               <button
                 className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
                   confirmDialog?.danger
-                    ? "bg-(--color-danger) hover:opacity-90"
-                    : "bg-(--color-accent) hover:opacity-90"
+                    ? "bg-destructive hover:opacity-90"
+                    : "bg-primary hover:opacity-90"
                 } ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
                 onClick={confirmDialog?.onConfirm}
                 disabled={isOperating}
@@ -743,22 +743,22 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         onOpenChange={(open) => !open && setRenameDialog(null)}
       >
         <DialogContent
-          className="w-80 bg-(--color-bg-secondary) p-4"
+          className="w-80 bg-secondary p-4"
           showCloseButton={false}
         >
-          <div className="rounded-lg border border-(--color-border) bg-(--color-bg-secondary) p-4 shadow-xl">
+          <div className="rounded-lg border border-border bg-secondary p-4 shadow-xl">
             <DialogHeader>
-              <DialogTitle className="mb-2 text-sm font-semibold text-(--color-text-primary)">
+              <DialogTitle className="mb-2 text-sm font-semibold text-foreground">
                 Rename Table
               </DialogTitle>
-              <DialogDescription className="mb-2 text-xs text-(--color-text-muted)">
+              <DialogDescription className="mb-2 text-xs text-muted-foreground">
                 {renameDialog?.schemaName}.{renameDialog?.tableName}
               </DialogDescription>
             </DialogHeader>
             <input
               ref={renameInputRef}
               type="text"
-              className="mb-1 w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) focus:border-(--color-accent) focus:outline-none"
+              className="mb-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
               value={renameInput}
               onChange={(e) => {
                 setRenameInput(e.target.value);
@@ -774,20 +774,18 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               aria-label="New table name"
             />
             {renameError && (
-              <p className="mb-2 text-xs text-(--color-danger)">
-                {renameError}
-              </p>
+              <p className="mb-2 text-xs text-destructive">{renameError}</p>
             )}
             <DialogFooter className="mt-3 flex justify-end gap-2">
               <button
-                className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
                 onClick={() => setRenameDialog(null)}
                 disabled={isOperating}
               >
                 Cancel
               </button>
               <button
-                className={`rounded bg-(--color-accent) px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
+                className={`rounded bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
                 onClick={handleConfirmRename}
                 disabled={isOperating}
                 aria-label="Rename"

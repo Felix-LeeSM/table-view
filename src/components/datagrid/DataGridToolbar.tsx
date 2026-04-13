@@ -61,13 +61,13 @@ export default function DataGridToolbar({
   onDeleteRow,
 }: DataGridToolbarProps) {
   return (
-    <div className="flex items-center justify-between border-b border-(--color-border) px-3 py-1.5">
-      <div className="flex items-center gap-2 text-xs text-(--color-text-secondary)">
+    <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+      <div className="flex items-center gap-2 text-xs text-secondary-foreground">
         {data ? (
           <>
             {data.total_count.toLocaleString()} rows
             {sorts.length > 0 && (
-              <span className="text-(--color-text-muted)">
+              <span className="text-muted-foreground">
                 Sorted by{" "}
                 {sorts.map((s) => `${s.column} ${s.direction}`).join(", ")}
               </span>
@@ -118,7 +118,7 @@ export default function DataGridToolbar({
         {data && (
           <>
             <button
-              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              className="rounded p-1 text-muted-foreground hover:bg-muted"
               onClick={onAddRow}
               aria-label="Add row"
               title="Add row"
@@ -126,7 +126,7 @@ export default function DataGridToolbar({
               <Plus size={14} />
             </button>
             <button
-              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+              className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
               onClick={onDeleteRow}
               disabled={selectedRowIdx === null}
               aria-label="Delete row"
@@ -137,8 +137,8 @@ export default function DataGridToolbar({
           </>
         )}
         <button
-          className={`relative rounded p-1 hover:bg-(--color-bg-tertiary) ${
-            showFilters ? "text-(--color-accent)" : "text-(--color-text-muted)"
+          className={`relative rounded p-1 hover:bg-muted ${
+            showFilters ? "text-primary" : "text-muted-foreground"
           }`}
           onClick={onToggleFilters}
           aria-label="Toggle filters"
@@ -146,7 +146,7 @@ export default function DataGridToolbar({
         >
           <Filter size={14} />
           {activeFilterCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-(--color-accent) text-[8px] font-bold text-white">
+            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-white">
               {activeFilterCount}
             </span>
           )}
@@ -154,7 +154,7 @@ export default function DataGridToolbar({
         {data && totalPages > 1 && (
           <div className="flex items-center gap-2">
             <button
-              className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
               disabled={page <= 1}
               onClick={() => onSetPage(1)}
               aria-label="First page"
@@ -162,21 +162,21 @@ export default function DataGridToolbar({
               <ChevronsLeft size={14} />
             </button>
             <button
-              className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
               disabled={page <= 1}
               onClick={() => onSetPage(Math.max(1, page - 1))}
               aria-label="Previous page"
             >
               <ChevronLeft size={14} />
             </button>
-            <span className="text-xs text-(--color-text-muted)">
+            <span className="text-xs text-muted-foreground">
               {page} / {totalPages}
             </span>
             <input
               type="number"
               min={1}
               max={totalPages}
-              className="w-10 rounded border border-(--color-border) bg-(--color-bg-primary) px-1 py-0.5 text-xs text-(--color-text-primary) text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              className="w-10 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               aria-label="Jump to page"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -191,7 +191,7 @@ export default function DataGridToolbar({
               }}
             />
             <button
-              className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
               disabled={page >= totalPages}
               onClick={() => onSetPage(Math.min(totalPages, page + 1))}
               aria-label="Next page"
@@ -199,7 +199,7 @@ export default function DataGridToolbar({
               <ChevronRight size={14} />
             </button>
             <button
-              className="rounded p-0.5 hover:bg-(--color-bg-tertiary) disabled:opacity-30"
+              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
               disabled={page >= totalPages}
               onClick={() => onSetPage(totalPages)}
               aria-label="Last page"
@@ -210,7 +210,7 @@ export default function DataGridToolbar({
         )}
         {data && (
           <select
-            className="rounded border border-(--color-border) bg-(--color-bg-primary) px-1 py-0.5 text-xs text-(--color-text-primary)"
+            className="rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground"
             value={pageSize}
             aria-label="Page size"
             onChange={(e) => {

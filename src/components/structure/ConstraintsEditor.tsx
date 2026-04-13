@@ -119,20 +119,20 @@ function AddConstraintModal({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
-        className="w-[480px] bg-(--color-bg-secondary) p-0"
+        className="w-[480px] bg-secondary p-0"
         showCloseButton={false}
       >
-        <div className="rounded-lg bg-(--color-bg-secondary) shadow-xl">
+        <div className="rounded-lg bg-secondary shadow-xl">
           {/* Header */}
-          <DialogHeader className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-            <DialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+          <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
+            <DialogTitle className="text-sm font-semibold text-foreground">
               Add Constraint
             </DialogTitle>
             <DialogDescription className="sr-only">
               Add a new constraint to this table
             </DialogDescription>
             <button
-              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              className="rounded p-1 text-muted-foreground hover:bg-muted"
               onClick={onCancel}
               aria-label="Close dialog"
             >
@@ -144,11 +144,11 @@ function AddConstraintModal({
           <div className="space-y-3 px-4 py-3">
             {/* Constraint Name */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+              <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                 Constraint Name
               </label>
               <input
-                className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                 value={constraintName}
                 onChange={(e) => setConstraintName(e.target.value)}
                 placeholder="constraint_name"
@@ -159,11 +159,11 @@ function AddConstraintModal({
 
             {/* Constraint Type */}
             <div>
-              <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+              <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                 Type
               </label>
               <select
-                className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                 value={constraintType}
                 onChange={(e) => {
                   setConstraintType(e.target.value as ConstraintType);
@@ -184,29 +184,29 @@ function AddConstraintModal({
             {/* Dynamic fields based on type */}
             {needsColumns && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                   Columns
                 </label>
-                <div className="max-h-[120px] overflow-auto rounded border border-(--color-border) bg-(--color-bg-primary) p-2">
+                <div className="max-h-[120px] overflow-auto rounded border border-border bg-background p-2">
                   {columns.map((col) => (
                     <label
                       key={col.name}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-(--color-text-primary) hover:bg-(--color-bg-tertiary)"
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
                     >
                       <input
                         type="checkbox"
                         checked={selectedColumns.includes(col.name)}
                         onChange={() => toggleColumn(col.name)}
-                        className="rounded border-(--color-border)"
+                        className="rounded border-border"
                       />
                       {col.name}
-                      <span className="text-(--color-text-muted)">
+                      <span className="text-muted-foreground">
                         ({col.data_type})
                       </span>
                     </label>
                   ))}
                   {columns.length === 0 && (
-                    <span className="text-xs text-(--color-text-muted)">
+                    <span className="text-xs text-muted-foreground">
                       No columns available
                     </span>
                   )}
@@ -217,11 +217,11 @@ function AddConstraintModal({
             {needsReference && (
               <>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                  <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                     Reference Table
                   </label>
                   <input
-                    className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                    className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                     value={referenceTable}
                     onChange={(e) => setReferenceTable(e.target.value)}
                     placeholder="reference_table"
@@ -229,11 +229,11 @@ function AddConstraintModal({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                  <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                     Reference Columns (comma-separated)
                   </label>
                   <input
-                    className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                    className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                     value={referenceColumns}
                     onChange={(e) => setReferenceColumns(e.target.value)}
                     placeholder="id, name"
@@ -245,11 +245,11 @@ function AddConstraintModal({
 
             {needsExpression && (
               <div>
-                <label className="mb-1 block text-xs font-medium text-(--color-text-secondary)">
+                <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                   Check Expression
                 </label>
                 <input
-                  className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)"
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={checkExpression}
                   onChange={(e) => setCheckExpression(e.target.value)}
                   placeholder="price > 0"
@@ -261,22 +261,22 @@ function AddConstraintModal({
 
           {/* Error */}
           {error && (
-            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)">
+            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
 
           {/* Footer */}
-          <DialogFooter className="border-t border-(--color-border) px-4 py-3">
+          <DialogFooter className="border-t border-border px-4 py-3">
             <button
-              className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
               onClick={onCancel}
               disabled={loading}
             >
               Cancel
             </button>
             <button
-              className="flex items-center gap-1.5 rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
               onClick={handlePreview}
               disabled={loading || !isValid}
             >
@@ -436,7 +436,7 @@ export default function ConstraintsEditor({
       {/* Action bar */}
       <div className="ml-auto flex items-center gap-1 pr-2">
         <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
           onClick={handleOpenAddConstraint}
           aria-label="Add constraint"
         >
@@ -449,21 +449,21 @@ export default function ConstraintsEditor({
       {constraints.length > 0 && (
         <div className="flex-1 overflow-auto">
           <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
+            <thead className="sticky top-0 z-10 bg-secondary">
               <tr>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Name
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Type
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Columns
                 </th>
-                <th className="border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary)">
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Reference
                 </th>
-                <th className="w-20 border-b border-(--color-border) px-1 py-1.5 text-center text-xs font-medium text-(--color-text-secondary)">
+                <th className="w-20 border-b border-border px-1 py-1.5 text-center text-xs font-medium text-secondary-foreground">
                   Actions
                 </th>
               </tr>
@@ -472,26 +472,26 @@ export default function ConstraintsEditor({
               {constraints.map((c) => (
                 <tr
                   key={c.name}
-                  className="group border-b border-(--color-border) hover:bg-(--color-bg-tertiary)"
+                  className="group border-b border-border hover:bg-muted"
                 >
-                  <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)">
+                  <td className="border-r border-border px-3 py-1 text-xs text-foreground">
                     {c.name}
                   </td>
-                  <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-secondary)">
+                  <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
                     {c.constraint_type}
                   </td>
-                  <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-secondary)">
+                  <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
                     {c.columns.join(", ")}
                   </td>
-                  <td className="border-r border-(--color-border) px-3 py-1 text-xs text-(--color-accent)">
+                  <td className="border-r border-border px-3 py-1 text-xs text-primary">
                     {c.reference_table
                       ? `${c.reference_table}(${(c.reference_columns ?? []).join(", ")})`
                       : "\u2014"}
                   </td>
-                  <td className="w-20 border-l border-(--color-border) px-1 py-1 text-center">
+                  <td className="w-20 border-l border-border px-1 py-1 text-center">
                     <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
-                        className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-danger)"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
                         onClick={() => handleDropConstraint(c.name)}
                         aria-label={`Delete constraint ${c.name}`}
                         title="Delete"
@@ -509,7 +509,7 @@ export default function ConstraintsEditor({
 
       {/* Empty state */}
       {constraints.length === 0 && (
-        <div className="px-3 py-4 text-center text-xs text-(--color-text-muted)">
+        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
           No constraints found
         </div>
       )}

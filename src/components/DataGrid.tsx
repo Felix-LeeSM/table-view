@@ -260,7 +260,7 @@ export default function DataGrid({
       {error && (
         <div
           role="alert"
-          className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)"
+          className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </div>
@@ -268,10 +268,7 @@ export default function DataGrid({
 
       {loading && !data && (
         <div className="flex items-center justify-center py-8">
-          <Loader2
-            className="animate-spin text-(--color-text-muted)"
-            size={24}
-          />
+          <Loader2 className="animate-spin text-muted-foreground" size={24} />
         </div>
       )}
 
@@ -300,9 +297,9 @@ export default function DataGrid({
 
       {/* Executed query bar */}
       {data && (
-        <div className="border-t border-(--color-border)">
+        <div className="border-t border-border">
           <button
-            className="flex w-full items-center gap-1 px-3 py-1 text-xs text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+            className="flex w-full items-center gap-1 px-3 py-1 text-xs text-muted-foreground hover:bg-muted"
             onClick={() => setShowQuery(!showQuery)}
             aria-expanded={showQuery}
             aria-label={showQuery ? "Hide query" : "Show query"}
@@ -315,11 +312,11 @@ export default function DataGrid({
           </button>
           {showQuery && (
             <div
-              className="max-h-32 overflow-auto bg-(--color-bg-secondary) px-3 py-1.5"
+              className="max-h-32 overflow-auto bg-secondary px-3 py-1.5"
               role="region"
               aria-label="Executed SQL query"
             >
-              <code className="whitespace-pre-wrap break-all text-xs text-(--color-text-secondary)">
+              <code className="whitespace-pre-wrap break-all text-xs text-secondary-foreground">
                 {data.executed_query}
               </code>
             </div>
@@ -333,20 +330,20 @@ export default function DataGrid({
         onOpenChange={(open) => !open && editState.setSqlPreview(null)}
       >
         <DialogContent
-          className="w-[600px] max-h-[80vh] bg-(--color-bg-primary) p-0"
+          className="w-[600px] max-h-[80vh] bg-background p-0"
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">
             <DialogTitle>SQL Preview</DialogTitle>
             <DialogDescription>Preview SQL before executing</DialogDescription>
           </DialogHeader>
-          <div className="flex max-h-[80vh] flex-col rounded-lg border border-(--color-border) bg-(--color-bg-primary) shadow-xl">
-            <div className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-              <h3 className="text-sm font-semibold text-(--color-text-primary)">
+          <div className="flex max-h-[80vh] flex-col rounded-lg border border-border bg-background shadow-xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview
               </h3>
               <button
-                className="rounded p-1 hover:bg-(--color-bg-tertiary)"
+                className="rounded p-1 hover:bg-muted"
                 onClick={() => editState.setSqlPreview(null)}
                 aria-label="Close SQL preview"
               >
@@ -357,15 +354,15 @@ export default function DataGrid({
               {editState.sqlPreview?.map((sql, i) => (
                 <pre
                   key={i}
-                  className="mb-2 whitespace-pre-wrap break-all rounded bg-(--color-bg-secondary) p-2 text-xs text-(--color-text-secondary)"
+                  className="mb-2 whitespace-pre-wrap break-all rounded bg-secondary p-2 text-xs text-secondary-foreground"
                 >
                   {sql}
                 </pre>
               ))}
             </div>
-            <DialogFooter className="border-t border-(--color-border) px-4 py-3">
+            <DialogFooter className="border-t border-border px-4 py-3">
               <button
-                className="rounded bg-(--color-bg-tertiary) px-3 py-1.5 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-secondary)"
+                className="rounded bg-muted px-3 py-1.5 text-xs text-secondary-foreground hover:bg-secondary"
                 onClick={() => editState.setSqlPreview(null)}
               >
                 Cancel

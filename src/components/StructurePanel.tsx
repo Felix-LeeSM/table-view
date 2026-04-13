@@ -77,7 +77,7 @@ export default function StructurePanel({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
-      <div className="flex items-center gap-0 border-b border-(--color-border) bg-(--color-bg-secondary)">
+      <div className="flex items-center gap-0 border-b border-border bg-secondary">
         {subTabs.map((tab) => (
           <button
             key={tab.key}
@@ -85,8 +85,8 @@ export default function StructurePanel({
             aria-selected={activeSubTab === tab.key}
             className={`px-4 py-1.5 text-xs font-medium transition-colors ${
               activeSubTab === tab.key
-                ? "border-b-2 border-(--color-accent) text-(--color-text-primary)"
-                : "text-(--color-text-muted) hover:text-(--color-text-secondary)"
+                ? "border-b-2 border-primary text-foreground"
+                : "text-muted-foreground hover:text-secondary-foreground"
             }`}
             onClick={() => setActiveSubTab(tab.key)}
           >
@@ -137,7 +137,7 @@ export default function StructurePanel({
       {error && (
         <div
           role="alert"
-          className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)"
+          className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </div>
@@ -146,10 +146,7 @@ export default function StructurePanel({
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-8">
-          <Loader2
-            className="animate-spin text-(--color-text-muted)"
-            size={24}
-          />
+          <Loader2 className="animate-spin text-muted-foreground" size={24} />
         </div>
       )}
     </div>

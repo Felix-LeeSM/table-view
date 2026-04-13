@@ -82,7 +82,7 @@ export default function QuickOpen() {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent
-        className="w-full max-w-lg rounded-lg border border-(--color-border) bg-(--color-bg-primary) p-0 top-[20vh] translate-y-0"
+        className="w-full max-w-lg rounded-lg border border-border bg-background p-0 top-[20vh] translate-y-0"
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
@@ -90,8 +90,8 @@ export default function QuickOpen() {
           <DialogDescription>Search and navigate to a table</DialogDescription>
         </DialogHeader>
         {/* Search input */}
-        <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-2">
-          <Search size={16} className="shrink-0 text-(--color-text-muted)" />
+        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <Search size={16} className="shrink-0 text-muted-foreground" />
           <input
             ref={inputRef}
             type="text"
@@ -103,7 +103,7 @@ export default function QuickOpen() {
                 ? `quick-open-option-${activeIndex}`
                 : undefined
             }
-            className="flex-1 bg-transparent text-sm text-(--color-text-primary) outline-none placeholder:text-(--color-text-muted)"
+            className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             placeholder="Search tables..."
             value={search}
             onChange={(e) => {
@@ -114,7 +114,7 @@ export default function QuickOpen() {
             autoFocus
           />
           <button
-            className="shrink-0 text-(--color-text-muted) hover:text-(--color-text-primary)"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
             onClick={handleClose}
           >
             <X size={16} />
@@ -124,7 +124,7 @@ export default function QuickOpen() {
         {/* Results list */}
         <div className="max-h-64 overflow-y-auto" role="listbox">
           {filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-(--color-text-muted)">
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
               No tables found
             </div>
           ) : (
@@ -135,19 +135,13 @@ export default function QuickOpen() {
                 role="option"
                 aria-selected={index === activeIndex}
                 className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
-                  index === activeIndex
-                    ? "bg-(--color-bg-tertiary)"
-                    : "hover:bg-(--color-bg-tertiary)"
+                  index === activeIndex ? "bg-muted" : "hover:bg-muted"
                 }`}
                 onClick={() => handleSelect(table)}
                 onMouseEnter={() => setActiveIndex(index)}
               >
-                <span className="text-(--color-text-muted)">
-                  {table.schema}.
-                </span>
-                <span className="text-(--color-text-primary)">
-                  {table.name}
-                </span>
+                <span className="text-muted-foreground">{table.schema}.</span>
+                <span className="text-foreground">{table.name}</span>
               </button>
             ))
           )}

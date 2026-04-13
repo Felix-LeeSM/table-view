@@ -70,10 +70,8 @@ export default function ConnectionGroup({
   return (
     <>
       <div
-        className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-(--color-text-muted) hover:bg-(--color-bg-tertiary) select-none ${
-          dropActive
-            ? "bg-(--color-accent)/10 outline outline-1 outline-(--color-accent)"
-            : ""
+        className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted select-none ${
+          dropActive ? "bg-primary/10 outline outline-1 outline-primary" : ""
         }`}
         role="button"
         tabIndex={0}
@@ -115,7 +113,7 @@ export default function ConnectionGroup({
         {renaming ? (
           <Input
             ref={renameRef}
-            className="h-5 min-w-0 flex-1 border-(--color-accent) bg-(--color-bg-primary) px-1.5 py-0.5 text-xs text-(--color-text-primary) shadow-none focus-visible:ring-0"
+            className="h-5 min-w-0 flex-1 border-primary bg-background px-1.5 py-0.5 text-xs text-foreground shadow-none focus-visible:ring-0"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameSubmit}

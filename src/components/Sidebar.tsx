@@ -49,18 +49,18 @@ export default function Sidebar() {
     <>
       <div
         ref={sidebarRef}
-        className="relative flex h-full shrink-0 flex-col select-none border-r border-(--color-border) bg-(--color-bg-sidebar)"
+        className="relative flex h-full shrink-0 flex-col select-none border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-(--color-border) px-3 py-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-(--color-text-muted)">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Connections
           </span>
           <div className="flex gap-1">
             <button
               onClick={() => setShowNewDialog(true)}
-              className="rounded p-1 hover:bg-(--color-bg-tertiary) text-(--color-text-secondary)"
+              className="rounded p-1 hover:bg-muted text-secondary-foreground"
               aria-label="New Connection"
               title="New Connection"
             >
@@ -73,11 +73,11 @@ export default function Sidebar() {
         <div className="flex-1 overflow-y-auto">
           {connections.length === 0 ? (
             <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-              <Database size={36} className="mb-3 text-(--color-text-muted)" />
-              <p className="text-sm font-medium text-(--color-text-secondary)">
+              <Database size={36} className="mb-3 text-muted-foreground" />
+              <p className="text-sm font-medium text-secondary-foreground">
                 No connections yet
               </p>
-              <p className="mt-1 text-xs text-(--color-text-muted)">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Click the + button above to add your first database connection
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-1.5">
@@ -95,7 +95,7 @@ export default function Sidebar() {
                   </span>
                 ))}
               </div>
-              <div className="mt-4 flex items-center gap-1.5 text-[10px] text-(--color-text-muted)">
+              <div className="mt-4 flex items-center gap-1.5 text-[10px] text-muted-foreground">
                 <MousePointerClick size={12} />
                 <span>Double-click a connection to connect</span>
               </div>
@@ -111,9 +111,9 @@ export default function Sidebar() {
         </div>
 
         {/* Footer — Theme Toggle */}
-        <div className="border-t border-(--color-border) px-3 py-2">
+        <div className="border-t border-border px-3 py-2">
           <button
-            className="flex items-center gap-2 rounded p-1 text-xs text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary) w-full"
+            className="flex items-center gap-2 rounded p-1 text-xs text-muted-foreground hover:bg-muted hover:text-secondary-foreground w-full"
             onClick={cycleTheme}
             aria-label={`Theme: ${theme}. Click to change.`}
           >
@@ -124,7 +124,7 @@ export default function Sidebar() {
 
         {/* Resize handle */}
         <div
-          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-(--color-accent) active:bg-(--color-accent)"
+          className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90"
           onMouseDown={handleResizeMouseDown}
         />
       </div>

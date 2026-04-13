@@ -99,22 +99,21 @@ export default function ConnectionDialog({
   };
 
   const inputClass =
-    "w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2.5 py-1.5 text-sm text-(--color-text-primary) outline-none focus:border-(--color-accent)";
-  const labelClass =
-    "mb-1 block text-xs font-medium text-(--color-text-secondary)";
+    "w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary";
+  const labelClass = "mb-1 block text-xs font-medium text-secondary-foreground";
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="w-[440px] bg-(--color-bg-secondary) p-0"
+        className="w-[440px] bg-secondary p-0"
         showCloseButton={false}
       >
-        <div className="w-[440px] rounded-lg bg-(--color-bg-secondary) shadow-xl">
+        <div className="w-[440px] rounded-lg bg-secondary shadow-xl">
           {/* Header */}
-          <DialogHeader className="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
+          <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogTitle
               id="dialog-title"
-              className="text-sm font-semibold text-(--color-text-primary)"
+              className="text-sm font-semibold text-foreground"
             >
               {isEditing ? "Edit Connection" : "New Connection"}
             </DialogTitle>
@@ -124,7 +123,7 @@ export default function ConnectionDialog({
                 : "Create a new database connection"}
             </DialogDescription>
             <button
-              className="rounded p-1 text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+              className="rounded p-1 text-muted-foreground hover:bg-muted"
               onClick={onClose}
               aria-label="Close dialog"
             >
@@ -136,12 +135,12 @@ export default function ConnectionDialog({
           <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
             {/* Input mode toggle */}
             {!isEditing && (
-              <div className="mb-3 flex gap-1 rounded-md border border-(--color-border) p-0.5">
+              <div className="mb-3 flex gap-1 rounded-md border border-border p-0.5">
                 <button
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${
                     inputMode === "form"
-                      ? "bg-(--color-bg-tertiary) text-(--color-text-primary)"
-                      : "text-(--color-text-muted) hover:text-(--color-text-secondary)"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-secondary-foreground"
                   }`}
                   onClick={() => setInputMode("form")}
                 >
@@ -151,8 +150,8 @@ export default function ConnectionDialog({
                 <button
                   className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${
                     inputMode === "url"
-                      ? "bg-(--color-bg-tertiary) text-(--color-text-primary)"
-                      : "text-(--color-text-muted) hover:text-(--color-text-secondary)"
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:text-secondary-foreground"
                   }`}
                   onClick={() => setInputMode("url")}
                 >
@@ -184,13 +183,13 @@ export default function ConnectionDialog({
                 {urlError && (
                   <div
                     role="alert"
-                    className="rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)"
+                    className="rounded bg-red-500/10 px-3 py-2 text-sm text-destructive"
                   >
                     {urlError}
                   </div>
                 )}
                 <button
-                  className="w-full rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover)"
+                  className="w-full rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90"
                   onClick={() => {
                     const parsed = parseConnectionUrl(urlValue);
                     if (!parsed) {
@@ -338,9 +337,9 @@ export default function ConnectionDialog({
                 </div>
 
                 {/* Advanced Settings */}
-                <div className="border-t border-(--color-border) pt-3">
+                <div className="border-t border-border pt-3">
                   <details>
-                    <summary className="cursor-pointer text-xs font-medium text-(--color-text-muted) hover:text-(--color-text-secondary)">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-secondary-foreground">
                       Advanced Settings
                     </summary>
                     <div className="mt-2 space-y-3">
@@ -396,8 +395,8 @@ export default function ConnectionDialog({
                     role="alert"
                     className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${
                       testResult.success
-                        ? "bg-green-500/10 text-(--color-success)"
-                        : "bg-red-500/10 text-(--color-danger)"
+                        ? "bg-green-500/10 text-emerald-500 dark:text-emerald-400"
+                        : "bg-red-500/10 text-destructive"
                     }`}
                   >
                     {testResult.success ? (
@@ -413,7 +412,7 @@ export default function ConnectionDialog({
                 {error && (
                   <div
                     role="alert"
-                    className="rounded bg-red-500/10 px-3 py-2 text-sm text-(--color-danger)"
+                    className="rounded bg-red-500/10 px-3 py-2 text-sm text-destructive"
                   >
                     {error}
                   </div>
@@ -423,9 +422,9 @@ export default function ConnectionDialog({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-(--color-border) px-4 py-3">
+          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
             <button
-              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary) disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted disabled:opacity-50"
               onClick={handleTest}
               disabled={testing}
             >
@@ -437,13 +436,13 @@ export default function ConnectionDialog({
               Test Connection
             </button>
             <button
-              className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+              className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
               onClick={onClose}
             >
               Cancel
             </button>
             <button
-              className="rounded bg-(--color-accent) px-3 py-1.5 text-sm text-white hover:bg-(--color-accent-hover) disabled:opacity-50"
+              className="rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
               onClick={handleSave}
               disabled={saving}
             >

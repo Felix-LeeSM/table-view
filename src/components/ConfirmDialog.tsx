@@ -28,18 +28,18 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent className="w-80 bg-(--color-bg-secondary) p-4">
+      <AlertDialogContent className="w-80 bg-secondary p-4">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-sm font-semibold text-(--color-text-primary)">
+          <AlertDialogTitle className="text-sm font-semibold text-foreground">
             {title}
           </AlertDialogTitle>
-          <AlertDialogDescription className="mt-2 text-sm text-(--color-text-secondary)">
+          <AlertDialogDescription className="mt-2 text-sm text-secondary-foreground">
             {message}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-4 flex justify-end gap-2">
           <button
-            className="rounded px-3 py-1.5 text-sm text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+            className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
             onClick={onCancel}
             disabled={loading}
           >
@@ -48,8 +48,8 @@ export default function ConfirmDialog({
           <button
             className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
               danger
-                ? "bg-(--color-danger) hover:opacity-90"
-                : "bg-(--color-accent) hover:opacity-90"
+                ? "bg-destructive hover:opacity-90"
+                : "bg-primary hover:opacity-90"
             } ${loading ? "cursor-not-allowed opacity-50" : ""}`}
             onClick={onConfirm}
             disabled={loading}

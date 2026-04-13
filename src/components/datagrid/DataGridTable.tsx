@@ -141,15 +141,12 @@ export default function DataGridTable({
   return (
     <div className="relative flex-1 overflow-auto">
       {loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-(--color-bg-primary)/60">
-          <Loader2
-            className="animate-spin text-(--color-text-muted)"
-            size={24}
-          />
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
+          <Loader2 className="animate-spin text-muted-foreground" size={24} />
         </div>
       )}
       <table className="w-full border-collapse text-sm" ref={tableRef}>
-        <thead className="sticky top-0 z-10 bg-(--color-bg-secondary)">
+        <thead className="sticky top-0 z-10 bg-secondary">
           <tr>
             {data.columns.map((col, colIdx) => {
               const sortInfo = sorts.find((s) => s.column === col.name);
@@ -157,7 +154,7 @@ export default function DataGridTable({
               return (
                 <th
                   key={col.name}
-                  className="relative cursor-pointer border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+                  className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
                   style={{
                     width: getColumnWidth(col.name, col.data_type),
                     minWidth: MIN_COL_WIDTH,
@@ -177,7 +174,7 @@ export default function DataGridTable({
                     )}
                     <span className="truncate">{col.name}</span>
                     {sortInfo && (
-                      <span className="flex shrink-0 items-center gap-0.5 text-(--color-accent)">
+                      <span className="flex shrink-0 items-center gap-0.5 text-primary">
                         <span className="text-[10px] font-bold">
                           {sortRank}
                         </span>
@@ -186,14 +183,14 @@ export default function DataGridTable({
                     )}
                   </div>
                   <div
-                    className="mt-0.5 truncate text-[10px] text-(--color-text-muted)"
+                    className="mt-0.5 truncate text-[10px] text-muted-foreground"
                     title={col.data_type}
                   >
                     {col.data_type}
                   </div>
                   {/* Resize handle */}
                   <div
-                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-(--color-accent) active:bg-(--color-accent)"
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary active:bg-primary"
                     onMouseDown={(e) => handleResizeStart(e, col.name, colIdx)}
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -210,7 +207,7 @@ export default function DataGridTable({
             return (
               <tr
                 key={rk}
-                className={`border-b border-(--color-border) hover:bg-(--color-bg-tertiary)${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+                className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
                 onClick={() => onSelectRow(rowIdx)}
               >
                 {(row as unknown[]).map((cell, cellIdx) => {
@@ -231,7 +228,7 @@ export default function DataGridTable({
                   return (
                     <td
                       key={cellIdx}
-                      className={`overflow-hidden border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
+                      className={`overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
                       style={{
                         width: getColumnWidth(
                           data.columns[cellIdx]?.name ?? "",
@@ -260,7 +257,7 @@ export default function DataGridTable({
                           type={getInputTypeForColumn(
                             data.columns[cellIdx]?.data_type ?? "",
                           )}
-                          className="w-full border-none bg-transparent p-0 text-xs text-(--color-text-primary) outline-none"
+                          className="w-full border-none bg-transparent p-0 text-xs text-foreground outline-none"
                           value={editValue}
                           autoFocus
                           onChange={(e) => onSetEditValue(e.target.value)}
@@ -277,7 +274,7 @@ export default function DataGridTable({
                       ) : hasPendingEdit ? (
                         <span className="line-clamp-3">{displayValue}</span>
                       ) : cell == null ? (
-                        <span className="italic text-(--color-text-muted)">
+                        <span className="italic text-muted-foreground">
                           NULL
                         </span>
                       ) : (
@@ -299,7 +296,7 @@ export default function DataGridTable({
             <tr>
               <td
                 colSpan={data.columns.length}
-                className="px-3 py-4 text-center text-xs text-(--color-text-muted)"
+                className="px-3 py-4 text-center text-xs text-muted-foreground"
               >
                 No data
               </td>
@@ -308,12 +305,12 @@ export default function DataGridTable({
           {pendingNewRows.map((newRow, newIdx) => (
             <tr
               key={`new-row-${newIdx}`}
-              className="border-b border-(--color-border) bg-yellow-500/5 hover:bg-(--color-bg-tertiary)"
+              className="border-b border-border bg-yellow-500/5 hover:bg-muted"
             >
               {(newRow as unknown[]).map((cell, cellIdx) => (
                 <td
                   key={cellIdx}
-                  className="overflow-hidden border-r border-(--color-border) px-3 py-1 text-xs italic text-(--color-text-muted)"
+                  className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground"
                   style={{
                     width: getColumnWidth(
                       data.columns[cellIdx]?.name ?? "",

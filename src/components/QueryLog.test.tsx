@@ -443,7 +443,7 @@ describe("QueryLog", () => {
     });
 
     const dot = screen.getByTitle("success");
-    expect(dot.className).toContain("color-success");
+    expect(dot.className).toContain("emerald-500");
   });
 
   it("uses theme CSS variable for error status dot", () => {
@@ -468,6 +468,6 @@ describe("QueryLog", () => {
     });
 
     const dot = screen.getByTitle("error");
-    expect(dot.className).toContain("color-danger");
+    expect(dot.className).toContain("destructive");
   });
 });

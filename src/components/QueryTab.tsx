@@ -254,33 +254,36 @@ export default function QueryTab({ tab }: QueryTabProps) {
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-(--color-border) bg-(--color-bg-secondary) px-2 py-1">
+      <div className="flex items-center gap-2 border-b border-border bg-secondary px-2 py-1">
         {tab.queryState.status === "running" ? (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
             onClick={handleExecute}
             aria-label="Cancel query"
           >
-            <Square size={12} className="text-(--color-danger)" />
+            <Square size={12} className="text-destructive" />
             <Loader2 size={12} className="animate-spin" />
             <span>Cancel</span>
           </button>
         ) : (
           <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-tertiary) disabled:opacity-40"
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted disabled:opacity-40"
             onClick={handleExecute}
             disabled={!tab.sql.trim()}
             aria-label="Run query"
           >
-            <Play size={12} className="text-(--color-success)" />
+            <Play
+              size={12}
+              className="text-emerald-500 dark:text-emerald-400"
+            />
             <span>Run</span>
-            <span className="text-[10px] text-(--color-text-muted)">
+            <span className="text-[10px] text-muted-foreground">
               {"\u2318\u23CE"}
             </span>
           </button>
         )}
         <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-tertiary) disabled:opacity-40"
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted disabled:opacity-40"
           onClick={handleFormat}
           disabled={!tab.sql.trim()}
           aria-label="Format SQL"
@@ -306,7 +309,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
       {/* Resize handle */}
       <div
-        className="h-1 cursor-row-resize shrink-0 border-y border-(--color-border) hover:bg-(--color-accent) active:bg-(--color-accent)"
+        className="h-1 cursor-row-resize shrink-0 border-y border-border hover:bg-primary/90 active:bg-primary/90"
         onMouseDown={handleResizeMouseDown}
       />
 
@@ -317,9 +320,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
       {/* History panel */}
       {historyEntries.length > 0 && (
-        <div className="border-t border-(--color-border) bg-(--color-bg-secondary)">
+        <div className="border-t border-border bg-secondary">
           <button
-            className="flex w-full items-center gap-1 px-2 py-1 text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
+            className="flex w-full items-center gap-1 px-2 py-1 text-xs font-medium text-secondary-foreground hover:bg-muted"
             onClick={() => setHistoryExpanded((v) => !v)}
           >
             {historyExpanded ? (
@@ -335,30 +338,30 @@ export default function QueryTab({ tab }: QueryTabProps) {
               {historyEntries.map((entry) => (
                 <button
                   key={entry.id}
-                  className="flex w-full items-center gap-2 border-t border-(--color-border) px-3 py-1 text-left text-xs hover:bg-(--color-bg-tertiary)"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-1 text-left text-xs hover:bg-muted"
                   onClick={() => updateQuerySql(tab.id, entry.sql)}
                   aria-label={entry.sql}
                 >
                   <span
                     className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                       entry.status === "success"
-                        ? "bg-(--color-success)"
-                        : "bg-(--color-danger)"
+                        ? "bg-emerald-500 dark:bg-emerald-400"
+                        : "bg-destructive"
                     }`}
                   />
-                  <span className="truncate font-mono text-(--color-text-primary)">
+                  <span className="truncate font-mono text-foreground">
                     {entry.sql}
                   </span>
-                  <span className="ml-auto shrink-0 text-(--color-text-muted)">
+                  <span className="ml-auto shrink-0 text-muted-foreground">
                     {entry.duration}ms
                   </span>
                 </button>
               ))}
             </div>
           )}
-          <div className="flex items-center justify-end border-t border-(--color-border) px-2 py-0.5">
+          <div className="flex items-center justify-end border-t border-border px-2 py-0.5">
             <button
-              className="flex items-center gap-1 text-[10px] text-(--color-text-muted) hover:text-(--color-danger)"
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive"
               onClick={clearHistory}
               aria-label="Clear history"
             >

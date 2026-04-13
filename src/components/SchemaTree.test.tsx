@@ -925,7 +925,7 @@ describe("SchemaTree", () => {
       fireEvent.click(schemaButton);
     });
 
-    expect(schemaButton).toHaveClass("bg-(--color-bg-tertiary)");
+    expect(schemaButton).toHaveClass("bg-muted");
   });
 
   // AC-SEL-02: Clicking a category selects it
@@ -949,7 +949,7 @@ describe("SchemaTree", () => {
       fireEvent.click(viewsCategory);
     });
 
-    expect(viewsCategory).toHaveClass("bg-(--color-bg-tertiary)");
+    expect(viewsCategory).toHaveClass("bg-muted");
   });
 
   // AC-SEL-03: Clicking a table selects it (and deselects previous)
@@ -977,9 +977,9 @@ describe("SchemaTree", () => {
       fireEvent.click(tableItem);
     });
 
-    expect(tableItem).toHaveClass("bg-(--color-accent)/10");
+    expect(tableItem).toHaveClass("bg-primary/10");
     // Schema should no longer have selection highlight
-    expect(schemaButton).not.toHaveClass("bg-(--color-bg-tertiary)");
+    expect(schemaButton).not.toHaveClass("bg-muted");
   });
 
   // =========================================================================
@@ -1085,9 +1085,7 @@ describe("SchemaTree", () => {
     });
 
     // There should be a border-t separator element between schemas
-    const separators = document.querySelectorAll(
-      ".border-t.border-\\(--color-border\\)",
-    );
+    const separators = document.querySelectorAll(".border-t.border-border");
     // Only separator between schemas (not the connection header border-b)
     const sectionSeparators = Array.from(separators).filter(
       (el) => el.classList.contains("mx-3") && el.classList.contains("my-0.5"),
@@ -1106,7 +1104,7 @@ describe("SchemaTree", () => {
     });
 
     const sectionSeparators = Array.from(
-      document.querySelectorAll(".border-t.border-\\(--color-border\\)"),
+      document.querySelectorAll(".border-t.border-border"),
     ).filter(
       (el) => el.classList.contains("mx-3") && el.classList.contains("my-0.5"),
     );

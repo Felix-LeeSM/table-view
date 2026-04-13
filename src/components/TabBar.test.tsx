@@ -193,9 +193,7 @@ describe("TabBar", () => {
 
     const dot = screen.getByLabelText("Connection color");
     expect(dot).toBeInTheDocument();
-    expect((dot as HTMLElement).style.backgroundColor).toBe(
-      "var(--color-accent)",
-    );
+    expect((dot as HTMLElement).style.backgroundColor).toBe("var(--primary)");
   });
 
   it("renders different colors for different connections", () => {

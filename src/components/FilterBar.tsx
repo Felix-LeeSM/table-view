@@ -98,19 +98,19 @@ export default function FilterBar({
   }, [columns.length, filters.length]);
 
   return (
-    <div className="border-b border-(--color-border) bg-(--color-bg-secondary) px-3 py-2">
+    <div className="border-b border-border bg-secondary px-3 py-2">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-(--color-text-secondary)">
+          <span className="text-xs font-medium text-secondary-foreground">
             Filters
           </span>
           {/* Mode toggle — segmented control */}
-          <div className="inline-flex rounded border border-(--color-border) overflow-hidden">
+          <div className="inline-flex rounded border border-border overflow-hidden">
             <button
               className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${
                 filterMode === "structured"
-                  ? "bg-(--color-accent) text-white"
-                  : "bg-(--color-bg-primary) text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+                  ? "bg-primary text-white"
+                  : "bg-background text-muted-foreground hover:bg-muted"
               }`}
               onClick={() => onFilterModeChange("structured")}
               aria-pressed={filterMode === "structured"}
@@ -120,8 +120,8 @@ export default function FilterBar({
             <button
               className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${
                 filterMode === "raw"
-                  ? "bg-(--color-accent) text-white"
-                  : "bg-(--color-bg-primary) text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+                  ? "bg-primary text-white"
+                  : "bg-background text-muted-foreground hover:bg-muted"
               }`}
               onClick={() => onFilterModeChange("raw")}
               aria-pressed={filterMode === "raw"}
@@ -133,7 +133,7 @@ export default function FilterBar({
         <Button
           variant="ghost"
           size="icon-xs"
-          className="text-(--color-text-muted) hover:text-(--color-text-secondary)"
+          className="text-muted-foreground hover:text-secondary-foreground"
           onClick={onClose}
           aria-label="Close filter bar"
         >
@@ -146,7 +146,7 @@ export default function FilterBar({
         <div>
           <Input
             type="text"
-            className="h-7 w-full border-(--color-border) bg-(--color-bg-primary) px-2 py-1 font-mono text-xs text-(--color-text-primary) placeholder:text-(--color-text-muted)"
+            className="h-7 w-full border-border bg-background px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground"
             placeholder="e.g. id = 13 AND name LIKE '%test%'"
             value={rawSql}
             onChange={(e) => {
@@ -167,10 +167,7 @@ export default function FilterBar({
             aria-label="Raw SQL WHERE clause"
           />
           {rawSqlError && (
-            <div
-              className="mt-1 text-[11px] text-(--color-danger)"
-              role="alert"
-            >
+            <div className="mt-1 text-[11px] text-destructive" role="alert">
               {rawSqlError}
             </div>
           )}
@@ -178,7 +175,7 @@ export default function FilterBar({
             <Button
               variant="ghost"
               size="xs"
-              className="text-(--color-text-muted)"
+              className="text-muted-foreground"
               onClick={() => {
                 onRawSqlChange("");
                 setRawSqlError(null);
@@ -189,7 +186,7 @@ export default function FilterBar({
             </Button>
             <Button
               size="xs"
-              className="bg-(--color-accent) text-white hover:bg-(--color-accent)/90"
+              className="bg-primary text-white hover:bg-primary/90"
               onClick={() => {
                 const err = validateRawSql(rawSql);
                 if (err) {
@@ -211,7 +208,7 @@ export default function FilterBar({
             <div key={filter.id} className="mb-1.5 flex items-center gap-2">
               {/* Column selector */}
               <select
-                className="rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
                 aria-label="Filter column"
                 value={filter.column}
                 onChange={(e) =>
@@ -227,7 +224,7 @@ export default function FilterBar({
 
               {/* Operator selector */}
               <select
-                className="rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
                 aria-label="Filter operator"
                 value={filter.operator}
                 onChange={(e) => {
@@ -253,7 +250,7 @@ export default function FilterBar({
               {opInfo(filter.operator)?.needsValue && (
                 <Input
                   type="text"
-                  className="h-7 min-w-[120px] flex-1 border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
+                  className="h-7 min-w-[120px] flex-1 border-border bg-background px-2 py-1 text-xs text-foreground"
                   placeholder="Value..."
                   value={filter.value ?? ""}
                   onChange={(e) =>
@@ -269,7 +266,7 @@ export default function FilterBar({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="text-(--color-text-muted) hover:text-(--color-danger)"
+                className="text-muted-foreground hover:text-destructive"
                 onClick={() => removeFilter(index)}
                 aria-label="Remove filter"
               >
@@ -282,7 +279,7 @@ export default function FilterBar({
             <Button
               variant="ghost"
               size="xs"
-              className="text-(--color-accent)"
+              className="text-primary"
               onClick={addFilter}
             >
               <Plus size={12} /> Add Filter
@@ -292,14 +289,14 @@ export default function FilterBar({
                 <Button
                   variant="ghost"
                   size="xs"
-                  className="text-(--color-text-muted)"
+                  className="text-muted-foreground"
                   onClick={clearAll}
                 >
                   Clear All
                 </Button>
                 <Button
                   size="xs"
-                  className="bg-(--color-accent) text-white hover:bg-(--color-accent)/90"
+                  className="bg-primary text-white hover:bg-primary/90"
                   onClick={onApply}
                 >
                   Apply

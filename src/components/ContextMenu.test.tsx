@@ -70,7 +70,7 @@ describe("ContextMenu", () => {
     render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
 
     const deleteItem = screen.getByRole("menuitem", { name: "Delete" });
-    expect(deleteItem.className).toContain("color-danger");
+    expect(deleteItem.className).toContain("destructive");
   });
 
   it("renders items with icons", () => {
