@@ -5,6 +5,7 @@ import { useQueryHistoryStore } from "../stores/queryHistoryStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
 import { splitSqlStatements, formatSql } from "../lib/sqlUtils";
 import { useSqlAutocomplete } from "../hooks/useSqlAutocomplete";
+import { useResizablePanel } from "../hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import {
@@ -240,45 +241,15 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
-  const resizeRef = useRef<{ startY: number; startEditorPct: number } | null>(
-    null,
-  );
-  const [editorPct, setEditorPct] = useState(50);
-
-  const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      resizeRef.current = { startY: e.clientY, startEditorPct: editorPct };
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!resizeRef.current || !containerRef.current) return;
-        const containerHeight = containerRef.current.clientHeight;
-        const delta = moveEvent.clientY - resizeRef.current.startY;
-        const newPct = Math.max(
-          10,
-          Math.min(
-            90,
-            resizeRef.current.startEditorPct + (delta / containerHeight) * 100,
-          ),
-        );
-        setEditorPct(newPct);
-      };
-
-      const handleMouseUp = () => {
-        resizeRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
-    },
-    [editorPct],
-  );
+  const { size: editorPct, handleMouseDown: handleResizeMouseDown } =
+    useResizablePanel({
+      axis: "vertical",
+      min: 10,
+      max: 90,
+      initial: 50,
+      percentage: true,
+      containerRef,
+    });
 
   return (
     <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden">

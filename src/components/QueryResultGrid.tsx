@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import type { QueryResult, QueryState, QueryType } from "../types/query";
+import { truncateCell } from "../lib/format";
 
 interface QueryResultGridProps {
   queryState: QueryState;
@@ -20,12 +21,6 @@ function formatCell(cell: unknown): string {
     return JSON.stringify(cell, null, 2);
   }
   return String(cell);
-}
-
-/** Truncate long cell values for display. */
-function truncateCell(value: string, limit: number = 200): string {
-  if (value.length <= limit) return value;
-  return value.slice(0, limit) + "...";
 }
 
 function ResultTable({ result }: { result: QueryResult }) {

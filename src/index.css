@@ -2,7 +2,35 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ===== shadcn/ui theme tokens (Tailwind v4 @theme) ===== */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 :root {
+  /* Original project palette */
   --color-bg-primary: #ffffff;
   --color-bg-secondary: #f8fafc;
   --color-bg-tertiary: #f1f5f9;
@@ -16,9 +44,32 @@
   --color-success: #22c55e;
   --color-danger: #ef4444;
   --color-danger-hover: #dc2626;
+
+  /* shadcn/ui semantic tokens — light */
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --secondary: #f8fafc;
+  --secondary-foreground: #475569;
+  --muted: #f1f5f9;
+  --muted-foreground: #94a3b8;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #4f46e5;
+  --radius: 0.5rem;
 }
 
 .dark {
+  /* Original project palette — dark */
   --color-bg-primary: #0f172a;
   --color-bg-secondary: #1e293b;
   --color-bg-tertiary: #334155;
@@ -32,11 +83,33 @@
   --color-success: #4ade80;
   --color-danger: #f87171;
   --color-danger-hover: #ef4444;
+
+  /* shadcn/ui semantic tokens — dark */
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --popover: #0f172a;
+  --popover-foreground: #f8fafc;
+  --primary: #818cf8;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #cbd5e1;
+  --muted: #334155;
+  --muted-foreground: #64748b;
+  --accent: #334155;
+  --accent-foreground: #f8fafc;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --border: #334155;
+  --input: #334155;
+  --ring: #818cf8;
 }
 
 /* System preference detection — applied when no manual override is set */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
+    /* Original project palette — dark */
     --color-bg-primary: #0f172a;
     --color-bg-secondary: #1e293b;
     --color-bg-tertiary: #334155;
@@ -50,6 +123,27 @@
     --color-success: #4ade80;
     --color-danger: #f87171;
     --color-danger-hover: #ef4444;
+
+    /* shadcn/ui semantic tokens — dark */
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --card: #0f172a;
+    --card-foreground: #f8fafc;
+    --popover: #0f172a;
+    --popover-foreground: #f8fafc;
+    --primary: #818cf8;
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #cbd5e1;
+    --muted: #334155;
+    --muted-foreground: #64748b;
+    --accent: #334155;
+    --accent-foreground: #f8fafc;
+    --destructive: #f87171;
+    --destructive-foreground: #ffffff;
+    --border: #334155;
+    --input: #334155;
+    --ring: #818cf8;
   }
 }
 

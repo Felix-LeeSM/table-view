@@ -15,6 +15,7 @@ import {
 import { useSchemaStore } from "../stores/schemaStore";
 import { useTabStore } from "../stores/tabStore";
 import FilterBar from "./FilterBar";
+import { truncateCell } from "../lib/format";
 import type {
   FilterCondition,
   FilterMode,
@@ -32,12 +33,6 @@ const DEFAULT_PAGE_SIZE = 100;
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 const MIN_COL_WIDTH = 60;
 const MAX_COL_WIDTH = 400;
-const CELL_DISPLAY_LIMIT = 200;
-
-function truncateCell(value: string): string {
-  if (value.length <= CELL_DISPLAY_LIMIT) return value;
-  return value.slice(0, CELL_DISPLAY_LIMIT) + "...";
-}
 
 function calcDefaultColWidth(name: string, dataType: string): number {
   const nameWidth = name.length * 8 + 40;

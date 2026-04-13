@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import {
   Plus,
   Database,
@@ -9,23 +9,12 @@ import {
 } from "lucide-react";
 import { useConnectionStore } from "../stores/connectionStore";
 import { useTheme } from "../hooks/useTheme";
+import { useResizablePanel } from "../hooks/useResizablePanel";
+import { DB_TYPE_META } from "../lib/db-meta";
 import ConnectionList from "./ConnectionList";
 import ConnectionDialog from "./ConnectionDialog";
 import SchemaTree from "./SchemaTree";
 import type { DatabaseType } from "../types/connection";
-
-const DEFAULT_SIDEBAR_WIDTH = 250;
-const MIN_SIDEBAR_WIDTH = 180;
-const MAX_SIDEBAR_WIDTH = 500;
-
-/** Mapping of DB type to display label and color */
-const DB_TYPE_META: Record<DatabaseType, { label: string; color: string }> = {
-  postgresql: { label: "PostgreSQL", color: "#336791" },
-  mysql: { label: "MySQL", color: "#4479A1" },
-  sqlite: { label: "SQLite", color: "#003B57" },
-  mongodb: { label: "MongoDB", color: "#47A248" },
-  redis: { label: "Redis", color: "#DC382D" },
-};
 
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -33,44 +22,16 @@ export default function Sidebar() {
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { theme, setTheme } = useTheme();
 
-  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
-  const sidebarRef = useRef<HTMLDivElement>(null);
-  const resizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
-
-  const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      resizeRef.current = { startX: e.clientX, startWidth: sidebarWidth };
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!resizeRef.current || !sidebarRef.current) return;
-        const delta = moveEvent.clientX - resizeRef.current.startX;
-        const newWidth = Math.max(
-          MIN_SIDEBAR_WIDTH,
-          Math.min(MAX_SIDEBAR_WIDTH, resizeRef.current.startWidth + delta),
-        );
-        sidebarRef.current.style.width = `${newWidth}px`;
-      };
-
-      const handleMouseUp = () => {
-        if (resizeRef.current && sidebarRef.current) {
-          const finalWidth = parseInt(sidebarRef.current.style.width, 10);
-          setSidebarWidth(finalWidth);
-        }
-        resizeRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    [sidebarWidth],
-  );
+  const {
+    size: sidebarWidth,
+    panelRef: sidebarRef,
+    handleMouseDown: handleResizeMouseDown,
+  } = useResizablePanel({
+    axis: "horizontal",
+    min: 180,
+    max: 500,
+    initial: 250,
+  });
 
   const connectedIds = connections
     .filter((c) => activeStatuses[c.id]?.type === "connected")

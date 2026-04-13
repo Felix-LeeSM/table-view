@@ -1,12 +1,9 @@
 import { useState, useRef } from "react";
-import type {
-  ConnectionConfig,
-  ConnectionStatus,
-  DatabaseType,
-} from "../types/connection";
+import type { ConnectionConfig, ConnectionStatus } from "../types/connection";
 import { useConnectionStore } from "../stores/connectionStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import ConnectionDialog from "./ConnectionDialog";
+import { DB_TYPE_META } from "../lib/db-meta";
 import {
   Database,
   Plug,
@@ -16,15 +13,6 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-
-/** Mapping of DB type to short label, display name, and color */
-const DB_TYPE_META: Record<DatabaseType, { short: string; color: string }> = {
-  postgresql: { short: "PG", color: "#336791" },
-  mysql: { short: "MY", color: "#4479A1" },
-  sqlite: { short: "SQ", color: "#003B57" },
-  mongodb: { short: "MG", color: "#47A248" },
-  redis: { short: "RD", color: "#DC382D" },
-};
 
 /** Module-level drag state shared between ConnectionItem, ConnectionGroup, ConnectionList */
 export let draggedConnectionId: string | null = null;
