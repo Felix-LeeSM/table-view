@@ -7,6 +7,7 @@ export default function TabBar() {
   const activeTabId = useTabStore((s) => s.activeTabId);
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const removeTab = useTabStore((s) => s.removeTab);
+  const promoteTab = useTabStore((s) => s.promoteTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const connections = useConnectionStore((s) => s.connections);
 
@@ -34,6 +35,11 @@ export default function TabBar() {
               : "text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
           }`}
           onClick={() => setActiveTab(tab.id)}
+          onDoubleClick={() => {
+            if (tab.type === "table" && (tab as TableTab).isPreview) {
+              promoteTab(tab.id);
+            }
+          }}
           onAuxClick={(e) => {
             if (e.button === 1) {
               e.preventDefault();
@@ -55,6 +61,9 @@ export default function TabBar() {
                 "var(--color-accent)",
             }}
             aria-label="Connection color"
+            title={
+              connections.find((c) => c.id === tab.connectionId)?.name ?? ""
+            }
           />
           {tab.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-(--color-text-muted)" />

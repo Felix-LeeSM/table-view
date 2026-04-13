@@ -15,6 +15,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  Paintbrush,
 } from "lucide-react";
 
 interface QueryTabProps {
@@ -44,7 +45,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
       return;
     }
 
-    const statements = splitSqlStatements(sql);
+    const statements = splitSqlStatements(sql).filter((stmt) => {
+      // Strip SQL comments and whitespace to detect statements that are
+      // effectively empty (e.g. "-- comment only" or "/* block */").
+      // Line comments: -- ... (to end of line)
+      // Block comments: /* ... */
+      let s = stmt;
+      s = s.replace(/--[^\n]*/g, "");
+      s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+      return s.trim().length > 0;
+    });
     if (statements.length === 0) return;
 
     // Single statement — use original behavior
@@ -222,6 +232,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
     return () => window.removeEventListener("format-sql", handler);
   }, [tab.id, tab.sql, updateQuerySql]);
 
+  const handleFormat = useCallback(() => {
+    if (!tab.sql.trim()) return;
+    const formatted = formatSql(tab.sql);
+    updateQuerySql(tab.id, formatted);
+  }, [tab.id, tab.sql, updateQuerySql]);
+
   // Resizable split state
   const containerRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<{ startY: number; startEditorPct: number } | null>(
@@ -292,6 +308,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
             </span>
           </button>
         )}
+        <button
+          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-text-secondary) hover:bg-(--color-bg-tertiary) disabled:opacity-40"
+          onClick={handleFormat}
+          disabled={!tab.sql.trim()}
+          aria-label="Format SQL"
+          title="Format SQL (Cmd+I)"
+        >
+          <Paintbrush size={12} />
+          <span>Format</span>
+        </button>
       </div>
 
       {/* Editor area */}

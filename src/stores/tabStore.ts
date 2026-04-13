@@ -66,6 +66,7 @@ function debouncePersist(tabs: Tab[], activeTabId: string | null): void {
 interface TabState {
   tabs: Tab[];
   activeTabId: string | null;
+  closedTabHistory: Tab[];
 
   // Table-tab actions
   addTab: (tab: Omit<TableTab, "id">) => void;
@@ -79,6 +80,9 @@ interface TabState {
   updateQuerySql: (tabId: string, sql: string) => void;
   updateQueryState: (tabId: string, state: QueryState) => void;
 
+  // Reopen last closed tab
+  reopenLastClosedTab: () => void;
+
   // Persistence
   loadPersistedTabs: () => void;
 }
@@ -89,6 +93,7 @@ let queryCounter = 0;
 export const useTabStore = create<TabState>((set) => ({
   tabs: [],
   activeTabId: null,
+  closedTabHistory: [],
 
   // -- Table tab actions ----------------------------------------------------
 
@@ -137,12 +142,20 @@ export const useTabStore = create<TabState>((set) => ({
 
   removeTab: (id) =>
     set((state) => {
+      const tabToRemove = state.tabs.find((t) => t.id === id);
       const filtered = state.tabs.filter((t) => t.id !== id);
       const newActive =
         state.activeTabId === id
           ? (filtered[filtered.length - 1]?.id ?? null)
           : state.activeTabId;
-      return { tabs: filtered, activeTabId: newActive };
+      const newHistory = tabToRemove
+        ? [tabToRemove, ...state.closedTabHistory].slice(0, 20)
+        : state.closedTabHistory;
+      return {
+        tabs: filtered,
+        activeTabId: newActive,
+        closedTabHistory: newHistory,
+      };
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
@@ -153,6 +166,26 @@ export const useTabStore = create<TabState>((set) => ({
         t.id === tabId && t.type === "table" ? { ...t, isPreview: false } : t,
       ),
     })),
+
+  reopenLastClosedTab: () =>
+    set((state) => {
+      if (state.closedTabHistory.length === 0) return state;
+      const [restored, ...rest] = state.closedTabHistory;
+      // Generate a fresh ID to avoid conflicts
+      const newId =
+        restored!.type === "table"
+          ? `tab-${++tabCounter}`
+          : `query-${++queryCounter}`;
+      const reopened: Tab =
+        restored!.type === "table"
+          ? { ...(restored as TableTab), id: newId }
+          : { ...(restored as QueryTab), id: newId };
+      return {
+        tabs: [...state.tabs, reopened],
+        activeTabId: newId,
+        closedTabHistory: rest,
+      };
+    }),
 
   setSubView: (tabId, subView) =>
     set((state) => ({

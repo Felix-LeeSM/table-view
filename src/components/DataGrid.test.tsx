@@ -83,6 +83,15 @@ vi.mock("../stores/schemaStore", () => ({
     }),
 }));
 
+const mockPromoteTab = vi.fn();
+vi.mock("../stores/tabStore", () => ({
+  useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      activeTabId: "tab-1",
+      promoteTab: mockPromoteTab,
+    }),
+}));
+
 function renderDataGrid(props: Partial<Parameters<typeof DataGrid>[0]> = {}) {
   return render(
     <DataGrid connectionId="conn1" table="users" schema="public" {...props} />,
@@ -101,6 +110,7 @@ describe("DataGrid", () => {
       execution_time_ms: 5,
       query_type: "dml" as const,
     });
+    mockPromoteTab.mockReset();
   });
 
   // 1. Initial rendering — queryTableData called with correct args
@@ -1158,5 +1168,132 @@ describe("DataGrid", () => {
     for (const row of dataRows) {
       expect(row.className).not.toContain("line-through");
     }
+  });
+
+  // ── Sprint 43: promoteTab triggers ──
+
+  // 50. Sorting triggers promoteTab
+  it("calls promoteTab when sorting changes", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+    mockPromoteTab.mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    await screen.findByText("▲");
+
+    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+  });
+
+  // 51. Inline edit (double-click) triggers promoteTab
+  it("calls promoteTab when inline editing starts", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+    mockPromoteTab.mockClear();
+
+    const cells = screen.getAllByRole("cell");
+    await act(async () => {
+      fireEvent.dblClick(cells[1]!);
+    });
+
+    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+  });
+
+  // 52. Add row triggers promoteTab
+  it("calls promoteTab when adding a row", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+    mockPromoteTab.mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Add row"));
+    });
+
+    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+  });
+
+  // 53. Delete row triggers promoteTab
+  it("calls promoteTab when deleting a row", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+    mockPromoteTab.mockClear();
+
+    const cells = screen.getAllByRole("cell");
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Delete row"));
+    });
+
+    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+  });
+
+  // ── Sprint 44: Data Grid UX ──
+
+  // 54. Truncates long cell values at 200 chars
+  it("truncates cell values longer than 200 characters", async () => {
+    const longText = "A".repeat(250);
+    mockQueryTableData.mockResolvedValue({
+      ...MOCK_DATA,
+      total_count: 1,
+      rows: [[1, longText, null]],
+    });
+    renderDataGrid();
+    await screen.findByText("1 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const nameCell = cells[1]!;
+    // Display should be truncated
+    const displayedText = nameCell.querySelector(".line-clamp-3")?.textContent;
+    expect(displayedText).toBe("A".repeat(200) + "...");
+    // Title should have full value
+    expect(nameCell).toHaveAttribute("title", longText);
+  });
+
+  // 55. Data type header has truncate class
+  it("applies truncate class to data type header", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const typeElements = screen.getAllByText("integer");
+    expect(typeElements[0]!.classList.contains("truncate")).toBe(true);
+  });
+
+  // 56. Date column renders datetime-local input when editing
+  it("renders datetime-local input for timestamp column editing", async () => {
+    const dateData: TableData = {
+      ...MOCK_DATA,
+      columns: [
+        ...MOCK_DATA.columns,
+        {
+          name: "created_at",
+          data_type: "timestamp",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+      ],
+      rows: [[1, "Alice", null, "2024-01-15T10:30:00"]],
+    };
+    mockQueryTableData.mockResolvedValue(dateData);
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const dateCell = cells[3]!; // created_at column
+
+    await act(async () => {
+      fireEvent.dblClick(dateCell);
+    });
+
+    const input = dateCell.querySelector("input");
+    expect(input).toBeInTheDocument();
+    expect((input as HTMLInputElement).type).toBe("datetime-local");
   });
 });

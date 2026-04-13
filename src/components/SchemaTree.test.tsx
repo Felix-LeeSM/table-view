@@ -9,6 +9,7 @@ import {
 import React from "react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "../stores/schemaStore";
+import { useConnectionStore } from "../stores/connectionStore";
 import { useTabStore } from "../stores/tabStore";
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ function resetStores() {
     loadTables: mockLoadTables,
   });
   useTabStore.setState({ tabs: [], activeTabId: null });
+  useConnectionStore.setState({ connections: [] });
 }
 
 // ---------------------------------------------------------------------------
@@ -984,8 +986,34 @@ describe("SchemaTree", () => {
   // NEW: Visual hierarchy and icons
   // =========================================================================
 
-  // AC-VIS-01: Connection header has Database icon and connection ID
-  it("renders connection header with Database icon and connection ID", async () => {
+  // AC-VIS-01: Connection header shows connection name when available, falls back to connection ID
+  it("renders connection header with connection name when connection exists in store", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "My PostgreSQL",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          password: "",
+          database: "testdb",
+          group_id: null,
+          color: null,
+        },
+      ],
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    expect(screen.getByText("My PostgreSQL")).toBeInTheDocument();
+    expect(screen.queryByText("conn1")).not.toBeInTheDocument();
+  });
+
+  it("falls back to connection ID when connection is not found in store", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="my-connection" />);
     });

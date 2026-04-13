@@ -31,6 +31,30 @@ interface DataGridProps {
 const DEFAULT_PAGE_SIZE = 100;
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 const MIN_COL_WIDTH = 60;
+const MAX_COL_WIDTH = 400;
+const CELL_DISPLAY_LIMIT = 200;
+
+function truncateCell(value: string): string {
+  if (value.length <= CELL_DISPLAY_LIMIT) return value;
+  return value.slice(0, CELL_DISPLAY_LIMIT) + "...";
+}
+
+function calcDefaultColWidth(name: string, dataType: string): number {
+  const nameWidth = name.length * 8 + 40;
+  const typeWidth = dataType.length * 6 + 20;
+  return Math.max(
+    MIN_COL_WIDTH,
+    Math.min(MAX_COL_WIDTH, Math.max(nameWidth, typeWidth)),
+  );
+}
+
+function getInputTypeForColumn(dataType: string): string {
+  const lower = dataType.toLowerCase();
+  if (lower.includes("timestamp")) return "datetime-local";
+  if (lower === "date") return "date";
+  if (lower.includes("time")) return "time";
+  return "text";
+}
 
 export default function DataGrid({
   connectionId,
@@ -81,15 +105,18 @@ export default function DataGrid({
     setColumnWidths({});
   }, [connectionId, table, schema]);
 
-  // Promote preview tab to permanent when user interacts (page change, filter)
+  // Promote preview tab to permanent when user interacts (page change, filter, sort)
   useEffect(() => {
     if (activeTabId) {
       promoteTab(activeTabId);
     }
-  }, [page, appliedFilters, appliedRawSql, activeTabId, promoteTab]);
+  }, [page, appliedFilters, appliedRawSql, sorts, activeTabId, promoteTab]);
 
   const getColumnWidth = useCallback(
-    (colName: string) => columnWidths[colName] ?? 150,
+    (colName: string, dataType: string = "") => {
+      if (columnWidths[colName]) return columnWidths[colName];
+      return calcDefaultColWidth(colName, dataType);
+    },
     [columnWidths],
   );
 
@@ -289,8 +316,10 @@ export default function DataGrid({
       }
       setEditingCell({ row: rowIdx, col: colIdx });
       setEditValue(currentValue);
+      // Promote preview tab on inline edit start
+      if (activeTabId) promoteTab(activeTabId);
     },
-    [editingCell, editValue],
+    [editingCell, editValue, activeTabId, promoteTab],
   );
 
   // -- SQL generation for pending edits ----------------------------------------
@@ -434,7 +463,9 @@ export default function DataGrid({
     if (!data) return;
     const emptyRow = data.columns.map(() => null);
     setPendingNewRows((prev) => [...prev, emptyRow]);
-  }, [data]);
+    // Promote preview tab on row add
+    if (activeTabId) promoteTab(activeTabId);
+  }, [data, activeTabId, promoteTab]);
 
   const handleDeleteRow = useCallback(() => {
     if (selectedRowIdx === null) return;
@@ -444,7 +475,9 @@ export default function DataGrid({
       return next;
     });
     setSelectedRowIdx(null);
-  }, [selectedRowIdx, rowKeyFn]);
+    // Promote preview tab on row delete
+    if (activeTabId) promoteTab(activeTabId);
+  }, [selectedRowIdx, rowKeyFn, activeTabId, promoteTab]);
 
   const hasPendingChanges =
     pendingEdits.size > 0 ||
@@ -738,7 +771,7 @@ export default function DataGrid({
                       key={col.name}
                       className="relative cursor-pointer border-b border-r border-(--color-border) px-3 py-1.5 text-left text-xs font-medium text-(--color-text-secondary) hover:bg-(--color-bg-tertiary)"
                       style={{
-                        width: getColumnWidth(col.name),
+                        width: getColumnWidth(col.name, col.data_type),
                         minWidth: MIN_COL_WIDTH,
                       }}
                       onClick={(e) => handleSort(col.name, e.shiftKey)}
@@ -764,7 +797,10 @@ export default function DataGrid({
                           </span>
                         )}
                       </div>
-                      <div className="mt-0.5 text-[10px] text-(--color-text-muted)">
+                      <div
+                        className="mt-0.5 truncate text-[10px] text-(--color-text-muted)"
+                        title={col.data_type}
+                      >
                         {col.data_type}
                       </div>
                       {/* Resize handle */}
@@ -810,10 +846,11 @@ export default function DataGrid({
                       return (
                         <td
                           key={cellIdx}
-                          className={`whitespace-normal break-words border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
+                          className={`overflow-hidden border-r border-(--color-border) px-3 py-1 text-xs text-(--color-text-primary)${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
                           style={{
                             width: getColumnWidth(
                               data.columns[cellIdx]?.name ?? "",
+                              data.columns[cellIdx]?.data_type ?? "",
                             ),
                             minWidth: MIN_COL_WIDTH,
                           }}
@@ -835,6 +872,9 @@ export default function DataGrid({
                         >
                           {isEditing ? (
                             <input
+                              type={getInputTypeForColumn(
+                                data.columns[cellIdx]?.data_type ?? "",
+                              )}
                               className="w-full border-none bg-transparent p-0 text-xs text-(--color-text-primary) outline-none"
                               value={editValue}
                               autoFocus
@@ -850,15 +890,19 @@ export default function DataGrid({
                               }}
                             />
                           ) : hasPendingEdit ? (
-                            displayValue
+                            <span className="line-clamp-3">{displayValue}</span>
                           ) : cell == null ? (
                             <span className="italic text-(--color-text-muted)">
                               NULL
                             </span>
-                          ) : typeof cell === "object" && cell !== null ? (
-                            JSON.stringify(cell, null, 2)
                           ) : (
-                            String(cell)
+                            <span className="line-clamp-3">
+                              {truncateCell(
+                                typeof cell === "object" && cell !== null
+                                  ? JSON.stringify(cell, null, 2)
+                                  : String(cell),
+                              )}
+                            </span>
                           )}
                         </td>
                       );
@@ -884,10 +928,11 @@ export default function DataGrid({
                   {(newRow as unknown[]).map((cell, cellIdx) => (
                     <td
                       key={cellIdx}
-                      className="whitespace-normal break-words border-r border-(--color-border) px-3 py-1 text-xs italic text-(--color-text-muted)"
+                      className="overflow-hidden border-r border-(--color-border) px-3 py-1 text-xs italic text-(--color-text-muted)"
                       style={{
                         width: getColumnWidth(
                           data.columns[cellIdx]?.name ?? "",
+                          data.columns[cellIdx]?.data_type ?? "",
                         ),
                         minWidth: MIN_COL_WIDTH,
                       }}

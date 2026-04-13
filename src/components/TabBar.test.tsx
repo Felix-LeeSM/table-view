@@ -239,4 +239,70 @@ describe("TabBar", () => {
     const titleEl = screen.getByText("Users");
     expect(titleEl.className).not.toContain("italic");
   });
+
+  // ── Sprint 43: Double-click tab promotion ──
+
+  it("promotes preview tab on double-click", () => {
+    addTableTab({ title: "Users", table: "users" });
+    // New tab is preview by default
+    const state = useTabStore.getState();
+    expect((state.tabs[0] as TableTab).isPreview).toBe(true);
+
+    render(<TabBar />);
+    const tab = screen.getByText("Users").closest("[role='tab']")!;
+    act(() => {
+      fireEvent.doubleClick(tab);
+    });
+
+    const updatedTab = useTabStore.getState().tabs[0] as TableTab;
+    expect(updatedTab.isPreview).toBe(false);
+  });
+
+  it("does not change permanent tab on double-click", () => {
+    addTableTab({ title: "Users", table: "users" });
+    const state = useTabStore.getState();
+    const tabId = state.tabs[0]!.id;
+    useTabStore.getState().promoteTab(tabId);
+
+    render(<TabBar />);
+    const tab = screen.getByText("Users").closest("[role='tab']")!;
+    act(() => {
+      fireEvent.doubleClick(tab);
+    });
+
+    const updatedTab = useTabStore.getState().tabs[0] as TableTab;
+    expect(updatedTab.isPreview).toBe(false);
+  });
+
+  it("does not call promoteTab on query tab double-click", () => {
+    addTableTab({ title: "Users", table: "users" });
+    useTabStore.getState().addQueryTab("conn1");
+
+    render(<TabBar />);
+    const tabs = screen.getAllByRole("tab");
+    const queryTab = tabs[1]!;
+
+    act(() => {
+      fireEvent.doubleClick(queryTab);
+    });
+
+    // Query tab should still exist and be active
+    expect(useTabStore.getState().tabs[1]!.type).toBe("query");
+  });
+
+  // ── Sprint 45: Tab color dot tooltip ──
+
+  it("color dot has title with connection name", () => {
+    useConnectionStore.setState({
+      connections: [
+        makeConnection({ id: "conn1", name: "My Database", color: "red" }),
+      ],
+    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+
+    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    render(<TabBar />);
+
+    const dot = screen.getByLabelText("Connection color");
+    expect(dot).toHaveAttribute("title", "My Database");
+  });
 });

@@ -507,4 +507,78 @@ describe("tabStore", () => {
       expect(state.activeTabId).toBeNull();
     });
   });
+
+  // -- Sprint 45: Reopen last closed tab --
+
+  describe("reopen last closed tab", () => {
+    beforeEach(() => {
+      useTabStore.setState({
+        tabs: [],
+        activeTabId: null,
+        closedTabHistory: [],
+      });
+    });
+
+    it("removes tab and saves it to closedTabHistory", () => {
+      const tab = makeTableTab({ id: "t1", table: "users" });
+      useTabStore.getState().addTab(tab);
+
+      const state = useTabStore.getState();
+      const tabId = state.tabs[0]!.id;
+
+      useTabStore.getState().removeTab(tabId);
+
+      const afterRemove = useTabStore.getState();
+      expect(afterRemove.tabs).toHaveLength(0);
+      expect(afterRemove.closedTabHistory).toHaveLength(1);
+      expect(afterRemove.closedTabHistory[0]!.type).toBe("table");
+    });
+
+    it("reopens last closed tab", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      const state1 = useTabStore.getState();
+      const queryTabId = state1.tabs[0]!.id;
+
+      // Update the SQL so we can verify it's restored
+      useTabStore.getState().updateQuerySql(queryTabId, "SELECT 1");
+
+      // Close it
+      useTabStore.getState().removeTab(queryTabId);
+
+      expect(useTabStore.getState().tabs).toHaveLength(0);
+
+      // Reopen
+      useTabStore.getState().reopenLastClosedTab();
+
+      const afterReopen = useTabStore.getState();
+      expect(afterReopen.tabs).toHaveLength(1);
+      expect(afterReopen.activeTabId).toBe(afterReopen.tabs[0]!.id);
+      // SQL content should be preserved (query state is reset to idle)
+      const reopened = getQueryTab(afterReopen, 0);
+      expect(reopened.sql).toBe("SELECT 1");
+      // History should be cleared
+      expect(afterReopen.closedTabHistory).toHaveLength(0);
+    });
+
+    it("reopenLastClosedTab is a no-op when history is empty", () => {
+      useTabStore.getState().reopenLastClosedTab();
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(0);
+      expect(state.activeTabId).toBeNull();
+    });
+
+    it("limits closedTabHistory to 20 entries", () => {
+      // Add and remove 25 tabs
+      for (let i = 0; i < 25; i++) {
+        useTabStore.getState().addQueryTab("conn1");
+        const state = useTabStore.getState();
+        const lastTabId = state.tabs[state.tabs.length - 1]!.id;
+        useTabStore.getState().removeTab(lastTabId);
+      }
+
+      const state = useTabStore.getState();
+      expect(state.closedTabHistory.length).toBe(20);
+    });
+  });
 });

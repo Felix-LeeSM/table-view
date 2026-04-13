@@ -1,10 +1,24 @@
 import { useRef, useEffect } from "react";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
-import { sql as sqlLanguage, StandardSQL, type SQLNamespace } from "@codemirror/lang-sql";
-import { defaultKeymap, indentWithTab } from "@codemirror/commands";
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput } from "@codemirror/language";
-import { autocompletion } from "@codemirror/autocomplete";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+} from "@codemirror/view";
+import {
+  sql as sqlLanguage,
+  StandardSQL,
+  type SQLNamespace,
+} from "@codemirror/lang-sql";
+import { defaultKeymap } from "@codemirror/commands";
+import {
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  bracketMatching,
+  indentOnInput,
+} from "@codemirror/language";
+import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 
 interface QueryEditorProps {
   sql: string;
@@ -13,7 +27,12 @@ interface QueryEditorProps {
   schemaNamespace?: SQLNamespace;
 }
 
-export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespace }: QueryEditorProps) {
+export default function QueryEditor({
+  sql,
+  onSqlChange,
+  onExecute,
+  schemaNamespace,
+}: QueryEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -41,8 +60,9 @@ export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespa
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         autocompletion(),
         keymap.of([
-          ...defaultKeymap,
-          indentWithTab,
+          // Custom bindings MUST come before defaultKeymap to take priority.
+          // defaultKeymap also binds Mod-Enter (insertNewlineAndIndent), which
+          // would otherwise intercept the keypress before our handler runs.
           {
             key: "Mod-Enter",
             run: () => {
@@ -50,6 +70,20 @@ export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespa
               return true;
             },
           },
+          {
+            key: "Tab",
+            run: (view) => {
+              // When the autocomplete popup is open, Tab should accept the
+              // completion.  Without this explicit binding, CodeMirror falls
+              // through to the default indentWithTab handler from
+              // defaultKeymap (or a plain indent), which inserts whitespace
+              // instead of accepting the suggestion.
+              if (acceptCompletion(view)) return true;
+              // No autocomplete active — fall through to default indent.
+              return false;
+            },
+          },
+          ...defaultKeymap,
         ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -59,7 +93,11 @@ export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespa
           }
         }),
         EditorView.theme({
-          "&": { height: "100%", fontSize: "13px", backgroundColor: "var(--color-bg-primary)" },
+          "&": {
+            height: "100%",
+            fontSize: "13px",
+            backgroundColor: "var(--color-bg-primary)",
+          },
           ".cm-scroller": { overflow: "auto" },
           ".cm-content": {
             fontFamily: '"JetBrains Mono", "Fira Code", monospace',
@@ -71,14 +109,19 @@ export default function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespa
             border: "none",
             borderRight: "1px solid var(--color-border)",
           },
-          ".cm-activeLineGutter": { backgroundColor: "var(--color-bg-tertiary)" },
+          ".cm-activeLineGutter": {
+            backgroundColor: "var(--color-bg-tertiary)",
+          },
           ".cm-activeLine": { backgroundColor: "var(--color-bg-tertiary)" },
           ".cm-cursor": { borderLeftColor: "var(--color-text-primary)" },
           "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
             backgroundColor: "var(--color-accent) !important",
             opacity: "0.3",
           },
-          ".cm-matchingBracket": { backgroundColor: "var(--color-accent)", opacity: "0.3" },
+          ".cm-matchingBracket": {
+            backgroundColor: "var(--color-accent)",
+            opacity: "0.3",
+          },
         }),
       ],
     });

@@ -17,6 +17,7 @@ import {
   Search,
 } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
+import { useConnectionStore } from "../stores/connectionStore";
 import { useTabStore } from "../stores/tabStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import type { TableInfo } from "../types/schema";
@@ -114,6 +115,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const tables = useSchemaStore((s) => s.tables);
+  const connectionName = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.name,
+  );
 
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
     new Set(),
@@ -381,7 +385,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       <div className="flex items-center gap-1.5 border-b border-(--color-border) px-3 py-1.5">
         <Database size={13} className="shrink-0 text-(--color-accent)" />
         <span className="truncate text-xs font-semibold text-(--color-text-primary)">
-          {connectionId}
+          {connectionName || connectionId}
         </span>
         <div className="ml-auto flex gap-1">
           <button

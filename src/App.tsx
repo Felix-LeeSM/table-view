@@ -35,7 +35,7 @@ export default function App() {
   // Cmd+T / Ctrl+T — new query tab
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "t") {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "t") {
         e.preventDefault();
         const { activeTabId, tabs } = useTabStore.getState();
         const activeTab = activeTabId
@@ -152,6 +152,18 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === "i") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("format-sql"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+Shift+T / Ctrl+Shift+T — reopen last closed tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
+        e.preventDefault();
+        useTabStore.getState().reopenLastClosedTab();
       }
     };
     document.addEventListener("keydown", handleKeyDown);

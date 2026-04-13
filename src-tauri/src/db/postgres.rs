@@ -243,7 +243,7 @@ impl PostgresAdapter {
         let result = match query_type {
             QueryType::Select => {
                 let query_future = async {
-                    // Execute the query and get rows
+                    // First, get column metadata from a dry-run (LIMIT 0) or the actual query
                     let rows = sqlx::query(query).fetch_all(&pool).await?;
 
                     // Extract column metadata from rows when available
@@ -262,15 +262,24 @@ impl PostgresAdapter {
                         Vec::new()
                     };
 
-                    // Convert rows to JSON values
-                    let json_rows: Vec<Vec<serde_json::Value>> = rows
+                    // Use row_to_json via PostgreSQL to convert rows to proper JSON values.
+                    // Direct try_get::<serde_json::Value> only works for json/jsonb columns,
+                    // so we wrap the query in a subquery and use row_to_json().
+                    let wrapped_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", query);
+                    let json_rows_raw = sqlx::query_scalar::<_, String>(&wrapped_sql)
+                        .fetch_all(&pool)
+                        .await?;
+
+                    let col_names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
+                    let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
                         .iter()
-                        .map(|row| {
-                            (0..row.columns().len())
-                                .map(|col_idx| {
-                                    // Try to get value as JSON, fall back to Null
-                                    row.try_get::<serde_json::Value, _>(col_idx)
-                                        .unwrap_or(serde_json::Value::Null)
+                        .map(|json_str| {
+                            let obj: serde_json::Map<String, serde_json::Value> =
+                                serde_json::from_str(json_str).unwrap_or_default();
+                            col_names
+                                .iter()
+                                .map(|name| {
+                                    obj.get(*name).cloned().unwrap_or(serde_json::Value::Null)
                                 })
                                 .collect()
                         })
