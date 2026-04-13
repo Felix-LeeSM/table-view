@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Search, Trash2, X } from "lucide-react";
 import { useQueryHistoryStore } from "../stores/queryHistoryStore";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import ConfirmDialog from "./ConfirmDialog";
 
 function truncateSql(sql: string, maxLen: number): string {
@@ -58,28 +60,32 @@ export default function QueryLog() {
         </span>
         <div className="flex flex-1 items-center gap-1.5">
           <Search size={12} className="shrink-0 text-(--color-text-muted)" />
-          <input
+          <Input
             type="text"
-            className="flex-1 bg-transparent text-xs text-(--color-text-primary) outline-none placeholder:text-(--color-text-muted)"
+            className="h-5 flex-1 border-0 bg-transparent text-xs shadow-none text-(--color-text-primary) placeholder:text-(--color-text-muted) focus-visible:ring-0"
             placeholder="Search queries..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          className="flex items-center gap-1 rounded bg-(--color-bg-tertiary) px-2 py-0.5 text-xs text-(--color-text-muted) hover:text-(--color-text-primary)"
+        <Button
+          variant="ghost"
+          size="xs"
+          className="gap-1 bg-(--color-bg-tertiary) text-(--color-text-muted) hover:text-(--color-text-primary)"
           onClick={() => setShowClearConfirm(true)}
           aria-label="Clear history"
         >
           <Trash2 size={12} />
           Clear
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
           className="text-(--color-text-muted) hover:text-(--color-text-primary)"
           onClick={() => setIsVisible(false)}
         >
           <X size={14} />
-        </button>
+        </Button>
       </div>
 
       {/* Entries */}

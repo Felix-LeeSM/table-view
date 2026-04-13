@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import type {
   ColumnInfo,
   FilterCondition,
@@ -128,21 +130,23 @@ export default function FilterBar({
             </button>
           </div>
         </div>
-        <button
-          className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary)"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-(--color-text-muted) hover:text-(--color-text-secondary)"
           onClick={onClose}
           aria-label="Close filter bar"
         >
           <X size={12} />
-        </button>
+        </Button>
       </div>
 
       {filterMode === "raw" ? (
         /* Raw SQL mode */
         <div>
-          <input
+          <Input
             type="text"
-            className="w-full rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs font-mono text-(--color-text-primary) placeholder:text-(--color-text-muted)"
+            className="h-7 w-full border-(--color-border) bg-(--color-bg-primary) px-2 py-1 font-mono text-xs text-(--color-text-primary) placeholder:text-(--color-text-muted)"
             placeholder="e.g. id = 13 AND name LIKE '%test%'"
             value={rawSql}
             onChange={(e) => {
@@ -171,8 +175,10 @@ export default function FilterBar({
             </div>
           )}
           <div className="mt-1.5 flex items-center gap-2">
-            <button
-              className="rounded px-3 py-1 text-xs font-medium text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-(--color-text-muted)"
               onClick={() => {
                 onRawSqlChange("");
                 setRawSqlError(null);
@@ -180,9 +186,10 @@ export default function FilterBar({
               }}
             >
               Clear
-            </button>
-            <button
-              className="rounded bg-(--color-accent) px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+            </Button>
+            <Button
+              size="xs"
+              className="bg-(--color-accent) text-white hover:bg-(--color-accent)/90"
               onClick={() => {
                 const err = validateRawSql(rawSql);
                 if (err) {
@@ -194,7 +201,7 @@ export default function FilterBar({
               }}
             >
               Apply
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -244,9 +251,9 @@ export default function FilterBar({
 
               {/* Value input (hidden for IS NULL / IS NOT NULL) */}
               {opInfo(filter.operator)?.needsValue && (
-                <input
+                <Input
                   type="text"
-                  className="min-w-[120px] flex-1 rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
+                  className="h-7 min-w-[120px] flex-1 border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
                   placeholder="Value..."
                   value={filter.value ?? ""}
                   onChange={(e) =>
@@ -259,37 +266,44 @@ export default function FilterBar({
               )}
 
               {/* Remove button */}
-              <button
-                className="rounded p-0.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-danger)"
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-(--color-text-muted) hover:text-(--color-danger)"
                 onClick={() => removeFilter(index)}
                 aria-label="Remove filter"
               >
                 <Trash2 size={12} />
-              </button>
+              </Button>
             </div>
           ))}
 
           <div className="flex items-center gap-2">
-            <button
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-(--color-accent) hover:bg-(--color-bg-tertiary)"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-(--color-accent)"
               onClick={addFilter}
             >
               <Plus size={12} /> Add Filter
-            </button>
+            </Button>
             {filters.length > 0 && (
               <>
-                <button
-                  className="rounded px-2 py-1 text-xs text-(--color-text-muted) hover:bg-(--color-bg-tertiary)"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-(--color-text-muted)"
                   onClick={clearAll}
                 >
                   Clear All
-                </button>
-                <button
-                  className="rounded bg-(--color-accent) px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+                </Button>
+                <Button
+                  size="xs"
+                  className="bg-(--color-accent) text-white hover:bg-(--color-accent)/90"
                   onClick={onApply}
                 >
                   Apply
-                </button>
+                </Button>
               </>
             )}
           </div>

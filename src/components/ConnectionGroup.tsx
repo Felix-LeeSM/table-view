@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight, ChevronDown, Trash2, Pencil } from "lucide-react";
+import { Input } from "./ui/input";
 import type {
   ConnectionConfig,
   ConnectionGroup as ConnectionGroupType,
@@ -112,9 +113,9 @@ export default function ConnectionGroup({
       >
         {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         {renaming ? (
-          <input
+          <Input
             ref={renameRef}
-            className="min-w-0 flex-1 rounded border border-(--color-accent) bg-(--color-bg-primary) px-1.5 py-0.5 text-xs text-(--color-text-primary) outline-none"
+            className="h-5 min-w-0 flex-1 border-(--color-accent) bg-(--color-bg-primary) px-1.5 py-0.5 text-xs text-(--color-text-primary) shadow-none focus-visible:ring-0"
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameSubmit}

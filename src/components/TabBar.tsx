@@ -1,6 +1,7 @@
 import { X, Table2, Code2, Plus } from "lucide-react";
 import { useTabStore, type TableTab } from "../stores/tabStore";
 import { useConnectionStore } from "../stores/connectionStore";
+import { Button } from "./ui/button";
 
 export default function TabBar() {
   const tabs = useTabStore((s) => s.tabs);
@@ -76,30 +77,34 @@ export default function TabBar() {
             {tab.title}
           </span>
           {tab.closable && (
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               aria-label={`Close ${tab.title}`}
-              className="rounded p-0.5 opacity-0 hover:bg-(--color-bg-tertiary) group-hover:opacity-100 focus:opacity-100"
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
                 removeTab(tab.id);
               }}
             >
               <X size={12} />
-            </button>
+            </Button>
           )}
         </div>
       ))}
 
       {/* New query tab button */}
       {activeConnectionId && (
-        <button
-          className="flex items-center rounded px-2 py-1.5 text-(--color-text-muted) hover:bg-(--color-bg-tertiary) hover:text-(--color-text-secondary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-(--color-text-muted) hover:text-(--color-text-secondary)"
           aria-label="New Query Tab"
           title="New Query Tab"
           onClick={() => addQueryTab(activeConnectionId)}
         >
           <Plus size={14} />
-        </button>
+        </Button>
       )}
     </div>
   );
