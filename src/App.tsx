@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Sidebar from "./components/Sidebar";
 import MainArea from "./components/MainArea";
 import QuickOpen from "./components/QuickOpen";
@@ -195,11 +196,13 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-(--color-bg-primary)">
-      <Sidebar />
-      <MainArea />
-      <QuickOpen />
-      <QueryLog />
-    </div>
+    <ErrorBoundary>
+      <div className="flex h-screen w-screen overflow-hidden bg-(--color-bg-primary)">
+        <Sidebar />
+        <MainArea />
+        <QuickOpen />
+        <QueryLog />
+      </div>
+    </ErrorBoundary>
   );
 }

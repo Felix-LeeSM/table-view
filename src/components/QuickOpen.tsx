@@ -11,6 +11,7 @@ export default function QuickOpen() {
   const [isOpen, setIsOpen] = useState(false);
   const [tables, setTables] = useState<QuickOpenTable[]>([]);
   const [search, setSearch] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function QuickOpen() {
       const detail = (e as CustomEvent<{ tables?: QuickOpenTable[] }>).detail;
       setTables(detail?.tables ?? []);
       setSearch("");
+      setActiveIndex(0);
       setIsOpen(true);
       // Auto-focus after render
       requestAnimationFrame(() => {
@@ -55,8 +57,18 @@ export default function QuickOpen() {
       handleClose();
       return;
     }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((prev) => Math.min(prev + 1, filtered.length - 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((prev) => Math.max(prev - 1, 0));
+      return;
+    }
     if (e.key === "Enter" && filtered.length > 0) {
-      handleSelect(filtered[0]!);
+      handleSelect(filtered[activeIndex] ?? filtered[0]!);
     }
   };
 
@@ -65,6 +77,7 @@ export default function QuickOpen() {
   return (
     <div
       role="dialog"
+      aria-modal="true"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
@@ -81,10 +94,21 @@ export default function QuickOpen() {
           <input
             ref={inputRef}
             type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={filtered.length > 0}
+            aria-activedescendant={
+              filtered.length > 0
+                ? `quick-open-option-${activeIndex}`
+                : undefined
+            }
             className="flex-1 bg-transparent text-sm text-(--color-text-primary) outline-none placeholder:text-(--color-text-muted)"
             placeholder="Search tables..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setActiveIndex(0);
+            }}
             onKeyDown={handleKeyDown}
             autoFocus
           />
@@ -97,17 +121,25 @@ export default function QuickOpen() {
         </div>
 
         {/* Results list */}
-        <div className="max-h-64 overflow-y-auto">
+        <div className="max-h-64 overflow-y-auto" role="listbox">
           {filtered.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-(--color-text-muted)">
               No tables found
             </div>
           ) : (
-            filtered.map((table) => (
+            filtered.map((table, index) => (
               <button
                 key={`${table.connectionId}-${table.schema}-${table.name}`}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-(--color-bg-tertiary)"
+                id={`quick-open-option-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
+                  index === activeIndex
+                    ? "bg-(--color-bg-tertiary)"
+                    : "hover:bg-(--color-bg-tertiary)"
+                }`}
                 onClick={() => handleSelect(table)}
+                onMouseEnter={() => setActiveIndex(index)}
               >
                 <span className="text-(--color-text-muted)">
                   {table.schema}.

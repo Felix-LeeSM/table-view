@@ -102,4 +102,115 @@ describe("ContextMenu", () => {
     const menu = screen.getByRole("menu");
     expect(menu.className).toContain("select-none");
   });
+
+  // -----------------------------------------------------------------------
+  // Sprint 48: Keyboard navigation and disabled support
+  // -----------------------------------------------------------------------
+  it("focuses the first item when opened", async () => {
+    render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
+
+    const editItem = screen.getByRole("menuitem", { name: "Edit" });
+    // The first item should receive focus after the menu positions itself
+    await vi.waitFor(() => {
+      expect(editItem).toHaveFocus();
+    });
+  });
+
+  it("ArrowDown moves focus to next item", async () => {
+    render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
+
+    // Wait for initial focus
+    await vi.waitFor(() => {
+      expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
+    });
+
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveFocus();
+  });
+
+  it("ArrowUp moves focus to previous item", async () => {
+    render(<ContextMenu x={100} y={100} items={items} onClose={onClose} />);
+
+    await vi.waitFor(() => {
+      expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
+    });
+
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+    fireEvent.keyDown(document, { key: "ArrowUp" });
+
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
+  });
+
+  it("renders disabled items with aria-disabled", () => {
+    const itemsWithDisabled: ContextMenuItem[] = [
+      { label: "Connect", disabled: true, onClick: vi.fn() },
+      { label: "Delete", danger: true, onClick: vi.fn() },
+    ];
+
+    render(
+      <ContextMenu
+        x={100}
+        y={100}
+        items={itemsWithDisabled}
+        onClose={onClose}
+      />,
+    );
+
+    const connectItem = screen.getByRole("menuitem", { name: "Connect" });
+    expect(connectItem).toHaveAttribute("aria-disabled", "true");
+    expect(connectItem.className).toContain("opacity-40");
+  });
+
+  it("does not call onClick for disabled items", () => {
+    const onClick = vi.fn();
+    const itemsWithDisabled: ContextMenuItem[] = [
+      { label: "Connect", disabled: true, onClick },
+    ];
+
+    render(
+      <ContextMenu
+        x={100}
+        y={100}
+        items={itemsWithDisabled}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Connect" }));
+
+    expect(onClick).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("skips disabled items during keyboard navigation", async () => {
+    const itemsWithDisabled: ContextMenuItem[] = [
+      { label: "Connect", disabled: true, onClick: vi.fn() },
+      { label: "Edit", onClick: vi.fn() },
+      { label: "Delete", danger: true, onClick: vi.fn() },
+    ];
+
+    render(
+      <ContextMenu
+        x={100}
+        y={100}
+        items={itemsWithDisabled}
+        onClose={onClose}
+      />,
+    );
+
+    // Should skip disabled "Connect" and focus "Edit" first
+    await vi.waitFor(() => {
+      expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
+    });
+
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveFocus();
+
+    // ArrowDown from last item should wrap around, skipping disabled
+    fireEvent.keyDown(document, { key: "ArrowDown" });
+
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
+  });
 });

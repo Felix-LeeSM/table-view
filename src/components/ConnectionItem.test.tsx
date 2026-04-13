@@ -156,6 +156,79 @@ describe("ConnectionItem", () => {
     expect(indicator).toBeInTheDocument();
   });
 
+  // -----------------------------------------------------------------------
+  // Sprint 46: Connecting spinner and error inline message
+  // -----------------------------------------------------------------------
+  it("renders spinner when connecting", () => {
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "connecting" } },
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const spinner = screen.getByLabelText("Connecting");
+    expect(spinner).toBeInTheDocument();
+  });
+
+  it("does not call connectToDatabase on double-click when connecting", () => {
+    const mockConnect = vi.fn().mockResolvedValue(undefined);
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "connecting" } },
+      connectToDatabase: mockConnect,
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    const item = screen.getByRole("button", { name: /Test DB/ });
+    fireEvent.doubleClick(item);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it("renders inline error message when error status", () => {
+    setStoreState({
+      activeStatuses: {
+        "conn-1": { type: "error", message: "Connection refused" },
+      },
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    expect(screen.getByText("Connection refused")).toBeInTheDocument();
+  });
+
+  it("shows full error message on click and hides on close", () => {
+    setStoreState({
+      activeStatuses: {
+        "conn-1": { type: "error", message: "Detailed error message here" },
+      },
+    });
+
+    render(<ConnectionItem connection={makeConnection()} />);
+
+    // Click to expand error detail
+    const expandBtn = screen.getByLabelText("Show error details");
+    fireEvent.click(expandBtn);
+
+    expect(screen.getByText("Detailed error message here")).toBeInTheDocument();
+    expect(screen.getByLabelText("Hide error details")).toBeInTheDocument();
+
+    // Click close
+    fireEvent.click(screen.getByLabelText("Hide error details"));
+    expect(screen.getByLabelText("Show error details")).toBeInTheDocument();
+  });
+
+  it("has aria-label reflecting connecting status", () => {
+    setStoreState({
+      activeStatuses: { "conn-1": { type: "connecting" } },
+    });
+
+    render(<ConnectionItem connection={makeConnection({ name: "ProdDB" })} />);
+
+    const item = screen.getByRole("button");
+    expect(item).toHaveAttribute("aria-label", "ProdDB — connecting");
+  });
+
   it("renders disconnected indicator when no status exists", () => {
     setStoreState({ activeStatuses: {} });
 
@@ -499,7 +572,7 @@ describe("ConnectionItem", () => {
 
     render(<ConnectionItem connection={makeConnection({ name: "ProdDB" })} />);
 
-    const item = screen.getByRole("button");
+    const item = screen.getByRole("button", { name: /ProdDB — error/ });
     expect(item).toHaveAttribute("aria-label", "ProdDB — error");
   });
 

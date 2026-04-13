@@ -127,7 +127,7 @@ describe("QuickOpen", () => {
     expect(screen.getByText("orders")).toBeInTheDocument();
 
     // Click on a table
-    const usersBtn = screen.getByRole("button", { name: /users/ });
+    const usersBtn = screen.getByRole("option", { name: /users/ });
     await act(async () => {
       usersBtn.click();
     });
@@ -205,5 +205,138 @@ describe("QuickOpen", () => {
     expect(screen.getByText("users")).toBeInTheDocument();
     expect(screen.getByText("user_roles")).toBeInTheDocument();
     expect(screen.queryByText("orders")).not.toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 48: Arrow key navigation
+  // -----------------------------------------------------------------------
+  it("ArrowDown moves active index to next item", async () => {
+    render(<QuickOpen />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("quick-open", {
+          detail: {
+            tables: [
+              { name: "users", schema: "public", connectionId: "conn1" },
+              { name: "orders", schema: "public", connectionId: "conn1" },
+            ],
+          },
+        }),
+      );
+    });
+
+    const searchInput = screen.getByPlaceholderText("Search tables...");
+
+    // First item should be selected by default
+    const firstOption = screen.getByRole("option", { name: /users/ });
+    expect(firstOption).toHaveAttribute("aria-selected", "true");
+
+    await act(async () => {
+      fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    });
+
+    // Second item should now be selected
+    const secondOption = screen.getByRole("option", { name: /orders/ });
+    expect(secondOption).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("ArrowUp moves active index to previous item", async () => {
+    render(<QuickOpen />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("quick-open", {
+          detail: {
+            tables: [
+              { name: "users", schema: "public", connectionId: "conn1" },
+              { name: "orders", schema: "public", connectionId: "conn1" },
+            ],
+          },
+        }),
+      );
+    });
+
+    const searchInput = screen.getByPlaceholderText("Search tables...");
+
+    // Move down first
+    await act(async () => {
+      fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    });
+
+    // Move back up
+    await act(async () => {
+      fireEvent.keyDown(searchInput, { key: "ArrowUp" });
+    });
+
+    const firstOption = screen.getByRole("option", { name: /users/ });
+    expect(firstOption).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("Enter selects the activeIndex item after ArrowDown", async () => {
+    const handler = vi.fn();
+    window.addEventListener("navigate-table", handler);
+
+    render(<QuickOpen />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("quick-open", {
+          detail: {
+            tables: [
+              { name: "users", schema: "public", connectionId: "conn1" },
+              { name: "orders", schema: "public", connectionId: "conn1" },
+            ],
+          },
+        }),
+      );
+    });
+
+    const searchInput = screen.getByPlaceholderText("Search tables...");
+
+    await act(async () => {
+      fireEvent.keyDown(searchInput, { key: "ArrowDown" });
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(searchInput, { key: "Enter" });
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { connectionId: "conn1", schema: "public", table: "orders" },
+      }),
+    );
+
+    window.removeEventListener("navigate-table", handler);
+  });
+
+  it("has aria-modal='true' on the dialog", () => {
+    render(<QuickOpen />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("quick-open"));
+    });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+  });
+
+  it("has role='listbox' on the results container", () => {
+    render(<QuickOpen />);
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("quick-open", {
+          detail: {
+            tables: [
+              { name: "users", schema: "public", connectionId: "conn1" },
+            ],
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
   });
 });

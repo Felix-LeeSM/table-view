@@ -7,7 +7,15 @@ import type {
 import { useConnectionStore } from "../stores/connectionStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import ConnectionDialog from "./ConnectionDialog";
-import { Database, Plug, Unplug, Pencil, Trash2 } from "lucide-react";
+import {
+  Database,
+  Plug,
+  Unplug,
+  Pencil,
+  Trash2,
+  Loader2,
+  X,
+} from "lucide-react";
 
 /** Mapping of DB type to short label, display name, and color */
 const DB_TYPE_META: Record<DatabaseType, { short: string; color: string }> = {
@@ -26,6 +34,15 @@ interface ConnectionItemProps {
 }
 
 function StatusIndicator({ status }: { status: ConnectionStatus }) {
+  if (status.type === "connecting") {
+    return (
+      <Loader2
+        size={10}
+        className="shrink-0 animate-spin text-(--color-text-muted)"
+        aria-label="Connecting"
+      />
+    );
+  }
   if (status.type === "connected") {
     return (
       <span
@@ -70,9 +87,12 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
 
   const status = activeStatuses[connection.id] ?? { type: "disconnected" };
   const isConnected = status.type === "connected";
+  const isConnecting = status.type === "connecting";
+  const errorMessage = status.type === "error" ? status.message : null;
+  const [showErrorDetail, setShowErrorDetail] = useState(false);
 
   const handleDoubleClick = async () => {
-    if (!isConnected) {
+    if (!isConnected && !isConnecting) {
       try {
         await connectToDatabase(connection.id);
       } catch {
@@ -85,6 +105,7 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
     {
       label: isConnected ? "Disconnect" : "Connect",
       icon: isConnected ? <Unplug size={14} /> : <Plug size={14} />,
+      disabled: isConnecting,
       onClick: async () => {
         if (isConnected) {
           await disconnectFromDatabase(connection.id);
@@ -116,7 +137,7 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
         role="button"
         tabIndex={0}
         draggable
-        aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "error" ? "error" : "disconnected"}`}
+        aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "connecting" ? "connecting" : status.type === "error" ? "error" : "disconnected"}`}
         onDoubleClick={handleDoubleClick}
         onKeyDown={(e) => {
           if (e.key === "Enter") handleDoubleClick();
@@ -152,6 +173,34 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
           {DB_TYPE_META[connection.db_type].short}
         </span>
       </div>
+
+      {errorMessage && !showErrorDetail && (
+        <button
+          className="flex w-full items-start gap-2 px-3 py-0 text-left"
+          onClick={() => setShowErrorDetail(true)}
+          aria-label="Show error details"
+        >
+          <span className="shrink-0 w-2" />
+          <span className="truncate text-[10px] text-(--color-danger)">
+            {errorMessage}
+          </span>
+        </button>
+      )}
+      {errorMessage && showErrorDetail && (
+        <div className="flex w-full items-start gap-2 px-3 py-0">
+          <span className="shrink-0 w-2" />
+          <span className="break-all text-[10px] text-(--color-danger)">
+            {errorMessage}
+          </span>
+          <button
+            className="shrink-0 rounded p-0.5 text-(--color-text-muted) hover:text-(--color-text-primary)"
+            onClick={() => setShowErrorDetail(false)}
+            aria-label="Hide error details"
+          >
+            <X size={10} />
+          </button>
+        </div>
+      )}
 
       {contextMenu && (
         <ContextMenu

@@ -163,7 +163,10 @@ export default function FilterBar({
             aria-label="Raw SQL WHERE clause"
           />
           {rawSqlError && (
-            <div className="mt-1 text-[11px] text-(--color-danger)">
+            <div
+              className="mt-1 text-[11px] text-(--color-danger)"
+              role="alert"
+            >
               {rawSqlError}
             </div>
           )}
@@ -202,6 +205,7 @@ export default function FilterBar({
               {/* Column selector */}
               <select
                 className="rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
+                aria-label="Filter column"
                 value={filter.column}
                 onChange={(e) =>
                   updateFilter(index, { column: e.target.value })
@@ -217,6 +221,7 @@ export default function FilterBar({
               {/* Operator selector */}
               <select
                 className="rounded border border-(--color-border) bg-(--color-bg-primary) px-2 py-1 text-xs text-(--color-text-primary)"
+                aria-label="Filter operator"
                 value={filter.operator}
                 onChange={(e) => {
                   const newOp = e.target.value as FilterOperator;

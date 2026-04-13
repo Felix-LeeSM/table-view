@@ -145,6 +145,46 @@ describe("connectionStore", () => {
     });
   });
 
+  it("transitions from connecting to connected on successful connect", async () => {
+    let resolveConnect: () => void;
+    const connectPromise = new Promise<void>((resolve) => {
+      resolveConnect = resolve;
+    });
+    const { connectToDatabase } = await import("../lib/tauri");
+    (connectToDatabase as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      connectPromise,
+    );
+
+    // Start connecting — should immediately set "connecting"
+    const connectCall = useConnectionStore.getState().connectToDatabase("c1");
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "connecting",
+    });
+
+    // Resolve the backend call
+    resolveConnect!();
+    await connectCall;
+
+    // Should now be "connected"
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "connected",
+    });
+  });
+
+  it("transitions from connecting to error on failed connect", async () => {
+    const { connectToDatabase } = await import("../lib/tauri");
+    (connectToDatabase as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Connection refused"),
+    );
+
+    await useConnectionStore.getState().connectToDatabase("c1");
+
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "error",
+      message: "Error: Connection refused",
+    });
+  });
+
   it("sets disconnected status on disconnect", async () => {
     useConnectionStore.setState({
       activeStatuses: { c1: { type: "connected" } },

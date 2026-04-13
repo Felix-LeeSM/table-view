@@ -444,4 +444,49 @@ describe("schemaStore", () => {
     const state = useSchemaStore.getState();
     expect(state.error).toContain("Schema not found");
   });
+
+  it("transitions loading state during loadSchemas", async () => {
+    let resolveLoad: (value: unknown) => void;
+    const loadPromise = new Promise((resolve) => {
+      resolveLoad = resolve;
+    });
+    const { listSchemas } = await import("../lib/tauri");
+    (listSchemas as ReturnType<typeof vi.fn>).mockReturnValueOnce(loadPromise);
+
+    // Start loading
+    const call = useSchemaStore.getState().loadSchemas("conn1");
+    expect(useSchemaStore.getState().loading).toBe(true);
+
+    // Resolve
+    resolveLoad!([{ name: "public" }]);
+    await call;
+    expect(useSchemaStore.getState().loading).toBe(false);
+  });
+
+  it("resets loading to false on loadSchemas error", async () => {
+    const { listSchemas } = await import("../lib/tauri");
+    (listSchemas as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("fail"),
+    );
+
+    await useSchemaStore.getState().loadSchemas("conn1");
+    expect(useSchemaStore.getState().loading).toBe(false);
+    expect(useSchemaStore.getState().error).toContain("fail");
+  });
+
+  it("transitions loading state during loadTables", async () => {
+    let resolveLoad: (value: unknown) => void;
+    const loadPromise = new Promise((resolve) => {
+      resolveLoad = resolve;
+    });
+    const { listTables } = await import("../lib/tauri");
+    (listTables as ReturnType<typeof vi.fn>).mockReturnValueOnce(loadPromise);
+
+    const call = useSchemaStore.getState().loadTables("conn1", "public");
+    expect(useSchemaStore.getState().loading).toBe(true);
+
+    resolveLoad!([{ name: "users", schema: "public", row_count: 1 }]);
+    await call;
+    expect(useSchemaStore.getState().loading).toBe(false);
+  });
 });

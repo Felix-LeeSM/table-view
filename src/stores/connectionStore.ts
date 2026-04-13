@@ -95,13 +95,28 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   connectToDatabase: async (id) => {
-    await tauri.connectToDatabase(id);
     set((state) => ({
       activeStatuses: {
         ...state.activeStatuses,
-        [id]: { type: "connected" as const },
+        [id]: { type: "connecting" as const },
       },
     }));
+    try {
+      await tauri.connectToDatabase(id);
+      set((state) => ({
+        activeStatuses: {
+          ...state.activeStatuses,
+          [id]: { type: "connected" as const },
+        },
+      }));
+    } catch (e) {
+      set((state) => ({
+        activeStatuses: {
+          ...state.activeStatuses,
+          [id]: { type: "error" as const, message: String(e) },
+        },
+      }));
+    }
   },
 
   disconnectFromDatabase: async (id) => {

@@ -402,4 +402,30 @@ describe("FilterBar", () => {
     ]![0] as FilterCondition[];
     expect(lastCall[0]!.value).toBeNull();
   });
+
+  // -----------------------------------------------------------------------
+  // Sprint 48: aria-label and role="alert" for accessibility
+  // -----------------------------------------------------------------------
+  it("has aria-label on column and operator selects", () => {
+    renderFilterBar();
+    expect(screen.getByLabelText("Filter column")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter operator")).toBeInTheDocument();
+  });
+
+  it("raw SQL error div has role=alert", async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    renderFilterBar({
+      filterMode: "raw",
+      rawSql: "id = 1; DROP TABLE",
+      onApply,
+    });
+
+    const input = screen.getByPlaceholderText(/e\.g\./);
+    await user.type(input, "{Enter}");
+
+    const alertEl = screen.getByRole("alert");
+    expect(alertEl).toBeInTheDocument();
+    expect(alertEl.textContent).toContain("semicolons");
+  });
 });

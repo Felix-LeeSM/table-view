@@ -70,25 +70,29 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   error: null,
 
   loadSchemas: async (connectionId) => {
+    set({ loading: true, error: null });
     try {
       const schemas = await tauri.listSchemas(connectionId);
       set((state) => ({
         schemas: { ...state.schemas, [connectionId]: schemas },
+        loading: false,
       }));
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: String(e), loading: false });
     }
   },
 
   loadTables: async (connectionId, schema) => {
+    set({ loading: true, error: null });
     try {
       const tables = await tauri.listTables(connectionId, schema);
       const key = `${connectionId}:${schema}`;
       set((state) => ({
         tables: { ...state.tables, [key]: tables },
+        loading: false,
       }));
     } catch (e) {
-      set({ error: String(e) });
+      set({ error: String(e), loading: false });
     }
   },
 

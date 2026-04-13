@@ -10,6 +10,29 @@ vi.mock("lucide-react", () => ({
   Trash2: () => <span data-testid="icon-trash" />,
 }));
 
+// Mock ConfirmDialog — render a simple dialog with confirm/cancel buttons
+vi.mock("./ConfirmDialog", () => ({
+  default: ({
+    onConfirm,
+    onCancel,
+    title,
+  }: {
+    onConfirm: () => void;
+    onCancel: () => void;
+    title: string;
+  }) => (
+    <div data-testid="confirm-dialog">
+      <span>{title}</span>
+      <button data-testid="confirm-ok" onClick={onConfirm}>
+        Confirm
+      </button>
+      <button data-testid="confirm-cancel" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
+  ),
+}));
+
 describe("QueryLog", () => {
   beforeEach(() => {
     useQueryHistoryStore.setState({ entries: [] });
@@ -144,7 +167,7 @@ describe("QueryLog", () => {
     window.removeEventListener("insert-sql", handler);
   });
 
-  it("clear button clears history", async () => {
+  it("clear button shows confirmation dialog before clearing history", async () => {
     const now = Date.now();
     useQueryHistoryStore.setState({
       entries: [
@@ -167,13 +190,59 @@ describe("QueryLog", () => {
 
     expect(screen.getByText(/SELECT \* FROM users/)).toBeInTheDocument();
 
+    // Click clear button — should show confirm dialog, not clear immediately
     const clearBtn = screen.getByRole("button", { name: /clear/i });
     await act(async () => {
       clearBtn.click();
     });
 
-    expect(screen.queryByText(/SELECT \* FROM users/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("confirm-dialog")).toBeInTheDocument();
+    expect(screen.getByText("Clear Query History")).toBeInTheDocument();
+    // History should NOT be cleared yet
+    expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+
+    // Confirm the dialog
+    await act(async () => {
+      screen.getByTestId("confirm-ok").click();
+    });
+
+    expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
     expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+  });
+
+  it("clear cancel does not clear history", async () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT * FROM users",
+          executedAt: now,
+          duration: 100,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    const clearBtn = screen.getByRole("button", { name: /clear/i });
+    await act(async () => {
+      clearBtn.click();
+    });
+
+    // Cancel the dialog
+    await act(async () => {
+      screen.getByTestId("confirm-cancel").click();
+    });
+
+    expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
+    expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
   });
 
   it("toggles visibility on second toggle-query-log event", () => {
@@ -347,5 +416,58 @@ describe("QueryLog", () => {
     });
 
     expect(screen.getByText("just now")).toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 49: Theme CSS variables for status dots
+  // -----------------------------------------------------------------------
+  it("uses theme CSS variable for success status dot", () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT 1",
+          executedAt: now,
+          duration: 50,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    const dot = screen.getByTitle("success");
+    expect(dot.className).toContain("color-success");
+  });
+
+  it("uses theme CSS variable for error status dot", () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "BAD QUERY",
+          executedAt: now,
+          duration: 50,
+          status: "error",
+          connectionId: "conn1",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    const dot = screen.getByTitle("error");
+    expect(dot.className).toContain("color-danger");
   });
 });

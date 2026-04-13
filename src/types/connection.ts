@@ -33,6 +33,7 @@ export interface ConnectionGroup {
 /// - { type: "error", message: "..." }
 export type ConnectionStatus =
   | { type: "connected" }
+  | { type: "connecting" }
   | { type: "disconnected" }
   | { type: "error"; message: string };
 

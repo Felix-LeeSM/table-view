@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Search, Trash2, X } from "lucide-react";
 import { useQueryHistoryStore } from "../stores/queryHistoryStore";
+import ConfirmDialog from "./ConfirmDialog";
 
 function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
@@ -23,6 +24,7 @@ function formatRelativeTime(timestamp: number): string {
 export default function QueryLog() {
   const [isVisible, setIsVisible] = useState(false);
   const [search, setSearch] = useState("");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const entries = useQueryHistoryStore((s) => s.entries);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
 
@@ -66,7 +68,7 @@ export default function QueryLog() {
         </div>
         <button
           className="flex items-center gap-1 rounded bg-(--color-bg-tertiary) px-2 py-0.5 text-xs text-(--color-text-muted) hover:text-(--color-text-primary)"
-          onClick={clearHistory}
+          onClick={() => setShowClearConfirm(true)}
           aria-label="Clear history"
         >
           <Trash2 size={12} />
@@ -98,7 +100,9 @@ export default function QueryLog() {
               {/* Status dot */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                  entry.status === "success" ? "bg-green-500" : "bg-red-500"
+                  entry.status === "success"
+                    ? "bg-(--color-success)"
+                    : "bg-(--color-danger)"
                 }`}
                 title={entry.status}
               />
@@ -118,6 +122,20 @@ export default function QueryLog() {
           ))
         )}
       </div>
+
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="Clear Query History"
+          message="Are you sure you want to clear all query history? This cannot be undone."
+          confirmLabel="Clear All"
+          danger
+          onConfirm={() => {
+            clearHistory();
+            setShowClearConfirm(false);
+          }}
+          onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
     </div>
   );
 }
