@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useSchemaStore } from "../../stores/schemaStore";
 import { useTabStore } from "../../stores/tabStore";
 import type { TableData } from "../../types/schema";
@@ -53,9 +53,12 @@ export interface DataGridEditState {
   sqlPreview: string[] | null;
   setSqlPreview: (v: string[] | null) => void;
 
-  // Row selection
+  // Row selection (multi-row)
+  selectedRowIds: Set<number>;
+  anchorRowIdx: number | null;
+
+  // Derived — backward compat: single selected row index
   selectedRowIdx: number | null;
-  setSelectedRowIdx: (v: number | null) => void;
 
   // Derived
   hasPendingChanges: boolean;
@@ -68,11 +71,17 @@ export interface DataGridEditState {
     colIdx: number,
     currentValue: string,
   ) => void;
+  handleSelectRow: (
+    rowIdx: number,
+    metaKey: boolean,
+    shiftKey: boolean,
+  ) => void;
   handleCommit: () => void;
   handleExecuteCommit: () => Promise<void>;
   handleDiscard: () => void;
   handleAddRow: () => void;
   handleDeleteRow: () => void;
+  handleDuplicateRow: () => void;
 }
 
 export function useDataGridEdit({
@@ -100,8 +109,16 @@ export function useDataGridEdit({
   // SQL preview modal state
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
 
-  // Row operations state
-  const [selectedRowIdx, setSelectedRowIdx] = useState<number | null>(null);
+  // Row selection state (multi-row)
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
+  const [anchorRowIdx, setAnchorRowIdx] = useState<number | null>(null);
+
+  // Reset selection when page changes
+  useEffect(() => {
+    setSelectedRowIds(new Set());
+    setAnchorRowIdx(null);
+  }, [page]);
+
   const [pendingNewRows, setPendingNewRows] = useState<unknown[][]>([]);
   const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
     Set<string>
@@ -123,6 +140,43 @@ export function useDataGridEdit({
     setEditingCell(null);
     setEditValue("");
   }, []);
+
+  const handleSelectRow = useCallback(
+    (rowIdx: number, metaKey: boolean, shiftKey: boolean) => {
+      if (metaKey) {
+        // Cmd/Ctrl+Click: toggle individual row
+        setSelectedRowIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(rowIdx)) {
+            next.delete(rowIdx);
+          } else {
+            next.add(rowIdx);
+          }
+          return next;
+        });
+        // Set anchor if this is the first selection
+        setAnchorRowIdx((prev) => (prev === null ? rowIdx : prev));
+      } else if (shiftKey && anchorRowIdx !== null) {
+        // Shift+Click with anchor: range selection
+        const start = Math.min(anchorRowIdx, rowIdx);
+        const end = Math.max(anchorRowIdx, rowIdx);
+        const range = new Set<number>();
+        for (let i = start; i <= end; i++) {
+          range.add(i);
+        }
+        setSelectedRowIds(range);
+      } else if (shiftKey && anchorRowIdx === null) {
+        // Shift+Click without anchor: fallback to single selection
+        setSelectedRowIds(new Set([rowIdx]));
+        setAnchorRowIdx(rowIdx);
+      } else {
+        // Normal click: single selection
+        setSelectedRowIds(new Set([rowIdx]));
+        setAnchorRowIdx(rowIdx);
+      }
+    },
+    [anchorRowIdx],
+  );
 
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string) => {
@@ -174,7 +228,8 @@ export function useDataGridEdit({
       setPendingEdits(new Map());
       setPendingNewRows([]);
       setPendingDeletedRowKeys(new Set());
-      setSelectedRowIdx(null);
+      setSelectedRowIds(new Set());
+      setAnchorRowIdx(null);
       // Refresh data
       fetchData();
     } catch {
@@ -188,7 +243,8 @@ export function useDataGridEdit({
     setEditValue("");
     setPendingNewRows([]);
     setPendingDeletedRowKeys(new Set());
-    setSelectedRowIdx(null);
+    setSelectedRowIds(new Set());
+    setAnchorRowIdx(null);
   }, []);
 
   const handleAddRow = useCallback(() => {
@@ -200,22 +256,42 @@ export function useDataGridEdit({
   }, [data, activeTabId, promoteTab]);
 
   const handleDeleteRow = useCallback(() => {
-    if (selectedRowIdx === null) return;
-    const rk = rowKeyFn(selectedRowIdx, page);
+    if (selectedRowIds.size === 0) return;
     setPendingDeletedRowKeys((prev) => {
       const next = new Set(prev);
-      next.add(rk);
+      selectedRowIds.forEach((rowIdx) => {
+        const rk = rowKeyFn(rowIdx, page);
+        next.add(rk);
+      });
       return next;
     });
-    setSelectedRowIdx(null);
+    setSelectedRowIds(new Set());
+    setAnchorRowIdx(null);
     // Promote preview tab on row delete
     if (activeTabId) promoteTab(activeTabId);
-  }, [selectedRowIdx, page, activeTabId, promoteTab]);
+  }, [selectedRowIds, page, activeTabId, promoteTab]);
+
+  const handleDuplicateRow = useCallback(() => {
+    if (!data || selectedRowIds.size === 0) return;
+    const sortedIds = [...selectedRowIds].sort((a, b) => a - b);
+    const newRows = sortedIds.map((rowIdx) => {
+      const row = data.rows[rowIdx];
+      return row ? [...(row as unknown[])] : data.columns.map(() => null);
+    });
+    setPendingNewRows((prev) => [...prev, ...newRows]);
+    setSelectedRowIds(new Set());
+    setAnchorRowIdx(null);
+    if (activeTabId) promoteTab(activeTabId);
+  }, [data, selectedRowIds, activeTabId, promoteTab]);
 
   const hasPendingChanges =
     pendingEdits.size > 0 ||
     pendingNewRows.length > 0 ||
     pendingDeletedRowKeys.size > 0;
+
+  // Derived: single selected row index (backward compat)
+  const selectedRowIdx =
+    selectedRowIds.size === 1 ? [...selectedRowIds][0]! : null;
 
   return {
     editingCell,
@@ -226,16 +302,19 @@ export function useDataGridEdit({
     pendingDeletedRowKeys,
     sqlPreview,
     setSqlPreview,
+    selectedRowIds,
+    anchorRowIdx,
     selectedRowIdx,
-    setSelectedRowIdx,
     hasPendingChanges,
     saveCurrentEdit,
     cancelEdit,
     handleStartEdit,
+    handleSelectRow,
     handleCommit,
     handleExecuteCommit,
     handleDiscard,
     handleAddRow,
     handleDeleteRow,
+    handleDuplicateRow,
   };
 }

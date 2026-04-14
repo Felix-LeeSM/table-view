@@ -1,10 +1,40 @@
-import { useCallback, useRef } from "react";
-import { Loader2, Key } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { Loader2, Key, Binary } from "lucide-react";
 import { truncateCell } from "../../lib/format";
 import type { SortInfo, TableData } from "../../types/schema";
 import { editKey, getInputTypeForColumn } from "./useDataGridEdit";
+import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
+import {
+  Pencil,
+  Trash2,
+  Copy,
+  Clipboard,
+  FileJson,
+  FileText,
+  Database,
+} from "lucide-react";
+import BlobViewerDialog from "./BlobViewerDialog";
+import {
+  rowsToPlainText,
+  rowsToJson,
+  rowsToCsv,
+  rowsToSqlInsert,
+} from "../../lib/format";
+import type { CopyRowData } from "../../lib/format";
 
 const MIN_COL_WIDTH = 60;
+const RESIZE_HANDLE_WIDTH = 4; // w-1 = 4px
+
+function isBlobColumn(dataType: string): boolean {
+  const lower = dataType.toLowerCase();
+  return (
+    lower.includes("blob") ||
+    lower.includes("bytea") ||
+    lower.includes("binary") ||
+    lower.includes("varbinary") ||
+    lower.includes("image")
+  );
+}
 
 function calcDefaultColWidth(name: string, dataType: string): number {
   const nameWidth = name.length * 8 + 40;
@@ -17,22 +47,28 @@ export interface DataGridTableProps {
   loading: boolean;
   sorts: SortInfo[];
   columnWidths: Record<string, number>;
+  columnOrder: number[];
   editingCell: { row: number; col: number } | null;
   editValue: string;
   pendingEdits: Map<string, string>;
-  selectedRowIdx: number | null;
+  selectedRowIds: Set<number>;
   pendingDeletedRowKeys: Set<string>;
   pendingNewRows: unknown[][];
   page: number;
+  schema: string;
+  table: string;
   onSetEditValue: (v: string) => void;
   onSaveCurrentEdit: () => void;
   onCancelEdit: () => void;
   onStartEdit: (rowIdx: number, colIdx: number, currentValue: string) => void;
-  onSelectRow: (rowIdx: number) => void;
+  onSelectRow: (rowIdx: number, metaKey: boolean, shiftKey: boolean) => void;
   onSort: (columnName: string, shiftKey: boolean) => void;
   onColumnWidthsChange: (
     updater: (prev: Record<string, number>) => Record<string, number>,
   ) => void;
+  onReorderColumns: (newOrder: number[]) => void;
+  onDeleteRow: () => void;
+  onDuplicateRow: () => void;
 }
 
 export default function DataGridTable({
@@ -40,13 +76,16 @@ export default function DataGridTable({
   loading,
   sorts,
   columnWidths,
+  columnOrder,
   editingCell,
   editValue,
   pendingEdits,
-  selectedRowIdx,
+  selectedRowIds,
   pendingDeletedRowKeys,
   pendingNewRows,
   page,
+  schema,
+  table,
   onSetEditValue,
   onSaveCurrentEdit,
   onCancelEdit,
@@ -54,6 +93,9 @@ export default function DataGridTable({
   onSelectRow,
   onSort,
   onColumnWidthsChange,
+  onReorderColumns,
+  onDeleteRow,
+  onDuplicateRow,
 }: DataGridTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
   const resizingRef = useRef<{
@@ -63,6 +105,37 @@ export default function DataGridTable({
     colIdx: number;
   } | null>(null);
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    rowIdx: number;
+    colIdx: number;
+  } | null>(null);
+
+  // BLOB viewer state
+  const [blobViewer, setBlobViewer] = useState<{
+    data: unknown;
+    columnName: string;
+  } | null>(null);
+
+  // Column drag reorder state
+  const [dragColIdx, setDragColIdx] = useState<number | null>(null);
+  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
+  // Refs to track latest drag state without closure issues
+  const dragColIdxRef = useRef<number | null>(null);
+  const dropTargetIdxRef = useRef<number | null>(null);
+  const orderRef = useRef<number[]>([]);
+
+  // The visual order: columnOrder[visualIdx] = dataIdx
+  // If columnOrder is empty/default, fall back to identity mapping
+  const visualCount = data.columns.length;
+  const order =
+    columnOrder.length === visualCount
+      ? columnOrder
+      : data.columns.map((_, i) => i);
+  orderRef.current = order;
+
   const getColumnWidth = useCallback(
     (colName: string, dataType: string = "") => {
       if (columnWidths[colName]) return columnWidths[colName];
@@ -70,6 +143,89 @@ export default function DataGridTable({
     },
     [columnWidths],
   );
+
+  const copyToClipboard = useCallback((text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {
+      // Clipboard API may fail in some environments; silently ignore
+    });
+  }, []);
+
+  const getSelectedCopyData = useCallback((): CopyRowData => {
+    const sortedIds = [...selectedRowIds].sort((a, b) => a - b);
+    const colNames = data.columns.map((c) => c.name);
+    const rows = sortedIds.map((idx) => data.rows[idx] as unknown[]);
+    return { columns: colNames, rows, schema, table };
+  }, [selectedRowIds, data, schema, table]);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, rowIdx: number, colIdx: number) => {
+      e.preventDefault();
+      if (data.rows.length === 0) return;
+      // If right-clicked row is not selected, select it first
+      if (!selectedRowIds.has(rowIdx)) {
+        onSelectRow(rowIdx, false, false);
+      }
+      setContextMenu({ x: e.clientX, y: e.clientY, rowIdx, colIdx });
+    },
+    [data.rows.length, selectedRowIds, onSelectRow],
+  );
+
+  const contextMenuItems: ContextMenuItem[] = contextMenu
+    ? [
+        {
+          label: "Edit Cell",
+          icon: <Pencil size={14} />,
+          onClick: () => {
+            const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
+            const cellStr =
+              cell == null
+                ? ""
+                : typeof cell === "object"
+                  ? JSON.stringify(cell)
+                  : String(cell);
+            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, cellStr);
+          },
+        },
+        {
+          label: "Delete Row",
+          icon: <Trash2 size={14} />,
+          danger: true,
+          onClick: onDeleteRow,
+        },
+        {
+          label: "Duplicate Row",
+          icon: <Copy size={14} />,
+          onClick: onDuplicateRow,
+        },
+        {
+          label: "",
+          separator: true,
+          onClick: () => {},
+        },
+        {
+          label: "Copy as Plain Text",
+          icon: <Clipboard size={14} />,
+          onClick: () =>
+            copyToClipboard(rowsToPlainText(getSelectedCopyData())),
+        },
+        {
+          label: "Copy as JSON",
+          icon: <FileJson size={14} />,
+          onClick: () => copyToClipboard(rowsToJson(getSelectedCopyData())),
+        },
+        {
+          label: "Copy as CSV",
+          icon: <FileText size={14} />,
+          onClick: () => copyToClipboard(rowsToCsv(getSelectedCopyData())),
+        },
+        {
+          label: "Copy as SQL Insert",
+          icon: <Database size={14} />,
+          onClick: () =>
+            copyToClipboard(rowsToSqlInsert(getSelectedCopyData())),
+        },
+      ]
+    : [];
 
   const handleResizeStart = useCallback(
     (e: React.MouseEvent, colName: string, colIdx: number) => {
@@ -136,6 +292,80 @@ export default function DataGridTable({
     [columnWidths, onColumnWidthsChange],
   );
 
+  // --- Column drag reorder handlers ---
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, visualIdx: number) => {
+      // Don't start drag if near the resize handle (right edge)
+      const th = e.currentTarget as HTMLElement;
+      const rect = th.getBoundingClientRect();
+      if (rect.width > 0) {
+        const offsetX = e.clientX - rect.left;
+        if (offsetX > rect.width - RESIZE_HANDLE_WIDTH) {
+          e.preventDefault();
+          return;
+        }
+      }
+      dragColIdxRef.current = visualIdx;
+      dropTargetIdxRef.current = null;
+      setDragColIdx(visualIdx);
+      setDropTargetIdx(null);
+      e.dataTransfer.effectAllowed = "move";
+      // Need to set some data for Firefox compatibility
+      e.dataTransfer.setData("text/plain", String(visualIdx));
+    },
+    [],
+  );
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, visualIdx: number) => {
+      e.preventDefault();
+      if (dragColIdxRef.current === null) return;
+      // Determine drop position: left half of cell = before, right half = after
+      const th = e.currentTarget as HTMLElement;
+      const rect = th.getBoundingClientRect();
+      const midX = rect.left + rect.width / 2;
+      let targetIdx = visualIdx;
+      if (e.clientX > midX) {
+        targetIdx = visualIdx + 1;
+      }
+      // Don't allow dropping on self or adjacent same position
+      if (
+        targetIdx === dragColIdxRef.current ||
+        targetIdx === dragColIdxRef.current + 1
+      ) {
+        dropTargetIdxRef.current = null;
+        setDropTargetIdx(null);
+        return;
+      }
+      dropTargetIdxRef.current = targetIdx;
+      setDropTargetIdx(targetIdx);
+    },
+    [],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    const from = dragColIdxRef.current;
+    const to = dropTargetIdxRef.current;
+    if (from !== null && to !== null) {
+      const currentOrder = orderRef.current;
+      const newOrder = [...currentOrder];
+      const [removed] = newOrder.splice(from, 1);
+      const insertIdx = to > from ? to - 1 : to;
+      newOrder.splice(insertIdx, 0, removed!);
+      onReorderColumns(newOrder);
+    }
+    dragColIdxRef.current = null;
+    dropTargetIdxRef.current = null;
+    setDragColIdx(null);
+    setDropTargetIdx(null);
+  }, [onReorderColumns]);
+
+  const handleDragLeave = useCallback(() => {
+    // Only clear if actually leaving the th, not entering a child element
+    setDropTargetIdx(null);
+  }, []);
+
   const rowKeyFn = (rowIdx: number) => `row-${page}-${rowIdx}`;
 
   return (
@@ -148,20 +378,41 @@ export default function DataGridTable({
       <table className="w-full border-collapse text-sm" ref={tableRef}>
         <thead className="sticky top-0 z-10 bg-secondary">
           <tr>
-            {data.columns.map((col, colIdx) => {
+            {order.map((dIdx, visualIdx) => {
+              const col = data.columns[dIdx]!;
               const sortInfo = sorts.find((s) => s.column === col.name);
               const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
+              const isDragged = dragColIdx === visualIdx;
+              const showDropBefore =
+                dropTargetIdx === visualIdx && dropTargetIdx !== dragColIdx;
+              const showDropAfter =
+                dropTargetIdx === visualIdx + 1 &&
+                dragColIdx !== null &&
+                dropTargetIdx !== dragColIdx + 1;
               return (
                 <th
                   key={col.name}
-                  className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
+                  className={`relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted${isDragged ? " opacity-50" : ""}`}
                   style={{
                     width: getColumnWidth(col.name, col.data_type),
                     minWidth: MIN_COL_WIDTH,
                   }}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, visualIdx)}
+                  onDragOver={(e) => handleDragOver(e, visualIdx)}
+                  onDragEnd={handleDragEnd}
+                  onDragLeave={handleDragLeave}
                   onClick={(e) => onSort(col.name, e.shiftKey)}
                   title={`Sort by ${col.name}`}
                 >
+                  {/* Drop indicator: vertical line before this column */}
+                  {showDropBefore && (
+                    <div className="absolute left-0 top-0 h-full w-0.5 bg-primary z-20" />
+                  )}
+                  {/* Drop indicator: vertical line after this column */}
+                  {showDropAfter && (
+                    <div className="absolute right-0 top-0 h-full w-0.5 bg-primary z-20" />
+                  )}
                   <div className="flex items-center gap-1">
                     {col.is_primary_key && (
                       <span title="Primary Key">
@@ -191,7 +442,9 @@ export default function DataGridTable({
                   {/* Resize handle */}
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary active:bg-primary"
-                    onMouseDown={(e) => handleResizeStart(e, col.name, colIdx)}
+                    onMouseDown={(e) =>
+                      handleResizeStart(e, col.name, visualIdx)
+                    }
                     onClick={(e) => e.stopPropagation()}
                   />
                 </th>
@@ -203,17 +456,25 @@ export default function DataGridTable({
           {data.rows.map((row, rowIdx) => {
             const rk = rowKeyFn(rowIdx);
             const isDeleted = pendingDeletedRowKeys.has(rk);
-            const isSelected = selectedRowIdx === rowIdx;
+            const isSelected = selectedRowIds.has(rowIdx);
             return (
               <tr
                 key={rk}
                 className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
-                onClick={() => onSelectRow(rowIdx)}
+                onClick={(e) =>
+                  onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)
+                }
+                onContextMenu={(e) => {
+                  // Use first data column index for context menu
+                  handleContextMenu(e, rowIdx, 0);
+                }}
               >
-                {(row as unknown[]).map((cell, cellIdx) => {
-                  const key = editKey(rowIdx, cellIdx);
+                {order.map((dIdx, visualIdx) => {
+                  const cell = (row as unknown[])[dIdx];
+                  const col = data.columns[dIdx]!;
+                  const key = editKey(rowIdx, dIdx);
                   const isEditing =
-                    editingCell?.row === rowIdx && editingCell?.col === cellIdx;
+                    editingCell?.row === rowIdx && editingCell?.col === dIdx;
                   const hasPendingEdit = pendingEdits.has(key);
                   const cellStr =
                     cell == null
@@ -224,16 +485,14 @@ export default function DataGridTable({
                   const displayValue = hasPendingEdit
                     ? pendingEdits.get(key)!
                     : cellStr;
+                  const isBlob = isBlobColumn(col.data_type);
 
                   return (
                     <td
-                      key={cellIdx}
+                      key={`${dIdx}-${visualIdx}`}
                       className={`overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
                       style={{
-                        width: getColumnWidth(
-                          data.columns[cellIdx]?.name ?? "",
-                          data.columns[cellIdx]?.data_type ?? "",
-                        ),
+                        width: getColumnWidth(col.name, col.data_type),
                         minWidth: MIN_COL_WIDTH,
                       }}
                       title={
@@ -243,9 +502,7 @@ export default function DataGridTable({
                             ? JSON.stringify(cell, null, 2)
                             : String(cell)
                       }
-                      onDoubleClick={() =>
-                        onStartEdit(rowIdx, cellIdx, cellStr)
-                      }
+                      onDoubleClick={() => onStartEdit(rowIdx, dIdx, cellStr)}
                       onClick={() => {
                         if (editingCell) {
                           onSaveCurrentEdit();
@@ -254,9 +511,7 @@ export default function DataGridTable({
                     >
                       {isEditing ? (
                         <input
-                          type={getInputTypeForColumn(
-                            data.columns[cellIdx]?.data_type ?? "",
-                          )}
+                          type={getInputTypeForColumn(col.data_type)}
                           className="w-full border-none bg-transparent p-0 text-xs text-foreground outline-none"
                           value={editValue}
                           autoFocus
@@ -273,6 +528,19 @@ export default function DataGridTable({
                         />
                       ) : hasPendingEdit ? (
                         <span className="line-clamp-3">{displayValue}</span>
+                      ) : isBlob && cell != null ? (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 cursor-pointer text-muted-foreground hover:text-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBlobViewer({ data: cell, columnName: col.name });
+                          }}
+                          aria-label={`View BLOB data for ${col.name}`}
+                        >
+                          <Binary className="w-3 h-3" />
+                          <span>(BLOB)</span>
+                        </button>
                       ) : cell == null ? (
                         <span className="italic text-muted-foreground">
                           NULL
@@ -307,25 +575,44 @@ export default function DataGridTable({
               key={`new-row-${newIdx}`}
               className="border-b border-border bg-yellow-500/5 hover:bg-muted"
             >
-              {(newRow as unknown[]).map((cell, cellIdx) => (
-                <td
-                  key={cellIdx}
-                  className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground"
-                  style={{
-                    width: getColumnWidth(
-                      data.columns[cellIdx]?.name ?? "",
-                      data.columns[cellIdx]?.data_type ?? "",
-                    ),
-                    minWidth: MIN_COL_WIDTH,
-                  }}
-                >
-                  {cell == null ? "NULL" : String(cell)}
-                </td>
-              ))}
+              {order.map((dIdx, visualIdx) => {
+                const cell = (newRow as unknown[])[dIdx];
+                const col = data.columns[dIdx]!;
+                return (
+                  <td
+                    key={`${dIdx}-${visualIdx}`}
+                    className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground"
+                    style={{
+                      width: getColumnWidth(col.name, col.data_type),
+                      minWidth: MIN_COL_WIDTH,
+                    }}
+                  >
+                    {cell == null ? "NULL" : String(cell)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>
       </table>
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+      {blobViewer && (
+        <BlobViewerDialog
+          open={blobViewer !== null}
+          onOpenChange={(open) => {
+            if (!open) setBlobViewer(null);
+          }}
+          data={blobViewer.data}
+          columnName={blobViewer.columnName}
+        />
+      )}
     </div>
   );
 }

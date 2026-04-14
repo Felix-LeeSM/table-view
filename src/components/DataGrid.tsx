@@ -51,11 +51,21 @@ export default function DataGrid({
   const [rawSql, setRawSql] = useState("");
   const [appliedRawSql, setAppliedRawSql] = useState("");
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [columnOrder, setColumnOrder] = useState<number[]>([]);
 
-  // Reset column widths when table/schema changes
+  // Reset column widths and order when table/schema changes
   useEffect(() => {
     setColumnWidths({});
+    setColumnOrder([]);
   }, [connectionId, table, schema]);
+
+  // Reset column order when columns change (new data, different table)
+  useEffect(() => {
+    if (data) {
+      setColumnOrder(data.columns.map((_, i) => i));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.columns]);
 
   // Promote preview tab to permanent when user interacts (page change, filter, sort)
   useEffect(() => {
@@ -227,7 +237,7 @@ export default function DataGrid({
         pendingEditsSize={editState.pendingEdits.size}
         pendingNewRowsCount={editState.pendingNewRows.length}
         pendingDeletedRowKeysSize={editState.pendingDeletedRowKeys.size}
-        selectedRowIdx={editState.selectedRowIdx}
+        selectedRowIdsCount={editState.selectedRowIds.size}
         onSetPage={setPage}
         onSetPageSize={(size) => {
           setPageSize(size);
@@ -238,6 +248,7 @@ export default function DataGrid({
         onDiscard={editState.handleDiscard}
         onAddRow={editState.handleAddRow}
         onDeleteRow={editState.handleDeleteRow}
+        onDuplicateRow={editState.handleDuplicateRow}
       />
 
       {/* Filter bar */}
@@ -278,20 +289,26 @@ export default function DataGrid({
           loading={loading}
           sorts={sorts}
           columnWidths={columnWidths}
+          columnOrder={columnOrder}
           editingCell={editState.editingCell}
           editValue={editState.editValue}
           pendingEdits={editState.pendingEdits}
-          selectedRowIdx={editState.selectedRowIdx}
+          selectedRowIds={editState.selectedRowIds}
           pendingDeletedRowKeys={editState.pendingDeletedRowKeys}
           pendingNewRows={editState.pendingNewRows}
           page={page}
+          schema={schema}
+          table={table}
           onSetEditValue={editState.setEditValue}
           onSaveCurrentEdit={editState.saveCurrentEdit}
           onCancelEdit={editState.cancelEdit}
           onStartEdit={editState.handleStartEdit}
-          onSelectRow={editState.setSelectedRowIdx}
+          onSelectRow={editState.handleSelectRow}
           onSort={handleSort}
           onColumnWidthsChange={setColumnWidths}
+          onReorderColumns={setColumnOrder}
+          onDeleteRow={editState.handleDeleteRow}
+          onDuplicateRow={editState.handleDuplicateRow}
         />
       )}
 

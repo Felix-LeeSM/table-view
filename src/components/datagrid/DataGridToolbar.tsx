@@ -7,6 +7,7 @@ import {
   X,
   Plus,
   Trash2,
+  Copy,
   Filter,
 } from "lucide-react";
 import type { SortInfo, TableData } from "../../types/schema";
@@ -27,7 +28,7 @@ export interface DataGridToolbarProps {
   pendingEditsSize: number;
   pendingNewRowsCount: number;
   pendingDeletedRowKeysSize: number;
-  selectedRowIdx: number | null;
+  selectedRowIdsCount: number;
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
@@ -35,6 +36,7 @@ export interface DataGridToolbarProps {
   onDiscard: () => void;
   onAddRow: () => void;
   onDeleteRow: () => void;
+  onDuplicateRow: () => void;
 }
 
 export default function DataGridToolbar({
@@ -51,7 +53,7 @@ export default function DataGridToolbar({
   pendingEditsSize,
   pendingNewRowsCount,
   pendingDeletedRowKeysSize,
-  selectedRowIdx,
+  selectedRowIdsCount,
   onSetPage,
   onSetPageSize,
   onToggleFilters,
@@ -59,6 +61,7 @@ export default function DataGridToolbar({
   onDiscard,
   onAddRow,
   onDeleteRow,
+  onDuplicateRow,
 }: DataGridToolbarProps) {
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
@@ -128,12 +131,26 @@ export default function DataGridToolbar({
             <button
               className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
               onClick={onDeleteRow}
-              disabled={selectedRowIdx === null}
+              disabled={selectedRowIdsCount === 0}
               aria-label="Delete row"
               title="Delete row"
             >
               <Trash2 size={14} />
             </button>
+            <button
+              className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
+              onClick={onDuplicateRow}
+              disabled={selectedRowIdsCount === 0}
+              aria-label="Duplicate row"
+              title="Duplicate row"
+            >
+              <Copy size={14} />
+            </button>
+            {selectedRowIdsCount > 1 && (
+              <span className="text-xs text-muted-foreground">
+                {selectedRowIdsCount} selected
+              </span>
+            )}
           </>
         )}
         <button

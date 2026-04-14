@@ -1296,4 +1296,145 @@ describe("DataGrid", () => {
     expect(input).toBeInTheDocument();
     expect((input as HTMLInputElement).type).toBe("datetime-local");
   });
+
+  // ── Sprint 50: Multi-row Selection ──
+
+  // 57. Cmd+Click toggles row selection
+  it("toggles row selection with Cmd+Click", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const rows = [
+      cells[0]!.closest("tr")!,
+      cells[3]!.closest("tr")!,
+      cells[6]!.closest("tr")!,
+    ];
+
+    // Click first row normally (selects it)
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+    expect(rows[0]!.className).toContain("bg-accent/20");
+
+    // Cmd+Click second row (adds to selection)
+    await act(async () => {
+      fireEvent.click(cells[3]!, { metaKey: true });
+    });
+    expect(rows[0]!.className).toContain("bg-accent/20");
+    expect(rows[1]!.className).toContain("bg-accent/20");
+  });
+
+  // 58. Shift+Click selects range
+  it("selects range of rows with Shift+Click", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const rows = [
+      cells[0]!.closest("tr")!,
+      cells[3]!.closest("tr")!,
+      cells[6]!.closest("tr")!,
+    ];
+
+    // Click first row (sets anchor)
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+
+    // Shift+Click third row (selects range 0-2)
+    await act(async () => {
+      fireEvent.click(cells[6]!, { shiftKey: true });
+    });
+
+    // All three rows should be selected
+    expect(rows[0]!.className).toContain("bg-accent/20");
+    expect(rows[1]!.className).toContain("bg-accent/20");
+    expect(rows[2]!.className).toContain("bg-accent/20");
+  });
+
+  // 59. Delete button deletes multiple selected rows
+  it("deletes multiple selected rows via Delete button", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const rows = [
+      cells[0]!.closest("tr")!,
+      cells[3]!.closest("tr")!,
+      cells[6]!.closest("tr")!,
+    ];
+
+    // Select first row
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+    // Cmd+Click third row
+    await act(async () => {
+      fireEvent.click(cells[6]!, { metaKey: true });
+    });
+
+    // Click delete
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Delete row"));
+    });
+
+    // First and third rows should have strikethrough
+    expect(rows[0]!.className).toContain("line-through");
+    expect(rows[1]!.className).not.toContain("line-through");
+    expect(rows[2]!.className).toContain("line-through");
+  });
+
+  // 60. Shows selection count when multiple rows selected
+  it("shows selection count when multiple rows are selected", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+
+    // Select first row
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+    // Cmd+Click second row
+    await act(async () => {
+      fireEvent.click(cells[3]!, { metaKey: true });
+    });
+
+    // Should show "2 selected"
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+  });
+
+  // 61. Normal click after multi-select resets to single selection
+  it("resets to single selection on normal click after multi-select", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const cells = screen.getAllByRole("cell");
+    const rows = [
+      cells[0]!.closest("tr")!,
+      cells[3]!.closest("tr")!,
+      cells[6]!.closest("tr")!,
+    ];
+
+    // Multi-select first and third
+    await act(async () => {
+      fireEvent.click(cells[0]!);
+    });
+    await act(async () => {
+      fireEvent.click(cells[6]!, { metaKey: true });
+    });
+    expect(rows[0]!.className).toContain("bg-accent/20");
+    expect(rows[2]!.className).toContain("bg-accent/20");
+
+    // Normal click on second row
+    await act(async () => {
+      fireEvent.click(cells[3]!);
+    });
+
+    // Only second row should be selected
+    expect(rows[0]!.className).not.toContain("bg-accent/20");
+    expect(rows[1]!.className).toContain("bg-accent/20");
+    expect(rows[2]!.className).not.toContain("bg-accent/20");
+  });
 });
