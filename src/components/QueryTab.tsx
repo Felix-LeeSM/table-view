@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { EditorView } from "@codemirror/view";
 import type { QueryTab } from "../stores/tabStore";
 import { useTabStore } from "../stores/tabStore";
 import { useQueryHistoryStore } from "../stores/queryHistoryStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
-import { splitSqlStatements, formatSql } from "../lib/sqlUtils";
+import { splitSqlStatements, formatSql, uglifySql } from "../lib/sqlUtils";
 import { useSqlAutocomplete } from "../hooks/useSqlAutocomplete";
 import { useResizablePanel } from "../hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
@@ -219,13 +220,28 @@ export default function QueryTab({ tab }: QueryTabProps) {
     return () => window.removeEventListener("cancel-query", handler);
   }, [tab.id, tab.queryState]);
 
-  // Format SQL event listener (Cmd+I)
+  // Format SQL event listener (Cmd+I) — supports selection-only formatting
   useEffect(() => {
     const handler = () => {
       // Only format if this tab is the active tab
       const { activeTabId } = useTabStore.getState();
       if (activeTabId !== tab.id) return;
       if (!tab.sql.trim()) return;
+
+      // If the editor has a selection, format only the selection
+      const view = editorRef.current;
+      if (view) {
+        const { from, to } = view.state.selection.main;
+        if (from !== to) {
+          const selectedText = view.state.sliceDoc(from, to);
+          const formatted = formatSql(selectedText);
+          view.dispatch({
+            changes: { from, to, insert: formatted },
+          });
+          return;
+        }
+      }
+
       const formatted = formatSql(tab.sql);
       updateQuerySql(tab.id, formatted);
     };
@@ -233,8 +249,38 @@ export default function QueryTab({ tab }: QueryTabProps) {
     return () => window.removeEventListener("format-sql", handler);
   }, [tab.id, tab.sql, updateQuerySql]);
 
+  // Uglify SQL event listener (Cmd+Shift+I)
+  useEffect(() => {
+    const handler = () => {
+      const { activeTabId } = useTabStore.getState();
+      if (activeTabId !== tab.id) return;
+      if (!tab.sql.trim()) return;
+      const uglified = uglifySql(tab.sql);
+      updateQuerySql(tab.id, uglified);
+    };
+    window.addEventListener("uglify-sql", handler);
+    return () => window.removeEventListener("uglify-sql", handler);
+  }, [tab.id, tab.sql, updateQuerySql]);
+
+  const editorRef = useRef<EditorView | null>(null);
+
   const handleFormat = useCallback(() => {
     if (!tab.sql.trim()) return;
+
+    // If the editor has a selection, format only the selection
+    const view = editorRef.current;
+    if (view) {
+      const { from, to } = view.state.selection.main;
+      if (from !== to) {
+        const selectedText = view.state.sliceDoc(from, to);
+        const formatted = formatSql(selectedText);
+        view.dispatch({
+          changes: { from, to, insert: formatted },
+        });
+        return;
+      }
+    }
+
     const formatted = formatSql(tab.sql);
     updateQuerySql(tab.id, formatted);
   }, [tab.id, tab.sql, updateQuerySql]);
@@ -300,6 +346,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
         style={{ flex: `0 0 ${editorPct}%` }}
       >
         <QueryEditor
+          ref={editorRef}
           sql={tab.sql}
           onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
           onExecute={handleExecute}

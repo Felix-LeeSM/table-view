@@ -347,3 +347,39 @@ export function formatSql(sql: string): string {
 
   return lines.join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// SQL Uglify (Sprint 53) — collapse SQL to single line
+// ---------------------------------------------------------------------------
+
+/**
+ * Collapse formatted SQL into a single line:
+ * - Removes newlines, tabs, and extra whitespace
+ * - Preserves string literals (content inside single quotes)
+ * - Trims leading/trailing whitespace
+ */
+export function uglifySql(sql: string): string {
+  let inString = false;
+  let result = "";
+  let lastChar = "";
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === "'" && lastChar !== "\\") {
+      inString = !inString;
+      result += ch;
+    } else if (inString) {
+      result += ch;
+    } else if (ch === "\n" || ch === "\r" || ch === "\t") {
+      // Collapse whitespace: only add a space if the last char isn't already a space
+      if (lastChar !== " ") {
+        result += " ";
+      }
+    } else if (ch === " " && lastChar === " ") {
+      // skip consecutive spaces
+    } else {
+      result += ch;
+    }
+    lastChar = result[result.length - 1] ?? "";
+  }
+  return result.trim();
+}

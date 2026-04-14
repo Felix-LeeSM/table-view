@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitSqlStatements, formatSql } from "./sqlUtils";
+import { splitSqlStatements, formatSql, uglifySql } from "./sqlUtils";
 
 describe("splitSqlStatements", () => {
   it("splits simple statements", () => {
@@ -122,5 +122,71 @@ describe("formatSql", () => {
   it("handles empty string", () => {
     expect(formatSql("")).toBe("");
     expect(formatSql("   ")).toBe("");
+  });
+});
+
+// -- Sprint 53: SQL Uglify --
+
+describe("uglifySql", () => {
+  it("collapses multi-line SQL to single line", () => {
+    const sql = "SELECT id\nFROM users\nWHERE id > 1";
+    const result = uglifySql(sql);
+    expect(result).toBe("SELECT id FROM users WHERE id > 1");
+  });
+
+  it("collapses multiple spaces to single space", () => {
+    const result = uglifySql("SELECT   id   FROM   users");
+    expect(result).toBe("SELECT id FROM users");
+  });
+
+  it("removes tabs", () => {
+    const result = uglifySql("SELECT\tid\tFROM\tusers");
+    expect(result).toBe("SELECT id FROM users");
+  });
+
+  it("removes carriage returns", () => {
+    const result = uglifySql("SELECT id\r\nFROM users");
+    expect(result).toBe("SELECT id FROM users");
+  });
+
+  it("preserves string literals with spaces", () => {
+    const result = uglifySql("SELECT 'hello   world' FROM users");
+    expect(result).toBe("SELECT 'hello   world' FROM users");
+  });
+
+  it("preserves string literals with newlines", () => {
+    const result = uglifySql("SELECT 'line1\nline2' FROM users");
+    expect(result).toBe("SELECT 'line1\nline2' FROM users");
+  });
+
+  it("handles empty string", () => {
+    expect(uglifySql("")).toBe("");
+  });
+
+  it("handles whitespace-only string", () => {
+    expect(uglifySql("   \n\t  ")).toBe("");
+  });
+
+  it("trims leading and trailing whitespace", () => {
+    const result = uglifySql("  SELECT id FROM users  ");
+    expect(result).toBe("SELECT id FROM users");
+  });
+
+  it("handles already single-line SQL", () => {
+    const result = uglifySql("SELECT id FROM users WHERE id > 1");
+    expect(result).toBe("SELECT id FROM users WHERE id > 1");
+  });
+
+  it("handles complex formatted SQL", () => {
+    const formatted = formatSql(
+      "select u.id, o.total from users u join orders o on u.id = o.user_id",
+    );
+    const uglified = uglifySql(formatted);
+    // Result should be single-line
+    expect(uglified).not.toContain("\n");
+    // Should still contain the essential keywords
+    expect(uglified).toContain("SELECT");
+    expect(uglified).toContain("FROM");
+    expect(uglified).toContain("JOIN");
   });
 });

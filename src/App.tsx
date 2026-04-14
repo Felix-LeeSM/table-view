@@ -150,9 +150,21 @@ export default function App() {
   // Cmd+I / Ctrl+I — format SQL
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "i") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("format-sql"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+Shift+I / Ctrl+Shift+I — uglify SQL
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "I") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("uglify-sql"));
       }
     };
     document.addEventListener("keydown", handleKeyDown);

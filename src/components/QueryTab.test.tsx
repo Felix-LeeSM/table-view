@@ -24,15 +24,20 @@ vi.mock("../lib/tauri", () => ({
   cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
 }));
 
-vi.mock("./QueryEditor", () => ({
-  default: ({ onExecute, sql }: { onExecute: () => void; sql: string }) => (
-    <div data-testid="mock-editor" data-sql={sql}>
-      <button data-testid="execute-btn" onClick={onExecute}>
-        Execute
-      </button>
-    </div>
-  ),
-}));
+vi.mock("./QueryEditor", async () => {
+  const React = await import("react");
+  const MockQueryEditor = React.forwardRef(
+    (props: { onExecute: () => void; sql: string }) => (
+      <div data-testid="mock-editor" data-sql={props.sql}>
+        <button data-testid="execute-btn" onClick={props.onExecute}>
+          Execute
+        </button>
+      </div>
+    ),
+  );
+  MockQueryEditor.displayName = "MockQueryEditor";
+  return { default: MockQueryEditor };
+});
 
 vi.mock("./QueryResultGrid", () => ({
   default: ({ queryState }: { queryState: unknown }) => (
@@ -54,6 +59,7 @@ vi.mock("../lib/sqlUtils", () => ({
     return parts.length > 0 ? parts : [];
   },
   formatSql: (sql: string) => sql.toUpperCase(),
+  uglifySql: (sql: string) => sql.replace(/\s+/g, " ").trim(),
 }));
 
 function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
@@ -675,5 +681,55 @@ describe("QueryTab", () => {
         }
       }
     });
+  });
+
+  // -- Sprint 53: Uglify SQL event --
+
+  it("uglifies SQL on uglify-sql event when tab is active", () => {
+    const tab = makeQueryTab({ sql: "SELECT  id\n  FROM  users" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("uglify-sql"));
+    });
+
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("SELECT id FROM users");
+    }
+  });
+
+  it("ignores uglify-sql event when tab is not active", () => {
+    const tab = makeQueryTab({ sql: "SELECT  id\n  FROM  users" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "other-tab" });
+    render(<QueryTab tab={tab} />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("uglify-sql"));
+    });
+
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("SELECT  id\n  FROM  users");
+    }
+  });
+
+  it("ignores uglify-sql event when SQL is empty", () => {
+    const tab = makeQueryTab({ sql: "   " });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("uglify-sql"));
+    });
+
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("   ");
+    }
   });
 });
