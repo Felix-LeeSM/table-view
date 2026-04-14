@@ -221,4 +221,49 @@ describe("ContextMenu", () => {
 
     expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveFocus();
   });
+
+  // ── Separator support ──────────────────────────────────────────────────
+
+  it("renders separator items as dividers", () => {
+    const itemsWithSeparator: ContextMenuItem[] = [
+      { label: "Edit", onClick: vi.fn() },
+      { label: "", separator: true, onClick: vi.fn() },
+      { label: "Delete", danger: true, onClick: vi.fn() },
+    ];
+
+    render(
+      <ContextMenu
+        x={100}
+        y={100}
+        items={itemsWithSeparator}
+        onClose={onClose}
+      />,
+    );
+
+    expect(screen.getByRole("separator")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
+  });
+
+  it("separator has border-t styling", () => {
+    const itemsWithSeparator: ContextMenuItem[] = [
+      { label: "Edit", onClick: vi.fn() },
+      { label: "", separator: true, onClick: vi.fn() },
+      { label: "Delete", danger: true, onClick: vi.fn() },
+    ];
+
+    render(
+      <ContextMenu
+        x={100}
+        y={100}
+        items={itemsWithSeparator}
+        onClose={onClose}
+      />,
+    );
+
+    const separator = screen.getByRole("separator");
+    expect(separator.className).toContain("border-t");
+  });
 });

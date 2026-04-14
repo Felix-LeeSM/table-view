@@ -5,6 +5,7 @@ export interface ContextMenuItem {
   icon?: React.ReactNode;
   danger?: boolean;
   disabled?: boolean;
+  separator?: boolean;
   onClick: () => void;
 }
 
@@ -113,29 +114,37 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       className={measured ? "select-none" : "select-none invisible"}
     >
       <div className="min-w-[160px] rounded-md border border-border bg-secondary py-1 shadow-lg">
-        {items.map((item, index) => (
-          <button
-            key={item.label}
-            role="menuitem"
-            tabIndex={index === activeIndex ? 0 : -1}
-            aria-disabled={item.disabled}
-            className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none ${
-              item.disabled
-                ? "cursor-not-allowed opacity-40"
-                : index === activeIndex
-                  ? "bg-muted focus:bg-muted"
-                  : "hover:bg-muted focus:bg-muted"
-            } ${item.danger ? "text-destructive" : "text-foreground"}`}
-            onClick={() => {
-              if (item.disabled) return;
-              item.onClick();
-              onClose();
-            }}
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
+        {items.map((item, index) =>
+          item.separator ? (
+            <div
+              key={`sep-${index}`}
+              role="separator"
+              className="my-1 border-t border-border"
+            />
+          ) : (
+            <button
+              key={item.label}
+              role="menuitem"
+              tabIndex={index === activeIndex ? 0 : -1}
+              aria-disabled={item.disabled}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm outline-none ${
+                item.disabled
+                  ? "cursor-not-allowed opacity-40"
+                  : index === activeIndex
+                    ? "bg-muted focus:bg-muted"
+                    : "hover:bg-muted focus:bg-muted"
+              } ${item.danger ? "text-destructive" : "text-foreground"}`}
+              onClick={() => {
+                if (item.disabled) return;
+                item.onClick();
+                onClose();
+              }}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ),
+        )}
       </div>
     </div>
   );
