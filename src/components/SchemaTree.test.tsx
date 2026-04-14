@@ -1021,8 +1021,8 @@ describe("SchemaTree", () => {
     expect(screen.getByText("my-connection")).toBeInTheDocument();
   });
 
-  // AC-VIS-02: Schema node has FolderOpen icon
-  it("renders schema node with FolderOpen icon", async () => {
+  // AC-VIS-02: Schema node has Folder icon when collapsed
+  it("renders schema node with Folder icon when collapsed", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
     });
@@ -1032,8 +1032,8 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
-    // The FolderOpen SVG should be inside the schema row
-    const svgElements = schemaButton.querySelectorAll("svg.lucide-folder-open");
+    // The Folder SVG should be inside the schema row when collapsed
+    const svgElements = schemaButton.querySelectorAll("svg.lucide-folder");
     expect(svgElements.length).toBe(1);
   });
 
@@ -1942,5 +1942,369 @@ describe("SchemaTree", () => {
     const rootDiv = container.firstElementChild as HTMLElement;
     expect(rootDiv).toBeTruthy();
     expect(rootDiv.className).toContain("select-none");
+  });
+
+  // =========================================================================
+  // NEW: Active tab highlight (Sprint 54)
+  // =========================================================================
+
+  // AC-ACTIVE-01: Table node matching active tab gets highlight class
+  it("highlights table node when it matches the active tab", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [
+          { name: "users", schema: "public", row_count: null },
+          { name: "orders", schema: "public", row_count: null },
+        ],
+      },
+    });
+
+    // Pre-set an active tab pointing to public.users
+    useTabStore.setState({
+      tabs: [
+        {
+          type: "table",
+          id: "tab-1",
+          title: "public.users",
+          connectionId: "conn1",
+          closable: true,
+          schema: "public",
+          table: "users",
+          subView: "records",
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Schema should auto-expand due to active tab
+    const schemaButton = screen.getByLabelText("public schema");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+
+    // The active table (users) should have highlight class
+    const usersItem = screen.getByLabelText("users table");
+    expect(usersItem).toHaveClass("bg-primary/10");
+    expect(usersItem).toHaveClass("text-primary");
+    expect(usersItem).toHaveClass("font-semibold");
+
+    // The other table (orders) should NOT have highlight
+    const ordersItem = screen.getByLabelText("orders table");
+    expect(ordersItem).not.toHaveClass("bg-primary/10");
+    expect(ordersItem).not.toHaveClass("text-primary");
+  });
+
+  // AC-ACTIVE-02: No highlight when active tab is a query tab
+  it("does not highlight any table when active tab is a query tab", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    // Set a query tab as active
+    useTabStore.setState({
+      tabs: [
+        {
+          type: "query",
+          id: "query-1",
+          title: "Query 1",
+          connectionId: "conn1",
+          closable: true,
+          sql: "SELECT 1",
+          queryState: { status: "idle" },
+        },
+      ],
+      activeTabId: "query-1",
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Expand schema manually
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // No table should have active highlight from tab state
+    const usersItem = screen.getByLabelText("users table");
+    // It won't have bg-primary/10 from active tab since it's a query tab
+    expect(usersItem).not.toHaveClass("font-semibold");
+  });
+
+  // AC-ACTIVE-03: Highlight updates when active tab changes
+  it("updates highlight when active tab changes to a different table", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [
+          { name: "users", schema: "public", row_count: null },
+          { name: "orders", schema: "public", row_count: null },
+        ],
+      },
+    });
+
+    // Start with users tab active
+    useTabStore.setState({
+      tabs: [
+        {
+          type: "table",
+          id: "tab-1",
+          title: "public.users",
+          connectionId: "conn1",
+          closable: true,
+          schema: "public",
+          table: "users",
+          subView: "records",
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    const { rerender } = await act(async () => {
+      return render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Users should be highlighted
+    expect(screen.getByLabelText("users table")).toHaveClass("bg-primary/10");
+
+    // Switch active tab to orders
+    await act(async () => {
+      useTabStore.setState({
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+          {
+            type: "table",
+            id: "tab-2",
+            title: "public.orders",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "orders",
+            subView: "records",
+          },
+        ],
+        activeTabId: "tab-2",
+      });
+    });
+
+    await act(async () => {
+      rerender(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Now orders should be highlighted, users should not
+    expect(screen.getByLabelText("orders table")).toHaveClass("bg-primary/10");
+    expect(screen.getByLabelText("users table")).not.toHaveClass(
+      "bg-primary/10",
+    );
+  });
+
+  // =========================================================================
+  // NEW: Schema auto-expand on active tab (Sprint 54)
+  // =========================================================================
+
+  // AC-EXPAND-01: Schema auto-expands when active tab targets it
+  it("auto-expands schema when active tab has table in that schema", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    // Set active tab AFTER store is set up
+    useTabStore.setState({
+      tabs: [
+        {
+          type: "table",
+          id: "tab-1",
+          title: "public.users",
+          connectionId: "conn1",
+          closable: true,
+          schema: "public",
+          table: "users",
+          subView: "records",
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Schema should be auto-expanded without manual click
+    const schemaButton = screen.getByLabelText("public schema");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+  });
+
+  // AC-EXPAND-02: Only the matching schema auto-expands (not others)
+  it("auto-expands only the schema matching active tab, not other schemas", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+        "conn1:analytics": [
+          { name: "events", schema: "analytics", row_count: null },
+        ],
+      },
+    });
+
+    // Set active tab to public.users
+    useTabStore.setState({
+      tabs: [
+        {
+          type: "table",
+          id: "tab-1",
+          title: "public.users",
+          connectionId: "conn1",
+          closable: true,
+          schema: "public",
+          table: "users",
+          subView: "records",
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // public should be expanded
+    expect(screen.getByLabelText("public schema")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    // analytics should NOT be expanded
+    expect(screen.getByLabelText("analytics schema")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  // =========================================================================
+  // NEW: Icon rendering per hierarchy level (Sprint 54)
+  // =========================================================================
+
+  // AC-ICON-01: Connection header shows Database icon
+  it("renders Database icon in connection header", async () => {
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // The connection header area should contain a Database SVG icon
+    const headerArea = screen.getByText("conn1").closest("div")!;
+    const dbIcon = headerArea.querySelectorAll("svg.lucide-database");
+    expect(dbIcon.length).toBe(1);
+  });
+
+  // AC-ICON-02: Schema node shows Folder icon when collapsed, FolderOpen when expanded
+  it("renders Folder icon when schema is collapsed and FolderOpen when expanded", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+
+    // Collapsed: should have Folder icon
+    const folderIcons = schemaButton.querySelectorAll("svg.lucide-folder");
+    const folderOpenIcons = schemaButton.querySelectorAll(
+      "svg.lucide-folder-open",
+    );
+    // When collapsed, should have lucide-folder (not lucide-folder-open)
+    expect(folderIcons.length).toBe(1);
+    expect(folderOpenIcons.length).toBe(0);
+
+    // Expand
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Expanded: should have FolderOpen icon
+    const folderOpenAfterExpand = schemaButton.querySelectorAll(
+      "svg.lucide-folder-open",
+    );
+    const folderAfterExpand =
+      schemaButton.querySelectorAll("svg.lucide-folder");
+    expect(folderOpenAfterExpand.length).toBe(1);
+    expect(folderAfterExpand.length).toBe(0);
+  });
+
+  // AC-ICON-03: Procedures category uses Terminal icon (distinct from Functions' Code2)
+  it("renders Terminal icon for Procedures category", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Procedures category should have a Terminal icon
+    const proceduresCategory = screen.getByLabelText("Procedures in public");
+    const terminalIcons = proceduresCategory.querySelectorAll(
+      "svg.lucide-terminal",
+    );
+    expect(terminalIcons.length).toBe(1);
+  });
+
+  // AC-ICON-04: Category icons are distinct from each other
+  it("renders distinct icons for each category type", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const tablesCat = screen.getByLabelText("Tables in public");
+    const viewsCat = screen.getByLabelText("Views in public");
+    const functionsCat = screen.getByLabelText("Functions in public");
+    const proceduresCat = screen.getByLabelText("Procedures in public");
+
+    // Tables: LayoutGrid
+    expect(tablesCat.querySelectorAll("svg.lucide-layout-grid").length).toBe(1);
+    // Views: Eye
+    expect(viewsCat.querySelectorAll("svg.lucide-eye").length).toBe(1);
+    // Functions: Code2 (renders as lucide-code-xml)
+    expect(functionsCat.querySelectorAll("svg.lucide-code-xml").length).toBe(1);
+    // Procedures: Terminal
+    expect(proceduresCat.querySelectorAll("svg.lucide-terminal").length).toBe(
+      1,
+    );
   });
 });

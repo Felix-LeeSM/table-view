@@ -8,6 +8,7 @@ import {
   Code2,
   Database,
   FolderOpen,
+  Folder,
   Eye,
   LayoutGrid,
   Columns3,
@@ -15,6 +16,7 @@ import {
   Pencil,
   X,
   Search,
+  Terminal,
 } from "lucide-react";
 import { useSchemaStore } from "../stores/schemaStore";
 import { useConnectionStore } from "../stores/connectionStore";
@@ -29,6 +31,7 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import type { TableInfo } from "../types/schema";
+import { cn } from "../lib/utils";
 
 const EMPTY_SCHEMAS: never[] = [];
 
@@ -45,7 +48,7 @@ const CATEGORIES = [
   {
     key: "procedures",
     label: "Procedures",
-    Icon: Code2,
+    Icon: Terminal,
     emptyLabel: "No procedures",
   },
 ] as const;
@@ -127,6 +130,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
 
+  // Track active tab for highlight & auto-expand
+  const activeTab = useTabStore((s) => {
+    const tabId = s.activeTabId;
+    return tabId ? s.tabs.find((t) => t.id === tabId) : null;
+  });
+  const activeSchema = activeTab?.type === "table" ? activeTab.schema : null;
+  const activeTable = activeTab?.type === "table" ? activeTab.table : null;
+
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
     new Set(),
   );
@@ -165,6 +176,18 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     window.addEventListener("refresh-schema", handler);
     return () => window.removeEventListener("refresh-schema", handler);
   }, [connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-expand schema when active tab changes to a table in that schema
+  useEffect(() => {
+    if (activeSchema) {
+      setExpandedSchemas((prev) => {
+        if (prev.has(activeSchema)) return prev;
+        const next = new Set(prev);
+        next.add(activeSchema);
+        return next;
+      });
+    }
+  }, [activeSchema]);
 
   const handleExpandSchema = async (schemaName: string) => {
     const newExpanded = new Set(expandedSchemas);
@@ -481,10 +504,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               ) : (
                 <ChevronRight size={12} className="shrink-0" />
               )}
-              <FolderOpen
-                size={13}
-                className="shrink-0 text-muted-foreground"
-              />
+              {isExpanded ? (
+                <FolderOpen
+                  size={13}
+                  className="shrink-0 text-muted-foreground"
+                />
+              ) : (
+                <Folder size={13} className="shrink-0 text-muted-foreground" />
+              )}
               <span className="truncate">{schema.name}</span>
               {isLoadingTables && (
                 <Loader2 size={10} className="ml-auto animate-spin" />
@@ -622,15 +649,19 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 });
                                 const isTableSelected =
                                   selectedNodeId === tableId;
+                                const isActiveTable =
+                                  activeSchema === schema.name &&
+                                  activeTable === item.name;
 
                                 return (
                                   <div
                                     key={item.name}
-                                    className={`flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted ${
-                                      isTableSelected
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-foreground"
-                                    }`}
+                                    className={cn(
+                                      "flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
+                                      isTableSelected || isActiveTable
+                                        ? "bg-primary/10 text-primary font-semibold"
+                                        : "text-foreground",
+                                    )}
                                     role="button"
                                     tabIndex={0}
                                     aria-label={`${item.name} table`}
