@@ -3,12 +3,14 @@ import type { EditorView } from "@codemirror/view";
 import type { QueryTab } from "../stores/tabStore";
 import { useTabStore } from "../stores/tabStore";
 import { useQueryHistoryStore } from "../stores/queryHistoryStore";
+import { useFavoritesStore } from "../stores/favoritesStore";
 import { executeQuery, cancelQuery } from "../lib/tauri";
 import { splitSqlStatements, formatSql, uglifySql } from "../lib/sqlUtils";
 import { useSqlAutocomplete } from "../hooks/useSqlAutocomplete";
 import { useResizablePanel } from "../hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
+import FavoritesPanel from "./FavoritesPanel";
 import {
   Play,
   Square,
@@ -18,6 +20,9 @@ import {
   ChevronDown,
   ChevronRight,
   Paintbrush,
+  Star,
+  Save,
+  X,
 } from "lucide-react";
 
 interface QueryTabProps {
@@ -32,6 +37,27 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const historyEntries = useQueryHistoryStore((s) => s.entries);
   const schemaNamespace = useSqlAutocomplete(tab.connectionId);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [favoriteName, setFavoriteName] = useState("");
+  const [showFavorites, setShowFavorites] = useState(false);
+  const addFavorite = useFavoritesStore((s) => s.addFavorite);
+  const favorites = useFavoritesStore((s) => s.favorites);
+
+  const handleSaveFavorite = useCallback(() => {
+    const name = favoriteName.trim();
+    const sql = tab.sql.trim();
+    if (!name || !sql) return;
+    addFavorite(name, sql, tab.connectionId);
+    setFavoriteName("");
+    setShowSaveForm(false);
+  }, [favoriteName, tab.sql, tab.connectionId, addFavorite]);
+
+  const handleLoadFavoriteSql = useCallback(
+    (sql: string) => {
+      updateQuerySql(tab.id, sql);
+    },
+    [tab.id, updateQuerySql],
+  );
 
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
@@ -262,6 +288,18 @@ export default function QueryTab({ tab }: QueryTabProps) {
     return () => window.removeEventListener("uglify-sql", handler);
   }, [tab.id, tab.sql, updateQuerySql]);
 
+  // Toggle favorites panel event listener (Cmd+Shift+F)
+  useEffect(() => {
+    const handler = () => {
+      const { activeTabId } = useTabStore.getState();
+      if (activeTabId !== tab.id) return;
+      setShowFavorites((v) => !v);
+      setShowSaveForm(false);
+    };
+    window.addEventListener("toggle-favorites", handler);
+    return () => window.removeEventListener("toggle-favorites", handler);
+  }, [tab.id]);
+
   const editorRef = useRef<EditorView | null>(null);
 
   const handleFormat = useCallback(() => {
@@ -338,6 +376,78 @@ export default function QueryTab({ tab }: QueryTabProps) {
           <Paintbrush size={12} />
           <span>Format</span>
         </button>
+        <div className="ml-auto flex items-center gap-1 relative">
+          <button
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted disabled:opacity-40"
+            onClick={() => {
+              setShowSaveForm(!showSaveForm);
+              setShowFavorites(false);
+            }}
+            disabled={!tab.sql.trim()}
+            aria-label="Save to favorites"
+            title="Save to favorites"
+          >
+            <Star size={12} />
+            <span>Save</span>
+          </button>
+          <button
+            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
+            onClick={() => {
+              setShowFavorites(!showFavorites);
+              setShowSaveForm(false);
+            }}
+            aria-label="Open favorites"
+            title="Favorites (Cmd+Shift+F)"
+          >
+            <Star size={12} className="text-primary" />
+            <span>
+              Favorites{favorites.length > 0 ? ` (${favorites.length})` : ""}
+            </span>
+          </button>
+          {showSaveForm && (
+            <div className="absolute right-0 top-full mt-1 z-50 flex items-center gap-1 rounded border border-border bg-background p-2 shadow-lg">
+              <input
+                type="text"
+                value={favoriteName}
+                onChange={(e) => setFavoriteName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveFavorite();
+                  if (e.key === "Escape") setShowSaveForm(false);
+                }}
+                placeholder="Favorite name..."
+                className="h-6 w-40 rounded border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring"
+                autoFocus
+              />
+              <button
+                className="flex items-center gap-1 rounded px-2 py-1 text-xs bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+                onClick={handleSaveFavorite}
+                disabled={!favoriteName.trim()}
+                aria-label="Confirm save"
+              >
+                <Save size={10} />
+              </button>
+              <button
+                className="rounded p-1 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setShowSaveForm(false);
+                  setFavoriteName("");
+                }}
+                aria-label="Cancel save"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          )}
+          {showFavorites && (
+            <div className="absolute right-0 top-full mt-1 z-50">
+              <FavoritesPanel
+                connectionId={tab.connectionId}
+                onLoadSql={handleLoadFavoriteSql}
+                onClose={() => setShowFavorites(false)}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Editor area */}
