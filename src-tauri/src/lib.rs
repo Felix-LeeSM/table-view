@@ -35,6 +35,10 @@ pub fn run() {
             commands::schema::drop_index,
             commands::schema::add_constraint,
             commands::schema::drop_constraint,
+            commands::schema::list_views,
+            commands::schema::list_functions,
+            commands::schema::get_view_definition,
+            commands::schema::get_function_source,
             commands::query::execute_query,
             commands::query::cancel_query,
         ])

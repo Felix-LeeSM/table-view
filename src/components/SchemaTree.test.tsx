@@ -18,17 +18,23 @@ import { useTabStore } from "../stores/tabStore";
 
 const mockLoadSchemas = vi.fn().mockResolvedValue(undefined);
 const mockLoadTables = vi.fn().mockResolvedValue(undefined);
+const mockLoadViews = vi.fn().mockResolvedValue(undefined);
+const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 
 function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
   useSchemaStore.setState({
     schemas: {},
     tables: {},
+    views: {},
+    functions: {},
     loading: false,
     error: null,
     ...overrides,
     // Preserve mocked actions
     loadSchemas: mockLoadSchemas,
     loadTables: mockLoadTables,
+    loadViews: mockLoadViews,
+    loadFunctions: mockLoadFunctions,
   });
 }
 
@@ -36,10 +42,14 @@ function resetStores() {
   useSchemaStore.setState({
     schemas: {},
     tables: {},
+    views: {},
+    functions: {},
     loading: false,
     error: null,
     loadSchemas: mockLoadSchemas,
     loadTables: mockLoadTables,
+    loadViews: mockLoadViews,
+    loadFunctions: mockLoadFunctions,
   });
   useTabStore.setState({ tabs: [], activeTabId: null });
   useConnectionStore.setState({ connections: [] });
@@ -2306,5 +2316,295 @@ describe("SchemaTree", () => {
     expect(proceduresCat.querySelectorAll("svg.lucide-terminal").length).toBe(
       1,
     );
+  });
+
+  // =========================================================================
+  // NEW: Views and Functions rendering with real data
+  // =========================================================================
+
+  it("renders view items under Views category", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {
+        "conn1:public": [
+          {
+            name: "active_users",
+            schema: "public",
+            definition: "SELECT * FROM users WHERE active = true",
+          },
+        ],
+      },
+      functions: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Expand Views category
+    const viewsCat = screen.getByLabelText("Views in public");
+    await act(async () => {
+      fireEvent.click(viewsCat);
+    });
+
+    expect(screen.getByText("active_users")).toBeInTheDocument();
+  });
+
+  it("renders function items under Functions category", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {},
+      functions: {
+        "conn1:public": [
+          {
+            name: "calculate_total",
+            schema: "public",
+            arguments: "user_id integer",
+            returnType: "numeric",
+            language: "plpgsql",
+            source: "BEGIN RETURN 0; END",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Expand Functions category
+    const functionsCat = screen.getByLabelText("Functions in public");
+    await act(async () => {
+      fireEvent.click(functionsCat);
+    });
+
+    expect(screen.getByText("calculate_total")).toBeInTheDocument();
+  });
+
+  it("renders procedure items under Procedures category", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {},
+      functions: {
+        "conn1:public": [
+          {
+            name: "do_migration",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "plpgsql",
+            source: "BEGIN END",
+            kind: "procedure",
+          },
+          {
+            name: "calculate_total",
+            schema: "public",
+            arguments: "user_id integer",
+            returnType: "numeric",
+            language: "plpgsql",
+            source: "BEGIN RETURN 0; END",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Expand Procedures category
+    const proceduresCat = screen.getByLabelText("Procedures in public");
+    await act(async () => {
+      fireEvent.click(proceduresCat);
+    });
+
+    // Only the procedure should appear, not the function
+    expect(screen.getByText("do_migration")).toBeInTheDocument();
+    expect(screen.queryByText("calculate_total")).not.toBeInTheDocument();
+  });
+
+  it("shows count badges for views and functions", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 5 }],
+      },
+      views: {
+        "conn1:public": [
+          { name: "v1", schema: "public", definition: null },
+          { name: "v2", schema: "public", definition: null },
+        ],
+      },
+      functions: {
+        "conn1:public": [
+          {
+            name: "f1",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "sql",
+            source: null,
+            kind: "function",
+          },
+          {
+            name: "p1",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "plpgsql",
+            source: null,
+            kind: "procedure",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    // Check count badges
+    const tablesCat = screen.getByLabelText("Tables in public");
+    const viewsCat = screen.getByLabelText("Views in public");
+    const functionsCat = screen.getByLabelText("Functions in public");
+    const proceduresCat = screen.getByLabelText("Procedures in public");
+
+    expect(tablesCat.textContent).toContain("1");
+    expect(viewsCat.textContent).toContain("2");
+    expect(functionsCat.textContent).toContain("1");
+    expect(proceduresCat.textContent).toContain("1");
+  });
+
+  it("loads views and functions when schema is expanded", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {},
+      views: {},
+      functions: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    expect(mockLoadViews).toHaveBeenCalledWith("conn1", "public");
+    expect(mockLoadFunctions).toHaveBeenCalledWith("conn1", "public");
+  });
+
+  it("clicking a view item opens a table tab with view name", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {
+        "conn1:public": [
+          { name: "active_users", schema: "public", definition: "SELECT 1" },
+        ],
+      },
+      functions: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCat = screen.getByLabelText("Views in public");
+    await act(async () => {
+      fireEvent.click(viewsCat);
+    });
+
+    const viewItem = screen.getByLabelText("active_users view");
+    await act(async () => {
+      fireEvent.click(viewItem);
+    });
+
+    const tabState = useTabStore.getState();
+    expect(tabState.tabs).toHaveLength(1);
+    expect(tabState.tabs[0]!.type).toBe("table");
+    if (tabState.tabs[0]!.type === "table") {
+      expect(tabState.tabs[0]!.table).toBe("active_users");
+      expect(tabState.tabs[0]!.schema).toBe("public");
+    }
+  });
+
+  it("clicking a function item opens a query tab", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {},
+      functions: {
+        "conn1:public": [
+          {
+            name: "calculate_total",
+            schema: "public",
+            arguments: "x integer",
+            returnType: "integer",
+            language: "plpgsql",
+            source: "BEGIN RETURN x; END",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const functionsCat = screen.getByLabelText("Functions in public");
+    await act(async () => {
+      fireEvent.click(functionsCat);
+    });
+
+    const funcItem = screen.getByLabelText("calculate_total function");
+    await act(async () => {
+      fireEvent.click(funcItem);
+    });
+
+    const tabState = useTabStore.getState();
+    expect(tabState.tabs).toHaveLength(1);
+    expect(tabState.tabs[0]!.type).toBe("query");
+    if (tabState.tabs[0]!.type === "query") {
+      expect(tabState.tabs[0]!.sql).toBe("BEGIN RETURN x; END");
+    }
   });
 });

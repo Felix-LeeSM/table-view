@@ -188,3 +188,19 @@ export interface DropConstraintRequest {
 export interface SchemaChangeResult {
   sql: string;
 }
+
+export interface ViewInfo {
+  name: string;
+  schema: string;
+  definition: string | null;
+}
+
+export interface FunctionInfo {
+  name: string;
+  schema: string;
+  arguments: string | null;
+  returnType: string | null;
+  language: string | null;
+  source: string | null;
+  kind: string; // "function" | "procedure" | "aggregate" | "window"
+}

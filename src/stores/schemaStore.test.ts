@@ -12,6 +12,37 @@ vi.mock("../lib/tauri", () => ({
       { name: "orders", schema: "public", row_count: null },
     ]),
   ),
+  listViews: vi.fn(() =>
+    Promise.resolve([
+      {
+        name: "active_users",
+        schema: "public",
+        definition: "SELECT * FROM users WHERE active = true",
+      },
+    ]),
+  ),
+  listFunctions: vi.fn(() =>
+    Promise.resolve([
+      {
+        name: "calculate_total",
+        schema: "public",
+        arguments: "user_id integer",
+        returnType: "numeric",
+        language: "plpgsql",
+        source: "BEGIN RETURN 0; END",
+        kind: "function",
+      },
+      {
+        name: "do_migration",
+        schema: "public",
+        arguments: null,
+        returnType: null,
+        language: "plpgsql",
+        source: "BEGIN END",
+        kind: "procedure",
+      },
+    ]),
+  ),
   getTableColumns: vi.fn(() =>
     Promise.resolve([
       {
@@ -87,6 +118,8 @@ describe("schemaStore", () => {
     useSchemaStore.setState({
       schemas: {},
       tables: {},
+      views: {},
+      functions: {},
       loading: false,
       error: null,
     });
@@ -488,5 +521,125 @@ describe("schemaStore", () => {
     resolveLoad!([{ name: "users", schema: "public", row_count: 1 }]);
     await call;
     expect(useSchemaStore.getState().loading).toBe(false);
+  });
+
+  it("loads views for schema", async () => {
+    await useSchemaStore.getState().loadViews("conn1", "public");
+    const state = useSchemaStore.getState();
+    const key = "conn1:public";
+    expect(state.views[key]).toHaveLength(1);
+    expect(state.views[key]![0]!.name).toBe("active_users");
+    expect(state.views[key]![0]!.definition).toBe(
+      "SELECT * FROM users WHERE active = true",
+    );
+  });
+
+  it("loads functions for schema", async () => {
+    await useSchemaStore.getState().loadFunctions("conn1", "public");
+    const state = useSchemaStore.getState();
+    const key = "conn1:public";
+    expect(state.functions[key]).toHaveLength(2);
+    expect(state.functions[key]![0]!.name).toBe("calculate_total");
+    expect(state.functions[key]![0]!.kind).toBe("function");
+    expect(state.functions[key]![1]!.name).toBe("do_migration");
+    expect(state.functions[key]![1]!.kind).toBe("procedure");
+  });
+
+  it("handles loadViews error", async () => {
+    const { listViews } = await import("../lib/tauri");
+    (listViews as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Views not accessible"),
+    );
+
+    await useSchemaStore.getState().loadViews("conn1", "public");
+    const state = useSchemaStore.getState();
+    expect(state.error).toContain("Views not accessible");
+  });
+
+  it("handles loadFunctions error", async () => {
+    const { listFunctions } = await import("../lib/tauri");
+    (listFunctions as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Functions not accessible"),
+    );
+
+    await useSchemaStore.getState().loadFunctions("conn1", "public");
+    const state = useSchemaStore.getState();
+    expect(state.error).toContain("Functions not accessible");
+  });
+
+  it("clearSchema removes views and functions for connection", async () => {
+    useSchemaStore.setState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+      },
+      views: {
+        "conn1:public": [
+          { name: "active_users", schema: "public", definition: "SELECT 1" },
+        ],
+      },
+      functions: {
+        "conn1:public": [
+          {
+            name: "calc",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "sql",
+            source: "SELECT 1",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    useSchemaStore.getState().clearSchema("conn1");
+
+    const state = useSchemaStore.getState();
+    expect(state.schemas["conn1"]).toBeUndefined();
+    expect(state.tables["conn1:public"]).toBeUndefined();
+    expect(state.views["conn1:public"]).toBeUndefined();
+    expect(state.functions["conn1:public"]).toBeUndefined();
+  });
+
+  it("clearSchema only removes matching connection views/functions", async () => {
+    useSchemaStore.setState({
+      views: {
+        "conn1:public": [{ name: "v1", schema: "public", definition: null }],
+        "conn2:public": [{ name: "v2", schema: "public", definition: null }],
+      },
+      functions: {
+        "conn1:public": [
+          {
+            name: "f1",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "sql",
+            source: null,
+            kind: "function",
+          },
+        ],
+        "conn2:public": [
+          {
+            name: "f2",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "sql",
+            source: null,
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    useSchemaStore.getState().clearSchema("conn1");
+
+    const state = useSchemaStore.getState();
+    expect(state.views["conn1:public"]).toBeUndefined();
+    expect(state.views["conn2:public"]).toHaveLength(1);
+    expect(state.functions["conn1:public"]).toBeUndefined();
+    expect(state.functions["conn2:public"]).toHaveLength(1);
   });
 });

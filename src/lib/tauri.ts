@@ -10,11 +10,13 @@ import type {
   DropIndexRequest,
   DropConstraintRequest,
   FilterCondition,
+  FunctionInfo,
   IndexInfo,
   SchemaChangeResult,
   SchemaInfo,
   TableData,
   TableInfo,
+  ViewInfo,
 } from "../types/schema";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
@@ -208,4 +210,43 @@ export async function dropConstraint(
   request: DropConstraintRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("drop_constraint", { request });
+}
+
+// Views & Functions
+export async function listViews(
+  connectionId: string,
+  schema: string,
+): Promise<ViewInfo[]> {
+  return invoke<ViewInfo[]>("list_views", { connectionId, schema });
+}
+
+export async function listFunctions(
+  connectionId: string,
+  schema: string,
+): Promise<FunctionInfo[]> {
+  return invoke<FunctionInfo[]>("list_functions", { connectionId, schema });
+}
+
+export async function getViewDefinition(
+  connectionId: string,
+  schema: string,
+  viewName: string,
+): Promise<string> {
+  return invoke<string>("get_view_definition", {
+    connectionId,
+    schema,
+    viewName,
+  });
+}
+
+export async function getFunctionSource(
+  connectionId: string,
+  schema: string,
+  functionName: string,
+): Promise<string> {
+  return invoke<string>("get_function_source", {
+    connectionId,
+    schema,
+    functionName,
+  });
 }

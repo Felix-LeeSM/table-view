@@ -30,7 +30,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "./ui/dialog";
-import type { TableInfo } from "../types/schema";
+import type { TableInfo, ViewInfo, FunctionInfo } from "../types/schema";
 import { cn } from "../lib/utils";
 
 const EMPTY_SCHEMAS: never[] = [];
@@ -59,7 +59,9 @@ type CategoryKey = (typeof CATEGORIES)[number]["key"];
 type NodeId =
   | { type: "schema"; schema: string }
   | { type: "category"; schema: string; category: CategoryKey }
-  | { type: "table"; schema: string; table: string };
+  | { type: "table"; schema: string; table: string }
+  | { type: "view"; schema: string; view: string }
+  | { type: "function"; schema: string; functionName: string };
 
 function nodeIdToString(id: NodeId): string {
   switch (id.type) {
@@ -69,6 +71,10 @@ function nodeIdToString(id: NodeId): string {
       return `category:${id.schema}:${id.category}`;
     case "table":
       return `table:${id.schema}:${id.table}`;
+    case "view":
+      return `view:${id.schema}:${id.view}`;
+    case "function":
+      return `function:${id.schema}:${id.functionName}`;
   }
 }
 
@@ -84,6 +90,22 @@ interface TableContextMenuTarget {
   y: number;
 }
 
+interface ViewContextMenuTarget {
+  kind: "view";
+  viewName: string;
+  schemaName: string;
+  x: number;
+  y: number;
+}
+
+interface FunctionContextMenuTarget {
+  kind: "function";
+  functionName: string;
+  schemaName: string;
+  x: number;
+  y: number;
+}
+
 interface SchemaContextMenuTarget {
   kind: "schema";
   schemaName: string;
@@ -93,6 +115,8 @@ interface SchemaContextMenuTarget {
 
 type ContextMenuTarget =
   | TableContextMenuTarget
+  | ViewContextMenuTarget
+  | FunctionContextMenuTarget
   | SchemaContextMenuTarget
   | null;
 
@@ -121,11 +145,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     useSchemaStore((s) => s.schemas[connectionId]) ?? EMPTY_SCHEMAS;
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
+  const loadViews = useSchemaStore((s) => s.loadViews);
+  const loadFunctions = useSchemaStore((s) => s.loadFunctions);
   const dropTable = useSchemaStore((s) => s.dropTable);
   const renameTableAction = useSchemaStore((s) => s.renameTable);
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const tables = useSchemaStore((s) => s.tables);
+  const views = useSchemaStore((s) => s.views);
+  const functions = useSchemaStore((s) => s.functions);
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
@@ -212,6 +241,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           }),
         );
     }
+    // Also load views and functions for this schema
+    if (!views[key]) {
+      loadViews(connectionId, schemaName).catch(() => {});
+    }
+    if (!functions[key]) {
+      loadFunctions(connectionId, schemaName).catch(() => {});
+    }
   };
 
   const handleRefresh = useCallback(() => {
@@ -225,11 +261,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     (schemaName: string) => {
       const key = `${connectionId}:${schemaName}`;
       setLoadingTables((prev) => new Set(prev).add(schemaName));
-      // Clear cached tables to force a reload
+      // Clear cached tables, views, functions to force a reload
       useSchemaStore.setState((state) => {
         const newTables = { ...state.tables };
         delete newTables[key];
-        return { tables: newTables };
+        const newViews = { ...state.views };
+        delete newViews[key];
+        const newFunctions = { ...state.functions };
+        delete newFunctions[key];
+        return { tables: newTables, views: newViews, functions: newFunctions };
       });
       loadTables(connectionId, schemaName)
         .catch(() => {})
@@ -240,8 +280,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             return next;
           }),
         );
+      loadViews(connectionId, schemaName).catch(() => {});
+      loadFunctions(connectionId, schemaName).catch(() => {});
     },
-    [connectionId, loadTables],
+    [connectionId, loadTables, loadViews, loadFunctions],
   );
 
   const handleTableClick = (tableName: string, schemaName: string) => {
@@ -331,6 +373,43 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       });
   };
 
+  const handleViewClick = (viewName: string, schemaName: string) => {
+    setSelectedNodeId(
+      nodeIdToString({ type: "view", schema: schemaName, view: viewName }),
+    );
+    addTab({
+      title: `${schemaName}.${viewName}`,
+      connectionId,
+      type: "table",
+      closable: true,
+      schema: schemaName,
+      table: viewName,
+      subView: "records",
+    });
+  };
+
+  const handleFunctionClick = (funcName: string, schemaName: string) => {
+    setSelectedNodeId(
+      nodeIdToString({
+        type: "function",
+        schema: schemaName,
+        functionName: funcName,
+      }),
+    );
+    addQueryTab(connectionId);
+    // Load function source and put it in the newly created tab
+    const latestTabs = useTabStore.getState().tabs;
+    const newTab = latestTabs[latestTabs.length - 1];
+    if (newTab && newTab.type === "query") {
+      const key = `${connectionId}:${schemaName}`;
+      const funcs = functions[key] ?? [];
+      const func = funcs.find((f) => f.name === funcName);
+      if (func?.source) {
+        updateQuerySql(newTab.id, func.source);
+      }
+    }
+  };
+
   const toggleCategory = (schemaName: string, categoryKey: CategoryKey) => {
     setExpandedCategories((prev) => {
       const current = prev[schemaName] ?? new Set(DEFAULT_EXPANDED);
@@ -401,13 +480,47 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               ),
           },
         ]
-      : [
-          {
-            label: "Refresh",
-            icon: <RefreshCw size={14} />,
-            onClick: () => handleRefreshSchema(contextMenuTarget.schemaName),
-          },
-        ]
+      : contextMenuTarget.kind === "view"
+        ? [
+            {
+              label: "Structure",
+              icon: <Columns3 size={14} />,
+              onClick: () =>
+                handleViewClick(
+                  contextMenuTarget.viewName,
+                  contextMenuTarget.schemaName,
+                ),
+            },
+            {
+              label: "Data",
+              icon: <Table2 size={14} />,
+              onClick: () =>
+                handleViewClick(
+                  contextMenuTarget.viewName,
+                  contextMenuTarget.schemaName,
+                ),
+            },
+          ]
+        : contextMenuTarget.kind === "function"
+          ? [
+              {
+                label: "View Source",
+                icon: <Code2 size={14} />,
+                onClick: () =>
+                  handleFunctionClick(
+                    contextMenuTarget.functionName,
+                    contextMenuTarget.schemaName,
+                  ),
+              },
+            ]
+          : [
+              {
+                label: "Refresh",
+                icon: <RefreshCw size={14} />,
+                onClick: () =>
+                  handleRefreshSchema(contextMenuTarget.schemaName),
+              },
+            ]
     : [];
 
   return (
@@ -538,22 +651,51 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                     });
                     const isCatSelected = selectedNodeId === categoryId;
 
-                    // For "tables" category, show actual tables. Others are empty.
-                    const unfilteredItems: TableInfo[] =
-                      cat.key === "tables" ? schemaTables : [];
-                    const searchValue =
-                      cat.key === "tables"
-                        ? (tableSearch[schema.name] ?? "")
-                        : "";
+                    const schemaKey = `${connectionId}:${schema.name}`;
+                    const schemaViews: ViewInfo[] = views[schemaKey] ?? [];
+                    const schemaFunctions: FunctionInfo[] =
+                      functions[schemaKey] ?? [];
+
+                    // Build items based on category type
+                    const isTableCat = cat.key === "tables";
+                    const isViewCat = cat.key === "views";
+                    const isFunctionCat = cat.key === "functions";
+                    const isProcedureCat = cat.key === "procedures";
+
+                    const unfilteredItems: (
+                      | TableInfo
+                      | ViewInfo
+                      | FunctionInfo
+                    )[] = isTableCat
+                      ? schemaTables
+                      : isViewCat
+                        ? schemaViews
+                        : isFunctionCat
+                          ? schemaFunctions.filter(
+                              (f) =>
+                                f.kind === "function" ||
+                                f.kind === "aggregate" ||
+                                f.kind === "window",
+                            )
+                          : isProcedureCat
+                            ? schemaFunctions.filter(
+                                (f) => f.kind === "procedure",
+                              )
+                            : [];
+                    const searchValue = isTableCat
+                      ? (tableSearch[schema.name] ?? "")
+                      : "";
                     const searchLower = searchValue.toLowerCase();
-                    const items: TableInfo[] =
-                      cat.key === "tables"
+                    const items: (TableInfo | ViewInfo | FunctionInfo)[] =
+                      isTableCat
                         ? searchLower
                           ? unfilteredItems.filter((t) =>
                               t.name.toLowerCase().includes(searchLower),
                             )
                           : unfilteredItems
-                        : [];
+                        : unfilteredItems;
+
+                    const itemCount = items.length;
 
                     return (
                       <div key={cat.key}>
@@ -586,9 +728,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                             className="shrink-0 text-muted-foreground"
                           />
                           <span>{cat.label}</span>
-                          {cat.key === "tables" && schemaTables.length > 0 && (
+                          {itemCount > 0 && (
                             <span className="ml-auto text-[10px] text-muted-foreground">
-                              {schemaTables.length}
+                              {itemCount}
                             </span>
                           )}
                         </div>
@@ -642,63 +784,130 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                               </div>
                             ) : (
                               items.map((item) => {
-                                const tableId = nodeIdToString({
-                                  type: "table",
-                                  schema: schema.name,
-                                  table: item.name,
-                                });
-                                const isTableSelected =
-                                  selectedNodeId === tableId;
-                                const isActiveTable =
+                                // Determine item type and rendering
+                                const isTableView = isTableCat;
+                                const isView = isViewCat;
+                                const isFunc = isFunctionCat || isProcedureCat;
+
+                                const itemId = isTableView
+                                  ? nodeIdToString({
+                                      type: "table",
+                                      schema: schema.name,
+                                      table: item.name,
+                                    })
+                                  : isView
+                                    ? nodeIdToString({
+                                        type: "view",
+                                        schema: schema.name,
+                                        view: item.name,
+                                      })
+                                    : nodeIdToString({
+                                        type: "function",
+                                        schema: schema.name,
+                                        functionName: item.name,
+                                      });
+
+                                const isSelected = selectedNodeId === itemId;
+                                const isActive =
                                   activeSchema === schema.name &&
                                   activeTable === item.name;
 
+                                const handleClick = () => {
+                                  if (isView) {
+                                    handleViewClick(item.name, schema.name);
+                                  } else if (isFunc) {
+                                    handleFunctionClick(item.name, schema.name);
+                                  } else {
+                                    handleTableClick(item.name, schema.name);
+                                  }
+                                };
+
+                                const handleContextMenu = (
+                                  e: React.MouseEvent,
+                                ) => {
+                                  e.preventDefault();
+                                  if (isView) {
+                                    setContextMenuTarget({
+                                      kind: "view",
+                                      viewName: item.name,
+                                      schemaName: schema.name,
+                                      x: e.clientX,
+                                      y: e.clientY,
+                                    });
+                                  } else if (isFunc) {
+                                    setContextMenuTarget({
+                                      kind: "function",
+                                      functionName: item.name,
+                                      schemaName: schema.name,
+                                      x: e.clientX,
+                                      y: e.clientY,
+                                    });
+                                  } else {
+                                    setContextMenuTarget({
+                                      kind: "table",
+                                      tableName: item.name,
+                                      schemaName: schema.name,
+                                      x: e.clientX,
+                                      y: e.clientY,
+                                    });
+                                  }
+                                };
+
                                 return (
                                   <div
-                                    key={item.name}
+                                    key={`${cat.key}-${item.name}`}
                                     className={cn(
                                       "flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
-                                      isTableSelected || isActiveTable
+                                      isSelected || isActive
                                         ? "bg-primary/10 text-primary font-semibold"
                                         : "text-foreground",
                                     )}
                                     role="button"
                                     tabIndex={0}
-                                    aria-label={`${item.name} table`}
-                                    onClick={() =>
-                                      handleTableClick(item.name, schema.name)
-                                    }
+                                    aria-label={`${item.name} ${isView ? "view" : isFunc ? "function" : "table"}`}
+                                    onClick={handleClick}
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
-                                        handleTableClick(
-                                          item.name,
-                                          schema.name,
-                                        );
+                                        handleClick();
                                       }
                                     }}
-                                    onContextMenu={(e) => {
-                                      e.preventDefault();
-                                      setContextMenuTarget({
-                                        kind: "table",
-                                        tableName: item.name,
-                                        schemaName: schema.name,
-                                        x: e.clientX,
-                                        y: e.clientY,
-                                      });
-                                    }}
+                                    onContextMenu={handleContextMenu}
                                   >
-                                    <Table2
-                                      size={12}
-                                      className="shrink-0 text-muted-foreground"
-                                    />
+                                    {isView ? (
+                                      <Eye
+                                        size={12}
+                                        className="shrink-0 text-muted-foreground"
+                                      />
+                                    ) : isFunc ? (
+                                      <Code2
+                                        size={12}
+                                        className="shrink-0 text-muted-foreground"
+                                      />
+                                    ) : (
+                                      <Table2
+                                        size={12}
+                                        className="shrink-0 text-muted-foreground"
+                                      />
+                                    )}
                                     <span className="truncate text-xs">
                                       {item.name}
                                     </span>
-                                    {item.row_count != null && (
-                                      <span className="ml-auto text-[10px] text-muted-foreground">
-                                        {item.row_count.toLocaleString()}
-                                      </span>
-                                    )}
+                                    {isTableView &&
+                                      "row_count" in item &&
+                                      (item as TableInfo).row_count != null && (
+                                        <span className="ml-auto text-[10px] text-muted-foreground">
+                                          {(
+                                            item as TableInfo
+                                          ).row_count!.toLocaleString()}
+                                        </span>
+                                      )}
+                                    {isFunc &&
+                                      "arguments" in item &&
+                                      (item as FunctionInfo).arguments && (
+                                        <span className="ml-auto truncate text-[10px] text-muted-foreground">
+                                          {(item as FunctionInfo).arguments}
+                                        </span>
+                                      )}
                                   </div>
                                 );
                               })

@@ -11,6 +11,6 @@ pub use schema::{
     CreateIndexRequest, DropConstraintRequest, DropIndexRequest, SchemaChangeResult,
 };
 pub use schema::{
-    ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, IndexInfo, SchemaInfo, TableData,
-    TableInfo,
+    ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,
+    SchemaInfo, TableData, TableInfo, ViewInfo,
 };

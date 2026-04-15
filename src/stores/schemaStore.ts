@@ -3,10 +3,12 @@ import type {
   ColumnInfo,
   ConstraintInfo,
   FilterCondition,
+  FunctionInfo,
   IndexInfo,
   SchemaInfo,
   TableData,
   TableInfo,
+  ViewInfo,
 } from "../types/schema";
 import type { QueryResult } from "../types/query";
 import * as tauri from "../lib/tauri";
@@ -14,11 +16,15 @@ import * as tauri from "../lib/tauri";
 interface SchemaState {
   schemas: Record<string, SchemaInfo[]>;
   tables: Record<string, TableInfo[]>;
+  views: Record<string, ViewInfo[]>;
+  functions: Record<string, FunctionInfo[]>;
   loading: boolean;
   error: string | null;
 
   loadSchemas: (connectionId: string) => Promise<void>;
   loadTables: (connectionId: string, schema: string) => Promise<void>;
+  loadViews: (connectionId: string, schema: string) => Promise<void>;
+  loadFunctions: (connectionId: string, schema: string) => Promise<void>;
   getTableColumns: (
     connectionId: string,
     table: string,
@@ -66,6 +72,8 @@ interface SchemaState {
 export const useSchemaStore = create<SchemaState>((set) => ({
   schemas: {},
   tables: {},
+  views: {},
+  functions: {},
   loading: false,
   error: null,
 
@@ -93,6 +101,30 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       }));
     } catch (e) {
       set({ error: String(e), loading: false });
+    }
+  },
+
+  loadViews: async (connectionId, schema) => {
+    try {
+      const views = await tauri.listViews(connectionId, schema);
+      const key = `${connectionId}:${schema}`;
+      set((state) => ({
+        views: { ...state.views, [key]: views },
+      }));
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  loadFunctions: async (connectionId, schema) => {
+    try {
+      const functions = await tauri.listFunctions(connectionId, schema);
+      const key = `${connectionId}:${schema}`;
+      set((state) => ({
+        functions: { ...state.functions, [key]: functions },
+      }));
+    } catch (e) {
+      set({ error: String(e) });
     }
   },
 
@@ -187,13 +219,30 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       const newSchemas = { ...state.schemas };
       delete newSchemas[connectionId];
       const newTables = { ...state.tables };
-      // Remove all table entries for this connection
+      const newViews = { ...state.views };
+      const newFunctions = { ...state.functions };
+      // Remove all entries for this connection
       for (const key of Object.keys(newTables)) {
         if (key.startsWith(`${connectionId}:`)) {
           delete newTables[key];
         }
       }
-      return { schemas: newSchemas, tables: newTables };
+      for (const key of Object.keys(newViews)) {
+        if (key.startsWith(`${connectionId}:`)) {
+          delete newViews[key];
+        }
+      }
+      for (const key of Object.keys(newFunctions)) {
+        if (key.startsWith(`${connectionId}:`)) {
+          delete newFunctions[key];
+        }
+      }
+      return {
+        schemas: newSchemas,
+        tables: newTables,
+        views: newViews,
+        functions: newFunctions,
+      };
     });
   },
 }));

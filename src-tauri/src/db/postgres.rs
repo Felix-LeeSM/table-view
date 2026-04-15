@@ -9,8 +9,8 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnInfo, ConnectionConfig,
     ConstraintDefinition, ConstraintInfo, CreateIndexRequest, DropConstraintRequest,
-    DropIndexRequest, FilterCondition, FilterOperator, IndexInfo, QueryColumn, QueryResult,
-    QueryType, SchemaChangeResult, SchemaInfo, TableData, TableInfo,
+    DropIndexRequest, FilterCondition, FilterOperator, FunctionInfo, IndexInfo, QueryColumn,
+    QueryResult, QueryType, SchemaChangeResult, SchemaInfo, TableData, TableInfo, ViewInfo,
 };
 
 /// Strip leading SQL comments and whitespace so that query type detection
@@ -1299,6 +1299,153 @@ impl PostgresAdapter {
             )
             .collect())
     }
+
+    /// List all views in the given schema.
+    pub async fn list_views(&self, schema: &str) -> Result<Vec<ViewInfo>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT table_name, view_definition \
+             FROM information_schema.views \
+             WHERE table_schema = $1 \
+             ORDER BY table_name",
+        )
+        .bind(schema)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(name, definition)| ViewInfo {
+                name,
+                schema: schema.to_string(),
+                definition,
+            })
+            .collect())
+    }
+
+    /// List all functions and procedures in the given schema.
+    #[allow(clippy::type_complexity)]
+    pub async fn list_functions(&self, schema: &str) -> Result<Vec<FunctionInfo>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let rows: Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            String,
+            Option<String>,
+            i8,
+        )> = sqlx::query_as(
+            "SELECT p.proname, \
+                        pg_get_function_arguments(p.oid) as args, \
+                        pg_get_function_result(p.oid) as result, \
+                        l.lanname, \
+                        p.prosrc, \
+                        p.prokind \
+                 FROM pg_proc p \
+                 JOIN pg_namespace n ON p.pronamespace = n.oid \
+                 JOIN pg_language l ON p.prolang = l.oid \
+                 WHERE n.nspname = $1 \
+                   AND p.prokind IN ('f', 'p', 'a', 'w') \
+                 ORDER BY p.proname",
+        )
+        .bind(schema)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(name, arguments, return_type, language, source, prokind)| {
+                    let kind = match prokind {
+                        112 => "procedure", // 'p'
+                        97 => "aggregate",  // 'a'
+                        119 => "window",    // 'w'
+                        _ => "function",    // 'f' (102) or default
+                    };
+                    FunctionInfo {
+                        name,
+                        schema: schema.to_string(),
+                        arguments,
+                        return_type,
+                        language: Some(language),
+                        source,
+                        kind: kind.to_string(),
+                    }
+                },
+            )
+            .collect())
+    }
+
+    /// Get the definition SQL of a view.
+    pub async fn get_view_definition(
+        &self,
+        schema: &str,
+        view_name: &str,
+    ) -> Result<String, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT view_definition \
+             FROM information_schema.views \
+             WHERE table_schema = $1 AND table_name = $2",
+        )
+        .bind(schema)
+        .bind(view_name)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        match row {
+            Some((def,)) => Ok(def),
+            None => Err(AppError::Connection(format!(
+                "View {schema}.{view_name} not found"
+            ))),
+        }
+    }
+
+    /// Get the source definition of a function or procedure.
+    pub async fn get_function_source(
+        &self,
+        schema: &str,
+        function_name: &str,
+    ) -> Result<String, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT pg_get_functiondef(p.oid) \
+             FROM pg_proc p \
+             JOIN pg_namespace n ON p.pronamespace = n.oid \
+             WHERE n.nspname = $1 AND p.proname = $2",
+        )
+        .bind(schema)
+        .bind(function_name)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        match row {
+            Some((source,)) => Ok(source),
+            None => Err(AppError::Connection(format!(
+                "Function {schema}.{function_name} not found"
+            ))),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1320,6 +1467,7 @@ mod tests {
             color: None,
             connection_timeout: None,
             keep_alive_interval: None,
+            environment: None,
         }
     }
 
@@ -2221,5 +2369,55 @@ mod tests {
         let result = adapter.drop_constraint(&req).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── list_views / list_functions / get_view_definition / get_function_source tests ─
+
+    #[tokio::test]
+    async fn list_views_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.list_views("public").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_functions_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.list_functions("public").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_view_definition_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.get_view_definition("public", "my_view").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_function_source_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.get_function_source("public", "my_func").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
     }
 }

@@ -2,7 +2,8 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, CreateIndexRequest, DropConstraintRequest,
-    DropIndexRequest, FilterCondition, SchemaChangeResult, TableData, TableInfo,
+    DropIndexRequest, FilterCondition, FunctionInfo, SchemaChangeResult, TableData, TableInfo,
+    ViewInfo,
 };
 
 #[tauri::command]
@@ -189,4 +190,58 @@ pub async fn drop_constraint(
         .get(&request.connection_id)
         .ok_or_else(|| AppError::Connection("Not connected".into()))?;
     adapter.drop_constraint(&request).await
+}
+
+#[tauri::command]
+pub async fn list_views(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+) -> Result<Vec<ViewInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.list_views(&schema).await
+}
+
+#[tauri::command]
+pub async fn list_functions(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+) -> Result<Vec<FunctionInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.list_functions(&schema).await
+}
+
+#[tauri::command]
+pub async fn get_view_definition(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    view_name: String,
+) -> Result<String, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.get_view_definition(&schema, &view_name).await
+}
+
+#[tauri::command]
+pub async fn get_function_source(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    function_name: String,
+) -> Result<String, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.get_function_source(&schema, &function_name).await
 }

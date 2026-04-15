@@ -182,6 +182,24 @@ pub struct SchemaChangeResult {
     pub sql: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewInfo {
+    pub name: String,
+    pub schema: String,
+    pub definition: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FunctionInfo {
+    pub name: String,
+    pub schema: String,
+    pub arguments: Option<String>,
+    pub return_type: Option<String>,
+    pub language: Option<String>,
+    pub source: Option<String>,
+    pub kind: String, // "function", "procedure", "aggregate", "window"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,5 +584,67 @@ mod tests {
             deserialized.sql,
             "ALTER TABLE \"public\".\"users\" ADD COLUMN \"email\" varchar(255)"
         );
+    }
+
+    #[test]
+    fn view_info_serde_roundtrip() {
+        let info = ViewInfo {
+            name: "active_users".to_string(),
+            schema: "public".to_string(),
+            definition: Some("SELECT * FROM users WHERE active = true".to_string()),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: ViewInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "active_users");
+        assert_eq!(deserialized.schema, "public");
+        assert_eq!(
+            deserialized.definition,
+            Some("SELECT * FROM users WHERE active = true".to_string())
+        );
+
+        let info_no_def = ViewInfo {
+            name: "simple_view".to_string(),
+            schema: "public".to_string(),
+            definition: None,
+        };
+        let json_no_def = serde_json::to_string(&info_no_def).unwrap();
+        let deserialized_no_def: ViewInfo = serde_json::from_str(&json_no_def).unwrap();
+        assert_eq!(deserialized_no_def.definition, None);
+    }
+
+    #[test]
+    fn function_info_serde_roundtrip() {
+        let info = FunctionInfo {
+            name: "calculate_total".to_string(),
+            schema: "public".to_string(),
+            arguments: Some("user_id integer".to_string()),
+            return_type: Some("numeric".to_string()),
+            language: Some("plpgsql".to_string()),
+            source: Some("BEGIN RETURN 0; END".to_string()),
+            kind: "function".to_string(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: FunctionInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "calculate_total");
+        assert_eq!(deserialized.kind, "function");
+        assert_eq!(deserialized.arguments, Some("user_id integer".to_string()));
+        assert_eq!(deserialized.return_type, Some("numeric".to_string()));
+        assert_eq!(deserialized.language, Some("plpgsql".to_string()));
+        assert_eq!(deserialized.source, Some("BEGIN RETURN 0; END".to_string()));
+
+        let info_minimal = FunctionInfo {
+            name: "do_something".to_string(),
+            schema: "public".to_string(),
+            arguments: None,
+            return_type: None,
+            language: None,
+            source: None,
+            kind: "procedure".to_string(),
+        };
+        let json_minimal = serde_json::to_string(&info_minimal).unwrap();
+        let deserialized_minimal: FunctionInfo = serde_json::from_str(&json_minimal).unwrap();
+        assert_eq!(deserialized_minimal.kind, "procedure");
+        assert!(deserialized_minimal.arguments.is_none());
+        assert!(deserialized_minimal.return_type.is_none());
     }
 }
