@@ -4,13 +4,23 @@ import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import ConnectionGroup from "./ConnectionGroup";
 import { GripVertical } from "lucide-react";
 
-export default function ConnectionList() {
-  const connections = useConnectionStore((s) => s.connections);
+interface ConnectionListProps {
+  environmentFilter?: string | null;
+}
+
+export default function ConnectionList({
+  environmentFilter = null,
+}: ConnectionListProps) {
+  const allConnections = useConnectionStore((s) => s.connections);
   const groups = useConnectionStore((s) => s.groups);
   const moveConnectionToGroup = useConnectionStore(
     (s) => s.moveConnectionToGroup,
   );
   const [dropActive, setDropActive] = useState(false);
+
+  const connections = environmentFilter
+    ? allConnections.filter((c) => c.environment === environmentFilter)
+    : allConnections;
 
   const rootConnections = connections.filter((c) => !c.group_id);
   const groupedConnections = groups.map((group) => ({
@@ -54,7 +64,7 @@ export default function ConnectionList() {
       ))}
 
       {/* Group hint — show only when there are connections but no groups */}
-      {connections.length > 0 && groups.length === 0 && (
+      {allConnections.length > 0 && groups.length === 0 && (
         <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] text-muted-foreground opacity-60">
           <GripVertical size={10} />
           <span>Drag connections onto each other to create groups</span>

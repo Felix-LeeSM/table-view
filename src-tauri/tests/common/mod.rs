@@ -35,6 +35,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             color: None,
             connection_timeout: Some(5),
             keep_alive_interval: None,
+            environment: None,
         },
         DatabaseType::Mysql => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -49,6 +50,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             color: None,
             connection_timeout: Some(5),
             keep_alive_interval: None,
+            environment: None,
         },
         other => panic!("test_config: unsupported DatabaseType {:?}", other),
     }

@@ -29,6 +29,7 @@ function makeConnection(
     database: "mydb",
     group_id: null,
     color: null,
+    environment: null,
     ...overrides,
   };
 }
@@ -527,5 +528,82 @@ describe("ConnectionDialog", () => {
 
     // The validation error should be gone (new error or no error)
     expect(screen.queryByText("Name is required")).not.toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 59: Environment select field
+  // -----------------------------------------------------------------------
+  it("renders Environment select field with default None", () => {
+    renderDialog();
+    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe("");
+  });
+
+  it("renders all environment options", () => {
+    renderDialog();
+    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.value);
+    expect(options).toContain("");
+    expect(options).toContain("local");
+    expect(options).toContain("testing");
+    expect(options).toContain("development");
+    expect(options).toContain("staging");
+    expect(options).toContain("production");
+  });
+
+  it("pre-selects environment when editing connection with environment", () => {
+    renderDialog({
+      connection: makeConnection({ environment: "production" }),
+    });
+    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
+    expect(select.value).toBe("production");
+  });
+
+  it("pre-selects empty when editing connection without environment", () => {
+    renderDialog({ connection: makeConnection({ environment: null }) });
+    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("updates environment in form state when selecting an option", async () => {
+    renderDialog();
+    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(select, { target: { value: "staging" } });
+    });
+    expect(select.value).toBe("staging");
+  });
+
+  it("sets environment to null when selecting None option", async () => {
+    renderDialog({
+      connection: makeConnection({ environment: "production" }),
+    });
+    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
+    expect(select.value).toBe("production");
+
+    await act(async () => {
+      fireEvent.change(select, { target: { value: "" } });
+    });
+    expect(select.value).toBe("");
+  });
+
+  it("includes environment in saved form data", async () => {
+    renderDialog();
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    const envSelect = screen.getByLabelText("Environment") as HTMLSelectElement;
+
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "Test DB" } });
+      fireEvent.change(envSelect, { target: { value: "local" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+
+    expect(mockAddConnection).toHaveBeenCalledTimes(1);
+    const savedForm = mockAddConnection.mock.calls[0]![0] as ConnectionConfig;
+    expect(savedForm.environment).toBe("local");
   });
 });

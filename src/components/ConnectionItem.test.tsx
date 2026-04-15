@@ -61,6 +61,7 @@ function makeConnection(
     database: "testdb",
     group_id: null,
     color: null,
+    environment: null,
     ...overrides,
   };
 }
@@ -671,5 +672,71 @@ describe("ConnectionItem", () => {
 
     const item = screen.getByRole("button", { name: /Test DB/ });
     expect(item.className).toContain("select-none");
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 59: Environment badge rendering
+  // -----------------------------------------------------------------------
+  it("does not render environment badge when environment is null", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem connection={makeConnection({ environment: null })} />,
+    );
+    expect(screen.queryByText("Local")).not.toBeInTheDocument();
+    expect(screen.queryByText("Production")).not.toBeInTheDocument();
+  });
+
+  it("does not render environment badge when environment is undefined", () => {
+    setStoreState({});
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { environment: _, ...connWithoutEnv } = makeConnection();
+    render(<ConnectionItem connection={connWithoutEnv as ConnectionConfig} />);
+    expect(screen.queryByText("Local")).not.toBeInTheDocument();
+  });
+
+  it("renders environment badge when environment is set", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem
+        connection={makeConnection({ environment: "production" })}
+      />,
+    );
+    expect(screen.getByText("Production")).toBeInTheDocument();
+  });
+
+  it.each([
+    { env: "local", label: "Local" },
+    { env: "testing", label: "Testing" },
+    { env: "development", label: "Development" },
+    { env: "staging", label: "Staging" },
+    { env: "production", label: "Production" },
+  ] as const)("renders $label badge for environment=$env", ({ env, label }) => {
+    setStoreState({});
+    render(
+      <ConnectionItem connection={makeConnection({ environment: env })} />,
+    );
+    expect(screen.getByText(label)).toBeInTheDocument();
+  });
+
+  it("does not render badge for unknown environment value", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem
+        connection={makeConnection({ environment: "unknown-env" })}
+      />,
+    );
+    // Should not render a badge for an unrecognized environment
+    expect(screen.queryByText("unknown-env")).not.toBeInTheDocument();
+  });
+
+  it("environment badge has correct title attribute", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem
+        connection={makeConnection({ environment: "staging" })}
+      />,
+    );
+    const badge = screen.getByText("Staging");
+    expect(badge).toHaveAttribute("title", "Staging");
   });
 });

@@ -229,6 +229,7 @@ mod tests {
             color: None,
             connection_timeout: None,
             keep_alive_interval: None,
+            environment: None,
         }
     }
 

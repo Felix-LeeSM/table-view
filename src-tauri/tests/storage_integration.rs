@@ -31,6 +31,7 @@ fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
         color: None,
         connection_timeout: None,
         keep_alive_interval: None,
+        environment: None,
     }
 }
 

@@ -40,6 +40,8 @@ pub struct ConnectionConfig {
     pub connection_timeout: Option<u32>,
     #[serde(default)]
     pub keep_alive_interval: Option<u32>,
+    #[serde(default)]
+    pub environment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,6 +165,7 @@ mod tests {
             color: None,
             connection_timeout: Some(60),
             keep_alive_interval: Some(15),
+            environment: Some("production".into()),
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
@@ -171,11 +174,12 @@ mod tests {
         assert_eq!(config.port, deserialized.port);
         assert_eq!(config.connection_timeout, deserialized.connection_timeout);
         assert_eq!(config.keep_alive_interval, deserialized.keep_alive_interval);
+        assert_eq!(config.environment, deserialized.environment);
     }
 
     #[test]
     fn connection_config_optional_fields_default_to_none() {
-        // Simulates data saved before timeout/keep_alive were added
+        // Simulates data saved before timeout/keep_alive/environment were added
         let json = r#"{
             "id": "test",
             "name": "test",
@@ -191,6 +195,7 @@ mod tests {
         let config: ConnectionConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.connection_timeout, None);
         assert_eq!(config.keep_alive_interval, None);
+        assert_eq!(config.environment, None);
     }
 
     #[test]
@@ -209,6 +214,7 @@ mod tests {
                 color: Some("#ff0000".into()),
                 connection_timeout: None,
                 keep_alive_interval: None,
+                environment: None,
             }],
             groups: vec![ConnectionGroup {
                 id: "g1".into(),

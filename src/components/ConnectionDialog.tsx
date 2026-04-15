@@ -4,6 +4,8 @@ import {
   createEmptyConnection,
   DATABASE_DEFAULTS,
   parseConnectionUrl,
+  ENVIRONMENT_META,
+  ENVIRONMENT_OPTIONS,
 } from "../types/connection";
 import { useConnectionStore } from "../stores/connectionStore";
 import {
@@ -249,6 +251,31 @@ export default function ConnectionDialog({
                     <option value="sqlite">SQLite</option>
                     <option value="mongodb">MongoDB</option>
                     <option value="redis">Redis</option>
+                  </select>
+                </div>
+
+                {/* Environment */}
+                <div>
+                  <label htmlFor="conn-environment" className={labelClass}>
+                    Environment
+                  </label>
+                  <select
+                    id="conn-environment"
+                    className={inputClass}
+                    value={form.environment ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        environment: e.target.value || null,
+                      }))
+                    }
+                  >
+                    <option value="">None</option>
+                    {ENVIRONMENT_OPTIONS.map((env) => (
+                      <option key={env} value={env}>
+                        {ENVIRONMENT_META[env].label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

@@ -52,6 +52,7 @@ function makeConnection(id: string, dbType = "postgresql") {
     database: "test",
     group_id: null as string | null,
     color: null as string | null,
+    environment: null as string | null,
   };
 }
 
@@ -66,6 +67,7 @@ interface ConnectionConfigLike {
   database: string;
   group_id: string | null;
   color: string | null;
+  environment: string | null;
 }
 
 function setConnectionState(overrides: {
@@ -503,5 +505,59 @@ describe("Sidebar", () => {
 
     const container = getSidebarContainer();
     expect(container.className).toContain("select-none");
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 59: Environment filter
+  // -----------------------------------------------------------------------
+  it("does not render environment filter when no connections exist", () => {
+    setConnectionState({ connections: [] });
+    render(<Sidebar />);
+    expect(
+      screen.queryByLabelText("Filter by environment"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders environment filter when connections exist", () => {
+    setConnectionState({ connections: [makeConnection("c1")] });
+    render(<Sidebar />);
+    expect(screen.getByLabelText("Filter by environment")).toBeInTheDocument();
+  });
+
+  it("renders All Environments as default filter option", () => {
+    setConnectionState({ connections: [makeConnection("c1")] });
+    render(<Sidebar />);
+    const select = screen.getByLabelText(
+      "Filter by environment",
+    ) as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("renders all environment options in filter dropdown", () => {
+    setConnectionState({ connections: [makeConnection("c1")] });
+    render(<Sidebar />);
+    const select = screen.getByLabelText(
+      "Filter by environment",
+    ) as HTMLSelectElement;
+    const options = Array.from(select.options).map((o) => o.value);
+    expect(options).toContain("");
+    expect(options).toContain("local");
+    expect(options).toContain("testing");
+    expect(options).toContain("development");
+    expect(options).toContain("staging");
+    expect(options).toContain("production");
+  });
+
+  it("passes environmentFilter to ConnectionList", () => {
+    setConnectionState({ connections: [makeConnection("c1")] });
+    render(<Sidebar />);
+    const select = screen.getByLabelText(
+      "Filter by environment",
+    ) as HTMLSelectElement;
+    act(() => {
+      fireEvent.change(select, { target: { value: "production" } });
+    });
+    // ConnectionList is mocked, so we just verify the filter UI updated
+    expect(select.value).toBe("production");
   });
 });

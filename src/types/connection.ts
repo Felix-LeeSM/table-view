@@ -18,6 +18,7 @@ export interface ConnectionConfig {
   color: string | null;
   connection_timeout?: number;
   keep_alive_interval?: number;
+  environment?: string | null;
 }
 
 export interface ConnectionGroup {
@@ -86,3 +87,32 @@ export function parseConnectionUrl(
     return null;
   }
 }
+
+/** Supported environment tags for connections. */
+export type EnvironmentTag =
+  | "local"
+  | "testing"
+  | "development"
+  | "staging"
+  | "production";
+
+/** Metadata for environment tags. */
+export const ENVIRONMENT_META: Record<
+  EnvironmentTag,
+  { label: string; color: string }
+> = {
+  local: { label: "Local", color: "#10b981" },
+  testing: { label: "Testing", color: "#eab308" },
+  development: { label: "Development", color: "#3b82f6" },
+  staging: { label: "Staging", color: "#f97316" },
+  production: { label: "Production", color: "#ef4444" },
+};
+
+/** All environment option values (for iteration). */
+export const ENVIRONMENT_OPTIONS: EnvironmentTag[] = [
+  "local",
+  "testing",
+  "development",
+  "staging",
+  "production",
+];

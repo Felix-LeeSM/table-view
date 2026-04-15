@@ -15,9 +15,13 @@ import ConnectionList from "./ConnectionList";
 import ConnectionDialog from "./ConnectionDialog";
 import SchemaTree from "./SchemaTree";
 import type { DatabaseType } from "../types/connection";
+import { ENVIRONMENT_META, ENVIRONMENT_OPTIONS } from "../types/connection";
 
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [environmentFilter, setEnvironmentFilter] = useState<string | null>(
+    null,
+  );
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { theme, setTheme } = useTheme();
@@ -69,6 +73,25 @@ export default function Sidebar() {
           </div>
         </div>
 
+        {/* Environment Filter */}
+        {connections.length > 0 && (
+          <div className="border-b border-border px-3 py-1.5">
+            <select
+              className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+              value={environmentFilter ?? ""}
+              onChange={(e) => setEnvironmentFilter(e.target.value || null)}
+              aria-label="Filter by environment"
+            >
+              <option value="">All Environments</option>
+              {ENVIRONMENT_OPTIONS.map((env) => (
+                <option key={env} value={env}>
+                  {ENVIRONMENT_META[env].label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Connection List */}
         <div className="flex-1 overflow-y-auto">
           {connections.length === 0 ? (
@@ -102,7 +125,7 @@ export default function Sidebar() {
             </div>
           ) : (
             <>
-              <ConnectionList />
+              <ConnectionList environmentFilter={environmentFilter} />
               {connectedIds.map((id) => (
                 <SchemaTree key={id} connectionId={id} />
               ))}

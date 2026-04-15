@@ -1,5 +1,10 @@
 import { useState, useRef } from "react";
-import type { ConnectionConfig, ConnectionStatus } from "../types/connection";
+import type {
+  ConnectionConfig,
+  ConnectionStatus,
+  EnvironmentTag,
+} from "../types/connection";
+import { ENVIRONMENT_META } from "../types/connection";
 import { useConnectionStore } from "../stores/connectionStore";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import ConnectionDialog from "./ConnectionDialog";
@@ -158,6 +163,23 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
         <span className="truncate text-sm text-foreground">
           {connection.name}
         </span>
+        {connection.environment &&
+          connection.environment in ENVIRONMENT_META && (
+            <span
+              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
+              style={{
+                backgroundColor: `${ENVIRONMENT_META[connection.environment as EnvironmentTag].color}20`,
+                color:
+                  ENVIRONMENT_META[connection.environment as EnvironmentTag]
+                    .color,
+              }}
+              title={
+                ENVIRONMENT_META[connection.environment as EnvironmentTag].label
+              }
+            >
+              {ENVIRONMENT_META[connection.environment as EnvironmentTag].label}
+            </span>
+          )}
         <span
           className="ml-auto shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold leading-none"
           style={{
