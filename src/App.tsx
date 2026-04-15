@@ -6,17 +6,22 @@ import QuickOpen from "./components/QuickOpen";
 import QueryLog from "./components/QueryLog";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
+import { useFavoritesStore } from "./stores/favoritesStore";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
   const loadGroups = useConnectionStore((s) => s.loadGroups);
   const initEventListeners = useConnectionStore((s) => s.initEventListeners);
+  const loadPersistedFavorites = useFavoritesStore(
+    (s) => s.loadPersistedFavorites,
+  );
 
   useEffect(() => {
     loadConnections();
     loadGroups();
     initEventListeners();
-  }, [loadConnections, loadGroups, initEventListeners]);
+    loadPersistedFavorites();
+  }, [loadConnections, loadGroups, initEventListeners, loadPersistedFavorites]);
 
   // Cmd+W / Ctrl+W closes the active tab (does NOT close the app)
   useEffect(() => {
@@ -177,6 +182,30 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
         e.preventDefault();
         useTabStore.getState().reopenLastClosedTab();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+Shift+F / Ctrl+Shift+F — toggle favorites panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "F") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("toggle-favorites"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+Shift+C / Ctrl+Shift+C — toggle global query log panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "C") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
       }
     };
     document.addEventListener("keydown", handleKeyDown);

@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import TabBar from "./TabBar";
 import {
   useTabStore,
@@ -8,6 +9,7 @@ import { Database } from "lucide-react";
 import DataGrid from "./DataGrid";
 import StructurePanel from "./StructurePanel";
 import QueryTab from "./QueryTab";
+import GlobalQueryLogPanel from "./GlobalQueryLogPanel";
 
 interface TableTabProps {
   tab: TableTab;
@@ -89,8 +91,18 @@ export default function MainArea() {
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const setSubView = useTabStore((s) => s.setSubView);
+  const [showGlobalLog, setShowGlobalLog] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // Listen for toggle-global-query-log custom event
+  useEffect(() => {
+    const handler = () => {
+      setShowGlobalLog((prev) => !prev);
+    };
+    window.addEventListener("toggle-global-query-log", handler);
+    return () => window.removeEventListener("toggle-global-query-log", handler);
+  }, []);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -113,6 +125,10 @@ export default function MainArea() {
           </div>
         )}
       </div>
+      <GlobalQueryLogPanel
+        visible={showGlobalLog}
+        onClose={() => setShowGlobalLog(false)}
+      />
     </div>
   );
 }
