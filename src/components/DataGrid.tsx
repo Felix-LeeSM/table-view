@@ -20,6 +20,7 @@ import type {
 import DataGridToolbar from "./datagrid/DataGridToolbar";
 import DataGridTable from "./datagrid/DataGridTable";
 import { useDataGridEdit } from "./datagrid/useDataGridEdit";
+import QuickLookPanel from "./QuickLookPanel";
 
 interface DataGridProps {
   connectionId: string;
@@ -52,6 +53,7 @@ export default function DataGrid({
   const [appliedRawSql, setAppliedRawSql] = useState("");
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [columnOrder, setColumnOrder] = useState<number[]>([]);
+  const [showQuickLook, setShowQuickLook] = useState(false);
 
   // Reset column widths and order when table/schema changes
   useEffect(() => {
@@ -80,6 +82,18 @@ export default function DataGrid({
       if (e.key === "f" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setShowFilters((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowQuickLook((prev) => !prev);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -244,6 +258,8 @@ export default function DataGrid({
           setPage(1);
         }}
         onToggleFilters={() => setShowFilters((prev) => !prev)}
+        showQuickLook={showQuickLook}
+        onToggleQuickLook={() => setShowQuickLook((prev) => !prev)}
         onCommit={editState.handleCommit}
         onDiscard={editState.handleDiscard}
         onAddRow={editState.handleAddRow}
@@ -309,6 +325,17 @@ export default function DataGrid({
           onReorderColumns={setColumnOrder}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
+        />
+      )}
+
+      {/* Quick Look panel */}
+      {showQuickLook && editState.selectedRowIds.size > 0 && data && (
+        <QuickLookPanel
+          data={data}
+          selectedRowIds={editState.selectedRowIds}
+          schema={schema}
+          table={table}
+          onClose={() => setShowQuickLook(false)}
         />
       )}
 

@@ -54,6 +54,8 @@ const defaultProps = {
   onSetPage: vi.fn(),
   onSetPageSize: vi.fn(),
   onToggleFilters: vi.fn(),
+  showQuickLook: false,
+  onToggleQuickLook: vi.fn(),
   onCommit: vi.fn(),
   onDiscard: vi.fn(),
   onAddRow: vi.fn(),

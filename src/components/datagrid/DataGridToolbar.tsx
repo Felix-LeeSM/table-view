@@ -9,6 +9,7 @@ import {
   Trash2,
   Copy,
   Filter,
+  Eye,
 } from "lucide-react";
 import type { SortInfo, TableData } from "../../types/schema";
 
@@ -24,6 +25,7 @@ export interface DataGridToolbarProps {
   sorts: SortInfo[];
   activeFilterCount: number;
   showFilters: boolean;
+  showQuickLook: boolean;
   hasPendingChanges: boolean;
   pendingEditsSize: number;
   pendingNewRowsCount: number;
@@ -32,6 +34,7 @@ export interface DataGridToolbarProps {
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
+  onToggleQuickLook: () => void;
   onCommit: () => void;
   onDiscard: () => void;
   onAddRow: () => void;
@@ -49,6 +52,7 @@ export default function DataGridToolbar({
   sorts,
   activeFilterCount,
   showFilters,
+  showQuickLook,
   hasPendingChanges,
   pendingEditsSize,
   pendingNewRowsCount,
@@ -57,6 +61,7 @@ export default function DataGridToolbar({
   onSetPage,
   onSetPageSize,
   onToggleFilters,
+  onToggleQuickLook,
   onCommit,
   onDiscard,
   onAddRow,
@@ -153,6 +158,16 @@ export default function DataGridToolbar({
             )}
           </>
         )}
+        <button
+          className={`relative rounded p-1 hover:bg-muted ${
+            showQuickLook ? "text-primary" : "text-muted-foreground"
+          }`}
+          onClick={onToggleQuickLook}
+          aria-label="Toggle Quick Look"
+          title="Quick Look (Cmd+L)"
+        >
+          <Eye size={14} />
+        </button>
         <button
           className={`relative rounded p-1 hover:bg-muted ${
             showFilters ? "text-primary" : "text-muted-foreground"
