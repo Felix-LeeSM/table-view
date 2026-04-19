@@ -727,12 +727,17 @@ async fn test_get_view_columns_returns_columns_in_order() {
         assert!(col.fk_reference.is_none());
     }
 
-    // Nullable detection still works for views (id and name are NOT NULL,
-    // score is nullable)
-    let id_col = columns.iter().find(|c| c.name == "id").unwrap();
-    assert!(!id_col.nullable, "id should be NOT NULL");
-    let score_col = columns.iter().find(|c| c.name == "score").unwrap();
-    assert!(score_col.nullable, "score should be nullable");
+    // Note: PostgreSQL reports every view column as nullable in
+    // information_schema.columns regardless of the underlying table's NOT NULL
+    // constraints, because the view itself has no own constraints. We do not
+    // attempt to back-propagate nullability from the base table.
+    for col in &columns {
+        assert!(
+            col.nullable,
+            "View column {} should be reported nullable by information_schema",
+            col.name
+        );
+    }
 
     // Clean up
     adapter
