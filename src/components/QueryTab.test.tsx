@@ -202,6 +202,18 @@ describe("QueryTab", () => {
     expect(mockCancelQuery).not.toHaveBeenCalled();
   });
 
+  it("result area is a flex column so the inner table can scroll", () => {
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+
+    // The result wrapper is the parent of the mocked QueryResultGrid.
+    const wrapper = screen.getByTestId("mock-result").parentElement!;
+    expect(wrapper.className).toMatch(/\bflex\b/);
+    expect(wrapper.className).toMatch(/\bflex-col\b/);
+    expect(wrapper.className).toMatch(/\boverflow-hidden\b/);
+    expect(wrapper.className).toMatch(/\bmin-h-0\b/);
+  });
+
   it("renders resize handle between editor and result", () => {
     const tab = makeQueryTab();
     render(<QueryTab tab={tab} />);

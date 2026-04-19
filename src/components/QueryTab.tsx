@@ -470,8 +470,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
         onMouseDown={handleResizeMouseDown}
       />
 
-      {/* Result area */}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      {/* Result area — flex column so QueryResultGrid's flex-1 children fill
+          the remaining height and the inner table can actually scroll. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <QueryResultGrid queryState={tab.queryState} />
       </div>
 
