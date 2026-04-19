@@ -4,11 +4,11 @@ import App from "./App";
 import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
 
 // Mock child components to isolate shortcut testing
-vi.mock("./components/Sidebar", () => ({
+vi.mock("./components/layout/Sidebar", () => ({
   default: () => <div data-testid="sidebar" />,
 }));
 
-vi.mock("./components/MainArea", () => ({
+vi.mock("./components/layout/MainArea", () => ({
   default: () => <div data-testid="main-area" />,
 }));
 
