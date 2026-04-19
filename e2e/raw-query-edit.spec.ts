@@ -1,0 +1,160 @@
+import { expect } from "@wdio/globals";
+
+/**
+ * Sprint 61: raw query result editing.
+ *
+ * Smoke-tests the editable-vs-read-only banner that QueryResultGrid renders
+ * for SELECT results, plus the cell detail dialog now reachable from
+ * raw query rows.
+ *
+ * Assumes the connection from earlier specs (`Test PG` against
+ * `viewtable_test`) is already configured by the schema-tree / data-grid
+ * specs that run before this one.
+ */
+
+async function ensureConnected() {
+  const existing = await $('[aria-label^="Test PG"]');
+  let exists = false;
+  try {
+    await existing.waitForExist({ timeout: 5000 });
+    exists = true;
+  } catch {
+    exists = false;
+  }
+
+  if (!exists) {
+    const newBtn = await $('[aria-label="New Connection"]');
+    await newBtn.waitForDisplayed({ timeout: 10000 });
+    await newBtn.click();
+
+    const dialog = await $('[role="dialog"]');
+    await dialog.waitForDisplayed({ timeout: 5000 });
+
+    await (await $("#conn-name")).setValue("Test PG");
+
+    const hostInput = await $("#conn-host");
+    await hostInput.clearValue();
+    await hostInput.setValue("localhost");
+
+    const portInput = await $("#conn-port");
+    await portInput.clearValue();
+    await portInput.setValue("5432");
+
+    const userInput = await $("#conn-user");
+    await userInput.clearValue();
+    await userInput.setValue("testuser");
+
+    await (await $("#conn-password")).setValue("testpass");
+
+    const dbInput = await $("#conn-database");
+    await dbInput.clearValue();
+    await dbInput.setValue("viewtable_test");
+
+    await (await $("button=Save")).click();
+    await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
+  }
+
+  // Connect by double-clicking if not already connected.
+  const publicSchema = await $('[aria-label="public schema"]');
+  let connected = false;
+  try {
+    await publicSchema.waitForDisplayed({ timeout: 3000 });
+    connected = true;
+  } catch {
+    connected = false;
+  }
+  if (!connected) {
+    const conn = await $('[aria-label^="Test PG"]');
+    await conn.waitForDisplayed({ timeout: 5000 });
+    await conn.doubleClick();
+    await publicSchema.waitForDisplayed({ timeout: 15000 });
+  }
+}
+
+async function openNewQueryTab() {
+  const newQueryBtn = await $('[aria-label="New Query"]');
+  await newQueryBtn.waitForDisplayed({ timeout: 5000 });
+  await newQueryBtn.click();
+  const editor = await $(".cm-editor");
+  await editor.waitForDisplayed({ timeout: 5000 });
+}
+
+async function typeQueryAndRun(sql: string) {
+  const cmContent = await $(".cm-content");
+  await cmContent.waitForDisplayed({ timeout: 5000 });
+  await cmContent.click();
+  await browser.pause(150);
+  // Clear any prior content — Cmd+A then Delete.
+  await browser.keys(["Control", "a"]);
+  await browser.keys("Delete");
+  await browser.pause(100);
+  await browser.keys(sql);
+  await browser.pause(200);
+
+  const runBtn = await $('[aria-label="Run query"]');
+  await runBtn.waitForDisplayed({ timeout: 5000 });
+  await runBtn.click();
+
+  const selectLabel = await $("span=SELECT");
+  await selectLabel.waitForDisplayed({ timeout: 10000 });
+}
+
+describe("Raw query result editing (Sprint 61)", () => {
+  beforeEach(async () => {
+    await ensureConnected();
+  });
+
+  it("shows Read-only banner for a SELECT without FROM", async () => {
+    await openNewQueryTab();
+    await typeQueryAndRun("SELECT 1 AS test_value");
+
+    // The banner copy starts with "Read-only —". WebKit may strip whitespace,
+    // so look for the substring rather than an exact match.
+    const banner = await $(
+      "//*[contains(translate(text(),'READ-ONLY','read-only'),'read-only')]",
+    );
+    await banner.waitForDisplayed({ timeout: 5000 });
+    expect(await banner.isDisplayed()).toBe(true);
+  });
+
+  it("shows Editable badge for a single-table SELECT with PK", async () => {
+    // Discover the first user table in `public` and run SELECT * on it.
+    // The schema-tree spec ran first, so the tree is already populated.
+    const firstTable = await $('[aria-label$=" table"]');
+    await firstTable.waitForDisplayed({ timeout: 10000 });
+    const tableLabel =
+      ((await firstTable.getProperty("textContent")) as string) ?? "";
+    const tableName = tableLabel.trim().split(/\s+/)[0]!;
+
+    await openNewQueryTab();
+    await typeQueryAndRun(`SELECT * FROM public.${tableName} LIMIT 5`);
+
+    // Wait for the editable badge — it appears asynchronously after the
+    // backend returns column metadata for the table.
+    const badge = await $(
+      "//*[contains(translate(text(),'EDITABLE','editable'),'editable')]",
+    );
+    await badge.waitForDisplayed({ timeout: 10000 });
+    expect(await badge.isDisplayed()).toBe(true);
+  });
+
+  it("opens the cell detail dialog on double-click in raw result", async () => {
+    await openNewQueryTab();
+    await typeQueryAndRun(
+      "SELECT 'a long string value for inspection' AS payload",
+    );
+
+    // Wait for at least one result cell, then double-click it.
+    const cell = await $("tbody td");
+    await cell.waitForDisplayed({ timeout: 10000 });
+    await cell.doubleClick();
+
+    // Cell detail dialog identifies itself by the "Cell Detail —" header.
+    const detailHeader = await $("//*[contains(text(),'Cell Detail')]");
+    await detailHeader.waitForDisplayed({ timeout: 5000 });
+    expect(await detailHeader.isDisplayed()).toBe(true);
+
+    // Close to keep the page clean for subsequent specs.
+    await browser.keys(["Escape"]);
+  });
+});
