@@ -1,30 +1,61 @@
 import { useEffect, useState } from "react";
-import {
-  Plus,
-  Database,
-  Sun,
-  Moon,
-  Monitor,
-  MousePointerClick,
-} from "lucide-react";
+import { Sun, Moon, Monitor } from "lucide-react";
 import { useConnectionStore } from "../stores/connectionStore";
+import { useTabStore } from "../stores/tabStore";
 import { useTheme } from "../hooks/useTheme";
 import { useResizablePanel } from "../hooks/useResizablePanel";
-import { DB_TYPE_META } from "../lib/db-meta";
-import ConnectionList from "./ConnectionList";
 import ConnectionDialog from "./ConnectionDialog";
-import SchemaTree from "./SchemaTree";
-import type { DatabaseType } from "../types/connection";
-import { ENVIRONMENT_META, ENVIRONMENT_OPTIONS } from "../types/connection";
+import ConnectionRail from "./ConnectionRail";
+import SchemaPanel from "./SchemaPanel";
 
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [environmentFilter, setEnvironmentFilter] = useState<string | null>(
-    null,
-  );
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const activeTab = useTabStore((s) => {
+    const id = s.activeTabId;
+    return id ? s.tabs.find((t) => t.id === id) : null;
+  });
+  const activeTabConnId = activeTab?.connectionId ?? null;
+
   const { theme, setTheme } = useTheme();
+
+  // The connection whose schema tree is shown in the right pane of the sidebar.
+  // Initially: pick the first connected connection if any, otherwise null.
+  const [selectedConnId, setSelectedConnId] = useState<string | null>(() => {
+    const firstConnected = connections.find(
+      (c) => activeStatuses[c.id]?.type === "connected",
+    );
+    return firstConnected?.id ?? null;
+  });
+
+  // Auto-sync the rail selection to the active tab so that opening a tab in
+  // a different connection brings its schema into view. The user can still
+  // override this by clicking another rail icon.
+  useEffect(() => {
+    if (activeTabConnId && activeTabConnId !== selectedConnId) {
+      setSelectedConnId(activeTabConnId);
+    }
+  }, [activeTabConnId, selectedConnId]);
+
+  // If the currently-selected connection vanishes (deleted or disconnected and
+  // never re-selected), pick another connected one — falls back to null.
+  useEffect(() => {
+    if (selectedConnId) {
+      const stillExists = connections.some((c) => c.id === selectedConnId);
+      if (!stillExists) {
+        const firstConnected = connections.find(
+          (c) => activeStatuses[c.id]?.type === "connected",
+        );
+        setSelectedConnId(firstConnected?.id ?? null);
+      }
+    } else if (connections.length > 0) {
+      const firstConnected = connections.find(
+        (c) => activeStatuses[c.id]?.type === "connected",
+      );
+      if (firstConnected) setSelectedConnId(firstConnected.id);
+    }
+  }, [connections, activeStatuses, selectedConnId]);
 
   const {
     size: sidebarWidth,
@@ -32,14 +63,10 @@ export default function Sidebar() {
     handleMouseDown: handleResizeMouseDown,
   } = useResizablePanel({
     axis: "horizontal",
-    min: 180,
-    max: 500,
-    initial: 250,
+    min: 220,
+    max: 540,
+    initial: 280,
   });
-
-  const connectedIds = connections
-    .filter((c) => activeStatuses[c.id]?.type === "connected")
-    .map((c) => c.id);
 
   const cycleTheme = () => {
     const next =
@@ -60,96 +87,41 @@ export default function Sidebar() {
     <>
       <div
         ref={sidebarRef}
-        className="relative flex h-full shrink-0 flex-col select-none border-r border-border bg-secondary"
+        className="relative flex h-full shrink-0 select-none border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Connections
-          </span>
-          <div className="flex gap-1">
+        {/* Left rail: vertical strip of connections */}
+        <ConnectionRail
+          selectedId={selectedConnId}
+          onSelect={setSelectedConnId}
+          onNewConnection={() => setShowNewDialog(true)}
+        />
+
+        {/* Right pane: schema tree of the selected connection + theme footer */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Header strip showing the current connection name */}
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {selectedConnId
+                ? (connections.find((c) => c.id === selectedConnId)?.name ??
+                  "Schemas")
+                : "Schemas"}
+            </span>
+          </div>
+
+          <SchemaPanel selectedId={selectedConnId} />
+
+          {/* Theme toggle */}
+          <div className="border-t border-border px-3 py-2">
             <button
-              onClick={() => setShowNewDialog(true)}
-              className="rounded p-1 hover:bg-muted text-secondary-foreground"
-              aria-label="New Connection"
-              title="New Connection"
+              className="flex w-full items-center gap-2 rounded p-1 text-xs text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+              onClick={cycleTheme}
+              aria-label={`Theme: ${theme}. Click to change.`}
             >
-              <Plus size={16} />
+              <ThemeIcon size={14} />
+              <span className="capitalize">{theme}</span>
             </button>
           </div>
-        </div>
-
-        {/* Environment Filter */}
-        {connections.length > 0 && (
-          <div className="border-b border-border px-3 py-1.5">
-            <select
-              className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-              value={environmentFilter ?? ""}
-              onChange={(e) => setEnvironmentFilter(e.target.value || null)}
-              aria-label="Filter by environment"
-            >
-              <option value="">All Environments</option>
-              {ENVIRONMENT_OPTIONS.map((env) => (
-                <option key={env} value={env}>
-                  {ENVIRONMENT_META[env].label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Connection List */}
-        <div className="flex-1 overflow-y-auto">
-          {connections.length === 0 ? (
-            <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
-              <Database size={36} className="mb-3 text-muted-foreground" />
-              <p className="text-sm font-medium text-secondary-foreground">
-                No connections yet
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Click the + button above to add your first database connection
-              </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-1.5">
-                {(Object.keys(DB_TYPE_META) as DatabaseType[]).map((dbType) => (
-                  <span
-                    key={dbType}
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      backgroundColor: `${DB_TYPE_META[dbType].color}18`,
-                      color: DB_TYPE_META[dbType].color,
-                      border: `1px solid ${DB_TYPE_META[dbType].color}30`,
-                    }}
-                  >
-                    {DB_TYPE_META[dbType].label}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-4 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                <MousePointerClick size={12} />
-                <span>Double-click a connection to connect</span>
-              </div>
-            </div>
-          ) : (
-            <>
-              <ConnectionList environmentFilter={environmentFilter} />
-              {connectedIds.map((id) => (
-                <SchemaTree key={id} connectionId={id} />
-              ))}
-            </>
-          )}
-        </div>
-
-        {/* Footer — Theme Toggle */}
-        <div className="border-t border-border px-3 py-2">
-          <button
-            className="flex items-center gap-2 rounded p-1 text-xs text-muted-foreground hover:bg-muted hover:text-secondary-foreground w-full"
-            onClick={cycleTheme}
-            aria-label={`Theme: ${theme}. Click to change.`}
-          >
-            <ThemeIcon size={14} />
-            <span className="capitalize">{theme}</span>
-          </button>
         </div>
 
         {/* Resize handle */}

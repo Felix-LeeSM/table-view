@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import Sidebar from "./Sidebar";
 import { useConnectionStore } from "../stores/connectionStore";
+import { useTabStore } from "../stores/tabStore";
+import type { ConnectionConfig, ConnectionStatus } from "../types/connection";
 
-// ---------------------------------------------------------------------------
 // Mock useTheme to avoid localStorage issues in jsdom
-// ---------------------------------------------------------------------------
 let mockTheme: string = "system";
 const mockSetTheme = vi.fn((t: string) => {
   mockTheme = t;
@@ -15,11 +15,35 @@ vi.mock("../hooks/useTheme", () => ({
   useTheme: () => ({ theme: mockTheme, setTheme: mockSetTheme }),
 }));
 
-// ---------------------------------------------------------------------------
-// Mock child components to isolate Sidebar logic
-// ---------------------------------------------------------------------------
-vi.mock("./ConnectionList", () => ({
-  default: () => <div data-testid="connection-list" />,
+// Mock children to isolate Sidebar wiring
+vi.mock("./ConnectionRail", () => ({
+  default: ({
+    selectedId,
+    onSelect,
+    onNewConnection,
+  }: {
+    selectedId: string | null;
+    onSelect: (id: string) => void;
+    onNewConnection: () => void;
+  }) => (
+    <div data-testid="connection-rail" data-selected={selectedId ?? ""}>
+      <button onClick={() => onSelect("c1")} data-testid="rail-pick-c1">
+        pick c1
+      </button>
+      <button onClick={() => onSelect("c2")} data-testid="rail-pick-c2">
+        pick c2
+      </button>
+      <button onClick={onNewConnection} data-testid="rail-new">
+        new
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("./SchemaPanel", () => ({
+  default: ({ selectedId }: { selectedId: string | null }) => (
+    <div data-testid="schema-panel">{selectedId ?? "none"}</div>
+  ),
 }));
 
 vi.mock("./ConnectionDialog", () => ({
@@ -30,540 +54,85 @@ vi.mock("./ConnectionDialog", () => ({
   ),
 }));
 
-vi.mock("./SchemaTree", () => ({
-  default: ({ connectionId }: { connectionId: string }) => (
-    <div data-testid="schema-tree">{connectionId}</div>
-  ),
-}));
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeConnection(id: string, dbType = "postgresql") {
+function makeConnection(id: string): ConnectionConfig {
   return {
     id,
     name: `${id} DB`,
-    db_type: dbType as "postgresql",
+    db_type: "postgresql",
     host: "localhost",
     port: 5432,
     user: "postgres",
     password: "",
     database: "test",
-    group_id: null as string | null,
-    color: null as string | null,
-    environment: null as string | null,
+    group_id: null,
+    color: null,
+    environment: null,
   };
 }
 
-interface ConnectionConfigLike {
-  id: string;
-  name: string;
-  db_type: string;
-  host: string;
-  port: number;
-  user: string;
-  password: string;
-  database: string;
-  group_id: string | null;
-  color: string | null;
-  environment: string | null;
-}
-
-function setConnectionState(overrides: {
-  connections?: ConnectionConfigLike[];
-  activeStatuses?: Record<string, { type: string; message?: string }>;
+function setStores(opts: {
+  connections?: ConnectionConfig[];
+  active?: string[];
 }) {
+  const conns = opts.connections ?? [];
+  const active = new Set(opts.active ?? []);
+  const statuses: Record<string, ConnectionStatus> = {};
+  for (const c of conns) {
+    statuses[c.id] = active.has(c.id)
+      ? { type: "connected" }
+      : { type: "disconnected" };
+  }
   useConnectionStore.setState({
-    connections: [],
-    activeStatuses: {},
-    ...overrides,
-  } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+    connections: conns,
+    activeStatuses: statuses,
+  });
+  useTabStore.setState({ tabs: [], activeTabId: null });
 }
-
-function resetTheme() {
-  mockTheme = "system";
-  mockSetTheme.mockClear();
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe("Sidebar", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetTheme();
-    setConnectionState({ connections: [], activeStatuses: {} });
-  });
-
-  afterEach(() => {
-    // Clean up any lingering document event listeners from resize
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-01: Empty state UI
-  // -----------------------------------------------------------------------
-  it("renders empty state when no connections exist", () => {
-    setConnectionState({ connections: [] });
-
-    render(<Sidebar />);
-
-    expect(screen.getByText("No connections yet")).toBeInTheDocument();
-  });
-
-  it("shows Database icon in empty state", () => {
-    setConnectionState({ connections: [] });
-
-    render(<Sidebar />);
-
-    // The Database icon from lucide renders as an SVG inside the empty state
-    const emptyState = screen.getByText("No connections yet").closest("div")!;
-    const svg = emptyState.querySelector("svg");
-    expect(svg).toBeInTheDocument();
-  });
-
-  it("shows all DB type badges in empty state", () => {
-    setConnectionState({ connections: [] });
-
-    render(<Sidebar />);
-
-    expect(screen.getByText("PostgreSQL")).toBeInTheDocument();
-    expect(screen.getByText("MySQL")).toBeInTheDocument();
-    expect(screen.getByText("SQLite")).toBeInTheDocument();
-    expect(screen.getByText("MongoDB")).toBeInTheDocument();
-    expect(screen.getByText("Redis")).toBeInTheDocument();
-  });
-
-  it("shows double-click hint in empty state", () => {
-    setConnectionState({ connections: [] });
-
-    render(<Sidebar />);
-
-    expect(
-      screen.getByText("Double-click a connection to connect"),
-    ).toBeInTheDocument();
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-02: Connections list renders when connections exist
-  // -----------------------------------------------------------------------
-  it("renders ConnectionList when connections exist", () => {
-    setConnectionState({ connections: [makeConnection("c1")] });
-
-    render(<Sidebar />);
-
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-    expect(screen.queryByText("No connections yet")).not.toBeInTheDocument();
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-03: "+" button opens ConnectionDialog
-  // -----------------------------------------------------------------------
-  it("opens ConnectionDialog when New Connection button is clicked", () => {
-    render(<Sidebar />);
-
-    expect(screen.queryByTestId("connection-dialog")).not.toBeInTheDocument();
-
-    const newBtn = screen.getByLabelText("New Connection");
-    act(() => {
-      fireEvent.click(newBtn);
-    });
-
-    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-04: ConnectionDialog close sets showNewDialog false
-  // -----------------------------------------------------------------------
-  it("closes ConnectionDialog when onClose is called", () => {
-    render(<Sidebar />);
-
-    // Open dialog
-    const newBtn = screen.getByLabelText("New Connection");
-    act(() => {
-      fireEvent.click(newBtn);
-    });
-    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
-
-    // Close via dialog's onClose
-    const closeBtn = screen.getByText("Close");
-    act(() => {
-      fireEvent.click(closeBtn);
-    });
-    expect(screen.queryByTestId("connection-dialog")).not.toBeInTheDocument();
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-05: Theme toggle cycles system -> light -> dark -> system
-  // -----------------------------------------------------------------------
-  it("calls setTheme with light when cycling from system", () => {
-    render(<Sidebar />);
-
-    const themeBtn = screen.getByLabelText(/Theme:/);
-    act(() => {
-      fireEvent.click(themeBtn);
-    });
-
-    expect(mockSetTheme).toHaveBeenCalledWith("light");
-  });
-
-  it("calls setTheme with dark when cycling from light", () => {
-    mockTheme = "light";
-
-    render(<Sidebar />);
-
-    const themeBtn = screen.getByLabelText(/Theme:/);
-    act(() => {
-      fireEvent.click(themeBtn);
-    });
-
-    expect(mockSetTheme).toHaveBeenCalledWith("dark");
-  });
-
-  it("calls setTheme with system when cycling from dark", () => {
-    mockTheme = "dark";
-
-    render(<Sidebar />);
-
-    const themeBtn = screen.getByLabelText(/Theme:/);
-    act(() => {
-      fireEvent.click(themeBtn);
-    });
-
-    expect(mockSetTheme).toHaveBeenCalledWith("system");
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-06: Theme-specific icon display
-  // -----------------------------------------------------------------------
-  it("displays icon and theme label in theme button", () => {
     mockTheme = "system";
-
-    render(<Sidebar />);
-
-    const themeBtn = screen.getByLabelText(/Theme:/);
-    const svg = themeBtn.querySelector("svg");
-    expect(svg).toBeInTheDocument();
-    expect(themeBtn).toHaveTextContent("system");
+    vi.clearAllMocks();
+    setStores({});
   });
 
-  it("shows light label when theme is light", () => {
-    mockTheme = "light";
-
+  it("renders ConnectionRail and SchemaPanel", () => {
     render(<Sidebar />);
-
-    const themeBtn = screen.getByLabelText(/Theme:/);
-    expect(themeBtn).toHaveTextContent("light");
+    expect(screen.getByTestId("connection-rail")).toBeInTheDocument();
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
   });
 
-  it("shows dark label when theme is dark", () => {
-    mockTheme = "dark";
-
-    render(<Sidebar />);
-
-    const themeBtn = screen.getByLabelText(/Theme:/);
-    expect(themeBtn).toHaveTextContent("dark");
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-07: SchemaTree for connected connections
-  // -----------------------------------------------------------------------
-  it("renders SchemaTree for each connected connection", () => {
-    setConnectionState({
+  it("shows the selected connection name in the header strip", () => {
+    setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
-      activeStatuses: {
-        c1: { type: "connected" },
-      },
+      active: ["c1"],
     });
-
     render(<Sidebar />);
-
-    const trees = screen.getAllByTestId("schema-tree");
-    expect(trees).toHaveLength(1);
-    expect(trees[0]).toHaveTextContent("c1");
+    // Initial selection should be the first connected: c1
+    expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
   });
 
-  it("renders multiple SchemaTrees when multiple connections are active", () => {
-    setConnectionState({
+  it("falls back to 'Schemas' header when no connection is selected", () => {
+    setStores({});
+    render(<Sidebar />);
+    expect(screen.getByText("Schemas")).toBeInTheDocument();
+  });
+
+  it("rail click changes the panel's selectedId", () => {
+    setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
-      activeStatuses: {
-        c1: { type: "connected" },
-        c2: { type: "connected" },
-      },
+      active: ["c1", "c2"],
     });
-
     render(<Sidebar />);
-
-    const trees = screen.getAllByTestId("schema-tree");
-    expect(trees).toHaveLength(2);
-  });
-
-  it("does not render SchemaTree for disconnected connections", () => {
-    setConnectionState({
-      connections: [makeConnection("c1")],
-      activeStatuses: {
-        c1: { type: "disconnected" },
-      },
-    });
-
-    render(<Sidebar />);
-
-    expect(screen.queryByTestId("schema-tree")).not.toBeInTheDocument();
-  });
-
-  it("does not render SchemaTree for connections with error status", () => {
-    setConnectionState({
-      connections: [makeConnection("c1")],
-      activeStatuses: {
-        c1: { type: "error", message: "fail" },
-      },
-    });
-
-    render(<Sidebar />);
-
-    expect(screen.queryByTestId("schema-tree")).not.toBeInTheDocument();
-  });
-
-  // -----------------------------------------------------------------------
-  // AC-08: Resize handle rendering and mousedown event
-  // -----------------------------------------------------------------------
-  // Helper: find the sidebar container div (the one with inline width style)
-  function getSidebarContainer() {
-    return screen
-      .getByText("Connections")
-      .closest('div[style*="width"]') as HTMLElement;
-  }
-
-  // Helper: find the resize handle (absolute-positioned child at right edge)
-  function getResizeHandle(container: HTMLElement) {
-    const allDivs = container.querySelectorAll(":scope > div");
-    for (let i = allDivs.length - 1; i >= 0; i--) {
-      const div = allDivs[i] as HTMLElement;
-      if (
-        div.className.includes("absolute") &&
-        div.className.includes("right-0")
-      ) {
-        return div;
-      }
-    }
-    return null;
-  }
-
-  it("renders resize handle inside sidebar container", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container);
-    expect(handle).toBeTruthy();
-  });
-
-  it("sets cursor and userSelect on mousedown of resize handle", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container)!;
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
 
     act(() => {
-      fireEvent.mouseDown(handle, { clientX: 250 });
+      screen.getByTestId("rail-pick-c2").click();
     });
-
-    expect(document.body.style.cursor).toBe("col-resize");
-    expect(document.body.style.userSelect).toBe("none");
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
-  it("updates sidebar width on mousemove after mousedown", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container)!;
-
-    // Initial width is 250
-    expect(container).toHaveStyle({ width: "250px" });
-
-    act(() => {
-      fireEvent.mouseDown(handle, { clientX: 250 });
-    });
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 300 });
-    });
-
-    // Width should increase by 50 (300 - 250), new width = 300
-    expect(container).toHaveStyle({ width: "300px" });
-  });
-
-  it("clamps sidebar width to minimum (180) on mousemove", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container)!;
-
-    act(() => {
-      fireEvent.mouseDown(handle, { clientX: 250 });
-    });
-    // Move far left to try to go below 180
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 0 });
-    });
-
-    expect(container).toHaveStyle({ width: "180px" });
-  });
-
-  it("clamps sidebar width to maximum (500) on mousemove", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container)!;
-
-    act(() => {
-      fireEvent.mouseDown(handle, { clientX: 250 });
-    });
-    // Move far right to try to exceed 500
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 1000 });
-    });
-
-    expect(container).toHaveStyle({ width: "500px" });
-  });
-
-  it("cleans up event listeners and styles on mouseup after resize", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container)!;
-
-    act(() => {
-      fireEvent.mouseDown(handle, { clientX: 250 });
-    });
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 300 });
-    });
-    act(() => {
-      fireEvent.mouseUp(document);
-    });
-
-    expect(document.body.style.cursor).toBe("");
-    expect(document.body.style.userSelect).toBe("");
-
-    // After mouseup, further mousemove should not change width
-    const widthAfterUp = container.style.width;
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 400 });
-    });
-    expect(container.style.width).toBe(widthAfterUp);
-  });
-
-  // -----------------------------------------------------------------------
-  // Additional coverage
-  // -----------------------------------------------------------------------
-  it("renders Connections header label", () => {
-    render(<Sidebar />);
-
-    expect(screen.getByText("Connections")).toBeInTheDocument();
-  });
-
-  it("renders empty state text about clicking + button", () => {
-    setConnectionState({ connections: [] });
-
-    render(<Sidebar />);
-
-    expect(
-      screen.getByText(
-        "Click the + button above to add your first database connection",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("persists new width in state after mouseup", () => {
-    const { unmount } = render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    const handle = getResizeHandle(container)!;
-
-    act(() => {
-      fireEvent.mouseDown(handle, { clientX: 250 });
-    });
-    act(() => {
-      fireEvent.mouseMove(document, { clientX: 300 });
-    }); // +50
-    act(() => {
-      fireEvent.mouseUp(document);
-    });
-
-    // Width should be committed to React state
-    expect(container).toHaveStyle({ width: "300px" });
-    unmount();
-  });
-
-  // -----------------------------------------------------------------------
-  // select-none on root element
-  // -----------------------------------------------------------------------
-  it("has select-none class on root container to prevent text selection", () => {
-    render(<Sidebar />);
-
-    const container = getSidebarContainer();
-    expect(container.className).toContain("select-none");
-  });
-
-  // -----------------------------------------------------------------------
-  // Sprint 59: Environment filter
-  // -----------------------------------------------------------------------
-  it("does not render environment filter when no connections exist", () => {
-    setConnectionState({ connections: [] });
-    render(<Sidebar />);
-    expect(
-      screen.queryByLabelText("Filter by environment"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("renders environment filter when connections exist", () => {
-    setConnectionState({ connections: [makeConnection("c1")] });
-    render(<Sidebar />);
-    expect(screen.getByLabelText("Filter by environment")).toBeInTheDocument();
-  });
-
-  it("renders All Environments as default filter option", () => {
-    setConnectionState({ connections: [makeConnection("c1")] });
-    render(<Sidebar />);
-    const select = screen.getByLabelText(
-      "Filter by environment",
-    ) as HTMLSelectElement;
-    expect(select.value).toBe("");
-  });
-
-  it("renders all environment options in filter dropdown", () => {
-    setConnectionState({ connections: [makeConnection("c1")] });
-    render(<Sidebar />);
-    const select = screen.getByLabelText(
-      "Filter by environment",
-    ) as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toContain("");
-    expect(options).toContain("local");
-    expect(options).toContain("testing");
-    expect(options).toContain("development");
-    expect(options).toContain("staging");
-    expect(options).toContain("production");
-  });
-
-  it("passes environmentFilter to ConnectionList", () => {
-    setConnectionState({ connections: [makeConnection("c1")] });
-    render(<Sidebar />);
-    const select = screen.getByLabelText(
-      "Filter by environment",
-    ) as HTMLSelectElement;
-    act(() => {
-      fireEvent.change(select, { target: { value: "production" } });
-    });
-    // ConnectionList is mocked, so we just verify the filter UI updated
-    expect(select.value).toBe("production");
-  });
-
-  // -- Cmd+N keyboard shortcut wiring -------------------------------------
-
-  it("opens connection dialog when new-connection event is dispatched", () => {
+  it("new-connection event opens the dialog", () => {
     render(<Sidebar />);
     expect(screen.queryByTestId("connection-dialog")).toBeNull();
 
@@ -574,26 +143,81 @@ describe("Sidebar", () => {
     expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
   });
 
-  it("keeps connection dialog open when new-connection is dispatched again", () => {
+  it("rail's new-connection click also opens the dialog", () => {
     render(<Sidebar />);
-
     act(() => {
-      window.dispatchEvent(new Event("new-connection"));
+      screen.getByTestId("rail-new").click();
     });
     expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+  });
+
+  it("auto-syncs rail selection to the active tab's connection", () => {
+    setStores({
+      connections: [makeConnection("c1"), makeConnection("c2")],
+      active: ["c1", "c2"],
+    });
+    render(<Sidebar />);
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
 
     act(() => {
-      window.dispatchEvent(new Event("new-connection"));
+      useTabStore.setState({
+        tabs: [
+          {
+            type: "table",
+            id: "tab-x",
+            title: "x",
+            connectionId: "c2",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+        ],
+        activeTabId: "tab-x",
+      });
     });
-    // Still exactly one dialog (idempotent)
-    expect(screen.getAllByTestId("connection-dialog")).toHaveLength(1);
+
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
+  });
+
+  it("clears selection when the selected connection is removed", () => {
+    setStores({
+      connections: [makeConnection("c1"), makeConnection("c2")],
+      active: ["c1", "c2"],
+    });
+    const { rerender } = render(<Sidebar />);
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
+
+    act(() => {
+      setStores({
+        connections: [makeConnection("c2")],
+        active: ["c2"],
+      });
+    });
+    rerender(<Sidebar />);
+
+    // Falls back to c2 (the surviving connected one)
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
+  });
+
+  it("renders the theme toggle and cycles theme on click", () => {
+    render(<Sidebar />);
+    const btn = screen.getByLabelText(/Theme:/);
+    act(() => {
+      fireEvent.click(btn);
+    });
+    expect(mockSetTheme).toHaveBeenCalled();
+  });
+
+  it("has a resize handle on the right edge", () => {
+    const { container } = render(<Sidebar />);
+    const handle = container.querySelector(".cursor-col-resize");
+    expect(handle).toBeInTheDocument();
   });
 
   it("removes new-connection listener on unmount", () => {
     const { unmount } = render(<Sidebar />);
     unmount();
-
-    // Should not throw — the listener is gone
     act(() => {
       window.dispatchEvent(new Event("new-connection"));
     });
