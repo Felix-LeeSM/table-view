@@ -118,8 +118,20 @@ describe("Raw query result editing (Sprint 61)", () => {
   });
 
   it("shows Editable badge for a single-table SELECT with PK", async () => {
-    // Discover the first user table in `public` and run SELECT * on it.
-    // The schema-tree spec ran first, so the tree is already populated.
+    // Each WDIO spec starts a fresh tauri-driver session, so the sidebar
+    // tree starts collapsed. Expand `public` schema and its Tables
+    // category to surface table nodes.
+    const publicSchema = await $('[aria-label="public schema"]');
+    await publicSchema.waitForDisplayed({ timeout: 10000 });
+    if ((await publicSchema.getAttribute("aria-expanded")) !== "true") {
+      await publicSchema.click();
+    }
+    const tablesCategory = await $('[aria-label="Tables in public"]');
+    await tablesCategory.waitForDisplayed({ timeout: 5000 });
+    if ((await tablesCategory.getAttribute("aria-expanded")) !== "true") {
+      await tablesCategory.click();
+    }
+
     const firstTable = await $('[aria-label$=" table"]');
     await firstTable.waitForDisplayed({ timeout: 10000 });
     const tableLabel =
