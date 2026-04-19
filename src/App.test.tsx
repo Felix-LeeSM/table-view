@@ -234,4 +234,71 @@ describe("App global shortcuts", () => {
 
     window.removeEventListener("format-sql", handler);
   });
+
+  // -- Sprint 60: navigate-table objectKind / quickopen-function --
+
+  it("navigate-table opens a table tab with default objectKind=table", () => {
+    render(<App />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("navigate-table", {
+          detail: {
+            connectionId: "c1",
+            schema: "public",
+            table: "users",
+          },
+        }),
+      );
+    });
+    const tab = useTabStore.getState().tabs.find((t) => t.type === "table") as
+      | TableTab
+      | undefined;
+    expect(tab).toBeDefined();
+    expect(tab!.objectKind).toBe("table");
+    expect(tab!.subView).toBe("records");
+    useTabStore.setState({ tabs: [], activeTabId: null });
+  });
+
+  it("navigate-table preserves explicit objectKind=view", () => {
+    render(<App />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("navigate-table", {
+          detail: {
+            connectionId: "c1",
+            schema: "public",
+            table: "active_users",
+            objectKind: "view",
+          },
+        }),
+      );
+    });
+    const tab = useTabStore.getState().tabs.find((t) => t.type === "table") as
+      | TableTab
+      | undefined;
+    expect(tab).toBeDefined();
+    expect(tab!.objectKind).toBe("view");
+    useTabStore.setState({ tabs: [], activeTabId: null });
+  });
+
+  it("quickopen-function opens a query tab with the source pre-filled", () => {
+    render(<App />);
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent("quickopen-function", {
+          detail: {
+            connectionId: "c1",
+            source: "BEGIN RETURN 1; END",
+            title: "public.calc",
+          },
+        }),
+      );
+    });
+    const tab = useTabStore.getState().tabs.find((t) => t.type === "query") as
+      | QueryTab
+      | undefined;
+    expect(tab).toBeDefined();
+    expect(tab!.sql).toBe("BEGIN RETURN 1; END");
+    useTabStore.setState({ tabs: [], activeTabId: null });
+  });
 });

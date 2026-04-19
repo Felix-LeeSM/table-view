@@ -212,28 +212,53 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Navigate-table event — open a table tab from Quick Open
+  // Navigate-table event — open a table or view tab from Quick Open
   useEffect(() => {
     const handler = (e: Event) => {
-      const { connectionId, schema, table } = (
+      const detail = (
         e as CustomEvent<{
           connectionId: string;
           schema: string;
           table: string;
+          objectKind?: "table" | "view";
         }>
       ).detail;
+      const { connectionId, schema, table, objectKind } = detail;
       useTabStore.getState().addTab({
         type: "table",
         connectionId,
         schema,
         table,
-        title: table,
+        title: `${schema}.${table}`,
         closable: true,
         subView: "records",
+        objectKind: objectKind ?? "table",
       });
     };
     window.addEventListener("navigate-table", handler);
     return () => window.removeEventListener("navigate-table", handler);
+  }, []);
+
+  // Quick Open function/procedure — open a query tab with the source pre-filled
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { connectionId, source } = (
+        e as CustomEvent<{
+          connectionId: string;
+          source: string;
+          title: string;
+        }>
+      ).detail;
+      const tabStore = useTabStore.getState();
+      tabStore.addQueryTab(connectionId);
+      const latestTabs = useTabStore.getState().tabs;
+      const newTab = latestTabs[latestTabs.length - 1];
+      if (newTab && newTab.type === "query" && source) {
+        tabStore.updateQuerySql(newTab.id, source);
+      }
+    };
+    window.addEventListener("quickopen-function", handler);
+    return () => window.removeEventListener("quickopen-function", handler);
   }, []);
 
   return (
