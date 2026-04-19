@@ -113,10 +113,13 @@ describe("Data Grid & Query Execution", () => {
     const cells = await $$("td");
     expect(cells.length).toBeGreaterThan(0);
 
-    // At least one cell should NOT contain "NULL"
+    // At least one cell should NOT contain "NULL".
+    // WebKit's webdriver returns "" from getText() on truncate-styled cells,
+    // so read textContent via getProperty for stability.
     let hasNonNullValue = false;
     for (const cell of cells) {
-      const text = await cell.getText();
+      const raw = ((await cell.getProperty("textContent")) as string) ?? "";
+      const text = raw.trim();
       if (text && text !== "NULL" && text !== "No data") {
         hasNonNullValue = true;
         break;
@@ -126,10 +129,14 @@ describe("Data Grid & Query Execution", () => {
   });
 
   it("shows connection name in schema tree header", async () => {
-    // The schema tree header should show the connection name, not a UUID
-    const headerText = await $(".truncate.font-semibold");
-    await headerText.waitForDisplayed({ timeout: 5000 });
-    const text = await headerText.getText();
+    // The sidebar header strip shows the active connection name. WebKit's
+    // webdriver returns "" from getText() on truncate spans, so read
+    // textContent via getProperty for stability.
+    const header = await $('[data-testid="sidebar-connection-header"]');
+    await header.waitForExist({ timeout: 5000 });
+    const text = (
+      ((await header.getProperty("textContent")) as string) ?? ""
+    ).trim();
     expect(text).toBe("Test PG");
     // Should NOT look like a UUID
     expect(text).not.toMatch(
@@ -213,9 +220,12 @@ describe("Data Grid & Query Execution", () => {
     const cells = await $$("td");
     expect(cells.length).toBeGreaterThan(0);
 
-    // The cell should contain "1", not "NULL"
+    // The cell should contain "1", not "NULL". Use textContent to bypass
+    // WebKit's getText() returning empty strings for truncate-styled cells.
     const firstCell = cells[0]!;
-    const cellText = await firstCell.getText();
+    const cellText = (
+      ((await firstCell.getProperty("textContent")) as string) ?? ""
+    ).trim();
     expect(cellText).toBe("1");
   });
 

@@ -158,9 +158,10 @@ describe("Schema Tree Features", () => {
     await firstTable.waitForDisplayed({ timeout: 5000 });
     await firstTable.click();
 
-    // After clicking, the table should be selected (highlighted)
+    // Selected/active table item is styled with bg-primary/10 + text-primary.
+    // Substring matching tolerates Tailwind's slash-modifier class names.
     const classes = await firstTable.getAttribute("class");
-    expect(classes).toContain("accent");
+    expect(classes).toMatch(/bg-primary|text-primary/);
   });
 
   // NOTE: tauri-driver does not support right-click via Actions API or dispatchEvent.

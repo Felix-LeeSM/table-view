@@ -8,10 +8,12 @@ describe("View Table — Smoke Tests", () => {
   it("renders the sidebar with Schemas header in the empty state", async () => {
     // Sidebar header now shows the active connection name or 'Schemas' when
     // nothing is selected. With no saved connections we expect the fallback.
-    const schemasHeader = await $('//span[normalize-space()="Schemas"]');
-    await schemasHeader.waitForDisplayed({ timeout: 10000 });
-    const text = await schemasHeader.getText();
-    expect(text.toLowerCase()).toContain("schemas");
+    // WebKit's webdriver returns an empty string from getText() on truncate
+    // spans, so read textContent via getProperty for stability.
+    const header = await $('[data-testid="sidebar-connection-header"]');
+    await header.waitForExist({ timeout: 10000 });
+    const text = ((await header.getProperty("textContent")) as string) ?? "";
+    expect(text.trim().toLowerCase()).toContain("schemas");
   });
 
   it("shows empty state when no connections exist", async () => {
