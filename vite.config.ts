@@ -24,7 +24,9 @@ export default defineConfig(async () => ({
     exclude: ["e2e/**", "node_modules/**"],
     pool: "forks",
     coverage: {
-      reporter: ["text", ["lcov", { projectDirectory: "src" }]],
+      reporter: process.env.CI
+        ? ["text"]
+        : ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
       thresholds: {
         // Sprint 9 이후 70%+ 달성
