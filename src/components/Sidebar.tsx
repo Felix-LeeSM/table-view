@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus,
   Database,
@@ -48,6 +48,13 @@ export default function Sidebar() {
   };
 
   const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+
+  // Listen for Cmd+N keyboard shortcut dispatched from App
+  useEffect(() => {
+    const handler = () => setShowNewDialog(true);
+    window.addEventListener("new-connection", handler);
+    return () => window.removeEventListener("new-connection", handler);
+  }, []);
 
   return (
     <>

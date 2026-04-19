@@ -560,4 +560,43 @@ describe("Sidebar", () => {
     // ConnectionList is mocked, so we just verify the filter UI updated
     expect(select.value).toBe("production");
   });
+
+  // -- Cmd+N keyboard shortcut wiring -------------------------------------
+
+  it("opens connection dialog when new-connection event is dispatched", () => {
+    render(<Sidebar />);
+    expect(screen.queryByTestId("connection-dialog")).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new Event("new-connection"));
+    });
+
+    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+  });
+
+  it("keeps connection dialog open when new-connection is dispatched again", () => {
+    render(<Sidebar />);
+
+    act(() => {
+      window.dispatchEvent(new Event("new-connection"));
+    });
+    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new Event("new-connection"));
+    });
+    // Still exactly one dialog (idempotent)
+    expect(screen.getAllByTestId("connection-dialog")).toHaveLength(1);
+  });
+
+  it("removes new-connection listener on unmount", () => {
+    const { unmount } = render(<Sidebar />);
+    unmount();
+
+    // Should not throw — the listener is gone
+    act(() => {
+      window.dispatchEvent(new Event("new-connection"));
+    });
+    expect(screen.queryByTestId("connection-dialog")).toBeNull();
+  });
 });
