@@ -2212,18 +2212,6 @@ describe("SchemaTree", () => {
   // NEW: Icon rendering per hierarchy level (Sprint 54)
   // =========================================================================
 
-  // AC-ICON-01: Connection header shows Database icon
-  it("renders Database icon in connection header", async () => {
-    await act(async () => {
-      render(<SchemaTree connectionId="conn1" />);
-    });
-
-    // The connection header area should contain a Database SVG icon
-    const headerArea = screen.getByText("conn1").closest("div")!;
-    const dbIcon = headerArea.querySelectorAll("svg.lucide-database");
-    expect(dbIcon.length).toBe(1);
-  });
-
   // AC-ICON-02: Schema node shows Folder icon when collapsed, FolderOpen when expanded
   it("renders Folder icon when schema is collapsed and FolderOpen when expanded", async () => {
     setSchemaStoreState({

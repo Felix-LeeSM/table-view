@@ -101,7 +101,7 @@ export default function Sidebar() {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Header strip showing the current connection name */}
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="truncate text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="truncate text-xs font-semibold text-foreground">
               {selectedConnId
                 ? (connections.find((c) => c.id === selectedConnId)?.name ??
                   "Schemas")

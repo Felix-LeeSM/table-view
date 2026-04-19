@@ -6,7 +6,6 @@ import {
   RefreshCw,
   Loader2,
   Code2,
-  Database,
   FolderOpen,
   Folder,
   Eye,
@@ -542,13 +541,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
   return (
     <div className="flex flex-col select-none">
-      {/* Connection header with Database icon */}
-      <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
-        <Database size={13} className="shrink-0 text-primary" />
-        <span className="truncate text-xs font-semibold text-foreground">
-          {connectionName || connectionId}
-        </span>
-        <div className="ml-auto flex gap-1">
+      {/* Action strip (connection name now lives in Sidebar header) */}
+      <div className="flex items-center justify-end gap-1 border-b border-border px-3 py-1">
+        <span className="sr-only">{connectionName || connectionId}</span>
+        <div className="flex gap-1">
           <button
             className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
             onClick={() => addQueryTab(connectionId)}
