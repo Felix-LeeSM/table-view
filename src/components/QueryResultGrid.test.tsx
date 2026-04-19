@@ -1,7 +1,45 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+} from "@testing-library/react";
 import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult } from "../types/query";
+import { useSchemaStore } from "../stores/schemaStore";
+
+vi.mock("../lib/tauri", async () => {
+  const mod =
+    await vi.importActual<typeof import("../lib/tauri")>("../lib/tauri");
+  return {
+    ...mod,
+    getTableColumns: vi.fn(async () => [
+      {
+        name: "id",
+        data_type: "integer",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "name",
+        data_type: "text",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ]),
+    executeQuery: vi.fn(async () => ({})),
+  };
+});
 
 const SELECT_RESULT: QueryResult = {
   columns: [
@@ -34,6 +72,12 @@ const DDL_RESULT: QueryResult = {
 };
 
 describe("QueryResultGrid", () => {
+  beforeEach(() => {
+    // Reset the per-connection PK metadata cache between tests so the
+    // editable-vs-read-only paths fetch fresh.
+    useSchemaStore.setState({ tableColumnsCache: {} });
+  });
+
   it("shows idle prompt when status is idle", () => {
     render(<QueryResultGrid queryState={{ status: "idle" }} />);
     expect(screen.getByText(/Cmd\+Return/i)).toBeInTheDocument();
@@ -127,6 +171,42 @@ describe("QueryResultGrid", () => {
     expect(dialog.textContent).toContain("name");
     expect(dialog.textContent).toContain("(text)");
     expect(dialog.textContent).toContain("Alice");
+  });
+
+  it("shows Editable badge when result is single-table SELECT with PK", async () => {
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+        connectionId="conn1"
+        sql="SELECT id, name FROM public.users"
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/Editable/)).toBeInTheDocument();
+    });
+  });
+
+  it("shows Read-only banner when SQL contains a JOIN", () => {
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+        connectionId="conn1"
+        sql="SELECT * FROM users JOIN orders ON users.id = orders.uid"
+      />,
+    );
+    expect(screen.getByText(/Read-only/)).toBeInTheDocument();
+    expect(screen.getByText(/single-table/)).toBeInTheDocument();
+  });
+
+  it("renders read-only table when no SQL/connectionId is supplied (back-compat)", () => {
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+      />,
+    );
+    expect(screen.queryByText(/Editable/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
   it("shows 'No data' for SELECT with empty rows", () => {

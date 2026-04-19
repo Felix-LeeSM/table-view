@@ -1,11 +1,23 @@
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Info, Loader2, Pencil } from "lucide-react";
 import type { QueryResult, QueryState, QueryType } from "../types/query";
 import { truncateCell } from "../lib/format";
+import {
+  analyzeResultEditability,
+  parseSingleTableSelect,
+} from "../lib/queryAnalyzer";
+import { useSchemaStore } from "../stores/schemaStore";
 import CellDetailDialog from "./datagrid/CellDetailDialog";
+import EditableQueryResultGrid from "./EditableQueryResultGrid";
 
 interface QueryResultGridProps {
   queryState: QueryState;
+  /** Connection used to look up PK metadata and run edit statements. */
+  connectionId?: string;
+  /** SQL of the executed query — used to detect a single-table SELECT. */
+  sql?: string;
+  /** Called after a raw-result edit is committed so the parent can refresh. */
+  onAfterCommit?: () => void;
 }
 
 /** Human-readable label for a QueryType value. */
@@ -135,7 +147,102 @@ function DdlMessage() {
   );
 }
 
-export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
+/**
+ * Wrapper that decides whether the SELECT result is editable, fetches the
+ * needed PK metadata, and renders either the editable grid + a green
+ * "Editable" badge or the read-only table + an info banner explaining why
+ * editing isn't available.
+ */
+function SelectResultArea({
+  result,
+  connectionId,
+  sql,
+  onAfterCommit,
+}: {
+  result: QueryResult;
+  connectionId?: string;
+  sql?: string;
+  onAfterCommit?: () => void;
+}) {
+  const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
+  const getTableColumns = useSchemaStore((s) => s.getTableColumns);
+
+  // Identify the source table once per SQL so we can fetch + look up its
+  // primary-key metadata. Resolution falls back to "public" because that's
+  // the default schema in PostgreSQL.
+  const parsed = useMemo(() => {
+    if (!sql) return null;
+    const info = parseSingleTableSelect(sql);
+    if (!info) return null;
+    return { schema: info.schema ?? "public", table: info.table };
+  }, [sql]);
+
+  useEffect(() => {
+    if (!parsed || !connectionId) return;
+    const cacheKey = `${connectionId}:${parsed.schema}:${parsed.table}`;
+    if (!tableColumnsCache[cacheKey]) {
+      getTableColumns(connectionId, parsed.table, parsed.schema).catch(() => {
+        // If the lookup fails we leave the cache empty; the editability
+        // analyser surfaces this as "Loading column metadata…".
+      });
+    }
+  }, [parsed, connectionId, tableColumnsCache, getTableColumns]);
+
+  const tableColumns = useMemo(() => {
+    if (!parsed || !connectionId) return null;
+    const cacheKey = `${connectionId}:${parsed.schema}:${parsed.table}`;
+    return tableColumnsCache[cacheKey] ?? null;
+  }, [parsed, connectionId, tableColumnsCache]);
+
+  const editability = useMemo(
+    () =>
+      sql ? analyzeResultEditability(sql, result.columns, tableColumns) : null,
+    [sql, result.columns, tableColumns],
+  );
+
+  if (editability && editability.editable) {
+    return (
+      <>
+        <div className="flex items-center gap-1.5 border-b border-border bg-emerald-500/10 px-3 py-1 text-xs text-emerald-700 dark:text-emerald-400">
+          <Pencil size={12} />
+          <span>
+            Editable — double-click a cell to edit, right-click for delete
+          </span>
+        </div>
+        <EditableQueryResultGrid
+          result={result}
+          connectionId={connectionId!}
+          plan={{
+            schema: editability.schema,
+            table: editability.table,
+            pkColumns: editability.pkColumns,
+            resultColumnNames: editability.resultToColumnName,
+          }}
+          onAfterCommit={onAfterCommit}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {editability && (
+        <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+          <Info size={12} />
+          <span>Read-only — {editability.reason}</span>
+        </div>
+      )}
+      <ResultTable result={result} />
+    </>
+  );
+}
+
+export default function QueryResultGrid({
+  queryState,
+  connectionId,
+  sql,
+  onAfterCommit,
+}: QueryResultGridProps) {
   // Running state
   if (queryState.status === "running") {
     return (
@@ -186,7 +293,14 @@ export default function QueryResultGrid({ queryState }: QueryResultGridProps) {
         </div>
 
         {/* Content */}
-        {result.query_type === "select" && <ResultTable result={result} />}
+        {result.query_type === "select" && (
+          <SelectResultArea
+            result={result}
+            connectionId={connectionId}
+            sql={sql}
+            onAfterCommit={onAfterCommit}
+          />
+        )}
         {typeof result.query_type === "object" &&
           "dml" in result.query_type && <DmlMessage result={result} />}
         {result.query_type === "ddl" && <DdlMessage />}
