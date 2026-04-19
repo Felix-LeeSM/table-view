@@ -289,6 +289,50 @@ export function useDataGridEdit({
     pendingNewRows.length > 0 ||
     pendingDeletedRowKeys.size > 0;
 
+  // Listen for global Cmd+S commit shortcut. Only the active tab's grid
+  // should react — gate on activeTabId being present and pending changes
+  // existing. Otherwise the dispatch is silently ignored (idempotent).
+  useEffect(() => {
+    const handler = () => {
+      if (!hasPendingChanges) return;
+      // If a cell is being edited, persist its value before opening preview
+      if (editingCell) {
+        const key = editKey(editingCell.row, editingCell.col);
+        const merged = new Map(pendingEdits);
+        merged.set(key, editValue);
+        if (!data) return;
+        const sqlStatements = generateSql(
+          data,
+          schema,
+          table,
+          merged,
+          pendingDeletedRowKeys,
+          pendingNewRows,
+        );
+        if (sqlStatements.length === 0) return;
+        setPendingEdits(merged);
+        setEditingCell(null);
+        setEditValue("");
+        setSqlPreview(sqlStatements);
+        return;
+      }
+      handleCommit();
+    };
+    window.addEventListener("commit-changes", handler);
+    return () => window.removeEventListener("commit-changes", handler);
+  }, [
+    hasPendingChanges,
+    editingCell,
+    editValue,
+    pendingEdits,
+    pendingDeletedRowKeys,
+    pendingNewRows,
+    data,
+    schema,
+    table,
+    handleCommit,
+  ]);
+
   // Derived: single selected row index (backward compat)
   const selectedRowIdx =
     selectedRowIds.size === 1 ? [...selectedRowIds][0]! : null;

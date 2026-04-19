@@ -381,7 +381,15 @@ export default function DataGrid({
             <DialogTitle>SQL Preview</DialogTitle>
             <DialogDescription>Preview SQL before executing</DialogDescription>
           </DialogHeader>
-          <div className="flex max-h-[80vh] flex-col rounded-lg border border-border bg-background shadow-xl">
+          <div
+            className="flex max-h-[80vh] flex-col rounded-lg border border-border bg-background shadow-xl"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                editState.handleExecuteCommit();
+              }
+            }}
+          >
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview
@@ -412,6 +420,7 @@ export default function DataGrid({
                 Cancel
               </button>
               <button
+                autoFocus
                 className="rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700"
                 onClick={editState.handleExecuteCommit}
                 aria-label="Execute SQL"
