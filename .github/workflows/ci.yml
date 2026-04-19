@@ -39,8 +39,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test with coverage
-        run: pnpm test -- --coverage --reporter=verbose --testTimeout=30000
+      - name: Test
+        run: pnpm test
 
       - name: Build
         run: pnpm build
