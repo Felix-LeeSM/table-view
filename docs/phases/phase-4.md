@@ -1,6 +1,6 @@
 # Phase 4: Editing & Polish
 
-> 인라인 편집, UX 개선 — **진행 중**
+> 인라인 편집, UX 개선 — **완료**
 
 ## 구현 항목
 
@@ -25,8 +25,8 @@
 - [x] 페이지 크기 선택기 제공 (100, 300, 500, 1000)
 - [x] 첫 페이지 / 마지막 페이지 이동 버튼
 - [x] 특정 페이지 번호로 직접 이동 (Jump to page)
-- [ ] 컬럼 순서 변경 가능 (드래그앤드롭)
-- [ ] BLOB/Binary 데이터는 아이콘으로 표시, 클릭 시 상세 보기
+- [x] 컬럼 순서 변경 가능 (드래그앤드롭)
+- [x] BLOB/Binary 데이터는 아이콘으로 표시, 클릭 시 상세 보기
 
 ## F3.2: 인라인 편집
 
@@ -44,10 +44,10 @@
 
 - [x] "Add Row" 버튼으로 빈 행 삽입
 - [x] 행 선택 후 "Delete Row"로 삭제 (pending 상태)
-- [ ] "Duplicate Row"로 선택한 행 복제 삽입
-- [ ] 여러 행 동시 선택 가능 (Shift+Click, Cmd+Click)
-- [ ] 선택한 행 복사 (Cmd+C): Plain text, JSON, CSV, SQL Insert 형식
-- [ ] 우클릭 컨텍스트 메뉴: Edit, Delete, Duplicate, Copy as...
+- [x] "Duplicate Row"로 선택한 행 복제 삽입
+- [x] 여러 행 동시 선택 가능 (Shift+Click, Cmd+Click)
+- [x] 선택한 행 복사 (Cmd+C): Plain text, JSON, CSV, SQL Insert 형식
+- [x] 우클릭 컨텍스트 메뉴: Edit, Delete, Duplicate, Copy as...
 
 ## F4.2: 쿼리 실행 UI 확장
 
@@ -66,8 +66,8 @@
 ## F4.5: 쿼리 포맷팅
 
 - [x] Cmd+I: SQL Beautify (들여쓰기, 줄바꿈으로 정렬)
-- [ ] Cmd+Shift+I: SQL Uglify (한 줄로 압축)
-- [ ] 포맷팅이 선택 영역에만 적용 가능
+- [x] Cmd+Shift+I: SQL Uglify (한 줄로 압축)
+- [x] 포맷팅이 선택 영역에만 적용 가능
 
 ## F4.6: 쿼리 히스토리
 
@@ -93,9 +93,9 @@
 ## F2.1: 스키마 탐색기 시각적 개선
 
 - [x] 스키마 노드 확장 시 객체 카테고리 표시: Tables, Views, Functions, Procedures
-- [ ] 현재 선택된 데이터베이스/스키마 하이라이트
-- [ ] 연결 수준과 스키마/테이블 수준의 시각적 분리
-- [ ] 각 계층 레벨에 서로 다른 아이콘 스타일 적용
+- [x] 현재 선택된 데이터베이스/스키마 하이라이트
+- [x] 연결 수준과 스키마/테이블 수준의 시각적 분리
+- [x] 각 계층 레벨에 서로 다른 아이콘 스타일 적용
 - [x] 스키마 섹션에 섹션 헤더 또는 구분자 표시
 
 ## F5.5: 인터랙티브 요소 텍스트 선택 방지

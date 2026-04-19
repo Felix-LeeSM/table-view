@@ -10,8 +10,9 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 ## 현재 상태
 
-Phase 1-3 완료. Phase 4(Editing & Polish) 대부분 완료 (Sprint 24-40 PASS).
-미구현 항목: Duplicate Row, 다중 행 선택/복사, 행 컨텍스트 메뉴, 컬럼 드래그 순서 변경, BLOB 뷰어, SQL Uglify, 선택 영역 포맷팅, 스키마 하이라이트, 계층 아이콘 스타일.
+Phase 1-4 완료 (Sprint 24-54 PASS). Phase 5(Extended Features) 진행 중 (Sprint 55-59 완료).
+Phase 5 구현 항목: Views/Functions 백엔드(F2.6, F2.7 부분), Quick Look 패널(F3.6), 쿼리 즐겨찾기(F4.7 부분), 글로벌 쿼리 로그(F5.3), 환경 태그 배지(F1.4 부분).
+주요 미구현 항목: 연결 색상 라벨 UI, View Structure 탭, Functions CRUD, 즐겨찾기 키워드 바인딩, 결과 분할(F4.8), 패널 관리 시스템(F5.6), Import/Export, SSH 터널링, MySQL/SQLite 어댑터.
 
 ## 문서 목차
 
@@ -28,8 +29,8 @@ Phase 1-3 완료. Phase 4(Editing & Polish) 대부분 완료 (Sprint 24-40 PASS)
 | 1 | Foundation (연결 관리) | 완료 | [phase-1.md](phases/phase-1.md) |
 | 2 | Schema & Data Exploration | 완료 | [phase-2.md](phases/phase-2.md) |
 | 3 | Query Editor | 완료 | [phase-3.md](phases/phase-3.md) |
-| 4 | Editing & Polish | 진행 중 | [phase-4.md](phases/phase-4.md) |
-| 5 | Extended Features | 예정 | [phase-5.md](phases/phase-5.md) |
+| 4 | Editing & Polish | 완료 | [phase-4.md](phases/phase-4.md) |
+| 5 | Extended Features | 진행 중 | [phase-5.md](phases/phase-5.md) |
 
 ## 참고 자료
 
