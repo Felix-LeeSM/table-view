@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { Button } from "@components/ui/button";
+import { Input } from "@components/ui/input";
 import type {
   ColumnInfo,
   FilterCondition,
   FilterMode,
   FilterOperator,
-} from "../types/schema";
-import { validateRawSql } from "../types/schema";
+} from "@/types/schema";
+import { validateRawSql } from "@/types/schema";
 
 interface FilterBarProps {
   columns: ColumnInfo[];

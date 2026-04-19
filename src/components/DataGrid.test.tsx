@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DataGrid from "./DataGrid";
-import type { TableData } from "../types/schema";
+import type { TableData } from "@/types/schema";
 
 // Mock FilterBar — test DataGrid in isolation
 vi.mock("./FilterBar", () => ({
@@ -75,7 +75,7 @@ const mockExecuteQuery = vi.fn(() =>
   }),
 );
 
-vi.mock("../stores/schemaStore", () => ({
+vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       queryTableData: mockQueryTableData,
@@ -84,7 +84,7 @@ vi.mock("../stores/schemaStore", () => ({
 }));
 
 const mockPromoteTab = vi.fn();
-vi.mock("../stores/tabStore", () => ({
+vi.mock("@stores/tabStore", () => ({
   useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       activeTabId: "tab-1",

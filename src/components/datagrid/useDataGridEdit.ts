@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
-import { useSchemaStore } from "../../stores/schemaStore";
-import { useTabStore } from "../../stores/tabStore";
-import type { TableData } from "../../types/schema";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useTabStore } from "@stores/tabStore";
+import type { TableData } from "@/types/schema";
 import { generateSql } from "./sqlGenerator";
 
 /**

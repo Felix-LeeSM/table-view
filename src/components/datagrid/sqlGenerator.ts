@@ -1,4 +1,4 @@
-import type { ColumnInfo, TableData } from "../../types/schema";
+import type { ColumnInfo, TableData } from "@/types/schema";
 
 /**
  * Build a SQL WHERE clause that identifies a specific row.

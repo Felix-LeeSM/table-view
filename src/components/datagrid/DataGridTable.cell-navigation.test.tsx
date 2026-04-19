@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import DataGridTable from "./DataGridTable";
-import type { TableData } from "../../types/schema";
+import type { TableData } from "@/types/schema";
 
 const MOCK_DATA: TableData = {
   columns: [

@@ -3,8 +3,8 @@ import {
   parseSingleTableSelect,
   analyzeResultEditability,
 } from "./queryAnalyzer";
-import type { ColumnInfo } from "../types/schema";
-import type { QueryColumn } from "../types/query";
+import type { ColumnInfo } from "@/types/schema";
+import type { QueryColumn } from "@/types/query";
 
 function col(
   name: string,

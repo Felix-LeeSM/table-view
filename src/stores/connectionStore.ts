@@ -4,8 +4,8 @@ import type {
   ConnectionConfig,
   ConnectionGroup,
   ConnectionStatus,
-} from "../types/connection";
-import * as tauri from "../lib/tauri";
+} from "@/types/connection";
+import * as tauri from "@lib/tauri";
 
 interface ConnectionState {
   connections: ConnectionConfig[];

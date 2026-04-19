@@ -9,9 +9,9 @@ import type {
   TableData,
   TableInfo,
   ViewInfo,
-} from "../types/schema";
-import type { QueryResult } from "../types/query";
-import * as tauri from "../lib/tauri";
+} from "@/types/schema";
+import type { QueryResult } from "@/types/query";
+import * as tauri from "@lib/tauri";
 
 interface SchemaState {
   schemas: Record<string, SchemaInfo[]>;

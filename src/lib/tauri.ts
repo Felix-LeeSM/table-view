@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ConnectionConfig, ConnectionGroup } from "../types/connection";
-import type { QueryResult } from "../types/query";
+import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
+import type { QueryResult } from "@/types/query";
 import type {
   AddConstraintRequest,
   AlterTableRequest,
@@ -17,7 +17,7 @@ import type {
   TableData,
   TableInfo,
   ViewInfo,
-} from "../types/schema";
+} from "@/types/schema";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke<ConnectionConfig[]>("list_connections");

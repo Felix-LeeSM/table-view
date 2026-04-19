@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
-import type { TableData } from "../../types/schema";
+import type { TableData } from "@/types/schema";
 
 const mockExecuteQuery = vi.fn(() =>
   Promise.resolve({
@@ -14,12 +14,12 @@ const mockExecuteQuery = vi.fn(() =>
 );
 const mockFetchData = vi.fn();
 
-vi.mock("../../stores/schemaStore", () => ({
+vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ executeQuery: mockExecuteQuery }),
 }));
 
-vi.mock("../../stores/tabStore", () => ({
+vi.mock("@stores/tabStore", () => ({
   useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ activeTabId: "tab-1", promoteTab: vi.fn() }),
 }));

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Key, Link2, Plus, Pencil, Trash2, X, Eye } from "lucide-react";
-import type { ColumnInfo, ColumnChange } from "../../types/schema";
-import * as tauri from "../../lib/tauri";
+import type { ColumnInfo, ColumnChange } from "@/types/schema";
+import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 
 // ---------------------------------------------------------------------------

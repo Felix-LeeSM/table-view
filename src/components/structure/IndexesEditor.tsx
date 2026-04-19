@@ -7,10 +7,10 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "../ui/dialog";
-import type { ColumnInfo, IndexInfo } from "../../types/schema";
-import * as tauri from "../../lib/tauri";
-import { useSchemaStore } from "../../stores/schemaStore";
+} from "@components/ui/dialog";
+import type { ColumnInfo, IndexInfo } from "@/types/schema";
+import * as tauri from "@lib/tauri";
+import { useSchemaStore } from "@stores/schemaStore";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 
 // ---------------------------------------------------------------------------

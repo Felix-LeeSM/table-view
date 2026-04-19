@@ -5,7 +5,7 @@ import {
   type QueryTab,
   type Tab,
 } from "./tabStore";
-import type { QueryState } from "../types/query";
+import type { QueryState } from "@/types/query";
 
 function makeTableTab(
   overrides: Partial<Omit<TableTab, "id">> & { id: string },

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { QueryState } from "../types/query";
+import type { QueryState } from "@/types/query";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`

@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import ErrorBoundary from "./components/ErrorBoundary";
-import Sidebar from "./components/Sidebar";
-import MainArea from "./components/MainArea";
-import QuickOpen from "./components/QuickOpen";
-import QueryLog from "./components/QueryLog";
+import ErrorBoundary from "./components/shared/ErrorBoundary";
+import Sidebar from "./components/layout/Sidebar";
+import MainArea from "./components/layout/MainArea";
+import QuickOpen from "./components/shared/QuickOpen";
+import QueryLog from "./components/query/QueryLog";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";

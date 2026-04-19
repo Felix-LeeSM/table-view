@@ -1,4 +1,4 @@
-import type { DatabaseType } from "../types/connection";
+import type { DatabaseType } from "@/types/connection";
 
 /** Metadata for each supported database type. */
 export interface DbMeta {

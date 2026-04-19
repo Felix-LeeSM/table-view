@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { SQLNamespace } from "@codemirror/lang-sql";
-import { useSchemaStore } from "../stores/schemaStore";
+import { useSchemaStore } from "@stores/schemaStore";
 
 /** Common SQL functions exposed as autocomplete candidates. */
 const SQL_FUNCTIONS = [

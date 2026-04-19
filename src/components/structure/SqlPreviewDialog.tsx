@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "../ui/dialog";
+} from "@components/ui/dialog";
 
 export interface SqlPreviewDialogProps {
   sql: string;

@@ -9,8 +9,8 @@
  * single source row.
  */
 
-import type { ColumnInfo } from "../types/schema";
-import type { QueryColumn } from "../types/query";
+import type { ColumnInfo } from "@/types/schema";
+import type { QueryColumn } from "@/types/query";
 
 export interface SingleTableSelectInfo {
   schema: string | null;

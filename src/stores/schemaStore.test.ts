@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useSchemaStore } from "./schemaStore";
 
 // Mock the tauri invoke wrapper
-vi.mock("../lib/tauri", () => ({
+vi.mock("@lib/tauri", () => ({
   listSchemas: vi.fn(() =>
     Promise.resolve([{ name: "public" }, { name: "test_schema" }]),
   ),
@@ -185,7 +185,7 @@ describe("schemaStore", () => {
   });
 
   it("handles load error", async () => {
-    const { listSchemas } = await import("../lib/tauri");
+    const { listSchemas } = await import("@lib/tauri");
     (listSchemas as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Connection refused"),
     );
@@ -196,7 +196,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates getTableColumns", async () => {
-    const { getTableColumns } = await import("../lib/tauri");
+    const { getTableColumns } = await import("@lib/tauri");
     const columns = await useSchemaStore
       .getState()
       .getTableColumns("conn1", "users", "public");
@@ -234,7 +234,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates queryTableData", async () => {
-    const { queryTableData } = await import("../lib/tauri");
+    const { queryTableData } = await import("@lib/tauri");
     const data = await useSchemaStore
       .getState()
       .queryTableData("conn1", "users", "public", 1, 50, "id");
@@ -254,7 +254,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates getTableIndexes", async () => {
-    const { getTableIndexes } = await import("../lib/tauri");
+    const { getTableIndexes } = await import("@lib/tauri");
     const indexes = await useSchemaStore
       .getState()
       .getTableIndexes("conn1", "users", "public");
@@ -266,7 +266,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates getTableConstraints", async () => {
-    const { getTableConstraints } = await import("../lib/tauri");
+    const { getTableConstraints } = await import("@lib/tauri");
     const constraints = await useSchemaStore
       .getState()
       .getTableConstraints("conn1", "users", "public");
@@ -281,7 +281,7 @@ describe("schemaStore", () => {
   });
 
   it("passes filters to queryTableData", async () => {
-    const { queryTableData } = await import("../lib/tauri");
+    const { queryTableData } = await import("@lib/tauri");
     const filters = [
       {
         column: "name",
@@ -308,7 +308,7 @@ describe("schemaStore", () => {
   });
 
   it("passes rawWhere to queryTableData", async () => {
-    const { queryTableData } = await import("../lib/tauri");
+    const { queryTableData } = await import("@lib/tauri");
 
     await useSchemaStore
       .getState()
@@ -357,7 +357,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates executeQuery", async () => {
-    const { executeQuery } = await import("../lib/tauri");
+    const { executeQuery } = await import("@lib/tauri");
     (executeQuery as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       columns: [{ name: "id", data_type: "integer" }],
       rows: [[1]],
@@ -376,7 +376,7 @@ describe("schemaStore", () => {
   });
 
   it("dropTable refreshes table list on success", async () => {
-    const { dropTable, listTables } = await import("../lib/tauri");
+    const { dropTable, listTables } = await import("@lib/tauri");
 
     useSchemaStore.setState({
       tables: {
@@ -401,7 +401,7 @@ describe("schemaStore", () => {
   });
 
   it("dropTable removes table optimistically when refresh fails", async () => {
-    const { dropTable, listTables } = await import("../lib/tauri");
+    const { dropTable, listTables } = await import("@lib/tauri");
 
     useSchemaStore.setState({
       tables: {
@@ -426,7 +426,7 @@ describe("schemaStore", () => {
   });
 
   it("dropTable handles missing cache key gracefully", async () => {
-    const { dropTable, listTables } = await import("../lib/tauri");
+    const { dropTable, listTables } = await import("@lib/tauri");
 
     useSchemaStore.setState({ tables: {} });
 
@@ -443,7 +443,7 @@ describe("schemaStore", () => {
   });
 
   it("renameTable refreshes table list on success", async () => {
-    const { renameTable, listTables } = await import("../lib/tauri");
+    const { renameTable, listTables } = await import("@lib/tauri");
 
     useSchemaStore.setState({
       tables: {
@@ -471,7 +471,7 @@ describe("schemaStore", () => {
   });
 
   it("renameTable updates table name optimistically when refresh fails", async () => {
-    const { renameTable, listTables } = await import("../lib/tauri");
+    const { renameTable, listTables } = await import("@lib/tauri");
 
     useSchemaStore.setState({
       tables: {
@@ -498,7 +498,7 @@ describe("schemaStore", () => {
   });
 
   it("renameTable handles missing cache key gracefully", async () => {
-    const { renameTable, listTables } = await import("../lib/tauri");
+    const { renameTable, listTables } = await import("@lib/tauri");
 
     useSchemaStore.setState({ tables: {} });
 
@@ -522,7 +522,7 @@ describe("schemaStore", () => {
   });
 
   it("handles loadTables error", async () => {
-    const { listTables } = await import("../lib/tauri");
+    const { listTables } = await import("@lib/tauri");
     (listTables as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Schema not found"),
     );
@@ -537,7 +537,7 @@ describe("schemaStore", () => {
     const loadPromise = new Promise((resolve) => {
       resolveLoad = resolve;
     });
-    const { listSchemas } = await import("../lib/tauri");
+    const { listSchemas } = await import("@lib/tauri");
     (listSchemas as ReturnType<typeof vi.fn>).mockReturnValueOnce(loadPromise);
 
     // Start loading
@@ -551,7 +551,7 @@ describe("schemaStore", () => {
   });
 
   it("resets loading to false on loadSchemas error", async () => {
-    const { listSchemas } = await import("../lib/tauri");
+    const { listSchemas } = await import("@lib/tauri");
     (listSchemas as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("fail"),
     );
@@ -566,7 +566,7 @@ describe("schemaStore", () => {
     const loadPromise = new Promise((resolve) => {
       resolveLoad = resolve;
     });
-    const { listTables } = await import("../lib/tauri");
+    const { listTables } = await import("@lib/tauri");
     (listTables as ReturnType<typeof vi.fn>).mockReturnValueOnce(loadPromise);
 
     const call = useSchemaStore.getState().loadTables("conn1", "public");
@@ -600,7 +600,7 @@ describe("schemaStore", () => {
   });
 
   it("handles loadViews error", async () => {
-    const { listViews } = await import("../lib/tauri");
+    const { listViews } = await import("@lib/tauri");
     (listViews as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Views not accessible"),
     );
@@ -611,7 +611,7 @@ describe("schemaStore", () => {
   });
 
   it("handles loadFunctions error", async () => {
-    const { listFunctions } = await import("../lib/tauri");
+    const { listFunctions } = await import("@lib/tauri");
     (listFunctions as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Functions not accessible"),
     );
@@ -657,7 +657,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates getViewColumns", async () => {
-    const { getViewColumns } = await import("../lib/tauri");
+    const { getViewColumns } = await import("@lib/tauri");
     const columns = await useSchemaStore
       .getState()
       .getViewColumns("conn1", "public", "active_users");
@@ -674,7 +674,7 @@ describe("schemaStore", () => {
   });
 
   it("delegates getViewDefinition", async () => {
-    const { getViewDefinition } = await import("../lib/tauri");
+    const { getViewDefinition } = await import("@lib/tauri");
     const sql = await useSchemaStore
       .getState()
       .getViewDefinition("conn1", "public", "active_users");
@@ -688,7 +688,7 @@ describe("schemaStore", () => {
   });
 
   it("propagates getViewColumns errors", async () => {
-    const { getViewColumns } = await import("../lib/tauri");
+    const { getViewColumns } = await import("@lib/tauri");
     (getViewColumns as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("View does not exist"),
     );

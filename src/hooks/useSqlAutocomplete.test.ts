@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useSqlAutocomplete } from "./useSqlAutocomplete";
-import { useSchemaStore } from "../stores/schemaStore";
+import { useSchemaStore } from "@stores/schemaStore";
 
 describe("useSqlAutocomplete", () => {
   beforeEach(() => {

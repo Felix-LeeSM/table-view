@@ -7,13 +7,13 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "../ui/dialog";
+} from "@components/ui/dialog";
 import type {
   ColumnInfo,
   ConstraintInfo,
   ConstraintDefinition,
-} from "../../types/schema";
-import * as tauri from "../../lib/tauri";
+} from "@/types/schema";
+import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 
 // ---------------------------------------------------------------------------
@@ -423,7 +423,7 @@ export default function ConstraintsEditor({
 
   const handleOpenAddConstraint = async () => {
     if (columns.length === 0) {
-      const { useSchemaStore } = await import("../../stores/schemaStore");
+      const { useSchemaStore } = await import("@stores/schemaStore");
       const { getTableColumns } = useSchemaStore.getState();
       const cols = await getTableColumns(connectionId, table, schema);
       onColumnsChange(cols);

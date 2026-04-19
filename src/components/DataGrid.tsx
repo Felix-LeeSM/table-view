@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
-import { useSchemaStore } from "../stores/schemaStore";
-import { useTabStore } from "../stores/tabStore";
-import FilterBar from "./FilterBar";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useTabStore } from "@stores/tabStore";
+import FilterBar from "@components/FilterBar";
 import {
   Dialog,
   DialogContent,
@@ -10,17 +10,17 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "./ui/dialog";
+} from "@components/ui/dialog";
 import type {
   FilterCondition,
   FilterMode,
   SortInfo,
   TableData,
-} from "../types/schema";
-import DataGridToolbar from "./datagrid/DataGridToolbar";
-import DataGridTable from "./datagrid/DataGridTable";
-import { useDataGridEdit } from "./datagrid/useDataGridEdit";
-import QuickLookPanel from "./QuickLookPanel";
+} from "@/types/schema";
+import DataGridToolbar from "@components/datagrid/DataGridToolbar";
+import DataGridTable from "@components/datagrid/DataGridTable";
+import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
+import QuickLookPanel from "@components/shared/QuickLookPanel";
 
 interface DataGridProps {
   connectionId: string;

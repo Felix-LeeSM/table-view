@@ -1,5 +1,10 @@
 import { useState, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@components/ui/dialog";
 
 export interface BlobViewerDialogProps {
   open: boolean;

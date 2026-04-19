@@ -11,7 +11,7 @@ import {
   Filter,
   Eye,
 } from "lucide-react";
-import type { SortInfo, TableData } from "../../types/schema";
+import type { SortInfo, TableData } from "@/types/schema";
 
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 

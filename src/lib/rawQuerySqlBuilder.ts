@@ -1,4 +1,4 @@
-import type { ColumnInfo } from "../types/schema";
+import type { ColumnInfo } from "@/types/schema";
 
 /**
  * Quote a SQL identifier with double quotes, escaping internal `"`.

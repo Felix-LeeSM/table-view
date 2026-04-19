@@ -7,7 +7,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 // Mock the tauri invoke wrapper
-vi.mock("../lib/tauri", () => ({
+vi.mock("@lib/tauri", () => ({
   listConnections: vi.fn(() =>
     Promise.resolve([
       {
@@ -150,7 +150,7 @@ describe("connectionStore", () => {
     const connectPromise = new Promise<void>((resolve) => {
       resolveConnect = resolve;
     });
-    const { connectToDatabase } = await import("../lib/tauri");
+    const { connectToDatabase } = await import("@lib/tauri");
     (connectToDatabase as ReturnType<typeof vi.fn>).mockReturnValueOnce(
       connectPromise,
     );
@@ -172,7 +172,7 @@ describe("connectionStore", () => {
   });
 
   it("transitions from connecting to error on failed connect", async () => {
-    const { connectToDatabase } = await import("../lib/tauri");
+    const { connectToDatabase } = await import("@lib/tauri");
     (connectToDatabase as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Connection refused"),
     );
@@ -244,7 +244,7 @@ describe("connectionStore", () => {
 
   it("disconnects before removing a connected connection", async () => {
     const { disconnectFromDatabase, deleteConnection } =
-      await import("../lib/tauri");
+      await import("@lib/tauri");
 
     useConnectionStore.setState({
       connections: [
@@ -274,7 +274,7 @@ describe("connectionStore", () => {
   });
 
   it("does not disconnect when removing a non-connected connection", async () => {
-    const { disconnectFromDatabase } = await import("../lib/tauri");
+    const { disconnectFromDatabase } = await import("@lib/tauri");
 
     useConnectionStore.setState({
       connections: [
@@ -301,7 +301,7 @@ describe("connectionStore", () => {
   });
 
   it("handles loadConnections error", async () => {
-    const { listConnections } = await import("../lib/tauri");
+    const { listConnections } = await import("@lib/tauri");
     (listConnections as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Network error"),
     );
@@ -313,7 +313,7 @@ describe("connectionStore", () => {
   });
 
   it("handles loadGroups error", async () => {
-    const { listGroups } = await import("../lib/tauri");
+    const { listGroups } = await import("@lib/tauri");
     (listGroups as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
       new Error("Server error"),
     );
@@ -324,7 +324,7 @@ describe("connectionStore", () => {
   });
 
   it("delegates testConnection", async () => {
-    const { testConnection } = await import("../lib/tauri");
+    const { testConnection } = await import("@lib/tauri");
     const config = {
       id: "c1",
       name: "DB",

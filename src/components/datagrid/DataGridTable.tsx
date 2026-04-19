@@ -1,13 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 import { Loader2, Key, Binary } from "lucide-react";
-import { truncateCell } from "../../lib/format";
-import type { SortInfo, TableData } from "../../types/schema";
+import { truncateCell } from "@lib/format";
+import type { SortInfo, TableData } from "@/types/schema";
 import {
   editKey,
   cellToEditString,
   getInputTypeForColumn,
 } from "./useDataGridEdit";
-import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
+import {
+  ContextMenu,
+  type ContextMenuItem,
+} from "@components/shared/ContextMenu";
 import {
   Pencil,
   Trash2,
@@ -25,8 +28,8 @@ import {
   rowsToJson,
   rowsToCsv,
   rowsToSqlInsert,
-} from "../../lib/format";
-import type { CopyRowData } from "../../lib/format";
+} from "@lib/format";
+import type { CopyRowData } from "@lib/format";
 
 const MIN_COL_WIDTH = 60;
 const RESIZE_HANDLE_WIDTH = 4; // w-1 = 4px

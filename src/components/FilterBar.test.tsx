@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import FilterBar from "./FilterBar";
-import type { ColumnInfo, FilterCondition } from "../types/schema";
+import type { ColumnInfo, FilterCondition } from "@/types/schema";
 
 const COLUMNS: ColumnInfo[] = [
   {

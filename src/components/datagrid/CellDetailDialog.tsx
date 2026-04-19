@@ -1,6 +1,11 @@
 import { useState, useMemo } from "react";
 import { Copy, Check } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@components/ui/dialog";
 
 export interface CellDetailDialogProps {
   open: boolean;
