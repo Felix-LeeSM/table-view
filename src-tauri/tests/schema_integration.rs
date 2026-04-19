@@ -668,3 +668,102 @@ async fn test_query_table_data_multi_column_ordering() {
 
     adapter.disconnect_pool().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_get_view_columns_returns_columns_in_order() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("vc_base");
+    let view_name = unique_table_name("vc_view");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id SERIAL PRIMARY KEY, \
+             name TEXT NOT NULL, \
+             score INTEGER)"
+        ))
+        .await
+        .expect("Failed to create base table");
+
+    adapter
+        .execute(&format!(
+            "CREATE VIEW \"{view_name}\" AS \
+             SELECT id, name, score FROM \"{table_name}\" WHERE score IS NOT NULL"
+        ))
+        .await
+        .expect("Failed to create view");
+
+    let columns = adapter
+        .get_view_columns("public", &view_name)
+        .await
+        .expect("get_view_columns failed");
+
+    assert_eq!(
+        columns.len(),
+        3,
+        "Expected 3 columns, got {}: {:?}",
+        columns.len(),
+        columns
+    );
+    assert_eq!(columns[0].name, "id");
+    assert_eq!(columns[1].name, "name");
+    assert_eq!(columns[2].name, "score");
+
+    // Views never carry primary/foreign key metadata
+    for col in &columns {
+        assert!(
+            !col.is_primary_key,
+            "View column {} should not be a primary key",
+            col.name
+        );
+        assert!(
+            !col.is_foreign_key,
+            "View column {} should not be a foreign key",
+            col.name
+        );
+        assert!(col.fk_reference.is_none());
+    }
+
+    // Nullable detection still works for views (id and name are NOT NULL,
+    // score is nullable)
+    let id_col = columns.iter().find(|c| c.name == "id").unwrap();
+    assert!(!id_col.nullable, "id should be NOT NULL");
+    let score_col = columns.iter().find(|c| c.name == "score").unwrap();
+    assert!(score_col.nullable, "score should be nullable");
+
+    // Clean up
+    adapter
+        .execute(&format!("DROP VIEW \"{view_name}\""))
+        .await
+        .expect("Failed to drop view");
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_view_columns_for_unknown_view_returns_empty() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let columns = adapter
+        .get_view_columns("public", "definitely_does_not_exist_view")
+        .await
+        .expect("get_view_columns should succeed even for unknown views");
+
+    assert!(
+        columns.is_empty(),
+        "Expected empty columns for unknown view, got: {:?}",
+        columns
+    );
+
+    adapter.disconnect_pool().await.unwrap();
+}

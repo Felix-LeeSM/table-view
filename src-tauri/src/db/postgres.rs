@@ -1386,6 +1386,71 @@ impl PostgresAdapter {
             .collect())
     }
 
+    /// Get the column metadata for a view.
+    ///
+    /// Views inherit column information from `information_schema.columns`,
+    /// but they have no primary or foreign keys of their own — those fields
+    /// are always returned as `false` / `None`.
+    pub async fn get_view_columns(
+        &self,
+        schema: &str,
+        view_name: &str,
+    ) -> Result<Vec<ColumnInfo>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT column_name, data_type, is_nullable, column_default \
+             FROM information_schema.columns \
+             WHERE table_schema = $1 AND table_name = $2 \
+             ORDER BY ordinal_position",
+        )
+        .bind(schema)
+        .bind(view_name)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let comment_rows: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT a.attname, col_description(a.attrelid, a.attnum) \
+             FROM pg_attribute a \
+             JOIN pg_class c ON a.attrelid = c.oid \
+             JOIN pg_namespace n ON c.relnamespace = n.oid \
+             WHERE n.nspname = $1 \
+               AND c.relname = $2 \
+               AND c.relkind IN ('v', 'm') \
+               AND a.attnum > 0 \
+               AND NOT a.attisdropped",
+        )
+        .bind(schema)
+        .bind(view_name)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let comments: std::collections::HashMap<String, Option<String>> =
+            comment_rows.into_iter().collect();
+
+        Ok(rows
+            .into_iter()
+            .map(|(name, data_type, is_nullable, default_value)| {
+                let comment = comments.get(&name).cloned().flatten();
+                ColumnInfo {
+                    name,
+                    data_type,
+                    nullable: is_nullable.eq_ignore_ascii_case("yes"),
+                    default_value,
+                    is_primary_key: false,
+                    is_foreign_key: false,
+                    fk_reference: None,
+                    comment,
+                }
+            })
+            .collect())
+    }
+
     /// Get the definition SQL of a view.
     pub async fn get_view_definition(
         &self,
@@ -2389,6 +2454,18 @@ mod tests {
     async fn list_functions_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         let result = adapter.list_functions("public").await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_view_columns_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.get_view_columns("public", "my_view").await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(

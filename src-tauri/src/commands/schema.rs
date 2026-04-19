@@ -233,6 +233,20 @@ pub async fn get_view_definition(
 }
 
 #[tauri::command]
+pub async fn get_view_columns(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    view_name: String,
+) -> Result<Vec<crate::models::ColumnInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.get_view_columns(&schema, &view_name).await
+}
+
+#[tauri::command]
 pub async fn get_function_source(
     state: tauri::State<'_, AppState>,
     connection_id: String,
