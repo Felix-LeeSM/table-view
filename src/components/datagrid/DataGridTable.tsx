@@ -144,6 +144,76 @@ export default function DataGridTable({
     [columnWidths],
   );
 
+  /**
+   * Move the inline edit cursor to a neighboring cell.
+   *
+   * Visual layout uses `order` so that `direction` is always interpreted
+   * relative to what the user sees, not the underlying data column index.
+   * Wraps to the next/previous row when the requested move overflows the
+   * row boundary; clamps at the table boundaries (no wrap across the entire
+   * grid — staying in-place is less surprising than jumping back to (0,0)).
+   */
+  const moveEditCursor = useCallback(
+    (
+      currentRow: number,
+      currentDataCol: number,
+      direction: "next-col" | "prev-col" | "next-row" | "prev-row",
+    ) => {
+      const totalRows = data.rows.length;
+      if (totalRows === 0) return;
+      const totalCols = order.length;
+      if (totalCols === 0) return;
+
+      const visualCol = order.indexOf(currentDataCol);
+      if (visualCol === -1) return;
+
+      let nextRow = currentRow;
+      let nextVisualCol = visualCol;
+
+      if (direction === "next-col") {
+        nextVisualCol = visualCol + 1;
+        if (nextVisualCol >= totalCols) {
+          nextVisualCol = 0;
+          nextRow = currentRow + 1;
+        }
+      } else if (direction === "prev-col") {
+        nextVisualCol = visualCol - 1;
+        if (nextVisualCol < 0) {
+          nextVisualCol = totalCols - 1;
+          nextRow = currentRow - 1;
+        }
+      } else if (direction === "next-row") {
+        nextRow = currentRow + 1;
+      } else if (direction === "prev-row") {
+        nextRow = currentRow - 1;
+      }
+
+      if (nextRow < 0 || nextRow >= totalRows) {
+        // Past the edge of the grid — just save and stop here
+        onSaveCurrentEdit();
+        return;
+      }
+
+      const nextDataCol = order[nextVisualCol]!;
+      const nextCell = (data.rows[nextRow] as unknown[])[nextDataCol];
+      const editKeyStr = editKey(nextRow, nextDataCol);
+      const pendingValue = pendingEdits.get(editKeyStr);
+      const startValue =
+        pendingValue !== undefined
+          ? pendingValue
+          : nextCell == null
+            ? ""
+            : typeof nextCell === "object"
+              ? JSON.stringify(nextCell)
+              : String(nextCell);
+
+      // onStartEdit persists the current in-flight edit before opening
+      // the next cell, so callers don't need to call onSaveCurrentEdit.
+      onStartEdit(nextRow, nextDataCol, startValue);
+    },
+    [data.rows, order, pendingEdits, onSaveCurrentEdit, onStartEdit],
+  );
+
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text).catch(() => {
       // Clipboard API may fail in some environments; silently ignore
@@ -517,9 +587,22 @@ export default function DataGridTable({
                           autoFocus
                           onChange={(e) => onSetEditValue(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") {
+                            if (e.key === "Tab") {
+                              e.preventDefault();
                               e.stopPropagation();
-                              onSaveCurrentEdit();
+                              moveEditCursor(
+                                rowIdx,
+                                dIdx,
+                                e.shiftKey ? "prev-col" : "next-col",
+                              );
+                            } else if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveEditCursor(
+                                rowIdx,
+                                dIdx,
+                                e.shiftKey ? "prev-row" : "next-row",
+                              );
                             } else if (e.key === "Escape") {
                               e.stopPropagation();
                               onCancelEdit();
