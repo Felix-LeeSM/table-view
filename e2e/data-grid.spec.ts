@@ -246,10 +246,13 @@ describe("Data Grid & Query Execution", () => {
     const tabsBefore = await $$('[role="tab"]');
     const countBefore = tabsBefore.length;
 
-    // Close the tab
+    // Close the tab. The button uses `opacity-0 group-hover:opacity-100`
+    // which webdriver treats as not displayed; trigger the click via JS to
+    // bypass the visibility gate (the click handler itself is what we care
+    // about for this test).
     const closeBtn = await tab.$('[aria-label^="Close"]');
-    await closeBtn.waitForDisplayed({ timeout: 5000 });
-    await closeBtn.click();
+    await closeBtn.waitForExist({ timeout: 5000 });
+    await browser.execute((el: HTMLElement) => el.click(), closeBtn);
 
     // Wait for tab to be removed
     await browser.pause(500);
