@@ -10,10 +10,10 @@
 - [x] 환경 태그 색상 배지로 시각적 표시 (ConnectionItem)
 - [ ] 태그로 필터링 가능
 
-## F2.6: 뷰(Views) 탐색 *(Sprint 55 부분 구현)*
+## F2.6: 뷰(Views) 탐색 *(Sprint 55 부분 구현, Sprint 62 완료)*
 
 - [x] Views 카테고리에 모든 뷰 목록 표시
-- [ ] 뷰 선택 시 Structure 탭에서 컬럼 정보 표시 *(테이블 전용 Structure 탭만 지원 — 다음 스프린트)*
+- [x] 뷰 선택 시 Structure 탭에서 컬럼 정보 표시 (ViewStructurePanel — Columns/Definition 서브탭)
 - [x] 뷰의 정의 SQL 확인 가능 (`get_view_definition` command)
 - [ ] 뷰 데이터 탐색 가능 (테이블 브라우저와 동일 UX) *(SELECT 쿼리로 조회 가능하나 dedicated UI 없음)*
 
