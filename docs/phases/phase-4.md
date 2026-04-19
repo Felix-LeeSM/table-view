@@ -32,7 +32,8 @@
 
 - [x] 셀 더블클릭 시 편집 모드 진입
 - [x] 텍스트, 숫자, boolean, 날짜/시간 타입 편집 가능
-- [x] 편집 중인 셀이 시각적으로 구분됨 (노란색 배경)
+- [x] 편집 중인 셀이 시각적으로 구분됨 (primary-color ring + bg tint)
+- [x] 값이 원본과 동일하면 pending 상태로 등록하지 않음 (Sprint 61)
 - [x] Tab/Enter로 다음 셀로 이동
 - [x] Escape로 편집 취소
 - [x] 변경 사항은 즉시 DB에 반영되지 않고 "pending" 상태로 표시

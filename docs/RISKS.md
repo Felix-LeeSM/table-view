@@ -2,7 +2,7 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-12 (Sprint 40 + E2E 안정화 완료 후 검증)
+Last updated: 2026-04-19 (Sprint 61 완료 후 검증)
 
 ## Summary
 
