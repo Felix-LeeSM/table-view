@@ -119,6 +119,9 @@ describe("DataGridTable — context menu", () => {
     contextClickFirstDataRow();
 
     expect(
+      screen.getByRole("menuitem", { name: "Show Cell Details" }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("menuitem", { name: "Edit Cell" }),
     ).toBeInTheDocument();
     expect(
@@ -346,5 +349,26 @@ describe("DataGridTable — context menu", () => {
     contextClickFirstDataRow();
 
     expect(screen.getByRole("separator")).toBeInTheDocument();
+  });
+
+  // S61-4: Show Cell Details opens the dialog with the right cell
+  it("opens cell detail dialog when Show Cell Details is clicked", () => {
+    renderTable();
+    // Right-click directly on the second cell of row 0 ("Alice"), not the row.
+    const tds = document.querySelectorAll("tbody tr:first-child td");
+    fireEvent.contextMenu(tds[1]!, { clientX: 50, clientY: 50 });
+
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("menuitem", { name: "Show Cell Details" }),
+      );
+    });
+
+    // Scope to the dialog so we don't collide with the table header that
+    // also reads "name".
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("name");
+    expect(dialog.textContent).toContain("(text)");
+    expect(dialog.textContent).toContain("Alice");
   });
 });

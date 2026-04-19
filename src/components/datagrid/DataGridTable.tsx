@@ -16,8 +16,10 @@ import {
   FileJson,
   FileText,
   Database,
+  Maximize2,
 } from "lucide-react";
 import BlobViewerDialog from "./BlobViewerDialog";
+import CellDetailDialog from "./CellDetailDialog";
 import {
   rowsToPlainText,
   rowsToJson,
@@ -121,6 +123,14 @@ export default function DataGridTable({
   const [blobViewer, setBlobViewer] = useState<{
     data: unknown;
     columnName: string;
+  } | null>(null);
+
+  // Cell detail viewer state — shows the full value of one cell in a dialog,
+  // since long text is otherwise truncated and unreadable in the grid.
+  const [cellDetail, setCellDetail] = useState<{
+    data: unknown;
+    columnName: string;
+    dataType: string;
   } | null>(null);
 
   // Column drag reorder state
@@ -241,16 +251,26 @@ export default function DataGridTable({
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
         {
+          label: "Show Cell Details",
+          icon: <Maximize2 size={14} />,
+          onClick: () => {
+            const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
+            const col = data.columns[contextMenu.colIdx];
+            if (col) {
+              setCellDetail({
+                data: cell,
+                columnName: col.name,
+                dataType: col.data_type,
+              });
+            }
+          },
+        },
+        {
           label: "Edit Cell",
           icon: <Pencil size={14} />,
           onClick: () => {
             const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
-            const cellStr =
-              cell == null
-                ? ""
-                : typeof cell === "object"
-                  ? JSON.stringify(cell)
-                  : String(cell);
+            const cellStr = cellToEditString(cell);
             onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, cellStr);
           },
         },
@@ -533,7 +553,9 @@ export default function DataGridTable({
                   onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)
                 }
                 onContextMenu={(e) => {
-                  // Use first data column index for context menu
+                  // Fallback when the right-click lands between cells.
+                  // Cell-level handlers below override this when the click
+                  // hits a real td so the context menu reflects that cell.
                   handleContextMenu(e, rowIdx, 0);
                 }}
               >
@@ -577,6 +599,12 @@ export default function DataGridTable({
                         if (editingCell) {
                           onSaveCurrentEdit();
                         }
+                      }}
+                      onContextMenu={(e) => {
+                        // Stop the row-level handler from overwriting our
+                        // accurate per-cell coordinates with colIdx=0.
+                        e.stopPropagation();
+                        handleContextMenu(e, rowIdx, dIdx);
                       }}
                     >
                       {isEditing ? (
@@ -695,6 +723,17 @@ export default function DataGridTable({
           }}
           data={blobViewer.data}
           columnName={blobViewer.columnName}
+        />
+      )}
+      {cellDetail && (
+        <CellDetailDialog
+          open={cellDetail !== null}
+          onOpenChange={(open) => {
+            if (!open) setCellDetail(null);
+          }}
+          data={cellDetail.data}
+          columnName={cellDetail.columnName}
+          dataType={cellDetail.dataType}
         />
       )}
     </div>

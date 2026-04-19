@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import QueryResultGrid from "./QueryResultGrid";
 import type { QueryResult } from "../types/query";
 
@@ -98,9 +98,7 @@ describe("QueryResultGrid", () => {
         queryState={{ status: "completed", result: DDL_RESULT }}
       />,
     );
-    expect(
-      screen.getByText("Query executed successfully"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Query executed successfully")).toBeInTheDocument();
   });
 
   it("shows execution time for DDL", () => {
@@ -110,6 +108,25 @@ describe("QueryResultGrid", () => {
       />,
     );
     expect(screen.getByText("120 ms")).toBeInTheDocument();
+  });
+
+  it("opens cell detail dialog on double-click in SELECT result", () => {
+    render(
+      <QueryResultGrid
+        queryState={{ status: "completed", result: SELECT_RESULT }}
+      />,
+    );
+
+    // Double-click the first row's name cell ("Alice").
+    const firstRowCells = document.querySelectorAll("tbody tr:first-child td");
+    act(() => {
+      fireEvent.doubleClick(firstRowCells[1]!);
+    });
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("name");
+    expect(dialog.textContent).toContain("(text)");
+    expect(dialog.textContent).toContain("Alice");
   });
 
   it("shows 'No data' for SELECT with empty rows", () => {

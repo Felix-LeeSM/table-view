@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { QueryResult, QueryState, QueryType } from "../types/query";
 import { truncateCell } from "../lib/format";
+import CellDetailDialog from "./datagrid/CellDetailDialog";
 
 interface QueryResultGridProps {
   queryState: QueryState;
@@ -24,6 +26,12 @@ function formatCell(cell: unknown): string {
 }
 
 function ResultTable({ result }: { result: QueryResult }) {
+  const [cellDetail, setCellDetail] = useState<{
+    data: unknown;
+    columnName: string;
+    dataType: string;
+  } | null>(null);
+
   return (
     <div className="flex-1 overflow-auto">
       <table className="w-full border-collapse text-sm">
@@ -49,21 +57,33 @@ function ResultTable({ result }: { result: QueryResult }) {
               key={`row-${rowIdx}`}
               className="border-b border-border hover:bg-muted"
             >
-              {row.map((cell, cellIdx) => (
-                <td
-                  key={cellIdx}
-                  className="overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground"
-                  title={formatCell(cell)}
-                >
-                  {cell == null ? (
-                    <span className="italic text-muted-foreground">NULL</span>
-                  ) : (
-                    <span className="line-clamp-3">
-                      {truncateCell(formatCell(cell))}
-                    </span>
-                  )}
-                </td>
-              ))}
+              {row.map((cell, cellIdx) => {
+                const col = result.columns[cellIdx];
+                return (
+                  <td
+                    key={cellIdx}
+                    className="overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground cursor-pointer"
+                    title={`${formatCell(cell)}\n\n(double-click to expand)`}
+                    onDoubleClick={() => {
+                      if (col) {
+                        setCellDetail({
+                          data: cell,
+                          columnName: col.name,
+                          dataType: col.data_type,
+                        });
+                      }
+                    }}
+                  >
+                    {cell == null ? (
+                      <span className="italic text-muted-foreground">NULL</span>
+                    ) : (
+                      <span className="line-clamp-3">
+                        {truncateCell(formatCell(cell))}
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
             </tr>
           ))}
           {result.rows.length === 0 && (
@@ -78,6 +98,17 @@ function ResultTable({ result }: { result: QueryResult }) {
           )}
         </tbody>
       </table>
+      {cellDetail && (
+        <CellDetailDialog
+          open={cellDetail !== null}
+          onOpenChange={(open) => {
+            if (!open) setCellDetail(null);
+          }}
+          data={cellDetail.data}
+          columnName={cellDetail.columnName}
+          dataType={cellDetail.dataType}
+        />
+      )}
     </div>
   );
 }
