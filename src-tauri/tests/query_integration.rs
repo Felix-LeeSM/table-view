@@ -535,6 +535,10 @@ async fn test_select_with_trailing_semicolon() {
 }
 
 /// Integration test: a DML with a trailing semicolon should also work.
+///
+/// Uses a uniquely named real table (not TEMP) because TEMP tables are
+/// session-scoped and the sqlx pool may hand out a different connection
+/// for the INSERT than for the CREATE.
 #[tokio::test]
 #[serial_test::serial]
 async fn test_dml_with_trailing_semicolon() {
@@ -543,19 +547,30 @@ async fn test_dml_with_trailing_semicolon() {
         None => return,
     };
 
-    // Setup: create a temp table
+    let table_name = format!(
+        "test_trailing_semi_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+    );
+
     adapter
-        .execute_query("CREATE TEMP TABLE trailing_semi_test (id integer);", None)
+        .execute_query(&format!("CREATE TABLE {table_name} (id integer);"), None)
         .await
-        .expect("CREATE TEMP TABLE should succeed");
+        .expect("CREATE TABLE should succeed");
 
     let result = adapter
-        .execute_query("INSERT INTO trailing_semi_test VALUES (1);", None)
+        .execute_query(&format!("INSERT INTO {table_name} VALUES (1);"), None)
         .await
         .expect("INSERT with trailing semicolon should succeed");
 
     assert!(matches!(result.query_type, QueryType::Dml { .. }));
 
+    adapter
+        .execute_query(&format!("DROP TABLE {table_name}"), None)
+        .await
+        .ok();
     adapter.disconnect_pool().await.ok();
 }
 
