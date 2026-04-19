@@ -5,7 +5,11 @@ import { useSchemaStore } from "../stores/schemaStore";
 
 describe("useSqlAutocomplete", () => {
   beforeEach(() => {
-    useSchemaStore.setState({ tables: {} });
+    useSchemaStore.setState({
+      tables: {},
+      views: {},
+      tableColumnsCache: {},
+    });
   });
 
   it("returns namespace with functions but no tables when no tables loaded", () => {
@@ -140,5 +144,131 @@ describe("useSqlAutocomplete", () => {
     expect(ns).toHaveProperty("users");
     // users should still exist but without column details
     expect((ns as Record<string, Record<string, unknown>>).users).toEqual({});
+  });
+
+  // -- Sprint 60 / S60-5: cached columns + views --
+
+  it("uses tableColumnsCache when no explicit override is supplied", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+      },
+      tableColumnsCache: {
+        "conn1:public:users": [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+          {
+            name: "email",
+            data_type: "text",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toHaveProperty("id");
+    expect(ns.users).toHaveProperty("email");
+    expect(ns["public.users"]).toHaveProperty("id");
+  });
+
+  it("ignores cached columns from other connections", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+      },
+      tableColumnsCache: {
+        "conn2:public:users": [
+          {
+            name: "secret",
+            data_type: "text",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toBeDefined();
+    expect(ns.users).not.toHaveProperty("secret");
+  });
+
+  it("explicit tableColumns override beats cache", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+      },
+      tableColumnsCache: {
+        "conn1:public:users": [
+          {
+            name: "cached_col",
+            data_type: "text",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { users: ["override_col"] }),
+    );
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toHaveProperty("override_col");
+    expect(ns.users).not.toHaveProperty("cached_col");
+  });
+
+  it("includes view names with cached columns", () => {
+    useSchemaStore.setState({
+      views: {
+        "conn1:public": [
+          { name: "active_users", schema: "public", definition: null },
+        ],
+      },
+      tableColumnsCache: {
+        "conn1:public:active_users": [
+          {
+            name: "user_id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.active_users).toBeDefined();
+    expect(ns.active_users).toHaveProperty("user_id");
+    expect(ns["public.active_users"]).toHaveProperty("user_id");
   });
 });

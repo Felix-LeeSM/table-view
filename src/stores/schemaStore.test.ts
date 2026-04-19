@@ -147,6 +147,7 @@ describe("schemaStore", () => {
       tables: {},
       views: {},
       functions: {},
+      tableColumnsCache: {},
       loading: false,
       error: null,
     });
@@ -204,6 +205,32 @@ describe("schemaStore", () => {
     expect(columns).toHaveLength(1);
     expect(columns[0]!.name).toBe("id");
     expect(columns[0]!.is_primary_key).toBe(true);
+  });
+
+  it("getTableColumns populates tableColumnsCache for autocomplete", async () => {
+    await useSchemaStore.getState().getTableColumns("conn1", "users", "public");
+    const state = useSchemaStore.getState();
+    expect(state.tableColumnsCache["conn1:public:users"]).toBeDefined();
+    expect(state.tableColumnsCache["conn1:public:users"]).toHaveLength(1);
+    expect(state.tableColumnsCache["conn1:public:users"]![0]!.name).toBe("id");
+  });
+
+  it("clearSchema also drops cached columns for that connection", async () => {
+    useSchemaStore.setState({
+      tableColumnsCache: {
+        "conn1:public:users": [],
+        "conn1:public:orders": [],
+        "conn2:public:items": [],
+      },
+    });
+
+    useSchemaStore.getState().clearSchema("conn1");
+
+    const state = useSchemaStore.getState();
+    expect(state.tableColumnsCache["conn1:public:users"]).toBeUndefined();
+    expect(state.tableColumnsCache["conn1:public:orders"]).toBeUndefined();
+    // Other connection preserved
+    expect(state.tableColumnsCache["conn2:public:items"]).toBeDefined();
   });
 
   it("delegates queryTableData", async () => {

@@ -18,6 +18,13 @@ interface SchemaState {
   tables: Record<string, TableInfo[]>;
   views: Record<string, ViewInfo[]>;
   functions: Record<string, FunctionInfo[]>;
+  /**
+   * Column metadata cache, keyed by `${connectionId}:${schema}:${table}`.
+   * Populated on demand by `getTableColumns` so that downstream consumers
+   * (e.g. SQL autocomplete) can resolve `table.column` candidates without
+   * re-fetching from the backend.
+   */
+  tableColumnsCache: Record<string, ColumnInfo[]>;
   loading: boolean;
   error: string | null;
 
@@ -84,6 +91,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   tables: {},
   views: {},
   functions: {},
+  tableColumnsCache: {},
   loading: false,
   error: null,
 
@@ -139,7 +147,16 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   },
 
   getTableColumns: async (connectionId, table, schema) => {
-    return tauri.getTableColumns(connectionId, table, schema);
+    const columns = await tauri.getTableColumns(connectionId, table, schema);
+    // Cache for SQL autocomplete and other consumers
+    const cacheKey = `${connectionId}:${schema}:${table}`;
+    set((state) => ({
+      tableColumnsCache: {
+        ...state.tableColumnsCache,
+        [cacheKey]: columns,
+      },
+    }));
+    return columns;
   },
 
   getTableIndexes: async (connectionId, table, schema) => {
@@ -239,6 +256,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       const newTables = { ...state.tables };
       const newViews = { ...state.views };
       const newFunctions = { ...state.functions };
+      const newColumnsCache = { ...state.tableColumnsCache };
       // Remove all entries for this connection
       for (const key of Object.keys(newTables)) {
         if (key.startsWith(`${connectionId}:`)) {
@@ -255,11 +273,17 @@ export const useSchemaStore = create<SchemaState>((set) => ({
           delete newFunctions[key];
         }
       }
+      for (const key of Object.keys(newColumnsCache)) {
+        if (key.startsWith(`${connectionId}:`)) {
+          delete newColumnsCache[key];
+        }
+      }
       return {
         schemas: newSchemas,
         tables: newTables,
         views: newViews,
         functions: newFunctions,
+        tableColumnsCache: newColumnsCache,
       };
     });
   },
