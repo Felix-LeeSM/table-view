@@ -41,6 +41,16 @@ fn strip_leading_comments(sql: &str) -> &str {
     s
 }
 
+/// Strip trailing semicolons and whitespace from a SQL statement.
+///
+/// Raw queries are wrapped in subqueries (e.g. `SELECT row_to_json(q) FROM (…) q`)
+/// when projecting JSON, so a trailing `;` from the user input becomes a syntax
+/// error inside the parens. This helper normalises the input by removing any
+/// trailing `;` and whitespace before the wrapping happens.
+fn strip_trailing_terminator(sql: &str) -> &str {
+    sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
+}
+
 /// Validate a SQL identifier (table name, column name, index name, constraint name)
 /// to prevent SQL injection. Only allows `[a-zA-Z_][a-zA-Z0-9_]*`.
 fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
@@ -211,6 +221,16 @@ impl PostgresAdapter {
         cancel_token: Option<&CancellationToken>,
     ) -> Result<QueryResult, AppError> {
         let start = std::time::Instant::now();
+
+        // Strip a trailing `;` so it does not break the row_to_json wrapping
+        // for SELECT queries — PostgreSQL itself accepts a single trailing
+        // semicolon on top-level statements, but it is invalid inside parens.
+        let query = strip_trailing_terminator(query);
+        if query.trim().is_empty() {
+            return Err(AppError::Validation(
+                "SQL query is empty after removing trailing terminators".into(),
+            ));
+        }
 
         // Detect query type from the SQL statement (strip comments first)
         let stripped = strip_leading_comments(query);
@@ -1630,6 +1650,41 @@ mod tests {
     #[test]
     fn strip_leading_comments_whitespace_only() {
         assert_eq!(strip_leading_comments("   "), "");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_removes_single_semicolon() {
+        assert_eq!(strip_trailing_terminator("SELECT 1;"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_removes_semicolon_with_whitespace() {
+        assert_eq!(strip_trailing_terminator("SELECT 1;  \n  "), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_removes_multiple_semicolons() {
+        assert_eq!(strip_trailing_terminator("SELECT 1;;"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_no_change_when_absent() {
+        assert_eq!(strip_trailing_terminator("SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_preserves_internal_semicolon() {
+        // Internal semicolons (e.g., inside string literals or between statements)
+        // are not the helper's responsibility — only true trailing ones go.
+        assert_eq!(
+            strip_trailing_terminator("SELECT ';' as v;"),
+            "SELECT ';' as v"
+        );
+    }
+
+    #[test]
+    fn strip_trailing_terminator_only_semicolons_returns_empty() {
+        assert_eq!(strip_trailing_terminator(";  ;  "), "");
     }
 
     #[tokio::test]

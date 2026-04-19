@@ -513,6 +513,52 @@ async fn test_select_with_leading_comment() {
     adapter.disconnect_pool().await.ok();
 }
 
+/// Integration test: a SELECT with a trailing semicolon should NOT throw a
+/// syntax error — the wrapping subquery would otherwise become invalid.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_select_with_trailing_semicolon() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let result = adapter
+        .execute_query("SELECT 1 as one;", None)
+        .await
+        .expect("SELECT with trailing semicolon should succeed");
+
+    assert_eq!(result.rows.len(), 1);
+    assert!(matches!(result.query_type, QueryType::Select));
+
+    adapter.disconnect_pool().await.ok();
+}
+
+/// Integration test: a DML with a trailing semicolon should also work.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_dml_with_trailing_semicolon() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    // Setup: create a temp table
+    adapter
+        .execute_query("CREATE TEMP TABLE trailing_semi_test (id integer);", None)
+        .await
+        .expect("CREATE TEMP TABLE should succeed");
+
+    let result = adapter
+        .execute_query("INSERT INTO trailing_semi_test VALUES (1);", None)
+        .await
+        .expect("INSERT with trailing semicolon should succeed");
+
+    assert!(matches!(result.query_type, QueryType::Dml { .. }));
+
+    adapter.disconnect_pool().await.ok();
+}
+
 /// Integration test: execute a SELECT with leading block comment.
 #[tokio::test]
 #[serial_test::serial]
