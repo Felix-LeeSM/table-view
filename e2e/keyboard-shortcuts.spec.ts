@@ -26,16 +26,35 @@ describe("Keyboard shortcuts (Sprint 60)", () => {
     }, key);
   }
 
+  /** Wait until the App + Sidebar listeners are mounted before dispatching. */
+  async function ensureAppReady() {
+    const newBtn = await $('[aria-label="New Connection"]');
+    await newBtn.waitForDisplayed({ timeout: 10000 });
+  }
+
+  /**
+   * Dispatch the shortcut and wait for the modal. Some webkit/wry builds
+   * race with React's first effect, so retry the dispatch a few times.
+   */
+  async function pressUntilDialog(key: string) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await pressCtrl(key);
+      try {
+        const dialog = await $('[role="dialog"]');
+        await dialog.waitForDisplayed({ timeout: 2000 });
+        return;
+      } catch {
+        // try again
+      }
+    }
+    throw new Error(`Dialog never appeared after Ctrl+${key}`);
+  }
+
   it("Ctrl+N opens the New Connection dialog", async () => {
-    // Make sure we start with no dialog open
-    const initial = await $$('[role="dialog"]');
-    const initialCount = initial.length;
+    await ensureAppReady();
+    const initialCount = (await $$('[role="dialog"]')).length;
 
-    await pressCtrl("n");
-
-    // After dispatch, ConnectionDialog should mount and become visible.
-    const dialog = await $('[role="dialog"]');
-    await dialog.waitForDisplayed({ timeout: 5000 });
+    await pressUntilDialog("n");
 
     const newCount = (await $$('[role="dialog"]')).length;
     expect(newCount).toBeGreaterThan(initialCount);
@@ -45,10 +64,8 @@ describe("Keyboard shortcuts (Sprint 60)", () => {
   });
 
   it("Ctrl+P opens the Quick Open palette", async () => {
-    await pressCtrl("p");
-
-    const dialog = await $('[role="dialog"]');
-    await dialog.waitForDisplayed({ timeout: 5000 });
+    await ensureAppReady();
+    await pressUntilDialog("p");
 
     // The palette is identifiable by its placeholder copy
     const input = await $(

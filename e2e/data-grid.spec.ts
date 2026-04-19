@@ -238,18 +238,20 @@ describe("Data Grid & Query Execution", () => {
     await firstTable.waitForDisplayed({ timeout: 5000 });
     await firstTable.click();
 
-    // Wait for tab to appear
-    const tab = await $('[role="tab"]');
+    // Scope all tab queries to the TabBar list — MainArea also renders
+    // role="tab" elements (Records/Structure sub-tabs) which would otherwise
+    // inflate the count and confuse the diff after closing.
+    const tabBarTabs =
+      '[role="tablist"][aria-label="Open connections"] [role="tab"]';
+
+    const tab = await $(tabBarTabs);
     await tab.waitForDisplayed({ timeout: 5000 });
 
-    // Get tab count before closing
-    const tabsBefore = await $$('[role="tab"]');
-    const countBefore = tabsBefore.length;
+    const countBefore = (await $$(tabBarTabs)).length;
 
-    // Close the tab. The button uses `opacity-0 group-hover:opacity-100`
-    // which webdriver treats as not displayed; trigger the click via JS to
-    // bypass the visibility gate (the click handler itself is what we care
-    // about for this test).
+    // The close button uses `opacity-0 group-hover:opacity-100` which
+    // webdriver treats as not displayed; trigger the click via JS to bypass
+    // the visibility gate. The React onClick handler is what we care about.
     const closeBtn = await tab.$('[aria-label^="Close"]');
     await closeBtn.waitForExist({ timeout: 5000 });
     await browser.execute((el: HTMLElement) => el.click(), closeBtn);
@@ -257,7 +259,7 @@ describe("Data Grid & Query Execution", () => {
     // Wait for tab to be removed
     await browser.pause(500);
 
-    const tabsAfter = await $$('[role="tab"]');
+    const tabsAfter = await $$(tabBarTabs);
     expect(tabsAfter.length).toBe(countBefore - 1);
   });
 });
