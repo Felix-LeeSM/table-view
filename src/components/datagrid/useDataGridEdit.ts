@@ -29,6 +29,40 @@ export function getInputTypeForColumn(dataType: string): string {
   return "text";
 }
 
+/**
+ * Render a raw cell value as the string the editor input would show.
+ * Used both for opening the editor and for detecting "no change" on save.
+ * Object cells use indented JSON so the editor and the comparison agree.
+ */
+export function cellToEditString(cell: unknown): string {
+  if (cell == null) return "";
+  if (typeof cell === "object") return JSON.stringify(cell, null, 2);
+  return String(cell);
+}
+
+/**
+ * Apply a cell edit, but skip (or remove) the pending entry when the value
+ * matches the original cell — opening and closing an editor without typing,
+ * or undoing a change back to the original, should not leave a phantom
+ * pending state behind.
+ */
+function applyEditOrClear(
+  prev: Map<string, string>,
+  key: string,
+  value: string,
+  originalValue: string,
+): Map<string, string> {
+  if (value === originalValue) {
+    if (!prev.has(key)) return prev;
+    const next = new Map(prev);
+    next.delete(key);
+    return next;
+  }
+  const next = new Map(prev);
+  next.set(key, value);
+  return next;
+}
+
 export interface UseDataGridEditParams {
   data: TableData | null;
   schema: string;
@@ -127,14 +161,14 @@ export function useDataGridEdit({
   const saveCurrentEdit = useCallback(() => {
     if (!editingCell) return;
     const key = editKey(editingCell.row, editingCell.col);
-    setPendingEdits((prev) => {
-      const next = new Map(prev);
-      next.set(key, editValue);
-      return next;
-    });
+    const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
+    const originalStr = cellToEditString(originalCell);
+    setPendingEdits((prev) =>
+      applyEditOrClear(prev, key, editValue, originalStr),
+    );
     setEditingCell(null);
     setEditValue("");
-  }, [editingCell, editValue]);
+  }, [editingCell, editValue, data]);
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
@@ -180,21 +214,21 @@ export function useDataGridEdit({
 
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string) => {
-      // Save any existing edit first
+      // Save any existing edit first — but skip pending when value unchanged
       if (editingCell) {
         const key = editKey(editingCell.row, editingCell.col);
-        setPendingEdits((prev) => {
-          const next = new Map(prev);
-          next.set(key, editValue);
-          return next;
-        });
+        const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
+        const originalStr = cellToEditString(originalCell);
+        setPendingEdits((prev) =>
+          applyEditOrClear(prev, key, editValue, originalStr),
+        );
       }
       setEditingCell({ row: rowIdx, col: colIdx });
       setEditValue(currentValue);
       // Promote preview tab on inline edit start
       if (activeTabId) promoteTab(activeTabId);
     },
-    [editingCell, editValue, activeTabId, promoteTab],
+    [editingCell, editValue, data, activeTabId, promoteTab],
   );
 
   const handleCommit = useCallback(() => {
@@ -295,12 +329,19 @@ export function useDataGridEdit({
   useEffect(() => {
     const handler = () => {
       if (!hasPendingChanges) return;
-      // If a cell is being edited, persist its value before opening preview
+      // If a cell is being edited, persist its value before opening preview —
+      // but only if the value actually differs from the original.
       if (editingCell) {
-        const key = editKey(editingCell.row, editingCell.col);
-        const merged = new Map(pendingEdits);
-        merged.set(key, editValue);
         if (!data) return;
+        const key = editKey(editingCell.row, editingCell.col);
+        const originalCell = data.rows[editingCell.row]?.[editingCell.col];
+        const originalStr = cellToEditString(originalCell);
+        const merged = applyEditOrClear(
+          pendingEdits,
+          key,
+          editValue,
+          originalStr,
+        );
         const sqlStatements = generateSql(
           data,
           schema,

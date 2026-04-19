@@ -2,7 +2,11 @@ import { useCallback, useRef, useState } from "react";
 import { Loader2, Key, Binary } from "lucide-react";
 import { truncateCell } from "../../lib/format";
 import type { SortInfo, TableData } from "../../types/schema";
-import { editKey, getInputTypeForColumn } from "./useDataGridEdit";
+import {
+  editKey,
+  cellToEditString,
+  getInputTypeForColumn,
+} from "./useDataGridEdit";
 import { ContextMenu, type ContextMenuItem } from "../ContextMenu";
 import {
   Pencil,
@@ -199,13 +203,7 @@ export default function DataGridTable({
       const editKeyStr = editKey(nextRow, nextDataCol);
       const pendingValue = pendingEdits.get(editKeyStr);
       const startValue =
-        pendingValue !== undefined
-          ? pendingValue
-          : nextCell == null
-            ? ""
-            : typeof nextCell === "object"
-              ? JSON.stringify(nextCell)
-              : String(nextCell);
+        pendingValue !== undefined ? pendingValue : cellToEditString(nextCell);
 
       // onStartEdit persists the current in-flight edit before opening
       // the next cell, so callers don't need to call onSaveCurrentEdit.
@@ -546,12 +544,7 @@ export default function DataGridTable({
                   const isEditing =
                     editingCell?.row === rowIdx && editingCell?.col === dIdx;
                   const hasPendingEdit = pendingEdits.has(key);
-                  const cellStr =
-                    cell == null
-                      ? ""
-                      : typeof cell === "object" && cell !== null
-                        ? JSON.stringify(cell, null, 2)
-                        : String(cell);
+                  const cellStr = cellToEditString(cell);
                   const displayValue = hasPendingEdit
                     ? pendingEdits.get(key)!
                     : cellStr;
@@ -560,7 +553,14 @@ export default function DataGridTable({
                   return (
                     <td
                       key={`${dIdx}-${visualIdx}`}
-                      className={`overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${hasPendingEdit ? " bg-yellow-500/20" : ""}`}
+                      data-editing={isEditing ? "true" : undefined}
+                      className={`overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
+                        isEditing
+                          ? " bg-primary/10 ring-2 ring-inset ring-primary"
+                          : hasPendingEdit
+                            ? " bg-yellow-500/20"
+                            : ""
+                      }`}
                       style={{
                         width: getColumnWidth(col.name, col.data_type),
                         minWidth: MIN_COL_WIDTH,
@@ -582,9 +582,10 @@ export default function DataGridTable({
                       {isEditing ? (
                         <input
                           type={getInputTypeForColumn(col.data_type)}
-                          className="w-full border-none bg-transparent p-0 text-xs text-foreground outline-none"
+                          className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
                           value={editValue}
                           autoFocus
+                          aria-label={`Editing ${col.name}`}
                           onChange={(e) => onSetEditValue(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Tab") {
