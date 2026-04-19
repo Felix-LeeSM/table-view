@@ -111,6 +111,33 @@ vi.mock("../lib/tauri", () => ({
   ),
   dropTable: vi.fn(() => Promise.resolve()),
   renameTable: vi.fn(() => Promise.resolve()),
+  getViewColumns: vi.fn(() =>
+    Promise.resolve([
+      {
+        name: "id",
+        data_type: "integer",
+        nullable: false,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "name",
+        data_type: "text",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: "display name",
+      },
+    ]),
+  ),
+  getViewDefinition: vi.fn(() =>
+    Promise.resolve("SELECT id, name FROM users WHERE active = true"),
+  ),
 }));
 
 describe("schemaStore", () => {
@@ -600,6 +627,50 @@ describe("schemaStore", () => {
     expect(state.tables["conn1:public"]).toBeUndefined();
     expect(state.views["conn1:public"]).toBeUndefined();
     expect(state.functions["conn1:public"]).toBeUndefined();
+  });
+
+  it("delegates getViewColumns", async () => {
+    const { getViewColumns } = await import("../lib/tauri");
+    const columns = await useSchemaStore
+      .getState()
+      .getViewColumns("conn1", "public", "active_users");
+
+    expect(getViewColumns).toHaveBeenCalledWith(
+      "conn1",
+      "public",
+      "active_users",
+    );
+    expect(columns).toHaveLength(2);
+    expect(columns[0]!.name).toBe("id");
+    expect(columns[0]!.is_primary_key).toBe(false);
+    expect(columns[1]!.comment).toBe("display name");
+  });
+
+  it("delegates getViewDefinition", async () => {
+    const { getViewDefinition } = await import("../lib/tauri");
+    const sql = await useSchemaStore
+      .getState()
+      .getViewDefinition("conn1", "public", "active_users");
+
+    expect(getViewDefinition).toHaveBeenCalledWith(
+      "conn1",
+      "public",
+      "active_users",
+    );
+    expect(sql).toContain("SELECT id, name FROM users");
+  });
+
+  it("propagates getViewColumns errors", async () => {
+    const { getViewColumns } = await import("../lib/tauri");
+    (getViewColumns as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("View does not exist"),
+    );
+
+    await expect(
+      useSchemaStore
+        .getState()
+        .getViewColumns("conn1", "public", "missing_view"),
+    ).rejects.toThrow("View does not exist");
   });
 
   it("clearSchema only removes matching connection views/functions", async () => {

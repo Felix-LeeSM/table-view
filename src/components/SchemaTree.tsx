@@ -385,6 +385,23 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       schema: schemaName,
       table: viewName,
       subView: "records",
+      objectKind: "view",
+    });
+  };
+
+  const handleOpenViewStructure = (viewName: string, schemaName: string) => {
+    setSelectedNodeId(
+      nodeIdToString({ type: "view", schema: schemaName, view: viewName }),
+    );
+    addTab({
+      title: `${schemaName}.${viewName}`,
+      connectionId,
+      type: "table",
+      closable: true,
+      schema: schemaName,
+      table: viewName,
+      subView: "structure",
+      objectKind: "view",
     });
   };
 
@@ -486,7 +503,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               label: "Structure",
               icon: <Columns3 size={14} />,
               onClick: () =>
-                handleViewClick(
+                handleOpenViewStructure(
                   contextMenuTarget.viewName,
                   contextMenuTarget.schemaName,
                 ),

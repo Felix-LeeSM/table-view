@@ -46,6 +46,25 @@ vi.mock("./StructurePanel", () => ({
   ),
 }));
 
+vi.mock("./ViewStructurePanel", () => ({
+  default: ({
+    connectionId,
+    view,
+    schema,
+  }: {
+    connectionId: string;
+    view: string;
+    schema: string;
+  }) => (
+    <div
+      data-testid="mock-view-structure"
+      data-connection={connectionId}
+      data-view={view}
+      data-schema={schema}
+    />
+  ),
+}));
+
 vi.mock("./QueryTab", () => ({
   default: ({ tab }: { tab: unknown }) => (
     <div data-testid="mock-querytab" data-tab={JSON.stringify(tab)} />
@@ -320,5 +339,48 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     expect(screen.getByText("View Table")).toBeInTheDocument();
+  });
+
+  it("renders ViewStructurePanel when view tab is in structure subView", () => {
+    const tab = makeTableTab({
+      subView: "structure",
+      objectKind: "view",
+      table: "active_users",
+      title: "active_users",
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+
+    render(<MainArea />);
+
+    expect(screen.getByTestId("mock-view-structure")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-structure")).toBeNull();
+    expect(screen.getByTestId("mock-view-structure")).toHaveAttribute(
+      "data-view",
+      "active_users",
+    );
+  });
+
+  it("renders DataGrid (not ViewStructurePanel) for view tab in records subView", () => {
+    const tab = makeTableTab({
+      subView: "records",
+      objectKind: "view",
+      table: "active_users",
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+
+    render(<MainArea />);
+
+    expect(screen.getByTestId("mock-datagrid")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-view-structure")).toBeNull();
+  });
+
+  it("falls back to StructurePanel when objectKind is omitted (legacy tab)", () => {
+    const tab = makeTableTab({ subView: "structure" });
+    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+
+    render(<MainArea />);
+
+    expect(screen.getByTestId("mock-structure")).toBeInTheDocument();
+    expect(screen.queryByTestId("mock-view-structure")).toBeNull();
   });
 });

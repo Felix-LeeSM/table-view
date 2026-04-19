@@ -40,6 +40,16 @@ interface SchemaState {
     table: string,
     schema: string,
   ) => Promise<ConstraintInfo[]>;
+  getViewColumns: (
+    connectionId: string,
+    schema: string,
+    viewName: string,
+  ) => Promise<ColumnInfo[]>;
+  getViewDefinition: (
+    connectionId: string,
+    schema: string,
+    viewName: string,
+  ) => Promise<string>;
   queryTableData: (
     connectionId: string,
     table: string,
@@ -138,6 +148,14 @@ export const useSchemaStore = create<SchemaState>((set) => ({
 
   getTableConstraints: async (connectionId, table, schema) => {
     return tauri.getTableConstraints(connectionId, table, schema);
+  },
+
+  getViewColumns: async (connectionId, schema, viewName) => {
+    return tauri.getViewColumns(connectionId, schema, viewName);
+  },
+
+  getViewDefinition: async (connectionId, schema, viewName) => {
+    return tauri.getViewDefinition(connectionId, schema, viewName);
   },
 
   queryTableData: async (

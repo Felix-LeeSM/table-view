@@ -7,6 +7,17 @@ import type { QueryState } from "../types/query";
 
 export type TabSubView = "records" | "structure";
 
+/**
+ * Distinguishes between a base table and a view.
+ *
+ * Both objects share the same tab shape (records + structure), but the
+ * Structure sub-view renders different content for views (read-only columns
+ * + definition SQL) versus tables (editable columns + indexes + constraints).
+ *
+ * Defaults to "table" when omitted (legacy persisted tabs).
+ */
+export type TabObjectKind = "table" | "view";
+
 /** A tab that shows table data / structure. */
 export interface TableTab {
   type: "table";
@@ -17,6 +28,8 @@ export interface TableTab {
   schema?: string;
   table?: string;
   subView: TabSubView;
+  /** Whether this tab points at a base table or a view. */
+  objectKind?: TabObjectKind;
   /** When true, clicking another table in the same connection replaces this tab. */
   isPreview?: boolean;
 }

@@ -8,6 +8,7 @@ import {
 import { Database } from "lucide-react";
 import DataGrid from "./DataGrid";
 import StructurePanel from "./StructurePanel";
+import ViewStructurePanel from "./ViewStructurePanel";
 import QueryTab from "./QueryTab";
 import GlobalQueryLogPanel from "./GlobalQueryLogPanel";
 
@@ -74,6 +75,12 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
         <DataGrid
           connectionId={tab.connectionId}
           table={tab.table!}
+          schema={tab.schema!}
+        />
+      ) : tab.objectKind === "view" ? (
+        <ViewStructurePanel
+          connectionId={tab.connectionId}
+          view={tab.table!}
           schema={tab.schema!}
         />
       ) : (

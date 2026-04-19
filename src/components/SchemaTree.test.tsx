@@ -2607,4 +2607,97 @@ describe("SchemaTree", () => {
       expect(tabState.tabs[0]!.sql).toBe("BEGIN RETURN x; END");
     }
   });
+
+  // =========================================================================
+  // View context menu — Structure routes to ViewStructurePanel
+  // =========================================================================
+
+  async function expandSchemaWithView() {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {
+        "conn1:public": [
+          {
+            name: "active_users",
+            schema: "public",
+            definition: "SELECT * FROM users WHERE active = true",
+          },
+        ],
+      },
+      functions: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCat = screen.getByLabelText("Views in public");
+    await act(async () => {
+      fireEvent.click(viewsCat);
+    });
+  }
+
+  it("opens view tab in records mode with objectKind 'view' on left click", async () => {
+    await expandSchemaWithView();
+
+    const viewItem = screen.getByLabelText("active_users view");
+    await act(async () => {
+      fireEvent.click(viewItem);
+    });
+
+    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    expect(tab).toBeDefined();
+    if (tab && tab.type === "table") {
+      expect(tab.subView).toBe("records");
+      expect(tab.objectKind).toBe("view");
+      expect(tab.table).toBe("active_users");
+    }
+  });
+
+  it("opens view tab in structure mode when context-menu Structure is clicked", async () => {
+    await expandSchemaWithView();
+
+    const viewItem = screen.getByLabelText("active_users view");
+    await act(async () => {
+      fireEvent.contextMenu(viewItem, { clientX: 100, clientY: 200 });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Structure"));
+    });
+
+    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    expect(tab).toBeDefined();
+    if (tab && tab.type === "table") {
+      expect(tab.subView).toBe("structure");
+      expect(tab.objectKind).toBe("view");
+      expect(tab.table).toBe("active_users");
+    }
+  });
+
+  it("opens view tab in records mode when context-menu Data is clicked", async () => {
+    await expandSchemaWithView();
+
+    const viewItem = screen.getByLabelText("active_users view");
+    await act(async () => {
+      fireEvent.contextMenu(viewItem, { clientX: 100, clientY: 200 });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Data"));
+    });
+
+    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    expect(tab).toBeDefined();
+    if (tab && tab.type === "table") {
+      expect(tab.subView).toBe("records");
+      expect(tab.objectKind).toBe("view");
+    }
+  });
 });

@@ -239,6 +239,18 @@ export async function getViewDefinition(
   });
 }
 
+export async function getViewColumns(
+  connectionId: string,
+  schema: string,
+  viewName: string,
+): Promise<ColumnInfo[]> {
+  return invoke<ColumnInfo[]>("get_view_columns", {
+    connectionId,
+    schema,
+    viewName,
+  });
+}
+
 export async function getFunctionSource(
   connectionId: string,
   schema: string,
