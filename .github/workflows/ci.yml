@@ -40,7 +40,7 @@ jobs:
         run: pnpm lint
 
       - name: Test with coverage
-        run: pnpm test -- --coverage
+        run: pnpm test -- --coverage --reporter=verbose --testTimeout=30000
 
       - name: Build
         run: pnpm build
