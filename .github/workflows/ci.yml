@@ -8,7 +8,7 @@ jobs:
   frontend:
     name: Frontend Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -24,6 +24,14 @@ jobs:
         with:
           node-version: 22.14.0
           cache: pnpm
+
+      - name: Cache Vite transform output
+        uses: actions/cache@v4
+        with:
+          path: node_modules/.vite
+          key: vite-${{ hashFiles('vite.config.ts', 'tsconfig.json') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx') }}
+          restore-keys: |
+            vite-${{ hashFiles('vite.config.ts', 'tsconfig.json') }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
