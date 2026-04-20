@@ -316,7 +316,7 @@ describe("Sidebar", () => {
       expect(screen.getByTestId("import-export-dialog")).toBeInTheDocument();
     });
 
-    it("schemas mode: New Connection and Import/Export remain accessible", () => {
+    it("schemas mode: New Connection stays available; Import/Export is hidden", () => {
       setStores({
         connections: [makeConnection("c1")],
         active: ["c1"],
@@ -326,7 +326,21 @@ describe("Sidebar", () => {
         fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
       });
 
-      // Always-on action buttons should still be present in schemas mode
+      // New Connection is always present (so Cmd+N has a visible counterpart
+      // and the e2e specs always have a stable selector).
+      expect(
+        screen.getByRole("button", { name: /new connection/i }),
+      ).toBeInTheDocument();
+      // Import/Export only makes sense while browsing connections.
+      expect(
+        screen.queryByRole("button", { name: /import \/ export/i }),
+      ).toBeNull();
+    });
+
+    it("connections mode: Import/Export and New Connection are both visible", () => {
+      setStores({});
+      render(<Sidebar />);
+
       expect(
         screen.getByRole("button", { name: /import \/ export/i }),
       ).toBeInTheDocument();

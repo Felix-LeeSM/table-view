@@ -145,9 +145,11 @@ export default function Sidebar() {
   const selectedConnected =
     !!selectedConnId && activeStatuses[selectedConnId]?.type === "connected";
 
-  // Right-side action buttons. New Connection + Import/Export are always
-  // available so test/keyboard flows don't depend on the current mode. The
-  // mode-context "+ Query" only appears in schemas mode.
+  // Right-side action buttons. New Connection is always present so keyboard
+  // and test flows don't depend on the current mode. The mode-context
+  // buttons appear only where they make sense:
+  //   - schemas mode: "+ Query" against the selected connection
+  //   - connections mode: Import / Export of connection definitions
   const renderActionButtons = () => (
     <div className="flex items-center gap-1">
       {mode === "schemas" && (
@@ -168,16 +170,18 @@ export default function Sidebar() {
           Query
         </Button>
       )}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-        aria-label="Import / Export"
-        title="Import / Export"
-        onClick={() => setShowImportExport(true)}
-      >
-        <ArrowDownUp />
-      </Button>
+      {mode === "connections" && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+          aria-label="Import / Export"
+          title="Import / Export"
+          onClick={() => setShowImportExport(true)}
+        >
+          <ArrowDownUp />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon-xs"
