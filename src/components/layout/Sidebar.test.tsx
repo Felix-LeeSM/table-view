@@ -223,4 +223,68 @@ describe("Sidebar", () => {
     });
     expect(screen.queryByTestId("connection-dialog")).toBeNull();
   });
+
+  describe("New Query button", () => {
+    it("is disabled when no connection is selected", () => {
+      setStores({});
+      render(<Sidebar />);
+      const btn = screen.getByRole("button", { name: /new query tab/i });
+      expect(btn).toBeDisabled();
+    });
+
+    it("is disabled when the selected connection is not connected", () => {
+      setStores({
+        connections: [makeConnection("c1")],
+        active: [],
+      });
+      render(<Sidebar />);
+      // Manually select c1 via rail
+      act(() => {
+        screen.getByTestId("rail-pick-c1").click();
+      });
+      const btn = screen.getByRole("button", { name: /new query tab/i });
+      expect(btn).toBeDisabled();
+    });
+
+    it("opens a new query tab for the selected connection on click", () => {
+      setStores({
+        connections: [makeConnection("c1"), makeConnection("c2")],
+        active: ["c1", "c2"],
+      });
+      render(<Sidebar />);
+      // Initial selection is c1
+      const btn = screen.getByRole("button", { name: /new query tab/i });
+      expect(btn).not.toBeDisabled();
+
+      act(() => {
+        fireEvent.click(btn);
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0]!.type).toBe("query");
+      expect(state.tabs[0]!.connectionId).toBe("c1");
+    });
+
+    it("uses the rail-selected connection, not the active tab's", () => {
+      setStores({
+        connections: [makeConnection("c1"), makeConnection("c2")],
+        active: ["c1", "c2"],
+      });
+      render(<Sidebar />);
+
+      // Switch rail to c2 (no active tab override)
+      act(() => {
+        screen.getByTestId("rail-pick-c2").click();
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query tab/i }));
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0]!.connectionId).toBe("c2");
+    });
+  });
 });

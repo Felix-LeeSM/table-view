@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Sun, Moon, Monitor } from "lucide-react";
+import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import { useTheme } from "@hooks/useTheme";
 import { useResizablePanel } from "@hooks/useResizablePanel";
+import { Button } from "@components/ui/button";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
 import ConnectionRail from "@components/connection/ConnectionRail";
 import SchemaPanel from "@components/schema/SchemaPanel";
@@ -17,6 +18,7 @@ export default function Sidebar() {
     return id ? s.tabs.find((t) => t.id === id) : null;
   });
   const activeTabConnId = activeTab?.connectionId ?? null;
+  const addQueryTab = useTabStore((s) => s.addQueryTab);
 
   const { theme, setTheme } = useTheme();
 
@@ -100,7 +102,7 @@ export default function Sidebar() {
         {/* Right pane: schema tree of the selected connection + theme footer */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Header strip showing the current connection name */}
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <span
               data-testid="sidebar-connection-header"
               className="truncate text-xs font-semibold text-foreground"
@@ -110,6 +112,28 @@ export default function Sidebar() {
                   "Schemas")
                 : "Schemas"}
             </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+              aria-label="New Query Tab"
+              title="New Query Tab"
+              disabled={
+                !selectedConnId ||
+                activeStatuses[selectedConnId]?.type !== "connected"
+              }
+              onClick={() => {
+                if (
+                  selectedConnId &&
+                  activeStatuses[selectedConnId]?.type === "connected"
+                ) {
+                  addQueryTab(selectedConnId);
+                }
+              }}
+            >
+              <Plus />
+              Query
+            </Button>
           </div>
 
           <SchemaPanel selectedId={selectedConnId} />
