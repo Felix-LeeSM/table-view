@@ -186,21 +186,18 @@ describe("Connection Import/Export", () => {
       ],
       groups: [],
     });
-    // setValue can drop characters on long payloads in some webdriver
-    // implementations; set the value via the DOM directly and dispatch the
-    // input event so React sees it.
-    await browser.execute(
-      (el: HTMLTextAreaElement, v: string) => {
-        const setter = Object.getOwnPropertyDescriptor(
-          window.HTMLTextAreaElement.prototype,
-          "value",
-        )?.set;
-        setter?.call(el, v);
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-      },
-      input,
-      importJson,
-    );
+    // Focus first, then use standard setValue. WebKit inside tauri-driver
+    // reliably echoes single setValue calls; a custom DOM setter dance
+    // sometimes bypasses React's change tracking.
+    await input.click();
+    await input.setValue(importJson);
+
+    // Verify the textarea actually holds the payload before clicking Import
+    // — this makes CI failures point at the right root cause if the value
+    // ever gets truncated.
+    const actual = ((await input.getProperty("value")) as string) ?? "";
+    expect(actual.length).toBeGreaterThan(0);
+    expect(actual).toContain("E2E Imported PG");
 
     const importBtn = await $('//button[normalize-space()="Import"]');
     await importBtn.waitForDisplayed({ timeout: 3000 });
