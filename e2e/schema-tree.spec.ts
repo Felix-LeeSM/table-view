@@ -52,9 +52,22 @@ async function rightClick(el: WebdriverIO.Element) {
   }
 }
 
+/** Make sure the sidebar is showing the connections list so that items
+ * created by previous specs are visible in the DOM. */
+async function ensureConnectionsMode() {
+  const tab = await $('[aria-label="Connections mode"]');
+  await tab.waitForDisplayed({ timeout: 5000 });
+  const selected = await tab.getAttribute("aria-selected");
+  if (selected !== "true") {
+    await tab.click();
+  }
+}
+
 describe("Schema Tree Features", () => {
   // Self-contained: reuse or create connection and connect before each test
   beforeEach(async () => {
+    await ensureConnectionsMode();
+
     // Wait for sidebar to be ready, then check if connection already exists
     const existingConn = await $('[aria-label^="Test PG"]');
     let exists = false;

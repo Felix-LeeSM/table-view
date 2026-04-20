@@ -12,7 +12,17 @@ import { expect } from "@wdio/globals";
  * specs that run before this one.
  */
 
+async function ensureConnectionsMode() {
+  const tab = await $('[aria-label="Connections mode"]');
+  await tab.waitForDisplayed({ timeout: 5000 });
+  const selected = await tab.getAttribute("aria-selected");
+  if (selected !== "true") {
+    await tab.click();
+  }
+}
+
 async function ensureConnected() {
+  await ensureConnectionsMode();
   const existing = await $('[aria-label^="Test PG"]');
   let exists = false;
   try {

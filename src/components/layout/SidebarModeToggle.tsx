@@ -37,6 +37,7 @@ export default function SidebarModeToggle({
             type="button"
             role="tab"
             aria-selected={active}
+            aria-label={`${opt.label} mode`}
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(opt.key)}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs font-medium transition-colors ${

@@ -134,6 +134,14 @@ export default function Sidebar() {
     return () => window.removeEventListener("new-connection", handler);
   }, []);
 
+  // When a new connection is saved, surface it to the user by flipping to
+  // connections mode so the new item is visible immediately.
+  useEffect(() => {
+    const handler = () => setMode("connections");
+    window.addEventListener("connection-added", handler);
+    return () => window.removeEventListener("connection-added", handler);
+  }, []);
+
   const selectedConnected =
     !!selectedConnId && activeStatuses[selectedConnId]?.type === "connected";
 

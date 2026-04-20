@@ -384,6 +384,22 @@ describe("Sidebar", () => {
       expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
     });
 
+    it("connection-added event flips the sidebar to connections mode", () => {
+      render(<Sidebar />);
+      // Start in schemas mode
+      act(() => {
+        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      });
+      expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
+
+      act(() => {
+        window.dispatchEvent(new Event("connection-added"));
+      });
+
+      expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+      expect(screen.queryByTestId("schema-panel")).toBeNull();
+    });
+
     it("removes new-connection listener on unmount", () => {
       const { unmount } = render(<Sidebar />);
       unmount();

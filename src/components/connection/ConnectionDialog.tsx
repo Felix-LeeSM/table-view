@@ -115,6 +115,9 @@ export default function ConnectionDialog({
         await updateConnection(draft);
       } else {
         await addConnection(draft);
+        // After a new connection is saved, surface it to the user — Sidebar
+        // listens for this and flips to Connections mode if needed.
+        window.dispatchEvent(new Event("connection-added"));
       }
       onClose();
     } catch (e) {
