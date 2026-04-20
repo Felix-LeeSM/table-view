@@ -102,6 +102,28 @@ export async function moveConnectionToGroup(
   });
 }
 
+// --- Import / Export ---
+
+export interface ImportRenamedEntry {
+  original_name: string;
+  new_name: string;
+}
+
+export interface ImportResult {
+  imported: string[];
+  renamed: ImportRenamedEntry[];
+  created_groups: string[];
+  skipped_groups: string[];
+}
+
+export async function exportConnections(ids: string[]): Promise<string> {
+  return invoke<string>("export_connections", { ids });
+}
+
+export async function importConnections(json: string): Promise<ImportResult> {
+  return invoke<ImportResult>("import_connections", { json });
+}
+
 // Schema exploration
 export async function listSchemas(connectionId: string): Promise<SchemaInfo[]> {
   return invoke<SchemaInfo[]>("list_schemas", { connectionId });

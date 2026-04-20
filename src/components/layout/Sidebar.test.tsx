@@ -80,6 +80,14 @@ vi.mock("@components/connection/ConnectionDialog", () => ({
   ),
 }));
 
+vi.mock("@components/connection/ImportExportDialog", () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="import-export-dialog">
+      <button onClick={onClose}>Close IE</button>
+    </div>
+  ),
+}));
+
 function makeConnection(id: string): ConnectionConfig {
   return {
     id,
@@ -288,6 +296,33 @@ describe("Sidebar", () => {
         fireEvent.click(btn);
       });
       expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+    });
+
+    it("connections mode: Import/Export button opens the dialog", () => {
+      render(<Sidebar />);
+      const btn = screen.getByRole("button", { name: /import \/ export/i });
+      act(() => {
+        fireEvent.click(btn);
+      });
+      expect(screen.getByTestId("import-export-dialog")).toBeInTheDocument();
+    });
+
+    it("schemas mode: Import/Export and New Connection buttons are hidden", () => {
+      setStores({
+        connections: [makeConnection("c1")],
+        active: ["c1"],
+      });
+      render(<Sidebar />);
+      act(() => {
+        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      });
+
+      expect(
+        screen.queryByRole("button", { name: /import \/ export/i }),
+      ).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: /new connection/i }),
+      ).toBeNull();
     });
 
     it("schemas mode: + opens a new query tab when connected", () => {

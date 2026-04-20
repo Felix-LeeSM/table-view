@@ -74,7 +74,8 @@
 
 ## 기타
 
-- [ ] Import/Export (CSV, JSON, SQL)
+- [x] Connection Import/Export (JSON, no passwords ever included)
+- [ ] Import/Export of table data (CSV, JSON, SQL)
 - [ ] SSH 터널링
 - [ ] MySQL 지원 (DbAdapter 구현체 추가)
 - [ ] SQLite 지원 (DbAdapter 구현체 추가)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Sun, Moon, Monitor, Plus } from "lucide-react";
+import { ArrowDownUp, Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import { useTheme } from "@hooks/useTheme";
@@ -7,6 +7,7 @@ import { useResizablePanel } from "@hooks/useResizablePanel";
 import { Button } from "@components/ui/button";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
 import ConnectionList from "@components/connection/ConnectionList";
+import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
@@ -38,6 +39,7 @@ function readWidth(): number {
 
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [showImportExport, setShowImportExport] = useState(false);
   const [mode, setMode] = useState<SidebarMode>(() => readMode());
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
@@ -139,16 +141,28 @@ export default function Sidebar() {
   const renderActionButton = () => {
     if (mode === "connections") {
       return (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-          aria-label="New Connection"
-          title="New Connection"
-          onClick={() => setShowNewDialog(true)}
-        >
-          <Plus />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+            aria-label="Import / Export"
+            title="Import / Export"
+            onClick={() => setShowImportExport(true)}
+          >
+            <ArrowDownUp />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+            aria-label="New Connection"
+            title="New Connection"
+            onClick={() => setShowNewDialog(true)}
+          >
+            <Plus />
+          </Button>
+        </div>
       );
     }
     return (
@@ -236,6 +250,10 @@ export default function Sidebar() {
 
       {showNewDialog && (
         <ConnectionDialog onClose={() => setShowNewDialog(false)} />
+      )}
+
+      {showImportExport && (
+        <ImportExportDialog onClose={() => setShowImportExport(false)} />
       )}
     </>
   );
