@@ -179,6 +179,101 @@ describe("ViewStructurePanel", () => {
     });
   });
 
+  it("renders char/line counter and Copy button on the Definition tab", async () => {
+    await act(async () => {
+      render(
+        <ViewStructurePanel
+          connectionId="conn1"
+          schema="public"
+          view="active_users"
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /copy view definition/i }),
+      ).toBeInTheDocument();
+    });
+
+    // VIEW_DEFINITION is a single-line string of length > 0
+    const def = "SELECT u.id, u.name FROM users u WHERE u.active = true";
+    expect(
+      screen.getByText(`${def.length.toLocaleString()} chars · 1 line`),
+    ).toBeInTheDocument();
+  });
+
+  it("does not render Copy button when definition is empty", async () => {
+    useSchemaStore.setState({
+      getViewColumns: vi.fn(() => Promise.resolve(VIEW_COLUMNS)),
+      getViewDefinition: vi.fn(() => Promise.resolve("   ")),
+    });
+
+    await act(async () => {
+      render(
+        <ViewStructurePanel
+          connectionId="conn1"
+          schema="public"
+          view="active_users"
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/definition not available/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("button", { name: /copy view definition/i }),
+    ).toBeNull();
+  });
+
+  it("copies the definition SQL to the clipboard and shows the Copied label", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+
+    await act(async () => {
+      render(
+        <ViewStructurePanel
+          connectionId="conn1"
+          schema="public"
+          view="active_users"
+        />,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /copy view definition/i }),
+      ).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /copy view definition/i }),
+      );
+    });
+
+    expect(writeText).toHaveBeenCalledWith(VIEW_DEFINITION);
+    await waitFor(() => {
+      expect(screen.getByText(/copied/i)).toBeInTheDocument();
+    });
+  });
+
   it("re-fetches when refresh-structure event is dispatched", async () => {
     const getViewColumns = vi.fn(() => Promise.resolve(VIEW_COLUMNS));
     useSchemaStore.setState({

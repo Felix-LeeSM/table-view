@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Copy, Loader2 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo } from "@/types/schema";
 
@@ -180,6 +180,28 @@ function ViewColumnsTable({ columns }: { columns: ColumnInfo[] }) {
 }
 
 function ViewDefinition({ sql }: { sql: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const stats = useMemo(
+    () => ({
+      chars: sql.length,
+      lines: sql === "" ? 0 : sql.split("\n").length,
+    }),
+    [sql],
+  );
+
+  const handleCopy = () => {
+    navigator.clipboard
+      .writeText(sql)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {
+        // Clipboard API may fail in some environments; silently ignore
+      });
+  };
+
   if (!sql.trim()) {
     return (
       <div className="flex flex-1 items-center justify-center px-3 py-8 text-sm text-muted-foreground">
@@ -189,10 +211,36 @@ function ViewDefinition({ sql }: { sql: string }) {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-3">
-      <pre className="whitespace-pre-wrap break-words rounded border border-border bg-secondary p-3 font-mono text-xs text-foreground">
-        {sql}
-      </pre>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-secondary/50 px-3 py-1.5">
+        <div className="text-xs text-muted-foreground">
+          {stats.chars.toLocaleString()} char{stats.chars !== 1 ? "s" : ""} ·{" "}
+          {stats.lines.toLocaleString()} line{stats.lines !== 1 ? "s" : ""}
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
+          aria-label="Copy view definition"
+        >
+          {copied ? (
+            <>
+              <Check size={12} className="text-emerald-500" />
+              <span>Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto p-3">
+        <pre className="whitespace-pre-wrap break-words rounded border border-border bg-secondary p-3 font-mono text-xs text-foreground">
+          {sql}
+        </pre>
+      </div>
     </div>
   );
 }
