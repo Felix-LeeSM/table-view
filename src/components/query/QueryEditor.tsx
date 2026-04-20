@@ -55,7 +55,11 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           highlightActiveLine(),
           indentOnInput(),
           bracketMatching(),
-          sqlLanguage({ dialect: StandardSQL, schema: schemaNamespace }),
+          sqlLanguage({
+            dialect: StandardSQL,
+            schema: schemaNamespace,
+            upperCaseKeywords: true,
+          }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
           keymap.of([
