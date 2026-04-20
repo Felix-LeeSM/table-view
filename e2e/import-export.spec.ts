@@ -88,6 +88,12 @@ describe("Connection Import/Export", () => {
     await ensureTestPgConnection();
   });
 
+  // Always clean up any dialog left open by a failing assertion so the next
+  // test / spec doesn't inherit a modal that blocks further interaction.
+  afterEach(async () => {
+    await closeAnyDialogIfOpen();
+  });
+
   it("opens the dialog without freezing the app", async () => {
     // Pure smoke: just open and make sure UI is still responsive afterwards.
     await openImportExportDialog();
@@ -180,17 +186,48 @@ describe("Connection Import/Export", () => {
       ],
       groups: [],
     });
-    await input.setValue(importJson);
+    // setValue can drop characters on long payloads in some webdriver
+    // implementations; set the value via the DOM directly and dispatch the
+    // input event so React sees it.
+    await browser.execute(
+      (el: HTMLTextAreaElement, v: string) => {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype,
+          "value",
+        )?.set;
+        setter?.call(el, v);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+      input,
+      importJson,
+    );
 
     const importBtn = await $('//button[normalize-space()="Import"]');
     await importBtn.waitForDisplayed({ timeout: 3000 });
+    // Wait until React has processed the input event and enabled the button.
+    await browser.waitUntil(async () => await importBtn.isEnabled(), {
+      timeout: 3000,
+      timeoutMsg: "Import button never became enabled",
+    });
     await importBtn.click();
 
-    // Result panel header
-    const result = await $(
-      '//*[contains(normalize-space(), "Imported 1 connection")]',
+    // Either the result panel appears or an alert explains why it didn't —
+    // surface whichever happens first so test failures are actionable.
+    await browser.waitUntil(
+      async () => {
+        const result = await $(
+          '//*[contains(normalize-space(), "Imported 1 connection")]',
+        );
+        if (await result.isDisplayed()) return true;
+        const alert = await $('[role="alert"]');
+        if (await alert.isDisplayed()) {
+          const msg = (await alert.getText()) || "(empty)";
+          throw new Error(`Import failed with alert: ${msg}`);
+        }
+        return false;
+      },
+      { timeout: 10000, timeoutMsg: "Import result never appeared" },
     );
-    await result.waitForDisplayed({ timeout: 5000 });
 
     await browser.keys(["Escape"]);
 
