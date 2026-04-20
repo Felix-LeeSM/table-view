@@ -137,53 +137,51 @@ export default function Sidebar() {
   const selectedConnected =
     !!selectedConnId && activeStatuses[selectedConnId]?.type === "connected";
 
-  // Right-side action button content depends on mode.
-  const renderActionButton = () => {
-    if (mode === "connections") {
-      return (
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label="Import / Export"
-            title="Import / Export"
-            onClick={() => setShowImportExport(true)}
-          >
-            <ArrowDownUp />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-            aria-label="New Connection"
-            title="New Connection"
-            onClick={() => setShowNewDialog(true)}
-          >
-            <Plus />
-          </Button>
-        </div>
-      );
-    }
-    return (
+  // Right-side action buttons. New Connection + Import/Export are always
+  // available so test/keyboard flows don't depend on the current mode. The
+  // mode-context "+ Query" only appears in schemas mode.
+  const renderActionButtons = () => (
+    <div className="flex items-center gap-1">
+      {mode === "schemas" && (
+        <Button
+          variant="ghost"
+          size="xs"
+          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+          aria-label="New Query Tab"
+          title="New Query Tab"
+          disabled={!selectedConnected}
+          onClick={() => {
+            if (selectedConnected && selectedConnId) {
+              addQueryTab(selectedConnId);
+            }
+          }}
+        >
+          <Plus />
+          Query
+        </Button>
+      )}
       <Button
         variant="ghost"
-        size="xs"
+        size="icon-xs"
         className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-        aria-label="New Query Tab"
-        title="New Query Tab"
-        disabled={!selectedConnected}
-        onClick={() => {
-          if (selectedConnected && selectedConnId) {
-            addQueryTab(selectedConnId);
-          }
-        }}
+        aria-label="Import / Export"
+        title="Import / Export"
+        onClick={() => setShowImportExport(true)}
+      >
+        <ArrowDownUp />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+        aria-label="New Connection"
+        title="New Connection"
+        onClick={() => setShowNewDialog(true)}
       >
         <Plus />
-        Query
       </Button>
-    );
-  };
+    </div>
+  );
 
   return (
     <>
@@ -195,7 +193,7 @@ export default function Sidebar() {
         {/* Mode toggle + context-aware action button */}
         <div className="flex items-center gap-2 border-b border-border px-2 py-2">
           <SidebarModeToggle mode={mode} onChange={setMode} />
-          {renderActionButton()}
+          {renderActionButtons()}
         </div>
 
         {/* Schemas mode: connection name strip */}

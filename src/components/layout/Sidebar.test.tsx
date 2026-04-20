@@ -307,7 +307,7 @@ describe("Sidebar", () => {
       expect(screen.getByTestId("import-export-dialog")).toBeInTheDocument();
     });
 
-    it("schemas mode: Import/Export and New Connection buttons are hidden", () => {
+    it("schemas mode: New Connection and Import/Export remain accessible", () => {
       setStores({
         connections: [makeConnection("c1")],
         active: ["c1"],
@@ -317,12 +317,13 @@ describe("Sidebar", () => {
         fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
       });
 
+      // Always-on action buttons should still be present in schemas mode
       expect(
-        screen.queryByRole("button", { name: /import \/ export/i }),
-      ).toBeNull();
+        screen.getByRole("button", { name: /import \/ export/i }),
+      ).toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: /new connection/i }),
-      ).toBeNull();
+        screen.getByRole("button", { name: /new connection/i }),
+      ).toBeInTheDocument();
     });
 
     it("schemas mode: + opens a new query tab when connected", () => {
