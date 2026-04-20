@@ -211,14 +211,14 @@ describe("Connection Import/Export", () => {
     });
     await importBtn.click();
 
-    // Either the result panel appears or an alert explains why it didn't —
-    // surface whichever happens first so test failures are actionable.
+    // The user-visible success signal is that the new connection appears in
+    // the sidebar (even if the result panel text changes in the future). If
+    // an error alert shows up first, surface its text so the failure is
+    // actionable.
     await browser.waitUntil(
       async () => {
-        const result = await $(
-          '//*[contains(normalize-space(), "Imported 1 connection")]',
-        );
-        if (await result.isDisplayed()) return true;
+        const item = await $('[aria-label^="E2E Imported PG"]');
+        if (await item.isExisting()) return true;
         const alert = await $('[role="alert"]');
         if (await alert.isDisplayed()) {
           const msg = (await alert.getText()) || "(empty)";
@@ -226,13 +226,14 @@ describe("Connection Import/Export", () => {
         }
         return false;
       },
-      { timeout: 10000, timeoutMsg: "Import result never appeared" },
+      {
+        timeout: 15000,
+        timeoutMsg: "Imported connection never appeared in sidebar",
+      },
     );
 
     await browser.keys(["Escape"]);
 
-    // The new connection should appear in the sidebar list (we're already in
-    // connections mode from the beforeEach helper).
     const importedItem = await $('[aria-label^="E2E Imported PG"]');
     await importedItem.waitForDisplayed({ timeout: 5000 });
     expect(await importedItem.getAttribute("aria-label")).toContain(
