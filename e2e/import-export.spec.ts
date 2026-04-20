@@ -199,7 +199,12 @@ describe("Connection Import/Export", () => {
     expect(actual.length).toBeGreaterThan(0);
     expect(actual).toContain("E2E Imported PG");
 
-    const importBtn = await $('//button[normalize-space()="Import"]');
+    // NOTE: the XPath excludes role="tab" so we don't re-click the already-
+    // active "Import" tab (both the tab and the action button share the
+    // text "Import"). Previously this silently no-op'd the import.
+    const importBtn = await $(
+      '//button[not(@role="tab") and normalize-space()="Import"]',
+    );
     await importBtn.waitForDisplayed({ timeout: 3000 });
     // Wait until React has processed the input event and enabled the button.
     await browser.waitUntil(async () => await importBtn.isEnabled(), {
