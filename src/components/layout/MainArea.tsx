@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import TabBar from "./TabBar";
 import { useTabStore, type TableTab, type TabSubView } from "@stores/tabStore";
-import { Database } from "lucide-react";
+import { useConnectionStore } from "@stores/connectionStore";
+import { Database, Plus } from "lucide-react";
 import DataGrid from "@components/DataGrid";
 import StructurePanel from "@components/schema/StructurePanel";
 import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
 import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
+import { Button } from "@components/ui/button";
 
 interface TableTabProps {
   tab: TableTab;
@@ -90,6 +92,47 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   );
 }
 
+function EmptyState() {
+  const connections = useConnectionStore((s) => s.connections);
+  const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const addQueryTab = useTabStore((s) => s.addQueryTab);
+
+  const firstConnected = connections.find(
+    (c) => activeStatuses[c.id]?.type === "connected",
+  );
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-muted-foreground">
+      <Database size={48} />
+      <p className="text-lg text-foreground">View Table</p>
+      {firstConnected ? (
+        <>
+          <p className="text-sm">
+            Open a table from the sidebar, or start writing SQL against{" "}
+            <span className="font-medium text-foreground">
+              {firstConnected.name}
+            </span>
+            .
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-1"
+            onClick={() => addQueryTab(firstConnected.id)}
+          >
+            <Plus />
+            New Query
+          </Button>
+        </>
+      ) : (
+        <p className="text-sm">
+          Select a connection from the sidebar to get started
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function MainArea() {
   const tabs = useTabStore((s) => s.tabs);
   const activeTabId = useTabStore((s) => s.activeTabId);
@@ -119,13 +162,7 @@ export default function MainArea() {
         ) : activeTab?.type === "query" ? (
           <QueryTab tab={activeTab} />
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-            <Database size={48} className="mb-3" />
-            <p className="text-lg">View Table</p>
-            <p className="mt-1 text-sm">
-              Select a connection from the sidebar to get started
-            </p>
-          </div>
+          <EmptyState />
         )}
       </div>
       <GlobalQueryLogPanel

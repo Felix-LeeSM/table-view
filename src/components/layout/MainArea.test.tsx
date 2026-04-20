@@ -6,6 +6,8 @@ import {
   type TableTab,
   type QueryTab as QueryTabType,
 } from "@stores/tabStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 // Mock child components to isolate MainArea routing logic
 vi.mock("@components/DataGrid", () => ({
@@ -98,9 +100,44 @@ function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
   };
 }
 
+function makeConnection(id: string): ConnectionConfig {
+  return {
+    id,
+    name: `${id} DB`,
+    db_type: "postgresql",
+    host: "localhost",
+    port: 5432,
+    user: "postgres",
+    password: "",
+    database: "test",
+    group_id: null,
+    color: null,
+    environment: null,
+  };
+}
+
+function setConnections(opts: {
+  connections?: ConnectionConfig[];
+  active?: string[];
+}) {
+  const conns = opts.connections ?? [];
+  const active = new Set(opts.active ?? []);
+  const statuses: Record<string, ConnectionStatus> = {};
+  for (const c of conns) {
+    statuses[c.id] = active.has(c.id)
+      ? { type: "connected" }
+      : { type: "disconnected" };
+  }
+  useConnectionStore.setState({
+    connections: conns,
+    activeStatuses: statuses,
+  });
+}
+
 describe("MainArea", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
+    setConnections({});
   });
 
   // AC-05: empty state placeholder
@@ -382,5 +419,73 @@ describe("MainArea", () => {
 
     expect(screen.getByTestId("mock-structure")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-view-structure")).toBeNull();
+  });
+
+  describe("Empty state CTA", () => {
+    it("shows New Query button when at least one connection is connected", () => {
+      setConnections({
+        connections: [makeConnection("c1")],
+        active: ["c1"],
+      });
+
+      render(<MainArea />);
+
+      expect(
+        screen.getByRole("button", { name: /new query/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
+    });
+
+    it("clicking New Query opens a query tab against the connected DB", () => {
+      setConnections({
+        connections: [makeConnection("c1")],
+        active: ["c1"],
+      });
+
+      render(<MainArea />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0]!.type).toBe("query");
+      expect(state.tabs[0]!.connectionId).toBe("c1");
+    });
+
+    it("does not show New Query button when no connection is connected", () => {
+      setConnections({
+        connections: [makeConnection("c1")],
+        active: [],
+      });
+
+      render(<MainArea />);
+
+      expect(screen.queryByRole("button", { name: /new query/i })).toBeNull();
+      expect(
+        screen.getByText(/select a connection from the sidebar/i),
+      ).toBeInTheDocument();
+    });
+
+    it("picks the first connected connection when multiple exist", () => {
+      setConnections({
+        connections: [
+          makeConnection("c1"),
+          makeConnection("c2"),
+          makeConnection("c3"),
+        ],
+        active: ["c2", "c3"],
+      });
+
+      render(<MainArea />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs[0]!.connectionId).toBe("c2");
+    });
   });
 });
