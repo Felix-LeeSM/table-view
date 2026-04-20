@@ -22,6 +22,8 @@ pub fn run() {
             commands::connection::save_group,
             commands::connection::delete_group,
             commands::connection::move_connection_to_group,
+            commands::connection::export_connections,
+            commands::connection::import_connections,
             commands::schema::list_schemas,
             commands::schema::list_tables,
             commands::schema::get_table_columns,

@@ -368,6 +368,197 @@ pub fn move_connection_to_group(
     storage::move_connection_to_group(&connection_id, group_id.as_deref())
 }
 
+// ---------------------------------------------------------------------------
+// Export / Import
+// ---------------------------------------------------------------------------
+
+const EXPORT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExportPayload {
+    pub schema_version: u32,
+    /// Unix epoch seconds of the export. Useful for back-dating a backup
+    /// without pulling in a date-time crate just for serialization.
+    pub exported_at_unix_secs: u64,
+    pub app: String,
+    pub connections: Vec<ConnectionConfigPublic>,
+    pub groups: Vec<ConnectionGroup>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RenamedEntry {
+    pub original_name: String,
+    pub new_name: String,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct ImportResult {
+    pub imported: Vec<String>,
+    pub renamed: Vec<RenamedEntry>,
+    pub created_groups: Vec<String>,
+    pub skipped_groups: Vec<String>,
+}
+
+/// Export the requested connections (and any groups they reference) as a
+/// portable JSON string. Passwords are NEVER included — neither plaintext
+/// nor ciphertext. The receiving side must re-enter passwords on import.
+#[tauri::command]
+pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
+    let data = storage::load_storage_redacted()?;
+    let presence = storage::password_presence_map()?;
+
+    // Filter connections by ids (empty = all)
+    let conns: Vec<&ConnectionConfig> = if ids.is_empty() {
+        data.connections.iter().collect()
+    } else {
+        let id_set: std::collections::HashSet<&str> = ids.iter().map(|s| s.as_str()).collect();
+        data.connections
+            .iter()
+            .filter(|c| id_set.contains(c.id.as_str()))
+            .collect()
+    };
+
+    // Collect referenced groups
+    let referenced_group_ids: std::collections::HashSet<&str> =
+        conns.iter().filter_map(|c| c.group_id.as_deref()).collect();
+    let groups: Vec<ConnectionGroup> = data
+        .groups
+        .iter()
+        .filter(|g| referenced_group_ids.contains(g.id.as_str()))
+        .cloned()
+        .collect();
+
+    let publics: Vec<ConnectionConfigPublic> = conns
+        .into_iter()
+        .map(|c| {
+            let mut p: ConnectionConfigPublic = c.into();
+            p.has_password = *presence.get(&c.id).unwrap_or(&false);
+            p
+        })
+        .collect();
+
+    let exported_at_unix_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let payload = ExportPayload {
+        schema_version: EXPORT_SCHEMA_VERSION,
+        exported_at_unix_secs,
+        app: "view-table".into(),
+        connections: publics,
+        groups,
+    };
+
+    serde_json::to_string_pretty(&payload).map_err(AppError::from)
+}
+
+/// Import connections from a JSON payload produced by `export_connections`.
+/// All imported connections start with no password — the user must re-enter
+/// each one before connecting.
+#[tauri::command]
+pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
+    let payload: ExportPayload = serde_json::from_str(&json)
+        .map_err(|e| AppError::Validation(format!("Invalid import JSON: {}", e)))?;
+
+    if payload.schema_version != EXPORT_SCHEMA_VERSION {
+        return Err(AppError::Validation(format!(
+            "Unsupported export schema version {} (expected {})",
+            payload.schema_version, EXPORT_SCHEMA_VERSION
+        )));
+    }
+
+    let mut result = ImportResult::default();
+
+    // Build set of existing names + group ids
+    let existing = storage::load_storage_redacted()?;
+    let mut existing_conn_names: std::collections::HashSet<String> = existing
+        .connections
+        .iter()
+        .map(|c| c.name.clone())
+        .collect();
+    let existing_group_ids: std::collections::HashSet<String> =
+        existing.groups.iter().map(|g| g.id.clone()).collect();
+
+    // Group id remapping (payload group id → final stored group id)
+    let mut group_id_map: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+
+    // Process groups: keep id when it doesn't collide, otherwise reuse the
+    // existing group with that id (treat as the same group).
+    for grp in &payload.groups {
+        if existing_group_ids.contains(&grp.id) {
+            group_id_map.insert(grp.id.clone(), grp.id.clone());
+        } else {
+            storage::save_group(grp.clone())?;
+            group_id_map.insert(grp.id.clone(), grp.id.clone());
+            result.created_groups.push(grp.id.clone());
+        }
+    }
+
+    // Process connections
+    for conn in &payload.connections {
+        // Always regenerate id to avoid collisions with the receiving store
+        let new_id = uuid::Uuid::new_v4().to_string();
+
+        // Resolve target group_id: prefer mapping from payload groups, else
+        // existing group with same id, else drop the reference and report.
+        let target_group_id = match conn.group_id.as_deref() {
+            None => None,
+            Some(gid) => {
+                if let Some(mapped) = group_id_map.get(gid) {
+                    Some(mapped.clone())
+                } else if existing_group_ids.contains(gid) {
+                    Some(gid.to_string())
+                } else {
+                    result.skipped_groups.push(conn.name.clone());
+                    None
+                }
+            }
+        };
+
+        // Auto-rename on name collision
+        let mut final_name = conn.name.clone();
+        if existing_conn_names.contains(&final_name) {
+            let original = final_name.clone();
+            let mut candidate = format!("{} (imported)", original);
+            let mut suffix = 2u32;
+            while existing_conn_names.contains(&candidate) {
+                candidate = format!("{} (imported {})", original, suffix);
+                suffix += 1;
+            }
+            result.renamed.push(RenamedEntry {
+                original_name: original,
+                new_name: candidate.clone(),
+            });
+            final_name = candidate;
+        }
+        existing_conn_names.insert(final_name.clone());
+
+        let stored = ConnectionConfig {
+            id: new_id.clone(),
+            name: final_name,
+            db_type: conn.db_type.clone(),
+            host: conn.host.clone(),
+            port: conn.port,
+            user: conn.user.clone(),
+            password: String::new(), // never imported
+            database: conn.database.clone(),
+            group_id: target_group_id,
+            color: conn.color.clone(),
+            connection_timeout: conn.connection_timeout,
+            keep_alive_interval: conn.keep_alive_interval,
+            environment: conn.environment.clone(),
+        };
+
+        // Save with explicit empty password (no preserve / no encrypt)
+        storage::save_connection(stored, Some(String::new()))?;
+        result.imported.push(new_id);
+    }
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -787,6 +978,280 @@ mod tests {
 
     fn setup_test_dir_inner() -> tempfile::TempDir {
         setup_test_env()
+    }
+
+    // -------------------------------------------------------------------
+    // Export / Import (Phase C)
+    // -------------------------------------------------------------------
+
+    /// Export must contain neither plaintext nor ciphertext password data.
+    #[test]
+    #[serial]
+    fn test_export_connections_omits_password_field() {
+        let _dir = setup_test_env();
+
+        let plaintext = "P!ainSecret";
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = plaintext.into();
+        storage_save_conn(conn).unwrap();
+
+        // Capture the on-disk ciphertext to assert it is also absent.
+        let data_dir = std::env::var("VIEWTABLE_TEST_DATA_DIR").unwrap();
+        let raw = std::fs::read_to_string(std::path::Path::new(&data_dir).join("connections.json"))
+            .unwrap();
+        let raw_json: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let ciphertext = raw_json["connections"][0]["password"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(!ciphertext.is_empty(), "Ciphertext should exist on disk");
+
+        let exported = export_connections(vec![]).unwrap();
+        assert!(
+            !exported.contains(plaintext),
+            "Exported JSON must not contain plaintext password"
+        );
+        assert!(
+            !exported.contains(&ciphertext),
+            "Exported JSON must not contain on-disk ciphertext"
+        );
+        // Public payload field that signals presence is fine
+        assert!(exported.contains("\"has_password\": true"));
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_export_connections_includes_referenced_groups() {
+        let _dir = setup_test_env();
+
+        storage::save_group(sample_group("g-prod", "Production")).unwrap();
+        let mut conn = sample_connection("c1", "DB1");
+        conn.group_id = Some("g-prod".to_string());
+        storage_save_conn(conn).unwrap();
+
+        // Add a second group with no connection — must NOT appear in export
+        storage::save_group(sample_group("g-unused", "Unused")).unwrap();
+
+        let exported = export_connections(vec!["c1".into()]).unwrap();
+        let payload: ExportPayload = serde_json::from_str(&exported).unwrap();
+        assert_eq!(payload.groups.len(), 1);
+        assert_eq!(payload.groups[0].id, "g-prod");
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_regenerates_uuids() {
+        let _dir = setup_test_env();
+
+        // Create a payload that already has fixed connection ids
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "view-table".into(),
+            connections: vec![ConnectionConfigPublic {
+                id: "fixed-id".into(),
+                name: "Imported".into(),
+                db_type: DatabaseType::Postgresql,
+                host: "localhost".into(),
+                port: 5432,
+                user: "u".into(),
+                database: "d".into(),
+                group_id: None,
+                color: None,
+                connection_timeout: None,
+                keep_alive_interval: None,
+                environment: None,
+                has_password: false,
+            }],
+            groups: vec![],
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+
+        let r1 = import_connections(json.clone()).unwrap();
+        let r2 = import_connections(json).unwrap();
+
+        // Both imports succeed and produce different new ids
+        assert_eq!(r1.imported.len(), 1);
+        assert_eq!(r2.imported.len(), 1);
+        assert_ne!(r1.imported[0], r2.imported[0]);
+        // Storage holds two distinct connections
+        let stored = storage::load_storage_redacted().unwrap();
+        assert_eq!(stored.connections.len(), 2);
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_auto_renames_on_name_collision() {
+        let _dir = setup_test_env();
+
+        storage_save_conn(sample_connection("c1", "MyDB")).unwrap();
+
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "view-table".into(),
+            connections: vec![ConnectionConfigPublic {
+                id: "x".into(),
+                name: "MyDB".into(),
+                db_type: DatabaseType::Postgresql,
+                host: "h".into(),
+                port: 5432,
+                user: "u".into(),
+                database: "d".into(),
+                group_id: None,
+                color: None,
+                connection_timeout: None,
+                keep_alive_interval: None,
+                environment: None,
+                has_password: false,
+            }],
+            groups: vec![],
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+
+        let r = import_connections(json).unwrap();
+        assert_eq!(r.renamed.len(), 1);
+        assert_eq!(r.renamed[0].original_name, "MyDB");
+        assert!(r.renamed[0].new_name.contains("(imported"));
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_drops_unknown_group_reference() {
+        let _dir = setup_test_env();
+
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "view-table".into(),
+            connections: vec![ConnectionConfigPublic {
+                id: "x".into(),
+                name: "Lonely".into(),
+                db_type: DatabaseType::Postgresql,
+                host: "h".into(),
+                port: 5432,
+                user: "u".into(),
+                database: "d".into(),
+                group_id: Some("g-missing".into()),
+                color: None,
+                connection_timeout: None,
+                keep_alive_interval: None,
+                environment: None,
+                has_password: false,
+            }],
+            groups: vec![], // group_id refers to nothing
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+
+        let r = import_connections(json).unwrap();
+        assert_eq!(r.skipped_groups, vec!["Lonely".to_string()]);
+
+        let stored = storage::load_storage_redacted().unwrap();
+        assert_eq!(stored.connections.len(), 1);
+        assert_eq!(stored.connections[0].group_id, None);
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_creates_new_groups_when_absent() {
+        let _dir = setup_test_env();
+
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "view-table".into(),
+            connections: vec![ConnectionConfigPublic {
+                id: "x".into(),
+                name: "InGrp".into(),
+                db_type: DatabaseType::Postgresql,
+                host: "h".into(),
+                port: 5432,
+                user: "u".into(),
+                database: "d".into(),
+                group_id: Some("g-new".into()),
+                color: None,
+                connection_timeout: None,
+                keep_alive_interval: None,
+                environment: None,
+                has_password: false,
+            }],
+            groups: vec![ConnectionGroup {
+                id: "g-new".into(),
+                name: "Brand New".into(),
+                color: None,
+                collapsed: false,
+            }],
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+
+        let r = import_connections(json).unwrap();
+        assert_eq!(r.created_groups, vec!["g-new".to_string()]);
+
+        let stored = storage::load_storage_redacted().unwrap();
+        assert!(stored.groups.iter().any(|g| g.id == "g-new"));
+        assert_eq!(stored.connections[0].group_id, Some("g-new".to_string()));
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_round_trip() {
+        let _dir = setup_test_env();
+
+        // Seed with two connections, one in a group with a password
+        storage::save_group(sample_group("g1", "G1")).unwrap();
+        let mut c1 = sample_connection("c1", "DB1");
+        c1.password = "h@s_pw".into();
+        c1.group_id = Some("g1".into());
+        storage_save_conn(c1).unwrap();
+
+        let mut c2 = sample_connection("c2", "DB2");
+        c2.password = String::new();
+        storage_save_conn(c2).unwrap();
+
+        let exported = export_connections(vec![]).unwrap();
+
+        // Reset storage by deleting everything
+        storage::delete_connection("c1").unwrap();
+        storage::delete_connection("c2").unwrap();
+        storage::delete_group("g1").unwrap();
+
+        let r = import_connections(exported).unwrap();
+        assert_eq!(r.imported.len(), 2);
+        // No password should be set on any imported connection
+        let stored = storage::load_storage_redacted().unwrap();
+        assert_eq!(stored.connections.len(), 2);
+        for c in &stored.connections {
+            let pw = storage::get_decrypted_password(&c.id).unwrap();
+            assert_eq!(pw, Some(String::new()), "Imported password must be empty");
+        }
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    fn test_import_connections_rejects_invalid_schema_version() {
+        let bad = serde_json::json!({
+            "schema_version": 99,
+            "exported_at_unix_secs": 0,
+            "app": "view-table",
+            "connections": [],
+            "groups": []
+        })
+        .to_string();
+        let result = import_connections(bad);
+        assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
     #[test]
