@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseConnectionUrl,
-  createEmptyConnection,
+  createEmptyDraft,
   DATABASE_DEFAULTS,
 } from "./connection";
 
@@ -67,12 +67,13 @@ describe("parseConnectionUrl", () => {
   });
 });
 
-describe("createEmptyConnection", () => {
-  it("returns default postgresql config", () => {
-    const conn = createEmptyConnection();
+describe("createEmptyDraft", () => {
+  it("returns default postgresql draft", () => {
+    const conn = createEmptyDraft();
     expect(conn.db_type).toBe("postgresql");
     expect(conn.port).toBe(5432);
     expect(conn.host).toBe("localhost");
     expect(conn.id).toBe("");
+    expect(conn.password).toBe("");
   });
 });

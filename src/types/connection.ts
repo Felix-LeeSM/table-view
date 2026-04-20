@@ -5,6 +5,12 @@ export type DatabaseType =
   | "mongodb"
   | "redis";
 
+/**
+ * The shape of a connection as it lives in the frontend. Note: there is no
+ * `password` field — passwords are kept exclusively in the encrypted backend
+ * store and never sent to the renderer process. Use `has_password` to know
+ * whether the user has set one.
+ */
 export interface ConnectionConfig {
   id: string;
   name: string;
@@ -12,13 +18,29 @@ export interface ConnectionConfig {
   host: string;
   port: number;
   user: string;
-  password: string;
   database: string;
   group_id: string | null;
   color: string | null;
   connection_timeout?: number;
   keep_alive_interval?: number;
   environment?: string | null;
+  /** Whether a password is currently stored on disk for this connection. */
+  has_password: boolean;
+}
+
+/**
+ * The shape used by ConnectionDialog while the user is editing a connection.
+ * Adds a transient `password` field whose value carries one of three
+ * meanings on save:
+ * - `null`     → leave the stored password unchanged (only valid when editing)
+ * - `""`       → explicitly clear the stored password
+ * - non-empty  → set/replace the stored password
+ */
+export interface ConnectionDraft extends Omit<
+  ConnectionConfig,
+  "has_password"
+> {
+  password: string | null;
 }
 
 export interface ConnectionGroup {
@@ -46,7 +68,7 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   redis: 6379,
 };
 
-export function createEmptyConnection(): ConnectionConfig {
+export function createEmptyDraft(): ConnectionDraft {
   return {
     id: "",
     name: "",
@@ -61,9 +83,30 @@ export function createEmptyConnection(): ConnectionConfig {
   };
 }
 
+/** Derive a draft from an existing connection. Password starts as `null`
+ * (meaning "do not change") so the dialog UX can leave the field empty
+ * without clearing the stored password on save. */
+export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
+  return {
+    id: conn.id,
+    name: conn.name,
+    db_type: conn.db_type,
+    host: conn.host,
+    port: conn.port,
+    user: conn.user,
+    database: conn.database,
+    group_id: conn.group_id,
+    color: conn.color,
+    connection_timeout: conn.connection_timeout,
+    keep_alive_interval: conn.keep_alive_interval,
+    environment: conn.environment,
+    password: null,
+  };
+}
+
 export function parseConnectionUrl(
   url: string,
-): Partial<ConnectionConfig> | null {
+): Partial<ConnectionDraft> | null {
   try {
     const parsed = new URL(url);
     const dbTypeMap: Record<string, DatabaseType> = {

@@ -9,7 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { ConnectionConfig } from "@/types/connection";
+import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,7 +25,7 @@ function makeConnection(
     host: "localhost",
     port: 5432,
     user: "postgres",
-    password: "secret",
+    has_password: true,
     database: "mydb",
     group_id: null,
     color: null,
@@ -193,9 +193,9 @@ describe("ConnectionDialog", () => {
     });
 
     expect(mockAddConnection).toHaveBeenCalledTimes(1);
-    const savedForm = mockAddConnection.mock.calls[0]![0] as ConnectionConfig;
-    expect(savedForm.name).toBe("New DB");
-    expect(savedForm.host).toBe("db.example.com");
+    const savedDraft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+    expect(savedDraft.name).toBe("New DB");
+    expect(savedDraft.host).toBe("db.example.com");
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -211,7 +211,11 @@ describe("ConnectionDialog", () => {
     });
 
     expect(mockUpdateConnection).toHaveBeenCalledTimes(1);
-    expect(mockUpdateConnection.mock.calls[0]![0]).toEqual(conn);
+    const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
+    expect(draft.name).toBe("Existing DB");
+    expect(draft.id).toBe(conn.id);
+    // Editing with empty input + has_password=true → password is null (keep)
+    expect(draft.password).toBeNull();
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -603,7 +607,114 @@ describe("ConnectionDialog", () => {
     });
 
     expect(mockAddConnection).toHaveBeenCalledTimes(1);
-    const savedForm = mockAddConnection.mock.calls[0]![0] as ConnectionConfig;
-    expect(savedForm.environment).toBe("local");
+    const savedDraft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+    expect(savedDraft.environment).toBe("local");
+  });
+
+  // -----------------------------------------------------------------------
+  // Phase B-2: password security UX
+  // -----------------------------------------------------------------------
+  describe("Password handling", () => {
+    it("password input starts empty when editing a connection with a stored password", () => {
+      renderDialog({ connection: makeConnection({ has_password: true }) });
+      const pw = screen.getByLabelText("Password") as HTMLInputElement;
+      expect(pw.value).toBe("");
+      expect(pw.placeholder).toMatch(/leave blank to keep current password/i);
+    });
+
+    it("shows 'Password set' badge when has_password is true", () => {
+      renderDialog({ connection: makeConnection({ has_password: true }) });
+      expect(screen.getByTestId("password-status-badge")).toHaveTextContent(
+        /password set/i,
+      );
+    });
+
+    it("shows 'No password' badge when has_password is false", () => {
+      renderDialog({ connection: makeConnection({ has_password: false }) });
+      expect(screen.getByTestId("password-status-badge")).toHaveTextContent(
+        /no password/i,
+      );
+    });
+
+    it("editing + empty input + Update → sends password: null (preserve)", async () => {
+      renderDialog({ connection: makeConnection({ has_password: true }) });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Update"));
+      });
+
+      const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.password).toBeNull();
+    });
+
+    it("editing + new password typed + Update → sends new password", async () => {
+      renderDialog({ connection: makeConnection({ has_password: true }) });
+
+      const pw = screen.getByLabelText("Password") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(pw, { target: { value: "fresh-pw" } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Update"));
+      });
+
+      const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.password).toBe("fresh-pw");
+    });
+
+    it("editing + Clear password checked → sends empty string", async () => {
+      renderDialog({ connection: makeConnection({ has_password: true }) });
+
+      const clearCheckbox = screen.getByLabelText(
+        /clear stored password on save/i,
+      ) as HTMLInputElement;
+      await act(async () => {
+        fireEvent.click(clearCheckbox);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Update"));
+      });
+
+      const draft = mockUpdateConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.password).toBe("");
+    });
+
+    it("Clear password checkbox disables the password input and clears it", async () => {
+      renderDialog({ connection: makeConnection({ has_password: true }) });
+
+      const pw = screen.getByLabelText("Password") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(pw, { target: { value: "willbecleared" } });
+      });
+      const clearCheckbox = screen.getByLabelText(
+        /clear stored password on save/i,
+      ) as HTMLInputElement;
+      await act(async () => {
+        fireEvent.click(clearCheckbox);
+      });
+
+      expect(pw).toBeDisabled();
+      expect(pw.value).toBe("");
+    });
+
+    it("Test Connection while editing forwards existingId", async () => {
+      const conn = makeConnection({ id: "to-test", has_password: true });
+      renderDialog({ connection: conn });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+
+      expect(mockTestConnection).toHaveBeenCalledTimes(1);
+      const args = mockTestConnection.mock.calls[0]!;
+      expect(args[1]).toBe("to-test");
+    });
+
+    it("does not show the Clear password checkbox when has_password is false", () => {
+      renderDialog({ connection: makeConnection({ has_password: false }) });
+      expect(
+        screen.queryByLabelText(/clear stored password on save/i),
+      ).toBeNull();
+    });
   });
 });

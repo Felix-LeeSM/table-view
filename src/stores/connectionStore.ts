@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import type {
   ConnectionConfig,
+  ConnectionDraft,
   ConnectionGroup,
   ConnectionStatus,
 } from "@/types/connection";
@@ -16,10 +17,13 @@ interface ConnectionState {
 
   loadConnections: () => Promise<void>;
   loadGroups: () => Promise<void>;
-  addConnection: (conn: ConnectionConfig) => Promise<ConnectionConfig>;
-  updateConnection: (conn: ConnectionConfig) => Promise<void>;
+  addConnection: (draft: ConnectionDraft) => Promise<ConnectionConfig>;
+  updateConnection: (draft: ConnectionDraft) => Promise<void>;
   removeConnection: (id: string) => Promise<void>;
-  testConnection: (config: ConnectionConfig) => Promise<string>;
+  testConnection: (
+    draft: ConnectionDraft,
+    existingId?: string | null,
+  ) => Promise<string>;
   connectToDatabase: (id: string) => Promise<void>;
   disconnectFromDatabase: (id: string) => Promise<void>;
   addGroup: (group: ConnectionGroup) => Promise<ConnectionGroup>;
@@ -58,18 +62,20 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }
   },
 
-  addConnection: async (conn) => {
-    const saved = await tauri.saveConnection(conn, true);
+  addConnection: async (draft) => {
+    const saved = await tauri.saveConnection(draft, true);
     set((state) => ({
       connections: [...state.connections, saved],
     }));
     return saved;
   },
 
-  updateConnection: async (conn) => {
-    await tauri.saveConnection(conn, false);
+  updateConnection: async (draft) => {
+    const saved = await tauri.saveConnection(draft, false);
     set((state) => ({
-      connections: state.connections.map((c) => (c.id === conn.id ? conn : c)),
+      connections: state.connections.map((c) =>
+        c.id === saved.id ? saved : c,
+      ),
     }));
   },
 
@@ -90,8 +96,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     });
   },
 
-  testConnection: async (config) => {
-    return tauri.testConnection(config);
+  testConnection: async (draft, existingId = null) => {
+    return tauri.testConnection(draft, existingId);
   },
 
   connectToDatabase: async (id) => {

@@ -44,6 +44,76 @@ pub struct ConnectionConfig {
     pub environment: Option<String>,
 }
 
+/// Public-facing connection shape returned to the frontend and exported to
+/// JSON. Crucially this struct has **no password field** — the boolean
+/// `has_password` is the only signal the UI gets about whether a password is
+/// stored. The plaintext never leaves the backend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionConfigPublic {
+    pub id: String,
+    pub name: String,
+    pub db_type: DatabaseType,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub database: String,
+    pub group_id: Option<String>,
+    pub color: Option<String>,
+    #[serde(default)]
+    pub connection_timeout: Option<u32>,
+    #[serde(default)]
+    pub keep_alive_interval: Option<u32>,
+    #[serde(default)]
+    pub environment: Option<String>,
+    /// Whether a password is stored on disk. Derived, never persisted.
+    #[serde(default)]
+    pub has_password: bool,
+}
+
+impl From<&ConnectionConfig> for ConnectionConfigPublic {
+    fn from(c: &ConnectionConfig) -> Self {
+        Self {
+            id: c.id.clone(),
+            name: c.name.clone(),
+            db_type: c.db_type.clone(),
+            host: c.host.clone(),
+            port: c.port,
+            user: c.user.clone(),
+            database: c.database.clone(),
+            group_id: c.group_id.clone(),
+            color: c.color.clone(),
+            connection_timeout: c.connection_timeout,
+            keep_alive_interval: c.keep_alive_interval,
+            environment: c.environment.clone(),
+            has_password: !c.password.is_empty(),
+        }
+    }
+}
+
+impl ConnectionConfigPublic {
+    /// Promote a public config to a full ConnectionConfig with an empty
+    /// password slot. Used by command handlers that accept this struct over
+    /// IPC and then forward to the storage layer (which separately receives
+    /// the optional new password).
+    pub fn into_config_with_empty_password(self) -> ConnectionConfig {
+        ConnectionConfig {
+            id: self.id,
+            name: self.name,
+            db_type: self.db_type,
+            host: self.host,
+            port: self.port,
+            user: self.user,
+            password: String::new(),
+            database: self.database,
+            group_id: self.group_id,
+            color: self.color,
+            connection_timeout: self.connection_timeout,
+            keep_alive_interval: self.keep_alive_interval,
+            environment: self.environment,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionGroup {
     pub id: String,

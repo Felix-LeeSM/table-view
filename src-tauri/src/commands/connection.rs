@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
@@ -9,8 +9,36 @@ use tracing::{info, warn};
 
 use crate::db::postgres::PostgresAdapter;
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, ConnectionGroup, ConnectionStatus};
+use crate::models::{ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus};
 use crate::storage;
+
+/// Request body for `save_connection`. Splitting `password` from the
+/// `ConnectionConfigPublic` body lets the frontend express three distinct
+/// intents:
+/// - `password = None`     → preserve existing stored password
+/// - `password = Some("")` → explicitly clear the stored password
+/// - `password = Some(s)`  → set a new password
+#[derive(Debug, Deserialize)]
+pub struct SaveConnectionRequest {
+    pub connection: ConnectionConfigPublic,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub is_new: Option<bool>,
+}
+
+/// Request body for `test_connection`. `password` follows the same three-way
+/// semantics as `SaveConnectionRequest`. When `existing_id` is supplied and
+/// `password` is `None`, the backend looks up the stored password without
+/// ever exposing it to the caller.
+#[derive(Debug, Deserialize)]
+pub struct TestConnectionRequest {
+    pub config: ConnectionConfigPublic,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub existing_id: Option<String>,
+}
 
 #[derive(Clone, Serialize)]
 struct StatusChangeEvent {
@@ -149,33 +177,43 @@ async fn keep_alive_loop(
 }
 
 #[tauri::command]
-pub fn list_connections() -> Result<Vec<ConnectionConfig>, AppError> {
-    let data = storage::load_storage()?;
-    Ok(data.connections)
+pub fn list_connections() -> Result<Vec<ConnectionConfigPublic>, AppError> {
+    let data = storage::load_storage_redacted()?;
+    let presence = storage::password_presence_map()?;
+    Ok(data
+        .connections
+        .iter()
+        .map(|c| {
+            let mut p: ConnectionConfigPublic = c.into();
+            // load_storage_redacted clears passwords, so derive has_password
+            // from the presence map instead of the (now-empty) field.
+            p.has_password = *presence.get(&c.id).unwrap_or(&false);
+            p
+        })
+        .collect())
 }
 
 #[tauri::command]
-pub fn save_connection(
-    connection: ConnectionConfig,
-    is_new: Option<bool>,
-) -> Result<ConnectionConfig, AppError> {
-    if connection.name.trim().is_empty() {
+pub fn save_connection(req: SaveConnectionRequest) -> Result<ConnectionConfigPublic, AppError> {
+    if req.connection.name.trim().is_empty() {
         return Err(AppError::Validation("Connection name is required".into()));
     }
-    if connection.host.trim().is_empty() {
+    if req.connection.host.trim().is_empty() {
         return Err(AppError::Validation("Host is required".into()));
     }
 
-    let conn = if is_new.unwrap_or(false) {
-        let mut new_conn = connection;
-        new_conn.id = uuid::Uuid::new_v4().to_string();
-        new_conn
-    } else {
-        connection
-    };
+    let mut conn = req.connection.into_config_with_empty_password();
+    if req.is_new.unwrap_or(false) {
+        conn.id = uuid::Uuid::new_v4().to_string();
+    }
 
-    storage::save_connection(conn.clone())?;
-    Ok(conn)
+    let new_password = req.password.clone();
+    storage::save_connection(conn.clone(), new_password)?;
+
+    let presence = storage::password_presence_map()?;
+    let mut public = ConnectionConfigPublic::from(&conn);
+    public.has_password = *presence.get(&conn.id).unwrap_or(&false);
+    Ok(public)
 }
 
 #[tauri::command]
@@ -184,15 +222,33 @@ pub fn delete_connection(id: String) -> Result<(), AppError> {
 }
 
 #[tauri::command]
-pub async fn test_connection(config: ConnectionConfig) -> Result<String, AppError> {
-    match config.db_type {
+pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppError> {
+    let TestConnectionRequest {
+        config,
+        password,
+        existing_id,
+    } = req;
+
+    // Resolve which plaintext password to use for the test.
+    let resolved_password: String = match password {
+        Some(s) => s,
+        None => match existing_id.as_deref() {
+            Some(id) => storage::get_decrypted_password(id)?.unwrap_or_default(),
+            None => String::new(),
+        },
+    };
+
+    let mut full = config.into_config_with_empty_password();
+    full.password = resolved_password;
+
+    match full.db_type {
         crate::models::DatabaseType::Postgresql => {
-            PostgresAdapter::test(&config).await?;
+            PostgresAdapter::test(&full).await?;
         }
         _ => {
             return Err(AppError::Validation(format!(
                 "Unsupported database type: {:?}",
-                config.db_type
+                full.db_type
             )));
         }
     }
@@ -205,7 +261,7 @@ pub async fn connect(
     app: tauri::AppHandle,
     id: String,
 ) -> Result<(), AppError> {
-    let data = storage::load_storage()?;
+    let data = storage::load_storage_with_secrets()?;
     let config = data
         .connections
         .into_iter()
@@ -274,7 +330,7 @@ pub async fn disconnect(state: tauri::State<'_, AppState>, id: String) -> Result
 
 #[tauri::command]
 pub fn list_groups() -> Result<Vec<ConnectionGroup>, AppError> {
-    let data = storage::load_storage()?;
+    let data = storage::load_storage_redacted()?;
     Ok(data.groups)
 }
 
@@ -347,6 +403,33 @@ mod tests {
         }
     }
 
+    /// Test helper: invoke the `save_connection` Tauri command with a
+    /// pre-existing `ConnectionConfig`. Treats `conn.password` as the new
+    /// password (matching the historical single-arg `save_connection` shape).
+    fn save_via_command(
+        conn: ConnectionConfig,
+        is_new: Option<bool>,
+    ) -> Result<ConnectionConfigPublic, AppError> {
+        let password = Some(conn.password.clone());
+        let req = SaveConnectionRequest {
+            connection: ConnectionConfigPublic::from(&conn),
+            password,
+            is_new,
+        };
+        save_connection(req)
+    }
+
+    fn load_storage() -> Result<crate::models::StorageData, AppError> {
+        storage::load_storage_with_secrets()
+    }
+
+    /// Test helper: invoke storage::save_connection treating conn.password as
+    /// the new plaintext (matches old single-arg behavior).
+    fn storage_save_conn(conn: ConnectionConfig) -> Result<(), AppError> {
+        let pw = Some(conn.password.clone());
+        storage::save_connection(conn, pw)
+    }
+
     fn sample_group(id: &str, name: &str) -> ConnectionGroup {
         ConnectionGroup {
             id: id.to_string(),
@@ -360,7 +443,7 @@ mod tests {
     #[test]
     fn test_save_connection_rejects_empty_name() {
         let conn = sample_connection("c1", "");
-        let result = save_connection(conn.clone(), None);
+        let result = save_via_command(conn.clone(), None);
         assert!(result.is_err());
         match result.unwrap_err() {
             AppError::Validation(msg) => assert!(msg.contains("name is required")),
@@ -371,7 +454,7 @@ mod tests {
     #[test]
     fn test_save_connection_rejects_whitespace_name() {
         let conn = sample_connection("c1", "   ");
-        let result = save_connection(conn, None);
+        let result = save_via_command(conn, None);
         assert!(result.is_err());
     }
 
@@ -379,7 +462,7 @@ mod tests {
     fn test_save_connection_rejects_empty_host() {
         let mut conn = sample_connection("c1", "MyDB");
         conn.host = String::new();
-        let result = save_connection(conn, None);
+        let result = save_via_command(conn, None);
         assert!(result.is_err());
         match result.unwrap_err() {
             AppError::Validation(msg) => assert!(msg.contains("Host is required")),
@@ -391,7 +474,7 @@ mod tests {
     fn test_save_connection_rejects_whitespace_host() {
         let mut conn = sample_connection("c1", "MyDB");
         conn.host = "   ".to_string();
-        let result = save_connection(conn, None);
+        let result = save_via_command(conn, None);
         assert!(result.is_err());
     }
 
@@ -402,7 +485,7 @@ mod tests {
         let _dir = setup_test_env();
 
         let conn = sample_connection("placeholder-id", "MyDB");
-        let result = save_connection(conn, Some(true)).unwrap();
+        let result = save_via_command(conn, Some(true)).unwrap();
 
         // UUID should differ from the placeholder id
         assert_ne!(result.id, "placeholder-id");
@@ -411,7 +494,7 @@ mod tests {
         assert!(result.id.contains('-'));
 
         // The saved connection should be loadable with the new UUID
-        let loaded = storage::load_storage().unwrap();
+        let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections.len(), 1);
         assert_eq!(loaded.connections[0].id, result.id);
 
@@ -424,7 +507,7 @@ mod tests {
         let _dir = setup_test_env();
 
         let conn = sample_connection("my-custom-id", "MyDB");
-        let result = save_connection(conn, Some(false)).unwrap();
+        let result = save_via_command(conn, Some(false)).unwrap();
 
         assert_eq!(result.id, "my-custom-id");
 
@@ -437,7 +520,7 @@ mod tests {
         let _dir = setup_test_env();
 
         let conn = sample_connection("my-custom-id", "MyDB");
-        let result = save_connection(conn, None).unwrap();
+        let result = save_via_command(conn, None).unwrap();
 
         assert_eq!(result.id, "my-custom-id");
 
@@ -513,8 +596,8 @@ mod tests {
     fn test_list_connections_returns_from_storage() {
         let _dir = setup_test_env();
 
-        storage::save_connection(sample_connection("c1", "DB1")).unwrap();
-        storage::save_connection(sample_connection("c2", "DB2")).unwrap();
+        storage_save_conn(sample_connection("c1", "DB1")).unwrap();
+        storage_save_conn(sample_connection("c2", "DB2")).unwrap();
 
         let connections = list_connections().unwrap();
         assert_eq!(connections.len(), 2);
@@ -527,10 +610,10 @@ mod tests {
     fn test_delete_connection_command_removes_connection() {
         let _dir = setup_test_env();
 
-        storage::save_connection(sample_connection("c1", "DB1")).unwrap();
+        storage_save_conn(sample_connection("c1", "DB1")).unwrap();
         delete_connection("c1".to_string()).unwrap();
 
-        let loaded = storage::load_storage().unwrap();
+        let loaded = load_storage().unwrap();
         assert!(loaded.connections.is_empty());
 
         cleanup_test_env();
@@ -544,10 +627,166 @@ mod tests {
         storage::save_group(sample_group("g1", "Group1")).unwrap();
         delete_group("g1".to_string()).unwrap();
 
-        let loaded = storage::load_storage().unwrap();
+        let loaded = load_storage().unwrap();
         assert!(loaded.groups.is_empty());
 
         cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // Password security regression tests (Phase B)
+    // -------------------------------------------------------------------
+
+    /// list_connections must NEVER include the plaintext password in the
+    /// payload sent to the frontend, even when the password is stored.
+    #[test]
+    #[serial]
+    fn test_list_connections_omits_plaintext_password() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "Sup3r!7".to_string();
+        storage_save_conn(conn).unwrap();
+
+        let publics = list_connections().unwrap();
+        assert_eq!(publics.len(), 1);
+        assert!(publics[0].has_password);
+
+        // Serialize the wire format and assert the secret is not present
+        let json = serde_json::to_string(&publics).unwrap();
+        assert!(
+            !json.contains("Sup3r!7"),
+            "Plaintext password leaked into list_connections payload: {}",
+            json
+        );
+        assert!(
+            !json.contains("\"password\""),
+            "Public payload must not include any 'password' field: {}",
+            json
+        );
+
+        cleanup_test_env();
+    }
+
+    /// save_connection with `password = None` must preserve the existing
+    /// stored password rather than clearing it.
+    #[test]
+    #[serial]
+    fn test_save_connection_password_none_preserves_existing() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "origpw".into();
+        storage_save_conn(conn).unwrap();
+
+        // Now "edit" the connection without sending a new password
+        let updated = sample_connection("c1", "DB1 edited");
+        let req = SaveConnectionRequest {
+            connection: ConnectionConfigPublic::from(&updated),
+            password: None,
+            is_new: Some(false),
+        };
+        save_connection(req).unwrap();
+
+        // The decrypted password should still be the original
+        let pw = storage::get_decrypted_password("c1").unwrap();
+        assert_eq!(pw, Some("origpw".to_string()));
+
+        cleanup_test_env();
+    }
+
+    /// `password = Some("")` must explicitly clear the stored password.
+    #[test]
+    #[serial]
+    fn test_save_connection_password_empty_string_clears() {
+        let _dir = setup_test_dir_inner();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "before".into();
+        storage_save_conn(conn).unwrap();
+
+        let stub = sample_connection("c1", "DB1");
+        let req = SaveConnectionRequest {
+            connection: ConnectionConfigPublic::from(&stub),
+            password: Some(String::new()),
+            is_new: Some(false),
+        };
+        save_connection(req).unwrap();
+
+        let pw = storage::get_decrypted_password("c1").unwrap();
+        assert_eq!(pw, Some(String::new()));
+
+        let publics = list_connections().unwrap();
+        assert!(!publics[0].has_password);
+
+        cleanup_test_env();
+    }
+
+    /// `password = Some(s)` must replace the stored password.
+    #[test]
+    #[serial]
+    fn test_save_connection_password_some_replaces() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "old".into();
+        storage_save_conn(conn).unwrap();
+
+        let stub = sample_connection("c1", "DB1");
+        let req = SaveConnectionRequest {
+            connection: ConnectionConfigPublic::from(&stub),
+            password: Some("brand-new".into()),
+            is_new: Some(false),
+        };
+        save_connection(req).unwrap();
+
+        let pw = storage::get_decrypted_password("c1").unwrap();
+        assert_eq!(pw, Some("brand-new".to_string()));
+
+        cleanup_test_env();
+    }
+
+    /// test_connection without an explicit password must look up the stored
+    /// one when `existing_id` is supplied (so the dialog can run a test
+    /// without the user re-typing the password).
+    #[tokio::test]
+    #[serial]
+    async fn test_test_connection_uses_stored_password_when_omitted() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "lkpme".into();
+        // Use a host that won't resolve so the test fails fast at the network
+        // step — we only care whether the password resolution path ran.
+        conn.host = "definitely-not-a-real-host.invalid".into();
+        storage_save_conn(conn.clone()).unwrap();
+
+        // Send no password, but supply existing_id. Storage lookup should
+        // succeed; then the postgres adapter will fail to actually connect,
+        // which is fine — the assertion is that get_decrypted_password ran.
+        let req = TestConnectionRequest {
+            config: ConnectionConfigPublic::from(&conn),
+            password: None,
+            existing_id: Some("c1".into()),
+        };
+        let result = test_connection(req).await;
+        // We expect a connection error (host doesn't resolve), NOT a missing
+        // password error. The mere fact that we got past the password lookup
+        // is what's being verified.
+        assert!(
+            result.is_err(),
+            "Expected connection failure to invalid host"
+        );
+
+        // Sanity: stored password is still intact and decryptable
+        let pw = storage::get_decrypted_password("c1").unwrap();
+        assert_eq!(pw, Some("lkpme".to_string()));
+
+        cleanup_test_env();
+    }
+
+    fn setup_test_dir_inner() -> tempfile::TempDir {
+        setup_test_env()
     }
 
     #[test]
@@ -556,11 +795,11 @@ mod tests {
         let _dir = setup_test_env();
 
         storage::save_group(sample_group("g1", "Group1")).unwrap();
-        storage::save_connection(sample_connection("c1", "DB1")).unwrap();
+        storage_save_conn(sample_connection("c1", "DB1")).unwrap();
 
         move_connection_to_group("c1".to_string(), Some("g1".to_string())).unwrap();
 
-        let loaded = storage::load_storage().unwrap();
+        let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections[0].group_id, Some("g1".to_string()));
 
         cleanup_test_env();

@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ConnectionConfig, ConnectionGroup } from "@/types/connection";
+import type {
+  ConnectionConfig,
+  ConnectionDraft,
+  ConnectionGroup,
+} from "@/types/connection";
 import type { QueryResult } from "@/types/query";
 import type {
   AddConstraintRequest,
@@ -23,13 +27,22 @@ export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke<ConnectionConfig[]>("list_connections");
 }
 
+/**
+ * Save a connection. The `draft` carries everything except `password`, which
+ * has its own three-way semantics: `null` → keep existing, `""` → clear,
+ * non-empty → set new. The backend never echoes the password back.
+ */
 export async function saveConnection(
-  connection: ConnectionConfig,
+  draft: ConnectionDraft,
   isNew: boolean,
 ): Promise<ConnectionConfig> {
+  const { password, ...connection } = draft;
   return invoke<ConnectionConfig>("save_connection", {
-    connection,
-    isNew,
+    req: {
+      connection: { ...connection, has_password: false },
+      password,
+      is_new: isNew,
+    },
   });
 }
 
@@ -37,10 +50,23 @@ export async function deleteConnection(id: string): Promise<void> {
   return invoke("delete_connection", { id });
 }
 
+/**
+ * Test a connection. When editing an existing connection the dialog should
+ * pass `existingId` so the backend can substitute the stored password if
+ * the user left the password input empty.
+ */
 export async function testConnection(
-  config: ConnectionConfig,
+  draft: ConnectionDraft,
+  existingId: string | null = null,
 ): Promise<string> {
-  return invoke<string>("test_connection", { config });
+  const { password, ...rest } = draft;
+  return invoke<string>("test_connection", {
+    req: {
+      config: { ...rest, has_password: false },
+      password,
+      existing_id: existingId,
+    },
+  });
 }
 
 export async function connectToDatabase(id: string): Promise<void> {

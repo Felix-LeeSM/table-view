@@ -2,8 +2,21 @@ use std::fs;
 
 use serial_test::serial;
 use tempfile::TempDir;
-use view_table_lib::models::{ConnectionConfig, ConnectionGroup, DatabaseType};
+use view_table_lib::error::AppError;
+use view_table_lib::models::{ConnectionConfig, ConnectionGroup, DatabaseType, StorageData};
 use view_table_lib::storage;
+
+/// Test shim mirroring the historical single-arg `storage::save_connection`
+/// signature. Treats `conn.password` as the new plaintext password.
+fn save_conn(conn: ConnectionConfig) -> Result<(), AppError> {
+    let pw = Some(conn.password.clone());
+    storage::save_connection(conn, pw)
+}
+
+/// Test shim equivalent to the old `storage::load_storage` (decrypts).
+fn load_storage() -> Result<StorageData, AppError> {
+    storage::load_storage_with_secrets()
+}
 
 /// Set up a temp directory as the test data dir and return the TempDir
 /// (must be kept alive for the duration of the test).
@@ -49,9 +62,9 @@ fn sample_group(id: &str, name: &str) -> ConnectionGroup {
 fn test_save_and_load_connection() {
     let _dir = setup_test_dir();
     let conn = sample_connection("c1", "MyDB");
-    storage::save_connection(conn.clone()).unwrap();
+    save_conn(conn.clone()).unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.connections.len(), 1);
     assert_eq!(loaded.connections[0].id, "c1");
     assert_eq!(loaded.connections[0].name, "MyDB");
@@ -64,13 +77,13 @@ fn test_save_and_load_connection() {
 fn test_save_connection_updates_existing() {
     let _dir = setup_test_dir();
     let conn = sample_connection("c1", "MyDB");
-    storage::save_connection(conn).unwrap();
+    save_conn(conn).unwrap();
 
     let mut updated = sample_connection("c1", "MyDB Updated");
     updated.port = 3306;
-    storage::save_connection(updated).unwrap();
+    save_conn(updated).unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.connections.len(), 1);
     assert_eq!(loaded.connections[0].name, "MyDB Updated");
     assert_eq!(loaded.connections[0].port, 3306);
@@ -81,9 +94,9 @@ fn test_save_connection_updates_existing() {
 #[serial]
 fn test_save_connection_rejects_duplicate_name() {
     let _dir = setup_test_dir();
-    storage::save_connection(sample_connection("c1", "MyDB")).unwrap();
+    save_conn(sample_connection("c1", "MyDB")).unwrap();
 
-    let result = storage::save_connection(sample_connection("c2", "MyDB"));
+    let result = save_conn(sample_connection("c2", "MyDB"));
     assert!(result.is_err());
     cleanup_test_dir();
 }
@@ -92,12 +105,12 @@ fn test_save_connection_rejects_duplicate_name() {
 #[serial]
 fn test_delete_connection() {
     let _dir = setup_test_dir();
-    storage::save_connection(sample_connection("c1", "DB1")).unwrap();
-    storage::save_connection(sample_connection("c2", "DB2")).unwrap();
+    save_conn(sample_connection("c1", "DB1")).unwrap();
+    save_conn(sample_connection("c2", "DB2")).unwrap();
 
     storage::delete_connection("c1").unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.connections.len(), 1);
     assert_eq!(loaded.connections[0].id, "c2");
     cleanup_test_dir();
@@ -119,7 +132,7 @@ fn test_save_and_list_groups() {
     storage::save_group(sample_group("g1", "Production")).unwrap();
     storage::save_group(sample_group("g2", "Development")).unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.groups.len(), 2);
     assert_eq!(loaded.groups[0].name, "Production");
     assert_eq!(loaded.groups[1].name, "Development");
@@ -134,11 +147,11 @@ fn test_delete_group_moves_connections_to_root() {
 
     let mut conn = sample_connection("c1", "DB1");
     conn.group_id = Some("g1".to_string());
-    storage::save_connection(conn).unwrap();
+    save_conn(conn).unwrap();
 
     storage::delete_group("g1").unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.groups.len(), 0);
     assert_eq!(loaded.connections.len(), 1);
     assert_eq!(loaded.connections[0].group_id, None);
@@ -150,11 +163,11 @@ fn test_delete_group_moves_connections_to_root() {
 fn test_move_connection_to_group() {
     let _dir = setup_test_dir();
     storage::save_group(sample_group("g1", "Group1")).unwrap();
-    storage::save_connection(sample_connection("c1", "DB1")).unwrap();
+    save_conn(sample_connection("c1", "DB1")).unwrap();
 
     storage::move_connection_to_group("c1", Some("g1")).unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.connections[0].group_id, Some("g1".to_string()));
     cleanup_test_dir();
 }
@@ -167,11 +180,11 @@ fn test_move_connection_to_root() {
 
     let mut conn = sample_connection("c1", "DB1");
     conn.group_id = Some("g1".to_string());
-    storage::save_connection(conn).unwrap();
+    save_conn(conn).unwrap();
 
     storage::move_connection_to_group("c1", None).unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.connections[0].group_id, None);
     cleanup_test_dir();
 }
@@ -181,7 +194,7 @@ fn test_move_connection_to_root() {
 fn test_password_is_encrypted_at_rest() {
     let _dir = setup_test_dir();
     let conn = sample_connection("c1", "MyDB");
-    storage::save_connection(conn).unwrap();
+    save_conn(conn).unwrap();
 
     // Read raw file and verify password is NOT stored in plaintext
     let data_dir = std::env::var("VIEWTABLE_TEST_DATA_DIR").unwrap();
@@ -198,7 +211,7 @@ fn test_password_is_encrypted_at_rest() {
 fn test_load_empty_storage() {
     let _dir = setup_test_dir();
     // No file created yet — should return empty defaults
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert!(loaded.connections.is_empty());
     assert!(loaded.groups.is_empty());
     cleanup_test_dir();
@@ -211,9 +224,9 @@ fn test_connection_timeout_and_keepalive_persist() {
     let mut conn = sample_connection("c1", "DB1");
     conn.connection_timeout = Some(60);
     conn.keep_alive_interval = Some(10);
-    storage::save_connection(conn).unwrap();
+    save_conn(conn).unwrap();
 
-    let loaded = storage::load_storage().unwrap();
+    let loaded = load_storage().unwrap();
     assert_eq!(loaded.connections[0].connection_timeout, Some(60));
     assert_eq!(loaded.connections[0].keep_alive_interval, Some(10));
     cleanup_test_dir();

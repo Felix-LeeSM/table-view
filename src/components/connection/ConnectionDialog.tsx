@@ -1,7 +1,12 @@
 import { useState } from "react";
-import type { ConnectionConfig, DatabaseType } from "@/types/connection";
+import type {
+  ConnectionConfig,
+  ConnectionDraft,
+  DatabaseType,
+} from "@/types/connection";
 import {
-  createEmptyConnection,
+  createEmptyDraft,
+  draftFromConnection,
   DATABASE_DEFAULTS,
   parseConnectionUrl,
   ENVIRONMENT_META,
@@ -35,14 +40,18 @@ export default function ConnectionDialog({
   onClose,
 }: ConnectionDialogProps) {
   const isEditing = !!connection;
-  const [inputMode, setInputMode] = useState<"form" | "url">(
-    connection ? "form" : "form",
-  );
+  const hadPassword = !!connection?.has_password;
+  const [inputMode, setInputMode] = useState<"form" | "url">("form");
   const [urlValue, setUrlValue] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
-  const [form, setForm] = useState<ConnectionConfig>(
-    connection ?? createEmptyConnection(),
+  const [form, setForm] = useState<ConnectionDraft>(
+    connection ? draftFromConnection(connection) : createEmptyDraft(),
   );
+  // The password input is a separate piece of UI state. When editing, it
+  // starts empty and is only sent if the user actually types something OR
+  // explicitly checks "Clear password".
+  const [passwordInput, setPasswordInput] = useState("");
+  const [clearPassword, setClearPassword] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
@@ -63,11 +72,24 @@ export default function ConnectionDialog({
     }));
   };
 
+  /** Resolve the password value to send to the backend. */
+  const resolvePassword = (): string | null => {
+    if (!isEditing) {
+      // New connections: the input is the password (empty string is fine).
+      return passwordInput;
+    }
+    if (clearPassword) return "";
+    if (passwordInput.length > 0) return passwordInput;
+    // Editing + empty input + not clearing → keep existing
+    return null;
+  };
+
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
     try {
-      const msg = await testConnection(form);
+      const draft: ConnectionDraft = { ...form, password: resolvePassword() };
+      const msg = await testConnection(draft, connection?.id ?? null);
       setTestResult({ success: true, message: msg });
     } catch (e) {
       setTestResult({ success: false, message: String(e) });
@@ -88,10 +110,11 @@ export default function ConnectionDialog({
     setSaving(true);
     setError(null);
     try {
+      const draft: ConnectionDraft = { ...form, password: resolvePassword() };
       if (isEditing) {
-        await updateConnection(form);
+        await updateConnection(draft);
       } else {
-        await addConnection(form);
+        await addConnection(draft);
       }
       onClose();
     } catch (e) {
@@ -200,11 +223,15 @@ export default function ConnectionDialog({
                       );
                       return;
                     }
+                    const { password, ...rest } = parsed;
                     setForm((f) => ({
                       ...f,
-                      ...parsed,
+                      ...rest,
                       name: f.name || parsed.database || "",
                     }));
+                    if (typeof password === "string") {
+                      setPasswordInput(password);
+                    }
                     setInputMode("form");
                   }}
                 >
@@ -332,19 +359,50 @@ export default function ConnectionDialog({
 
                 {/* Password */}
                 <div>
-                  <label htmlFor="conn-password" className={labelClass}>
-                    Password
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="conn-password" className={labelClass}>
+                      Password
+                    </label>
+                    {isEditing && (
+                      <span
+                        className={`mb-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                          hadPassword
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                        data-testid="password-status-badge"
+                      >
+                        {hadPassword ? "Password set" : "No password"}
+                      </span>
+                    )}
+                  </div>
                   <input
                     id="conn-password"
                     className={inputClass}
                     type="password"
-                    value={form.password}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, password: e.target.value }))
+                    value={passwordInput}
+                    disabled={isEditing && clearPassword}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    placeholder={
+                      isEditing && hadPassword
+                        ? "Leave blank to keep current password"
+                        : "••••••••"
                     }
-                    placeholder="••••••••"
                   />
+                  {isEditing && hadPassword && (
+                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="cursor-pointer"
+                        checked={clearPassword}
+                        onChange={(e) => {
+                          setClearPassword(e.target.checked);
+                          if (e.target.checked) setPasswordInput("");
+                        }}
+                      />
+                      Clear stored password on save
+                    </label>
+                  )}
                 </div>
 
                 {/* Database */}

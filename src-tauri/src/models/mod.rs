@@ -3,7 +3,8 @@ pub mod query;
 pub mod schema;
 
 pub use connection::{
-    ConnectionConfig, ConnectionGroup, ConnectionStatus, DatabaseType, StorageData,
+    ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus, DatabaseType,
+    StorageData,
 };
 pub use query::{QueryColumn, QueryResult, QueryType};
 pub use schema::{

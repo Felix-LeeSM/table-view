@@ -30,7 +30,12 @@ fn storage_file_path() -> Result<PathBuf, AppError> {
     Ok(app_data_dir()?.join("connections.json"))
 }
 
-fn load_storage_inner() -> Result<StorageData, AppError> {
+/// Load storage from disk WITHOUT decrypting passwords. Each connection's
+/// `password` field still holds the on-disk ciphertext (or "" when no
+/// password is set). Use this when a function will not return password data
+/// to its caller — passing through ciphertext is safer than decrypting and
+/// re-encrypting (and avoids changing nonces unnecessarily).
+fn load_storage_raw() -> Result<StorageData, AppError> {
     let path = storage_file_path()?;
     if !path.exists() {
         info!("Storage file not found, creating default");
@@ -38,48 +43,30 @@ fn load_storage_inner() -> Result<StorageData, AppError> {
             connections: vec![],
             groups: vec![],
         };
-        save_storage_inner(&default)?;
+        save_storage_raw(&default)?;
         return Ok(default);
     }
 
     let content = fs::read_to_string(&path)?;
-    let mut data: StorageData = serde_json::from_str(&content)?;
-
-    // Decrypt passwords
-    let key = crypto::get_or_create_key()?;
-    for conn in &mut data.connections {
-        if !conn.password.is_empty() {
-            conn.password = crypto::decrypt(&conn.password, &key)?;
-        }
-    }
-
-    debug!("Loaded {} connections", data.connections.len());
+    let data: StorageData = serde_json::from_str(&content)?;
+    debug!("Loaded {} connections (raw)", data.connections.len());
     Ok(data)
 }
 
-fn save_storage_inner(data: &StorageData) -> Result<(), AppError> {
+/// Save storage to disk WITHOUT re-encrypting passwords. Each connection's
+/// `password` field MUST already contain ciphertext (or be empty).
+fn save_storage_raw(data: &StorageData) -> Result<(), AppError> {
     let path = storage_file_path()?;
-    let key = crypto::get_or_create_key()?;
-
-    // Encrypt passwords before saving
-    let mut save_data = data.clone();
-    for conn in &mut save_data.connections {
-        if !conn.password.is_empty() {
-            conn.password = crypto::encrypt(&conn.password, &key)?;
-        }
-    }
-
-    let json = serde_json::to_string_pretty(&save_data)?;
+    let json = serde_json::to_string_pretty(data)?;
     fs::write(&path, &json)?;
 
-    // Restrict file permissions to owner-only
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
     }
 
-    debug!("Saved {} connections", data.connections.len());
+    debug!("Saved {} connections (raw)", data.connections.len());
     Ok(())
 }
 
@@ -97,13 +84,76 @@ where
 
 // --- Public API (each acquires STORAGE_LOCK to prevent TOCTOU) ---
 
-pub fn load_storage() -> Result<StorageData, AppError> {
-    with_lock(load_storage_inner)
+/// Load storage with passwords cleared. Each `ConnectionConfig.password` is
+/// returned as an empty string regardless of whether one is stored on disk.
+/// Use this for any path that ends in IPC/HTTP/file output.
+pub fn load_storage_redacted() -> Result<StorageData, AppError> {
+    with_lock(|| {
+        let mut data = load_storage_raw()?;
+        for conn in &mut data.connections {
+            conn.password.clear();
+        }
+        Ok(data)
+    })
 }
 
-pub fn save_connection(conn: ConnectionConfig) -> Result<(), AppError> {
+/// Load storage with passwords decrypted. Use ONLY when a real database
+/// connection is about to be made; never expose the result to the frontend.
+pub fn load_storage_with_secrets() -> Result<StorageData, AppError> {
     with_lock(|| {
-        let mut data = load_storage_inner()?;
+        let mut data = load_storage_raw()?;
+        let key = crypto::get_or_create_key()?;
+        for conn in &mut data.connections {
+            if !conn.password.is_empty() {
+                conn.password = crypto::decrypt(&conn.password, &key)?;
+            }
+        }
+        Ok(data)
+    })
+}
+
+/// Returns whether each connection currently has a stored password,
+/// indexed by connection id. Cheap (no decryption performed).
+pub fn password_presence_map() -> Result<std::collections::HashMap<String, bool>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        Ok(data
+            .connections
+            .into_iter()
+            .map(|c| (c.id, !c.password.is_empty()))
+            .collect())
+    })
+}
+
+/// Decrypt the password for a single connection. Returns:
+/// - `Ok(None)` when the connection does not exist
+/// - `Ok(Some(""))` when the connection exists with no password
+/// - `Ok(Some(plaintext))` when the connection has a stored password
+pub fn get_decrypted_password(id: &str) -> Result<Option<String>, AppError> {
+    with_lock(|| {
+        let data = load_storage_raw()?;
+        let conn = data.connections.iter().find(|c| c.id == id);
+        match conn {
+            None => Ok(None),
+            Some(c) if c.password.is_empty() => Ok(Some(String::new())),
+            Some(c) => {
+                let key = crypto::get_or_create_key()?;
+                Ok(Some(crypto::decrypt(&c.password, &key)?))
+            }
+        }
+    })
+}
+
+/// Save a connection. `new_password` semantics:
+/// - `None`     → preserve the existing ciphertext (or empty for new ids)
+/// - `Some("")` → explicitly clear the password
+/// - `Some(s)`  → encrypt `s` and store
+pub fn save_connection(
+    mut conn: ConnectionConfig,
+    new_password: Option<String>,
+) -> Result<(), AppError> {
+    with_lock(|| {
+        let mut data = load_storage_raw()?;
 
         // Check for duplicate name
         if data
@@ -117,19 +167,35 @@ pub fn save_connection(conn: ConnectionConfig) -> Result<(), AppError> {
             )));
         }
 
+        // Resolve the encrypted password to persist
+        let encrypted = match new_password {
+            Some(s) if !s.is_empty() => {
+                let key = crypto::get_or_create_key()?;
+                crypto::encrypt(&s, &key)?
+            }
+            Some(_) => String::new(),
+            None => data
+                .connections
+                .iter()
+                .find(|c| c.id == conn.id)
+                .map(|c| c.password.clone())
+                .unwrap_or_default(),
+        };
+        conn.password = encrypted;
+
         if let Some(existing) = data.connections.iter_mut().find(|c| c.id == conn.id) {
             *existing = conn;
         } else {
             data.connections.push(conn);
         }
 
-        save_storage_inner(&data)
+        save_storage_raw(&data)
     })
 }
 
 pub fn delete_connection(id: &str) -> Result<(), AppError> {
     with_lock(|| {
-        let mut data = load_storage_inner()?;
+        let mut data = load_storage_raw()?;
         let initial_len = data.connections.len();
         data.connections.retain(|c| c.id != id);
 
@@ -137,13 +203,13 @@ pub fn delete_connection(id: &str) -> Result<(), AppError> {
             return Err(AppError::NotFound(format!("Connection '{}' not found", id)));
         }
 
-        save_storage_inner(&data)
+        save_storage_raw(&data)
     })
 }
 
 pub fn save_group(group: ConnectionGroup) -> Result<(), AppError> {
     with_lock(|| {
-        let mut data = load_storage_inner()?;
+        let mut data = load_storage_raw()?;
 
         if let Some(existing) = data.groups.iter_mut().find(|g| g.id == group.id) {
             *existing = group;
@@ -151,13 +217,13 @@ pub fn save_group(group: ConnectionGroup) -> Result<(), AppError> {
             data.groups.push(group);
         }
 
-        save_storage_inner(&data)
+        save_storage_raw(&data)
     })
 }
 
 pub fn delete_group(id: &str) -> Result<(), AppError> {
     with_lock(|| {
-        let mut data = load_storage_inner()?;
+        let mut data = load_storage_raw()?;
 
         let initial_len = data.groups.len();
         data.groups.retain(|g| g.id != id);
@@ -172,7 +238,7 @@ pub fn delete_group(id: &str) -> Result<(), AppError> {
             }
         }
 
-        save_storage_inner(&data)
+        save_storage_raw(&data)
     })
 }
 
@@ -181,7 +247,7 @@ pub fn move_connection_to_group(
     group_id: Option<&str>,
 ) -> Result<(), AppError> {
     with_lock(|| {
-        let mut data = load_storage_inner()?;
+        let mut data = load_storage_raw()?;
 
         let conn = data
             .connections
@@ -192,7 +258,7 @@ pub fn move_connection_to_group(
             })?;
 
         conn.group_id = group_id.map(String::from);
-        save_storage_inner(&data)
+        save_storage_raw(&data)
     })
 }
 
@@ -213,6 +279,18 @@ mod tests {
 
     fn cleanup_test_env() {
         std::env::remove_var("VIEWTABLE_TEST_DATA_DIR");
+    }
+
+    /// Test helper: previous-style save that treats the conn.password field
+    /// as the source of truth for the new password. Equivalent to the old
+    /// single-arg `save_connection`.
+    fn save_conn(conn: ConnectionConfig) -> Result<(), AppError> {
+        let pw = Some(conn.password.clone());
+        save_connection(conn, pw)
+    }
+
+    fn load_storage() -> Result<StorageData, AppError> {
+        load_storage_with_secrets()
     }
 
     fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
@@ -262,7 +340,7 @@ mod tests {
         let _dir = setup_test_env();
 
         let conn = sample_connection("c1", "MyDB");
-        save_connection(conn.clone()).unwrap();
+        save_conn(conn.clone()).unwrap();
 
         let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections.len(), 1);
@@ -281,12 +359,12 @@ mod tests {
         let _dir = setup_test_env();
 
         let conn = sample_connection("c1", "MyDB");
-        save_connection(conn).unwrap();
+        save_conn(conn).unwrap();
 
         let mut updated = sample_connection("c1", "MyDB Updated");
         updated.port = 3306;
         updated.host = "newhost".to_string();
-        save_connection(updated).unwrap();
+        save_conn(updated).unwrap();
 
         let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections.len(), 1);
@@ -303,9 +381,9 @@ mod tests {
     fn test_save_connection_rejects_duplicate_name() {
         let _dir = setup_test_env();
 
-        save_connection(sample_connection("c1", "MyDB")).unwrap();
+        save_conn(sample_connection("c1", "MyDB")).unwrap();
 
-        let result = save_connection(sample_connection("c2", "MyDB"));
+        let result = save_conn(sample_connection("c2", "MyDB"));
         assert!(result.is_err());
         match result.unwrap_err() {
             AppError::Validation(msg) => {
@@ -328,8 +406,8 @@ mod tests {
     fn test_delete_connection_removes_by_id() {
         let _dir = setup_test_env();
 
-        save_connection(sample_connection("c1", "DB1")).unwrap();
-        save_connection(sample_connection("c2", "DB2")).unwrap();
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c2", "DB2")).unwrap();
 
         delete_connection("c1").unwrap();
 
@@ -367,7 +445,7 @@ mod tests {
 
         let mut conn = sample_connection("c1", "MyDB");
         conn.password = "pwd_tst".to_string();
-        save_connection(conn).unwrap();
+        save_conn(conn).unwrap();
 
         // Verify password is NOT stored in plaintext in the file
         let data_dir = std::env::var("VIEWTABLE_TEST_DATA_DIR").unwrap();
@@ -427,7 +505,7 @@ mod tests {
 
         let mut conn = sample_connection("c1", "DB1");
         conn.group_id = Some("g1".to_string());
-        save_connection(conn).unwrap();
+        save_conn(conn).unwrap();
 
         delete_group("g1").unwrap();
 
@@ -446,7 +524,7 @@ mod tests {
         let _dir = setup_test_env();
 
         save_group(sample_group("g1", "Group1")).unwrap();
-        save_connection(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c1", "DB1")).unwrap();
 
         // Move to group
         move_connection_to_group("c1", Some("g1")).unwrap();
@@ -505,7 +583,7 @@ mod tests {
 
         let mut conn = sample_connection("c1", "MyDB");
         conn.password = String::new();
-        save_connection(conn).unwrap();
+        save_conn(conn).unwrap();
 
         let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections[0].password, "");
@@ -519,12 +597,118 @@ mod tests {
     fn test_save_multiple_connections() {
         let _dir = setup_test_env();
 
-        save_connection(sample_connection("c1", "DB1")).unwrap();
-        save_connection(sample_connection("c2", "DB2")).unwrap();
-        save_connection(sample_connection("c3", "DB3")).unwrap();
+        save_conn(sample_connection("c1", "DB1")).unwrap();
+        save_conn(sample_connection("c2", "DB2")).unwrap();
+        save_conn(sample_connection("c3", "DB3")).unwrap();
 
         let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections.len(), 3);
+
+        cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // Phase B password security
+    // -------------------------------------------------------------------
+
+    /// load_storage_redacted must NEVER return decrypted plaintext.
+    #[test]
+    #[serial]
+    fn test_load_storage_redacted_omits_plaintext() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "noleak".into();
+        save_conn(conn).unwrap();
+
+        let data = load_storage_redacted().unwrap();
+        for c in &data.connections {
+            assert!(
+                !c.password.contains("noleak"),
+                "Plaintext leaked from load_storage_redacted: {}",
+                c.password
+            );
+            assert!(c.password.is_empty(), "Redacted password must be empty");
+        }
+
+        cleanup_test_env();
+    }
+
+    /// load_storage_with_secrets must round-trip plaintext correctly.
+    #[test]
+    #[serial]
+    fn test_load_storage_with_secrets_decrypts() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "rtrip".into();
+        save_conn(conn).unwrap();
+
+        let data = load_storage_with_secrets().unwrap();
+        assert_eq!(data.connections[0].password, "rtrip");
+
+        cleanup_test_env();
+    }
+
+    /// save_connection with `None` preserves the existing ciphertext (and the
+    /// decrypted plaintext when read back).
+    #[test]
+    #[serial]
+    fn test_save_connection_with_none_preserves_existing() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "alpha".into();
+        save_conn(conn).unwrap();
+
+        // Save again with `None`: should keep the existing password
+        let mut updated = sample_connection("c1", "DB1 renamed");
+        updated.password = String::new(); // value is irrelevant when None
+        save_connection(updated, None).unwrap();
+
+        let data = load_storage_with_secrets().unwrap();
+        assert_eq!(data.connections[0].password, "alpha");
+        assert_eq!(data.connections[0].name, "DB1 renamed");
+
+        cleanup_test_env();
+    }
+
+    /// password_presence_map reports has-password without decrypting.
+    #[test]
+    #[serial]
+    fn test_password_presence_map_reports_correctly() {
+        let _dir = setup_test_env();
+
+        let mut with = sample_connection("c1", "DB1");
+        with.password = "yes".into();
+        save_conn(with).unwrap();
+
+        let mut without = sample_connection("c2", "DB2");
+        without.password = String::new();
+        save_conn(without).unwrap();
+
+        let map = password_presence_map().unwrap();
+        assert_eq!(map.get("c1"), Some(&true));
+        assert_eq!(map.get("c2"), Some(&false));
+
+        cleanup_test_env();
+    }
+
+    /// get_decrypted_password returns the right plaintext for the right id.
+    #[test]
+    #[serial]
+    fn test_get_decrypted_password_returns_plaintext() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("c1", "DB1");
+        conn.password = "lkpw".into();
+        save_conn(conn).unwrap();
+
+        let pw = get_decrypted_password("c1").unwrap();
+        assert_eq!(pw, Some("lkpw".to_string()));
+
+        let missing = get_decrypted_password("nope").unwrap();
+        assert_eq!(missing, None);
 
         cleanup_test_env();
     }
@@ -535,11 +719,11 @@ mod tests {
     fn test_save_connection_same_name_same_id_succeeds() {
         let _dir = setup_test_env();
 
-        save_connection(sample_connection("c1", "MyDB")).unwrap();
+        save_conn(sample_connection("c1", "MyDB")).unwrap();
 
         // Same id and same name should succeed (it's an update)
         let updated = sample_connection("c1", "MyDB");
-        let result = save_connection(updated);
+        let result = save_conn(updated);
         assert!(result.is_ok());
 
         let loaded = load_storage().unwrap();

@@ -79,7 +79,7 @@ function makeConnection(
     host: "localhost",
     port: 5432,
     user: "postgres",
-    password: "",
+    has_password: false,
     database: "testdb",
     group_id: null,
     color: null,

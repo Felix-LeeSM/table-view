@@ -88,7 +88,7 @@ function makeConnection(id: string): ConnectionConfig {
     host: "localhost",
     port: 5432,
     user: "postgres",
-    password: "",
+    has_password: false,
     database: "test",
     group_id: null,
     color: null,
