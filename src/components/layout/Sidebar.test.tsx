@@ -5,6 +5,29 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
+// jsdom in this project's setup ships an incomplete localStorage (getItem etc.
+// are undefined). Provide a working in-memory shim so persistence tests run.
+{
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => store.clear(),
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      get length() {
+        return store.size;
+      },
+    },
+  });
+}
+
 // Mock useTheme to avoid localStorage issues in jsdom
 let mockTheme: string = "system";
 const mockSetTheme = vi.fn((t: string) => {
@@ -15,26 +38,29 @@ vi.mock("@hooks/useTheme", () => ({
   useTheme: () => ({ theme: mockTheme, setTheme: mockSetTheme }),
 }));
 
-// Mock children to isolate Sidebar wiring
-vi.mock("@components/connection/ConnectionRail", () => ({
+// Mock children to isolate Sidebar wiring.
+// ConnectionList exposes the props it received as data attributes so we can
+// assert the contract without rendering the real list (which transitively
+// pulls in store + DnD).
+vi.mock("@components/connection/ConnectionList", () => ({
   default: ({
     selectedId,
     onSelect,
-    onNewConnection,
+    onActivate,
   }: {
     selectedId: string | null;
-    onSelect: (id: string) => void;
-    onNewConnection: () => void;
+    onSelect?: (id: string) => void;
+    onActivate?: (id: string) => void;
   }) => (
-    <div data-testid="connection-rail" data-selected={selectedId ?? ""}>
-      <button onClick={() => onSelect("c1")} data-testid="rail-pick-c1">
+    <div data-testid="connection-list" data-selected={selectedId ?? ""}>
+      <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
         pick c1
       </button>
-      <button onClick={() => onSelect("c2")} data-testid="rail-pick-c2">
+      <button data-testid="list-pick-c2" onClick={() => onSelect?.("c2")}>
         pick c2
       </button>
-      <button onClick={onNewConnection} data-testid="rail-new">
-        new
+      <button data-testid="list-activate-c2" onClick={() => onActivate?.("c2")}>
+        activate c2
       </button>
     </div>
   ),
@@ -93,71 +119,107 @@ describe("Sidebar", () => {
   beforeEach(() => {
     mockTheme = "system";
     vi.clearAllMocks();
+    window.localStorage.clear();
     setStores({});
   });
 
-  it("renders ConnectionRail and SchemaPanel", () => {
+  it("renders both mode toggle tabs", () => {
     render(<Sidebar />);
-    expect(screen.getByTestId("connection-rail")).toBeInTheDocument();
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /connections/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /schemas/i })).toBeInTheDocument();
   });
 
-  it("shows the selected connection name in the header strip", () => {
+  it("starts in connections mode by default and renders ConnectionList", () => {
+    render(<Sidebar />);
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-panel")).toBeNull();
+  });
+
+  it("switches to schemas mode when the Schemas tab is clicked", () => {
+    setStores({
+      connections: [makeConnection("c1")],
+      active: ["c1"],
+    });
+    render(<Sidebar />);
+
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+    });
+
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
+    expect(screen.queryByTestId("connection-list")).toBeNull();
+  });
+
+  it("shows connection name header strip in schemas mode", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1"],
     });
     render(<Sidebar />);
-    // Initial selection should be the first connected: c1
+
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+    });
+
     expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
   });
 
   it("falls back to 'Schemas' header when no connection is selected", () => {
     setStores({});
     render(<Sidebar />);
-    expect(screen.getByText("Schemas")).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+    });
+
+    expect(screen.getByTestId("sidebar-connection-header")).toHaveTextContent(
+      "Schemas",
+    );
   });
 
-  it("rail click changes the panel's selectedId", () => {
+  it("single-click on a connection in the list updates selectedId", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
     });
     render(<Sidebar />);
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
 
     act(() => {
-      screen.getByTestId("rail-pick-c2").click();
+      screen.getByTestId("list-pick-c2").click();
+    });
+
+    // Switch to schemas to verify the panel sees the new selection
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
     });
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
-  it("new-connection event opens the dialog", () => {
-    render(<Sidebar />);
-    expect(screen.queryByTestId("connection-dialog")).toBeNull();
-
-    act(() => {
-      window.dispatchEvent(new Event("new-connection"));
-    });
-
-    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
-  });
-
-  it("rail's new-connection click also opens the dialog", () => {
-    render(<Sidebar />);
-    act(() => {
-      screen.getByTestId("rail-new").click();
-    });
-    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
-  });
-
-  it("auto-syncs rail selection to the active tab's connection", () => {
+  it("activate (double-click) auto-switches to schemas mode", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
     });
     render(<Sidebar />);
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId("list-activate-c2").click();
+    });
+
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
+  });
+
+  it("auto-syncs selection AND switches to schemas when active tab changes", () => {
+    setStores({
+      connections: [makeConnection("c1"), makeConnection("c2")],
+      active: ["c1", "c2"],
+    });
+    render(<Sidebar />);
+    // Default mode is connections; selection is the first connected (c1)
 
     act(() => {
       useTabStore.setState({
@@ -177,6 +239,8 @@ describe("Sidebar", () => {
       });
     });
 
+    // Mode should have flipped to schemas with c2 selected
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
@@ -186,7 +250,6 @@ describe("Sidebar", () => {
       active: ["c1", "c2"],
     });
     const { rerender } = render(<Sidebar />);
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
 
     act(() => {
       setStores({
@@ -197,65 +260,48 @@ describe("Sidebar", () => {
     rerender(<Sidebar />);
 
     // Falls back to c2 (the surviving connected one)
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+    });
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
-  it("renders the theme toggle and cycles theme on click", () => {
-    render(<Sidebar />);
-    const btn = screen.getByLabelText(/Theme:/);
-    act(() => {
-      fireEvent.click(btn);
-    });
-    expect(mockSetTheme).toHaveBeenCalled();
-  });
-
-  it("has a resize handle on the right edge", () => {
-    const { container } = render(<Sidebar />);
-    const handle = container.querySelector(".cursor-col-resize");
-    expect(handle).toBeInTheDocument();
-  });
-
-  it("removes new-connection listener on unmount", () => {
+  it("persists mode to localStorage and restores on remount", () => {
     const { unmount } = render(<Sidebar />);
-    unmount();
     act(() => {
-      window.dispatchEvent(new Event("new-connection"));
+      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
     });
-    expect(screen.queryByTestId("connection-dialog")).toBeNull();
+    expect(window.localStorage.getItem("viewtable.sidebar.mode")).toBe(
+      "schemas",
+    );
+    unmount();
+
+    render(<Sidebar />);
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
   });
 
-  describe("New Query button", () => {
-    it("is disabled when no connection is selected", () => {
-      setStores({});
+  describe("Action button (mode-context)", () => {
+    it("connections mode: + opens ConnectionDialog", () => {
       render(<Sidebar />);
-      const btn = screen.getByRole("button", { name: /new query tab/i });
-      expect(btn).toBeDisabled();
+      const btn = screen.getByRole("button", { name: /new connection/i });
+      act(() => {
+        fireEvent.click(btn);
+      });
+      expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
     });
 
-    it("is disabled when the selected connection is not connected", () => {
+    it("schemas mode: + opens a new query tab when connected", () => {
       setStores({
         connections: [makeConnection("c1")],
-        active: [],
+        active: ["c1"],
       });
       render(<Sidebar />);
-      // Manually select c1 via rail
       act(() => {
-        screen.getByTestId("rail-pick-c1").click();
+        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
       });
-      const btn = screen.getByRole("button", { name: /new query tab/i });
-      expect(btn).toBeDisabled();
-    });
 
-    it("opens a new query tab for the selected connection on click", () => {
-      setStores({
-        connections: [makeConnection("c1"), makeConnection("c2")],
-        active: ["c1", "c2"],
-      });
-      render(<Sidebar />);
-      // Initial selection is c1
       const btn = screen.getByRole("button", { name: /new query tab/i });
       expect(btn).not.toBeDisabled();
-
       act(() => {
         fireEvent.click(btn);
       });
@@ -266,25 +312,55 @@ describe("Sidebar", () => {
       expect(state.tabs[0]!.connectionId).toBe("c1");
     });
 
-    it("uses the rail-selected connection, not the active tab's", () => {
+    it("schemas mode: New Query is disabled when not connected", () => {
       setStores({
-        connections: [makeConnection("c1"), makeConnection("c2")],
-        active: ["c1", "c2"],
+        connections: [makeConnection("c1")],
+        active: [],
       });
       render(<Sidebar />);
-
-      // Switch rail to c2 (no active tab override)
       act(() => {
-        screen.getByTestId("rail-pick-c2").click();
+        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
       });
 
+      const btn = screen.getByRole("button", { name: /new query tab/i });
+      expect(btn).toBeDisabled();
+    });
+  });
+
+  describe("Misc", () => {
+    it("new-connection event opens the dialog", () => {
+      render(<Sidebar />);
+      expect(screen.queryByTestId("connection-dialog")).toBeNull();
+
       act(() => {
-        fireEvent.click(screen.getByRole("button", { name: /new query tab/i }));
+        window.dispatchEvent(new Event("new-connection"));
       });
 
-      const state = useTabStore.getState();
-      expect(state.tabs).toHaveLength(1);
-      expect(state.tabs[0]!.connectionId).toBe("c2");
+      expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+    });
+
+    it("removes new-connection listener on unmount", () => {
+      const { unmount } = render(<Sidebar />);
+      unmount();
+      act(() => {
+        window.dispatchEvent(new Event("new-connection"));
+      });
+      expect(screen.queryByTestId("connection-dialog")).toBeNull();
+    });
+
+    it("renders the theme toggle and cycles theme on click", () => {
+      render(<Sidebar />);
+      const btn = screen.getByLabelText(/Theme:/);
+      act(() => {
+        fireEvent.click(btn);
+      });
+      expect(mockSetTheme).toHaveBeenCalled();
+    });
+
+    it("has a resize handle on the right edge", () => {
+      const { container } = render(<Sidebar />);
+      const handle = container.querySelector(".cursor-col-resize");
+      expect(handle).toBeInTheDocument();
     });
   });
 });

@@ -6,10 +6,19 @@ import { GripVertical } from "lucide-react";
 
 interface ConnectionListProps {
   environmentFilter?: string | null;
+  /** Currently focused connection. Drives the selected ring on items. */
+  selectedId?: string | null;
+  /** Single-click selects a connection without connecting. */
+  onSelect?: (id: string) => void;
+  /** Fired after a successful double-click connect, so the parent can react. */
+  onActivate?: (id: string) => void;
 }
 
 export default function ConnectionList({
   environmentFilter = null,
+  selectedId = null,
+  onSelect,
+  onActivate,
 }: ConnectionListProps) {
   const allConnections = useConnectionStore((s) => s.connections);
   const groups = useConnectionStore((s) => s.groups);
@@ -51,7 +60,13 @@ export default function ConnectionList({
     >
       {/* Root-level connections */}
       {rootConnections.map((conn) => (
-        <ConnectionItem key={conn.id} connection={conn} />
+        <ConnectionItem
+          key={conn.id}
+          connection={conn}
+          selected={selectedId === conn.id}
+          onSelect={onSelect}
+          onActivate={onActivate}
+        />
       ))}
 
       {/* Grouped connections */}
@@ -60,6 +75,9 @@ export default function ConnectionList({
           key={group.id}
           group={group}
           connections={groupConns}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          onActivate={onActivate}
         />
       ))}
 

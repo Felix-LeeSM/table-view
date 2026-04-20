@@ -35,6 +35,12 @@ export let draggedConnectionId: string | null = null;
 
 interface ConnectionItemProps {
   connection: ConnectionConfig;
+  /** When true, shows a selected ring around the row. */
+  selected?: boolean;
+  /** Single-click handler — used by the Sidebar to set the focused connection. */
+  onSelect?: (id: string) => void;
+  /** Fired after a successful double-click connect, so the parent can switch panes. */
+  onActivate?: (id: string) => void;
 }
 
 function StatusIndicator({ status }: { status: ConnectionStatus }) {
@@ -72,7 +78,12 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
   );
 }
 
-export default function ConnectionItem({ connection }: ConnectionItemProps) {
+export default function ConnectionItem({
+  connection,
+  selected = false,
+  onSelect,
+  onActivate,
+}: ConnectionItemProps) {
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -95,13 +106,22 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
   const errorMessage = status.type === "error" ? status.message : null;
   const [showErrorDetail, setShowErrorDetail] = useState(false);
 
+  const handleSingleClick = () => {
+    onSelect?.(connection.id);
+  };
+
   const handleDoubleClick = async () => {
     if (!isConnected && !isConnecting) {
       try {
         await connectToDatabase(connection.id);
+        onActivate?.(connection.id);
       } catch {
         // Error shown via store
       }
+    } else if (isConnected) {
+      // Already connected — treat double-click as "activate" so the sidebar
+      // jumps straight to the schema view.
+      onActivate?.(connection.id);
     }
   };
 
@@ -137,11 +157,13 @@ export default function ConnectionItem({ connection }: ConnectionItemProps) {
         ref={dragRef}
         className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted select-none ${
           dragging ? "opacity-40" : ""
-        }`}
+        } ${selected ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""}`}
         role="button"
         tabIndex={0}
+        aria-pressed={selected}
         draggable
         aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "connecting" ? "connecting" : status.type === "error" ? "error" : "disconnected"}`}
+        onClick={handleSingleClick}
         onDoubleClick={handleDoubleClick}
         onKeyDown={(e) => {
           if (e.key === "Enter") handleDoubleClick();

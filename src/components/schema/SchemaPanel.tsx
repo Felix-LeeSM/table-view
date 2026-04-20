@@ -30,7 +30,7 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
           No connections yet
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Use the + button on the rail to add your first database
+          Switch to the Connections tab and add your first database
         </p>
       </div>
     );
@@ -47,7 +47,7 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
           Select a connection
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Click an icon on the rail to view its schemas
+          Pick a connection from the Connections tab to view its schemas
         </p>
       </div>
     );
@@ -78,7 +78,7 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
             ? "Connecting…"
             : isError
               ? `Failed to connect: ${status?.type === "error" ? status.message : ""}`
-              : "Double-click on the rail to connect"}
+              : "Double-click in the Connections tab to connect"}
         </p>
       </div>
     );

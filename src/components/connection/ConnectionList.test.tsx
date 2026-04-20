@@ -14,8 +14,26 @@ let _draggedConnectionId: string | null = null;
 // ---------------------------------------------------------------------------
 
 vi.mock("./ConnectionItem", () => ({
-  default: ({ connection }: { connection: ConnectionConfig }) => (
-    <div data-testid="connection-item">{connection.name}</div>
+  default: ({
+    connection,
+    selected,
+    onSelect,
+    onActivate,
+  }: {
+    connection: ConnectionConfig;
+    selected?: boolean;
+    onSelect?: (id: string) => void;
+    onActivate?: (id: string) => void;
+  }) => (
+    <div
+      data-testid="connection-item"
+      data-selected={selected ? "true" : "false"}
+      data-conn-id={connection.id}
+      onClick={() => onSelect?.(connection.id)}
+      onDoubleClick={() => onActivate?.(connection.id)}
+    >
+      {connection.name}
+    </div>
   ),
   get draggedConnectionId() {
     return _draggedConnectionId;
@@ -26,11 +44,22 @@ vi.mock("./ConnectionGroup", () => ({
   default: ({
     group,
     connections,
+    selectedId,
+    onSelect,
+    onActivate,
   }: {
     group: { id: string; name: string };
     connections: ConnectionConfig[];
+    selectedId?: string | null;
+    onSelect?: (id: string) => void;
+    onActivate?: (id: string) => void;
   }) => (
-    <div data-testid="connection-group">
+    <div
+      data-testid="connection-group"
+      data-selected={selectedId ?? ""}
+      data-has-onselect={onSelect ? "true" : "false"}
+      data-has-onactivate={onActivate ? "true" : "false"}
+    >
       {group.name} ({connections.length})
     </div>
   ),
@@ -424,5 +453,79 @@ describe("ConnectionList", () => {
     const rootDiv = container.firstElementChild as HTMLElement;
     expect(rootDiv).toBeTruthy();
     expect(rootDiv.className).toContain("select-none");
+  });
+
+  describe("Selection forwarding", () => {
+    it("marks the matching root connection as selected", () => {
+      setStoreState({
+        connections: [
+          makeConnection({ id: "c1", name: "Root 1", group_id: null }),
+          makeConnection({ id: "c2", name: "Root 2", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList selectedId="c2" />);
+
+      const items = screen.getAllByTestId("connection-item");
+      expect(items[0]?.getAttribute("data-selected")).toBe("false");
+      expect(items[1]?.getAttribute("data-selected")).toBe("true");
+    });
+
+    it("forwards onSelect from a clicked root connection", () => {
+      const onSelect = vi.fn();
+      setStoreState({
+        connections: [
+          makeConnection({ id: "c1", name: "Root 1", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList onSelect={onSelect} />);
+
+      act(() => {
+        fireEvent.click(screen.getByTestId("connection-item"));
+      });
+      expect(onSelect).toHaveBeenCalledWith("c1");
+    });
+
+    it("forwards onActivate from a double-clicked root connection", () => {
+      const onActivate = vi.fn();
+      setStoreState({
+        connections: [
+          makeConnection({ id: "c1", name: "Root 1", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList onActivate={onActivate} />);
+
+      act(() => {
+        fireEvent.doubleClick(screen.getByTestId("connection-item"));
+      });
+      expect(onActivate).toHaveBeenCalledWith("c1");
+    });
+
+    it("forwards selectedId, onSelect, onActivate to ConnectionGroup", () => {
+      setStoreState({
+        connections: [
+          makeConnection({ id: "g-1", name: "Inside", group_id: "grp" }),
+        ],
+        groups: [makeGroup({ id: "grp", name: "Group A" })],
+      });
+
+      render(
+        <ConnectionList
+          selectedId="g-1"
+          onSelect={() => {}}
+          onActivate={() => {}}
+        />,
+      );
+
+      const group = screen.getByTestId("connection-group");
+      expect(group.getAttribute("data-selected")).toBe("g-1");
+      expect(group.getAttribute("data-has-onselect")).toBe("true");
+      expect(group.getAttribute("data-has-onactivate")).toBe("true");
+    });
   });
 });

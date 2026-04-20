@@ -77,7 +77,9 @@ describe("SchemaPanel", () => {
     setupStore({ connections: [makeConn("c1")] });
     render(<SchemaPanel selectedId="c1" />);
     expect(screen.getByText("c1 DB")).toBeInTheDocument();
-    expect(screen.getByText(/double-click on the rail/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/double-click in the connections tab/i),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("schema-tree")).toBeNull();
   });
 

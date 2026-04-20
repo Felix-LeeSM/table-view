@@ -15,11 +15,17 @@ import {
 interface ConnectionGroupProps {
   group: ConnectionGroupType;
   connections: ConnectionConfig[];
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+  onActivate?: (id: string) => void;
 }
 
 export default function ConnectionGroup({
   group,
   connections,
+  selectedId = null,
+  onSelect,
+  onActivate,
 }: ConnectionGroupProps) {
   const [collapsed, setCollapsed] = useState(group.collapsed);
   const [renaming, setRenaming] = useState(false);
@@ -137,7 +143,13 @@ export default function ConnectionGroup({
 
       {!collapsed &&
         connections.map((conn) => (
-          <ConnectionItem key={conn.id} connection={conn} />
+          <ConnectionItem
+            key={conn.id}
+            connection={conn}
+            selected={selectedId === conn.id}
+            onSelect={onSelect}
+            onActivate={onActivate}
+          />
         ))}
 
       {contextMenu && (

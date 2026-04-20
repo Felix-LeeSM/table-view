@@ -739,4 +739,105 @@ describe("ConnectionItem", () => {
     const badge = screen.getByText("Staging");
     expect(badge).toHaveAttribute("title", "Staging");
   });
+
+  describe("Selection props", () => {
+    it("applies selected styling and aria-pressed when selected", () => {
+      setStoreState({});
+      render(
+        <ConnectionItem
+          connection={makeConnection({ name: "Sel" })}
+          selected
+        />,
+      );
+
+      const row = screen.getByRole("button", { name: /Sel/ });
+      expect(row).toHaveAttribute("aria-pressed", "true");
+      expect(row.className).toMatch(/ring-primary/);
+    });
+
+    it("calls onSelect on single click with the connection id", () => {
+      const onSelect = vi.fn();
+      setStoreState({});
+      render(
+        <ConnectionItem
+          connection={makeConnection({ id: "click-me" })}
+          onSelect={onSelect}
+        />,
+      );
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /Test DB/ }));
+      });
+      expect(onSelect).toHaveBeenCalledWith("click-me");
+    });
+
+    it("calls onActivate after a successful double-click connect", async () => {
+      const connectFn = vi.fn().mockResolvedValue(undefined);
+      const onActivate = vi.fn();
+      setStoreState({
+        activeStatuses: { "conn-1": { type: "disconnected" } },
+        connectToDatabase: connectFn,
+      });
+
+      render(
+        <ConnectionItem
+          connection={makeConnection()}
+          onActivate={onActivate}
+        />,
+      );
+
+      await act(async () => {
+        fireEvent.doubleClick(screen.getByRole("button", { name: /Test DB/ }));
+      });
+
+      expect(connectFn).toHaveBeenCalledWith("conn-1");
+      expect(onActivate).toHaveBeenCalledWith("conn-1");
+    });
+
+    it("calls onActivate on double-click when already connected (no reconnect)", () => {
+      const connectFn = vi.fn().mockResolvedValue(undefined);
+      const onActivate = vi.fn();
+      setStoreState({
+        activeStatuses: { "conn-1": { type: "connected" } },
+        connectToDatabase: connectFn,
+      });
+
+      render(
+        <ConnectionItem
+          connection={makeConnection()}
+          onActivate={onActivate}
+        />,
+      );
+
+      act(() => {
+        fireEvent.doubleClick(screen.getByRole("button", { name: /Test DB/ }));
+      });
+
+      expect(connectFn).not.toHaveBeenCalled();
+      expect(onActivate).toHaveBeenCalledWith("conn-1");
+    });
+
+    it("does not call onActivate when connect rejects", async () => {
+      const connectFn = vi.fn().mockRejectedValue(new Error("nope"));
+      const onActivate = vi.fn();
+      setStoreState({
+        activeStatuses: { "conn-1": { type: "disconnected" } },
+        connectToDatabase: connectFn,
+      });
+
+      render(
+        <ConnectionItem
+          connection={makeConnection()}
+          onActivate={onActivate}
+        />,
+      );
+
+      await act(async () => {
+        fireEvent.doubleClick(screen.getByRole("button", { name: /Test DB/ }));
+      });
+
+      expect(connectFn).toHaveBeenCalled();
+      expect(onActivate).not.toHaveBeenCalled();
+    });
+  });
 });

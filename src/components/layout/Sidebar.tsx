@@ -6,11 +6,39 @@ import { useTheme } from "@hooks/useTheme";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import { Button } from "@components/ui/button";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
-import ConnectionRail from "@components/connection/ConnectionRail";
+import ConnectionList from "@components/connection/ConnectionList";
 import SchemaPanel from "@components/schema/SchemaPanel";
+import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
+
+const MODE_KEY = "viewtable.sidebar.mode";
+const WIDTH_KEY = "viewtable.sidebar.width";
+const DEFAULT_WIDTH = 280;
+
+function readMode(): SidebarMode {
+  if (typeof window === "undefined") return "connections";
+  try {
+    const v = window.localStorage.getItem(MODE_KEY);
+    return v === "schemas" ? "schemas" : "connections";
+  } catch {
+    return "connections";
+  }
+}
+
+function readWidth(): number {
+  if (typeof window === "undefined") return DEFAULT_WIDTH;
+  try {
+    const v = window.localStorage.getItem(WIDTH_KEY);
+    if (!v) return DEFAULT_WIDTH;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : DEFAULT_WIDTH;
+  } catch {
+    return DEFAULT_WIDTH;
+  }
+}
 
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
+  const [mode, setMode] = useState<SidebarMode>(() => readMode());
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const activeTab = useTabStore((s) => {
@@ -22,8 +50,7 @@ export default function Sidebar() {
 
   const { theme, setTheme } = useTheme();
 
-  // The connection whose schema tree is shown in the right pane of the sidebar.
-  // Initially: pick the first connected connection if any, otherwise null.
+  // The connection whose schema tree is shown when in "schemas" mode.
   const [selectedConnId, setSelectedConnId] = useState<string | null>(() => {
     const firstConnected = connections.find(
       (c) => activeStatuses[c.id]?.type === "connected",
@@ -31,12 +58,14 @@ export default function Sidebar() {
     return firstConnected?.id ?? null;
   });
 
-  // Auto-sync the rail selection to the active tab so that opening a tab in
-  // a different connection brings its schema into view. The user can still
-  // override this by clicking another rail icon.
+  // Auto-sync the selection to the active tab so opening a tab in a different
+  // connection brings its schema into view.
   useEffect(() => {
     if (activeTabConnId && activeTabConnId !== selectedConnId) {
       setSelectedConnId(activeTabConnId);
+      // Switching active tab implies the user wants to look at that
+      // connection's data — flip to schemas mode for them.
+      setMode("schemas");
     }
   }, [activeTabConnId, selectedConnId]);
 
@@ -59,6 +88,15 @@ export default function Sidebar() {
     }
   }, [connections, activeStatuses, selectedConnId]);
 
+  // Persist mode whenever it changes.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MODE_KEY, mode);
+    } catch {
+      // localStorage may be unavailable (privacy mode, quota)
+    }
+  }, [mode]);
+
   const {
     size: sidebarWidth,
     panelRef: sidebarRef,
@@ -67,8 +105,17 @@ export default function Sidebar() {
     axis: "horizontal",
     min: 220,
     max: 540,
-    initial: 280,
+    initial: readWidth(),
   });
+
+  // Persist width on every commit (mouseup).
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(WIDTH_KEY, String(sidebarWidth));
+    } catch {
+      // ignore
+    }
+  }, [sidebarWidth]);
 
   const cycleTheme = () => {
     const next =
@@ -85,70 +132,99 @@ export default function Sidebar() {
     return () => window.removeEventListener("new-connection", handler);
   }, []);
 
+  const selectedConnected =
+    !!selectedConnId && activeStatuses[selectedConnId]?.type === "connected";
+
+  // Right-side action button content depends on mode.
+  const renderActionButton = () => {
+    if (mode === "connections") {
+      return (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+          aria-label="New Connection"
+          title="New Connection"
+          onClick={() => setShowNewDialog(true)}
+        >
+          <Plus />
+        </Button>
+      );
+    }
+    return (
+      <Button
+        variant="ghost"
+        size="xs"
+        className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+        aria-label="New Query Tab"
+        title="New Query Tab"
+        disabled={!selectedConnected}
+        onClick={() => {
+          if (selectedConnected && selectedConnId) {
+            addQueryTab(selectedConnId);
+          }
+        }}
+      >
+        <Plus />
+        Query
+      </Button>
+    );
+  };
+
   return (
     <>
       <div
         ref={sidebarRef}
-        className="relative flex h-full shrink-0 select-none border-r border-border bg-secondary"
+        className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
       >
-        {/* Left rail: vertical strip of connections */}
-        <ConnectionRail
-          selectedId={selectedConnId}
-          onSelect={setSelectedConnId}
-          onNewConnection={() => setShowNewDialog(true)}
-        />
+        {/* Mode toggle + context-aware action button */}
+        <div className="flex items-center gap-2 border-b border-border px-2 py-2">
+          <SidebarModeToggle mode={mode} onChange={setMode} />
+          {renderActionButton()}
+        </div>
 
-        {/* Right pane: schema tree of the selected connection + theme footer */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Header strip showing the current connection name */}
-          <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+        {/* Schemas mode: connection name strip */}
+        {mode === "schemas" && (
+          <div className="border-b border-border px-3 py-1.5">
             <span
               data-testid="sidebar-connection-header"
-              className="truncate text-xs font-semibold text-foreground"
+              className="block truncate text-xs font-semibold text-foreground"
             >
               {selectedConnId
                 ? (connections.find((c) => c.id === selectedConnId)?.name ??
                   "Schemas")
                 : "Schemas"}
             </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-              aria-label="New Query Tab"
-              title="New Query Tab"
-              disabled={
-                !selectedConnId ||
-                activeStatuses[selectedConnId]?.type !== "connected"
-              }
-              onClick={() => {
-                if (
-                  selectedConnId &&
-                  activeStatuses[selectedConnId]?.type === "connected"
-                ) {
-                  addQueryTab(selectedConnId);
-                }
+          </div>
+        )}
+
+        {/* Body — exclusive view */}
+        <div className="flex flex-1 flex-col overflow-auto">
+          {mode === "connections" ? (
+            <ConnectionList
+              selectedId={selectedConnId}
+              onSelect={(id) => setSelectedConnId(id)}
+              onActivate={(id) => {
+                setSelectedConnId(id);
+                setMode("schemas");
               }}
-            >
-              <Plus />
-              Query
-            </Button>
-          </div>
+            />
+          ) : (
+            <SchemaPanel selectedId={selectedConnId} />
+          )}
+        </div>
 
-          <SchemaPanel selectedId={selectedConnId} />
-
-          {/* Theme toggle */}
-          <div className="border-t border-border px-3 py-2">
-            <button
-              className="flex w-full items-center gap-2 rounded p-1 text-xs text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
-              onClick={cycleTheme}
-              aria-label={`Theme: ${theme}. Click to change.`}
-            >
-              <ThemeIcon size={14} />
-              <span className="capitalize">{theme}</span>
-            </button>
-          </div>
+        {/* Theme toggle footer */}
+        <div className="border-t border-border px-3 py-2">
+          <button
+            className="flex w-full items-center gap-2 rounded p-1 text-xs text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+            onClick={cycleTheme}
+            aria-label={`Theme: ${theme}. Click to change.`}
+          >
+            <ThemeIcon size={14} />
+            <span className="capitalize">{theme}</span>
+          </button>
         </div>
 
         {/* Resize handle */}
