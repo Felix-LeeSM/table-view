@@ -187,6 +187,15 @@ describe("Sidebar", () => {
     );
   });
 
+  it("shows 'Connections' header in connections mode", () => {
+    setStores({});
+    render(<Sidebar />);
+    // Default mode is connections — header should reflect it
+    expect(screen.getByTestId("sidebar-connection-header")).toHaveTextContent(
+      "Connections",
+    );
+  });
+
   it("single-click on a connection in the list updates selectedId", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],

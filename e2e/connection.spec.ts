@@ -61,8 +61,10 @@ describe("Database Connection Flow", () => {
     expect(await publicSchema.isDisplayed()).toBe(true);
   });
 
-  it("opens a query tab via keyboard shortcut", async () => {
-    const newQueryBtn = await $('[aria-label="New Query"]');
+  it("opens a query tab from the sidebar header New Query button", async () => {
+    // After the previous test connected and auto-switched to schemas mode,
+    // the sidebar header renders a "New Query Tab" button. Click it.
+    const newQueryBtn = await $('[aria-label="New Query Tab"]');
     await newQueryBtn.waitForDisplayed({ timeout: 5000 });
     await newQueryBtn.click();
 

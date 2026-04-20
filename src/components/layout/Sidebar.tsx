@@ -196,20 +196,22 @@ export default function Sidebar() {
           {renderActionButtons()}
         </div>
 
-        {/* Schemas mode: connection name strip */}
-        {mode === "schemas" && (
-          <div className="border-b border-border px-3 py-1.5">
-            <span
-              data-testid="sidebar-connection-header"
-              className="block truncate text-xs font-semibold text-foreground"
-            >
-              {selectedConnId
+        {/* Header strip — shows the connection name in schemas mode and the
+            current mode label otherwise. The data-testid is always rendered
+            so e2e tests have a stable readiness sentinel. */}
+        <div className="border-b border-border px-3 py-1.5">
+          <span
+            data-testid="sidebar-connection-header"
+            className="block truncate text-xs font-semibold text-foreground"
+          >
+            {mode === "schemas"
+              ? selectedConnId
                 ? (connections.find((c) => c.id === selectedConnId)?.name ??
                   "Schemas")
-                : "Schemas"}
-            </span>
-          </div>
-        )}
+                : "Schemas"
+              : "Connections"}
+          </span>
+        </div>
 
         {/* Body — exclusive view */}
         <div className="flex flex-1 flex-col overflow-auto">

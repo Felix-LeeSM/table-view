@@ -5,18 +5,39 @@ describe("View Table — Smoke Tests", () => {
     expect(title).toBe("View Table");
   });
 
-  it("renders the sidebar with Schemas header in the empty state", async () => {
-    // Sidebar header now shows the active connection name or 'Schemas' when
-    // nothing is selected. With no saved connections we expect the fallback.
+  it("renders the sidebar header with the current mode label", async () => {
+    // The sidebar starts in "connections" mode by default, so the header
+    // strip should read "Connections". After clicking the Schemas tab it
+    // should read "Schemas" (when no connection is selected).
     // WebKit's webdriver returns an empty string from getText() on truncate
     // spans, so read textContent via getProperty for stability.
     const header = await $('[data-testid="sidebar-connection-header"]');
     await header.waitForExist({ timeout: 10000 });
-    const text = ((await header.getProperty("textContent")) as string) ?? "";
+
+    let text = ((await header.getProperty("textContent")) as string) ?? "";
+    expect(text.trim().toLowerCase()).toContain("connections");
+
+    const schemasTab = await $('[role="tab"][aria-selected="false"]');
+    await schemasTab.waitForDisplayed({ timeout: 5000 });
+    await schemasTab.click();
+
+    // Re-read the same node — its text should now read "Schemas".
+    await browser.waitUntil(
+      async () =>
+        (((await header.getProperty("textContent")) as string) ?? "")
+          .trim()
+          .toLowerCase()
+          .includes("schemas"),
+      { timeout: 5000 },
+    );
+    text = ((await header.getProperty("textContent")) as string) ?? "";
     expect(text.trim().toLowerCase()).toContain("schemas");
   });
 
-  it("shows empty state when no connections exist", async () => {
+  it("shows 'No connections yet' empty state when the store is empty", async () => {
+    // The default connections mode renders ConnectionList, which now shows
+    // its own empty state. (The schema-panel empty state is only reached
+    // after switching to Schemas mode without any connection selected.)
     const emptyState = await $('//p[normalize-space()="No connections yet"]');
     await emptyState.waitForDisplayed({ timeout: 10000 });
     const text = await emptyState.getText();

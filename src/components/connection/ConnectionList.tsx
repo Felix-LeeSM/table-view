@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import ConnectionGroup from "./ConnectionGroup";
-import { GripVertical } from "lucide-react";
+import { Database, GripVertical } from "lucide-react";
 
 interface ConnectionListProps {
   environmentFilter?: string | null;
@@ -86,6 +86,22 @@ export default function ConnectionList({
         <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] text-muted-foreground opacity-60">
           <GripVertical size={10} />
           <span>Drag connections onto each other to create groups</span>
+        </div>
+      )}
+
+      {/* Empty state — visible only when there are no connections at all */}
+      {allConnections.length === 0 && (
+        <div
+          className="flex flex-1 flex-col items-center justify-center px-4 py-8 text-center"
+          role="status"
+        >
+          <Database size={32} className="mb-3 text-muted-foreground" />
+          <p className="text-sm font-medium text-secondary-foreground">
+            No connections yet
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Click the + button to add your first database
+          </p>
         </div>
       )}
     </div>
