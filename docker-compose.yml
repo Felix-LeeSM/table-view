@@ -1,11 +1,11 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: viewtable_postgres
+    container_name: table_view_postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: viewtable_test
+      POSTGRES_DB: table_view_test
     ports:
       - "5432:5432"
     volumes:

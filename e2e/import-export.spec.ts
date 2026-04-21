@@ -50,7 +50,7 @@ async function ensureTestPgConnection() {
   await (await $("#conn-password")).setValue("testpass");
   const dbInput = await $("#conn-database");
   await dbInput.clearValue();
-  await dbInput.setValue("viewtable_test");
+  await dbInput.setValue("table_view_test");
 
   await (await $("button=Save")).click();
   await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
@@ -166,7 +166,7 @@ describe("Connection Import/Export", () => {
     const importJson = JSON.stringify({
       schema_version: 1,
       exported_at_unix_secs: 0,
-      app: "view-table",
+      app: "table-view",
       connections: [
         {
           id: "ignored-on-import",
@@ -175,7 +175,7 @@ describe("Connection Import/Export", () => {
           host: "localhost",
           port: 5432,
           user: "testuser",
-          database: "viewtable_test",
+          database: "table_view_test",
           group_id: null,
           color: null,
           connection_timeout: null,

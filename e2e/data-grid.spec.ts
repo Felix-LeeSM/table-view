@@ -78,7 +78,7 @@ describe("Data Grid & Query Execution", () => {
 
       const dbInput = await $("#conn-database");
       await dbInput.clearValue();
-      await dbInput.setValue("viewtable_test");
+      await dbInput.setValue("table_view_test");
 
       const saveBtn = await $("button=Save");
       await saveBtn.click();

@@ -24,7 +24,7 @@ export const config: Options.Testrunner = {
       "tauri:options": {
         application: path.resolve(
           __dirname,
-          "src-tauri/target/debug/view-table",
+          "src-tauri/target/debug/table-view",
         ),
       },
     },

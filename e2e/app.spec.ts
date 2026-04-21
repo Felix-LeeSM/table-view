@@ -1,8 +1,8 @@
-describe("View Table — Smoke Tests", () => {
+describe("Table View — Smoke Tests", () => {
   it("launches the app window", async () => {
     // The app window should be open and the title should be set
     const title = await browser.getTitle();
-    expect(title).toBe("View Table");
+    expect(title).toBe("Table View");
   });
 
   it("renders the sidebar header with the current mode label", async () => {

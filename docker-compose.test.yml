@@ -8,15 +8,15 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: viewtable_test_postgres
+    container_name: table_view_test_postgres
     environment:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpass
-      POSTGRES_DB: viewtable_test
+      POSTGRES_DB: table_view_test
     ports:
       - "${PG_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U testuser -d viewtable_test"]
+      test: ["CMD-SHELL", "pg_isready -U testuser -d table_view_test"]
       interval: 2s
       timeout: 3s
       retries: 15
@@ -26,11 +26,11 @@ services:
 
   mysql:
     image: mysql:8
-    container_name: viewtable_test_mysql
+    container_name: table_view_test_mysql
     environment:
       MYSQL_USER: testuser
       MYSQL_PASSWORD: testpass
-      MYSQL_DATABASE: viewtable_test
+      MYSQL_DATABASE: table_view_test
       MYSQL_ROOT_PASSWORD: rootpass
     ports:
       - "${MYSQL_PORT:-3306}:3306"

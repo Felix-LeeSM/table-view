@@ -33,7 +33,7 @@ describe("Database Connection Flow", () => {
 
     const dbInput = await $("#conn-database");
     await dbInput.clearValue();
-    await dbInput.setValue("viewtable_test");
+    await dbInput.setValue("table_view_test");
 
     // 4. Save
     const saveBtn = await $("button=Save");

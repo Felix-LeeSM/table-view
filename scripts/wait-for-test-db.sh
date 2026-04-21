@@ -32,9 +32,9 @@ wait_for_postgres() {
     local host="${PGHOST:-localhost}"
     local port="${PG_PORT:-${PGPORT:-5432}}"
     local user="${PGUSER:-testuser}"
-    local db="${PGDATABASE:-viewtable_test}"
+    local db="${PGDATABASE:-table_view_test}"
     echo "  Checking PostgreSQL at ${host}:${port} ..."
-    until docker exec viewtable_test_postgres pg_isready -U "$user" -d "$db" &>/dev/null; do
+    until docker exec table_view_test_postgres pg_isready -U "$user" -d "$db" &>/dev/null; do
         local now
         now=$(date +%s)
         if (( now - start_time >= TIMEOUT )); then
@@ -50,7 +50,7 @@ wait_for_mysql() {
     local host="${MYSQL_HOST:-localhost}"
     local port="${MYSQL_PORT:-3306}"
     echo "  Checking MySQL at ${host}:${port} ..."
-    until docker exec viewtable_test_mysql mysqladmin ping -h localhost --silent &>/dev/null; do
+    until docker exec table_view_test_mysql mysqladmin ping -h localhost --silent &>/dev/null; do
         local now
         now=$(date +%s)
         if (( now - start_time >= TIMEOUT )); then
@@ -67,23 +67,23 @@ overall_rc=0
 checked_count=0
 
 # Wait for PostgreSQL
-if docker ps --format '{{.Names}}' | grep -q '^viewtable_test_postgres$'; then
+if docker ps --format '{{.Names}}' | grep -q '^table_view_test_postgres$'; then
     if ! wait_for_postgres; then
         overall_rc=1
     fi
     checked_count=$((checked_count + 1))
 else
-    echo "  SKIP: viewtable_test_postgres container not running"
+    echo "  SKIP: table_view_test_postgres container not running"
 fi
 
 # Wait for MySQL
-if docker ps --format '{{.Names}}' | grep -q '^viewtable_test_mysql$'; then
+if docker ps --format '{{.Names}}' | grep -q '^table_view_test_mysql$'; then
     if ! wait_for_mysql; then
         overall_rc=1
     fi
     checked_count=$((checked_count + 1))
 else
-    echo "  SKIP: viewtable_test_mysql container not running"
+    echo "  SKIP: table_view_test_mysql container not running"
 fi
 
 if [ "$checked_count" -eq 0 ]; then

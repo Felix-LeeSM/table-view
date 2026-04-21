@@ -8,7 +8,7 @@ import { expect } from "@wdio/globals";
  * raw query rows.
  *
  * Assumes the connection from earlier specs (`Test PG` against
- * `viewtable_test`) is already configured by the schema-tree / data-grid
+ * `table_view_test`) is already configured by the schema-tree / data-grid
  * specs that run before this one.
  */
 
@@ -58,7 +58,7 @@ async function ensureConnected() {
 
     const dbInput = await $("#conn-database");
     await dbInput.clearValue();
-    await dbInput.setValue("viewtable_test");
+    await dbInput.setValue("table_view_test");
 
     await (await $("button=Save")).click();
     await dialog.waitForDisplayed({ timeout: 5000, reverse: true });

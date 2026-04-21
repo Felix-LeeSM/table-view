@@ -78,11 +78,11 @@ jobs:
         env:
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: viewtable_test
+          POSTGRES_DB: table_view_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U testuser -d viewtable_test"
+          --health-cmd "pg_isready -U testuser -d table_view_test"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 15
@@ -112,7 +112,7 @@ jobs:
           PGPORT: 5432
           PGUSER: testuser
           PGPASSWORD: testpass
-          PGDATABASE: viewtable_test
+          PGDATABASE: table_view_test
         run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
 
   e2e:
@@ -126,11 +126,11 @@ jobs:
         env:
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: viewtable_test
+          POSTGRES_DB: table_view_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U testuser -d viewtable_test"
+          --health-cmd "pg_isready -U testuser -d table_view_test"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 15
@@ -142,7 +142,7 @@ jobs:
       - name: Seed database
         run: |
           sudo apt-get update && sudo apt-get install -y postgresql-client
-          PGPASSWORD=testpass psql -h localhost -U testuser -d viewtable_test -c "
+          PGPASSWORD=testpass psql -h localhost -U testuser -d table_view_test -c "
             CREATE TABLE IF NOT EXISTS users (
               id SERIAL PRIMARY KEY,
               name VARCHAR(255) NOT NULL,
@@ -201,7 +201,7 @@ jobs:
           PGHOST: localhost
           PGUSER: testuser
           PGPASSWORD: testpass
-          PGDATABASE: viewtable_test
+          PGDATABASE: table_view_test
         run: xvfb-run pnpm test:e2e
 
       - name: Upload E2E logs on failure
