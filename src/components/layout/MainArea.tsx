@@ -104,7 +104,7 @@ function EmptyState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-muted-foreground">
       <Database size={48} />
-      <p className="text-lg text-foreground">View Table</p>
+      <p className="text-lg text-foreground">Table View</p>
       {firstConnected ? (
         <>
           <p className="text-sm">

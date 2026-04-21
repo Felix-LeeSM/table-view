@@ -7,9 +7,15 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] ?? null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 
@@ -27,19 +33,19 @@ describe("useTheme", () => {
   });
 
   it("reads stored theme from localStorage", () => {
-    localStorage.setItem("view-table-theme", "dark");
+    localStorage.setItem("table-view-theme", "dark");
     const { result } = renderHook(() => useTheme());
     expect(result.current.theme).toBe("dark");
   });
 
   it("applies dark class for dark theme", () => {
-    localStorage.setItem("view-table-theme", "dark");
+    localStorage.setItem("table-view-theme", "dark");
     renderHook(() => useTheme());
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
   it("applies light class for light theme", () => {
-    localStorage.setItem("view-table-theme", "light");
+    localStorage.setItem("table-view-theme", "light");
     renderHook(() => useTheme());
     expect(document.documentElement.classList.contains("light")).toBe(true);
   });
@@ -52,12 +58,12 @@ describe("useTheme", () => {
     });
 
     expect(result.current.theme).toBe("dark");
-    expect(localStorage.getItem("view-table-theme")).toBe("dark");
+    expect(localStorage.getItem("table-view-theme")).toBe("dark");
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
   it("switches from dark to light", () => {
-    localStorage.setItem("view-table-theme", "dark");
+    localStorage.setItem("table-view-theme", "dark");
     const { result } = renderHook(() => useTheme());
 
     act(() => {

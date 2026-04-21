@@ -174,8 +174,8 @@ describe("favoritesStore", () => {
     it("persists to localStorage on add", () => {
       useFavoritesStore.getState().addFavorite("Q1", "SELECT 1", null);
 
-      expect(storage["view-table-favorites"]).toBeDefined();
-      const parsed = JSON.parse(storage["view-table-favorites"]!);
+      expect(storage["table-view-favorites"]).toBeDefined();
+      const parsed = JSON.parse(storage["table-view-favorites"]!);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].name).toBe("Q1");
     });
@@ -187,7 +187,7 @@ describe("favoritesStore", () => {
       const id = useFavoritesStore.getState().favorites[0]!.id;
       useFavoritesStore.getState().removeFavorite(id);
 
-      const parsed = JSON.parse(storage["view-table-favorites"]!);
+      const parsed = JSON.parse(storage["table-view-favorites"]!);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].name).toBe("Q2");
     });
@@ -198,12 +198,12 @@ describe("favoritesStore", () => {
 
       useFavoritesStore.getState().updateFavorite(id, { name: "Updated" });
 
-      const parsed = JSON.parse(storage["view-table-favorites"]!);
+      const parsed = JSON.parse(storage["table-view-favorites"]!);
       expect(parsed[0].name).toBe("Updated");
     });
 
     it("loads persisted favorites", () => {
-      storage["view-table-favorites"] = JSON.stringify([
+      storage["table-view-favorites"] = JSON.stringify([
         {
           id: "fav-99",
           name: "Persisted",
@@ -222,7 +222,7 @@ describe("favoritesStore", () => {
     });
 
     it("updates counter to avoid ID collisions after loading", () => {
-      storage["view-table-favorites"] = JSON.stringify([
+      storage["table-view-favorites"] = JSON.stringify([
         {
           id: "fav-500",
           name: "Old",
@@ -245,7 +245,7 @@ describe("favoritesStore", () => {
     });
 
     it("handles corrupted localStorage gracefully", () => {
-      storage["view-table-favorites"] = "not valid json{{{";
+      storage["table-view-favorites"] = "not valid json{{{";
 
       expect(() =>
         useFavoritesStore.getState().loadPersistedFavorites(),

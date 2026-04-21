@@ -51,7 +51,7 @@ export type Tab = TableTab | QueryTab;
 // Persistence helpers
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = "view-table-tabs";
+const STORAGE_KEY = "table-view-tabs";
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 function persistTabs(tabs: Tab[], activeTabId: string | null): void {

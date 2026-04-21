@@ -11,7 +11,7 @@ import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
-const WIDTH_KEY = "viewtable.sidebar.width";
+const WIDTH_KEY = "table-view.sidebar.width";
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 540;
 const DEFAULT_WIDTH = 280;

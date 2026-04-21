@@ -144,7 +144,7 @@ describe("MainArea", () => {
   it("shows empty state placeholder when no active tab", () => {
     render(<MainArea />);
 
-    expect(screen.getByText("View Table")).toBeInTheDocument();
+    expect(screen.getByText("Table View")).toBeInTheDocument();
     expect(
       screen.getByText("Select a connection from the sidebar to get started"),
     ).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     // The Database icon from lucide renders as an SVG
-    const container = screen.getByText("View Table").parentElement!;
+    const container = screen.getByText("Table View").parentElement!;
     const svg = container.querySelector("svg");
     expect(svg).toBeInTheDocument();
   });
@@ -165,7 +165,7 @@ describe("MainArea", () => {
 
     render(<MainArea />);
 
-    expect(screen.getByText("View Table")).toBeInTheDocument();
+    expect(screen.getByText("Table View")).toBeInTheDocument();
   });
 
   // AC-06: table tab renders DataGrid + sub-tabs
@@ -345,7 +345,7 @@ describe("MainArea", () => {
 
     // TabBar renders only when tabs exist; with no tabs it returns null
     // So we just verify the component doesn't crash
-    expect(screen.getByText("View Table")).toBeInTheDocument();
+    expect(screen.getByText("Table View")).toBeInTheDocument();
   });
 
   it("renders TabBar when tabs exist", () => {
@@ -366,7 +366,7 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     // Without table name, it should show empty state (falls through)
-    expect(screen.getByText("View Table")).toBeInTheDocument();
+    expect(screen.getByText("Table View")).toBeInTheDocument();
   });
 
   it("does not render table content when table tab has no schema", () => {
@@ -375,7 +375,7 @@ describe("MainArea", () => {
 
     render(<MainArea />);
 
-    expect(screen.getByText("View Table")).toBeInTheDocument();
+    expect(screen.getByText("Table View")).toBeInTheDocument();
   });
 
   it("renders ViewStructurePanel when view tab is in structure subView", () => {

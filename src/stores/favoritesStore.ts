@@ -20,7 +20,7 @@ export type FavoriteScope = "all" | "global" | "connection";
 // Persistence helpers
 // ---------------------------------------------------------------------------
 
-const STORAGE_KEY = "view-table-favorites";
+const STORAGE_KEY = "table-view-favorites";
 
 function persistFavorites(favorites: FavoriteQuery[]): void {
   if (typeof window === "undefined") return;

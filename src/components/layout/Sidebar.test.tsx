@@ -329,7 +329,7 @@ describe("Sidebar", () => {
     act(() => {
       fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
     });
-    expect(window.localStorage.getItem("viewtable.sidebar.mode")).toBeNull();
+    expect(window.localStorage.getItem("table-view.sidebar.mode")).toBeNull();
     unmount();
 
     render(<Sidebar />);

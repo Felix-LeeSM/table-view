@@ -440,7 +440,7 @@ describe("tabStore", () => {
       const lastCall = setItemCalls[setItemCalls.length - 1];
       expect(lastCall).toBeDefined();
       if (lastCall) {
-        expect(lastCall[0]).toBe("view-table-tabs");
+        expect(lastCall[0]).toBe("table-view-tabs");
         const parsed = JSON.parse(lastCall[1]);
         expect(parsed.tabs).toHaveLength(1);
       }
@@ -461,7 +461,7 @@ describe("tabStore", () => {
         ],
         activeTabId: "query-1",
       };
-      storage["view-table-tabs"] = JSON.stringify(persistedState);
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
 
       useTabStore.getState().loadPersistedTabs();
 
@@ -485,7 +485,7 @@ describe("tabStore", () => {
         ],
         activeTabId: "query-1",
       };
-      storage["view-table-tabs"] = JSON.stringify(persistedState);
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
 
       useTabStore.getState().loadPersistedTabs();
 
@@ -497,7 +497,7 @@ describe("tabStore", () => {
     });
 
     it("handles corrupted localStorage gracefully", () => {
-      storage["view-table-tabs"] = "not valid json{{{";
+      storage["table-view-tabs"] = "not valid json{{{";
 
       // Should not throw
       expect(() => useTabStore.getState().loadPersistedTabs()).not.toThrow();

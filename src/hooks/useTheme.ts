@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 type Theme = "system" | "light" | "dark";
 
-const STORAGE_KEY = "view-table-theme";
+const STORAGE_KEY = "table-view-theme";
 
 function getSystemPreference(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
