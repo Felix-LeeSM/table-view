@@ -70,7 +70,17 @@ export default function Sidebar() {
     }
   }, [connections, activeStatuses, focusedConnId, setFocusedConn]);
 
-  const focusAndOpenSchemas = (id: string) => {
+  // Single-click: focus only, and flip to schemas only when the connection is
+  // already connected. For disconnected items we stay in the list so the
+  // user's double-click (to connect) can't race against an immediate unmount.
+  const handleConnectionSelect = (id: string) => {
+    setFocusedConn(id);
+    if (activeStatuses[id]?.type === "connected") {
+      setMode("schemas");
+    }
+  };
+
+  const handleConnectionActivate = (id: string) => {
     setFocusedConn(id);
     setMode("schemas");
   };
@@ -206,8 +216,8 @@ export default function Sidebar() {
           {mode === "connections" ? (
             <ConnectionList
               selectedId={focusedConnId}
-              onSelect={focusAndOpenSchemas}
-              onActivate={focusAndOpenSchemas}
+              onSelect={handleConnectionSelect}
+              onActivate={handleConnectionActivate}
             />
           ) : (
             <SchemaPanel selectedId={focusedConnId} />

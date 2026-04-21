@@ -231,6 +231,30 @@ describe("Sidebar", () => {
     expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
   });
 
+  it("single-click on a disconnected connection keeps connections mode so double-click can connect", () => {
+    // Disconnected items must not unmount from under the user's fingers mid
+    // double-click — otherwise the second click + dblclick never reach
+    // ConnectionItem and the connect trigger is lost.
+    setStores({
+      connections: [makeConnection("c1"), makeConnection("c2")],
+      active: [],
+    });
+    render(<Sidebar />);
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId("list-pick-c2").click();
+    });
+
+    // Focus moved, but we're still in connections mode
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-panel")).toBeNull();
+    expect(screen.getByTestId("connection-list")).toHaveAttribute(
+      "data-selected",
+      "c2",
+    );
+  });
+
   it("activate (double-click) auto-switches to schemas mode", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
