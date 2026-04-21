@@ -2,6 +2,7 @@ import { X, Table2, Code2, Plus } from "lucide-react";
 import { useTabStore, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
+import { getConnectionColor } from "@lib/connectionColor";
 
 export default function TabBar() {
   const tabs = useTabStore((s) => s.tabs);
@@ -30,7 +31,7 @@ export default function TabBar() {
           role="tab"
           aria-selected={tab.id === activeTabId}
           tabIndex={tab.id === activeTabId ? 0 : -1}
-          className={`group flex items-center gap-1.5 border-r border-border px-3 py-1.5 text-sm cursor-pointer select-none ${
+          className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1.5 text-sm cursor-pointer select-none ${
             tab.id === activeTabId
               ? "bg-background text-foreground border-b-2 border-b-primary"
               : "text-secondary-foreground hover:bg-muted"
@@ -56,14 +57,19 @@ export default function TabBar() {
         >
           {(() => {
             const conn = connections.find((c) => c.id === tab.connectionId);
-            return conn?.color ? (
+            if (!conn) return null;
+            const color = getConnectionColor(conn);
+            const isActive = tab.id === activeTabId;
+            return (
               <span
-                className="inline-block h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: conn.color }}
+                className={`absolute inset-y-0 left-0 w-0.5 ${
+                  isActive ? "opacity-100" : "opacity-60"
+                }`}
+                style={{ backgroundColor: color }}
                 aria-label="Connection color"
-                title={conn.name ?? ""}
+                title={conn.name}
               />
-            ) : null;
+            );
           })()}
           {tab.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-muted-foreground" />

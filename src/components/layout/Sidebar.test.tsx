@@ -119,6 +119,7 @@ function setStores(opts: {
   useConnectionStore.setState({
     connections: conns,
     activeStatuses: statuses,
+    focusedConnId: null,
   });
   useTabStore.setState({ tabs: [], activeTabId: null });
 }
@@ -207,11 +208,27 @@ describe("Sidebar", () => {
       screen.getByTestId("list-pick-c2").click();
     });
 
-    // Switch to schemas to verify the panel sees the new selection
-    act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
-    });
+    // Single click also flips the sidebar into schemas mode so the tree for
+    // the newly focused connection is immediately visible.
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
+  });
+
+  it("single-click from connections mode flips to schemas mode", () => {
+    setStores({
+      connections: [makeConnection("c1"), makeConnection("c2")],
+      active: ["c1", "c2"],
+    });
+    render(<Sidebar />);
+    // We're in connections mode
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+
+    act(() => {
+      screen.getByTestId("list-pick-c2").click();
+    });
+
+    expect(screen.queryByTestId("connection-list")).toBeNull();
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
   });
 
   it("activate (double-click) auto-switches to schemas mode", () => {

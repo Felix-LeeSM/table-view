@@ -35,6 +35,8 @@ export default function Sidebar() {
   const [mode, setMode] = useState<SidebarMode>("connections");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const focusedConnId = useConnectionStore((s) => s.focusedConnId);
+  const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
   const activeTab = useTabStore((s) => {
     const id = s.activeTabId;
     return id ? s.tabs.find((t) => t.id === id) : null;
@@ -44,43 +46,34 @@ export default function Sidebar() {
 
   const { theme, setTheme } = useTheme();
 
-  // The connection whose schema tree is shown when in "schemas" mode.
-  const [selectedConnId, setSelectedConnId] = useState<string | null>(() => {
+  // Focus the active tab's connection so its schema tree comes into view.
+  useEffect(() => {
+    if (activeTabConnId && activeTabConnId !== focusedConnId) {
+      setFocusedConn(activeTabConnId);
+      setMode("schemas");
+    }
+  }, [activeTabConnId, focusedConnId, setFocusedConn]);
+
+  // Keep focus pointing at an existing connection: seed on first load, and
+  // heal if the focused connection vanishes (deleted, or store reset).
+  useEffect(() => {
     const firstConnected = connections.find(
       (c) => activeStatuses[c.id]?.type === "connected",
     );
-    return firstConnected?.id ?? null;
-  });
-
-  // Auto-sync the selection to the active tab so opening a tab in a different
-  // connection brings its schema into view.
-  useEffect(() => {
-    if (activeTabConnId && activeTabConnId !== selectedConnId) {
-      setSelectedConnId(activeTabConnId);
-      // Switching active tab implies the user wants to look at that
-      // connection's data — flip to schemas mode for them.
-      setMode("schemas");
+    if (!focusedConnId) {
+      if (firstConnected) setFocusedConn(firstConnected.id);
+      return;
     }
-  }, [activeTabConnId, selectedConnId]);
-
-  // If the currently-selected connection vanishes (deleted or disconnected and
-  // never re-selected), pick another connected one — falls back to null.
-  useEffect(() => {
-    if (selectedConnId) {
-      const stillExists = connections.some((c) => c.id === selectedConnId);
-      if (!stillExists) {
-        const firstConnected = connections.find(
-          (c) => activeStatuses[c.id]?.type === "connected",
-        );
-        setSelectedConnId(firstConnected?.id ?? null);
-      }
-    } else if (connections.length > 0) {
-      const firstConnected = connections.find(
-        (c) => activeStatuses[c.id]?.type === "connected",
-      );
-      if (firstConnected) setSelectedConnId(firstConnected.id);
+    const stillExists = connections.some((c) => c.id === focusedConnId);
+    if (!stillExists) {
+      setFocusedConn(firstConnected?.id ?? null);
     }
-  }, [connections, activeStatuses, selectedConnId]);
+  }, [connections, activeStatuses, focusedConnId, setFocusedConn]);
+
+  const focusAndOpenSchemas = (id: string) => {
+    setFocusedConn(id);
+    setMode("schemas");
+  };
 
   const {
     size: sidebarWidth,
@@ -126,7 +119,7 @@ export default function Sidebar() {
   }, []);
 
   const selectedConnected =
-    !!selectedConnId && activeStatuses[selectedConnId]?.type === "connected";
+    !!focusedConnId && activeStatuses[focusedConnId]?.type === "connected";
 
   // Right-side action buttons — each visible only in the mode where it makes sense:
   //   - schemas mode: "+ Query" against the selected connection
@@ -142,8 +135,8 @@ export default function Sidebar() {
           title="New Query Tab"
           disabled={!selectedConnected}
           onClick={() => {
-            if (selectedConnected && selectedConnId) {
-              addQueryTab(selectedConnId);
+            if (selectedConnected && focusedConnId) {
+              addQueryTab(focusedConnId);
             }
           }}
         >
@@ -199,8 +192,8 @@ export default function Sidebar() {
             className="block truncate text-xs font-semibold text-foreground"
           >
             {mode === "schemas"
-              ? selectedConnId
-                ? (connections.find((c) => c.id === selectedConnId)?.name ??
+              ? focusedConnId
+                ? (connections.find((c) => c.id === focusedConnId)?.name ??
                   "Schemas")
                 : "Schemas"
               : "Connections"}
@@ -212,15 +205,12 @@ export default function Sidebar() {
         <div className="flex flex-1 flex-col overflow-auto">
           {mode === "connections" ? (
             <ConnectionList
-              selectedId={selectedConnId}
-              onSelect={(id) => setSelectedConnId(id)}
-              onActivate={(id) => {
-                setSelectedConnId(id);
-                setMode("schemas");
-              }}
+              selectedId={focusedConnId}
+              onSelect={focusAndOpenSchemas}
+              onActivate={focusAndOpenSchemas}
             />
           ) : (
-            <SchemaPanel selectedId={selectedConnId} />
+            <SchemaPanel selectedId={focusedConnId} />
           )}
         </div>
 

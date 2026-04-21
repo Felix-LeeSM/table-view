@@ -12,6 +12,13 @@ interface ConnectionState {
   connections: ConnectionConfig[];
   groups: ConnectionGroup[];
   activeStatuses: Record<string, ConnectionStatus>;
+  /**
+   * The connection the user is currently focused on — drives the schema tree,
+   * the "+ Query" button, and any future UI that needs to know "which one am
+   * I looking at". Backend still supports multiple simultaneous connections;
+   * this field only tracks UI focus, not the set of live connections.
+   */
+  focusedConnId: string | null;
   loading: boolean;
   error: string | null;
 
@@ -26,6 +33,7 @@ interface ConnectionState {
   ) => Promise<string>;
   connectToDatabase: (id: string) => Promise<void>;
   disconnectFromDatabase: (id: string) => Promise<void>;
+  setFocusedConn: (id: string | null) => void;
   addGroup: (group: ConnectionGroup) => Promise<ConnectionGroup>;
   updateGroup: (group: ConnectionGroup) => Promise<void>;
   removeGroup: (id: string) => Promise<void>;
@@ -36,10 +44,23 @@ interface ConnectionState {
   initEventListeners: () => Promise<void>;
 }
 
+/** Pick another "connected" id to fall back to, or null if none available. */
+function pickFallbackFocus(
+  connections: ConnectionConfig[],
+  statuses: Record<string, ConnectionStatus>,
+  excludeId: string,
+): string | null {
+  const next = connections.find(
+    (c) => c.id !== excludeId && statuses[c.id]?.type === "connected",
+  );
+  return next?.id ?? null;
+}
+
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: [],
   groups: [],
   activeStatuses: {},
+  focusedConnId: null,
   loading: false,
   error: null,
 
@@ -89,9 +110,15 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set((state) => {
       const newStatuses = { ...state.activeStatuses };
       delete newStatuses[id];
+      const newConnections = state.connections.filter((c) => c.id !== id);
+      const newFocused =
+        state.focusedConnId === id
+          ? pickFallbackFocus(newConnections, newStatuses, id)
+          : state.focusedConnId;
       return {
-        connections: state.connections.filter((c) => c.id !== id),
+        connections: newConnections,
         activeStatuses: newStatuses,
+        focusedConnId: newFocused,
       };
     });
   },
@@ -134,6 +161,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       },
     }));
   },
+
+  setFocusedConn: (id) => set({ focusedConnId: id }),
 
   addGroup: async (group) => {
     const saved = await tauri.saveGroup(group, true);

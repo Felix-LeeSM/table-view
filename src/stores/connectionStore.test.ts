@@ -52,6 +52,7 @@ describe("connectionStore", () => {
       connections: [],
       groups: [],
       activeStatuses: {},
+      focusedConnId: null,
       loading: false,
       error: null,
     });
@@ -386,6 +387,100 @@ describe("connectionStore", () => {
     expect(useConnectionStore.getState().groups[0]!.name).toBe("Updated");
     expect(useConnectionStore.getState().groups[0]!.color).toBe("#ff0000");
     expect(useConnectionStore.getState().groups[0]!.collapsed).toBe(true);
+  });
+
+  describe("focusedConnId", () => {
+    function seedConnections() {
+      useConnectionStore.setState({
+        connections: [
+          {
+            id: "c1",
+            name: "A",
+            db_type: "postgresql",
+            host: "localhost",
+            port: 5432,
+            user: "postgres",
+            has_password: false,
+            database: "a",
+            group_id: null,
+            color: null,
+          },
+          {
+            id: "c2",
+            name: "B",
+            db_type: "postgresql",
+            host: "localhost",
+            port: 5432,
+            user: "postgres",
+            has_password: false,
+            database: "b",
+            group_id: null,
+            color: null,
+          },
+        ],
+      });
+    }
+
+    it("setFocusedConn sets and clears the focus", () => {
+      useConnectionStore.getState().setFocusedConn("c1");
+      expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+      useConnectionStore.getState().setFocusedConn(null);
+      expect(useConnectionStore.getState().focusedConnId).toBeNull();
+    });
+
+    it("clears focus when the focused connection is removed", async () => {
+      seedConnections();
+      useConnectionStore.setState({
+        activeStatuses: { c1: { type: "disconnected" } },
+        focusedConnId: "c1",
+      });
+
+      await useConnectionStore.getState().removeConnection("c1");
+
+      expect(useConnectionStore.getState().focusedConnId).toBeNull();
+    });
+
+    it("falls back to another connected connection when the focused one is removed", async () => {
+      seedConnections();
+      useConnectionStore.setState({
+        activeStatuses: {
+          c1: { type: "connected" },
+          c2: { type: "connected" },
+        },
+        focusedConnId: "c1",
+      });
+
+      await useConnectionStore.getState().removeConnection("c1");
+
+      expect(useConnectionStore.getState().focusedConnId).toBe("c2");
+    });
+
+    it("does not change focus when a non-focused connection is removed", async () => {
+      seedConnections();
+      useConnectionStore.setState({
+        activeStatuses: { c1: { type: "connected" } },
+        focusedConnId: "c2",
+      });
+
+      await useConnectionStore.getState().removeConnection("c1");
+
+      expect(useConnectionStore.getState().focusedConnId).toBe("c2");
+    });
+
+    it("keeps focus on the disconnected connection so its placeholder stays visible", async () => {
+      seedConnections();
+      useConnectionStore.setState({
+        activeStatuses: {
+          c1: { type: "connected" },
+          c2: { type: "connected" },
+        },
+        focusedConnId: "c1",
+      });
+
+      await useConnectionStore.getState().disconnectFromDatabase("c1");
+
+      expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+    });
   });
 
   it("initEventListeners registers connection-status-changed listener", async () => {

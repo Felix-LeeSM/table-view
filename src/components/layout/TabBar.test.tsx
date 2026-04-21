@@ -170,7 +170,7 @@ describe("TabBar", () => {
     };
   }
 
-  it("renders color dot for tab with connection color", () => {
+  it("renders color stripe for tab with connection color", () => {
     useConnectionStore.setState({
       connections: [makeConnection({ id: "conn1", color: "red" })],
     } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
@@ -178,17 +178,31 @@ describe("TabBar", () => {
     addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
     render(<TabBar />);
 
-    const dot = screen.getByLabelText("Connection color");
-    expect(dot).toBeInTheDocument();
-    expect((dot as HTMLElement).style.backgroundColor).toBe("red");
+    const stripe = screen.getByLabelText("Connection color");
+    expect(stripe).toBeInTheDocument();
+    expect((stripe as HTMLElement).style.backgroundColor).toBe("red");
   });
 
-  it("renders no color dot when no color specified", () => {
+  it("still renders a stripe when no color is set (uses derived palette color)", () => {
     useConnectionStore.setState({
       connections: [makeConnection({ id: "conn1", color: null })],
     } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
 
     addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
+    render(<TabBar />);
+
+    const stripe = screen.getByLabelText("Connection color");
+    expect(stripe).toBeInTheDocument();
+    // A non-empty color is applied (palette-derived), even without user input.
+    expect((stripe as HTMLElement).style.backgroundColor).not.toBe("");
+  });
+
+  it("does not render a stripe when the tab's connection has been removed", () => {
+    useConnectionStore.setState({
+      connections: [],
+    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+
+    addTableTab({ title: "Orphan", table: "orphan", connectionId: "missing" });
     render(<TabBar />);
 
     expect(screen.queryByLabelText("Connection color")).toBeNull();
@@ -206,10 +220,10 @@ describe("TabBar", () => {
     addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
     render(<TabBar />);
 
-    const dots = screen.getAllByLabelText("Connection color");
-    expect(dots).toHaveLength(2);
-    expect((dots[0] as HTMLElement).style.backgroundColor).toBe("red");
-    expect((dots[1] as HTMLElement).style.backgroundColor).toBe("blue");
+    const stripes = screen.getAllByLabelText("Connection color");
+    expect(stripes).toHaveLength(2);
+    expect((stripes[0] as HTMLElement).style.backgroundColor).toBe("red");
+    expect((stripes[1] as HTMLElement).style.backgroundColor).toBe("blue");
   });
 
   // ── Sprint 29: Preview Tab Display ──
@@ -288,7 +302,7 @@ describe("TabBar", () => {
 
   // ── Sprint 45: Tab color dot tooltip ──
 
-  it("color dot has title with connection name", () => {
+  it("color stripe has title with connection name", () => {
     useConnectionStore.setState({
       connections: [
         makeConnection({ id: "conn1", name: "My Database", color: "red" }),
@@ -298,7 +312,7 @@ describe("TabBar", () => {
     addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
     render(<TabBar />);
 
-    const dot = screen.getByLabelText("Connection color");
-    expect(dot).toHaveAttribute("title", "My Database");
+    const stripe = screen.getByLabelText("Connection color");
+    expect(stripe).toHaveAttribute("title", "My Database");
   });
 });
