@@ -1,12 +1,13 @@
 mod common;
 
 use std::time::Duration;
+
+use table_view_lib::commands::connection::AppState;
+use table_view_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
+use table_view_lib::error::AppError;
+use table_view_lib::models::{DatabaseType, QueryType};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use view_table_lib::commands::connection::AppState;
-use view_table_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
-use view_table_lib::error::AppError;
-use view_table_lib::models::{DatabaseType, QueryType};
 
 /// Integration test for SELECT query execution
 #[tokio::test]

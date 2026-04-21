@@ -1,10 +1,10 @@
 [package]
-name = "view-table"
+name = "table-view"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "view_table_lib"
+name = "table_view_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

@@ -1,10 +1,10 @@
 use std::fs;
 
 use serial_test::serial;
+use table_view_lib::error::AppError;
+use table_view_lib::models::{ConnectionConfig, ConnectionGroup, DatabaseType, StorageData};
+use table_view_lib::storage;
 use tempfile::TempDir;
-use view_table_lib::error::AppError;
-use view_table_lib::models::{ConnectionConfig, ConnectionGroup, DatabaseType, StorageData};
-use view_table_lib::storage;
 
 /// Test shim mirroring the historical single-arg `storage::save_connection`
 /// signature. Treats `conn.password` as the new plaintext password.
@@ -22,12 +22,12 @@ fn load_storage() -> Result<StorageData, AppError> {
 /// (must be kept alive for the duration of the test).
 fn setup_test_dir() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    std::env::set_var("VIEWTABLE_TEST_DATA_DIR", tmp.path());
+    std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", tmp.path());
     tmp
 }
 
 fn cleanup_test_dir() {
-    std::env::remove_var("VIEWTABLE_TEST_DATA_DIR");
+    std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
 }
 
 fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
@@ -197,7 +197,7 @@ fn test_password_is_encrypted_at_rest() {
     save_conn(conn).unwrap();
 
     // Read raw file and verify password is NOT stored in plaintext
-    let data_dir = std::env::var("VIEWTABLE_TEST_DATA_DIR").unwrap();
+    let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
     let raw = fs::read_to_string(std::path::Path::new(&data_dir).join("connections.json")).unwrap();
     assert!(
         !raw.contains("secret"),

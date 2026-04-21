@@ -5,8 +5,8 @@
 //! database is unavailable, and a helper to enumerate which DBMS types have
 //! running instances.
 
-use view_table_lib::db::postgres::PostgresAdapter;
-use view_table_lib::models::{ConnectionConfig, DatabaseType};
+use table_view_lib::db::postgres::PostgresAdapter;
+use table_view_lib::models::{ConnectionConfig, DatabaseType};
 
 /// Default host, port, user, password, and database for each DBMS when running
 /// under `docker-compose.test.yml`. Values can be overridden with environment
@@ -30,7 +30,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             port: env_or("PGPORT", "5432").parse().unwrap_or(5432),
             user: env_or("PGUSER", "testuser"),
             password: env_or("PGPASSWORD", "testpass"),
-            database: env_or("PGDATABASE", "viewtable_test"),
+            database: env_or("PGDATABASE", "table_view_test"),
             group_id: None,
             color: None,
             connection_timeout: Some(5),
@@ -45,7 +45,7 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             port: env_or("MYSQL_PORT", "3306").parse().unwrap_or(3306),
             user: env_or("MYSQL_USER", "testuser"),
             password: env_or("MYSQL_PASSWORD", "testpass"),
-            database: env_or("MYSQL_DATABASE", "viewtable_test"),
+            database: env_or("MYSQL_DATABASE", "table_view_test"),
             group_id: None,
             color: None,
             connection_timeout: Some(5),

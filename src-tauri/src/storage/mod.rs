@@ -13,7 +13,7 @@ static STORAGE_LOCK: LazyLock<std::sync::Mutex<()>> = LazyLock::new(|| std::sync
 
 fn app_data_dir() -> Result<PathBuf, AppError> {
     // Allow tests to override data directory via env var
-    if let Ok(dir) = std::env::var("VIEWTABLE_TEST_DATA_DIR") {
+    if let Ok(dir) = std::env::var("TABLE_VIEW_TEST_DATA_DIR") {
         let dir = PathBuf::from(dir);
         fs::create_dir_all(&dir)?;
         return Ok(dir);
@@ -21,7 +21,7 @@ fn app_data_dir() -> Result<PathBuf, AppError> {
     let dir = dirs::data_local_dir()
         .or_else(dirs::data_dir)
         .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;
-    let dir = dir.join("view-table");
+    let dir = dir.join("table-view");
     fs::create_dir_all(&dir)?;
     Ok(dir)
 }
@@ -273,12 +273,12 @@ mod tests {
     /// Returns the TempDir which must be kept alive for the duration of the test.
     fn setup_test_env() -> TempDir {
         let dir = tempfile::tempdir().unwrap();
-        std::env::set_var("VIEWTABLE_TEST_DATA_DIR", dir.path());
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
         dir
     }
 
     fn cleanup_test_env() {
-        std::env::remove_var("VIEWTABLE_TEST_DATA_DIR");
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
     }
 
     /// Test helper: previous-style save that treats the conn.password field
@@ -448,7 +448,7 @@ mod tests {
         save_conn(conn).unwrap();
 
         // Verify password is NOT stored in plaintext in the file
-        let data_dir = std::env::var("VIEWTABLE_TEST_DATA_DIR").unwrap();
+        let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
         let raw = std::fs::read_to_string(std::path::Path::new(&data_dir).join("connections.json"))
             .unwrap();
         assert!(

@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
-  "productName": "View Table",
+  "productName": "Table View",
   "version": "0.1.0",
-  "identifier": "com.viewtable.desktop",
+  "identifier": "com.tableview.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "View Table",
+        "title": "Table View",
         "width": 1200,
         "height": 800,
         "minWidth": 800,

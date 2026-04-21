@@ -12,7 +12,7 @@ fn key_file_path() -> Result<PathBuf, AppError> {
     let dir = dirs::data_local_dir()
         .or_else(dirs::data_dir)
         .ok_or_else(|| AppError::Storage("Cannot determine app data directory".into()))?;
-    let dir = dir.join("view-table");
+    let dir = dir.join("table-view");
     fs::create_dir_all(&dir)?;
     Ok(dir.join(".key"))
 }

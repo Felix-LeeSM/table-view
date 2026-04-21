@@ -445,7 +445,7 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
     let payload = ExportPayload {
         schema_version: EXPORT_SCHEMA_VERSION,
         exported_at_unix_secs,
-        app: "view-table".into(),
+        app: "table-view".into(),
         connections: publics,
         groups,
     };
@@ -568,12 +568,12 @@ mod tests {
 
     fn setup_test_env() -> TempDir {
         let dir = tempfile::tempdir().unwrap();
-        std::env::set_var("VIEWTABLE_TEST_DATA_DIR", dir.path());
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
         dir
     }
 
     fn cleanup_test_env() {
-        std::env::remove_var("VIEWTABLE_TEST_DATA_DIR");
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
     }
 
     fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
@@ -996,7 +996,7 @@ mod tests {
         storage_save_conn(conn).unwrap();
 
         // Capture the on-disk ciphertext to assert it is also absent.
-        let data_dir = std::env::var("VIEWTABLE_TEST_DATA_DIR").unwrap();
+        let data_dir = std::env::var("TABLE_VIEW_TEST_DATA_DIR").unwrap();
         let raw = std::fs::read_to_string(std::path::Path::new(&data_dir).join("connections.json"))
             .unwrap();
         let raw_json: serde_json::Value = serde_json::from_str(&raw).unwrap();
@@ -1051,7 +1051,7 @@ mod tests {
         let payload = ExportPayload {
             schema_version: EXPORT_SCHEMA_VERSION,
             exported_at_unix_secs: 0,
-            app: "view-table".into(),
+            app: "table-view".into(),
             connections: vec![ConnectionConfigPublic {
                 id: "fixed-id".into(),
                 name: "Imported".into(),
@@ -1095,7 +1095,7 @@ mod tests {
         let payload = ExportPayload {
             schema_version: EXPORT_SCHEMA_VERSION,
             exported_at_unix_secs: 0,
-            app: "view-table".into(),
+            app: "table-view".into(),
             connections: vec![ConnectionConfigPublic {
                 id: "x".into(),
                 name: "MyDB".into(),
@@ -1131,7 +1131,7 @@ mod tests {
         let payload = ExportPayload {
             schema_version: EXPORT_SCHEMA_VERSION,
             exported_at_unix_secs: 0,
-            app: "view-table".into(),
+            app: "table-view".into(),
             connections: vec![ConnectionConfigPublic {
                 id: "x".into(),
                 name: "Lonely".into(),
@@ -1169,7 +1169,7 @@ mod tests {
         let payload = ExportPayload {
             schema_version: EXPORT_SCHEMA_VERSION,
             exported_at_unix_secs: 0,
-            app: "view-table".into(),
+            app: "table-view".into(),
             connections: vec![ConnectionConfigPublic {
                 id: "x".into(),
                 name: "InGrp".into(),
@@ -1245,7 +1245,7 @@ mod tests {
         let bad = serde_json::json!({
             "schema_version": 99,
             "exported_at_unix_secs": 0,
-            "app": "view-table",
+            "app": "table-view",
             "connections": [],
             "groups": []
         })

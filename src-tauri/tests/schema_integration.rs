@@ -1,6 +1,6 @@
 mod common;
 
-use view_table_lib::models::{DatabaseType, FilterCondition, FilterOperator};
+use table_view_lib::models::{DatabaseType, FilterCondition, FilterOperator};
 
 /// Helper: create a unique test table name to avoid collisions across tests.
 fn unique_table_name(prefix: &str) -> String {
