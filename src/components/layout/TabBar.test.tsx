@@ -183,7 +183,7 @@ describe("TabBar", () => {
     expect((dot as HTMLElement).style.backgroundColor).toBe("red");
   });
 
-  it("renders default color dot when no color specified", () => {
+  it("renders no color dot when no color specified", () => {
     useConnectionStore.setState({
       connections: [makeConnection({ id: "conn1", color: null })],
     } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
@@ -191,9 +191,7 @@ describe("TabBar", () => {
     addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
     render(<TabBar />);
 
-    const dot = screen.getByLabelText("Connection color");
-    expect(dot).toBeInTheDocument();
-    expect((dot as HTMLElement).style.backgroundColor).toBe("var(--primary)");
+    expect(screen.queryByLabelText("Connection color")).toBeNull();
   });
 
   it("renders different colors for different connections", () => {

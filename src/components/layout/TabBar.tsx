@@ -54,18 +54,17 @@ export default function TabBar() {
             }
           }}
         >
-          <span
-            className="inline-block h-2 w-2 shrink-0 rounded-full"
-            style={{
-              backgroundColor:
-                connections.find((c) => c.id === tab.connectionId)?.color ??
-                "var(--primary)",
-            }}
-            aria-label="Connection color"
-            title={
-              connections.find((c) => c.id === tab.connectionId)?.name ?? ""
-            }
-          />
+          {(() => {
+            const conn = connections.find((c) => c.id === tab.connectionId);
+            return conn?.color ? (
+              <span
+                className="inline-block h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: conn.color }}
+                aria-label="Connection color"
+                title={conn.name ?? ""}
+              />
+            ) : null;
+          })()}
           {tab.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-muted-foreground" />
           ) : (
