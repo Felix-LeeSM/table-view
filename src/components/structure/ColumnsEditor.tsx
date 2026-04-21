@@ -51,7 +51,7 @@ function EditableColumnRow({
   const [defaultValue, setDefaultValue] = useState(col.default_value ?? "");
 
   const inputClass =
-    "w-full rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:border-primary";
+    "w-full bg-transparent px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary";
 
   const handleSave = () => {
     const hasDataTypeChange = dataType !== col.data_type;
@@ -213,7 +213,7 @@ function NewColumnRow({
   onCancel,
 }: NewColumnRowProps) {
   const inputClass =
-    "w-full rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground outline-none focus:border-primary";
+    "w-full bg-transparent px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary";
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") onConfirm();
@@ -507,7 +507,7 @@ export default function ColumnsEditor({
       {/* Table */}
       {columns.length > 0 && (
         <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full table-fixed border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-secondary">
               <tr>
                 <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">

@@ -100,7 +100,7 @@ describe("DataGridTable editing visual emphasis", () => {
     );
     const input = screen.getByLabelText("Editing name") as HTMLInputElement;
     expect(input.value).toBe("Alice");
-    expect(input.className).toMatch(/bg-background/);
+    expect(input.className).toMatch(/bg-transparent/);
   });
 
   it("pending-only (not editing) cell uses yellow bg, not primary ring", () => {

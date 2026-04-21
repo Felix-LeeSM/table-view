@@ -111,6 +111,7 @@ export default function DataGridTable({
     colName: string;
     startX: number;
     startWidth: number;
+    startTableWidth: number;
     colIdx: number;
   } | null>(null);
 
@@ -322,16 +323,27 @@ export default function DataGridTable({
     (e: React.MouseEvent, colName: string, colIdx: number) => {
       e.stopPropagation();
       e.preventDefault();
-      const currentWidth = columnWidths[colName] ?? 150;
+      const th = tableRef.current?.querySelector(
+        `th:nth-child(${colIdx + 1})`,
+      ) as HTMLElement | null;
+      const currentWidth =
+        th?.getBoundingClientRect().width ??
+        columnWidths[colName] ??
+        calcDefaultColWidth(colName, "");
+      const startTableWidth =
+        tableRef.current?.getBoundingClientRect().width ?? 0;
       resizingRef.current = {
         colName,
         startX: e.clientX,
         startWidth: currentWidth,
+        startTableWidth,
         colIdx,
       };
 
       const applyWidth = (width: number) => {
-        if (!tableRef.current) return;
+        if (!tableRef.current || !resizingRef.current) return;
+        const delta = width - resizingRef.current.startWidth;
+        tableRef.current.style.width = `${resizingRef.current.startTableWidth + delta}px`;
         const w = `${width}px`;
         const th = tableRef.current.querySelector(
           `th:nth-child(${colIdx + 1})`,
@@ -357,15 +369,20 @@ export default function DataGridTable({
 
       const handleMouseUp = () => {
         if (resizingRef.current) {
+          const {
+            colName: resizedColName,
+            colIdx: resizedColIdx,
+            startWidth,
+          } = resizingRef.current;
           const finalWidth = tableRef.current?.querySelector(
-            `th:nth-child(${resizingRef.current.colIdx + 1})`,
+            `th:nth-child(${resizedColIdx + 1})`,
           ) as HTMLElement | null;
           const w = finalWidth
             ? parseInt(finalWidth.style.width, 10)
-            : resizingRef.current.startWidth;
+            : startWidth;
           onColumnWidthsChange((prev) => ({
             ...prev,
-            [resizingRef.current!.colName]: w,
+            [resizedColName]: w,
           }));
         }
         resizingRef.current = null;
@@ -466,7 +483,10 @@ export default function DataGridTable({
           <Loader2 className="animate-spin text-muted-foreground" size={24} />
         </div>
       )}
-      <table className="w-full border-collapse text-sm" ref={tableRef}>
+      <table
+        className="min-w-full table-fixed border-collapse text-sm"
+        ref={tableRef}
+      >
         <thead className="sticky top-0 z-10 bg-secondary">
           <tr>
             {order.map((dIdx, visualIdx) => {
@@ -532,7 +552,7 @@ export default function DataGridTable({
                   </div>
                   {/* Resize handle */}
                   <div
-                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary active:bg-primary"
+                    className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
                     onMouseDown={(e) =>
                       handleResizeStart(e, col.name, visualIdx)
                     }
@@ -613,7 +633,7 @@ export default function DataGridTable({
                       {isEditing ? (
                         <input
                           type={getInputTypeForColumn(col.data_type)}
-                          className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
+                          className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
                           value={editValue}
                           autoFocus
                           aria-label={`Editing ${col.name}`}
