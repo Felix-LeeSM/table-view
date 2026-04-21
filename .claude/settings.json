@@ -41,6 +41,18 @@
             "if": "Edit(*.ts)|Edit(*.tsx)|Write(*.ts)|Write(*.tsx)",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && npx prettier --write $(echo \"$TOOL_INPUT\" | jq -r '.file_path' | sed \"s|^$CLAUDE_PROJECT_DIR/||\") 2>/dev/null || true",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "if": "Edit(memory/**)|Write(memory/**)",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-size.sh 2>&1 | head -10 || true",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Edit(memory/**)|Write(memory/**)",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-structure.sh 2>&1 | head -10 || true",
+            "timeout": 10
           }
         ]
       }
