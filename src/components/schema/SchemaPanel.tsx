@@ -18,6 +18,7 @@ interface SchemaPanelProps {
 export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const connectToDatabase = useConnectionStore((s) => s.connectToDatabase);
 
   if (connections.length === 0) {
     return (
@@ -80,6 +81,14 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
               ? `Failed to connect: ${status?.type === "error" ? status.message : ""}`
               : "Double-click in the Connections tab to connect"}
         </p>
+        {!isConnecting && !isError && (
+          <button
+            className="mt-2 text-xs text-primary hover:underline"
+            onClick={() => connectToDatabase(selectedId)}
+          >
+            Connect
+          </button>
+        )}
       </div>
     );
   }

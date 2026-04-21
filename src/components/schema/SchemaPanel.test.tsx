@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import SchemaPanel from "./SchemaPanel";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
@@ -81,6 +81,30 @@ describe("SchemaPanel", () => {
       screen.getByText(/double-click in the connections tab/i),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("schema-tree")).toBeNull();
+  });
+
+  it("shows Connect button in disconnected state and calls connectToDatabase on click", () => {
+    const connectToDatabase = vi.fn();
+    useConnectionStore.setState((s) => ({ ...s, connectToDatabase }));
+    setupStore({ connections: [makeConn("c1")] });
+    render(<SchemaPanel selectedId="c1" />);
+
+    const btn = screen.getByRole("button", { name: /^connect$/i });
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(connectToDatabase).toHaveBeenCalledWith("c1");
+  });
+
+  it("hides Connect button while connecting", () => {
+    setupStore({ connections: [makeConn("c1")], connecting: ["c1"] });
+    render(<SchemaPanel selectedId="c1" />);
+    expect(screen.queryByRole("button", { name: /^connect$/i })).toBeNull();
+  });
+
+  it("hides Connect button when connection errored", () => {
+    setupStore({ connections: [makeConn("c1")], errored: { c1: "timeout" } });
+    render(<SchemaPanel selectedId="c1" />);
+    expect(screen.queryByRole("button", { name: /^connect$/i })).toBeNull();
   });
 
   it("shows 'Connecting…' message during the connecting state", () => {
