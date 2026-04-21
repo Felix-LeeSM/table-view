@@ -8,6 +8,43 @@ updated: 2026-04-22
 
 상세 설계: [docs/architecture.md](../../docs/architecture.md). 여기는 AI 탐색용 요약.
 
+## 기술 스택
+
+| 영역 | 기술 |
+|------|------|
+| Desktop Framework | Tauri 2.0 |
+| Frontend | React 19 + TypeScript 5 (strict) |
+| State Management | Zustand |
+| Styling | Tailwind CSS 4 (다크 모드 지원 필수) |
+| Backend | Rust (Tauri commands) |
+| DB Drivers | sqlx (PostgreSQL, MySQL, SQLite), mongodb, redis |
+| Build Tool | Vite 6 (frontend), Cargo (backend) |
+| Testing | Vitest (frontend), cargo test (backend), Playwright (e2e) |
+
+## 디렉토리 구조
+
+```
+table-view/
+├── src-tauri/           # Rust 백엔드
+│   ├── src/
+│   │   ├── main.rs      # Tauri 진입점
+│   │   ├── db/          # DB driver 추상화 (trait DbAdapter)
+│   │   ├── commands/    # Tauri IPC 명령 핸들러
+│   │   ├── storage/     # 연결 설정 I/O + 암호화
+│   │   ├── models/      # 데이터 모델 (struct)
+│   │   └── error.rs     # 공통 에러 타입 (AppError)
+│   └── tests/           # 통합 테스트
+├── src/                 # React 프론트엔드
+│   ├── components/      # UI 컴포넌트 (PascalCase, 1파일=1컴포넌트)
+│   ├── hooks/           # 커스텀 훅
+│   ├── stores/          # Zustand 스토어 (camelCase)
+│   ├── pages/           # 페이지 단위 컴포넌트
+│   ├── lib/             # 유틸리티
+│   └── types/           # TypeScript 타입
+├── e2e/                 # Playwright E2E
+└── docs/                # 프로젝트 문서 (PLAN, RISKS, phases)
+```
+
 ## 계층
 
 - **Rust 백엔드** (`src-tauri/src/`) — Tauri IPC commands, DbAdapter trait, storage
@@ -39,3 +76,4 @@ updated: 2026-04-22
 
 - [decisions](../decisions/memory.md) — 구조 결정 이력
 - [roadmap](../roadmap/memory.md) — 어느 모듈이 어느 Phase에 확장되는지
+- [conventions](../conventions/memory.md) — Rust/TS 코딩 규칙, 테스트, 커밋

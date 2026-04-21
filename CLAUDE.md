@@ -5,139 +5,25 @@
 Table View는 Tauri 2.0 + React + Rust 기반의 TablePlus-like 데이터베이스 관리 도구입니다.
 데스크톱 앱으로, 다중 DBMS(PostgreSQL, MySQL, SQLite, MongoDB 등)를 지원합니다.
 
+## 먼저 읽을 곳
+
+상세 지식은 **메모리 팔레스**에 주제별로 나뉘어 있다. 작업 시작 전 필요한 방만 읽는다.
+
+- **[`memory/memory.md`](memory/memory.md)** — 팔레스 입구, 방 지도.
+  - [`memory/architecture/memory.md`](memory/architecture/memory.md) — 기술 스택, 디렉토리 구조, IPC·상태 흐름
+  - [`memory/conventions/memory.md`](memory/conventions/memory.md) — Rust/TS 컨벤션, 테스트 규칙, 커밋, 금지 사항
+  - [`memory/roadmap/memory.md`](memory/roadmap/memory.md) — 현재 Phase 상태
+  - [`memory/decisions/memory.md`](memory/decisions/memory.md) — ADR 이력
+  - [`memory/lessons/memory.md`](memory/lessons/memory.md) — 교훈
+
 ## 프로젝트 문서
 
-- **[`docs/PLAN.md`](docs/PLAN.md)** — 마스터 플랜. 프로젝트 목적(판단 기준), 현재 상태, 하위 문서 링크를 제공. 모든 구현 결정은 "TablePlus 사용자가 핵심 워크플로우에서 끊김 없이 전환 가능한가?" 기준으로 판단.
-- **[`docs/RISKS.md`](docs/RISKS.md)** — 잔여 위험 등록부. 스프린트 handoff를 재읽지 않아도 되는 단일 위험 추적 문서. 각 항목은 `active`/`resolved`/`deferred` 상태와 영역 태그를 가짐. 위험 해결 시 Resolution Log에 기록.
+- **[`docs/PLAN.md`](docs/PLAN.md)** — 마스터 플랜. 모든 구현 결정은 "TablePlus 사용자가 핵심 워크플로우에서 끊김 없이 전환 가능한가?" 기준으로 판단.
+- **[`docs/RISKS.md`](docs/RISKS.md)** — 잔여 위험 등록부. `active`/`resolved`/`deferred` 상태 추적.
 
-## 기술 스택
+## 메모리 팔레스 규칙 (강제)
 
-| 영역 | 기술 |
-|------|------|
-| Desktop Framework | Tauri 2.0 |
-| Frontend | React 19 + TypeScript 5 |
-| State Management | Zustand |
-| Styling | Tailwind CSS 4 |
-| Backend | Rust (Tauri commands) |
-| DB Drivers | sqlx (PostgreSQL, MySQL, SQLite), mongodb, redis |
-| Build Tool | Vite 6 (frontend), Cargo (backend) |
-| Testing | Vitest (frontend), cargo test (backend), Playwright (e2e) |
-
-## 디렉토리 구조
-
-```
-table-view/
-├── src-tauri/           # Rust 백엔드
-│   ├── src/
-│   │   ├── main.rs      # Tauri 진입점
-│   │   ├── db/          # DB driver 추상화 (trait DbAdapter)
-│   │   ├── commands/    # Tauri IPC 명령 핸들러
-│   │   ├── models/      # 데이터 모델 (struct)
-│   │   └── error.rs     # 공통 에러 타입
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-├── src/                 # React 프론트엔드
-│   ├── components/      # UI 컴포넌트
-│   ├── hooks/           # 커스텀 훅
-│   ├── stores/          # Zustand 스토어
-│   ├── pages/           # 페이지 단위 컴포넌트
-│   ├── lib/             # 유틸리티, 헬퍼
-│   └── types/           # TypeScript 타입 정의
-├── e2e/                 # Playwright E2E 테스트
-├── docs/                # 프로젝트 문서
-└── CLAUDE.md            # 이 파일
-```
-
-## Rust 코딩 컨벤션
-
-### 기본 규칙
-- `cargo fmt`로 포맷팅, `cargo clippy`로 린트 통과 필수
-- 에러 처리: `thiserror`로 커스텀 에러 타입 정의, `Result<T, AppError>` 사용
-- `unwrap()` 사용 금지 (테스트 코드 제외). 대신 `?` 연산자나 `map_err` 사용
-- 공개 API는 문서 주석(`///`) 필수
-
-### Module 구조
-- 각 모듈은 `mod.rs`에서 공개 인터페이스를 정의
-- 파일 하나당 하나의 주요 struct/trait 정의
-- 모듈 간 의존성은 최소화 (순환 참조 금지)
-
-### DB Driver 추상화 (trait DbAdapter)
-```rust
-pub trait DbAdapter: Send + Sync {
-    async fn connect(&self, config: &ConnectionConfig) -> Result<()>;
-    async fn disconnect(&self) -> Result<()>;
-    async fn execute(&self, query: &str) -> Result<ExecuteResult>;
-    async fn query(&self, query: &str) -> Result<Vec<Row>>;
-    async fn get_tables(&self) -> Result<Vec<TableInfo>>;
-    async fn get_schema(&self, table: &str) -> Result<TableSchema>;
-}
-```
-- 각 DBMS(PostgreSQL, MySQL, SQLite 등)는 이 trait을 구현
-- Connection Factory 패턴으로 드라이버 인스턴스 생성
-- 모든 DB 작업은 async로 구현
-
-## TypeScript/React 컨벤션
-
-### 컴포넌트
-- 함수 컴포넌트만 사용 (class 컴포넌트 금지)
-- 파일명: PascalCase (`ConnectionPanel.tsx`)
-- 컴포넌트 1개 = 파일 1개
-- Props 타입은 `interface`로 정의, `export` 필수
-
-### 상태 관리
-- 전역 상태: Zustand 스토어 (`stores/` 디렉토리)
-- 지역 상태: `useState`, `useReducer`
-- 서버 상태: 필요시 TanStack Query 고려
-- 스토어 파일명: camelCase (`connectionStore.ts`)
-
-### 스타일링
-- Tailwind CSS 유틸리티 클래스 사용
-- 커스텀 CSS 최소화
-- 다크 모드 지원 필수
-
-### TypeScript 규칙
-- `any` 타입 사용 금지. 모르는 타입은 `unknown` 사용
-- strict mode 필수
-- 타입 가드로 `unknown` 좁히기
-
-## 테스트 필수 규칙
-
-### Rust 테스트
-- 모든 새 기능/버그 수정에 단위 테스트 필수
-- 테스트 위치: 같은 파일 하단 `#[cfg(test)] mod tests {}`
-- 통합 테스트: `src-tauri/tests/` 디렉토리
-- 커버리지: 핵심 로직(DbAdapter 구현체, 쿼리 파서) 80% 이상
-
-### React 테스트
-- 모든 컴포넌트에 렌더링 테스트 필수
-- 테스트 도구: Vitest + React Testing Library
-- 테스트 파일: 컴포넌트 옆에 `*.test.tsx` 또는 `__tests__/` 디렉토리
-- Zustand 스토어는 순수 함수처럼 테스트
-
-### E2E 테스트
-- 주요 사용자 플로우에 대해 Playwright 테스트 작성
-- 핵심 플로우: 연결 생성, 쿼리 실행, 결과 확인
-
-## 금지 사항
-
-- `unwrap()` 남용 (Rust 테스트 제외)
-- `any` 타입 사용 (TypeScript)
-- 민감 정보(비밀번호, API 키) 하드코딩
-- `console.log` 디버깅 코드 커밋
-- 직접적인 DOM 조작 (`document.querySelector` 등)
-- 테스트 없는 새 기능 커밋
-- `eval()`, `innerHTML` 사용 (XSS 위험)
-
-## 커밋 메시지 규칙
-
-Conventional Commits 형식:
-```
-type(scope): description
-
-feat(connection): add connection test button
-fix(query): handle empty result set
-refactor(db): extract common adapter logic
-test(connection): add unit tests for PostgreSQL adapter
-```
-
-Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+- `memory/` 트리는 **오직 `memory.md`만** 허용. 하위 주제는 디렉토리로 분기하고 다시 `memory.md`.
+- 한 파일 **200줄 이하**. 초과 시 `/split-memory`로 분할.
+- **ADR 본문은 작성 순간 동결** — 결정/이유/트레이드오프 수정 금지. 프론트매터 메타 필드(`status`, `superseded_by`)만 갱신 가능. 결정을 뒤집으려면 새 ADR을 추가하고 원본 상태를 `Superseded`로 전이.
+- 대화에서 배운 결정·교훈은 `/remember`로 적절한 방에 저장.

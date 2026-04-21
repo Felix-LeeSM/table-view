@@ -10,7 +10,8 @@ updated: 2026-04-22
 
 ## 방 지도
 
-- [architecture](./architecture/memory.md) — Tauri IPC, Rust 모듈, React 상태 흐름
+- [architecture](./architecture/memory.md) — 기술 스택, 디렉토리 구조, Tauri IPC, Rust 모듈, React 상태 흐름
+- [conventions](./conventions/memory.md) — Rust/TS 컨벤션, 테스트 규칙, 커밋, 금지 사항
 - [roadmap](./roadmap/memory.md) — 현재 Phase 상태, 진행 중 스프린트
 - [decisions](./decisions/memory.md) — ADR 이력 (과거 결정, 대체 관계)
 - [lessons](./lessons/memory.md) — 실패·성공 교훈
