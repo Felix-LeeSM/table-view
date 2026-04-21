@@ -12,6 +12,8 @@ import SchemaPanel from "@components/schema/SchemaPanel";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
 const WIDTH_KEY = "viewtable.sidebar.width";
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 540;
 const DEFAULT_WIDTH = 280;
 
 function readWidth(): number {
@@ -20,7 +22,8 @@ function readWidth(): number {
     const v = window.localStorage.getItem(WIDTH_KEY);
     if (!v) return DEFAULT_WIDTH;
     const n = parseInt(v, 10);
-    return Number.isFinite(n) ? n : DEFAULT_WIDTH;
+    if (!Number.isFinite(n)) return DEFAULT_WIDTH;
+    return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, n));
   } catch {
     return DEFAULT_WIDTH;
   }
@@ -85,8 +88,8 @@ export default function Sidebar() {
     handleMouseDown: handleResizeMouseDown,
   } = useResizablePanel({
     axis: "horizontal",
-    min: 260,
-    max: 540,
+    min: MIN_WIDTH,
+    max: MAX_WIDTH,
     initial: readWidth(),
   });
 
