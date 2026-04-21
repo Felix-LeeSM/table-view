@@ -20,6 +20,7 @@ const mockLoadSchemas = vi.fn().mockResolvedValue(undefined);
 const mockLoadTables = vi.fn().mockResolvedValue(undefined);
 const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
+const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
 
 function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
   useSchemaStore.setState({
@@ -35,6 +36,7 @@ function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
     loadTables: mockLoadTables,
     loadViews: mockLoadViews,
     loadFunctions: mockLoadFunctions,
+    prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
 }
 
@@ -50,6 +52,7 @@ function resetStores() {
     loadTables: mockLoadTables,
     loadViews: mockLoadViews,
     loadFunctions: mockLoadFunctions,
+    prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
   useTabStore.setState({ tabs: [], activeTabId: null });
   useConnectionStore.setState({ connections: [] });
@@ -514,12 +517,14 @@ describe("SchemaTree", () => {
   });
 
   it("shows loading spinner next to schema name while tables are loading", async () => {
-    let resolveTables: () => void;
-    mockLoadTables.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
-        resolveTables = resolve;
-      }),
-    );
+    // Use mockImplementation so every loadTables call (including the auto-load
+    // on mount) gets the same pending promise — ensures handleExpandSchema also
+    // sees a pending call and sets loadingTables.
+    let resolveTables!: () => void;
+    const pendingPromise = new Promise<void>((resolve) => {
+      resolveTables = resolve;
+    });
+    mockLoadTables.mockImplementation(() => pendingPromise);
 
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -536,14 +541,13 @@ describe("SchemaTree", () => {
     });
 
     // Should show a loading spinner next to the schema name
-    // The schema row should have an animate-spin element
     const schemaRow = schemaButton.closest("div")!;
     const spinners = schemaRow.querySelectorAll(".animate-spin");
     expect(spinners.length).toBeGreaterThanOrEqual(1);
 
     // Resolve to clean up
     await act(async () => {
-      resolveTables!();
+      resolveTables();
     });
   });
 

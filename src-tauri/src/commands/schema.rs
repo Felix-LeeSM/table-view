@@ -1,7 +1,7 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, CreateIndexRequest, DropConstraintRequest,
+    AddConstraintRequest, AlterTableRequest, ColumnInfo, CreateIndexRequest, DropConstraintRequest,
     DropIndexRequest, FilterCondition, FunctionInfo, SchemaChangeResult, TableData, TableInfo,
     ViewInfo,
 };
@@ -43,6 +43,19 @@ pub async fn get_table_columns(
         .get(&connection_id)
         .ok_or_else(|| AppError::Connection("Not connected".into()))?;
     adapter.get_table_columns(&table, &schema).await
+}
+
+#[tauri::command]
+pub async fn list_schema_columns(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let adapter = connections
+        .get(&connection_id)
+        .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+    adapter.list_schema_columns(&schema).await
 }
 
 #[tauri::command]

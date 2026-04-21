@@ -147,6 +147,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     useSchemaStore((s) => s.schemas[connectionId]) ?? EMPTY_SCHEMAS;
   const loadSchemas = useSchemaStore((s) => s.loadSchemas);
   const loadTables = useSchemaStore((s) => s.loadTables);
+  const prefetchSchemaColumns = useSchemaStore((s) => s.prefetchSchemaColumns);
   const loadViews = useSchemaStore((s) => s.loadViews);
   const loadFunctions = useSchemaStore((s) => s.loadFunctions);
   const dropTable = useSchemaStore((s) => s.dropTable);
@@ -191,15 +192,25 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
 
-  // Auto-load schemas on mount or when connectionId changes
+  // Auto-load schemas on mount, then prefetch tables + columns for autocomplete
   useEffect(() => {
     if (autoLoadedRef.current === connectionId) return;
     autoLoadedRef.current = connectionId;
     setLoadingSchemas(true);
     loadSchemas(connectionId)
+      .then(() => {
+        const state = useSchemaStore.getState();
+        const schemaList = state.schemas[connectionId] ?? [];
+        for (const s of schemaList) {
+          if (!state.tables[`${connectionId}:${s.name}`]) {
+            loadTables(connectionId, s.name).catch(() => {});
+          }
+          prefetchSchemaColumns(connectionId, s.name);
+        }
+      })
       .catch(() => {})
       .finally(() => setLoadingSchemas(false));
-  }, [connectionId, loadSchemas]);
+  }, [connectionId, loadSchemas, loadTables, prefetchSchemaColumns]);
 
   // Listen for context-aware refresh events (Cmd+R / F5)
   useEffect(() => {

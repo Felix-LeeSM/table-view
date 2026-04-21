@@ -84,6 +84,10 @@ interface SchemaState {
     newName: string,
   ) => Promise<void>;
   clearSchema: (connectionId: string) => void;
+  prefetchSchemaColumns: (
+    connectionId: string,
+    schema: string,
+  ) => Promise<void>;
 }
 
 export const useSchemaStore = create<SchemaState>((set) => ({
@@ -286,5 +290,22 @@ export const useSchemaStore = create<SchemaState>((set) => ({
         tableColumnsCache: newColumnsCache,
       };
     });
+  },
+
+  prefetchSchemaColumns: async (connectionId, schema) => {
+    try {
+      const result = await tauri.listSchemaColumns(connectionId, schema);
+      const newEntries: Record<string, ColumnInfo[]> = {};
+      for (const [tableName, columns] of Object.entries(result)) {
+        newEntries[`${connectionId}:${schema}:${tableName}`] = columns;
+      }
+      if (Object.keys(newEntries).length > 0) {
+        set((state) => ({
+          tableColumnsCache: { ...state.tableColumnsCache, ...newEntries },
+        }));
+      }
+    } catch {
+      // prefetch is best-effort; silently ignore failures
+    }
   },
 }));

@@ -753,6 +753,115 @@ impl PostgresAdapter {
             .collect())
     }
 
+    /// Fetches columns for every table in `schema` in one round-trip.
+    /// Returns a map of table_name → Vec<ColumnInfo>.
+    pub async fn list_schema_columns(
+        &self,
+        schema: &str,
+    ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        // Basic column info for all tables in the schema
+        let col_rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT table_name, column_name, data_type, is_nullable, column_default \
+             FROM information_schema.columns \
+             WHERE table_schema = $1 \
+             ORDER BY table_name, ordinal_position",
+        )
+        .bind(schema)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        // Primary keys for all tables in the schema
+        let pk_rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT kcu.table_name, kcu.column_name \
+             FROM information_schema.table_constraints tc \
+             JOIN information_schema.key_column_usage kcu \
+               ON tc.constraint_name = kcu.constraint_name \
+              AND tc.table_schema = kcu.table_schema \
+             WHERE tc.table_schema = $1 AND tc.constraint_type = 'PRIMARY KEY'",
+        )
+        .bind(schema)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        // Foreign keys for all tables in the schema
+        let fk_rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT kcu.table_name, kcu.column_name, \
+                    ccu.table_name || '.' || ccu.column_name \
+             FROM information_schema.table_constraints tc \
+             JOIN information_schema.key_column_usage kcu \
+               ON tc.constraint_name = kcu.constraint_name \
+              AND tc.table_schema = kcu.table_schema \
+             JOIN information_schema.constraint_column_usage ccu \
+               ON tc.constraint_name = ccu.constraint_name \
+              AND tc.table_schema = ccu.table_schema \
+             WHERE tc.table_schema = $1 AND tc.constraint_type = 'FOREIGN KEY'",
+        )
+        .bind(schema)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        // Column comments for all tables in the schema
+        let comment_rows: Vec<(String, String, Option<String>)> = sqlx::query_as(
+            "SELECT c.relname, a.attname, col_description(c.oid, a.attnum) \
+             FROM pg_class c \
+             JOIN pg_namespace n ON n.oid = c.relnamespace \
+             JOIN pg_attribute a ON a.attrelid = c.oid \
+              AND a.attnum > 0 AND NOT a.attisdropped \
+             WHERE n.nspname = $1 AND c.relkind = 'r'",
+        )
+        .bind(schema)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        // Build lookup sets/maps keyed by (table, column)
+        let pk_set: std::collections::HashSet<(String, String)> = pk_rows.into_iter().collect();
+
+        let fk_map: std::collections::HashMap<(String, String), String> =
+            fk_rows.into_iter().map(|(t, c, r)| ((t, c), r)).collect();
+
+        let comment_map: std::collections::HashMap<(String, String), Option<String>> = comment_rows
+            .into_iter()
+            .map(|(t, c, cmt)| ((t, c), cmt))
+            .collect();
+
+        // Group columns by table
+        let mut result: std::collections::HashMap<String, Vec<ColumnInfo>> =
+            std::collections::HashMap::new();
+
+        for (table_name, col_name, data_type, is_nullable, default_value) in col_rows {
+            let is_pk = pk_set.contains(&(table_name.clone(), col_name.clone()));
+            let (is_fk, fk_reference) = match fk_map.get(&(table_name.clone(), col_name.clone())) {
+                Some(r) => (true, Some(r.clone())),
+                None => (false, None),
+            };
+            let comment = comment_map
+                .get(&(table_name.clone(), col_name.clone()))
+                .and_then(Option::clone);
+
+            result.entry(table_name).or_default().push(ColumnInfo {
+                name: col_name,
+                data_type,
+                nullable: is_nullable == "YES",
+                default_value,
+                is_primary_key: is_pk,
+                is_foreign_key: is_fk,
+                fk_reference,
+                comment,
+            });
+        }
+
+        Ok(result)
+    }
+
     #[allow(clippy::type_complexity)]
     pub async fn get_table_indexes(
         &self,

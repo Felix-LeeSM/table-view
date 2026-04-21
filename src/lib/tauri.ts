@@ -148,6 +148,16 @@ export async function getTableColumns(
   });
 }
 
+export async function listSchemaColumns(
+  connectionId: string,
+  schema: string,
+): Promise<Record<string, ColumnInfo[]>> {
+  return invoke<Record<string, ColumnInfo[]>>("list_schema_columns", {
+    connectionId,
+    schema,
+  });
+}
+
 export async function queryTableData(
   connectionId: string,
   table: string,
