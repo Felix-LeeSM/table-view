@@ -93,44 +93,6 @@ export default function StructurePanel({
             {tab.label}
           </button>
         ))}
-
-        {/* Column editing actions */}
-        {activeSubTab === "columns" && (
-          <ColumnsEditor
-            key={`${connectionId}-${table}-${schema}`}
-            connectionId={connectionId}
-            table={table}
-            schema={schema}
-            columns={columns}
-            onRefresh={fetchData}
-          />
-        )}
-
-        {/* Index actions */}
-        {activeSubTab === "indexes" && (
-          <IndexesEditor
-            connectionId={connectionId}
-            table={table}
-            schema={schema}
-            indexes={indexes}
-            columns={columns}
-            onColumnsChange={setColumns}
-            onRefresh={fetchData}
-          />
-        )}
-
-        {/* Constraint actions */}
-        {activeSubTab === "constraints" && (
-          <ConstraintsEditor
-            connectionId={connectionId}
-            table={table}
-            schema={schema}
-            constraints={constraints}
-            columns={columns}
-            onColumnsChange={setColumns}
-            onRefresh={fetchData}
-          />
-        )}
       </div>
 
       {/* Error */}
@@ -148,6 +110,40 @@ export default function StructurePanel({
         <div className="flex items-center justify-center py-8">
           <Loader2 className="animate-spin text-muted-foreground" size={24} />
         </div>
+      )}
+
+      {/* Editors — outside the tab bar */}
+      {!loading && !error && activeSubTab === "columns" && (
+        <ColumnsEditor
+          key={`${connectionId}-${table}-${schema}`}
+          connectionId={connectionId}
+          table={table}
+          schema={schema}
+          columns={columns}
+          onRefresh={fetchData}
+        />
+      )}
+      {!loading && !error && activeSubTab === "indexes" && (
+        <IndexesEditor
+          connectionId={connectionId}
+          table={table}
+          schema={schema}
+          indexes={indexes}
+          columns={columns}
+          onColumnsChange={setColumns}
+          onRefresh={fetchData}
+        />
+      )}
+      {!loading && !error && activeSubTab === "constraints" && (
+        <ConstraintsEditor
+          connectionId={connectionId}
+          table={table}
+          schema={schema}
+          constraints={constraints}
+          columns={columns}
+          onColumnsChange={setColumns}
+          onRefresh={fetchData}
+        />
       )}
     </div>
   );

@@ -432,9 +432,9 @@ export default function ConstraintsEditor({
   };
 
   return (
-    <>
+    <div className="flex flex-1 flex-col overflow-hidden">
       {/* Action bar */}
-      <div className="ml-auto flex items-center gap-1 pr-2">
+      <div className="flex items-center justify-end border-b border-border bg-secondary px-2 py-1">
         <button
           className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
           onClick={handleOpenAddConstraint}
@@ -533,6 +533,6 @@ export default function ConstraintsEditor({
           onCancel={() => setShowAddConstraintModal(false)}
         />
       )}
-    </>
+    </div>
   );
 }
