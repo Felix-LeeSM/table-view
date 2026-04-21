@@ -70,6 +70,12 @@ describe("View Table — Smoke Tests", () => {
   });
 
   it("shows the New Connection button", async () => {
+    // The New Connection button is scoped to connections mode; previous test
+    // leaves the sidebar in schemas mode, so switch back first.
+    const connectionsTab = await $('[aria-label="Connections mode"]');
+    await connectionsTab.waitForDisplayed({ timeout: 5000 });
+    await connectionsTab.click();
+
     const newButton = await $('[aria-label="New Connection"]');
     await newButton.waitForDisplayed({ timeout: 10000 });
     expect(await newButton.isDisplayed()).toBe(true);
