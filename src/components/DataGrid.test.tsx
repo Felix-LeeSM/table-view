@@ -534,6 +534,21 @@ describe("DataGrid", () => {
 
     const resizeHandle = document.querySelectorAll(".cursor-col-resize")[0]!;
 
+    // jsdom returns 0 for getBoundingClientRect — mock a realistic column width
+    const th = document.querySelector("th:nth-child(1)") as HTMLElement;
+    th.getBoundingClientRect = () =>
+      ({
+        width: 150,
+        height: 0,
+        top: 0,
+        left: 0,
+        bottom: 0,
+        right: 150,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
     // Trigger mousedown — this registers document-level listeners
     fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
 
@@ -541,13 +556,10 @@ describe("DataGrid", () => {
     expect(document.body.style.cursor).toBe("col-resize");
     expect(document.body.style.userSelect).toBe("none");
 
-    // Simulate mousemove on document (wider than start)
+    // Simulate mousemove on document (wider than start: 150 + 80 = 230)
     fireEvent.mouseMove(document, { clientX: 280 });
 
-    // The first column's th should have its width updated via direct DOM
-    const th = document.querySelector("th:nth-child(1)") as HTMLElement;
     expect(th).toBeTruthy();
-    // Width should have increased (from 150 + 80 = 230)
     expect(parseInt(th.style.width, 10)).toBeGreaterThan(150);
 
     // Clean up: manually trigger mouseup to remove listeners
