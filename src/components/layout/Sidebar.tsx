@@ -12,9 +12,9 @@ import SchemaPanel from "@components/schema/SchemaPanel";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
 const WIDTH_KEY = "viewtable.sidebar.width";
-const MIN_WIDTH = 280;
+const MIN_WIDTH = 300;
 const MAX_WIDTH = 540;
-const DEFAULT_WIDTH = 280;
+const DEFAULT_WIDTH = 300;
 
 function readWidth(): number {
   if (typeof window === "undefined") return DEFAULT_WIDTH;
