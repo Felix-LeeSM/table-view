@@ -295,8 +295,15 @@ describe("ConnectionItem", () => {
     expect(mockConnect).not.toHaveBeenCalled();
   });
 
-  it("handles connectToDatabase rejection on double-click without throwing", () => {
-    const mockConnect = vi.fn().mockRejectedValue(new Error("fail"));
+  it("handles connectToDatabase error status on double-click without throwing", async () => {
+    const mockConnect = vi.fn().mockImplementation(async (id: string) => {
+      useConnectionStore.setState((s) => ({
+        activeStatuses: {
+          ...s.activeStatuses,
+          [id]: { type: "error", message: "fail" },
+        },
+      }));
+    });
     setStoreState({
       activeStatuses: { "conn-1": { type: "disconnected" } },
       connectToDatabase: mockConnect,
@@ -305,11 +312,11 @@ describe("ConnectionItem", () => {
     render(<ConnectionItem connection={makeConnection()} />);
 
     const item = screen.getByRole("button", { name: /Test DB/ });
-    expect(() =>
-      act(() => {
+    await expect(
+      act(async () => {
         fireEvent.doubleClick(item);
       }),
-    ).not.toThrow();
+    ).resolves.not.toThrow();
   });
 
   // -----------------------------------------------------------------------
@@ -772,7 +779,11 @@ describe("ConnectionItem", () => {
     });
 
     it("calls onActivate after a successful double-click connect", async () => {
-      const connectFn = vi.fn().mockResolvedValue(undefined);
+      const connectFn = vi.fn().mockImplementation(async (id: string) => {
+        useConnectionStore.setState((s) => ({
+          activeStatuses: { ...s.activeStatuses, [id]: { type: "connected" } },
+        }));
+      });
       const onActivate = vi.fn();
       setStoreState({
         activeStatuses: { "conn-1": { type: "disconnected" } },
@@ -817,8 +828,15 @@ describe("ConnectionItem", () => {
       expect(onActivate).toHaveBeenCalledWith("conn-1");
     });
 
-    it("does not call onActivate when connect rejects", async () => {
-      const connectFn = vi.fn().mockRejectedValue(new Error("nope"));
+    it("does not call onActivate when connection status is error after connect", async () => {
+      const connectFn = vi.fn().mockImplementation(async (id: string) => {
+        useConnectionStore.setState((s) => ({
+          activeStatuses: {
+            ...s.activeStatuses,
+            [id]: { type: "error", message: "nope" },
+          },
+        }));
+      });
       const onActivate = vi.fn();
       setStoreState({
         activeStatuses: { "conn-1": { type: "disconnected" } },

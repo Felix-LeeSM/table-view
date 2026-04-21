@@ -112,11 +112,11 @@ export default function ConnectionItem({
 
   const handleDoubleClick = async () => {
     if (!isConnected && !isConnecting) {
-      try {
-        await connectToDatabase(connection.id);
+      await connectToDatabase(connection.id);
+      const status =
+        useConnectionStore.getState().activeStatuses[connection.id];
+      if (status?.type === "connected") {
         onActivate?.(connection.id);
-      } catch {
-        // Error shown via store
       }
     } else if (isConnected) {
       // Already connected — treat double-click as "activate" so the sidebar
