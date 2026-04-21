@@ -12,9 +12,9 @@ import SchemaPanel from "@components/schema/SchemaPanel";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
 const WIDTH_KEY = "viewtable.sidebar.width";
-const MIN_WIDTH = 300;
+const MIN_WIDTH = 220;
 const MAX_WIDTH = 540;
-const DEFAULT_WIDTH = 300;
+const DEFAULT_WIDTH = 280;
 
 function readWidth(): number {
   if (typeof window === "undefined") return DEFAULT_WIDTH;
@@ -185,16 +185,15 @@ export default function Sidebar() {
         className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
       >
-        {/* Mode toggle + context-aware action button */}
-        <div className="flex items-center gap-2 border-b border-border px-2 py-2">
+        {/* Mode toggle */}
+        <div className="flex items-center border-b border-border px-2 py-2">
           <SidebarModeToggle mode={mode} onChange={setMode} />
-          {renderActionButtons()}
         </div>
 
-        {/* Header strip — shows the connection name in schemas mode and the
-            current mode label otherwise. The data-testid is always rendered
-            so e2e tests have a stable readiness sentinel. */}
-        <div className="border-b border-border px-3 py-1.5">
+        {/* Header strip — shows the connection name (schemas) or mode label
+            (connections), with contextual action buttons on the right.
+            data-testid is always rendered so e2e tests have a stable sentinel. */}
+        <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
           <span
             data-testid="sidebar-connection-header"
             className="block truncate text-xs font-semibold text-foreground"
@@ -206,6 +205,7 @@ export default function Sidebar() {
                 : "Schemas"
               : "Connections"}
           </span>
+          {renderActionButtons()}
         </div>
 
         {/* Body — exclusive view */}
