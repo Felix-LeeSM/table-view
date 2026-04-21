@@ -83,28 +83,28 @@ describe("SchemaPanel", () => {
     expect(screen.queryByTestId("schema-tree")).toBeNull();
   });
 
-  it("shows Connect button in disconnected state and calls connectToDatabase on click", () => {
+  it("shows 'connect now' link in disconnected state and calls connectToDatabase on click", () => {
     const connectToDatabase = vi.fn();
     useConnectionStore.setState((s) => ({ ...s, connectToDatabase }));
     setupStore({ connections: [makeConn("c1")] });
     render(<SchemaPanel selectedId="c1" />);
 
-    const btn = screen.getByRole("button", { name: /^connect$/i });
+    const btn = screen.getByRole("button", { name: /connect now/i });
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(connectToDatabase).toHaveBeenCalledWith("c1");
   });
 
-  it("hides Connect button while connecting", () => {
+  it("hides 'connect now' link while connecting", () => {
     setupStore({ connections: [makeConn("c1")], connecting: ["c1"] });
     render(<SchemaPanel selectedId="c1" />);
-    expect(screen.queryByRole("button", { name: /^connect$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /connect now/i })).toBeNull();
   });
 
-  it("hides Connect button when connection errored", () => {
+  it("hides 'connect now' link when connection errored", () => {
     setupStore({ connections: [makeConn("c1")], errored: { c1: "timeout" } });
     render(<SchemaPanel selectedId="c1" />);
-    expect(screen.queryByRole("button", { name: /^connect$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /connect now/i })).toBeNull();
   });
 
   it("shows 'Connecting…' message during the connecting state", () => {

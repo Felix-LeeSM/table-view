@@ -75,20 +75,22 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
           {selected.name}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {isConnecting
-            ? "Connecting…"
-            : isError
-              ? `Failed to connect: ${status?.type === "error" ? status.message : ""}`
-              : "Double-click in the Connections tab to connect"}
+          {isConnecting ? (
+            "Connecting…"
+          ) : isError ? (
+            `Failed to connect: ${status?.type === "error" ? status.message : ""}`
+          ) : (
+            <>
+              Double-click in the Connections tab to connect, or{" "}
+              <button
+                className="text-primary hover:underline"
+                onClick={() => connectToDatabase(selectedId)}
+              >
+                connect now
+              </button>
+            </>
+          )}
         </p>
-        {!isConnecting && !isError && (
-          <button
-            className="mt-2 text-xs text-primary hover:underline"
-            onClick={() => connectToDatabase(selectedId)}
-          >
-            Connect
-          </button>
-        )}
       </div>
     );
   }
