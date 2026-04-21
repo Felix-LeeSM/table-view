@@ -11,7 +11,10 @@ updated: 2026-04-22
 ## 현재 상태
 
 - **Phase 1-4** 완료 (Sprint 24-54 PASS)
-- **Phase 5** Extended Features 진행 중 (Sprint 55-61 완료)
+- **Phase 5** Extended Features
+  - Sprint 55-61 완료
+  - Sprint 62 부분 진행: F2.6 View Structure 탭 완료 (`c737692`), 나머지 F-항목 미개시. 공식 `docs/sprints/sprint-62/` 디렉토리 아직 없음.
+  - Sprint 61 이후 비-스프린트 개선 다수 (Sidebar mode-toggle, Connection import/export, 비밀번호 masking, Raw query inline edit/delete, View Structure 패널). 상세는 `git log --since=2026-04-19`.
 
 ## 다음 Phase (계획 문서만)
 
@@ -23,6 +26,7 @@ updated: 2026-04-22
 
 현재 스프린트는 [docs/sprints/](../../docs/sprints/)의 최신 번호 디렉토리 참조.
 각 스프린트는 `contract.md`(계약) + `execution-brief.md`(실행 지시) + `handoff.md`(결과) 보유.
+비-스프린트 개별 커밋으로 선행되는 작업도 있음 (Sprint 62가 예시) — 문서화와 구현이 비동기일 수 있음.
 
 ## 판단 기준
 

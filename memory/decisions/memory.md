@@ -13,6 +13,9 @@ updated: 2026-04-22
 | [0001](./0001-desktop-stack-tauri-sqlx/memory.md) | 데스크톱 스택: Tauri v2 + sqlx | Accepted | 2026-01-01 | — |
 | [0002](./0002-global-state-zustand/memory.md) | 전역 상태: Zustand 채택 | Accepted | 2026-01-01 | — |
 | [0003](./0003-multi-connection-focused-id/memory.md) | 다중 connection: focusedConnId store 승격 | Accepted | 2026-04-20 | — |
+| [0004](./0004-sidebar-connection-schema-mode-toggle/memory.md) | Sidebar Connections/Schemas 모드 토글 | Accepted | 2026-04-20 | — |
+| [0005](./0005-plaintext-password-never-leaves-backend/memory.md) | plaintext 비밀번호는 IPC 경계를 넘지 않는다 | Accepted | 2026-04-20 | — |
+| [0006](./0006-raw-query-edit-gated-by-query-analyzer/memory.md) | Raw query 편집은 queryAnalyzer gate 통과 시만 허용 | Accepted | 2026-04-20 | — |
 
 ## 역사 (Superseded / Deprecated)
 
