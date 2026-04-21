@@ -1,10 +1,10 @@
-# View Table — Master Plan
+# Table View — Master Plan
 
 ## 프로젝트 목적
 
 TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
-**판단 기준**: "TablePlus 사용자가 View Table로 전환했을 때 핵심 워크플로우(연결 → 탐색 → 조회 → 편집 → 쿼리)가 끊기지 않아야 한다."
+**판단 기준**: "TablePlus 사용자가 Table View로 전환했을 때 핵심 워크플로우(연결 → 탐색 → 조회 → 편집 → 쿼리)가 끊기지 않아야 한다."
 
 초기 DBMS는 PostgreSQL. 아키텍처는 다중 DBMS 확장을 전제로 설계.
 

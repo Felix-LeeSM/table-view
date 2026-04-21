@@ -102,7 +102,7 @@ Phase 4(Editing & Polish) 완료 후 6개의 확장 기능을 구현하여 Table
 3. 즐겨찾기 목록 항목을 클릭하면 해당 SQL이 쿼리 에디터에 삽입된다 (기존 내용 교체)
 4. 즐겨찾기 항목에 우클릭 또는 삭제 아이콘 클릭 시 삭제 가능하다
 5. 저장 시 "Scope" 선택이 가능하다: "Global"(모든 연결) 또는 "Current Connection"(현재 연결에만). 기본값은 "Current Connection"
-6. 즐겨찾기 데이터는 localStorage에 `view-table:favorites` 키로 JSON 배열 형태로 영속화된다. 구조: `[{ id, name, sql, scope: "global" | "connection", connectionId: string | null, createdAt: number }]`
+6. 즐겨찾기 데이터는 localStorage에 `table-view-favorites` 키로 JSON 배열 형태로 영속화된다. 구조: `[{ id, name, sql, scope: "global" | "connection", connectionId: string | null, createdAt: number }]`
 7. 앱 재시작 후에도 즐겨찾기가 유지된다
 8. Zustand 스토어 `useFavoritesStore`가 즐겨찾기 상태를 관리한다. 초기 로드 시 localStorage에서 읽고, 변경 시 localStorage에 저장한다 (debounce 500ms)
 9. `pnpm test` 통과, `pnpm tsc --noEmit` 통과

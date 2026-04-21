@@ -60,18 +60,18 @@ Storage/mod.rs handles all persistence (CRUD for connections/groups, password en
 ## Key Implementation Notes
 
 ### Storage Test Pattern
-Storage uses `VIEWTABLE_TEST_DATA_DIR` env var to override data directory. Use `tempfile::tempdir()`:
+Storage uses `TABLE_VIEW_TEST_DATA_DIR` env var to override data directory. Use `tempfile::tempdir()`:
 ```rust
 use std::env;
 use tempfile::TempDir;
 
 fn setup_test_env() -> TempDir {
     let dir = tempfile::tempdir().unwrap();
-    env::set_var("VIEWTABLE_TEST_DATA_DIR", dir.path());
+    env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
     dir
 }
 
-// Call env::remove_var("VIEWTABLE_TEST_DATA_DIR") in cleanup
+// Call env::remove_var("TABLE_VIEW_TEST_DATA_DIR") in cleanup
 ```
 
 NOTE: The global `STORAGE_LOCK` mutex means tests must be serialized. Use `#[serial]` from `serial_test` crate.

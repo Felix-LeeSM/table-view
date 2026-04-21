@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "osascript -e 'display notification \"View Table 작업 완료\" with title \"Claude Code\"' 2>/dev/null || true",
+            "command": "osascript -e 'display notification \"Table View 작업 완료\" with title \"Claude Code\"' 2>/dev/null || true",
             "timeout": 5
           }
         ]

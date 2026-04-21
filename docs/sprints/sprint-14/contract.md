@@ -49,7 +49,7 @@
 ## Design Bar / Quality Bar
 
 - Tests use `tempfile::tempdir()` for isolation (existing pattern in storage_integration.rs)
-- Use `VIEWTABLE_TEST_DATA_DIR` env var for test data directory
+- Use `TABLE_VIEW_TEST_DATA_DIR` env var for test data directory
 - No `unwrap()` in test code is acceptable (tests can use unwrap)
 - Test functions named `test_<behavior>_<condition>_<expected>`
 - `serial_test` for tests that share the global STORAGE_LOCK

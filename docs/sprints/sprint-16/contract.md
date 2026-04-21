@@ -47,7 +47,7 @@
 ## Design Bar / Quality Bar
 
 - Docker Compose 서비스는 healthcheck 필수
-- 테스트 credentials: `testuser/testpass`, DB명: `viewtable_test`
+- 테스트 credentials: `testuser/testpass`, DB명: `table_view_test`
 - graceful skip: 연결 실패 시 `println!` 후 `return`, panic 없음
 - 포트 충돌 시 환경변수로 오버라이드 가능 (`TEST_PG_PORT` 등)
 

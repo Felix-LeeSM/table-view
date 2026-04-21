@@ -1,4 +1,4 @@
-# Architecture — View Table
+# Architecture — Table View
 
 Tauri 2.0 + React + Rust 기반 데스크톱 데이터베이스 관리 도구.
 
@@ -40,7 +40,7 @@ Tauri 2.0 + React + Rust 기반 데스크톱 데이터베이스 관리 도구.
 │   └────────────────────────────┘        │
 ├─────────────────────────────────────────┤
 │   Local File System                     │
-│   ~/.view-table/                        │
+│   ~/.table-view/                        │
 │   ├─ connections.json                   │
 │   ├─ preferences.json                   │
 │   ├─ query-history.json                 │

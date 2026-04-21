@@ -1,4 +1,4 @@
-# Risk Register — View Table
+# Risk Register — Table View
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 

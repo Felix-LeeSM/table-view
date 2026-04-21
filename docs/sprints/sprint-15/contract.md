@@ -28,7 +28,7 @@
 - All existing unit tests pass (376 frontend + 84 Rust)
 - No changes to production code
 - `pnpm lint`, `pnpm tsc --noEmit` still pass
-- Tauri debug binary must exist at `src-tauri/target/debug/view-table`
+- Tauri debug binary must exist at `src-tauri/target/debug/table-view`
 
 ## Acceptance Criteria
 

@@ -1,6 +1,6 @@
-# View Table
+# Table View
 
-View Table은 Tauri 2, React, TypeScript, Rust로 만드는 로컬 데스크톱 데이터베이스 브라우저입니다.
+Table View는 Tauri 2, React, TypeScript, Rust로 만드는 로컬 데스크톱 데이터베이스 브라우저입니다.
 
 지향점은 TablePlus처럼 빠르게 연결하고, 스키마와 테이블을 탐색하고, 데이터를 바로 확인할 수 있는 가벼운 로컬 클라이언트입니다. 현재는 PostgreSQL 중심으로 구현 중이며, TablePlus와는 별개의 독립 프로젝트입니다.
 
@@ -59,12 +59,12 @@ docker compose up -d
 - Port: `5432`
 - User: `postgres`
 - Password: `postgres`
-- Database: `viewtable_test`
+- Database: `table_view_test`
 
 Connection URL:
 
 ```text
-postgresql://postgres:postgres@localhost:5432/viewtable_test
+postgresql://postgres:postgres@localhost:5432/table_view_test
 ```
 
 개발 실행:
@@ -81,7 +81,7 @@ pnpm tauri dev
 
 - `pnpm build`는 정상 동작합니다
 - `pnpm tauri build --debug`는 macOS용 `.app` 번들까지 생성합니다
-- 확인 경로: `src-tauri/target/debug/bundle/macos/View Table.app`
+- 확인 경로: `src-tauri/target/debug/bundle/macos/Table View.app`
 - 생성된 `.app` 번들을 기준으로 로컬 실행 확인을 진행할 수 있습니다
 - 현재 DMG 패키징 단계는 `bundle_dmg.sh`에서 실패하고 있어, 배포 패키지 흐름은 아직 정리되지 않았습니다
 
@@ -168,7 +168,7 @@ CI(GitHub Actions)에서는 `webkit2gtk-driver` + `xvfb` + `tauri-driver` + Post
 
 ## 저장과 보안
 
-연결 정보는 OS의 로컬 앱 데이터 디렉터리 아래 `view-table` 폴더에 저장됩니다.
+연결 정보는 OS의 로컬 앱 데이터 디렉터리 아래 `table-view` 폴더에 저장됩니다.
 
 - `connections.json`: 연결 및 그룹 정보
 - `.key`: 비밀번호 암호화 키
