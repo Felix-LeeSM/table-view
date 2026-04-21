@@ -31,6 +31,9 @@ Phase 5 구현 항목: Views/Functions 백엔드(F2.6, F2.7 부분), Quick Look 
 | 3 | Query Editor | 완료 | [phase-3.md](phases/phase-3.md) |
 | 4 | Editing & Polish | 완료 | [phase-4.md](phases/phase-4.md) |
 | 5 | Extended Features | 진행 중 | [phase-5.md](phases/phase-5.md) |
+| 6 | MongoDB 지원 | 계획 | [phase-6.md](phases/phase-6.md) |
+| 7 | Elasticsearch 지원 | 계획 | [phase-7.md](phases/phase-7.md) |
+| 8 | Redis 지원 | 계획 | [phase-8.md](phases/phase-8.md) |
 
 ## 참고 자료
 
