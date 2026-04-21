@@ -283,18 +283,17 @@ describe("Sidebar", () => {
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
-  it("persists mode to localStorage and restores on remount", () => {
+  it("does not persist mode to localStorage; always starts in connections on remount", () => {
     const { unmount } = render(<Sidebar />);
     act(() => {
       fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
     });
-    expect(window.localStorage.getItem("viewtable.sidebar.mode")).toBe(
-      "schemas",
-    );
+    expect(window.localStorage.getItem("viewtable.sidebar.mode")).toBeNull();
     unmount();
 
     render(<Sidebar />);
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-panel")).toBeNull();
   });
 
   describe("Action button (mode-context)", () => {

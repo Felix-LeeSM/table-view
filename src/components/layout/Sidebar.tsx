@@ -11,19 +11,8 @@ import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
-const MODE_KEY = "viewtable.sidebar.mode";
 const WIDTH_KEY = "viewtable.sidebar.width";
 const DEFAULT_WIDTH = 280;
-
-function readMode(): SidebarMode {
-  if (typeof window === "undefined") return "connections";
-  try {
-    const v = window.localStorage.getItem(MODE_KEY);
-    return v === "schemas" ? "schemas" : "connections";
-  } catch {
-    return "connections";
-  }
-}
 
 function readWidth(): number {
   if (typeof window === "undefined") return DEFAULT_WIDTH;
@@ -40,7 +29,7 @@ function readWidth(): number {
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
-  const [mode, setMode] = useState<SidebarMode>(() => readMode());
+  const [mode, setMode] = useState<SidebarMode>("connections");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const activeTab = useTabStore((s) => {
@@ -89,15 +78,6 @@ export default function Sidebar() {
       if (firstConnected) setSelectedConnId(firstConnected.id);
     }
   }, [connections, activeStatuses, selectedConnId]);
-
-  // Persist mode whenever it changes.
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(MODE_KEY, mode);
-    } catch {
-      // localStorage may be unavailable (privacy mode, quota)
-    }
-  }, [mode]);
 
   const {
     size: sidebarWidth,
