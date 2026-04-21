@@ -85,7 +85,7 @@ export default function Sidebar() {
     handleMouseDown: handleResizeMouseDown,
   } = useResizablePanel({
     axis: "horizontal",
-    min: 220,
+    min: 260,
     max: 540,
     initial: readWidth(),
   });
@@ -183,7 +183,7 @@ export default function Sidebar() {
         style={{ width: sidebarWidth }}
       >
         {/* Mode toggle + context-aware action button */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-2">
+        <div className="flex items-center gap-2 border-b border-border px-2 py-2">
           <SidebarModeToggle mode={mode} onChange={setMode} />
           {renderActionButtons()}
         </div>
