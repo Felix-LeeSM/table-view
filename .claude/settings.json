@@ -13,6 +13,11 @@
             "type": "command",
             "if": "Edit(*.claude/settings.local.json)|Write(*.claude/settings.local.json)",
             "command": "echo 'BLOCKED: Editing local settings is not allowed.' >&2 && exit 1"
+          },
+          {
+            "type": "command",
+            "if": "Edit(memory/decisions/*/memory.md)|Write(memory/decisions/*/memory.md)",
+            "command": "echo '⚠️  ADR 본문은 작성 순간 동결입니다. 결정/이유/트레이드오프 본문을 수정하지 마세요. 갱신 가능한 것은 프론트매터 메타 필드(status, superseded_by)뿐입니다. 결정을 뒤집으려면 새 ADR을 추가하세요.' >&2"
           }
         ]
       },
@@ -52,6 +57,12 @@
             "type": "command",
             "if": "Edit(memory/**)|Write(memory/**)",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-structure.sh 2>&1 | head -10 || true",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Edit(memory/decisions/**)|Write(memory/decisions/**)",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-adr.sh 2>&1 | head -30 || true",
             "timeout": 10
           }
         ]
