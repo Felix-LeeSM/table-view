@@ -4,6 +4,8 @@ import type {
   ConnectionDraft,
   DatabaseType,
 } from "@/types/connection";
+import { Button } from "@components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
   createEmptyDraft,
   draftFromConnection,
@@ -150,42 +152,36 @@ export default function ConnectionDialog({
                 ? "Edit the connection details"
                 : "Create a new database connection"}
             </DialogDescription>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onClose}
               aria-label="Close dialog"
             >
-              <X size={16} />
-            </button>
+              <X />
+            </Button>
           </DialogHeader>
 
           {/* Form */}
           <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
             {/* Input mode toggle */}
             {!isEditing && (
-              <div className="mb-3 flex gap-1 rounded-md border border-border p-0.5">
-                <button
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${
-                    inputMode === "form"
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-secondary-foreground"
-                  }`}
-                  onClick={() => setInputMode("form")}
+              <div className="mb-3">
+                <ToggleGroup
+                  type="single"
+                  value={inputMode}
+                  onValueChange={(v) => v && setInputMode(v as "form" | "url")}
+                  className="w-full"
                 >
-                  <List size={12} />
-                  Form
-                </button>
-                <button
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-xs font-medium ${
-                    inputMode === "url"
-                      ? "bg-muted text-foreground"
-                      : "text-muted-foreground hover:text-secondary-foreground"
-                  }`}
-                  onClick={() => setInputMode("url")}
-                >
-                  <Link size={12} />
-                  URL
-                </button>
+                  <ToggleGroupItem value="form" className="flex-1">
+                    <List />
+                    Form
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="url" className="flex-1">
+                    <Link />
+                    URL
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </div>
             )}
 
@@ -216,8 +212,9 @@ export default function ConnectionDialog({
                     {urlError}
                   </div>
                 )}
-                <button
-                  className="w-full rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90"
+                <Button
+                  className="w-full"
+                  size="sm"
                   onClick={() => {
                     const parsed = parseConnectionUrl(urlValue);
                     if (!parsed) {
@@ -239,7 +236,7 @@ export default function ConnectionDialog({
                   }}
                 >
                   Parse & Continue
-                </button>
+                </Button>
               </div>
             )}
 
@@ -511,31 +508,25 @@ export default function ConnectionDialog({
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-            <button
-              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted disabled:opacity-50"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleTest}
               disabled={testing}
             >
               {testing ? (
-                <Loader2 size={14} className="animate-spin" />
+                <Loader2 className="animate-spin size-3.5" />
               ) : (
-                <Plug size={14} />
+                <Plug />
               )}
               Test Connection
-            </button>
-            <button
-              className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
-              onClick={onClose}
-            >
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              className="rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
-              onClick={handleSave}
-              disabled={saving}
-            >
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={saving}>
               {saving ? "Saving..." : isEditing ? "Update" : "Save"}
-            </button>
+            </Button>
           </div>
         </div>
       </DialogContent>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Copy, Check } from "lucide-react";
+import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -83,24 +84,24 @@ export default function CellDetailDialog({
             {charCount.toLocaleString()} char{charCount !== 1 ? "s" : ""} ·{" "}
             {lineCount.toLocaleString()} line{lineCount !== 1 ? "s" : ""}
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={handleCopy}
-            className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
             aria-label="Copy cell value"
           >
             {copied ? (
               <>
-                <Check size={12} className="text-emerald-500" />
+                <Check className="text-emerald-500" />
                 <span>Copied</span>
               </>
             ) : (
               <>
-                <Copy size={12} />
+                <Copy />
                 <span>Copy</span>
               </>
             )}
-          </button>
+          </Button>
         </div>
 
         <div className="max-h-[70vh] overflow-auto rounded border border-border bg-muted/30">

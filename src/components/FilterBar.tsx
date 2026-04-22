@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import type {
   ColumnInfo,
   FilterCondition,
@@ -105,30 +106,24 @@ export default function FilterBar({
             Filters
           </span>
           {/* Mode toggle — segmented control */}
-          <div className="inline-flex rounded border border-border overflow-hidden">
-            <button
-              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                filterMode === "structured"
-                  ? "bg-primary text-white"
-                  : "bg-background text-muted-foreground hover:bg-muted"
-              }`}
-              onClick={() => onFilterModeChange("structured")}
-              aria-pressed={filterMode === "structured"}
+          <ToggleGroup
+            type="single"
+            value={filterMode}
+            onValueChange={(v) => v && onFilterModeChange(v as FilterMode)}
+          >
+            <ToggleGroupItem
+              value="structured"
+              className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
             >
               Structured
-            </button>
-            <button
-              className={`px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                filterMode === "raw"
-                  ? "bg-primary text-white"
-                  : "bg-background text-muted-foreground hover:bg-muted"
-              }`}
-              onClick={() => onFilterModeChange("raw")}
-              aria-pressed={filterMode === "raw"}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="raw"
+              className="data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
             >
               Raw SQL
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
         <Button
           variant="ghost"

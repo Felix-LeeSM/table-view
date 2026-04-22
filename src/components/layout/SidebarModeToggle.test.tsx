@@ -3,38 +3,38 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import SidebarModeToggle from "./SidebarModeToggle";
 
 describe("SidebarModeToggle", () => {
-  it("renders both tabs as a tablist", () => {
+  it("renders both options as a radio group", () => {
     render(<SidebarModeToggle mode="connections" onChange={vi.fn()} />);
 
-    const tablist = screen.getByRole("tablist", { name: /sidebar mode/i });
-    expect(tablist).toBeInTheDocument();
+    const group = screen.getByRole("group", { name: /sidebar mode/i });
+    expect(group).toBeInTheDocument();
 
-    const tabs = screen.getAllByRole("tab");
-    expect(tabs).toHaveLength(2);
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(2);
   });
 
-  it("marks the active tab via aria-selected", () => {
+  it("marks the active option via aria-checked", () => {
     const { rerender } = render(
       <SidebarModeToggle mode="connections" onChange={vi.fn()} />,
     );
 
-    expect(screen.getByRole("tab", { name: /connections/i })).toHaveAttribute(
-      "aria-selected",
+    expect(screen.getByRole("radio", { name: /connections/i })).toHaveAttribute(
+      "aria-checked",
       "true",
     );
-    expect(screen.getByRole("tab", { name: /schemas/i })).toHaveAttribute(
-      "aria-selected",
+    expect(screen.getByRole("radio", { name: /schemas/i })).toHaveAttribute(
+      "aria-checked",
       "false",
     );
 
     rerender(<SidebarModeToggle mode="schemas" onChange={vi.fn()} />);
 
-    expect(screen.getByRole("tab", { name: /connections/i })).toHaveAttribute(
-      "aria-selected",
+    expect(screen.getByRole("radio", { name: /connections/i })).toHaveAttribute(
+      "aria-checked",
       "false",
     );
-    expect(screen.getByRole("tab", { name: /schemas/i })).toHaveAttribute(
-      "aria-selected",
+    expect(screen.getByRole("radio", { name: /schemas/i })).toHaveAttribute(
+      "aria-checked",
       "true",
     );
   });
@@ -44,22 +44,23 @@ describe("SidebarModeToggle", () => {
     render(<SidebarModeToggle mode="connections" onChange={onChange} />);
 
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
     });
 
     expect(onChange).toHaveBeenCalledWith("schemas");
   });
 
-  it("does not call onChange when the active tab is clicked again", () => {
-    // Note: this is a UX consideration — re-clicking the active tab fires
-    // onChange too (the parent can choose to no-op). We just verify the call.
+  it("does not call onChange when the active option is clicked again", () => {
+    // Radix ToggleGroup type="single" does not fire onValueChange when the
+    // already-selected item is clicked — clicking it would deselect it, but
+    // our onValueChange guard (v && onChange(v)) prevents that.
     const onChange = vi.fn();
     render(<SidebarModeToggle mode="connections" onChange={onChange} />);
 
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /connections/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /connections/i }));
     });
 
-    expect(onChange).toHaveBeenCalledWith("connections");
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

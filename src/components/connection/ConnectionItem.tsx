@@ -4,12 +4,15 @@ import type {
   ConnectionStatus,
   EnvironmentTag,
 } from "@/types/connection";
+import { Button } from "@components/ui/button";
 import { ENVIRONMENT_META } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
   ContextMenu,
-  type ContextMenuItem,
-} from "@components/shared/ContextMenu";
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@components/ui/context-menu";
 import ConnectionDialog from "./ConnectionDialog";
 import { DB_TYPE_META } from "@lib/db-meta";
 import {
@@ -86,10 +89,6 @@ export default function ConnectionItem({
 }: ConnectionItemProps) {
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -125,101 +124,102 @@ export default function ConnectionItem({
     }
   };
 
-  const menuItems: ContextMenuItem[] = [
-    {
-      label: isConnected ? "Disconnect" : "Connect",
-      icon: isConnected ? <Unplug size={14} /> : <Plug size={14} />,
-      disabled: isConnecting,
-      onClick: async () => {
-        if (isConnected) {
-          await disconnectFromDatabase(connection.id);
-        } else {
-          await connectToDatabase(connection.id);
-        }
-      },
-    },
-    {
-      label: "Edit",
-      icon: <Pencil size={14} />,
-      onClick: () => setShowEditDialog(true),
-    },
-    {
-      label: "Delete",
-      icon: <Trash2 size={14} />,
-      danger: true,
-      onClick: () => setShowDeleteConfirm(true),
-    },
-  ];
-
   return (
     <>
-      <div
-        ref={dragRef}
-        className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted select-none ${
-          dragging ? "opacity-40" : ""
-        } ${selected ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""}`}
-        role="button"
-        tabIndex={0}
-        aria-pressed={selected}
-        draggable
-        aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "connecting" ? "connecting" : status.type === "error" ? "error" : "disconnected"}`}
-        onClick={handleSingleClick}
-        onDoubleClick={handleDoubleClick}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleDoubleClick();
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setContextMenu({ x: e.clientX, y: e.clientY });
-        }}
-        onDragStart={(e) => {
-          draggedConnectionId = connection.id;
-          setDragging(true);
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", connection.id);
-        }}
-        onDragEnd={() => {
-          draggedConnectionId = null;
-          setDragging(false);
-        }}
-      >
-        <StatusIndicator status={status} />
-        <Database size={14} className="shrink-0 text-muted-foreground" />
-        <span className="truncate text-sm text-foreground">
-          {connection.name}
-        </span>
-        {connection.environment &&
-          connection.environment in ENVIRONMENT_META && (
-            <span
-              className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
-              style={{
-                backgroundColor: `${ENVIRONMENT_META[connection.environment as EnvironmentTag].color}20`,
-                color:
-                  ENVIRONMENT_META[connection.environment as EnvironmentTag]
-                    .color,
-              }}
-              title={
-                ENVIRONMENT_META[connection.environment as EnvironmentTag].label
-              }
-            >
-              {ENVIRONMENT_META[connection.environment as EnvironmentTag].label}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            ref={dragRef}
+            className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted select-none ${
+              dragging ? "opacity-40" : ""
+            } ${selected ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={selected}
+            draggable
+            aria-label={`${connection.name} — ${status.type === "connected" ? "connected" : status.type === "connecting" ? "connecting" : status.type === "error" ? "error" : "disconnected"}`}
+            onClick={handleSingleClick}
+            onDoubleClick={handleDoubleClick}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleDoubleClick();
+            }}
+            onDragStart={(e) => {
+              draggedConnectionId = connection.id;
+              setDragging(true);
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", connection.id);
+            }}
+            onDragEnd={() => {
+              draggedConnectionId = null;
+              setDragging(false);
+            }}
+          >
+            <StatusIndicator status={status} />
+            <Database size={14} className="shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm text-foreground">
+              {connection.name}
             </span>
-          )}
-        <span
-          className="ml-auto shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold leading-none"
-          style={{
-            backgroundColor: `${DB_TYPE_META[connection.db_type].color}20`,
-            color: DB_TYPE_META[connection.db_type].color,
-          }}
-          title={connection.db_type}
-        >
-          {DB_TYPE_META[connection.db_type].short}
-        </span>
-      </div>
+            {connection.environment &&
+              connection.environment in ENVIRONMENT_META && (
+                <span
+                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
+                  style={{
+                    backgroundColor: `${ENVIRONMENT_META[connection.environment as EnvironmentTag].color}20`,
+                    color:
+                      ENVIRONMENT_META[connection.environment as EnvironmentTag]
+                        .color,
+                  }}
+                  title={
+                    ENVIRONMENT_META[connection.environment as EnvironmentTag]
+                      .label
+                  }
+                >
+                  {
+                    ENVIRONMENT_META[connection.environment as EnvironmentTag]
+                      .label
+                  }
+                </span>
+              )}
+            <span
+              className="ml-auto shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold leading-none"
+              style={{
+                backgroundColor: `${DB_TYPE_META[connection.db_type].color}20`,
+                color: DB_TYPE_META[connection.db_type].color,
+              }}
+              title={connection.db_type}
+            >
+              {DB_TYPE_META[connection.db_type].short}
+            </span>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            disabled={isConnecting}
+            onClick={async () => {
+              if (isConnected) {
+                await disconnectFromDatabase(connection.id);
+              } else {
+                await connectToDatabase(connection.id);
+              }
+            }}
+          >
+            {isConnected ? <Unplug size={14} /> : <Plug size={14} />}
+            {isConnected ? "Disconnect" : "Connect"}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => setShowEditDialog(true)}>
+            <Pencil size={14} /> Edit
+          </ContextMenuItem>
+          <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
+            <Trash2 size={14} /> Delete
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       {errorMessage && !showErrorDetail && (
-        <button
-          className="flex w-full items-start gap-2 px-3 py-0 text-left"
+        <Button
+          variant="ghost"
+          size="xs"
+          className="h-auto w-full justify-start px-3 py-0 text-left"
           onClick={() => setShowErrorDetail(true)}
           aria-label="Show error details"
         >
@@ -227,7 +227,7 @@ export default function ConnectionItem({
           <span className="truncate text-[10px] text-destructive">
             {errorMessage}
           </span>
-        </button>
+        </Button>
       )}
       {errorMessage && showErrorDetail && (
         <div className="flex w-full items-start gap-2 px-3 py-0">
@@ -235,23 +235,16 @@ export default function ConnectionItem({
           <span className="break-all text-[10px] text-destructive">
             {errorMessage}
           </span>
-          <button
-            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
             onClick={() => setShowErrorDetail(false)}
             aria-label="Hide error details"
           >
-            <X size={10} />
-          </button>
+            <X />
+          </Button>
         </div>
-      )}
-
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={menuItems}
-          onClose={() => setContextMenu(null)}
-        />
       )}
 
       {showEditDialog && (
@@ -279,21 +272,23 @@ export default function ConnectionItem({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="mt-4 flex justify-end gap-2">
-              <button
-                className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 Cancel
-              </button>
-              <button
-                className="rounded bg-destructive px-3 py-1.5 text-sm text-white hover:bg-destructive/90"
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={async () => {
                   await removeConnection(connection.id);
                   setShowDeleteConfirm(false);
                 }}
               >
                 Delete
-              </button>
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

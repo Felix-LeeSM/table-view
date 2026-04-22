@@ -12,6 +12,7 @@ import {
   Eye,
 } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
+import { Button } from "@components/ui/button";
 
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 
@@ -97,24 +98,28 @@ export default function DataGridToolbar({
             )}
             {hasPendingChanges && (
               <>
-                <button
-                  className="flex items-center gap-1 rounded bg-green-600/20 px-2 py-0.5 text-xs text-green-400 hover:bg-green-600/30"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="bg-green-600/20 text-green-400 hover:bg-green-600/30 hover:text-green-400"
                   onClick={onCommit}
                   aria-label="Commit changes"
                   title="Commit changes"
                 >
-                  <Check size={12} />
+                  <Check />
                   Commit
-                </button>
-                <button
-                  className="flex items-center gap-1 rounded bg-red-600/20 px-2 py-0.5 text-xs text-red-400 hover:bg-red-600/30"
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-red-400"
                   onClick={onDiscard}
                   aria-label="Discard changes"
                   title="Discard changes"
                 >
-                  <X size={12} />
+                  <X />
                   Discard
-                </button>
+                </Button>
               </>
             )}
           </>
@@ -125,32 +130,38 @@ export default function DataGridToolbar({
       <div className="flex items-center gap-2">
         {data && (
           <>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground"
               onClick={onAddRow}
               aria-label="Add row"
               title="Add row"
             >
-              <Plus size={14} />
-            </button>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
+              <Plus />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground"
               onClick={onDeleteRow}
               disabled={selectedRowIdsCount === 0}
               aria-label="Delete row"
               title="Delete row"
             >
-              <Trash2 size={14} />
-            </button>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted disabled:opacity-30"
+              <Trash2 />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="text-muted-foreground"
               onClick={onDuplicateRow}
               disabled={selectedRowIdsCount === 0}
               aria-label="Duplicate row"
               title="Duplicate row"
             >
-              <Copy size={14} />
-            </button>
+              <Copy />
+            </Button>
             {selectedRowIdsCount > 1 && (
               <span className="text-xs text-muted-foreground">
                 {selectedRowIdsCount} selected
@@ -158,49 +169,51 @@ export default function DataGridToolbar({
             )}
           </>
         )}
-        <button
-          className={`relative rounded p-1 hover:bg-muted ${
-            showQuickLook ? "text-primary" : "text-muted-foreground"
-          }`}
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={`relative ${showQuickLook ? "text-primary" : "text-muted-foreground"}`}
           onClick={onToggleQuickLook}
           aria-label="Toggle Quick Look"
           title="Quick Look (Cmd+L)"
         >
-          <Eye size={14} />
-        </button>
-        <button
-          className={`relative rounded p-1 hover:bg-muted ${
-            showFilters ? "text-primary" : "text-muted-foreground"
-          }`}
+          <Eye />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className={`relative ${showFilters ? "text-primary" : "text-muted-foreground"}`}
           onClick={onToggleFilters}
           aria-label="Toggle filters"
           title="Toggle filters"
         >
-          <Filter size={14} />
+          <Filter />
           {activeFilterCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-white">
               {activeFilterCount}
             </span>
           )}
-        </button>
+        </Button>
         {data && totalPages > 1 && (
           <div className="flex items-center gap-2">
-            <button
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               disabled={page <= 1}
               onClick={() => onSetPage(1)}
               aria-label="First page"
             >
-              <ChevronsLeft size={14} />
-            </button>
-            <button
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+              <ChevronsLeft />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
               disabled={page <= 1}
               onClick={() => onSetPage(Math.max(1, page - 1))}
               aria-label="Previous page"
             >
-              <ChevronLeft size={14} />
-            </button>
+              <ChevronLeft />
+            </Button>
             <span className="text-xs text-muted-foreground">
               {page} / {totalPages}
             </span>
@@ -222,22 +235,24 @@ export default function DataGridToolbar({
                 }
               }}
             />
-            <button
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               disabled={page >= totalPages}
               onClick={() => onSetPage(Math.min(totalPages, page + 1))}
               aria-label="Next page"
             >
-              <ChevronRight size={14} />
-            </button>
-            <button
-              className="rounded p-0.5 hover:bg-muted disabled:opacity-30"
+              <ChevronRight />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
               disabled={page >= totalPages}
               onClick={() => onSetPage(totalPages)}
               aria-label="Last page"
             >
-              <ChevronsRight size={14} />
-            </button>
+              <ChevronsRight />
+            </Button>
           </div>
         )}
         {data && (

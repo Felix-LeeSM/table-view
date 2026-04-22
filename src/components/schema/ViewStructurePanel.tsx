@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, Loader2 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo } from "@/types/schema";
+import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { Button } from "@components/ui/button";
 
 interface ViewStructurePanelProps {
   connectionId: string;
@@ -66,26 +68,25 @@ export default function ViewStructurePanel({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
-      <div className="flex items-center gap-0 border-b border-border bg-secondary">
-        {SUB_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={activeSubTab === tab.key}
-            className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeSubTab === tab.key
-                ? "border-b-2 border-primary text-foreground"
-                : "text-muted-foreground hover:text-secondary-foreground"
-            }`}
-            onClick={() => setActiveSubTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-        <span className="ml-auto pr-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-          Read-only
-        </span>
-      </div>
+      <Tabs
+        value={activeSubTab}
+        onValueChange={(v) => setActiveSubTab(v as ViewSubTab)}
+      >
+        <TabsList className="w-full justify-start rounded-none border-b border-border bg-secondary gap-0">
+          {SUB_TABS.map((tab) => (
+            <TabsTrigger
+              key={tab.key}
+              value={tab.key}
+              className="rounded-none px-4"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+          <span className="ml-auto pr-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+            Read-only
+          </span>
+        </TabsList>
+      </Tabs>
 
       {/* Error */}
       {error && (
@@ -217,24 +218,24 @@ function ViewDefinition({ sql }: { sql: string }) {
           {stats.chars.toLocaleString()} char{stats.chars !== 1 ? "s" : ""} ·{" "}
           {stats.lines.toLocaleString()} line{stats.lines !== 1 ? "s" : ""}
         </div>
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="xs"
           onClick={handleCopy}
-          className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
           aria-label="Copy view definition"
         >
           {copied ? (
             <>
-              <Check size={12} className="text-emerald-500" />
+              <Check className="text-emerald-500" />
               <span>Copied</span>
             </>
           ) : (
             <>
-              <Copy size={12} />
+              <Copy />
               <span>Copy</span>
             </>
           )}
-        </button>
+        </Button>
       </div>
       <div className="flex-1 overflow-auto p-3">
         <pre className="whitespace-pre-wrap break-words rounded border border-border bg-secondary p-3 font-mono text-xs text-foreground">

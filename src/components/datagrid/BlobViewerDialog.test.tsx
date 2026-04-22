@@ -31,7 +31,7 @@ describe("BlobViewerDialog", () => {
 
   it("switches to text view on tab click", () => {
     render(<BlobViewerDialog {...defaultProps} />);
-    fireEvent.click(screen.getByText("Text"));
+    fireEvent.mouseDown(screen.getByText("Text"));
     // Should show decoded text
     expect(screen.getByText("Hello World")).toBeInTheDocument();
   });
@@ -44,14 +44,14 @@ describe("BlobViewerDialog", () => {
   it("handles object data by JSON-stringifying", () => {
     render(<BlobViewerDialog {...defaultProps} data={{ key: "value" }} />);
     // Click Text tab to see the JSON string
-    fireEvent.click(screen.getByText("Text"));
+    fireEvent.mouseDown(screen.getByText("Text"));
     expect(screen.getByText(/"key"/)).toBeInTheDocument();
     expect(screen.getByText(/"value"/)).toBeInTheDocument();
   });
 
   it("handles numeric data", () => {
     render(<BlobViewerDialog {...defaultProps} data={42} />);
-    fireEvent.click(screen.getByText("Text"));
+    fireEvent.mouseDown(screen.getByText("Text"));
     expect(screen.getByText("42")).toBeInTheDocument();
   });
 

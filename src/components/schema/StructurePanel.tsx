@@ -5,6 +5,7 @@ import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
 import ColumnsEditor from "@components/structure/ColumnsEditor";
 import IndexesEditor from "@components/structure/IndexesEditor";
 import ConstraintsEditor from "@components/structure/ConstraintsEditor";
+import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 
 interface StructurePanelProps {
   connectionId: string;
@@ -77,23 +78,22 @@ export default function StructurePanel({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
-      <div className="flex items-center gap-0 border-b border-border bg-secondary">
-        {subTabs.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={activeSubTab === tab.key}
-            className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-              activeSubTab === tab.key
-                ? "border-b-2 border-primary text-foreground"
-                : "text-muted-foreground hover:text-secondary-foreground"
-            }`}
-            onClick={() => setActiveSubTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={activeSubTab}
+        onValueChange={(v) => setActiveSubTab(v as SubTab)}
+      >
+        <TabsList className="w-full justify-start rounded-none border-b border-border bg-secondary gap-0">
+          {subTabs.map((tab) => (
+            <TabsTrigger
+              key={tab.key}
+              value={tab.key}
+              className="rounded-none px-4"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* Error */}
       {error && (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X, Table2, Eye, Code2, Terminal } from "lucide-react";
+import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -214,12 +215,14 @@ export default function QuickOpen() {
             onKeyDown={handleKeyDown}
             autoFocus
           />
-          <button
+          <Button
+            variant="ghost"
+            size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-foreground"
             onClick={handleClose}
           >
-            <X size={16} />
-          </button>
+            <X />
+          </Button>
         </div>
 
         {/* Results list */}
@@ -234,13 +237,15 @@ export default function QuickOpen() {
             filtered.map((item, index) => {
               const meta = KIND_META[item.kind];
               return (
-                <button
+                <Button
                   key={`${item.connectionId}-${item.kind}-${item.schema}-${item.name}`}
                   id={`quick-open-option-${index}`}
                   role="option"
                   aria-selected={index === activeIndex}
-                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${
-                    index === activeIndex ? "bg-muted" : "hover:bg-muted"
+                  variant="ghost"
+                  size="sm"
+                  className={`w-full justify-start gap-2 px-3 py-1.5 text-sm rounded-none h-auto ${
+                    index === activeIndex ? "bg-muted" : ""
                   }`}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setActiveIndex(index)}
@@ -255,7 +260,7 @@ export default function QuickOpen() {
                   <span className="ml-auto truncate text-xs text-muted-foreground">
                     {item.connectionName}
                   </span>
-                </button>
+                </Button>
               );
             })
           )}

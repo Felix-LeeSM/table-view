@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Copy, Download, Upload, X } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -42,44 +43,36 @@ export default function ImportExportDialog({
               Move connections between machines as JSON. Passwords are never
               included.
             </DialogDescription>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onClose}
               aria-label="Close dialog"
             >
-              <X size={16} />
-            </button>
+              <X />
+            </Button>
           </DialogHeader>
 
-          <div className="flex border-b border-border px-2 py-1.5">
-            <button
-              role="tab"
-              aria-selected={tab === "export"}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === "export"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-secondary-foreground"
-              }`}
-              onClick={() => setTab("export")}
+          <div className="border-b border-border px-2 py-1.5">
+            <ToggleGroup
+              type="single"
+              value={tab}
+              onValueChange={(v) => v && setTab(v as "export" | "import")}
+              className="w-full bg-transparent border-0 p-0 gap-1"
             >
-              <span className="inline-flex items-center gap-1.5">
+              <ToggleGroupItem
+                value="export"
+                className="flex-1 gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm"
+              >
                 <Download size={12} /> Export
-              </span>
-            </button>
-            <button
-              role="tab"
-              aria-selected={tab === "import"}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === "import"
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-secondary-foreground"
-              }`}
-              onClick={() => setTab("import")}
-            >
-              <span className="inline-flex items-center gap-1.5">
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="import"
+                className="flex-1 gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm"
+              >
                 <Upload size={12} /> Import
-              </span>
-            </button>
+              </ToggleGroupItem>
+            </ToggleGroup>
           </div>
 
           <div className="px-4 py-4">

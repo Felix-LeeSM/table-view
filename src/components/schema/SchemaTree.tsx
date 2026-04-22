@@ -18,12 +18,14 @@ import {
   Terminal,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
   ContextMenu,
-  type ContextMenuItem,
-} from "@components/shared/ContextMenu";
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@components/ui/context-menu";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +34,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@components/ui/dialog";
+import { Button } from "@components/ui/button";
 import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
 import { cn } from "@lib/utils";
 
@@ -83,45 +86,6 @@ function nodeIdToString(id: NodeId): string {
 /** Default expanded categories for a newly-opened schema. */
 const DEFAULT_EXPANDED = new Set<CategoryKey>(["tables"]);
 
-/** Context menu target types. */
-interface TableContextMenuTarget {
-  kind: "table";
-  tableName: string;
-  schemaName: string;
-  x: number;
-  y: number;
-}
-
-interface ViewContextMenuTarget {
-  kind: "view";
-  viewName: string;
-  schemaName: string;
-  x: number;
-  y: number;
-}
-
-interface FunctionContextMenuTarget {
-  kind: "function";
-  functionName: string;
-  schemaName: string;
-  x: number;
-  y: number;
-}
-
-interface SchemaContextMenuTarget {
-  kind: "schema";
-  schemaName: string;
-  x: number;
-  y: number;
-}
-
-type ContextMenuTarget =
-  | TableContextMenuTarget
-  | ViewContextMenuTarget
-  | FunctionContextMenuTarget
-  | SchemaContextMenuTarget
-  | null;
-
 /** Confirmation dialog state. */
 interface ConfirmDialog {
   title: string;
@@ -154,14 +118,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const renameTableAction = useSchemaStore((s) => s.renameTable);
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const connectionName = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.name,
+  );
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const functions = useSchemaStore((s) => s.functions);
-  const connectionName = useConnectionStore(
-    (s) => s.connections.find((c) => c.id === connectionId)?.name,
-  );
-
   // Track active tab for highlight & auto-expand
   const activeTab = useTabStore((s) => {
     const tabId = s.activeTabId;
@@ -179,8 +142,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [loadingSchemas, setLoadingSchemas] = useState(false);
   const [loadingTables, setLoadingTables] = useState<Set<string>>(new Set());
-  const [contextMenuTarget, setContextMenuTarget] =
-    useState<ContextMenuTarget>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
     null,
   );
@@ -468,117 +429,34 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     return expanded.has(key);
   };
 
-  // Build context menu items based on target
-  const contextMenuItems: ContextMenuItem[] = contextMenuTarget
-    ? contextMenuTarget.kind === "table"
-      ? [
-          {
-            label: "Structure",
-            icon: <Columns3 size={14} />,
-            onClick: () =>
-              handleOpenStructure(
-                contextMenuTarget.tableName,
-                contextMenuTarget.schemaName,
-              ),
-          },
-          {
-            label: "Data",
-            icon: <Table2 size={14} />,
-            onClick: () =>
-              handleTableClick(
-                contextMenuTarget.tableName,
-                contextMenuTarget.schemaName,
-              ),
-          },
-          {
-            label: "Rename",
-            icon: <Pencil size={14} />,
-            onClick: () =>
-              handleStartRename(
-                contextMenuTarget.tableName,
-                contextMenuTarget.schemaName,
-              ),
-          },
-          {
-            label: "Drop",
-            icon: <Trash2 size={14} />,
-            danger: true,
-            onClick: () =>
-              handleDropTable(
-                contextMenuTarget.tableName,
-                contextMenuTarget.schemaName,
-              ),
-          },
-        ]
-      : contextMenuTarget.kind === "view"
-        ? [
-            {
-              label: "Structure",
-              icon: <Columns3 size={14} />,
-              onClick: () =>
-                handleOpenViewStructure(
-                  contextMenuTarget.viewName,
-                  contextMenuTarget.schemaName,
-                ),
-            },
-            {
-              label: "Data",
-              icon: <Table2 size={14} />,
-              onClick: () =>
-                handleViewClick(
-                  contextMenuTarget.viewName,
-                  contextMenuTarget.schemaName,
-                ),
-            },
-          ]
-        : contextMenuTarget.kind === "function"
-          ? [
-              {
-                label: "View Source",
-                icon: <Code2 size={14} />,
-                onClick: () =>
-                  handleFunctionClick(
-                    contextMenuTarget.functionName,
-                    contextMenuTarget.schemaName,
-                  ),
-              },
-            ]
-          : [
-              {
-                label: "Refresh",
-                icon: <RefreshCw size={14} />,
-                onClick: () =>
-                  handleRefreshSchema(contextMenuTarget.schemaName),
-              },
-            ]
-    : [];
-
   return (
     <div className="flex flex-col select-none">
-      {/* Action strip (connection name now lives in Sidebar header) */}
+      {/* Action strip */}
       <div className="flex items-center justify-end gap-1 border-b border-border px-3 py-1">
         <span className="sr-only">{connectionName || connectionId}</span>
         <div className="flex gap-1">
-          <button
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={() => addQueryTab(connectionId)}
             aria-label="New Query"
             title="New Query"
           >
-            <Code2 size={12} />
-          </button>
-          <button
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+            <Code2 />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={handleRefresh}
             disabled={loadingSchemas}
             aria-label="Refresh schemas"
           >
             {loadingSchemas ? (
-              <Loader2 size={12} className="animate-spin" />
+              <Loader2 className="animate-spin" />
             ) : (
-              <RefreshCw size={12} />
+              <RefreshCw />
             )}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -608,55 +486,60 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             )}
 
             {/* Schema row */}
-            <div
-              className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
-                isSchemaSelected
-                  ? "bg-muted text-foreground"
-                  : "text-secondary-foreground"
-              }`}
-              role="button"
-              tabIndex={0}
-              aria-expanded={isExpanded}
-              aria-label={`${schema.name} schema`}
-              onClick={() => {
-                handleExpandSchema(schema.name);
-                setSelectedNodeId(schemaId);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  handleExpandSchema(schema.name);
-                  setSelectedNodeId(schemaId);
-                }
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setContextMenuTarget({
-                  kind: "schema",
-                  schemaName: schema.name,
-                  x: e.clientX,
-                  y: e.clientY,
-                });
-              }}
-            >
-              {isExpanded ? (
-                <ChevronDown size={12} className="shrink-0" />
-              ) : (
-                <ChevronRight size={12} className="shrink-0" />
-              )}
-              {isExpanded ? (
-                <FolderOpen
-                  size={13}
-                  className="shrink-0 text-muted-foreground"
-                />
-              ) : (
-                <Folder size={13} className="shrink-0 text-muted-foreground" />
-              )}
-              <span className="truncate">{schema.name}</span>
-              {isLoadingTables && (
-                <Loader2 size={10} className="ml-auto animate-spin" />
-              )}
-            </div>
+            <ContextMenu>
+              <ContextMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
+                    isSchemaSelected
+                      ? "bg-muted text-foreground"
+                      : "text-secondary-foreground"
+                  }`}
+                  aria-expanded={isExpanded}
+                  aria-label={`${schema.name} schema`}
+                  onClick={() => {
+                    handleExpandSchema(schema.name);
+                    setSelectedNodeId(schemaId);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleExpandSchema(schema.name);
+                      setSelectedNodeId(schemaId);
+                    }
+                  }}
+                >
+                  {isExpanded ? (
+                    <ChevronDown size={12} className="shrink-0" />
+                  ) : (
+                    <ChevronRight size={12} className="shrink-0" />
+                  )}
+                  {isExpanded ? (
+                    <FolderOpen
+                      size={13}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                  ) : (
+                    <Folder
+                      size={13}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                  )}
+                  <span className="truncate">{schema.name}</span>
+                  {isLoadingTables && (
+                    <Loader2 size={10} className="ml-auto animate-spin" />
+                  )}
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem
+                  onClick={() => handleRefreshSchema(schema.name)}
+                >
+                  <RefreshCw size={14} />
+                  Refresh
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
 
             {/* Category sections under expanded schema */}
             {isExpanded && (
@@ -727,14 +610,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                     return (
                       <div key={cat.key}>
                         {/* Category header */}
-                        <div
-                          className={`flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-[11px] font-medium hover:bg-muted ${
+                        <button
+                          type="button"
+                          className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-[11px] font-medium hover:bg-muted ${
                             isCatSelected
                               ? "bg-muted text-foreground"
                               : "text-secondary-foreground"
                           }`}
-                          role="button"
-                          tabIndex={0}
                           aria-expanded={catExpanded}
                           aria-label={`${cat.label} in ${schema.name}`}
                           onClick={() => toggleCategory(schema.name, cat.key)}
@@ -760,7 +642,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                               {itemCount}
                             </span>
                           )}
-                        </div>
+                        </button>
 
                         {/* Category content */}
                         {catExpanded && (
@@ -787,8 +669,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                     aria-label={`Filter tables in ${schema.name}`}
                                   />
                                   {searchValue && (
-                                    <button
-                                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-xs"
                                       onClick={() =>
                                         setTableSearch((prev) => {
                                           const next = { ...prev };
@@ -798,8 +681,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                       }
                                       aria-label={`Clear table filter in ${schema.name}`}
                                     >
-                                      <X size={11} />
-                                    </button>
+                                      <X />
+                                    </Button>
                                   )}
                                 </div>
                               )}
@@ -849,93 +732,145 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                   }
                                 };
 
-                                const handleContextMenu = (
-                                  e: React.MouseEvent,
-                                ) => {
-                                  e.preventDefault();
-                                  if (isView) {
-                                    setContextMenuTarget({
-                                      kind: "view",
-                                      viewName: item.name,
-                                      schemaName: schema.name,
-                                      x: e.clientX,
-                                      y: e.clientY,
-                                    });
-                                  } else if (isFunc) {
-                                    setContextMenuTarget({
-                                      kind: "function",
-                                      functionName: item.name,
-                                      schemaName: schema.name,
-                                      x: e.clientX,
-                                      y: e.clientY,
-                                    });
-                                  } else {
-                                    setContextMenuTarget({
-                                      kind: "table",
-                                      tableName: item.name,
-                                      schemaName: schema.name,
-                                      x: e.clientX,
-                                      y: e.clientY,
-                                    });
-                                  }
-                                };
-
                                 return (
-                                  <div
-                                    key={`${cat.key}-${item.name}`}
-                                    className={cn(
-                                      "flex cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
-                                      isSelected || isActive
-                                        ? "bg-primary/10 text-primary font-semibold"
-                                        : "text-foreground",
-                                    )}
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={`${item.name} ${isView ? "view" : isFunc ? "function" : "table"}`}
-                                    onClick={handleClick}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        handleClick();
-                                      }
-                                    }}
-                                    onContextMenu={handleContextMenu}
-                                  >
-                                    {isView ? (
-                                      <Eye
-                                        size={12}
-                                        className="shrink-0 text-muted-foreground"
-                                      />
-                                    ) : isFunc ? (
-                                      <Code2
-                                        size={12}
-                                        className="shrink-0 text-muted-foreground"
-                                      />
-                                    ) : (
-                                      <Table2
-                                        size={12}
-                                        className="shrink-0 text-muted-foreground"
-                                      />
-                                    )}
-                                    <span className="truncate text-xs">
-                                      {item.name}
-                                    </span>
-                                    {isTableView &&
-                                      "row_count" in item &&
-                                      (item as TableInfo).row_count != null && (
-                                        <span className="ml-auto text-[10px] text-muted-foreground">
-                                          {(
-                                            item as TableInfo
-                                          ).row_count!.toLocaleString()}
+                                  <ContextMenu key={`${cat.key}-${item.name}`}>
+                                    <ContextMenuTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className={cn(
+                                          "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
+                                          isSelected || isActive
+                                            ? "bg-primary/10 text-primary font-semibold"
+                                            : "text-foreground",
+                                        )}
+                                        aria-label={`${item.name} ${isView ? "view" : isFunc ? "function" : "table"}`}
+                                        onClick={handleClick}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            handleClick();
+                                          }
+                                        }}
+                                      >
+                                        {isView ? (
+                                          <Eye
+                                            size={12}
+                                            className="shrink-0 text-muted-foreground"
+                                          />
+                                        ) : isFunc ? (
+                                          <Code2
+                                            size={12}
+                                            className="shrink-0 text-muted-foreground"
+                                          />
+                                        ) : (
+                                          <Table2
+                                            size={12}
+                                            className="shrink-0 text-muted-foreground"
+                                          />
+                                        )}
+                                        <span className="truncate text-xs">
+                                          {item.name}
                                         </span>
+                                        {isTableView &&
+                                          "row_count" in item &&
+                                          (item as TableInfo).row_count !=
+                                            null && (
+                                            <span className="ml-auto text-[10px] text-muted-foreground">
+                                              {(
+                                                item as TableInfo
+                                              ).row_count!.toLocaleString()}
+                                            </span>
+                                          )}
+                                        {isFunc &&
+                                          "arguments" in item &&
+                                          (item as FunctionInfo).arguments && (
+                                            <span className="ml-auto truncate text-[10px] text-muted-foreground">
+                                              {(item as FunctionInfo).arguments}
+                                            </span>
+                                          )}
+                                      </button>
+                                    </ContextMenuTrigger>
+                                    <ContextMenuContent>
+                                      {isTableView ? (
+                                        <>
+                                          <ContextMenuItem
+                                            onClick={() =>
+                                              handleOpenStructure(
+                                                item.name,
+                                                schema.name,
+                                              )
+                                            }
+                                          >
+                                            <Columns3 size={14} /> Structure
+                                          </ContextMenuItem>
+                                          <ContextMenuItem
+                                            onClick={() =>
+                                              handleTableClick(
+                                                item.name,
+                                                schema.name,
+                                              )
+                                            }
+                                          >
+                                            <Table2 size={14} /> Data
+                                          </ContextMenuItem>
+                                          <ContextMenuItem
+                                            onClick={() =>
+                                              handleStartRename(
+                                                item.name,
+                                                schema.name,
+                                              )
+                                            }
+                                          >
+                                            <Pencil size={14} /> Rename
+                                          </ContextMenuItem>
+                                          <ContextMenuItem
+                                            danger
+                                            onClick={() =>
+                                              handleDropTable(
+                                                item.name,
+                                                schema.name,
+                                              )
+                                            }
+                                          >
+                                            <Trash2 size={14} /> Drop
+                                          </ContextMenuItem>
+                                        </>
+                                      ) : isView ? (
+                                        <>
+                                          <ContextMenuItem
+                                            onClick={() =>
+                                              handleOpenViewStructure(
+                                                item.name,
+                                                schema.name,
+                                              )
+                                            }
+                                          >
+                                            <Columns3 size={14} /> Structure
+                                          </ContextMenuItem>
+                                          <ContextMenuItem
+                                            onClick={() =>
+                                              handleViewClick(
+                                                item.name,
+                                                schema.name,
+                                              )
+                                            }
+                                          >
+                                            <Table2 size={14} /> Data
+                                          </ContextMenuItem>
+                                        </>
+                                      ) : (
+                                        <ContextMenuItem
+                                          onClick={() =>
+                                            handleFunctionClick(
+                                              item.name,
+                                              schema.name,
+                                            )
+                                          }
+                                        >
+                                          <Code2 size={14} /> View Source
+                                        </ContextMenuItem>
                                       )}
-                                    {isFunc &&
-                                      "arguments" in item &&
-                                      (item as FunctionInfo).arguments && (
-                                        <span className="ml-auto truncate text-[10px] text-muted-foreground">
-                                          {(item as FunctionInfo).arguments}
-                                        </span>
-                                      )}
-                                  </div>
+                                    </ContextMenuContent>
+                                  </ContextMenu>
                                 );
                               })
                             )}
@@ -950,16 +885,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           </div>
         );
       })}
-
-      {/* Context menu */}
-      {contextMenuTarget && (
-        <ContextMenu
-          x={contextMenuTarget.x}
-          y={contextMenuTarget.y}
-          items={contextMenuItems}
-          onClose={() => setContextMenuTarget(null)}
-        />
-      )}
 
       {/* Drop table confirmation dialog */}
       <Dialog
@@ -980,25 +905,23 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               </DialogDescription>
             </DialogHeader>
             <DialogFooter className="flex justify-end gap-2">
-              <button
-                className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setConfirmDialog(null)}
                 disabled={isOperating}
               >
                 Cancel
-              </button>
-              <button
-                className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
-                  confirmDialog?.danger
-                    ? "bg-destructive hover:opacity-90"
-                    : "bg-primary hover:opacity-90"
-                } ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
+              </Button>
+              <Button
+                variant={confirmDialog?.danger ? "destructive" : "default"}
+                size="sm"
                 onClick={confirmDialog?.onConfirm}
                 disabled={isOperating}
                 aria-label={confirmDialog?.confirmLabel}
               >
                 {isOperating ? "Dropping..." : confirmDialog?.confirmLabel}
-              </button>
+              </Button>
             </DialogFooter>
           </div>
         </DialogContent>
@@ -1044,21 +967,22 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               <p className="mb-2 text-xs text-destructive">{renameError}</p>
             )}
             <DialogFooter className="mt-3 flex justify-end gap-2">
-              <button
-                className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setRenameDialog(null)}
                 disabled={isOperating}
               >
                 Cancel
-              </button>
-              <button
-                className={`rounded bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 ${isOperating ? "cursor-not-allowed opacity-50" : ""}`}
+              </Button>
+              <Button
+                size="sm"
                 onClick={handleConfirmRename}
                 disabled={isOperating}
                 aria-label="Rename"
               >
                 {isOperating ? "Renaming..." : "Rename"}
-              </button>
+              </Button>
             </DialogFooter>
           </div>
         </DialogContent>

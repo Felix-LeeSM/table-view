@@ -3,6 +3,7 @@ import { Key, Link2, Plus, Pencil, Trash2, X, Eye } from "lucide-react";
 import type { ColumnInfo, ColumnChange } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
+import { Button } from "@components/ui/button";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -152,41 +153,47 @@ function EditableColumnRow({
         <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {isEditing ? (
             <>
-              <button
-                className="rounded p-1 text-emerald-500 dark:text-emerald-400 hover:bg-muted"
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-emerald-500 dark:text-emerald-400"
                 onClick={handleSave}
                 aria-label={`Save changes for ${col.name}`}
                 title="Save"
               >
-                <Eye size={12} />
-              </button>
-              <button
-                className="rounded p-1 text-muted-foreground hover:bg-muted"
+                <Eye />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={onCancelEdit}
                 aria-label={`Cancel editing ${col.name}`}
                 title="Cancel"
               >
-                <X size={12} />
-              </button>
+                <X />
+              </Button>
             </>
           ) : (
             <>
-              <button
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={onStartEdit}
                 aria-label={`Edit column ${col.name}`}
                 title="Edit"
               >
-                <Pencil size={12} />
-              </button>
-              <button
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                <Pencil />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="hover:text-destructive"
                 onClick={onDelete}
                 aria-label={`Delete column ${col.name}`}
                 title="Delete"
               >
-                <Trash2 size={12} />
-              </button>
+                <Trash2 />
+              </Button>
             </>
           )}
         </div>
@@ -270,23 +277,26 @@ function NewColumnRow({
       </td>
       <td className="w-20 border-l border-border px-1 py-1 text-center">
         <div className="flex items-center justify-center gap-0.5">
-          <button
-            className="rounded p-1 text-emerald-500 dark:text-emerald-400 hover:bg-muted"
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-emerald-500 dark:text-emerald-400"
             onClick={onConfirm}
             disabled={!draft.name.trim() || !draft.data_type.trim()}
             aria-label="Confirm add column"
             title="Confirm"
           >
-            <Eye size={12} />
-          </button>
-          <button
-            className="rounded p-1 text-muted-foreground hover:bg-muted"
+            <Eye />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={onCancel}
             aria-label="Cancel add column"
             title="Cancel"
           >
-            <X size={12} />
-          </button>
+            <X />
+          </Button>
         </div>
       </td>
     </tr>
@@ -484,23 +494,24 @@ export default function ColumnsEditor({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Action bar */}
       <div className="flex items-center justify-end border-b border-border bg-secondary px-2 py-1">
-        <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={handleAddColumn}
           aria-label="Add column"
         >
-          <Plus size={12} />
+          <Plus />
           Add Column
-        </button>
+        </Button>
         {pendingCount > 0 && (
-          <button
-            className="flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs text-white hover:bg-primary/90"
+          <Button
+            size="xs"
             onClick={handleReviewSql}
             aria-label={`Review SQL (${pendingCount})`}
           >
-            <Eye size={12} />
+            <Eye />
             Review SQL ({pendingCount})
-          </button>
+          </Button>
         )}
       </div>
 
@@ -598,8 +609,10 @@ export default function ColumnsEditor({
                       </td>
                       <td className="w-20 border-l border-border px-1 py-1 text-center">
                         <div className="flex items-center justify-center gap-0.5">
-                          <button
-                            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            className="hover:text-destructive"
                             onClick={() => {
                               setPendingChanges((prev) =>
                                 prev.filter(
@@ -610,8 +623,8 @@ export default function ColumnsEditor({
                             aria-label={`Remove pending column ${change.name}`}
                             title="Remove"
                           >
-                            <X size={12} />
-                          </button>
+                            <X />
+                          </Button>
                         </div>
                       </td>
                     </tr>

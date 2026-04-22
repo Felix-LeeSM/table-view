@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@components/ui/tabs";
 
 export interface BlobViewerDialogProps {
   open: boolean;
@@ -12,8 +13,6 @@ export interface BlobViewerDialogProps {
   data: unknown;
   columnName: string;
 }
-
-type ViewTab = "hex" | "text";
 
 /** Convert unknown cell data to a Uint8Array for hex/text viewing. */
 function toBytes(data: unknown): Uint8Array {
@@ -85,8 +84,6 @@ export default function BlobViewerDialog({
   data,
   columnName,
 }: BlobViewerDialogProps) {
-  const [activeTab, setActiveTab] = useState<ViewTab>("hex");
-
   const bytes = useMemo(() => toBytes(data), [data]);
   const hexDump = useMemo(() => formatHexDump(bytes), [bytes]);
   const textContent = useMemo(() => {
@@ -107,42 +104,31 @@ export default function BlobViewerDialog({
           </DialogTitle>
         </DialogHeader>
 
-        {/* Tab selector */}
-        <div className="flex gap-1 border-b border-border">
-          <button
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === "hex"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("hex")}
-          >
-            Hex
-          </button>
-          <button
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeTab === "text"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setActiveTab("text")}
-          >
-            Text
-          </button>
-        </div>
+        <Tabs defaultValue="hex">
+          <TabsList className="border-b border-border w-full justify-start rounded-none gap-0">
+            <TabsTrigger value="hex" className="rounded-none">
+              Hex
+            </TabsTrigger>
+            <TabsTrigger value="text" className="rounded-none">
+              Text
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Content area */}
-        <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
-          {activeTab === "hex" ? (
-            <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre">
-              {bytes.length === 0 ? "(empty)" : hexDump}
-            </pre>
-          ) : (
-            <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre-wrap break-all">
-              {textContent}
-            </pre>
-          )}
-        </div>
+          <TabsContent value="hex">
+            <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
+              <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre">
+                {bytes.length === 0 ? "(empty)" : hexDump}
+              </pre>
+            </div>
+          </TabsContent>
+          <TabsContent value="text">
+            <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
+              <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre-wrap break-all">
+                {textContent}
+              </pre>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Footer info */}
         <div className="text-xs text-muted-foreground">

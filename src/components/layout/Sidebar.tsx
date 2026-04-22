@@ -226,14 +226,16 @@ export default function Sidebar() {
 
         {/* Theme toggle footer */}
         <div className="border-t border-border px-3 py-2">
-          <button
-            className="flex w-full items-center gap-2 rounded p-1 text-xs text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="w-full justify-start text-muted-foreground"
             onClick={cycleTheme}
             aria-label={`Theme: ${theme}. Click to change.`}
           >
-            <ThemeIcon size={14} />
+            <ThemeIcon />
             <span className="capitalize">{theme}</span>
-          </button>
+          </Button>
         </div>
 
         {/* Resize handle */}

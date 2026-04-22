@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Star, Trash2, Globe, Link, X } from "lucide-react";
 import { cn } from "@lib/utils";
 import { useFavoritesStore, type FavoriteScope } from "@stores/favoritesStore";
+import { Button } from "@components/ui/button";
 
 interface FavoritesPanelProps {
   /** Active connection ID — used for "This Connection" filter and saving */
@@ -42,13 +43,15 @@ export default function FavoritesPanel({
           <Star size={14} className="text-primary" />
           <span>Favorites</span>
         </div>
-        <button
-          className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground hover:text-foreground"
           onClick={onClose}
           aria-label="Close favorites"
         >
-          <X size={14} />
-        </button>
+          <X />
+        </Button>
       </div>
 
       {/* Filter tabs */}
@@ -78,9 +81,11 @@ export default function FavoritesPanel({
           </div>
         ) : (
           filtered.map((fav) => (
-            <button
+            <Button
               key={fav.id}
-              className="flex w-full items-start gap-2 border-b border-border px-3 py-2 text-left hover:bg-muted transition-colors"
+              variant="ghost"
+              size="xs"
+              className="w-full justify-start items-start gap-2 border-b border-border px-3 py-2 text-left h-auto rounded-none"
               onClick={() => {
                 onLoadSql(fav.sql);
                 onClose();
@@ -108,17 +113,19 @@ export default function FavoritesPanel({
                   {fav.sql}
                 </div>
               </div>
-              <button
-                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive"
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeFavorite(fav.id);
                 }}
                 aria-label={`Delete favorite: ${fav.name}`}
               >
-                <Trash2 size={12} />
-              </button>
-            </button>
+                <Trash2 />
+              </Button>
+            </Button>
           ))
         )}
       </div>

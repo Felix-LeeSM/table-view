@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
+import { Button } from "@components/ui/button";
 import type { QueryResult } from "@/types/query";
 import {
   Dialog,
@@ -241,22 +242,23 @@ export default function EditableQueryResultGrid({
             {pendingDeletedRowKeys.size !== 1 ? "s" : ""} pending
           </span>
           <div className="flex items-center gap-2">
-            <button
-              className="flex items-center gap-1 rounded border border-border px-2 py-1 text-xs hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={handleDiscard}
               aria-label="Discard pending changes"
             >
               <X size={12} />
               Discard
-            </button>
-            <button
-              className="flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs text-primary-foreground hover:bg-primary/90"
+            </Button>
+            <Button
+              size="xs"
               onClick={handleCommit}
               aria-label="Commit pending changes"
             >
               <Save size={12} />
               Commit
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -445,13 +447,14 @@ export default function EditableQueryResultGrid({
               <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview
               </h3>
-              <button
-                className="rounded p-1 hover:bg-muted"
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={() => setSqlPreview(null)}
                 aria-label="Close SQL preview"
               >
                 <X size={14} />
-              </button>
+              </Button>
             </div>
             <div className="flex-1 overflow-auto p-4">
               {sqlPreview?.map((sql, i) => (
@@ -472,22 +475,24 @@ export default function EditableQueryResultGrid({
               )}
             </div>
             <DialogFooter className="border-t border-border px-4 py-3">
-              <button
-                className="rounded bg-muted px-3 py-1.5 text-xs text-secondary-foreground hover:bg-secondary"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setSqlPreview(null)}
                 disabled={executing}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 autoFocus
-                className="rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700 disabled:opacity-50"
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
                 onClick={handleExecute}
                 aria-label="Execute SQL"
                 disabled={executing}
               >
                 {executing ? "Executing…" : "Execute"}
-              </button>
+              </Button>
             </DialogFooter>
           </div>
         </DialogContent>

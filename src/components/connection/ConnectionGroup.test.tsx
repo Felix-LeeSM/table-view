@@ -34,30 +34,92 @@ vi.mock("./ConnectionItem", () => ({
   },
 }));
 
-vi.mock("@components/shared/ContextMenu", () => ({
-  ContextMenu: ({
-    items,
-    onClose,
+// ---------------------------------------------------------------------------
+// Mock @components/ui/context-menu with stateful open/close behavior
+// ---------------------------------------------------------------------------
+
+vi.mock("@components/ui/context-menu", async () => {
+  const React = await import("react");
+  const ContextMenuOpenCtx = React.createContext<{
+    open: boolean;
+    setOpen: (v: boolean) => void;
+  }>({ open: false, setOpen: () => {} });
+
+  function ContextMenu({ children }: { children: React.ReactNode }) {
+    const [open, setOpen] = React.useState(false);
+    return (
+      <ContextMenuOpenCtx.Provider value={{ open, setOpen }}>
+        {children}
+      </ContextMenuOpenCtx.Provider>
+    );
+  }
+
+  function ContextMenuTrigger({
+    children,
+    asChild,
   }: {
-    items: { label: string; onClick: () => void }[];
-    onClose: () => void;
-  }) => (
-    <div data-testid="context-menu">
-      {items.map((item) => (
-        <button
-          key={item.label}
-          data-testid={`menu-item-${item.label}`}
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  ),
-}));
+    children: React.ReactNode;
+    asChild?: boolean;
+  }) {
+    const { setOpen } = React.useContext(ContextMenuOpenCtx);
+    if (!asChild) return <>{children}</>;
+    const child = React.Children.only(children) as React.ReactElement<{
+      onContextMenu?: (e: React.MouseEvent) => void;
+    }>;
+    return React.cloneElement(child, {
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault();
+        child.props.onContextMenu?.(e);
+        setOpen(true);
+      },
+    });
+  }
+
+  function ContextMenuContent({ children }: { children: React.ReactNode }) {
+    const { open } = React.useContext(ContextMenuOpenCtx);
+    if (!open) return null;
+    return <div data-testid="context-menu">{children}</div>;
+  }
+
+  function ContextMenuItem({
+    children,
+    onClick,
+    danger,
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    danger?: boolean;
+  }) {
+    const { setOpen } = React.useContext(ContextMenuOpenCtx);
+    const label =
+      typeof children === "string"
+        ? children
+        : React.Children.toArray(children)
+            .filter((c) => typeof c === "string")
+            .join(" ")
+            .trim();
+    return (
+      <button
+        data-testid={`menu-item-${label}`}
+        data-danger={danger ? "true" : undefined}
+        onClick={() => {
+          onClick?.();
+          setOpen(false);
+        }}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  return {
+    ContextMenu,
+    ContextMenuTrigger,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator: () => <hr />,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers

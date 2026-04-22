@@ -135,9 +135,9 @@ describe("Sidebar", () => {
   it("renders both mode toggle tabs", () => {
     render(<Sidebar />);
     expect(
-      screen.getByRole("tab", { name: /connections/i }),
+      screen.getByRole("radio", { name: /connections/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /schemas/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /schemas/i })).toBeInTheDocument();
   });
 
   it("starts in connections mode by default and renders ConnectionList", () => {
@@ -154,7 +154,7 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
     });
 
     expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
     });
 
     expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
@@ -180,7 +180,7 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
     });
 
     expect(screen.getByTestId("sidebar-connection-header")).toHaveTextContent(
@@ -319,7 +319,7 @@ describe("Sidebar", () => {
 
     // Falls back to c2 (the surviving connected one)
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
     });
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
@@ -327,7 +327,7 @@ describe("Sidebar", () => {
   it("does not persist mode to localStorage; always starts in connections on remount", () => {
     const { unmount } = render(<Sidebar />);
     act(() => {
-      fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
     });
     expect(window.localStorage.getItem("table-view.sidebar.mode")).toBeNull();
     unmount();
@@ -363,7 +363,7 @@ describe("Sidebar", () => {
       });
       render(<Sidebar />);
       act(() => {
-        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
       });
 
       expect(
@@ -393,7 +393,7 @@ describe("Sidebar", () => {
       });
       render(<Sidebar />);
       act(() => {
-        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
       });
 
       const btn = screen.getByRole("button", { name: /new query tab/i });
@@ -415,7 +415,7 @@ describe("Sidebar", () => {
       });
       render(<Sidebar />);
       act(() => {
-        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
       });
 
       const btn = screen.getByRole("button", { name: /new query tab/i });
@@ -439,7 +439,7 @@ describe("Sidebar", () => {
       render(<Sidebar />);
       // Start in schemas mode
       act(() => {
-        fireEvent.click(screen.getByRole("tab", { name: /schemas/i }));
+        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
       });
       expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
 

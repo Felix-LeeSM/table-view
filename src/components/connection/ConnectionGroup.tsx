@@ -9,8 +9,10 @@ import { useConnectionStore } from "@stores/connectionStore";
 import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import {
   ContextMenu,
-  type ContextMenuItem,
-} from "@components/shared/ContextMenu";
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@components/ui/context-menu";
 
 interface ConnectionGroupProps {
   group: ConnectionGroupType;
@@ -37,11 +39,6 @@ export default function ConnectionGroup({
   const moveConnectionToGroup = useConnectionStore(
     (s) => s.moveConnectionToGroup,
   );
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
   useEffect(() => {
     if (renaming && renameRef.current) {
       renameRef.current.focus();
@@ -57,89 +54,85 @@ export default function ConnectionGroup({
     setRenaming(false);
   };
 
-  const menuItems: ContextMenuItem[] = [
-    {
-      label: "Rename",
-      icon: <Pencil size={14} />,
-      onClick: () => {
-        setRenameValue(group.name);
-        setRenaming(true);
-      },
-    },
-    {
-      label: "Delete Group",
-      icon: <Trash2 size={14} />,
-      danger: true,
-      onClick: () => {
-        removeGroup(group.id);
-      },
-    },
-  ];
-
   return (
     <>
-      <div
-        className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted select-none ${
-          dropActive ? "bg-primary/10 outline outline-1 outline-primary" : ""
-        }`}
-        role="button"
-        tabIndex={0}
-        aria-expanded={!collapsed}
-        aria-label={`${group.name} group (${connections.length} connections)`}
-        onClick={() => {
-          if (!renaming) setCollapsed(!collapsed);
-        }}
-        onKeyDown={(e) => {
-          if (renaming) return;
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setCollapsed(!collapsed);
-          }
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          setContextMenu({ x: e.clientX, y: e.clientY });
-        }}
-        onDragOver={(e) => {
-          if (draggedConnectionId) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-            setDropActive(true);
-          }
-        }}
-        onDragLeave={() => setDropActive(false)}
-        onDrop={async (e) => {
-          e.preventDefault();
-          setDropActive(false);
-          const connId =
-            draggedConnectionId ?? e.dataTransfer.getData("text/plain");
-          if (connId) {
-            await moveConnectionToGroup(connId, group.id);
-          }
-        }}
-      >
-        {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-        {renaming ? (
-          <Input
-            ref={renameRef}
-            className="h-5 min-w-0 flex-1 border-primary bg-background px-1.5 py-0.5 text-xs text-foreground shadow-none focus-visible:ring-0"
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={handleRenameSubmit}
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div
+            className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted select-none ${
+              dropActive
+                ? "bg-primary/10 outline outline-1 outline-primary"
+                : ""
+            }`}
+            role="button"
+            tabIndex={0}
+            aria-expanded={!collapsed}
+            aria-label={`${group.name} group (${connections.length} connections)`}
+            onClick={() => {
+              if (!renaming) setCollapsed(!collapsed);
+            }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleRenameSubmit();
-              if (e.key === "Escape") {
-                setRenameValue(group.name);
-                setRenaming(false);
+              if (renaming) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setCollapsed(!collapsed);
               }
             }}
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="truncate">{group.name}</span>
-        )}
-        <span className="ml-1 text-[10px]">({connections.length})</span>
-      </div>
+            onDragOver={(e) => {
+              if (draggedConnectionId) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDropActive(true);
+              }
+            }}
+            onDragLeave={() => setDropActive(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setDropActive(false);
+              const connId =
+                draggedConnectionId ?? e.dataTransfer.getData("text/plain");
+              if (connId) {
+                await moveConnectionToGroup(connId, group.id);
+              }
+            }}
+          >
+            {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            {renaming ? (
+              <Input
+                ref={renameRef}
+                className="h-5 min-w-0 flex-1 border-primary bg-background px-1.5 py-0.5 text-xs text-foreground shadow-none focus-visible:ring-0"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={handleRenameSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRenameSubmit();
+                  if (e.key === "Escape") {
+                    setRenameValue(group.name);
+                    setRenaming(false);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="truncate">{group.name}</span>
+            )}
+            <span className="ml-1 text-[10px]">({connections.length})</span>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem
+            onClick={() => {
+              setRenameValue(group.name);
+              setRenaming(true);
+            }}
+          >
+            <Pencil size={14} /> Rename
+          </ContextMenuItem>
+          <ContextMenuItem danger onClick={() => removeGroup(group.id)}>
+            <Trash2 size={14} /> Delete Group
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
 
       {!collapsed &&
         connections.map((conn) => (
@@ -151,15 +144,6 @@ export default function ConnectionGroup({
             onActivate={onActivate}
           />
         ))}
-
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={menuItems}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
     </>
   );
 }

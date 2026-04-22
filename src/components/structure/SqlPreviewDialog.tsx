@@ -7,6 +7,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@components/ui/dialog";
+import { Button } from "@components/ui/button";
 
 export interface SqlPreviewDialogProps {
   sql: string;
@@ -38,13 +39,14 @@ export default function SqlPreviewDialog({
             <DialogDescription className="sr-only">
               Review and execute SQL changes
             </DialogDescription>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onCancel}
               aria-label="Close dialog"
             >
-              <X size={16} />
-            </button>
+              <X />
+            </Button>
           </DialogHeader>
 
           {/* SQL content */}
@@ -63,25 +65,22 @@ export default function SqlPreviewDialog({
 
           {/* Footer */}
           <DialogFooter className="border-t border-border px-4 py-3">
-            <button
-              className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onCancel}
               disabled={loading}
             >
               Cancel
-            </button>
-            <button
-              className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
+            </Button>
+            <Button
+              size="sm"
               onClick={onConfirm}
               disabled={loading || !sql.trim()}
             >
-              {loading ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Play size={14} />
-              )}
+              {loading ? <Loader2 className="animate-spin" /> : <Play />}
               {loading ? "Executing..." : "Execute"}
-            </button>
+            </Button>
           </DialogFooter>
         </div>
       </DialogContent>

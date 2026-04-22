@@ -315,7 +315,7 @@ describe("ImportExportDialog", () => {
       expect(screen.queryByLabelText("Import JSON input")).toBeNull();
 
       await act(async () => {
-        fireEvent.click(screen.getByRole("tab", { name: /import/i }));
+        fireEvent.click(screen.getByRole("radio", { name: /import/i }));
       });
       expect(screen.getByLabelText("Import JSON input")).toBeInTheDocument();
     });

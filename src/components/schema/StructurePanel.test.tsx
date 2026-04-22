@@ -224,7 +224,7 @@ describe("StructurePanel", () => {
 
     // Switch to indexes tab
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     const indexesTab = screen.getByRole("tab", { name: "Indexes" });
@@ -244,7 +244,7 @@ describe("StructurePanel", () => {
 
     // Switch to indexes tab
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     // Index names
@@ -270,7 +270,7 @@ describe("StructurePanel", () => {
 
     // Switch to constraints tab
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     const constraintsTab = screen.getByRole("tab", { name: "Constraints" });
@@ -290,7 +290,7 @@ describe("StructurePanel", () => {
 
     // Switch to constraints tab
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     // Constraint names
@@ -315,7 +315,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     // The em-dash character is used for null reference_table
@@ -346,7 +346,7 @@ describe("StructurePanel", () => {
 
     // Switch to indexes tab
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     expect(screen.getByRole("alert")).toHaveTextContent("Permission denied");
@@ -360,7 +360,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     expect(screen.getByRole("alert")).toHaveTextContent("Schema not found");
@@ -387,7 +387,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     expect(screen.getByText("No indexes found")).toBeInTheDocument();
@@ -401,7 +401,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     expect(screen.getByText("No constraints found")).toBeInTheDocument();
@@ -467,7 +467,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     // The users_name_idx row should not have PK or UNIQUE badge
@@ -555,7 +555,7 @@ describe("StructurePanel", () => {
 
     // Switch to indexes tab (which succeeds)
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -584,7 +584,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     expect(
@@ -1271,7 +1271,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     expect(
@@ -1298,7 +1298,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1319,7 +1319,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1341,7 +1341,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1370,7 +1370,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1448,7 +1448,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     // Non-primary index should have delete button
@@ -1466,7 +1466,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     // Primary key index should NOT have delete button
@@ -1481,7 +1481,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1507,7 +1507,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1540,7 +1540,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1565,7 +1565,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     // Indexes table should have Actions header
@@ -1587,7 +1587,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     expect(
@@ -1614,7 +1614,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1634,7 +1634,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1658,7 +1658,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1681,7 +1681,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1705,7 +1705,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1777,7 +1777,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     expect(
@@ -1797,7 +1797,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1825,7 +1825,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1860,7 +1860,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -1887,7 +1887,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     // Constraints table should have Actions header
@@ -1909,7 +1909,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1953,7 +1953,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -1975,7 +1975,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -2002,7 +2002,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {
@@ -2026,7 +2026,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Indexes" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Indexes" }));
     });
 
     await act(async () => {
@@ -2044,7 +2044,7 @@ describe("StructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: "Constraints" }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: "Constraints" }));
     });
 
     await act(async () => {

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Loader2, Key, Binary } from "lucide-react";
+import { Button } from "@components/ui/button";
 import { truncateCell } from "@lib/format";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
@@ -664,18 +665,19 @@ export default function DataGridTable({
                       ) : hasPendingEdit ? (
                         <span className="line-clamp-3">{displayValue}</span>
                       ) : isBlob && cell != null ? (
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 cursor-pointer text-muted-foreground hover:text-foreground"
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="text-muted-foreground hover:text-foreground"
                           onClick={(e) => {
                             e.stopPropagation();
                             setBlobViewer({ data: cell, columnName: col.name });
                           }}
                           aria-label={`View BLOB data for ${col.name}`}
                         >
-                          <Binary className="w-3 h-3" />
+                          <Binary />
                           <span>(BLOB)</span>
-                        </button>
+                        </Button>
                       ) : cell == null ? (
                         <span className="italic text-muted-foreground">
                           NULL

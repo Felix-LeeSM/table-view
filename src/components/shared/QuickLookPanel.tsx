@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { X, Binary, GripHorizontal } from "lucide-react";
+import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
 import type { ColumnInfo, TableData } from "@/types/schema";
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
@@ -106,14 +107,16 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
             {value ? "true" : "false"}
           </span>
         ) : isBlob ? (
-          <button
-            className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 text-muted-foreground hover:bg-secondary"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="bg-muted hover:bg-secondary text-muted-foreground"
             onClick={() => onBlobView(value, column.name)}
             aria-label={`View BLOB data for ${column.name}`}
           >
-            <Binary className="h-3 w-3" />
+            <Binary />
             <span>(BLOB)</span>
-          </button>
+          </Button>
         ) : isObject || isJsonString ? (
           <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-foreground">
             {displayValue}
@@ -244,13 +247,14 @@ export default function QuickLookPanel({
             </span>
           )}
         </h3>
-        <button
-          className="rounded p-1 hover:bg-muted"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           onClick={onClose}
           aria-label="Close row details"
         >
-          <X size={14} />
-        </button>
+          <X />
+        </Button>
       </div>
 
       {/* Scrollable field list */}

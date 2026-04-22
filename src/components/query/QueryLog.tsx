@@ -96,9 +96,11 @@ export default function QueryLog() {
           </div>
         ) : (
           filtered.map((entry) => (
-            <button
+            <Button
               key={entry.id}
-              className="flex w-full items-center gap-2 px-3 py-1 text-left text-xs hover:bg-muted"
+              variant="ghost"
+              size="xs"
+              className="w-full justify-start gap-2 px-3 py-1 text-left font-normal rounded-none h-auto"
               onClick={() => handleEntryClick(entry.sql)}
             >
               {/* Status dot */}
@@ -122,7 +124,7 @@ export default function QueryLog() {
               <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
                 {entry.duration}ms
               </span>
-            </button>
+            </Button>
           ))
         )}
       </div>

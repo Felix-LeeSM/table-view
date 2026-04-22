@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Loader2, Key, Shield, Plus, Trash2, X, Eye } from "lucide-react";
+import { Button } from "@components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -88,13 +89,14 @@ function CreateIndexModal({
             <DialogDescription className="sr-only">
               Create a new index on this table
             </DialogDescription>
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={onCancel}
               aria-label="Close dialog"
             >
-              <X size={16} />
-            </button>
+              <X />
+            </Button>
           </DialogHeader>
 
           {/* Form */}
@@ -185,25 +187,26 @@ function CreateIndexModal({
 
           {/* Footer */}
           <DialogFooter className="border-t border-border px-4 py-3">
-            <button
-              className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onCancel}
               disabled={loading}
             >
               Cancel
-            </button>
-            <button
-              className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/90 disabled:opacity-50"
+            </Button>
+            <Button
+              size="sm"
               onClick={handlePreview}
               disabled={loading || !isValid}
             >
               {loading ? (
-                <Loader2 size={14} className="animate-spin" />
+                <Loader2 className="animate-spin size-3.5" />
               ) : (
-                <Eye size={14} />
+                <Eye />
               )}
               {loading ? "Previewing..." : "Preview SQL"}
-            </button>
+            </Button>
           </DialogFooter>
         </div>
       </DialogContent>
@@ -351,14 +354,15 @@ export default function IndexesEditor({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Action bar */}
       <div className="flex items-center justify-end border-b border-border bg-secondary px-2 py-1">
-        <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={handleOpenCreateIndex}
           aria-label="Create index"
         >
-          <Plus size={12} />
+          <Plus />
           Create Index
-        </button>
+        </Button>
       </div>
 
       {/* Index table */}
@@ -421,14 +425,16 @@ export default function IndexesEditor({
                   <td className="w-20 border-l border-border px-1 py-1 text-center">
                     <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       {!idx.is_primary && (
-                        <button
-                          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive"
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="hover:text-destructive"
                           onClick={() => handleDropIndex(idx.name)}
                           aria-label={`Delete index ${idx.name}`}
                           title="Delete"
                         >
-                          <Trash2 size={12} />
-                        </button>
+                          <Trash2 />
+                        </Button>
                       )}
                     </div>
                   </td>

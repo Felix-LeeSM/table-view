@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Button } from "@components/ui/button";
 import type { EditorView } from "@codemirror/view";
 import type { QueryTab } from "@stores/tabStore";
 import { useTabStore } from "@stores/tabStore";
@@ -340,45 +341,46 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {/* Toolbar */}
       <div className="flex items-center gap-2 border-b border-border bg-secondary px-2 py-1">
         {tab.queryState.status === "running" ? (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={handleExecute}
             aria-label="Cancel query"
           >
-            <Square size={12} className="text-destructive" />
-            <Loader2 size={12} className="animate-spin" />
+            <Square className="text-destructive" />
+            <Loader2 className="animate-spin" />
             <span>Cancel</span>
-          </button>
+          </Button>
         ) : (
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted disabled:opacity-40"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={handleExecute}
             disabled={!tab.sql.trim()}
             aria-label="Run query"
           >
-            <Play
-              size={12}
-              className="text-emerald-500 dark:text-emerald-400"
-            />
+            <Play className="text-emerald-500 dark:text-emerald-400" />
             <span>Run</span>
             <span className="text-[10px] text-muted-foreground">
               {"\u2318\u23CE"}
             </span>
-          </button>
+          </Button>
         )}
-        <button
-          className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted disabled:opacity-40"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={handleFormat}
           disabled={!tab.sql.trim()}
           aria-label="Format SQL"
           title="Format SQL (Cmd+I)"
         >
-          <Paintbrush size={12} />
+          <Paintbrush />
           <span>Format</span>
-        </button>
+        </Button>
         <div className="ml-auto flex items-center gap-1 relative">
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted disabled:opacity-40"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => {
               setShowSaveForm(!showSaveForm);
               setShowFavorites(false);
@@ -387,11 +389,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
             aria-label="Save to favorites"
             title="Save to favorites"
           >
-            <Star size={12} />
+            <Star />
             <span>Save</span>
-          </button>
-          <button
-            className="flex items-center gap-1 rounded px-2 py-1 text-xs text-secondary-foreground hover:bg-muted"
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => {
               setShowFavorites(!showFavorites);
               setShowSaveForm(false);
@@ -399,11 +402,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
             aria-label="Open favorites"
             title="Favorites (Cmd+Shift+F)"
           >
-            <Star size={12} className="text-primary" />
+            <Star className="text-primary" />
             <span>
               Favorites{favorites.length > 0 ? ` (${favorites.length})` : ""}
             </span>
-          </button>
+          </Button>
           {showSaveForm && (
             <div className="absolute right-0 top-full mt-1 z-50 flex items-center gap-1 rounded border border-border bg-background p-2 shadow-lg">
               <input
@@ -418,24 +421,26 @@ export default function QueryTab({ tab }: QueryTabProps) {
                 className="h-6 w-40 rounded border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring"
                 autoFocus
               />
-              <button
-                className="flex items-center gap-1 rounded px-2 py-1 text-xs bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+              <Button
+                size="xs"
                 onClick={handleSaveFavorite}
                 disabled={!favoriteName.trim()}
                 aria-label="Confirm save"
               >
-                <Save size={10} />
-              </button>
-              <button
-                className="rounded p-1 text-muted-foreground hover:text-foreground"
+                <Save />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   setShowSaveForm(false);
                   setFavoriteName("");
                 }}
                 aria-label="Cancel save"
               >
-                <X size={10} />
-              </button>
+                <X />
+              </Button>
             </div>
           )}
           {showFavorites && (
@@ -484,24 +489,24 @@ export default function QueryTab({ tab }: QueryTabProps) {
       {/* History panel */}
       {historyEntries.length > 0 && (
         <div className="border-t border-border bg-secondary">
-          <button
-            className="flex w-full items-center gap-1 px-2 py-1 text-xs font-medium text-secondary-foreground hover:bg-muted"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="w-full justify-start text-secondary-foreground"
             onClick={() => setHistoryExpanded((v) => !v)}
           >
-            {historyExpanded ? (
-              <ChevronDown size={12} />
-            ) : (
-              <ChevronRight size={12} />
-            )}
-            <Clock size={12} />
+            {historyExpanded ? <ChevronDown /> : <ChevronRight />}
+            <Clock />
             <span>History ({historyEntries.length})</span>
-          </button>
+          </Button>
           {historyExpanded && (
             <div className="max-h-40 overflow-y-auto">
               {historyEntries.map((entry) => (
-                <button
+                <Button
                   key={entry.id}
-                  className="flex w-full items-center gap-2 border-t border-border px-3 py-1 text-left text-xs hover:bg-muted"
+                  variant="ghost"
+                  size="xs"
+                  className="w-full justify-start gap-2 border-t border-border px-3 py-1 text-left font-normal rounded-none h-auto"
                   onClick={() => updateQuerySql(tab.id, entry.sql)}
                   aria-label={entry.sql}
                 >
@@ -518,19 +523,21 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   <span className="ml-auto shrink-0 text-muted-foreground">
                     {entry.duration}ms
                   </span>
-                </button>
+                </Button>
               ))}
             </div>
           )}
           <div className="flex items-center justify-end border-t border-border px-2 py-0.5">
-            <button
-              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-muted-foreground hover:text-destructive"
               onClick={clearHistory}
               aria-label="Clear history"
             >
-              <Trash2 size={10} />
+              <Trash2 />
               Clear
-            </button>
+            </Button>
           </div>
         </div>
       )}

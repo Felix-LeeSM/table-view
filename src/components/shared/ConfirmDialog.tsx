@@ -6,6 +6,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
 } from "@components/ui/alert-dialog";
+import { Button } from "@components/ui/button";
 
 interface ConfirmDialogProps {
   title: string;
@@ -38,25 +39,23 @@ export default function ConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="mt-4 flex justify-end gap-2">
-          <button
-            className="rounded px-3 py-1.5 text-sm text-secondary-foreground hover:bg-muted"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
             disabled={loading}
           >
             Cancel
-          </button>
-          <button
-            className={`rounded px-3 py-1.5 text-sm font-medium text-white ${
-              danger
-                ? "bg-destructive hover:opacity-90"
-                : "bg-primary hover:opacity-90"
-            } ${loading ? "cursor-not-allowed opacity-50" : ""}`}
+          </Button>
+          <Button
+            variant={danger ? "destructive" : "default"}
+            size="sm"
             onClick={onConfirm}
             disabled={loading}
             aria-label={confirmLabel}
           >
             {loading ? "Processing..." : confirmLabel}
-          </button>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

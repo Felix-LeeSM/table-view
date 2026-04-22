@@ -1,4 +1,5 @@
 import { Database, MousePointerClick, Plug } from "lucide-react";
+import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import SchemaTree from "./SchemaTree";
 
@@ -82,12 +83,13 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
           ) : (
             <>
               Double-click in the Connections tab to connect, or{" "}
-              <button
-                className="text-primary hover:underline"
+              <Button
+                variant="link"
+                className="h-auto p-0 text-xs"
                 onClick={() => connectToDatabase(selectedId)}
               >
                 connect now
-              </button>
+              </Button>
             </>
           )}
         </p>

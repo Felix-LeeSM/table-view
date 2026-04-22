@@ -102,7 +102,7 @@ describe("ViewStructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: /definition/i }));
     });
 
     await waitFor(() => {
@@ -150,7 +150,7 @@ describe("ViewStructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: /definition/i }));
     });
 
     await waitFor(() => {
@@ -191,7 +191,7 @@ describe("ViewStructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: /definition/i }));
     });
 
     await waitFor(() => {
@@ -224,7 +224,7 @@ describe("ViewStructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: /definition/i }));
     });
 
     await waitFor(() => {
@@ -253,7 +253,7 @@ describe("ViewStructurePanel", () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("tab", { name: /definition/i }));
+      fireEvent.mouseDown(screen.getByRole("tab", { name: /definition/i }));
     });
 
     await waitFor(() => {
