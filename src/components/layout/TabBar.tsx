@@ -65,7 +65,8 @@ export default function TabBar() {
             }
           }}
           onDragStart={(e) => {
-            e.dataTransfer.setData("text/plain", tab.id);
+            // dataTransfer can be null/undefined in jsdom and some WebViews
+            e.dataTransfer?.setData("text/plain", tab.id);
             setDraggingId(tab.id);
           }}
           onDragEnd={() => {
@@ -81,7 +82,9 @@ export default function TabBar() {
           onDragLeave={() => setDragOverId(null)}
           onDrop={(e) => {
             e.preventDefault();
-            const fromId = e.dataTransfer.getData("text/plain");
+            // dataTransfer can be null/undefined (jsdom, WKWebView on Tauri).
+            // Fall back to the draggingId React state which is always reliable.
+            const fromId = e.dataTransfer?.getData("text/plain") || draggingId;
             if (fromId && fromId !== tab.id) {
               moveTab(fromId, tab.id);
             }

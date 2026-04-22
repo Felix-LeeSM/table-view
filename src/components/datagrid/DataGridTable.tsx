@@ -105,6 +105,10 @@ export default function DataGridTable({
   onDuplicateRow,
 }: DataGridTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
+  // Tracks mousedown position on column headers to distinguish clicks from drags.
+  // When movement exceeds 4px we suppress the sort so that dragging the header
+  // (e.g. to scroll horizontally) doesn't accidentally change sort order.
+  const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
   const resizingRef = useRef<{
     colName: string;
     startX: number;
@@ -315,9 +319,11 @@ export default function DataGridTable({
       const th = tableRef.current?.querySelector(
         `th:nth-child(${colIdx + 1})`,
       ) as HTMLElement | null;
+      // Prioritise the stored width so that a second resize always starts
+      // from the result of the first one, not from the default/DOM value.
       const currentWidth =
-        th?.getBoundingClientRect().width ??
         columnWidths[colName] ??
+        th?.getBoundingClientRect().width ??
         calcDefaultColWidth(colName, "");
       const startTableWidth =
         tableRef.current?.getBoundingClientRect().width ?? 0;
@@ -366,9 +372,8 @@ export default function DataGridTable({
           const finalWidth = tableRef.current?.querySelector(
             `th:nth-child(${resizedColIdx + 1})`,
           ) as HTMLElement | null;
-          const w = finalWidth
-            ? parseInt(finalWidth.style.width, 10)
-            : startWidth;
+          const rawW = finalWidth ? parseInt(finalWidth.style.width, 10) : NaN;
+          const w = Number.isNaN(rawW) ? startWidth : rawW;
           onColumnWidthsChange((prev) => ({
             ...prev,
             [resizedColName]: w,
@@ -416,7 +421,27 @@ export default function DataGridTable({
                     width: getColumnWidth(col.name, col.data_type),
                     minWidth: MIN_COL_WIDTH,
                   }}
-                  onClick={(e) => onSort(col.name, e.shiftKey)}
+                  onMouseDown={(e) => {
+                    sortMouseStartRef.current = { x: e.clientX, y: e.clientY };
+                  }}
+                  onClick={(e) => {
+                    // Suppress sort when the user dragged the header rather
+                    // than simply clicking it (movement threshold: 4 px).
+                    if (sortMouseStartRef.current) {
+                      const dx = Math.abs(
+                        e.clientX - sortMouseStartRef.current.x,
+                      );
+                      const dy = Math.abs(
+                        e.clientY - sortMouseStartRef.current.y,
+                      );
+                      sortMouseStartRef.current = null;
+                      if (dx > 4 || dy > 4) return;
+                    }
+                    // If a cell is being edited, save it before changing sort
+                    // so the input doesn't stay visible at the wrong position.
+                    if (editingCell) onSaveCurrentEdit();
+                    onSort(col.name, e.shiftKey);
+                  }}
                   title={`Sort by ${col.name}`}
                 >
                   <div className="flex items-center gap-1">

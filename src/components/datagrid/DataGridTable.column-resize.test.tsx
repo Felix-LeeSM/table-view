@@ -158,4 +158,52 @@ describe("DataGridTable — Column Resize", () => {
 
     expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
   });
+
+  it("second resize uses stored columnWidths as startWidth (Issue 003)", () => {
+    // Render with columnWidths already set to 200 for the "id" column
+    // (simulates a previously-completed first resize).
+    const onColumnWidthsChange = vi.fn();
+    render(
+      <DataGridTable
+        {...defaultProps}
+        columnWidths={{ id: 200 }}
+        onColumnWidthsChange={onColumnWidthsChange}
+      />,
+    );
+
+    const handle = getResizeHandles()[0]!;
+
+    act(() => {
+      handle.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 500,
+        }),
+      );
+    });
+
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { bubbles: true, clientX: 530 }), // +30px
+      );
+    });
+
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent("mouseup", { bubbles: true, clientX: 530 }),
+      );
+    });
+
+    expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
+    const updater = onColumnWidthsChange.mock.calls[0]![0] as (
+      prev: Record<string, number>,
+    ) => Record<string, number>;
+    const result = updater({});
+    // startWidth was 200 (from columnWidths prop), so final width should be 230.
+    // DOM style.width may not be set in jsdom, so final falls back to startWidth.
+    // Either 230 (if mousemove updated DOM) or 200 (jsdom fallback) is acceptable;
+    // what must NOT happen is a default calc (~88px) as startWidth.
+    expect(result["id"]).toBeGreaterThanOrEqual(200);
+  });
 });

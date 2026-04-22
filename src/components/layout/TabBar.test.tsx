@@ -315,4 +315,117 @@ describe("TabBar", () => {
     const stripe = screen.getByLabelText("Connection color");
     expect(stripe).toHaveAttribute("title", "My Database");
   });
+
+  // ── Drag-and-drop reorder ──
+
+  // Helper: set tabs directly in the store to bypass the preview-replacement
+  // logic in addTab (which collapses multiple same-connection tabs into one).
+  function setThreeTabs() {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: "t1",
+          type: "table",
+          title: "users",
+          connectionId: "conn1",
+          closable: true,
+          subView: "records" as const,
+          isPreview: false,
+          schema: "public",
+          table: "users",
+        },
+        {
+          id: "t2",
+          type: "table",
+          title: "orders",
+          connectionId: "conn1",
+          closable: true,
+          subView: "records" as const,
+          isPreview: false,
+          schema: "public",
+          table: "orders",
+        },
+        {
+          id: "t3",
+          type: "table",
+          title: "products",
+          connectionId: "conn1",
+          closable: true,
+          subView: "records" as const,
+          isPreview: false,
+          schema: "public",
+          table: "products",
+        },
+      ],
+      activeTabId: "t1",
+      closedTabHistory: [],
+    });
+  }
+
+  it("reorders tabs when dragging first tab onto third", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(3);
+
+    // Capture IDs before drag
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+
+    act(() => {
+      fireEvent.dragStart(tabs[0]!);
+    });
+    // Re-query after state update so we get the current DOM nodes
+    const tabsAfterDrag = screen.getAllByRole("tab");
+    act(() => {
+      fireEvent.dragOver(tabsAfterDrag[2]!);
+    });
+    act(() => {
+      fireEvent.drop(tabsAfterDrag[2]!);
+    });
+    act(() => {
+      fireEvent.dragEnd(tabsAfterDrag[0]!);
+    });
+
+    const after = useTabStore.getState().tabs.map((t) => t.id);
+    // t1 moves to where t3 was → [t2, t3, t1]
+    expect(after).toEqual([before[1], before[2], before[0]]);
+  });
+
+  it("does not reorder when dropping a tab onto itself", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    const tabs = screen.getAllByRole("tab");
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+
+    act(() => {
+      fireEvent.dragStart(tabs[0]!);
+    });
+    act(() => {
+      fireEvent.drop(tabs[0]!);
+    });
+
+    expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+  });
+
+  it("activeTabId is unchanged after drag reorder", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    const { activeTabId } = useTabStore.getState();
+
+    act(() => {
+      fireEvent.dragStart(screen.getAllByRole("tab")[0]!);
+    });
+    const tabs = screen.getAllByRole("tab");
+    act(() => {
+      fireEvent.dragOver(tabs[2]!);
+    });
+    act(() => {
+      fireEvent.drop(tabs[2]!);
+    });
+
+    expect(useTabStore.getState().activeTabId).toBe(activeTabId);
+  });
 });

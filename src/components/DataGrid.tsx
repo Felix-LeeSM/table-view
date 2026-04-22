@@ -183,6 +183,18 @@ export default function DataGrid({
     fetchData,
   });
 
+  // Cancel active cell editing when the user explicitly refreshes data
+  // (Cmd+R / F5 / refresh button) so the input doesn't linger at a
+  // stale row position after new data arrives.
+  const { cancelEdit } = editState;
+  useEffect(() => {
+    const handler = () => {
+      cancelEdit();
+    };
+    window.addEventListener("refresh-data", handler);
+    return () => window.removeEventListener("refresh-data", handler);
+  }, [cancelEdit]);
+
   const handleSort = (columnName: string, shiftKey: boolean = false) => {
     if (shiftKey) {
       setSorts((prev) => {
