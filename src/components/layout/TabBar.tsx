@@ -19,11 +19,24 @@ export default function TabBar() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
+  const [ghostStyle, setGhostStyle] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    title: string;
+    type: "table" | "query";
+  } | null>(null);
+
   // Ref for drag state — used in native DOM listeners (no stale closure issues)
   const dragStateRef = useRef<{
     tabId: string;
     startX: number;
     isDragging: boolean;
+    offsetX: number;
+    tabWidth: number;
+    tabHeight: number;
+    tabTitle: string;
+    tabType: "table" | "query";
   } | null>(null);
 
   // Find the connectionId from the active tab to use for new query tabs.
@@ -75,10 +88,18 @@ export default function TabBar() {
           // Mouse-based drag reorder — more reliable than HTML5 DnD in WKWebView
           onMouseDown={(e) => {
             if (e.button !== 0) return; // primary button only
+            const rect = (
+              e.currentTarget as HTMLElement
+            ).getBoundingClientRect();
             dragStateRef.current = {
               tabId: tab.id,
               startX: e.clientX,
               isDragging: false,
+              offsetX: e.clientX - rect.left,
+              tabWidth: rect.width,
+              tabHeight: rect.height,
+              tabTitle: tab.title,
+              tabType: tab.type,
             };
 
             const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -92,12 +113,24 @@ export default function TabBar() {
                 document.body.style.cursor = "grabbing";
                 document.body.style.userSelect = "none";
               }
+              if (dragStateRef.current.isDragging) {
+                const { offsetX, tabWidth, tabHeight, tabTitle, tabType } =
+                  dragStateRef.current;
+                setGhostStyle({
+                  x: moveEvent.clientX - offsetX,
+                  y: moveEvent.clientY - tabHeight / 2,
+                  width: tabWidth,
+                  title: tabTitle,
+                  type: tabType,
+                });
+              }
             };
 
             const handleMouseUp = () => {
               dragStateRef.current = null;
               setDraggingId(null);
               setDragOverId(null);
+              setGhostStyle(null);
               document.body.style.cursor = "";
               document.body.style.userSelect = "";
               document.removeEventListener("mousemove", handleMouseMove);
@@ -182,6 +215,26 @@ export default function TabBar() {
         >
           <Plus size={14} />
         </Button>
+      )}
+
+      {/* Drag ghost — follows cursor during tab drag */}
+      {ghostStyle && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50 flex items-center gap-1.5 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground opacity-90 shadow-md"
+          style={{
+            left: ghostStyle.x,
+            top: ghostStyle.y,
+            width: ghostStyle.width,
+          }}
+        >
+          {ghostStyle.type === "query" ? (
+            <Code2 size={12} className="shrink-0 text-muted-foreground" />
+          ) : (
+            <Table2 size={12} className="shrink-0 text-muted-foreground" />
+          )}
+          <span className="max-w-30 truncate">{ghostStyle.title}</span>
+        </div>
       )}
     </div>
   );
