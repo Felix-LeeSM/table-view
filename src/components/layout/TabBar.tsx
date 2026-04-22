@@ -17,10 +17,6 @@ export default function TabBar() {
 
   // Visual feedback states
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState<{
-    id: string;
-    side: "before" | "after";
-  } | null>(null);
 
   const [ghostStyle, setGhostStyle] = useState<{
     x: number;
@@ -45,6 +41,14 @@ export default function TabBar() {
   // Find the connectionId from the active tab to use for new query tabs.
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeConnectionId = activeTab?.connectionId ?? "";
+
+  // Table names that appear in more than one open tab — these need schema prefix.
+  const tableNames = tabs
+    .filter((t): t is TableTab => t.type === "table" && !!t.table)
+    .map((t) => t.table!);
+  const ambiguousTableNames = new Set(
+    tableNames.filter((name, idx) => tableNames.indexOf(name) !== idx),
+  );
 
   if (tabs.length === 0) return null;
 
@@ -97,7 +101,12 @@ export default function TabBar() {
               offsetX: e.clientX - rect.left,
               tabWidth: rect.width,
               tabHeight: rect.height,
-              tabTitle: tab.title,
+              tabTitle:
+                tab.type === "table" &&
+                tab.table &&
+                !ambiguousTableNames.has(tab.table)
+                  ? tab.table
+                  : tab.title,
               tabType: tab.type,
             };
 
@@ -128,7 +137,6 @@ export default function TabBar() {
             const handleMouseUp = () => {
               dragStateRef.current = null;
               setDraggingId(null);
-              setDragOver(null);
               setGhostStyle(null);
               document.body.style.cursor = "";
               document.body.style.userSelect = "";
@@ -138,22 +146,6 @@ export default function TabBar() {
 
             document.addEventListener("mousemove", handleMouseMove);
             document.addEventListener("mouseup", handleMouseUp);
-          }}
-          onMouseMove={(e) => {
-            if (
-              !dragStateRef.current?.isDragging ||
-              dragStateRef.current.tabId === tab.id
-            )
-              return;
-            const rect = (
-              e.currentTarget as HTMLElement
-            ).getBoundingClientRect();
-            const side =
-              e.clientX < rect.left + rect.width / 2 ? "before" : "after";
-            setDragOver({ id: tab.id, side });
-          }}
-          onMouseLeave={() => {
-            if (dragStateRef.current?.isDragging) setDragOver(null);
           }}
           onMouseUp={(e) => {
             const src = dragStateRef.current;
@@ -183,15 +175,6 @@ export default function TabBar() {
               />
             );
           })()}
-          {/* Drop indicator line */}
-          {dragOver?.id === tab.id && draggingId !== tab.id && (
-            <div
-              aria-hidden
-              className={`pointer-events-none absolute inset-y-0 w-0.5 bg-primary ${
-                dragOver.side === "before" ? "left-0" : "right-0"
-              }`}
-            />
-          )}
           {tab.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-muted-foreground" />
           ) : (
@@ -200,7 +183,11 @@ export default function TabBar() {
           <span
             className={`max-w-30 truncate${tab.type === "table" && (tab as TableTab).isPreview ? " italic opacity-70" : ""}`}
           >
-            {tab.title}
+            {tab.type === "table" &&
+            tab.table &&
+            !ambiguousTableNames.has(tab.table)
+              ? tab.table
+              : tab.title}
           </span>
           {tab.closable && (
             <Button

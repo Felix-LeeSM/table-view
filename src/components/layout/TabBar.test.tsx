@@ -43,45 +43,98 @@ describe("TabBar", () => {
   });
 
   it("renders tabs with titles", () => {
-    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
-    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
+    addTableTab({
+      title: "public.users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "public.orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
 
     render(<TabBar />);
-    expect(screen.getByText("Users")).toBeInTheDocument();
-    expect(screen.getByText("Orders")).toBeInTheDocument();
+    // Unique table names → only table name shown (no schema prefix)
+    expect(screen.getByText("users")).toBeInTheDocument();
+    expect(screen.getByText("orders")).toBeInTheDocument();
+  });
+
+  it("shows schema.table when two tabs share the same table name", () => {
+    // Same table name from two different connections → must disambiguate with schema prefix
+    addTableTab({
+      title: "public.users",
+      schema: "public",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "public.users",
+      schema: "public",
+      table: "users",
+      connectionId: "conn2",
+    });
+
+    render(<TabBar />);
+    // Ambiguous table name → full schema.table shown for both tabs
+    expect(screen.getAllByText("public.users")).toHaveLength(2);
   });
 
   it("closes tab on middle-click (auxclick button 1)", () => {
-    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
-    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
+    addTableTab({
+      title: "public.users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "public.orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
 
     render(<TabBar />);
 
     const state = useTabStore.getState();
     expect(state.tabs).toHaveLength(2);
 
-    const ordersTab = screen.getByText("Orders").closest("[role='tab']")!;
+    const ordersTab = screen.getByText("orders").closest("[role='tab']")!;
     fireAuxClick(ordersTab, 1);
 
     expect(useTabStore.getState().tabs).toHaveLength(1);
-    expect(screen.queryByText("Orders")).not.toBeInTheDocument();
+    expect(screen.queryByText("orders")).not.toBeInTheDocument();
   });
 
   it("does not close tab on right-click (auxclick button 2)", () => {
-    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
-    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
+    addTableTab({
+      title: "public.users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "public.orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
 
     render(<TabBar />);
 
-    const ordersTab = screen.getByText("Orders").closest("[role='tab']")!;
+    const ordersTab = screen.getByText("orders").closest("[role='tab']")!;
     fireAuxClick(ordersTab, 2);
 
     expect(useTabStore.getState().tabs).toHaveLength(2);
   });
 
   it("activates tab on click", () => {
-    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
-    addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
+    addTableTab({
+      title: "public.users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "public.orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
 
     render(<TabBar />);
 
@@ -89,7 +142,7 @@ describe("TabBar", () => {
     const firstTabId = state.tabs[0]!.id;
 
     // Click the first tab (second tab is currently active)
-    const usersTab = screen.getByText("Users").closest("[role='tab']")!;
+    const usersTab = screen.getByText("users").closest("[role='tab']")!;
     act(() => {
       fireEvent.click(usersTab);
     });
@@ -229,16 +282,16 @@ describe("TabBar", () => {
   // ── Sprint 29: Preview Tab Display ──
 
   it("preview tab has italic title", () => {
-    addTableTab({ title: "Users", table: "users" });
+    addTableTab({ title: "public.users", table: "users" });
     // New tabs are preview by default
 
     render(<TabBar />);
-    const titleEl = screen.getByText("Users");
+    const titleEl = screen.getByText("users");
     expect(titleEl.className).toContain("italic");
   });
 
   it("permanent tab does not have italic title", () => {
-    addTableTab({ title: "Users", table: "users" });
+    addTableTab({ title: "public.users", table: "users" });
 
     // Promote the tab to permanent
     const state = useTabStore.getState();
@@ -246,20 +299,20 @@ describe("TabBar", () => {
     useTabStore.getState().promoteTab(tabId);
 
     render(<TabBar />);
-    const titleEl = screen.getByText("Users");
+    const titleEl = screen.getByText("users");
     expect(titleEl.className).not.toContain("italic");
   });
 
   // ── Sprint 43: Double-click tab promotion ──
 
   it("promotes preview tab on double-click", () => {
-    addTableTab({ title: "Users", table: "users" });
+    addTableTab({ title: "public.users", table: "users" });
     // New tab is preview by default
     const state = useTabStore.getState();
     expect((state.tabs[0] as TableTab).isPreview).toBe(true);
 
     render(<TabBar />);
-    const tab = screen.getByText("Users").closest("[role='tab']")!;
+    const tab = screen.getByText("users").closest("[role='tab']")!;
     act(() => {
       fireEvent.doubleClick(tab);
     });
@@ -269,13 +322,13 @@ describe("TabBar", () => {
   });
 
   it("does not change permanent tab on double-click", () => {
-    addTableTab({ title: "Users", table: "users" });
+    addTableTab({ title: "public.users", table: "users" });
     const state = useTabStore.getState();
     const tabId = state.tabs[0]!.id;
     useTabStore.getState().promoteTab(tabId);
 
     render(<TabBar />);
-    const tab = screen.getByText("Users").closest("[role='tab']")!;
+    const tab = screen.getByText("users").closest("[role='tab']")!;
     act(() => {
       fireEvent.doubleClick(tab);
     });
