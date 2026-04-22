@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { QueryState } from "@/types/query";
+import type { FilterCondition } from "@/types/schema";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -32,6 +33,8 @@ export interface TableTab {
   objectKind?: TabObjectKind;
   /** When true, clicking another table in the same connection replaces this tab. */
   isPreview?: boolean;
+  /** Pre-applied filters when the tab is opened (e.g. from FK navigation). Consumed once on mount. */
+  initialFilters?: FilterCondition[];
 }
 
 /** A tab that hosts the SQL query editor. */

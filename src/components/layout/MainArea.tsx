@@ -74,6 +74,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           connectionId={tab.connectionId}
           table={tab.table!}
           schema={tab.schema!}
+          initialFilters={tab.initialFilters}
         />
       ) : tab.objectKind === "view" ? (
         <ViewStructurePanel

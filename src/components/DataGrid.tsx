@@ -26,6 +26,7 @@ interface DataGridProps {
   connectionId: string;
   table: string;
   schema: string;
+  initialFilters?: FilterCondition[];
 }
 
 const DEFAULT_PAGE_SIZE = 300;
@@ -34,19 +35,27 @@ export default function DataGrid({
   connectionId,
   table,
   schema,
+  initialFilters,
 }: DataGridProps) {
   const queryTableData = useSchemaStore((s) => s.queryTableData);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
+  const addTab = useTabStore((s) => s.addTab);
   const [data, setData] = useState<TableData | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sorts, setSorts] = useState<SortInfo[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<FilterCondition[]>([]);
-  const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>([]);
+  const [showFilters, setShowFilters] = useState(
+    () => (initialFilters?.length ?? 0) > 0,
+  );
+  const [filters, setFilters] = useState<FilterCondition[]>(
+    () => initialFilters ?? [],
+  );
+  const [appliedFilters, setAppliedFilters] = useState<FilterCondition[]>(
+    () => initialFilters ?? [],
+  );
   const [showQuery, setShowQuery] = useState(true);
   const [filterMode, setFilterMode] = useState<FilterMode>("structured");
   const [rawSql, setRawSql] = useState("");
@@ -226,6 +235,34 @@ export default function DataGrid({
     setPage(1);
   };
 
+  const handleNavigateToFk = useCallback(
+    (
+      refSchema: string,
+      refTable: string,
+      refColumn: string,
+      cellValue: string,
+    ) => {
+      addTab({
+        type: "table",
+        connectionId,
+        schema: refSchema,
+        table: refTable,
+        title: `${refSchema}.${refTable}`,
+        closable: true,
+        subView: "records",
+        initialFilters: [
+          {
+            id: crypto.randomUUID(),
+            column: refColumn,
+            operator: "Eq",
+            value: cellValue,
+          },
+        ],
+      });
+    },
+    [addTab, connectionId],
+  );
+
   const handleApplyFilters = () => {
     if (filterMode === "raw") {
       setAppliedRawSql(rawSql);
@@ -336,6 +373,7 @@ export default function DataGrid({
           onColumnWidthsChange={setColumnWidths}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
+          onNavigateToFk={handleNavigateToFk}
         />
       )}
 

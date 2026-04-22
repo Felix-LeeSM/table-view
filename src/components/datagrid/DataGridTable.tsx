@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Loader2, Key, Binary } from "lucide-react";
+import { Loader2, Key, Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { truncateCell } from "@lib/format";
 import type { SortInfo, TableData } from "@/types/schema";
@@ -33,6 +33,14 @@ import {
 import type { CopyRowData } from "@lib/format";
 
 const MIN_COL_WIDTH = 60;
+
+function parseFkReference(
+  ref: string,
+): { schema: string; table: string; column: string } | null {
+  const match = ref.match(/^(.+)\.(.+)\((.+)\)$/);
+  if (!match) return null;
+  return { schema: match[1]!, table: match[2]!, column: match[3]! };
+}
 
 function isBlobColumn(dataType: string): boolean {
   const lower = dataType.toLowerCase();
@@ -77,6 +85,12 @@ export interface DataGridTableProps {
   ) => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
+  onNavigateToFk?: (
+    schema: string,
+    table: string,
+    column: string,
+    value: string,
+  ) => void;
 }
 
 export default function DataGridTable({
@@ -103,6 +117,7 @@ export default function DataGridTable({
   onColumnWidthsChange,
   onDeleteRow,
   onDuplicateRow,
+  onNavigateToFk,
 }: DataGridTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
   // Tracks mousedown position on column headers to distinguish clicks from drags.
@@ -515,11 +530,16 @@ export default function DataGridTable({
                     : cellStr;
                   const isBlob = isBlobColumn(col.data_type);
 
+                  const fkRef =
+                    col.is_foreign_key && col.fk_reference && cell != null
+                      ? parseFkReference(col.fk_reference)
+                      : null;
+
                   return (
                     <td
                       key={`${dIdx}-${visualIdx}`}
                       data-editing={isEditing ? "true" : undefined}
-                      className={`overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
+                      className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
                         isEditing
                           ? " bg-primary/10 ring-2 ring-inset ring-primary"
                           : hasPendingEdit
@@ -602,11 +622,33 @@ export default function DataGridTable({
                           NULL
                         </span>
                       ) : (
-                        <span className="line-clamp-3">
-                          {truncateCell(
-                            typeof cell === "object" && cell !== null
-                              ? JSON.stringify(cell, null, 2)
-                              : String(cell),
+                        <span className="flex items-center gap-1">
+                          <span className="line-clamp-3">
+                            {truncateCell(
+                              typeof cell === "object" && cell !== null
+                                ? JSON.stringify(cell, null, 2)
+                                : String(cell),
+                            )}
+                          </span>
+                          {fkRef && onNavigateToFk && (
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="invisible shrink-0 group-hover/cell:visible text-muted-foreground hover:text-foreground"
+                              aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
+                              title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNavigateToFk(
+                                  fkRef.schema,
+                                  fkRef.table,
+                                  fkRef.column,
+                                  String(cell),
+                                );
+                              }}
+                            >
+                              <ArrowUpRight size={10} />
+                            </Button>
                           )}
                         </span>
                       )}
