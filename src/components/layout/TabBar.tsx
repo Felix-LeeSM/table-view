@@ -17,7 +17,10 @@ export default function TabBar() {
 
   // Visual feedback states
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<{
+    id: string;
+    side: "before" | "after";
+  } | null>(null);
 
   const [ghostStyle, setGhostStyle] = useState<{
     x: number;
@@ -62,11 +65,7 @@ export default function TabBar() {
             tab.id === activeTabId
               ? "bg-background text-foreground border-b-2 border-b-primary"
               : "text-secondary-foreground hover:bg-muted"
-          } ${draggingId === tab.id ? "opacity-50" : ""} ${
-            dragOverId === tab.id && draggingId !== tab.id
-              ? "ring-2 ring-inset ring-primary/60"
-              : ""
-          }`}
+          } ${draggingId === tab.id ? "opacity-50" : ""}`}
           onClick={() => setActiveTab(tab.id)}
           onDoubleClick={() => {
             if (tab.type === "table" && (tab as TableTab).isPreview) {
@@ -129,7 +128,7 @@ export default function TabBar() {
             const handleMouseUp = () => {
               dragStateRef.current = null;
               setDraggingId(null);
-              setDragOverId(null);
+              setDragOver(null);
               setGhostStyle(null);
               document.body.style.cursor = "";
               document.body.style.userSelect = "";
@@ -140,23 +139,31 @@ export default function TabBar() {
             document.addEventListener("mousemove", handleMouseMove);
             document.addEventListener("mouseup", handleMouseUp);
           }}
-          onMouseEnter={() => {
+          onMouseMove={(e) => {
             if (
-              dragStateRef.current?.isDragging &&
-              dragStateRef.current.tabId !== tab.id
-            ) {
-              setDragOverId(tab.id);
-            }
+              !dragStateRef.current?.isDragging ||
+              dragStateRef.current.tabId === tab.id
+            )
+              return;
+            const rect = (
+              e.currentTarget as HTMLElement
+            ).getBoundingClientRect();
+            const side =
+              e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+            setDragOver({ id: tab.id, side });
           }}
           onMouseLeave={() => {
-            if (dragStateRef.current?.isDragging) {
-              setDragOverId(null);
-            }
+            if (dragStateRef.current?.isDragging) setDragOver(null);
           }}
-          onMouseUp={() => {
+          onMouseUp={(e) => {
             const src = dragStateRef.current;
             if (src?.isDragging && src.tabId !== tab.id) {
-              moveTab(src.tabId, tab.id);
+              const rect = (
+                e.currentTarget as HTMLElement
+              ).getBoundingClientRect();
+              const side =
+                e.clientX < rect.left + rect.width / 2 ? "before" : "after";
+              moveTab(src.tabId, tab.id, side);
             }
           }}
         >
@@ -176,6 +183,15 @@ export default function TabBar() {
               />
             );
           })()}
+          {/* Drop indicator line */}
+          {dragOver?.id === tab.id && draggingId !== tab.id && (
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-y-0 w-0.5 bg-primary ${
+                dragOver.side === "before" ? "left-0" : "right-0"
+              }`}
+            />
+          )}
           {tab.type === "query" ? (
             <Code2 size={12} className="shrink-0 text-muted-foreground" />
           ) : (

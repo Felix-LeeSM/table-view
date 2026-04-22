@@ -97,7 +97,11 @@ interface TabState {
   reopenLastClosedTab: () => void;
 
   // Reorder tabs by drag-and-drop
-  moveTab: (fromId: string, toId: string) => void;
+  moveTab: (
+    fromId: string,
+    toId: string,
+    position?: "before" | "after",
+  ) => void;
 
   // Persistence
   loadPersistedTabs: () => void;
@@ -247,7 +251,7 @@ export const useTabStore = create<TabState>((set) => ({
       ),
     })),
 
-  moveTab: (fromId, toId) => {
+  moveTab: (fromId, toId, position = "before") => {
     if (fromId === toId) return;
     set((state) => {
       const tabs = [...state.tabs];
@@ -255,7 +259,11 @@ export const useTabStore = create<TabState>((set) => ({
       const toIdx = tabs.findIndex((t) => t.id === toId);
       if (fromIdx === -1 || toIdx === -1) return state;
       const [moved] = tabs.splice(fromIdx, 1);
-      tabs.splice(toIdx, 0, moved!);
+      // toIdx shifts left by 1 if the removed element was before it
+      const adjustedToIdx = toIdx > fromIdx ? toIdx - 1 : toIdx;
+      const insertIdx =
+        position === "before" ? adjustedToIdx : adjustedToIdx + 1;
+      tabs.splice(insertIdx, 0, moved!);
       return { tabs };
     });
   },

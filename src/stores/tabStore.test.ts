@@ -515,7 +515,7 @@ describe("tabStore", () => {
       useTabStore.setState({ tabs: [], activeTabId: null });
     });
 
-    it("moves a tab to a different position", () => {
+    it("inserts BEFORE the target when position='before'", () => {
       useTabStore.getState().addQueryTab("conn1");
       useTabStore.getState().addQueryTab("conn1");
       useTabStore.getState().addQueryTab("conn1");
@@ -523,11 +523,39 @@ describe("tabStore", () => {
       const before = useTabStore.getState().tabs.map((t) => t.id);
       expect(before).toHaveLength(3);
 
-      // Move the first tab to where the third is
-      useTabStore.getState().moveTab(before[0]!, before[2]!);
+      useTabStore.getState().moveTab(before[0]!, before[2]!, "before");
 
       const after = useTabStore.getState().tabs.map((t) => t.id);
+      // t0 inserts before t2 → [t1, t0, t2]
+      expect(after).toEqual([before[1], before[0], before[2]]);
+    });
+
+    it("inserts AFTER the target when position='after'", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+
+      const before = useTabStore.getState().tabs.map((t) => t.id);
+
+      useTabStore.getState().moveTab(before[0]!, before[2]!, "after");
+
+      const after = useTabStore.getState().tabs.map((t) => t.id);
+      // t0 inserts after t2 → [t1, t2, t0]
       expect(after).toEqual([before[1], before[2], before[0]]);
+    });
+
+    it("inserts BEFORE when dragging right-to-left with position='before'", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+
+      const before = useTabStore.getState().tabs.map((t) => t.id);
+
+      useTabStore.getState().moveTab(before[2]!, before[0]!, "before");
+
+      const after = useTabStore.getState().tabs.map((t) => t.id);
+      // t2 inserts before t0 → [t2, t0, t1]
+      expect(after).toEqual([before[2], before[0], before[1]]);
     });
 
     it("is a no-op when fromId === toId", () => {
