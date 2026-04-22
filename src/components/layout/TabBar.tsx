@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, Table2, Code2, Plus } from "lucide-react";
 import { useTabStore, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -15,8 +15,16 @@ export default function TabBar() {
   const moveTab = useTabStore((s) => s.moveTab);
   const connections = useConnectionStore((s) => s.connections);
 
+  // Visual feedback states
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  // Ref for drag state — used in native DOM listeners (no stale closure issues)
+  const dragStateRef = useRef<{
+    tabId: string;
+    startX: number;
+    isDragging: boolean;
+  } | null>(null);
 
   // Find the connectionId from the active tab to use for new query tabs.
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -34,9 +42,9 @@ export default function TabBar() {
         <div
           key={tab.id}
           role="tab"
+          data-tab-id={tab.id}
           aria-selected={tab.id === activeTabId}
           tabIndex={tab.id === activeTabId ? 0 : -1}
-          draggable
           className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1.5 text-sm cursor-pointer select-none transition-opacity ${
             tab.id === activeTabId
               ? "bg-background text-foreground border-b-2 border-b-primary"
@@ -64,31 +72,59 @@ export default function TabBar() {
               setActiveTab(tab.id);
             }
           }}
-          onDragStart={(e) => {
-            // dataTransfer can be null/undefined in jsdom and some WebViews
-            e.dataTransfer?.setData("text/plain", tab.id);
-            setDraggingId(tab.id);
+          // Mouse-based drag reorder — more reliable than HTML5 DnD in WKWebView
+          onMouseDown={(e) => {
+            if (e.button !== 0) return; // primary button only
+            dragStateRef.current = {
+              tabId: tab.id,
+              startX: e.clientX,
+              isDragging: false,
+            };
+
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              if (!dragStateRef.current) return;
+              const dx = Math.abs(
+                moveEvent.clientX - dragStateRef.current.startX,
+              );
+              if (dx > 4 && !dragStateRef.current.isDragging) {
+                dragStateRef.current.isDragging = true;
+                setDraggingId(dragStateRef.current.tabId);
+                document.body.style.cursor = "grabbing";
+                document.body.style.userSelect = "none";
+              }
+            };
+
+            const handleMouseUp = () => {
+              dragStateRef.current = null;
+              setDraggingId(null);
+              setDragOverId(null);
+              document.body.style.cursor = "";
+              document.body.style.userSelect = "";
+              document.removeEventListener("mousemove", handleMouseMove);
+              document.removeEventListener("mouseup", handleMouseUp);
+            };
+
+            document.addEventListener("mousemove", handleMouseMove);
+            document.addEventListener("mouseup", handleMouseUp);
           }}
-          onDragEnd={() => {
-            setDraggingId(null);
-            setDragOverId(null);
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (draggingId && draggingId !== tab.id) {
+          onMouseEnter={() => {
+            if (
+              dragStateRef.current?.isDragging &&
+              dragStateRef.current.tabId !== tab.id
+            ) {
               setDragOverId(tab.id);
             }
           }}
-          onDragLeave={() => setDragOverId(null)}
-          onDrop={(e) => {
-            e.preventDefault();
-            // dataTransfer can be null/undefined (jsdom, WKWebView on Tauri).
-            // Fall back to the draggingId React state which is always reliable.
-            const fromId = e.dataTransfer?.getData("text/plain") || draggingId;
-            if (fromId && fromId !== tab.id) {
-              moveTab(fromId, tab.id);
+          onMouseLeave={() => {
+            if (dragStateRef.current?.isDragging) {
+              setDragOverId(null);
             }
-            setDragOverId(null);
+          }}
+          onMouseUp={() => {
+            const src = dragStateRef.current;
+            if (src?.isDragging && src.tabId !== tab.id) {
+              moveTab(src.tabId, tab.id);
+            }
           }}
         >
           {(() => {

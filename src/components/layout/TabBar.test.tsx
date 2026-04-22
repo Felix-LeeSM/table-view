@@ -366,25 +366,15 @@ describe("TabBar", () => {
     setThreeTabs();
     render(<TabBar />);
 
+    const before = useTabStore.getState().tabs.map((t) => t.id);
     const tabs = screen.getAllByRole("tab");
     expect(tabs).toHaveLength(3);
 
-    // Capture IDs before drag
-    const before = useTabStore.getState().tabs.map((t) => t.id);
-
     act(() => {
-      fireEvent.dragStart(tabs[0]!);
-    });
-    // Re-query after state update so we get the current DOM nodes
-    const tabsAfterDrag = screen.getAllByRole("tab");
-    act(() => {
-      fireEvent.dragOver(tabsAfterDrag[2]!);
-    });
-    act(() => {
-      fireEvent.drop(tabsAfterDrag[2]!);
-    });
-    act(() => {
-      fireEvent.dragEnd(tabsAfterDrag[0]!);
+      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
+      fireEvent.mouseMove(document, { clientX: 10 }); // dx=10 > 4 → isDragging
+      fireEvent.mouseEnter(tabs[2]!);
+      fireEvent.mouseUp(tabs[2]!);
     });
 
     const after = useTabStore.getState().tabs.map((t) => t.id);
@@ -396,14 +386,13 @@ describe("TabBar", () => {
     setThreeTabs();
     render(<TabBar />);
 
-    const tabs = screen.getAllByRole("tab");
     const before = useTabStore.getState().tabs.map((t) => t.id);
+    const tabs = screen.getAllByRole("tab");
 
     act(() => {
-      fireEvent.dragStart(tabs[0]!);
-    });
-    act(() => {
-      fireEvent.drop(tabs[0]!);
+      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
+      fireEvent.mouseMove(document, { clientX: 10 }); // isDragging = true
+      fireEvent.mouseUp(tabs[0]!); // same tab → no reorder
     });
 
     expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
@@ -414,16 +403,13 @@ describe("TabBar", () => {
     render(<TabBar />);
 
     const { activeTabId } = useTabStore.getState();
+    const tabs = screen.getAllByRole("tab");
 
     act(() => {
-      fireEvent.dragStart(screen.getAllByRole("tab")[0]!);
-    });
-    const tabs = screen.getAllByRole("tab");
-    act(() => {
-      fireEvent.dragOver(tabs[2]!);
-    });
-    act(() => {
-      fireEvent.drop(tabs[2]!);
+      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
+      fireEvent.mouseMove(document, { clientX: 10 });
+      fireEvent.mouseEnter(tabs[2]!);
+      fireEvent.mouseUp(tabs[2]!);
     });
 
     expect(useTabStore.getState().activeTabId).toBe(activeTabId);
