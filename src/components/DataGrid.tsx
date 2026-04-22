@@ -28,7 +28,7 @@ interface DataGridProps {
   schema: string;
 }
 
-const DEFAULT_PAGE_SIZE = 100;
+const DEFAULT_PAGE_SIZE = 300;
 
 export default function DataGrid({
   connectionId,

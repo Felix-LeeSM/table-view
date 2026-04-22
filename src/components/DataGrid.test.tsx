@@ -122,7 +122,7 @@ describe("DataGrid", () => {
       "users",
       "public",
       1,
-      100,
+      300,
       undefined,
       undefined,
       undefined,
@@ -362,11 +362,11 @@ describe("DataGrid", () => {
     const user = userEvent.setup();
     const bigData: TableData = {
       ...MOCK_DATA,
-      total_count: 250,
+      total_count: 700,
     };
     mockQueryTableData.mockResolvedValue(bigData);
     renderDataGrid();
-    await screen.findByText("250 rows");
+    await screen.findByText("700 rows");
 
     const nextBtn = screen.getByLabelText("Next page");
     await user.click(nextBtn);
@@ -738,7 +738,7 @@ describe("DataGrid", () => {
 
     const select = screen.getByLabelText("Page size") as HTMLSelectElement;
     expect(select).toBeInTheDocument();
-    expect(select.value).toBe("100");
+    expect(select.value).toBe("300");
   });
 
   // 30. Changes page size when selector changes
@@ -810,16 +810,16 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    // totalPages = ceil(500/100) = 5
-    expect(lastCall[3]).toBe(5);
+    // totalPages = ceil(500/300) = 2
+    expect(lastCall[3]).toBe(2);
   });
 
   // 34. Jump to page input works
   it("jump to page input works", async () => {
-    const bigData: TableData = { ...MOCK_DATA, total_count: 500 };
+    const bigData: TableData = { ...MOCK_DATA, total_count: 1200 };
     mockQueryTableData.mockResolvedValue(bigData);
     renderDataGrid();
-    await screen.findByText("500 rows");
+    await screen.findByText("1,200 rows");
 
     const jumpInput = screen.getByLabelText("Jump to page") as HTMLInputElement;
     expect(jumpInput).toBeInTheDocument();

@@ -194,7 +194,7 @@ export default function DataGridToolbar({
             </span>
           )}
         </Button>
-        {data && totalPages > 1 && (
+        {data && (
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -214,15 +214,19 @@ export default function DataGridToolbar({
             >
               <ChevronLeft />
             </Button>
-            <span className="text-xs text-muted-foreground">
-              {page} / {totalPages}
-            </span>
             <input
               type="number"
               min={1}
               max={totalPages}
+              value={page}
               className="w-10 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               aria-label="Jump to page"
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (val >= 1 && val <= totalPages) {
+                  onSetPage(val);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   const val = parseInt(
@@ -235,6 +239,9 @@ export default function DataGridToolbar({
                 }
               }}
             />
+            <span className="text-xs text-muted-foreground">
+              / {totalPages}
+            </span>
             <Button
               variant="ghost"
               size="icon-xs"
