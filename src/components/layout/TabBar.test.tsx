@@ -162,28 +162,6 @@ describe("TabBar", () => {
     expect(useTabStore.getState().tabs).toHaveLength(0);
   });
 
-  it("shows + button for new query tab when connection is active", () => {
-    addTableTab({ title: "Users", table: "users" });
-
-    render(<TabBar />);
-    expect(screen.getByLabelText("New Query Tab")).toBeInTheDocument();
-  });
-
-  it("adds query tab on + button click", () => {
-    addTableTab({ title: "Users", table: "users" });
-
-    render(<TabBar />);
-    const addBtn = screen.getByLabelText("New Query Tab");
-    act(() => {
-      fireEvent.click(addBtn);
-    });
-
-    const state = useTabStore.getState();
-    expect(state.tabs).toHaveLength(2);
-    expect(state.tabs[1]!.type).toBe("query");
-    expect(state.activeTabId).toBe(state.tabs[1]!.id);
-  });
-
   it("renders query tab with correct icon", () => {
     addTableTab({ title: "Users", table: "users" });
     useTabStore.getState().addQueryTab("conn1");

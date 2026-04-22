@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Table2, Code2, Plus } from "lucide-react";
+import { X, Table2, Code2 } from "lucide-react";
 import { useTabStore, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
@@ -11,7 +11,6 @@ export default function TabBar() {
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const removeTab = useTabStore((s) => s.removeTab);
   const promoteTab = useTabStore((s) => s.promoteTab);
-  const addQueryTab = useTabStore((s) => s.addQueryTab);
   const moveTab = useTabStore((s) => s.moveTab);
   const connections = useConnectionStore((s) => s.connections);
 
@@ -48,10 +47,6 @@ export default function TabBar() {
     tabTitle: string;
     tabType: "table" | "query";
   } | null>(null);
-
-  // Find the connectionId from the active tab to use for new query tabs.
-  const activeTab = tabs.find((t) => t.id === activeTabId);
-  const activeConnectionId = activeTab?.connectionId ?? "";
 
   // Table names that appear in more than one open tab — these need schema prefix.
   const tableNames = tabs
@@ -221,20 +216,6 @@ export default function TabBar() {
           </div>
         ))}
       </div>
-
-      {/* New query tab button — stays fixed on the right outside the scroll area */}
-      {activeConnectionId && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-          aria-label="New Query Tab"
-          title="New Query Tab"
-          onClick={() => addQueryTab(activeConnectionId)}
-        >
-          <Plus size={14} />
-        </Button>
-      )}
 
       {/* Drag ghost — follows cursor during tab drag */}
       {ghostStyle && (
