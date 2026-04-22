@@ -431,40 +431,28 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
   return (
     <div className="flex flex-col select-none">
-      {/* Action strip */}
-      <div className="flex items-center justify-end gap-1 border-b border-border px-3 py-1">
-        <span className="sr-only">{connectionName || connectionId}</span>
-        <div className="flex gap-1">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => addQueryTab(connectionId)}
-            aria-label="New Query"
-            title="New Query"
-          >
-            <Code2 />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={handleRefresh}
-            disabled={loadingSchemas}
-            aria-label="Refresh schemas"
-          >
-            {loadingSchemas ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <RefreshCw />
-            )}
-          </Button>
-        </div>
-      </div>
+      {/* sr-only connection name for accessibility */}
+      <span className="sr-only">{connectionName || connectionId}</span>
 
-      {/* "Schemas" header label */}
-      <div className="px-3 py-1">
+      {/* "Schemas" header label + refresh button */}
+      <div className="flex items-center justify-between px-3 py-1">
         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           Schemas
         </span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={handleRefresh}
+          disabled={loadingSchemas}
+          aria-label="Refresh schemas"
+          title="Refresh schemas"
+        >
+          {loadingSchemas ? (
+            <Loader2 className="animate-spin" size={12} />
+          ) : (
+            <RefreshCw size={12} />
+          )}
+        </Button>
       </div>
 
       {schemas.map((schema, schemaIndex) => {

@@ -33,7 +33,6 @@ import {
 import type { CopyRowData } from "@lib/format";
 
 const MIN_COL_WIDTH = 60;
-const RESIZE_HANDLE_WIDTH = 4; // w-1 = 4px
 
 function isBlobColumn(dataType: string): boolean {
   const lower = dataType.toLowerCase();
@@ -76,7 +75,6 @@ export interface DataGridTableProps {
   onColumnWidthsChange: (
     updater: (prev: Record<string, number>) => Record<string, number>,
   ) => void;
-  onReorderColumns: (newOrder: number[]) => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
 }
@@ -103,7 +101,6 @@ export default function DataGridTable({
   onSelectRow,
   onSort,
   onColumnWidthsChange,
-  onReorderColumns,
   onDeleteRow,
   onDuplicateRow,
 }: DataGridTableProps) {
@@ -138,14 +135,6 @@ export default function DataGridTable({
     dataType: string;
   } | null>(null);
 
-  // Column drag reorder state
-  const [dragColIdx, setDragColIdx] = useState<number | null>(null);
-  const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
-  // Refs to track latest drag state without closure issues
-  const dragColIdxRef = useRef<number | null>(null);
-  const dropTargetIdxRef = useRef<number | null>(null);
-  const orderRef = useRef<number[]>([]);
-
   // The visual order: columnOrder[visualIdx] = dataIdx
   // If columnOrder is empty/default, fall back to identity mapping
   const visualCount = data.columns.length;
@@ -153,7 +142,6 @@ export default function DataGridTable({
     columnOrder.length === visualCount
       ? columnOrder
       : data.columns.map((_, i) => i);
-  orderRef.current = order;
 
   const getColumnWidth = useCallback(
     (colName: string, dataType: string = "") => {
@@ -401,80 +389,6 @@ export default function DataGridTable({
     [columnWidths, onColumnWidthsChange],
   );
 
-  // --- Column drag reorder handlers ---
-
-  const handleDragStart = useCallback(
-    (e: React.DragEvent, visualIdx: number) => {
-      // Don't start drag if near the resize handle (right edge)
-      const th = e.currentTarget as HTMLElement;
-      const rect = th.getBoundingClientRect();
-      if (rect.width > 0) {
-        const offsetX = e.clientX - rect.left;
-        if (offsetX > rect.width - RESIZE_HANDLE_WIDTH) {
-          e.preventDefault();
-          return;
-        }
-      }
-      dragColIdxRef.current = visualIdx;
-      dropTargetIdxRef.current = null;
-      setDragColIdx(visualIdx);
-      setDropTargetIdx(null);
-      e.dataTransfer.effectAllowed = "move";
-      // Need to set some data for Firefox compatibility
-      e.dataTransfer.setData("text/plain", String(visualIdx));
-    },
-    [],
-  );
-
-  const handleDragOver = useCallback(
-    (e: React.DragEvent, visualIdx: number) => {
-      e.preventDefault();
-      if (dragColIdxRef.current === null) return;
-      // Determine drop position: left half of cell = before, right half = after
-      const th = e.currentTarget as HTMLElement;
-      const rect = th.getBoundingClientRect();
-      const midX = rect.left + rect.width / 2;
-      let targetIdx = visualIdx;
-      if (e.clientX > midX) {
-        targetIdx = visualIdx + 1;
-      }
-      // Don't allow dropping on self or adjacent same position
-      if (
-        targetIdx === dragColIdxRef.current ||
-        targetIdx === dragColIdxRef.current + 1
-      ) {
-        dropTargetIdxRef.current = null;
-        setDropTargetIdx(null);
-        return;
-      }
-      dropTargetIdxRef.current = targetIdx;
-      setDropTargetIdx(targetIdx);
-    },
-    [],
-  );
-
-  const handleDragEnd = useCallback(() => {
-    const from = dragColIdxRef.current;
-    const to = dropTargetIdxRef.current;
-    if (from !== null && to !== null) {
-      const currentOrder = orderRef.current;
-      const newOrder = [...currentOrder];
-      const [removed] = newOrder.splice(from, 1);
-      const insertIdx = to > from ? to - 1 : to;
-      newOrder.splice(insertIdx, 0, removed!);
-      onReorderColumns(newOrder);
-    }
-    dragColIdxRef.current = null;
-    dropTargetIdxRef.current = null;
-    setDragColIdx(null);
-    setDropTargetIdx(null);
-  }, [onReorderColumns]);
-
-  const handleDragLeave = useCallback(() => {
-    // Only clear if actually leaving the th, not entering a child element
-    setDropTargetIdx(null);
-  }, []);
-
   const rowKeyFn = (rowIdx: number) => `row-${page}-${rowIdx}`;
 
   return (
@@ -494,37 +408,17 @@ export default function DataGridTable({
               const col = data.columns[dIdx]!;
               const sortInfo = sorts.find((s) => s.column === col.name);
               const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
-              const isDragged = dragColIdx === visualIdx;
-              const showDropBefore =
-                dropTargetIdx === visualIdx && dropTargetIdx !== dragColIdx;
-              const showDropAfter =
-                dropTargetIdx === visualIdx + 1 &&
-                dragColIdx !== null &&
-                dropTargetIdx !== dragColIdx + 1;
               return (
                 <th
                   key={col.name}
-                  className={`relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted${isDragged ? " opacity-50" : ""}`}
+                  className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
                   style={{
                     width: getColumnWidth(col.name, col.data_type),
                     minWidth: MIN_COL_WIDTH,
                   }}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, visualIdx)}
-                  onDragOver={(e) => handleDragOver(e, visualIdx)}
-                  onDragEnd={handleDragEnd}
-                  onDragLeave={handleDragLeave}
                   onClick={(e) => onSort(col.name, e.shiftKey)}
                   title={`Sort by ${col.name}`}
                 >
-                  {/* Drop indicator: vertical line before this column */}
-                  {showDropBefore && (
-                    <div className="absolute left-0 top-0 h-full w-0.5 bg-primary z-20" />
-                  )}
-                  {/* Drop indicator: vertical line after this column */}
-                  {showDropAfter && (
-                    <div className="absolute right-0 top-0 h-full w-0.5 bg-primary z-20" />
-                  )}
                   <div className="flex items-center gap-1">
                     {col.is_primary_key && (
                       <span title="Primary Key">

@@ -508,6 +508,58 @@ describe("tabStore", () => {
     });
   });
 
+  // -- Tab drag reorder --
+
+  describe("moveTab", () => {
+    beforeEach(() => {
+      useTabStore.setState({ tabs: [], activeTabId: null });
+    });
+
+    it("moves a tab to a different position", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+
+      const before = useTabStore.getState().tabs.map((t) => t.id);
+      expect(before).toHaveLength(3);
+
+      // Move the first tab to where the third is
+      useTabStore.getState().moveTab(before[0]!, before[2]!);
+
+      const after = useTabStore.getState().tabs.map((t) => t.id);
+      expect(after).toEqual([before[1], before[2], before[0]]);
+    });
+
+    it("is a no-op when fromId === toId", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+
+      const before = useTabStore.getState().tabs.map((t) => t.id);
+      useTabStore.getState().moveTab(before[0]!, before[0]!);
+
+      expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+    });
+
+    it("is a no-op when an id does not exist", () => {
+      useTabStore.getState().addQueryTab("conn1");
+
+      const before = useTabStore.getState().tabs.map((t) => t.id);
+      useTabStore.getState().moveTab(before[0]!, "ghost-id");
+
+      expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+    });
+
+    it("does not change activeTabId", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      useTabStore.getState().addQueryTab("conn1");
+
+      const { activeTabId, tabs } = useTabStore.getState();
+      useTabStore.getState().moveTab(tabs[0]!.id, tabs[1]!.id);
+
+      expect(useTabStore.getState().activeTabId).toBe(activeTabId);
+    });
+  });
+
   // -- Sprint 45: Reopen last closed tab --
 
   describe("reopen last closed tab", () => {

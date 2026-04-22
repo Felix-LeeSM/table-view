@@ -96,6 +96,9 @@ interface TabState {
   // Reopen last closed tab
   reopenLastClosedTab: () => void;
 
+  // Reorder tabs by drag-and-drop
+  moveTab: (fromId: string, toId: string) => void;
+
   // Persistence
   loadPersistedTabs: () => void;
 }
@@ -243,6 +246,19 @@ export const useTabStore = create<TabState>((set) => ({
         t.id === tabId && t.type === "query" ? { ...t, queryState } : t,
       ),
     })),
+
+  moveTab: (fromId, toId) => {
+    if (fromId === toId) return;
+    set((state) => {
+      const tabs = [...state.tabs];
+      const fromIdx = tabs.findIndex((t) => t.id === fromId);
+      const toIdx = tabs.findIndex((t) => t.id === toId);
+      if (fromIdx === -1 || toIdx === -1) return state;
+      const [moved] = tabs.splice(fromIdx, 1);
+      tabs.splice(toIdx, 0, moved!);
+      return { tabs };
+    });
+  },
 
   loadPersistedTabs: () => {
     try {

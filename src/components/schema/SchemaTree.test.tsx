@@ -277,24 +277,6 @@ describe("SchemaTree", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-06: "New Query" button -> addQueryTab
-  // -----------------------------------------------------------------------
-  it("calls addQueryTab when New Query button is clicked", async () => {
-    await act(async () => {
-      render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const newQueryBtn = screen.getByLabelText("New Query");
-    await act(async () => {
-      fireEvent.click(newQueryBtn);
-    });
-
-    const state = useTabStore.getState();
-    const queryTab = state.tabs.find((t) => t.type === "query");
-    expect(queryTab).toBeDefined();
-  });
-
-  // -----------------------------------------------------------------------
   // AC-07: Refresh button -> reload schemas
   // -----------------------------------------------------------------------
   it("calls loadSchemas again when Refresh button is clicked", async () => {

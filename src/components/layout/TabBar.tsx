@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { X, Table2, Code2, Plus } from "lucide-react";
 import { useTabStore, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -11,7 +12,11 @@ export default function TabBar() {
   const removeTab = useTabStore((s) => s.removeTab);
   const promoteTab = useTabStore((s) => s.promoteTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const moveTab = useTabStore((s) => s.moveTab);
   const connections = useConnectionStore((s) => s.connections);
+
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Find the connectionId from the active tab to use for new query tabs.
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -31,10 +36,15 @@ export default function TabBar() {
           role="tab"
           aria-selected={tab.id === activeTabId}
           tabIndex={tab.id === activeTabId ? 0 : -1}
-          className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1.5 text-sm cursor-pointer select-none ${
+          draggable
+          className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1.5 text-sm cursor-pointer select-none transition-opacity ${
             tab.id === activeTabId
               ? "bg-background text-foreground border-b-2 border-b-primary"
               : "text-secondary-foreground hover:bg-muted"
+          } ${draggingId === tab.id ? "opacity-50" : ""} ${
+            dragOverId === tab.id && draggingId !== tab.id
+              ? "ring-2 ring-inset ring-primary/60"
+              : ""
           }`}
           onClick={() => setActiveTab(tab.id)}
           onDoubleClick={() => {
@@ -53,6 +63,29 @@ export default function TabBar() {
               e.preventDefault();
               setActiveTab(tab.id);
             }
+          }}
+          onDragStart={(e) => {
+            e.dataTransfer.setData("text/plain", tab.id);
+            setDraggingId(tab.id);
+          }}
+          onDragEnd={() => {
+            setDraggingId(null);
+            setDragOverId(null);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (draggingId && draggingId !== tab.id) {
+              setDragOverId(tab.id);
+            }
+          }}
+          onDragLeave={() => setDragOverId(null)}
+          onDrop={(e) => {
+            e.preventDefault();
+            const fromId = e.dataTransfer.getData("text/plain");
+            if (fromId && fromId !== tab.id) {
+              moveTab(fromId, tab.id);
+            }
+            setDragOverId(null);
           }}
         >
           {(() => {

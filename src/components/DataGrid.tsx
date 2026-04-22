@@ -322,7 +322,6 @@ export default function DataGrid({
           onSelectRow={editState.handleSelectRow}
           onSort={handleSort}
           onColumnWidthsChange={setColumnWidths}
-          onReorderColumns={setColumnOrder}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
         />

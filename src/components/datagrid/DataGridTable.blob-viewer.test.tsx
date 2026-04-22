@@ -105,7 +105,6 @@ const defaultProps = {
   onSelectRow: vi.fn(),
   onSort: vi.fn(),
   onColumnWidthsChange: vi.fn(),
-  onReorderColumns: vi.fn(),
   onDeleteRow: vi.fn(),
   onDuplicateRow: vi.fn(),
 };
