@@ -4,6 +4,9 @@
 #   ./scripts/wait-for-test-db.sh
 #   cargo test --test schema_integration --test query_integration
 #   docker compose -f docker-compose.test.yml down
+#
+# Port overrides: copy .env.example → .env and adjust when default ports
+# conflict with locally running services. Compose auto-loads .env.
 
 services:
   postgres:
@@ -14,7 +17,7 @@ services:
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: table_view_test
     ports:
-      - "${PG_PORT:-5432}:5432"
+      - "${PGPORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U testuser -d table_view_test"]
       interval: 2s
@@ -33,7 +36,7 @@ services:
       MYSQL_DATABASE: table_view_test
       MYSQL_ROOT_PASSWORD: rootpass
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "${MYSQL_TCP_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 2s
@@ -42,3 +45,56 @@ services:
       start_period: 10s
     tmpfs:
       - /var/lib/mysql
+
+  mongodb:
+    image: mongo:7
+    container_name: table_view_test_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: testuser
+      MONGO_INITDB_ROOT_PASSWORD: testpass
+      MONGO_INITDB_DATABASE: table_view_test
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    tmpfs:
+      - /data/db
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: table_view_test_elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    tmpfs:
+      - /usr/share/elasticsearch/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: table_view_test_redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 3s

@@ -3,11 +3,11 @@ services:
     image: postgres:16-alpine
     container_name: table_view_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: table_view_test
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+      POSTGRES_DB: ${PGDATABASE:-table_view_test}
     ports:
-      - "5432:5432"
+      - "${PGPORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 

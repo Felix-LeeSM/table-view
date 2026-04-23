@@ -19,7 +19,7 @@ fn env_or(key: &str, default: &str) -> String {
 ///
 /// Environment variable overrides (per DBMS prefix):
 ///   PostgreSQL — `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
-///   MySQL      — `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE`
+///   MySQL      — `MYSQL_HOST`, `MYSQL_TCP_PORT`, `MYSQL_USER`, `MYSQL_PWD`, `MYSQL_DATABASE`
 pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
     match db_type {
         DatabaseType::Postgresql => ConnectionConfig {
@@ -42,9 +42,9 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             name: "TestDB".to_string(),
             db_type: DatabaseType::Mysql,
             host: env_or("MYSQL_HOST", "localhost"),
-            port: env_or("MYSQL_PORT", "3306").parse().unwrap_or(3306),
+            port: env_or("MYSQL_TCP_PORT", "3306").parse().unwrap_or(3306),
             user: env_or("MYSQL_USER", "testuser"),
-            password: env_or("MYSQL_PASSWORD", "testpass"),
+            password: env_or("MYSQL_PWD", "testpass"),
             database: env_or("MYSQL_DATABASE", "table_view_test"),
             group_id: None,
             color: None,
