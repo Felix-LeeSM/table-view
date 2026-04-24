@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
@@ -41,12 +41,42 @@ export default function DataGrid({
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
   const addTab = useTabStore((s) => s.addTab);
+  const updateTabSorts = useTabStore((s) => s.updateTabSorts);
+  // Sprint 76: sort state lives on the active tab so it survives tab
+  // switches (this component unmounts/remounts when the user navigates
+  // away and back). Reading `tab.sorts` makes the tab the single source
+  // of truth; `setSorts` delegates to the store action so sibling tabs
+  // are never touched.
+  const activeTabSorts = useTabStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    if (!tab || tab.type !== "table") return undefined;
+    return tab.sorts;
+  });
+  // Memoise the fallback so `sorts` keeps a stable identity when the tab
+  // has no sort configured. Without this, `fetchData` (which depends on
+  // `sorts`) would rebuild on every render and trigger a fetch loop.
+  const EMPTY_SORTS = useMemo<SortInfo[]>(() => [], []);
+  const sorts: SortInfo[] = activeTabSorts ?? EMPTY_SORTS;
+  const setSorts = useCallback(
+    (updater: SortInfo[] | ((prev: SortInfo[]) => SortInfo[])) => {
+      // Read the live sort value off the store rather than closing over the
+      // render-time `sorts` so two synchronous updates compose correctly.
+      const state = useTabStore.getState();
+      const tabId = state.activeTabId;
+      if (!tabId) return;
+      const tab = state.tabs.find((t) => t.id === tabId);
+      const prev: SortInfo[] =
+        tab && tab.type === "table" ? (tab.sorts ?? []) : [];
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      updateTabSorts(tabId, next);
+    },
+    [updateTabSorts],
+  );
   const [data, setData] = useState<TableData | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sorts, setSorts] = useState<SortInfo[]>([]);
   const [showFilters, setShowFilters] = useState(
     () => (initialFilters?.length ?? 0) > 0,
   );

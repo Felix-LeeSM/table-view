@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
-import type { FilterCondition } from "@/types/schema";
+import type { FilterCondition, SortInfo } from "@/types/schema";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -45,6 +45,17 @@ export interface TableTab {
    * tabs without this field are migrated to `"rdb"` in `loadPersistedTabs`.
    */
   paradigm?: Paradigm;
+  /**
+   * Per-tab sort state. Sprint 76 promotes sort ordering from `DataGrid`'s
+   * local `useState<SortInfo[]>` to tab-scoped store state so a user's
+   * column ordering survives tab switches (the grid unmounts/remounts
+   * between tabs) and persists to localStorage alongside the tab itself.
+   *
+   * Optional for forward-compat with legacy persisted tabs; `loadPersistedTabs`
+   * normalises missing values to `[]` so every downstream consumer can
+   * treat the field as a plain array.
+   */
+  sorts?: SortInfo[];
 }
 
 /** Execution mode for a query tab. SQL statements belong to `"sql"`, while
@@ -123,6 +134,7 @@ interface TabState {
   setActiveTab: (id: string) => void;
   setSubView: (tabId: string, subView: TabSubView) => void;
   promoteTab: (tabId: string) => void;
+  updateTabSorts: (tabId: string, sorts: SortInfo[]) => void;
 
   // Query-tab actions
   addQueryTab: (
@@ -259,6 +271,13 @@ export const useTabStore = create<TabState>((set) => ({
       ),
     })),
 
+  updateTabSorts: (tabId, sorts) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId && t.type === "table" ? { ...t, sorts } : t,
+      ),
+    })),
+
   // -- Query tab actions ----------------------------------------------------
 
   addQueryTab: (connectionId, opts = {}) => {
@@ -363,11 +382,17 @@ export const useTabStore = create<TabState>((set) => ({
         // pre-existing TableTabs that were saved before the `paradigm`
         // field existed. Every legacy persisted tab targeted an RDB, so
         // defaulting to `"rdb"` matches user expectations.
+        //
+        // Sprint 76: normalise the `sorts` field. Older serialised tabs
+        // predate per-tab sort state and omit the key entirely, so we
+        // default to `[]` here rather than threading an `undefined` guard
+        // through every consumer (`DataGrid`, `DataGridTable`, `fetchData`).
         if (t.type === "table") {
           return {
             ...t,
             isPreview: false,
             paradigm: t.paradigm ?? ("rdb" as const),
+            sorts: t.sorts ?? [],
           };
         }
         return t;

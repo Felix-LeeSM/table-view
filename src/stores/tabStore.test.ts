@@ -6,6 +6,7 @@ import {
   type Tab,
 } from "./tabStore";
 import type { QueryState } from "@/types/query";
+import type { SortInfo } from "@/types/schema";
 
 function makeTableTab(
   overrides: Partial<Omit<TableTab, "id">> & { id: string },
@@ -827,6 +828,305 @@ describe("tabStore", () => {
 
       const state = useTabStore.getState();
       expect(state.closedTabHistory.length).toBe(20);
+    });
+  });
+
+  // -- Sprint 76: Per-tab sort state --
+
+  describe("per-tab sort state", () => {
+    beforeEach(() => {
+      useTabStore.setState({
+        tabs: [],
+        activeTabId: null,
+        closedTabHistory: [],
+      });
+    });
+
+    // AC-01 — new tab starts with sorts undefined (optional field, no
+    // surprise value). Consumers that need an array read `tab.sorts ?? []`.
+    it("addTab does not pre-seed sorts; new tab's sorts is undefined", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+
+      const state = useTabStore.getState();
+      expect(getTableTab(state, 0).sorts).toBeUndefined();
+    });
+
+    it("addTab preserves sorts when the caller provides them", () => {
+      const sorts: SortInfo[] = [{ column: "id", direction: "ASC" }];
+      useTabStore.getState().addTab({
+        ...makeTableTab({ id: "t1", table: "users" }),
+        sorts,
+      });
+
+      const state = useTabStore.getState();
+      expect(getTableTab(state, 0).sorts).toEqual(sorts);
+    });
+
+    // AC-02 — updateTabSorts writes into one tab only.
+    it("updateTabSorts writes the target tab's sorts", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+      const tabId = useTabStore.getState().tabs[0]!.id;
+
+      const next: SortInfo[] = [{ column: "id", direction: "DESC" }];
+      useTabStore.getState().updateTabSorts(tabId, next);
+
+      const updated = useTabStore.getState();
+      expect(getTableTab(updated, 0).sorts).toEqual(next);
+    });
+
+    it("updateTabSorts leaves sibling tabs untouched (per-tab isolation)", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "t1",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "t2",
+          connectionId: "conn2",
+          table: "orders",
+        }),
+      );
+
+      const [first, second] = useTabStore.getState().tabs;
+      useTabStore
+        .getState()
+        .updateTabSorts(first!.id, [{ column: "id", direction: "ASC" }]);
+
+      const state = useTabStore.getState();
+      const tabA = state.tabs.find((t) => t.id === first!.id) as TableTab;
+      const tabB = state.tabs.find((t) => t.id === second!.id) as TableTab;
+      expect(tabA.sorts).toEqual([{ column: "id", direction: "ASC" }]);
+      expect(tabB.sorts).toBeUndefined();
+    });
+
+    it("updateTabSorts on a non-existent tab is a no-op", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+      const before = useTabStore.getState().tabs[0]!;
+
+      useTabStore
+        .getState()
+        .updateTabSorts("ghost-id", [{ column: "name", direction: "DESC" }]);
+
+      const after = useTabStore.getState().tabs[0]! as TableTab;
+      expect(after).toEqual(before);
+    });
+
+    it("updateTabSorts does not touch query tabs even if the ids collide", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      const qtId = useTabStore.getState().tabs[0]!.id;
+
+      useTabStore
+        .getState()
+        .updateTabSorts(qtId, [{ column: "id", direction: "ASC" }]);
+
+      const qt = getQueryTab(useTabStore.getState(), 0);
+      // QueryTab should never grow a `sorts` field.
+      expect((qt as unknown as { sorts?: SortInfo[] }).sorts).toBeUndefined();
+    });
+
+    it("tab A's sort survives switching to tab B and back", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "t1",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "t2",
+          connectionId: "conn2",
+          table: "orders",
+        }),
+      );
+      const [first, second] = useTabStore.getState().tabs;
+      useTabStore
+        .getState()
+        .updateTabSorts(first!.id, [{ column: "id", direction: "DESC" }]);
+
+      useTabStore.getState().setActiveTab(second!.id);
+      useTabStore.getState().setActiveTab(first!.id);
+
+      const state = useTabStore.getState();
+      const tabA = state.tabs.find((t) => t.id === first!.id) as TableTab;
+      expect(tabA.sorts).toEqual([{ column: "id", direction: "DESC" }]);
+    });
+
+    it("supports 5+ multi-column sort entries", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+      const tabId = useTabStore.getState().tabs[0]!.id;
+      const sorts: SortInfo[] = [
+        { column: "a", direction: "ASC" },
+        { column: "b", direction: "DESC" },
+        { column: "c", direction: "ASC" },
+        { column: "d", direction: "DESC" },
+        { column: "e", direction: "ASC" },
+      ];
+
+      useTabStore.getState().updateTabSorts(tabId, sorts);
+
+      expect(getTableTab(useTabStore.getState(), 0).sorts).toEqual(sorts);
+    });
+
+    it("accepts an empty sorts array (clears sort on the tab)", () => {
+      useTabStore.getState().addTab({
+        ...makeTableTab({ id: "t1", table: "users" }),
+        sorts: [{ column: "id", direction: "ASC" }],
+      });
+      const tabId = useTabStore.getState().tabs[0]!.id;
+
+      useTabStore.getState().updateTabSorts(tabId, []);
+
+      expect(getTableTab(useTabStore.getState(), 0).sorts).toEqual([]);
+    });
+  });
+
+  // -- Sprint 76: sort persistence + legacy migration --
+
+  describe("per-tab sort persistence", () => {
+    let storage: Record<string, string>;
+
+    beforeEach(() => {
+      useTabStore.setState({
+        tabs: [],
+        activeTabId: null,
+        closedTabHistory: [],
+      });
+      storage = {};
+      vi.useFakeTimers();
+      vi.stubGlobal("localStorage", {
+        getItem: vi.fn((key: string) => storage[key] ?? null),
+        setItem: vi.fn((key: string, value: string) => {
+          storage[key] = value;
+        }),
+        removeItem: vi.fn((key: string) => {
+          delete storage[key];
+        }),
+        clear: vi.fn(() => {
+          storage = {};
+        }),
+        get length() {
+          return Object.keys(storage).length;
+        },
+        key: vi.fn(() => null),
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // AC-04 — legacy persisted tab missing `sorts` migrates to `[]`
+    // without throwing so the app still boots on prior data.
+    it("loadPersistedTabs normalises legacy TableTab (missing sorts) to []", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            paradigm: "rdb",
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      expect(() => useTabStore.getState().loadPersistedTabs()).not.toThrow();
+
+      const tt = useTabStore.getState().tabs[0]!;
+      expect(tt.type).toBe("table");
+      if (tt.type === "table") {
+        expect(tt.sorts).toEqual([]);
+      }
+    });
+
+    it("loadPersistedTabs preserves persisted sorts on a TableTab", () => {
+      const persistedSorts: SortInfo[] = [
+        { column: "id", direction: "DESC" },
+        { column: "name", direction: "ASC" },
+      ];
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            paradigm: "rdb",
+            sorts: persistedSorts,
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const tt = useTabStore.getState().tabs[0]!;
+      if (tt.type === "table") {
+        expect(tt.sorts).toEqual(persistedSorts);
+      }
+    });
+
+    // Round-trip: write → read restores sort on the same tab id.
+    it("persists sort updates and restores them on reload", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+      const tabId = useTabStore.getState().tabs[0]!.id;
+      const sorts: SortInfo[] = [{ column: "id", direction: "ASC" }];
+      useTabStore.getState().updateTabSorts(tabId, sorts);
+
+      // Flush debounce timer to commit persistence.
+      vi.advanceTimersByTime(300);
+
+      // Reset in-memory state, then reload from storage.
+      useTabStore.setState({
+        tabs: [],
+        activeTabId: null,
+        closedTabHistory: [],
+      });
+      useTabStore.getState().loadPersistedTabs();
+
+      const loaded = useTabStore.getState().tabs[0]!;
+      if (loaded.type === "table") {
+        expect(loaded.sorts).toEqual(sorts);
+      }
+    });
+
+    it("reopenLastClosedTab restores the tab's sorts", () => {
+      useTabStore.setState({
+        tabs: [],
+        activeTabId: null,
+        closedTabHistory: [],
+      });
+      useTabStore.getState().addTab({
+        ...makeTableTab({ id: "t1", table: "users" }),
+        sorts: [{ column: "created_at", direction: "DESC" }],
+      });
+      const tabId = useTabStore.getState().tabs[0]!.id;
+      useTabStore.getState().removeTab(tabId);
+
+      useTabStore.getState().reopenLastClosedTab();
+
+      const reopened = useTabStore.getState().tabs[0]!;
+      expect(reopened.type).toBe("table");
+      if (reopened.type === "table") {
+        expect(reopened.sorts).toEqual([
+          { column: "created_at", direction: "DESC" },
+        ]);
+      }
     });
   });
 });

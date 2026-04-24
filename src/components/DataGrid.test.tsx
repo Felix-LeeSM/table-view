@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DataGrid from "./DataGrid";
-import type { TableData } from "@/types/schema";
+import type { SortInfo, TableData } from "@/types/schema";
 
 // Mock FilterBar — test DataGrid in isolation
 vi.mock("./FilterBar", () => ({
@@ -84,13 +84,68 @@ vi.mock("@stores/schemaStore", () => ({
 }));
 
 const mockPromoteTab = vi.fn();
-vi.mock("@stores/tabStore", () => ({
-  useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      activeTabId: "tab-1",
-      promoteTab: mockPromoteTab,
-    }),
-}));
+
+// Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
+// shape. The component subscribes through the selector; `updateTabSorts`
+// mutates the tab entry and bumps `version` so every selector re-runs on
+// the next render. `forceRerender` via `useTabStoreBump` keeps React in
+// sync without dragging the real zustand library into the mock.
+interface MockTabShape {
+  id: string;
+  type: "table";
+  sorts?: SortInfo[];
+}
+const mockTabStoreState: {
+  tabs: MockTabShape[];
+  activeTabId: string | null;
+} = {
+  tabs: [{ id: "tab-1", type: "table" }],
+  activeTabId: "tab-1",
+};
+const subscribers = new Set<() => void>();
+function notify() {
+  subscribers.forEach((fn) => fn());
+}
+const mockUpdateTabSorts = vi.fn((tabId: string, next: SortInfo[]) => {
+  const tab = mockTabStoreState.tabs.find((t) => t.id === tabId);
+  if (tab) tab.sorts = next;
+  notify();
+});
+function resetMockTabStore() {
+  mockTabStoreState.tabs = [{ id: "tab-1", type: "table" }];
+  mockTabStoreState.activeTabId = "tab-1";
+  mockUpdateTabSorts.mockClear();
+  subscribers.clear();
+}
+function mockTabStoreView() {
+  return {
+    tabs: mockTabStoreState.tabs,
+    activeTabId: mockTabStoreState.activeTabId,
+    promoteTab: mockPromoteTab,
+    updateTabSorts: mockUpdateTabSorts,
+  };
+}
+vi.mock("@stores/tabStore", async () => {
+  const React = await import("react");
+  return {
+    useTabStore: Object.assign(
+      (selector: (state: Record<string, unknown>) => unknown) => {
+        const [, forceRerender] = React.useReducer((n: number) => n + 1, 0);
+        React.useEffect(() => {
+          const fn = () => forceRerender();
+          subscribers.add(fn);
+          return () => {
+            subscribers.delete(fn);
+          };
+        }, []);
+        return selector(mockTabStoreView());
+      },
+      {
+        getState: () => mockTabStoreView(),
+      },
+    ),
+  };
+});
 
 function renderDataGrid(props: Partial<Parameters<typeof DataGrid>[0]> = {}) {
   return render(
@@ -111,6 +166,7 @@ describe("DataGrid", () => {
       query_type: "dml" as const,
     });
     mockPromoteTab.mockReset();
+    resetMockTabStore();
   });
 
   // 1. Initial rendering — queryTableData called with correct args
@@ -1448,5 +1504,142 @@ describe("DataGrid", () => {
     expect(rows[0]!.className).not.toContain("bg-accent/20");
     expect(rows[1]!.className).toContain("bg-accent/20");
     expect(rows[2]!.className).not.toContain("bg-accent/20");
+  });
+
+  // ── Sprint 76: Per-tab sort state ──
+
+  // AC-02 — sort writes go through the store action, not local state.
+  it("routes handleSort through updateTabSorts (store action)", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Sort by id"));
+    });
+    await screen.findByText("▲");
+
+    expect(mockUpdateTabSorts).toHaveBeenCalled();
+    const calls = mockUpdateTabSorts.mock.calls;
+    const last = calls[calls.length - 1]!;
+    expect(last[0]).toBe("tab-1");
+    expect(last[1]).toEqual([{ column: "id", direction: "ASC" }]);
+  });
+
+  // AC-03 — DataGrid consumes tab.sorts on mount and reflects the
+  // indicator + sends the correct orderBy to queryTableData. This is
+  // the remount-after-tab-switch restoration path.
+  it("renders the indicator + orderBy from the persisted tab.sorts on mount", async () => {
+    // Seed the active tab with a pre-existing sort (simulating the user
+    // having applied it earlier and switched away). The grid should
+    // restore both the visual indicator and the backend ordering on
+    // mount without any interaction.
+    mockTabStoreState.tabs = [
+      {
+        id: "tab-1",
+        type: "table",
+        sorts: [{ column: "name", direction: "DESC" }],
+      },
+    ];
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Visual: ▼ rendered on `name`
+    expect(await screen.findByText("▼")).toBeInTheDocument();
+
+    // Backend: first call's orderBy reflects the restored sort.
+    const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
+    expect(firstCall[5]).toBe("name DESC");
+  });
+
+  // AC-03 — multi-column sort persisted on a tab is restored with
+  // rank numbers and a comma-joined orderBy string.
+  it("restores multi-column sorts with ranks + joined orderBy", async () => {
+    mockTabStoreState.tabs = [
+      {
+        id: "tab-1",
+        type: "table",
+        sorts: [
+          { column: "id", direction: "ASC" },
+          { column: "name", direction: "DESC" },
+        ],
+      },
+    ];
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Both rank numbers visible.
+    await waitFor(() => {
+      const ranks = screen
+        .getAllByText(/^\d+$/)
+        .filter((el) => el.classList.contains("font-bold"));
+      expect(ranks.map((n) => n.textContent).sort()).toEqual(["1", "2"]);
+    });
+
+    // orderBy preserves the order and direction for the backend.
+    const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
+    expect(firstCall[5]).toBe("id ASC, name DESC");
+  });
+
+  // AC-02 / AC-03 — two tabs, two independent sorts. Simulate the
+  // tab-switch by swapping `activeTabId` and rerendering the component.
+  it("isolates sort state between tabs — tab A's sort does not leak into tab B", async () => {
+    mockTabStoreState.tabs = [
+      {
+        id: "tab-A",
+        type: "table",
+        sorts: [{ column: "id", direction: "ASC" }],
+      },
+      {
+        id: "tab-B",
+        type: "table",
+        sorts: [{ column: "name", direction: "DESC" }],
+      },
+    ];
+
+    // Start on tab A.
+    mockTabStoreState.activeTabId = "tab-A";
+    const { unmount } = renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Tab A shows id ASC (▲).
+    expect(await screen.findByText("▲")).toBeInTheDocument();
+    const aCalls = mockQueryTableData.mock.calls;
+    let lastCall = aCalls[aCalls.length - 1] as unknown[];
+    expect(lastCall[5]).toBe("id ASC");
+
+    // Simulate tab switch by remounting with tab B active.
+    unmount();
+    mockTabStoreState.activeTabId = "tab-B";
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    // Tab B shows name DESC (▼); A's `▲` must not be present because
+    // the grid now reads tab B's sort list.
+    expect(await screen.findByText("▼")).toBeInTheDocument();
+    const bCalls = mockQueryTableData.mock.calls;
+    lastCall = bCalls[bCalls.length - 1] as unknown[];
+    expect(lastCall[5]).toBe("name DESC");
+
+    // Tab A's state object is untouched by tab B's render.
+    const tabA = mockTabStoreState.tabs.find((t) => t.id === "tab-A")!;
+    expect(tabA.sorts).toEqual([{ column: "id", direction: "ASC" }]);
+  });
+
+  // Regression guard — with a legacy tab that has no `sorts` key (as
+  // would happen before `loadPersistedTabs` normalises it), the grid
+  // must render without throwing and fetch without an orderBy string.
+  it("tolerates a tab whose sorts field is missing", async () => {
+    mockTabStoreState.tabs = [{ id: "tab-1", type: "table" }];
+
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
+    expect(firstCall[5]).toBeUndefined();
+    // No sort indicator on any column header.
+    expect(screen.queryByText("▲")).not.toBeInTheDocument();
+    expect(screen.queryByText("▼")).not.toBeInTheDocument();
   });
 });
