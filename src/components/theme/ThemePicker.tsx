@@ -26,9 +26,9 @@ export default function ThemePicker() {
   }, [query]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-foreground">
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Appearance
         </span>
         <ToggleGroup
@@ -38,17 +38,30 @@ export default function ThemePicker() {
             if (next) setMode(next as ThemeMode);
           }}
           aria-label="Appearance mode"
+          className="w-full justify-between"
         >
-          <ToggleGroupItem value="light" aria-label="Light mode">
-            <Sun />
+          <ToggleGroupItem
+            value="light"
+            aria-label="Light mode"
+            className="flex-1"
+          >
+            <Sun size={12} />
             Light
           </ToggleGroupItem>
-          <ToggleGroupItem value="dark" aria-label="Dark mode">
-            <Moon />
+          <ToggleGroupItem
+            value="dark"
+            aria-label="Dark mode"
+            className="flex-1"
+          >
+            <Moon size={12} />
             Dark
           </ToggleGroupItem>
-          <ToggleGroupItem value="system" aria-label="System mode">
-            <Monitor />
+          <ToggleGroupItem
+            value="system"
+            aria-label="System mode"
+            className="flex-1"
+          >
+            <Monitor size={12} />
             System
           </ToggleGroupItem>
         </ToggleGroup>
@@ -65,7 +78,7 @@ export default function ThemePicker() {
 
       <div
         data-testid="theme-picker-grid"
-        className="grid max-h-[360px] grid-cols-2 gap-2 overflow-auto pr-1"
+        className="grid max-h-[320px] grid-cols-2 gap-1.5 overflow-y-auto overflow-x-hidden p-0.5"
       >
         {visible.length === 0 ? (
           <div className="col-span-2 py-8 text-center text-xs text-muted-foreground">
@@ -84,19 +97,19 @@ export default function ThemePicker() {
                 aria-pressed={active}
                 onClick={() => setTheme(entry.id as ThemeId)}
                 className={cn(
-                  "flex items-center gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-left transition-colors",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                  active && "ring-2 ring-primary",
+                  "flex min-w-0 items-center gap-1.5 rounded-md border border-border bg-background px-1.5 py-1 text-left transition-colors",
+                  "hover:bg-muted",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70",
+                  active && "ring-2 ring-inset ring-primary",
                 )}
               >
                 <span
                   aria-hidden="true"
-                  className="h-4 w-4 shrink-0 rounded-full border border-border"
+                  className="h-3.5 w-3.5 shrink-0 rounded-full border border-border"
                   style={{ backgroundColor: entry.swatch }}
                 />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-xs font-semibold text-foreground">
+                <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                  <span className="truncate text-[11px] font-semibold text-foreground">
                     {entry.name}
                   </span>
                   <span className="truncate text-[10px] text-muted-foreground">

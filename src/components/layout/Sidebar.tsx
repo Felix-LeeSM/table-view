@@ -265,7 +265,8 @@ export default function Sidebar() {
               align="start"
               side="top"
               sideOffset={8}
-              className="w-80"
+              collisionPadding={8}
+              className="w-72 p-2"
             >
               <ThemePicker />
             </PopoverContent>
