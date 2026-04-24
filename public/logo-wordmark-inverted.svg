@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180" fill="none">
+  <rect x="26" y="26" width="128" height="128" rx="14" stroke="#f5efde" stroke-width="8" stroke-linecap="round" fill="#7a2a0f"></rect>
+  <g stroke="#f5efde" stroke-width="6" stroke-linecap="round" fill="none">
+    <line x1="26" y1="58" x2="154" y2="58"></line>
+    <line x1="26" y1="90" x2="154" y2="90"></line>
+    <line x1="26" y1="122" x2="154" y2="122"></line>
+    <line x1="58" y1="26" x2="58" y2="154"></line>
+    <line x1="90" y1="26" x2="90" y2="154"></line>
+    <line x1="122" y1="26" x2="122" y2="154"></line>
+  </g>
+  <text x="186" y="108" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="64" fill="#f5efde" letter-spacing="-1.5">Table View</text>
+</svg>

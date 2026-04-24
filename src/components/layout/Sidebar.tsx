@@ -9,6 +9,7 @@ import ConnectionDialog from "@components/connection/ConnectionDialog";
 import ConnectionList from "@components/connection/ConnectionList";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
+import { LogoWordmark } from "@components/shared/Logo";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
 const WIDTH_KEY = "table-view.sidebar.width";
@@ -188,6 +189,11 @@ export default function Sidebar() {
         className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
       >
+        {/* Brand header */}
+        <div className="flex items-center justify-center border-b border-border px-3 py-2">
+          <LogoWordmark className="h-7 w-auto" />
+        </div>
+
         {/* Mode toggle */}
         <div className="flex items-center border-b border-border px-2 py-2">
           <SidebarModeToggle mode={mode} onChange={setMode} />

@@ -145,19 +145,18 @@ describe("MainArea", () => {
   it("shows empty state placeholder when no active tab", () => {
     render(<MainArea />);
 
-    expect(screen.getByText("Table View")).toBeInTheDocument();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
     expect(
       screen.getByText("Select a connection from the sidebar to get started"),
     ).toBeInTheDocument();
   });
 
-  it("shows database icon in empty state", () => {
+  it("shows logo wordmark in empty state", () => {
     render(<MainArea />);
 
-    // The Database icon from lucide renders as an SVG
-    const container = screen.getByText("Table View").parentElement!;
-    const svg = container.querySelector("svg");
-    expect(svg).toBeInTheDocument();
+    const wordmark = screen.getByAltText("Table View");
+    expect(wordmark).toBeInTheDocument();
+    expect(wordmark).toHaveAttribute("src", "/logo-wordmark.svg");
   });
 
   it("shows empty state when tabs exist but none are active", () => {
@@ -166,7 +165,7 @@ describe("MainArea", () => {
 
     render(<MainArea />);
 
-    expect(screen.getByText("Table View")).toBeInTheDocument();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
   // AC-06: table tab renders DataGrid + sub-tabs
@@ -346,7 +345,7 @@ describe("MainArea", () => {
 
     // TabBar renders only when tabs exist; with no tabs it returns null
     // So we just verify the component doesn't crash
-    expect(screen.getByText("Table View")).toBeInTheDocument();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
   it("renders TabBar when tabs exist", () => {
@@ -367,7 +366,7 @@ describe("MainArea", () => {
     render(<MainArea />);
 
     // Without table name, it should show empty state (falls through)
-    expect(screen.getByText("Table View")).toBeInTheDocument();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
   it("does not render table content when table tab has no schema", () => {
@@ -376,7 +375,7 @@ describe("MainArea", () => {
 
     render(<MainArea />);
 
-    expect(screen.getByText("Table View")).toBeInTheDocument();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
   it("renders ViewStructurePanel when view tab is in structure subView", () => {

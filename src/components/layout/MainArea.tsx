@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import TabBar from "./TabBar";
 import { useTabStore, type TableTab, type TabSubView } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { Database, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import DataGrid from "@components/DataGrid";
 import DocumentDataGrid from "@components/DocumentDataGrid";
 import StructurePanel from "@components/schema/StructurePanel";
@@ -10,6 +10,7 @@ import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
 import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";
+import { LogoWordmark } from "@components/shared/Logo";
 
 interface TableTabProps {
   tab: TableTab;
@@ -122,8 +123,7 @@ function EmptyState() {
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-muted-foreground">
-      <Database size={48} />
-      <p className="text-lg text-foreground">Table View</p>
+      <LogoWordmark className="h-20 w-auto" />
       {firstConnected ? (
         <>
           <p className="text-sm">
