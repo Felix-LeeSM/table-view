@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { EditorView, keymap } from "@codemirror/view";
-import { language } from "@codemirror/language";
+import { ensureSyntaxTree, language } from "@codemirror/language";
+import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
 import type { KeyBinding } from "@codemirror/view";
 import QueryEditor from "./QueryEditor";
 
@@ -430,5 +431,178 @@ describe("QueryEditor", () => {
     expect(
       screen.getByLabelText("MongoDB Aggregate Pipeline Editor"),
     ).toBeDefined();
+  });
+
+  // ── Sprint 82: provider-aware SQL dialect ────────────────────────────────
+
+  /**
+   * Collect every identifier in the SQL source that the parser tagged with
+   * node name `Keyword`. We walk the full syntax tree for the current doc
+   * and pull the matching ranges out as normalised (lowercased) strings so
+   * callers can assert "did the dialect actually treat `RETURNING` as a
+   * keyword?" without depending on CSS / highlight style output.
+   */
+  function collectKeywords(view: EditorView): Set<string> {
+    const tree = ensureSyntaxTree(view.state, view.state.doc.length, 1000);
+    const out = new Set<string>();
+    if (!tree) return out;
+    tree.iterate({
+      enter: (node) => {
+        if (node.name === "Keyword") {
+          const text = view.state.doc
+            .sliceString(node.from, node.to)
+            .toLowerCase();
+          out.add(text);
+        }
+      },
+    });
+    return out;
+  }
+
+  // AC-01: Postgres dialect surfaces `RETURNING` and `ILIKE` as keywords.
+  it("recognises Postgres-only keywords when sqlDialect=PostgreSQL", () => {
+    render(
+      <QueryEditor
+        sql="INSERT INTO t (a) VALUES (1) RETURNING id; SELECT 1 WHERE x ILIKE 'foo'"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        sqlDialect={PostgreSQL}
+      />,
+    );
+    const kws = collectKeywords(getEditorView());
+    expect(kws.has("returning")).toBe(true);
+    expect(kws.has("ilike")).toBe(true);
+  });
+
+  // AC-02: MySQL dialect highlights `REPLACE` and `DUAL`.
+  it("recognises MySQL-only keywords when sqlDialect=MySQL", () => {
+    render(
+      <QueryEditor
+        sql="REPLACE INTO t (a) VALUES (1); SELECT * FROM DUAL"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        sqlDialect={MySQL}
+      />,
+    );
+    const kws = collectKeywords(getEditorView());
+    expect(kws.has("replace")).toBe(true);
+    expect(kws.has("dual")).toBe(true);
+  });
+
+  // AC-03: SQLite dialect highlights `AUTOINCREMENT` and `PRAGMA`.
+  it("recognises SQLite-only keywords when sqlDialect=SQLite", () => {
+    render(
+      <QueryEditor
+        sql="CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT); PRAGMA foreign_keys = ON"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        sqlDialect={SQLite}
+      />,
+    );
+    const kws = collectKeywords(getEditorView());
+    expect(kws.has("autoincrement")).toBe(true);
+    expect(kws.has("pragma")).toBe(true);
+  });
+
+  // AC-07: default (sqlDialect undefined) falls back to StandardSQL behaviour.
+  // `RETURNING` is Postgres-only so the standard dialect must NOT flag it as
+  // a keyword — this guards the fallback path and keeps the pre-Sprint-82
+  // contract intact for callers that never pass the new prop.
+  it("falls back to StandardSQL when sqlDialect is omitted", () => {
+    render(
+      <QueryEditor
+        sql="INSERT INTO t (a) VALUES (1) RETURNING id"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+      />,
+    );
+    const kws = collectKeywords(getEditorView());
+    // SELECT is in every dialect; this sanity-checks the parser produced a
+    // tree at all.
+    expect(kws.has("insert")).toBe(true);
+    // RETURNING is Postgres-only.
+    expect(kws.has("returning")).toBe(false);
+  });
+
+  // AC-05: flipping the dialect prop keeps the same EditorView instance.
+  // Uses `DUAL` — MySQL recognises it as a keyword, MySQLite/Postgres both
+  // treat it as a plain identifier — to prove the Compartment actually
+  // reloaded the language spec between renders.
+  it("reconfigures the dialect in-place without recreating the EditorView", async () => {
+    const { rerender } = render(
+      <QueryEditor
+        sql="SELECT * FROM DUAL"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        sqlDialect={SQLite}
+      />,
+    );
+
+    const viewBefore = getEditorView();
+    expect(collectKeywords(viewBefore).has("dual")).toBe(false);
+
+    rerender(
+      <QueryEditor
+        sql="SELECT * FROM DUAL"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        sqlDialect={MySQL}
+      />,
+    );
+
+    await waitFor(() => {
+      const viewAfter = getEditorView();
+      // Same EditorView instance — dialect swap must reuse the Compartment,
+      // not tear the editor down (cursor/selection/history live inside
+      // the view instance).
+      expect(viewAfter).toBe(viewBefore);
+      expect(collectKeywords(viewAfter).has("dual")).toBe(true);
+    });
+  });
+
+  // AC-05 / AC-07 — omitting + re-adding the dialect still preserves identity.
+  it("preserves the EditorView when switching from StandardSQL fallback to an explicit dialect", async () => {
+    const { rerender } = render(
+      <QueryEditor
+        sql="SELECT 1"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+      />,
+    );
+    const viewBefore = getEditorView();
+
+    rerender(
+      <QueryEditor
+        sql="SELECT 1"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        sqlDialect={PostgreSQL}
+      />,
+    );
+
+    await waitFor(() => {
+      const viewAfter = getEditorView();
+      expect(viewAfter).toBe(viewBefore);
+    });
+  });
+
+  // AC-06: Document paradigm is unaffected by the dialect prop — the editor
+  // must still load the JSON language extension and keep its aria-label.
+  it("keeps JSON language when paradigm=document even if sqlDialect is passed", () => {
+    render(
+      <QueryEditor
+        sql="{}"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="find"
+        sqlDialect={MySQL}
+      />,
+    );
+    const container = screen.getByLabelText("MongoDB Find Query Editor");
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
+    )!;
+    expect(view.state.facet(language)?.name).toBe("json");
   });
 });

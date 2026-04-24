@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { SQLNamespace } from "@codemirror/lang-sql";
+import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
 import { useSchemaStore } from "@stores/schemaStore";
 
 /** Common SQL functions exposed as autocomplete candidates. */
@@ -24,6 +24,65 @@ const SQL_FUNCTIONS = [
   "CURRENT_TIMESTAMP",
 ];
 
+/** Explicit test-only overrides: `table → column names`. */
+export type TableColumnOverrides = Record<string, string[]>;
+
+export interface UseSqlAutocompleteOptions {
+  /** Explicit test-only override: `table → column names`. */
+  tableColumns?: TableColumnOverrides;
+  /**
+   * Sprint 82 — the SQL dialect of the active connection. The hook uses it to
+   * decide how to apply mixed-case identifiers (backticks for MySQL,
+   * double-quotes for Postgres / SQLite). When omitted the hook behaves
+   * identically to pre-Sprint-82 callers.
+   */
+  dialect?: SQLDialect;
+}
+
+/**
+ * Backwards-compatible second-argument shape. Pre-Sprint-82 callers passed a
+ * plain `Record<string, string[]>` override; Sprint 82 widens this to either
+ * the same record (detected via `Array.isArray` of any value) or a structured
+ * `UseSqlAutocompleteOptions` object. This keeps existing tests and call
+ * sites working without touching them.
+ */
+type AutocompleteArg = TableColumnOverrides | UseSqlAutocompleteOptions;
+
+function normalizeOptions(
+  arg: AutocompleteArg | undefined,
+): UseSqlAutocompleteOptions {
+  if (!arg) return {};
+  // A `TableColumnOverrides` record has only string[] values. A structured
+  // options object has non-array values (`dialect`, `tableColumns`). If any
+  // own value is an array, treat the whole thing as the legacy record shape.
+  const values = Object.values(arg);
+  const looksLikeLegacyRecord =
+    values.length > 0 && values.every((v) => Array.isArray(v));
+  if (looksLikeLegacyRecord) {
+    return { tableColumns: arg as TableColumnOverrides };
+  }
+  // Empty record is treated as "no overrides" under the options shape. An
+  // empty record from tests (`{}`) reaches this branch and returns `{}`,
+  // which is exactly the pre-Sprint-82 behaviour.
+  return arg as UseSqlAutocompleteOptions;
+}
+
+/** Character CodeMirror uses to quote identifiers for a given dialect.
+ * Dialect metadata lives on `dialect.spec.identifierQuotes` (e.g. `` "`" ``
+ * for MySQL, `\"` for Postgres / SQLite). Falls back to the ANSI double-quote
+ * when the dialect is unknown or doesn't define one. */
+function quoteCharForDialect(dialect: SQLDialect | undefined): string {
+  const quotes = dialect?.spec?.identifierQuotes;
+  return quotes && quotes.length > 0 ? quotes[0]! : '"';
+}
+
+/** True when `name` contains characters that require quoting (upper-case
+ * letters, spaces, or anything outside the typical identifier character set).
+ * Lowercase alphanumerics + underscore are considered safe. */
+function identifierNeedsQuoting(name: string): boolean {
+  return !/^[a-z_][a-z0-9_]*$/.test(name);
+}
+
 /**
  * Builds a CodeMirror SQLNamespace from the schema store data for a given connection.
  *
@@ -37,17 +96,26 @@ const SQL_FUNCTIONS = [
  * `tableColumns` override is still accepted for tests or callers that wish to
  * inject explicit values.
  *
+ * Sprint 82 extends the hook to accept a SQL dialect hint. When a mixed-case
+ * identifier is present (e.g. `"Users"`), the hook emits an extra completion
+ * candidate whose `apply` string is quoted with the dialect's quote character
+ * (`` `Users` `` for MySQL, `"Users"` for Postgres / SQLite) so the inserted
+ * identifier round-trips through the server intact.
+ *
  * @param connectionId The active connection identifier.
- * @param tableColumns Optional explicit mapping of table name → column names.
- *                     When omitted, columns are read from the store cache.
+ * @param arg Either a legacy `Record<string, string[]>` override (kept for
+ *            backwards-compatibility with pre-Sprint-82 callers) or the
+ *            structured `UseSqlAutocompleteOptions` shape.
  */
 export function useSqlAutocomplete(
   connectionId: string,
-  tableColumns?: Record<string, string[]>,
+  arg?: AutocompleteArg,
 ): SQLNamespace {
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const columnsCache = useSchemaStore((s) => s.tableColumnsCache);
+  const opts = normalizeOptions(arg);
+  const { tableColumns, dialect } = opts;
 
   return useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +165,31 @@ export function useSqlAutocomplete(
       );
     };
 
+    // Sprint 82 — when a dialect is supplied, emit an additional quoted-
+    // identifier candidate for every mixed-case table/view name so the
+    // autocomplete popup surfaces both the bare label (which breaks at the
+    // server for case-sensitive catalogs) and the dialect-quoted label.
+    const quoteChar = quoteCharForDialect(dialect);
+    const addQuotedAlias = (
+      bareName: string,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      colNs: Record<string, any>,
+    ) => {
+      if (!dialect) return;
+      if (!identifierNeedsQuoting(bareName)) return;
+      const quoted = `${quoteChar}${bareName}${quoteChar}`;
+      if (!ns[quoted]) {
+        ns[quoted] = {
+          self: {
+            label: quoted,
+            apply: quoted,
+            type: "type",
+          },
+          children: colNs,
+        };
+      }
+    };
+
     // Tables
     for (const [key, tableList] of Object.entries(tables)) {
       if (!key.startsWith(`${connectionId}:`)) continue;
@@ -106,6 +199,7 @@ export function useSqlAutocomplete(
         const colNs = pickColumns(table.name, qualified);
         ns[table.name] = colNs;
         ns[qualified] = colNs;
+        addQuotedAlias(table.name, colNs);
       }
     }
 
@@ -119,9 +213,10 @@ export function useSqlAutocomplete(
         // Don't overwrite a table of the same name (rare but possible)
         if (!ns[v.name]) ns[v.name] = colNs;
         if (!ns[qualified]) ns[qualified] = colNs;
+        addQuotedAlias(v.name, colNs);
       }
     }
 
     return ns as SQLNamespace;
-  }, [tables, views, columnsCache, connectionId, tableColumns]);
+  }, [tables, views, columnsCache, connectionId, tableColumns, dialect]);
 }

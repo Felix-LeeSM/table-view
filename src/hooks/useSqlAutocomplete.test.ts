@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
+import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
 import { useSqlAutocomplete } from "./useSqlAutocomplete";
 import { useSchemaStore } from "@stores/schemaStore";
 
@@ -270,5 +271,125 @@ describe("useSqlAutocomplete", () => {
     expect(ns.active_users).toBeDefined();
     expect(ns.active_users).toHaveProperty("user_id");
     expect(ns["public.active_users"]).toHaveProperty("user_id");
+  });
+
+  // ── Sprint 82: dialect-aware identifier quoting ─────────────────────────
+
+  // AC-04: MySQL dialect must surface a backtick-quoted label for
+  // mixed-case identifiers so the autocomplete popup inserts `Users`.
+  it("emits a backtick-quoted alias for mixed-case MySQL tables", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "Users", schema: "public", row_count: 1 }],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { dialect: MySQL }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty("Users");
+    expect(ns).toHaveProperty("`Users`");
+    // The quoted alias is a structured `{ self, children }` node so
+    // CodeMirror renders it as a distinct completion candidate.
+    const aliased = (ns as Record<string, { self?: { apply?: string } }>)[
+      "`Users`"
+    ];
+    expect(aliased?.self?.apply).toBe("`Users`");
+  });
+
+  // AC-04: Postgres dialect → double-quote identifier quoting.
+  it("emits a double-quoted alias for mixed-case Postgres tables", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "Users", schema: "public", row_count: 1 }],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { dialect: PostgreSQL }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty('"Users"');
+    const aliased = (ns as Record<string, { self?: { apply?: string } }>)[
+      '"Users"'
+    ];
+    expect(aliased?.self?.apply).toBe('"Users"');
+  });
+
+  // AC-04: SQLite dialect → first identifier quote char (backtick per
+  // CodeMirror's SQLite spec) is used.
+  it("emits a quoted alias for mixed-case SQLite tables", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "MyTable", schema: "public", row_count: 1 }],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { dialect: SQLite }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty("`MyTable`");
+  });
+
+  // Lowercase identifiers do not need quoting — the hook must NOT emit a
+  // spurious `` `users` `` alias that would duplicate the bare label.
+  it("does not emit a quoted alias for already-lowercase MySQL identifiers", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { dialect: MySQL }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty("users");
+    expect(ns).not.toHaveProperty("`users`");
+  });
+
+  // AC-07: without a dialect, the legacy namespace shape is preserved.
+  it("omits quoted aliases entirely when no dialect is supplied", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "Users", schema: "public", row_count: 1 }],
+      },
+    });
+    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty("Users");
+    expect(ns).not.toHaveProperty("`Users`");
+    expect(ns).not.toHaveProperty('"Users"');
+  });
+
+  // Views follow the same quoting rule as tables (covers AC-04 view branch).
+  it("emits a quoted alias for mixed-case MySQL views", () => {
+    useSchemaStore.setState({
+      views: {
+        "conn1:public": [
+          { name: "ActiveUsers", schema: "public", definition: null },
+        ],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { dialect: MySQL }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty("ActiveUsers");
+    expect(ns).toHaveProperty("`ActiveUsers`");
+  });
+
+  // AC-04 regression: the legacy `tableColumns` record arg still works even
+  // though the hook now also accepts the options-object shape.
+  it("keeps pre-Sprint-82 tableColumns record arg working", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { users: ["id", "email"] }),
+    );
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toHaveProperty("id");
+    expect(ns.users).toHaveProperty("email");
   });
 });

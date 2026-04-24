@@ -9,6 +9,7 @@ import {
 import {
   sql as sqlLanguage,
   StandardSQL,
+  type SQLDialect,
   type SQLNamespace,
 } from "@codemirror/lang-sql";
 import { json as jsonLanguage } from "@codemirror/lang-json";
@@ -41,11 +42,22 @@ interface QueryEditorProps {
    * (stored for future differentiation such as MQL preview).
    */
   queryMode?: QueryMode;
+  /**
+   * Sprint 82 — the CodeMirror `SQLDialect` to use when the tab is in the
+   * `rdb` paradigm. Ignored for `document` (JSON) tabs, but always accepted
+   * so the caller can pass it unconditionally. When omitted the editor falls
+   * back to `StandardSQL` so existing callers (and tabs whose connection has
+   * been deleted) keep working unchanged.
+   */
+  sqlDialect?: SQLDialect;
 }
 
-const buildSqlLang = (ns: SQLNamespace | undefined): Extension =>
+const buildSqlLang = (
+  dialect: SQLDialect,
+  ns: SQLNamespace | undefined,
+): Extension =>
   sqlLanguage({
-    dialect: StandardSQL,
+    dialect,
     schema: ns,
     upperCaseKeywords: true,
   });
@@ -57,11 +69,16 @@ const buildJsonLang = (): Extension => jsonLanguage();
  * `"document"` always uses JSON regardless of `queryMode`; `"rdb"` and any
  * future paradigms fall back to SQL. `schemaNamespace` is ignored for JSON
  * since MQL autocomplete isn't wired yet (Sprint 80).
+ *
+ * Sprint 82: `dialect` drives the SQL dialect when `p === "rdb"`. JSON paths
+ * are unaffected — the dialect argument is simply not read for documents.
  */
 const buildLangExtension = (
   p: Paradigm,
+  dialect: SQLDialect,
   ns: SQLNamespace | undefined,
-): Extension => (p === "document" ? buildJsonLang() : buildSqlLang(ns));
+): Extension =>
+  p === "document" ? buildJsonLang() : buildSqlLang(dialect, ns);
 
 const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
   function QueryEditor(
@@ -72,9 +89,14 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       schemaNamespace,
       paradigm = "rdb",
       queryMode,
+      sqlDialect,
     },
     ref,
   ) {
+    // Fallback is resolved here (not inside the callers) so ref + reconfigure
+    // paths always share the same "effective" dialect value. StandardSQL
+    // keeps pre-Sprint-82 callers working byte-for-byte.
+    const effectiveDialect: SQLDialect = sqlDialect ?? StandardSQL;
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -105,6 +127,11 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
     schemaNamespaceRef.current = schemaNamespace;
     const paradigmRef = useRef<Paradigm>(paradigm);
     paradigmRef.current = paradigm;
+    // Sprint 82 — dialect ref so the initial editor construction sees the
+    // latest prop value even when React commits the mount effect after a
+    // dialect-aware parent has already passed its first render's prop.
+    const dialectRef = useRef<SQLDialect>(effectiveDialect);
+    dialectRef.current = effectiveDialect;
 
     // Create the CodeMirror editor once.
     useEffect(() => {
@@ -118,7 +145,11 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           indentOnInput(),
           bracketMatching(),
           langCompartment.current.of(
-            buildLangExtension(paradigmRef.current, schemaNamespaceRef.current),
+            buildLangExtension(
+              paradigmRef.current,
+              dialectRef.current,
+              schemaNamespaceRef.current,
+            ),
           ),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
@@ -204,20 +235,22 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       // tearing the view down.
     }, []);
 
-    // Reconfigure the language extension in place when paradigm or
-    // schemaNamespace changes identity — keeps cursor/selection/doc intact.
-    // Sprint 73 widened the dependency set from `schemaNamespace` to
-    // `(paradigm, schemaNamespace)` so paradigm flips also reuse the
-    // Compartment reconfigure path instead of tearing the editor down.
+    // Reconfigure the language extension in place when paradigm,
+    // schemaNamespace, or the SQL dialect changes identity — keeps
+    // cursor/selection/doc intact. Sprint 73 widened the dependency set
+    // from `schemaNamespace` to `(paradigm, schemaNamespace)`; Sprint 82
+    // further widens it to include `effectiveDialect` so switching the
+    // active connection (e.g. Postgres → MySQL) re-runs the Compartment
+    // reconfigure instead of rebuilding the editor.
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       view.dispatch({
         effects: langCompartment.current.reconfigure(
-          buildLangExtension(paradigm, schemaNamespace),
+          buildLangExtension(paradigm, effectiveDialect, schemaNamespace),
         ),
       });
-    }, [paradigm, schemaNamespace]);
+    }, [paradigm, effectiveDialect, schemaNamespace]);
 
     // Sync external sql changes into the editor (e.g. when switching tabs).
     useEffect(() => {

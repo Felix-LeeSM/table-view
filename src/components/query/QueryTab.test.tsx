@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
+import {
+  MySQL,
+  PostgreSQL,
+  SQLite,
+  StandardSQL,
+  type SQLDialect,
+} from "@codemirror/lang-sql";
 import QueryTab from "./QueryTab";
 import { useTabStore, type QueryTab as QueryTabType } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import type { QueryResult } from "@/types/query";
 
 const MOCK_RESULT: QueryResult = {
@@ -28,6 +37,17 @@ vi.mock("@lib/tauri", () => ({
   aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
 }));
 
+/**
+ * Shared ref the tests read to assert which SQLDialect the real QueryTab
+ * passed down to QueryEditor. Using a module-level holder (instead of adding
+ * a DOM attribute) keeps the dialect object reference intact so the test
+ * can compare with `toBe(MySQL)` etc.
+ */
+const mockEditorProps: {
+  lastDialect: SQLDialect | undefined;
+  dialectHistory: (SQLDialect | undefined)[];
+} = { lastDialect: undefined, dialectHistory: [] };
+
 vi.mock("./QueryEditor", async () => {
   const React = await import("react");
   // Tests target the editor through the DOM (data-testid), so the forwarded
@@ -35,8 +55,14 @@ vi.mock("./QueryEditor", async () => {
   // to expose the CodeMirror view, which we don't need here.
   const MockQueryEditor = React.forwardRef<
     unknown,
-    { onExecute: () => void; sql: string }
+    {
+      onExecute: () => void;
+      sql: string;
+      sqlDialect?: SQLDialect;
+    }
   >(function MockQueryEditor(props) {
+    mockEditorProps.lastDialect = props.sqlDialect;
+    mockEditorProps.dialectHistory.push(props.sqlDialect);
     return (
       <div data-testid="mock-editor" data-sql={props.sql}>
         <button data-testid="execute-btn" onClick={props.onExecute}>
@@ -87,14 +113,35 @@ function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
   };
 }
 
+function makeConn(overrides: Partial<ConnectionConfig> = {}): ConnectionConfig {
+  const dbType: DatabaseType = overrides.db_type ?? "postgresql";
+  return {
+    id: "conn1",
+    name: "Test",
+    db_type: dbType,
+    host: "localhost",
+    port: 5432,
+    user: "postgres",
+    database: "db",
+    group_id: null,
+    color: null,
+    has_password: false,
+    paradigm: "rdb",
+    ...overrides,
+  };
+}
+
 describe("QueryTab", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
     useQueryHistoryStore.setState({ entries: [] });
+    useConnectionStore.setState({ connections: [] });
     mockExecuteQuery.mockReset();
     mockCancelQuery.mockReset();
     mockFindDocuments.mockReset();
     mockAggregateDocuments.mockReset();
+    mockEditorProps.lastDialect = undefined;
+    mockEditorProps.dialectHistory = [];
   });
 
   it("renders editor and result grid in idle state", () => {
@@ -1092,5 +1139,79 @@ describe("QueryTab", () => {
         expect(updated.queryState.status).toBe("error");
       }
     });
+  });
+
+  // ── Sprint 82: provider-aware SQL dialect prop ──────────────────────────
+
+  // AC-01: Postgres connection → QueryEditor receives the Postgres dialect.
+  it("passes the PostgreSQL dialect when the active connection is postgres", () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", db_type: "postgresql" })],
+    });
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+    expect(mockEditorProps.lastDialect).toBe(PostgreSQL);
+  });
+
+  // AC-02: MySQL connection → MySQL dialect.
+  it("passes the MySQL dialect when the active connection is mysql", () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", db_type: "mysql" })],
+    });
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+    expect(mockEditorProps.lastDialect).toBe(MySQL);
+  });
+
+  // AC-03: SQLite connection → SQLite dialect.
+  it("passes the SQLite dialect when the active connection is sqlite", () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", db_type: "sqlite" })],
+    });
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+    expect(mockEditorProps.lastDialect).toBe(SQLite);
+  });
+
+  // AC-07: Missing connection (deleted mid-session) → silent StandardSQL
+  // fallback. Users see the editor keep working with generic highlighting
+  // instead of an error, matching the existing pre-Sprint-82 contract.
+  it("falls back to StandardSQL when the tab's connection is missing from the store", () => {
+    // Store is empty — connection was deleted between render cycles.
+    useConnectionStore.setState({ connections: [] });
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+    expect(mockEditorProps.lastDialect).toBe(StandardSQL);
+  });
+
+  // AC-07 parity: MongoDB connection reaches a SQL query tab (rare, but the
+  // guard exists in `databaseTypeToSqlDialect`). Still falls back.
+  it("falls back to StandardSQL when the connection paradigm is non-RDB", () => {
+    useConnectionStore.setState({
+      connections: [
+        makeConn({ id: "conn1", db_type: "mongodb", paradigm: "document" }),
+      ],
+    });
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+    expect(mockEditorProps.lastDialect).toBe(StandardSQL);
+  });
+
+  // AC-05: changing the active connection's db_type swaps the dialect prop
+  // without recreating the QueryTab / QueryEditor.
+  it("updates the dialect prop when connection db_type flips", async () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ id: "conn1", db_type: "postgresql" })],
+    });
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+    expect(mockEditorProps.lastDialect).toBe(PostgreSQL);
+
+    await act(async () => {
+      useConnectionStore.setState({
+        connections: [makeConn({ id: "conn1", db_type: "mysql" })],
+      });
+    });
+    expect(mockEditorProps.lastDialect).toBe(MySQL);
   });
 });

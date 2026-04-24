@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import type { EditorView } from "@codemirror/view";
@@ -6,6 +6,7 @@ import type { QueryTab, QueryMode } from "@stores/tabStore";
 import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import {
   executeQuery,
   cancelQuery,
@@ -13,6 +14,7 @@ import {
   aggregateDocuments,
 } from "@lib/tauri";
 import { splitSqlStatements, formatSql, uglifySql } from "@lib/sqlUtils";
+import { databaseTypeToSqlDialect } from "@lib/sqlDialect";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
@@ -70,7 +72,19 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);
-  const schemaNamespace = useSqlAutocomplete(tab.connectionId);
+  // Sprint 82 — resolve the active connection's dialect so the editor +
+  // autocomplete namespace can tailor keywords / identifier quoting. A
+  // missing connection (e.g. deleted mid-session) falls back to StandardSQL
+  // via `databaseTypeToSqlDialect(undefined)`; document paradigm tabs keep
+  // receiving the resolved dialect but ignore it inside `QueryEditor`.
+  const connections = useConnectionStore((s) => s.connections);
+  const sqlDialect = useMemo(() => {
+    const conn = connections.find((c) => c.id === tab.connectionId);
+    return databaseTypeToSqlDialect(conn?.db_type);
+  }, [connections, tab.connectionId]);
+  const schemaNamespace = useSqlAutocomplete(tab.connectionId, {
+    dialect: sqlDialect,
+  });
   const isDocument = tab.paradigm === "document";
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [showSaveForm, setShowSaveForm] = useState(false);
@@ -694,6 +708,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
           schemaNamespace={schemaNamespace}
           paradigm={tab.paradigm}
           queryMode={tab.queryMode}
+          sqlDialect={sqlDialect}
         />
       </div>
 
