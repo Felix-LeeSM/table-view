@@ -4,6 +4,7 @@ import { Button } from "@components/ui/button";
 import { cn } from "@lib/utils";
 import type { ColumnInfo, TableData } from "@/types/schema";
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
+import BsonTreeViewer from "@components/shared/BsonTreeViewer";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -135,9 +136,18 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
   );
 }
 
-// ── QuickLookPanel ────────────────────────────────────────────────────
+// ── QuickLookPanel Props ──────────────────────────────────────────────
 
-export interface QuickLookPanelProps {
+/**
+ * Props discriminated union — `mode` selects between the classic RDB
+ * column-oriented renderer (default, backwards compatible) and the
+ * document-paradigm BSON tree renderer. The default "rdb" mode keeps the
+ * existing call-sites in `DataGrid.tsx` working without any changes; a
+ * paradigm-aware call-site opts in with `mode: "document"` and supplies
+ * `rawDocuments` plus `database`/`collection` labels.
+ */
+export interface QuickLookPanelRdbProps {
+  mode?: "rdb";
   data: TableData;
   selectedRowIds: Set<number>;
   schema: string;
@@ -145,42 +155,32 @@ export interface QuickLookPanelProps {
   onClose: () => void;
 }
 
+export interface QuickLookPanelDocumentProps {
+  mode: "document";
+  rawDocuments: Record<string, unknown>[];
+  selectedRowIds: Set<number>;
+  database: string;
+  collection: string;
+  onClose: () => void;
+}
+
+export type QuickLookPanelProps =
+  | QuickLookPanelRdbProps
+  | QuickLookPanelDocumentProps;
+
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT = 600;
 const DEFAULT_HEIGHT = 280;
 
-export default function QuickLookPanel({
-  data,
-  selectedRowIds,
-  schema,
-  table,
-  onClose,
-}: QuickLookPanelProps) {
+export default function QuickLookPanel(props: QuickLookPanelProps) {
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
-  const [blobViewer, setBlobViewer] = useState<{
-    data: unknown;
-    columnName: string;
-  } | null>(null);
 
-  // Use the first selected row
+  // Shared selection arithmetic — both paradigms use the smallest-index
+  // row as the "first" selected, matching the existing RDB behaviour.
   const firstSelectedId = useMemo(() => {
-    if (selectedRowIds.size === 0) return null;
-    return Math.min(...selectedRowIds);
-  }, [selectedRowIds]);
-
-  const row = useMemo(() => {
-    if (firstSelectedId == null || firstSelectedId >= data.rows.length) {
-      return null;
-    }
-    return data.rows[firstSelectedId];
-  }, [firstSelectedId, data.rows]);
-
-  const handleBlobView = useCallback(
-    (blobData: unknown, columnName: string) => {
-      setBlobViewer({ data: blobData, columnName });
-    },
-    [],
-  );
+    if (props.selectedRowIds.size === 0) return null;
+    return Math.min(...props.selectedRowIds);
+  }, [props.selectedRowIds]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -212,6 +212,77 @@ export default function QuickLookPanel({
     [height],
   );
 
+  if (props.mode === "document") {
+    return (
+      <DocumentModeBody
+        rawDocuments={props.rawDocuments}
+        selectedRowIds={props.selectedRowIds}
+        database={props.database}
+        collection={props.collection}
+        onClose={props.onClose}
+        firstSelectedId={firstSelectedId}
+        height={height}
+        onResizeMouseDown={handleMouseDown}
+      />
+    );
+  }
+
+  return (
+    <RdbModeBody
+      data={props.data}
+      selectedRowIds={props.selectedRowIds}
+      schema={props.schema}
+      table={props.table}
+      onClose={props.onClose}
+      firstSelectedId={firstSelectedId}
+      height={height}
+      onResizeMouseDown={handleMouseDown}
+    />
+  );
+}
+
+// ── RDB mode body ─────────────────────────────────────────────────────
+
+interface RdbBodyProps {
+  data: TableData;
+  selectedRowIds: Set<number>;
+  schema: string;
+  table: string;
+  onClose: () => void;
+  firstSelectedId: number | null;
+  height: number;
+  onResizeMouseDown: (e: React.MouseEvent) => void;
+}
+
+function RdbModeBody({
+  data,
+  selectedRowIds,
+  schema,
+  table,
+  onClose,
+  firstSelectedId,
+  height,
+  onResizeMouseDown,
+}: RdbBodyProps) {
+  const [blobViewer, setBlobViewer] = useState<{
+    data: unknown;
+    columnName: string;
+  } | null>(null);
+
+  const row = useMemo(() => {
+    if (firstSelectedId == null || firstSelectedId >= data.rows.length) {
+      return null;
+    }
+    return data.rows[firstSelectedId];
+  }, [firstSelectedId, data.rows]);
+
+  const handleBlobView = useCallback(
+    (blobData: unknown, columnName: string) => {
+      setBlobViewer({ data: blobData, columnName });
+    },
+    [],
+  );
+
   if (!row) return null;
 
   const displayTable = schema ? `${schema}.${table}` : table;
@@ -226,7 +297,7 @@ export default function QuickLookPanel({
       {/* Resize handle */}
       <div
         className="flex h-2 cursor-row-resize items-center justify-center border-b border-border bg-muted/30 hover:bg-muted"
-        onMouseDown={handleMouseDown}
+        onMouseDown={onResizeMouseDown}
         aria-hidden="true"
       >
         <GripHorizontal className="h-3 w-3 text-muted-foreground" />
@@ -281,6 +352,92 @@ export default function QuickLookPanel({
           columnName={blobViewer.columnName}
         />
       )}
+    </div>
+  );
+}
+
+// ── Document mode body ────────────────────────────────────────────────
+
+interface DocumentBodyProps {
+  rawDocuments: Record<string, unknown>[];
+  selectedRowIds: Set<number>;
+  database: string;
+  collection: string;
+  onClose: () => void;
+  firstSelectedId: number | null;
+  height: number;
+  onResizeMouseDown: (e: React.MouseEvent) => void;
+}
+
+function DocumentModeBody({
+  rawDocuments,
+  selectedRowIds,
+  database,
+  collection,
+  onClose,
+  firstSelectedId,
+  height,
+  onResizeMouseDown,
+}: DocumentBodyProps) {
+  // Out-of-range or missing selection → pass `null` so BsonTreeViewer's
+  // built-in empty state takes over. This keeps the panel mounted (so the
+  // header stays useful) while still surfacing "No document selected".
+  const documentValue = useMemo<Record<string, unknown> | null>(() => {
+    if (
+      firstSelectedId == null ||
+      firstSelectedId < 0 ||
+      firstSelectedId >= rawDocuments.length
+    ) {
+      return null;
+    }
+    return rawDocuments[firstSelectedId] ?? null;
+  }, [firstSelectedId, rawDocuments]);
+
+  const displayNamespace = `${database}.${collection}`;
+
+  return (
+    <div
+      className="flex shrink-0 flex-col border-t border-border bg-background"
+      style={{ height }}
+      role="region"
+      aria-label="Document Details"
+    >
+      {/* Resize handle */}
+      <div
+        className="flex h-2 cursor-row-resize items-center justify-center border-b border-border bg-muted/30 hover:bg-muted dark:bg-muted/20"
+        onMouseDown={onResizeMouseDown}
+        aria-hidden="true"
+      >
+        <GripHorizontal className="h-3 w-3 text-muted-foreground" />
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-1.5">
+        <h3 className="text-xs font-semibold text-foreground">
+          Document Details —{" "}
+          <span className="font-mono text-muted-foreground">
+            {displayNamespace}
+          </span>
+          {selectedRowIds.size > 1 && (
+            <span className="ml-2 text-muted-foreground">
+              ({selectedRowIds.size} selected, showing first)
+            </span>
+          )}
+        </h3>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onClose}
+          aria-label="Close document details"
+        >
+          <X />
+        </Button>
+      </div>
+
+      {/* BSON tree — null falls through to the viewer's built-in empty state */}
+      <div className="flex-1 overflow-auto">
+        <BsonTreeViewer value={documentValue} />
+      </div>
     </div>
   );
 }

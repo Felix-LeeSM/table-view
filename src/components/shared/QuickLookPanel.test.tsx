@@ -105,151 +105,272 @@ const defaultProps = {
 };
 
 describe("QuickLookPanel", () => {
-  it("renders field names and values for the selected row", () => {
-    render(<QuickLookPanel {...defaultProps} />);
+  describe("rdb mode", () => {
+    it("renders field names and values for the selected row", () => {
+      render(<QuickLookPanel {...defaultProps} />);
 
-    // Header
-    expect(screen.getByText(/Row Details/)).toBeInTheDocument();
-    expect(screen.getByText(/public\.users/)).toBeInTheDocument();
+      // Header
+      expect(screen.getByText(/Row Details/)).toBeInTheDocument();
+      expect(screen.getByText(/public\.users/)).toBeInTheDocument();
 
-    // Column names should appear
-    expect(screen.getByText("id")).toBeInTheDocument();
-    expect(screen.getByText("name")).toBeInTheDocument();
-    expect(screen.getByText("active")).toBeInTheDocument();
-    expect(screen.getByText("meta")).toBeInTheDocument();
-    expect(screen.getByText("data")).toBeInTheDocument();
-    expect(screen.getByText("bio")).toBeInTheDocument();
+      // Column names should appear
+      expect(screen.getByText("id")).toBeInTheDocument();
+      expect(screen.getByText("name")).toBeInTheDocument();
+      expect(screen.getByText("active")).toBeInTheDocument();
+      expect(screen.getByText("meta")).toBeInTheDocument();
+      expect(screen.getByText("data")).toBeInTheDocument();
+      expect(screen.getByText("bio")).toBeInTheDocument();
 
-    // Values for row 0: id=1, name=Alice
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+      // Values for row 0: id=1, name=Alice
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+    });
+
+    it("shows NULL for null values", () => {
+      // Row 0: bio is null
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const nullElements = screen.getAllByText("NULL");
+      // Row 0 has bio=null
+      expect(nullElements.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("shows boolean values as badges", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      // Row 0: active=true
+      expect(screen.getByText("true")).toBeInTheDocument();
+    });
+
+    it("shows formatted JSON for object values", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      // Row 0: meta = {key: "value"} should be pretty-printed
+      expect(screen.getByText(/"key"/)).toBeInTheDocument();
+      expect(screen.getByText(/"value"/)).toBeInTheDocument();
+    });
+
+    it("shows BLOB button for BLOB columns with non-null data", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      // Row 0: data = "binary-data" (bytea column)
+      const blobButton = screen.getByLabelText(/View BLOB data for data/);
+      expect(blobButton).toBeInTheDocument();
+      expect(blobButton).toHaveTextContent("(BLOB)");
+    });
+
+    it("opens BLOB viewer when BLOB button is clicked", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const blobButton = screen.getByLabelText(/View BLOB data for data/);
+      fireEvent.click(blobButton);
+
+      expect(screen.getByTestId("blob-viewer-dialog")).toBeInTheDocument();
+      expect(screen.getByText(/BLOB Viewer — data/)).toBeInTheDocument();
+    });
+
+    it("shows NULL for null BLOB columns", () => {
+      // Row 1: data is null (bytea column)
+      render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set([1])} />,
+      );
+
+      // Should NOT show BLOB button for null data column
+      expect(
+        screen.queryByLabelText(/View BLOB data for data/),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows large text in a textarea", () => {
+      // Row 1: bio = "a".repeat(300) — large text
+      render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set([1])} />,
+      );
+
+      const textarea = screen.getByLabelText("Value for bio");
+      expect(textarea).toBeInTheDocument();
+      expect(textarea.tagName).toBe("TEXTAREA");
+      expect(textarea).toHaveAttribute("readonly");
+    });
+
+    it("close button calls onClose", () => {
+      const onClose = vi.fn();
+      render(<QuickLookPanel {...defaultProps} onClose={onClose} />);
+
+      const closeButton = screen.getByLabelText("Close row details");
+      fireEvent.click(closeButton);
+      expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it("renders nothing when selected row index is out of bounds", () => {
+      const { container } = render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set([99])} />,
+      );
+      expect(container.innerHTML).toBe("");
+    });
+
+    it("renders nothing when selection is empty", () => {
+      const { container } = render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set()} />,
+      );
+      expect(container.innerHTML).toBe("");
+    });
+
+    it("shows first row when multiple rows are selected", () => {
+      render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set([2, 0])} />,
+      );
+
+      // Should show row 0 data (smallest id in the set)
+      expect(screen.getByText("Alice")).toBeInTheDocument();
+    });
+
+    it("indicates multiple selection in header", () => {
+      render(
+        <QuickLookPanel
+          {...defaultProps}
+          selectedRowIds={new Set([0, 1, 2])}
+        />,
+      );
+
+      expect(screen.getByText(/3 selected, showing first/)).toBeInTheDocument();
+    });
+
+    it("shows row 2 data correctly", () => {
+      render(
+        <QuickLookPanel {...defaultProps} selectedRowIds={new Set([2])} />,
+      );
+
+      expect(screen.getByText("Charlie")).toBeInTheDocument();
+      expect(screen.getByText("true")).toBeInTheDocument();
+    });
+
+    it("has row details region for accessibility", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+      expect(
+        screen.getByRole("region", { name: "Row Details" }),
+      ).toBeInTheDocument();
+    });
+
+    it("shows column data types next to column names", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+      // The column data types should appear in the panel
+      expect(screen.getByText("integer")).toBeInTheDocument();
+      // "text" appears as data type for name and bio columns
+      const textLabels = screen.getAllByText("text");
+      expect(textLabels.length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText("boolean")).toBeInTheDocument();
+      expect(screen.getByText("jsonb")).toBeInTheDocument();
+      expect(screen.getByText("bytea")).toBeInTheDocument();
+    });
   });
 
-  it("shows NULL for null values", () => {
-    // Row 0: bio is null
-    render(<QuickLookPanel {...defaultProps} />);
+  describe("document mode", () => {
+    const documentDefaultProps = {
+      mode: "document" as const,
+      rawDocuments: [
+        {
+          _id: { $oid: "65abcdef0123456789abcdef" },
+          name: "Alice",
+          age: 30,
+          tags: ["admin", "beta"],
+        },
+        {
+          _id: { $oid: "65abcdef0123456789abcde0" },
+          name: "Bob",
+          age: 27,
+          tags: [],
+        },
+      ] as Record<string, unknown>[],
+      selectedRowIds: new Set([0]),
+      database: "table_view_test",
+      collection: "users",
+      onClose: vi.fn(),
+    };
 
-    const nullElements = screen.getAllByText("NULL");
-    // Row 0 has bio=null
-    expect(nullElements.length).toBeGreaterThanOrEqual(1);
-  });
+    it("renders the document details header with the db.collection label", () => {
+      render(<QuickLookPanel {...documentDefaultProps} />);
 
-  it("shows boolean values as badges", () => {
-    render(<QuickLookPanel {...defaultProps} />);
+      expect(screen.getByText(/Document Details/)).toBeInTheDocument();
+      expect(screen.getByText(/table_view_test\.users/)).toBeInTheDocument();
+    });
 
-    // Row 0: active=true
-    expect(screen.getByText("true")).toBeInTheDocument();
-  });
+    it("mounts the BsonTreeViewer with top-level keys for the selected document", () => {
+      render(<QuickLookPanel {...documentDefaultProps} />);
 
-  it("shows formatted JSON for object values", () => {
-    render(<QuickLookPanel {...defaultProps} />);
+      const tree = screen.getByRole("tree", { name: /BSON document tree/i });
+      expect(tree).toBeInTheDocument();
 
-    // Row 0: meta = {key: "value"} should be pretty-printed
-    expect(screen.getByText(/"key"/)).toBeInTheDocument();
-    expect(screen.getByText(/"value"/)).toBeInTheDocument();
-  });
+      // Top-level keys rendered as copy-path buttons inside the tree.
+      expect(tree).toHaveTextContent("_id");
+      expect(tree).toHaveTextContent("name");
+      expect(tree).toHaveTextContent("age");
+      expect(tree).toHaveTextContent("tags");
+    });
 
-  it("shows BLOB button for BLOB columns with non-null data", () => {
-    render(<QuickLookPanel {...defaultProps} />);
+    it("shows the BsonTreeViewer empty state when the selection is out of bounds", () => {
+      render(
+        <QuickLookPanel
+          {...documentDefaultProps}
+          selectedRowIds={new Set([99])}
+        />,
+      );
 
-    // Row 0: data = "binary-data" (bytea column)
-    const blobButton = screen.getByLabelText(/View BLOB data for data/);
-    expect(blobButton).toBeInTheDocument();
-    expect(blobButton).toHaveTextContent("(BLOB)");
-  });
+      expect(
+        screen.getByRole("tree", { name: /BSON document tree/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/No document selected/i)).toBeInTheDocument();
+    });
 
-  it("opens BLOB viewer when BLOB button is clicked", () => {
-    render(<QuickLookPanel {...defaultProps} />);
+    it("shows the BsonTreeViewer empty state when rawDocuments is empty", () => {
+      render(
+        <QuickLookPanel
+          {...documentDefaultProps}
+          rawDocuments={[]}
+          selectedRowIds={new Set([0])}
+        />,
+      );
 
-    const blobButton = screen.getByLabelText(/View BLOB data for data/);
-    fireEvent.click(blobButton);
+      expect(
+        screen.getByRole("tree", { name: /BSON document tree/i }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/No document selected/i)).toBeInTheDocument();
+    });
 
-    expect(screen.getByTestId("blob-viewer-dialog")).toBeInTheDocument();
-    expect(screen.getByText(/BLOB Viewer — data/)).toBeInTheDocument();
-  });
+    it("indicates multi-select in the header while still showing the first document", () => {
+      render(
+        <QuickLookPanel
+          {...documentDefaultProps}
+          selectedRowIds={new Set([0, 1, 2])}
+        />,
+      );
 
-  it("shows NULL for null BLOB columns", () => {
-    // Row 1: data is null (bytea column)
-    render(<QuickLookPanel {...defaultProps} selectedRowIds={new Set([1])} />);
+      expect(screen.getByText(/3 selected, showing first/)).toBeInTheDocument();
+      // First document's top-level `name` field is rendered.
+      const tree = screen.getByRole("tree", { name: /BSON document tree/i });
+      expect(tree).toHaveTextContent("name");
+    });
 
-    // Should NOT show BLOB button for null data column
-    expect(
-      screen.queryByLabelText(/View BLOB data for data/),
-    ).not.toBeInTheDocument();
-  });
+    it("close button calls onClose", () => {
+      const onClose = vi.fn();
+      render(<QuickLookPanel {...documentDefaultProps} onClose={onClose} />);
 
-  it("shows large text in a textarea", () => {
-    // Row 1: bio = "a".repeat(300) — large text
-    render(<QuickLookPanel {...defaultProps} selectedRowIds={new Set([1])} />);
+      const closeButton = screen.getByLabelText("Close document details");
+      fireEvent.click(closeButton);
+      expect(onClose).toHaveBeenCalledOnce();
+    });
 
-    const textarea = screen.getByLabelText("Value for bio");
-    expect(textarea).toBeInTheDocument();
-    expect(textarea.tagName).toBe("TEXTAREA");
-    expect(textarea).toHaveAttribute("readonly");
-  });
+    it("uses the document region label for accessibility", () => {
+      render(<QuickLookPanel {...documentDefaultProps} />);
+      expect(
+        screen.getByRole("region", { name: "Document Details" }),
+      ).toBeInTheDocument();
+    });
 
-  it("close button calls onClose", () => {
-    const onClose = vi.fn();
-    render(<QuickLookPanel {...defaultProps} onClose={onClose} />);
-
-    const closeButton = screen.getByLabelText("Close row details");
-    fireEvent.click(closeButton);
-    expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it("renders nothing when selected row index is out of bounds", () => {
-    const { container } = render(
-      <QuickLookPanel {...defaultProps} selectedRowIds={new Set([99])} />,
-    );
-    expect(container.innerHTML).toBe("");
-  });
-
-  it("renders nothing when selection is empty", () => {
-    const { container } = render(
-      <QuickLookPanel {...defaultProps} selectedRowIds={new Set()} />,
-    );
-    expect(container.innerHTML).toBe("");
-  });
-
-  it("shows first row when multiple rows are selected", () => {
-    render(
-      <QuickLookPanel {...defaultProps} selectedRowIds={new Set([2, 0])} />,
-    );
-
-    // Should show row 0 data (smallest id in the set)
-    expect(screen.getByText("Alice")).toBeInTheDocument();
-  });
-
-  it("indicates multiple selection in header", () => {
-    render(
-      <QuickLookPanel {...defaultProps} selectedRowIds={new Set([0, 1, 2])} />,
-    );
-
-    expect(screen.getByText(/3 selected, showing first/)).toBeInTheDocument();
-  });
-
-  it("shows row 2 data correctly", () => {
-    render(<QuickLookPanel {...defaultProps} selectedRowIds={new Set([2])} />);
-
-    expect(screen.getByText("Charlie")).toBeInTheDocument();
-    expect(screen.getByText("true")).toBeInTheDocument();
-  });
-
-  it("has row details region for accessibility", () => {
-    render(<QuickLookPanel {...defaultProps} />);
-    expect(
-      screen.getByRole("region", { name: "Row Details" }),
-    ).toBeInTheDocument();
-  });
-
-  it("shows column data types next to column names", () => {
-    render(<QuickLookPanel {...defaultProps} />);
-    // The column data types should appear in the panel
-    expect(screen.getByText("integer")).toBeInTheDocument();
-    // "text" appears as data type for name and bio columns
-    const textLabels = screen.getAllByText("text");
-    expect(textLabels.length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("boolean")).toBeInTheDocument();
-    expect(screen.getByText("jsonb")).toBeInTheDocument();
-    expect(screen.getByText("bytea")).toBeInTheDocument();
+    it("does not mount the BLOB viewer dialog in document mode", () => {
+      render(<QuickLookPanel {...documentDefaultProps} />);
+      expect(
+        screen.queryByTestId("blob-viewer-dialog"),
+      ).not.toBeInTheDocument();
+    });
   });
 });

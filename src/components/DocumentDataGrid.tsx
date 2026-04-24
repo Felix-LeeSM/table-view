@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
 import type { ColumnInfo, TableData } from "@/types/schema";
+import { isDocumentSentinel } from "@/types/document";
+import QuickLookPanel from "@components/shared/QuickLookPanel";
+import { cn } from "@lib/utils";
 
 interface DocumentDataGridProps {
   connectionId: string;
@@ -12,15 +15,13 @@ interface DocumentDataGridProps {
 const DEFAULT_PAGE_SIZE = 300;
 
 /**
- * Sprint 66 — P0 read-only grid for document-paradigm tabs.
+ * Sprint 66/71 — read-only grid for document-paradigm tabs.
  *
- * Intentionally minimal: it fetches via `useDocumentStore.runFind`, renders
- * the flattened rows in a plain HTML table, and surfaces pagination via
- * `skip` + `limit`. Composite cells (`"{...}"` / `"[N items]"`) render as
- * muted text so the user knows the value is a sentinel rather than a raw
- * string. Editing, filtering, and Quick Look are deliberately deferred to
- * Sprint 67+ — this component's purpose is to prove the read path works
- * end-to-end against the new adapter wiring.
+ * Sprint 66 shipped the fetch + render skeleton; Sprint 71 layers single-row
+ * selection, Cmd+L Quick Look toggling, and BSON tree preview on top of it.
+ * Composite cells (`"{...}"` / `"[N items]"`) render as muted sentinels via
+ * `isDocumentSentinel()`. Editing, MQL preview, and filtering remain
+ * deferred to Sprint 73.
  */
 export default function DocumentDataGrid({
   connectionId,
@@ -36,6 +37,10 @@ export default function DocumentDataGrid({
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [showQuickLook, setShowQuickLook] = useState(false);
   const fetchIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
@@ -57,6 +62,37 @@ export default function DocumentDataGrid({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
+  // as `DataGrid.tsx:100-110` so keyboard behaviour stays consistent across
+  // paradigms.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "l" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShowQuickLook((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Page-local row indices become meaningless once the page changes, so we
+  // reset the selection whenever `page` flips. This also catches the
+  // back-button case where the user pages backwards.
+  useEffect(() => {
+    setSelectedRowIds(new Set());
+  }, [page]);
+
+  const handleRowClick = useCallback((rowIdx: number) => {
+    setSelectedRowIds((prev) => {
+      const next = new Set<number>();
+      // Single-select: re-clicking the active row clears selection; clicking
+      // any other row replaces the selection with that row's index.
+      if (!prev.has(rowIdx)) next.add(rowIdx);
+      return next;
+    });
+  }, []);
 
   // Convert DocumentQueryResult → a minimal TableData-compatible shape so
   // the rest of the grid code path can reuse existing formatting helpers
@@ -88,6 +124,9 @@ export default function DocumentDataGrid({
   const totalPages = data
     ? Math.max(1, Math.ceil(data.total_count / pageSize))
     : 1;
+
+  const showQuickLookMounted =
+    showQuickLook && selectedRowIds.size > 0 && !!queryResult;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -169,49 +208,55 @@ export default function DocumentDataGrid({
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row, rowIdx) => (
-                <tr
-                  key={`row-${page}-${rowIdx}`}
-                  className="border-b border-border hover:bg-muted"
-                >
-                  {data.columns.map((col, colIdx) => {
-                    const cell = (row as unknown[])[colIdx];
-                    const isSentinel =
-                      typeof cell === "string" &&
-                      (cell === "{...}" || /^\[\d+ items\]$/.test(cell));
-                    const isNull = cell == null;
-                    return (
-                      <td
-                        key={col.name}
-                        className="overflow-hidden border-r border-border px-3 py-1 text-xs"
-                        title={
-                          isNull
-                            ? "null"
-                            : typeof cell === "object"
-                              ? JSON.stringify(cell)
-                              : String(cell)
-                        }
-                      >
-                        {isNull ? (
-                          <span className="italic text-muted-foreground">
-                            null
-                          </span>
-                        ) : isSentinel ? (
-                          <span className="italic text-muted-foreground">
-                            {String(cell)}
-                          </span>
-                        ) : (
-                          <span className="line-clamp-3 text-foreground">
-                            {typeof cell === "object"
-                              ? JSON.stringify(cell)
-                              : String(cell)}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {data.rows.map((row, rowIdx) => {
+                const selected = selectedRowIds.has(rowIdx);
+                return (
+                  <tr
+                    key={`row-${page}-${rowIdx}`}
+                    aria-selected={selected}
+                    onClick={() => handleRowClick(rowIdx)}
+                    className={cn(
+                      "cursor-pointer border-b border-border hover:bg-muted",
+                      selected && "bg-accent dark:bg-accent/60",
+                    )}
+                  >
+                    {data.columns.map((col, colIdx) => {
+                      const cell = (row as unknown[])[colIdx];
+                      const isSentinel = isDocumentSentinel(cell);
+                      const isNull = cell == null;
+                      return (
+                        <td
+                          key={col.name}
+                          className="overflow-hidden border-r border-border px-3 py-1 text-xs"
+                          title={
+                            isNull
+                              ? "null"
+                              : typeof cell === "object"
+                                ? JSON.stringify(cell)
+                                : String(cell)
+                          }
+                        >
+                          {isNull ? (
+                            <span className="italic text-muted-foreground">
+                              null
+                            </span>
+                          ) : isSentinel ? (
+                            <span className="italic text-muted-foreground">
+                              {String(cell)}
+                            </span>
+                          ) : (
+                            <span className="line-clamp-3 text-foreground">
+                              {typeof cell === "object"
+                                ? JSON.stringify(cell)
+                                : String(cell)}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
               {data.rows.length === 0 && (
                 <tr>
                   <td
@@ -225,6 +270,17 @@ export default function DocumentDataGrid({
             </tbody>
           </table>
         </div>
+      )}
+
+      {showQuickLookMounted && queryResult && (
+        <QuickLookPanel
+          mode="document"
+          rawDocuments={queryResult.raw_documents}
+          selectedRowIds={selectedRowIds}
+          database={database}
+          collection={collection}
+          onClose={() => setShowQuickLook(false)}
+        />
       )}
     </div>
   );
