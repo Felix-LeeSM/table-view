@@ -18,9 +18,10 @@ updated: 2026-04-22
 
 ## 다음 Phase (계획 문서만)
 
-- **Phase 6** MongoDB — [docs/phases/phase-6.md](../../docs/phases/phase-6.md)
+- **Phase 6** MongoDB — [docs/phases/phase-6.md](../../docs/phases/phase-6.md) (Sprint 63/64 완료, 65부터 MongoAdapter 구현)
 - **Phase 7** Elasticsearch — [docs/phases/phase-7.md](../../docs/phases/phase-7.md)
 - **Phase 8** Redis — [docs/phases/phase-8.md](../../docs/phases/phase-8.md)
+- **Phase 9** MySQL + SQLite — [docs/phases/phase-9.md](../../docs/phases/phase-9.md) (RDB trait 일반화 선행)
 
 ## Active 작업
 
