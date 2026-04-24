@@ -22,6 +22,18 @@ impl DatabaseType {
             DatabaseType::Redis => 6379,
         }
     }
+
+    /// Paradigm tag exposed to the frontend. Sprint 64 introduces this so the
+    /// UI can (eventually) branch on relational vs document vs search vs kv
+    /// connections. This sprint only serializes the tag — consumers do not
+    /// yet branch on it.
+    pub fn paradigm(&self) -> &'static str {
+        match self {
+            DatabaseType::Postgresql | DatabaseType::Mysql | DatabaseType::Sqlite => "rdb",
+            DatabaseType::Mongodb => "document",
+            DatabaseType::Redis => "kv",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +80,13 @@ pub struct ConnectionConfigPublic {
     /// Whether a password is stored on disk. Derived, never persisted.
     #[serde(default)]
     pub has_password: bool,
+    /// Paradigm tag derived from `db_type` (`"rdb"`, `"document"`, `"search"`,
+    /// `"kv"`). Added in Sprint 64 so the frontend can route UI off it in
+    /// future phases. Serialized on every response; deserialization defaults
+    /// to the empty string so that older persisted JSON (which lacks this
+    /// field) still loads.
+    #[serde(default)]
+    pub paradigm: String,
 }
 
 impl From<&ConnectionConfig> for ConnectionConfigPublic {
@@ -75,6 +94,7 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
         Self {
             id: c.id.clone(),
             name: c.name.clone(),
+            paradigm: c.db_type.paradigm().to_string(),
             db_type: c.db_type.clone(),
             host: c.host.clone(),
             port: c.port,
@@ -190,6 +210,84 @@ mod tests {
         assert_eq!(json, "\"postgresql\"");
         let json = serde_json::to_string(&DatabaseType::Mysql).unwrap();
         assert_eq!(json, "\"mysql\"");
+    }
+
+    #[test]
+    fn database_type_paradigm_maps_expected_tags() {
+        assert_eq!(DatabaseType::Postgresql.paradigm(), "rdb");
+        assert_eq!(DatabaseType::Mysql.paradigm(), "rdb");
+        assert_eq!(DatabaseType::Sqlite.paradigm(), "rdb");
+        assert_eq!(DatabaseType::Mongodb.paradigm(), "document");
+        assert_eq!(DatabaseType::Redis.paradigm(), "kv");
+    }
+
+    #[test]
+    fn connection_config_public_serializes_paradigm_for_postgres() {
+        let conn = ConnectionConfig {
+            id: "c1".into(),
+            name: "DB".into(),
+            db_type: DatabaseType::Postgresql,
+            host: "h".into(),
+            port: 5432,
+            user: "u".into(),
+            password: "p".into(),
+            database: "d".into(),
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+        };
+        let public = ConnectionConfigPublic::from(&conn);
+        assert_eq!(public.paradigm, "rdb");
+
+        let json = serde_json::to_string(&public).unwrap();
+        assert!(
+            json.contains("\"paradigm\":\"rdb\""),
+            "paradigm tag missing from payload: {}",
+            json
+        );
+    }
+
+    #[test]
+    fn connection_config_public_serializes_paradigm_for_mongodb() {
+        let conn = ConnectionConfig {
+            id: "c1".into(),
+            name: "DB".into(),
+            db_type: DatabaseType::Mongodb,
+            host: "h".into(),
+            port: 27017,
+            user: "u".into(),
+            password: String::new(),
+            database: "d".into(),
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+        };
+        let public = ConnectionConfigPublic::from(&conn);
+        assert_eq!(public.paradigm, "document");
+    }
+
+    #[test]
+    fn connection_config_public_deserializes_without_paradigm_field() {
+        // Payload shape from older Sprint 63 clients — no `paradigm` key.
+        let json = r#"{
+            "id": "c1",
+            "name": "DB",
+            "db_type": "postgresql",
+            "host": "h",
+            "port": 5432,
+            "user": "u",
+            "database": "d",
+            "group_id": null,
+            "color": null
+        }"#;
+        let public: ConnectionConfigPublic = serde_json::from_str(json).unwrap();
+        // Default is empty string; callers must reconstruct via From<&ConnectionConfig>
+        // when they need the derived value.
+        assert_eq!(public.paradigm, "");
     }
 
     #[test]

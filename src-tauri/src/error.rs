@@ -20,6 +20,9 @@ pub enum AppError {
     #[error("Database error: {0}")]
     Database(String),
 
+    #[error("Unsupported operation: {0}")]
+    Unsupported(String),
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -67,6 +70,10 @@ mod tests {
         assert_eq!(
             AppError::NotFound("id-123".into()).to_string(),
             "Not found: id-123"
+        );
+        assert_eq!(
+            AppError::Unsupported("mysql".into()).to_string(),
+            "Unsupported operation: mysql"
         );
     }
 

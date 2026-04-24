@@ -1,6 +1,5 @@
 pub mod postgres;
 
-#[allow(dead_code)]
 pub use postgres::PostgresAdapter;
 
 use std::future::Future;
@@ -18,14 +17,13 @@ use crate::models::{
 };
 
 /// Local BoxFuture alias — the project does not depend on the `futures` crate
-/// yet, so we reproduce the common `BoxFuture<'a, T>` shape here.
-#[allow(dead_code)]
+/// yet, so we reproduce the common `BoxFuture<'a, T>` shape here. All trait
+/// methods in this module use this alias uniformly for readability.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
 
 /// UI hint for how an RDBMS-style namespace should be presented.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NamespaceLabel {
     Schema,
@@ -36,7 +34,6 @@ pub enum NamespaceLabel {
 /// Paradigm-neutral namespace descriptor returned by `RdbAdapter::list_namespaces`.
 /// For Sprint A1 this mirrors `SchemaInfo` — future DBMS adapters may extend
 /// additional fields without breaking existing call sites.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NamespaceInfo {
     pub name: String,
@@ -51,7 +48,6 @@ impl From<SchemaInfo> for NamespaceInfo {
 /// RDB query result — alias of the existing `QueryResult` so RDB adapters
 /// can continue to use the same concrete type while the trait stays
 /// paradigm-named.
-#[allow(dead_code)]
 pub type RdbQueryResult = QueryResult;
 
 /// MongoDB document identifier (Phase 6).
@@ -60,7 +56,6 @@ pub type RdbQueryResult = QueryResult;
 /// with the `bson` crate dependency. For Sprint A1 we keep a thin placeholder
 /// keyed by the extended-JSON string representation so that the trait
 /// compiles without pulling `bson` into `Cargo.toml` prematurely.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DocumentId {
     ObjectId(String),
@@ -73,7 +68,6 @@ pub enum DocumentId {
 ///
 /// Represented as `serde_json::Value` for Sprint A1 — Sprint B will migrate
 /// these to `bson::Document` once the `bson` crate is added.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FindBody {
     pub filter: serde_json::Value,
@@ -84,7 +78,6 @@ pub struct FindBody {
 }
 
 /// Result shape for document-oriented query/aggregation (Phase 6).
-#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentQueryResult {
     pub columns: Vec<crate::models::QueryColumn>,
@@ -97,18 +90,14 @@ pub struct DocumentQueryResult {
 // ── Lifecycle trait ───────────────────────────────────────────────────────
 
 /// Connection lifecycle contract shared by every adapter paradigm.
-#[allow(dead_code)]
 pub trait DbAdapter: Send + Sync {
     fn kind(&self) -> DatabaseType;
 
-    fn connect<'a>(
-        &'a self,
-        config: &'a ConnectionConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    fn connect<'a>(&'a self, config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>>;
 
-    fn disconnect<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
 
-    fn ping<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── RdbAdapter ────────────────────────────────────────────────────────────
@@ -119,30 +108,27 @@ pub trait DbAdapter: Send + Sync {
 /// implementations may reorder arguments internally when delegating to
 /// legacy inherent methods.
 #[allow(clippy::too_many_arguments)]
-#[allow(dead_code)]
 pub trait RdbAdapter: DbAdapter {
     fn namespace_label(&self) -> NamespaceLabel;
 
-    fn list_namespaces<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<NamespaceInfo>, AppError>> + Send + 'a>>;
+    fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
     fn list_tables<'a>(
         &'a self,
         namespace: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<TableInfo>, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>>;
 
     fn get_columns<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>>;
 
     fn execute_sql<'a>(
         &'a self,
         sql: &'a str,
         cancel: Option<&'a CancellationToken>,
-    ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>>;
 
     fn query_table_data<'a>(
         &'a self,
@@ -153,71 +139,71 @@ pub trait RdbAdapter: DbAdapter {
         order_by: Option<&'a str>,
         filters: Option<&'a [FilterCondition]>,
         raw_where: Option<&'a str>,
-    ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<TableData, AppError>>;
 
     // DDL
     fn drop_table<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 
     fn rename_table<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
         new_name: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 
     fn alter_table<'a>(
         &'a self,
         req: &'a AlterTableRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn create_index<'a>(
         &'a self,
         req: &'a CreateIndexRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn drop_index<'a>(
         &'a self,
         req: &'a DropIndexRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn add_constraint<'a>(
         &'a self,
         req: &'a AddConstraintRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn drop_constraint<'a>(
         &'a self,
         req: &'a DropConstraintRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn get_table_indexes<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>>;
 
     fn get_table_constraints<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ConstraintInfo>, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>>;
 
     // Views/Functions — default: empty list (each DBMS overrides as needed).
     fn list_views<'a>(
         &'a self,
         _namespace: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ViewInfo>, AppError>> + Send + 'a>> {
+    ) -> BoxFuture<'a, Result<Vec<ViewInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
 
     fn list_functions<'a>(
         &'a self,
         _namespace: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<FunctionInfo>, AppError>> + Send + 'a>> {
+    ) -> BoxFuture<'a, Result<Vec<FunctionInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
     }
 
@@ -225,55 +211,63 @@ pub trait RdbAdapter: DbAdapter {
         &'a self,
         namespace: &'a str,
         view: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<String, AppError>>;
+
+    fn get_view_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+        view: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>>;
+
+    fn list_schema_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>>;
 
     fn get_function_source<'a>(
         &'a self,
         namespace: &'a str,
         function: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<String, AppError>>;
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
 
-#[allow(dead_code)]
 pub trait DocumentAdapter: DbAdapter {
-    fn list_databases<'a>(
-        &'a self,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<NamespaceInfo>, AppError>> + Send + 'a>>;
+    fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
     fn list_collections<'a>(
         &'a self,
         db: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<TableInfo>, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>>;
 
     fn infer_collection_fields<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         sample_size: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>>;
 
     fn find<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         body: FindBody,
-    ) -> Pin<Box<dyn Future<Output = Result<DocumentQueryResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
     fn aggregate<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         pipeline: Vec<serde_json::Value>,
-    ) -> Pin<Box<dyn Future<Output = Result<DocumentQueryResult, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
     fn insert_document<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         doc: serde_json::Value,
-    ) -> Pin<Box<dyn Future<Output = Result<DocumentId, AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<DocumentId, AppError>>;
 
     fn update_document<'a>(
         &'a self,
@@ -281,22 +275,20 @@ pub trait DocumentAdapter: DbAdapter {
         collection: &'a str,
         id: DocumentId,
         patch: serde_json::Value,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 
     fn delete_document<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         id: DocumentId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>>;
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────
 
-#[allow(dead_code)]
 pub trait SearchAdapter: DbAdapter {}
 
-#[allow(dead_code)]
 pub trait KvAdapter: DbAdapter {}
 
 // ── ActiveAdapter enum ────────────────────────────────────────────────────
@@ -306,7 +298,6 @@ pub trait KvAdapter: DbAdapter {}
 /// Wraps one of the paradigm-specific traits. Accessors return a typed
 /// reference or a paradigm-mismatch error so that RDB-only commands can
 /// reject document/search/kv connections cleanly.
-#[allow(dead_code)]
 pub enum ActiveAdapter {
     Rdb(Box<dyn RdbAdapter>),
     Document(Box<dyn DocumentAdapter>),
@@ -314,7 +305,6 @@ pub enum ActiveAdapter {
     Kv(Box<dyn KvAdapter>),
 }
 
-#[allow(dead_code)]
 impl ActiveAdapter {
     pub fn kind(&self) -> DatabaseType {
         self.lifecycle().kind()
@@ -332,10 +322,7 @@ impl ActiveAdapter {
     pub fn as_rdb(&self) -> Result<&dyn RdbAdapter, AppError> {
         match self {
             ActiveAdapter::Rdb(a) => Ok(a.as_ref()),
-            // `AppError::Unsupported` does not yet exist; Sprint A1 reuses
-            // `Validation` to flag a paradigm mismatch at the command boundary
-            // until Sprint A2 introduces a dedicated variant.
-            _ => Err(AppError::Validation(
+            _ => Err(AppError::Unsupported(
                 "Operation requires a relational (RDB) connection".into(),
             )),
         }
@@ -344,7 +331,7 @@ impl ActiveAdapter {
     pub fn as_document(&self) -> Result<&dyn DocumentAdapter, AppError> {
         match self {
             ActiveAdapter::Document(a) => Ok(a.as_ref()),
-            _ => Err(AppError::Validation(
+            _ => Err(AppError::Unsupported(
                 "Operation requires a document (MongoDB) connection".into(),
             )),
         }
@@ -353,7 +340,7 @@ impl ActiveAdapter {
     pub fn as_search(&self) -> Result<&dyn SearchAdapter, AppError> {
         match self {
             ActiveAdapter::Search(a) => Ok(a.as_ref()),
-            _ => Err(AppError::Validation(
+            _ => Err(AppError::Unsupported(
                 "Operation requires a search connection".into(),
             )),
         }
@@ -362,9 +349,154 @@ impl ActiveAdapter {
     pub fn as_kv(&self) -> Result<&dyn KvAdapter, AppError> {
         match self {
             ActiveAdapter::Kv(a) => Ok(a.as_ref()),
-            _ => Err(AppError::Validation(
+            _ => Err(AppError::Unsupported(
                 "Operation requires a key-value connection".into(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn namespace_info_from_schema_info_preserves_name() {
+        let schema = SchemaInfo {
+            name: "public".to_string(),
+        };
+        let ns: NamespaceInfo = schema.into();
+        assert_eq!(ns.name, "public");
+    }
+
+    #[test]
+    fn namespace_info_from_schema_info_with_empty_name() {
+        let schema = SchemaInfo {
+            name: String::new(),
+        };
+        let ns: NamespaceInfo = schema.into();
+        assert_eq!(ns.name, "");
+    }
+
+    #[test]
+    fn namespace_info_from_schema_info_keeps_unicode() {
+        let schema = SchemaInfo {
+            name: "스키마_名前".to_string(),
+        };
+        let ns: NamespaceInfo = schema.into();
+        assert_eq!(ns.name, "스키마_名前");
+    }
+
+    #[test]
+    fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
+        struct DummyDocument;
+        impl DbAdapter for DummyDocument {
+            fn kind(&self) -> DatabaseType {
+                DatabaseType::Mongodb
+            }
+            fn connect<'a>(
+                &'a self,
+                _config: &'a ConnectionConfig,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+        impl DocumentAdapter for DummyDocument {
+            fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn list_collections<'a>(
+                &'a self,
+                _db: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn infer_collection_fields<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _sample_size: usize,
+            ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn find<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _body: FindBody,
+            ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+                Box::pin(async {
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                })
+            }
+            fn aggregate<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _pipeline: Vec<serde_json::Value>,
+            ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+                Box::pin(async {
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                })
+            }
+            fn insert_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _doc: serde_json::Value,
+            ) -> BoxFuture<'a, Result<DocumentId, AppError>> {
+                Box::pin(async { Ok(DocumentId::Number(0)) })
+            }
+            fn update_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _id: DocumentId,
+                _patch: serde_json::Value,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn delete_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _id: DocumentId,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+
+        let active = ActiveAdapter::Document(Box::new(DummyDocument));
+        match active.as_rdb() {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("relational"), "unexpected message: {}", msg);
+            }
+            other => panic!("Expected Unsupported error, got: {:?}", other.is_ok()),
+        }
+
+        // Sanity: as_document resolves on the same adapter.
+        assert!(active.as_document().is_ok());
+
+        // Cross-paradigm sanity: as_search/as_kv also yield Unsupported.
+        assert!(matches!(active.as_search(), Err(AppError::Unsupported(_))));
+        assert!(matches!(active.as_kv(), Err(AppError::Unsupported(_))));
     }
 }

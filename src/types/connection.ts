@@ -6,6 +6,14 @@ export type DatabaseType =
   | "redis";
 
 /**
+ * Broad paradigm classification mirrored from the backend. Each
+ * `DatabaseType` maps to exactly one paradigm. Sprint 64 added this tag so
+ * future sprints can branch UI on paradigm rather than per-DBMS. Do not
+ * consume this in UI code yet — that wiring lands in Sprint 65+.
+ */
+export type Paradigm = "rdb" | "document" | "search" | "kv";
+
+/**
  * The shape of a connection as it lives in the frontend. Note: there is no
  * `password` field — passwords are kept exclusively in the encrypted backend
  * store and never sent to the renderer process. Use `has_password` to know
@@ -26,6 +34,15 @@ export interface ConnectionConfig {
   environment?: string | null;
   /** Whether a password is currently stored on disk for this connection. */
   has_password: boolean;
+  /**
+   * Paradigm tag derived from `db_type` on the backend. Present on every
+   * connection returned from the backend after Sprint 64. Marked optional
+   * so that pre-Sprint 64 JSON fixtures (e.g. legacy tests, localStorage
+   * payloads) still type-check; consumers that need the value should fall
+   * back to `paradigmOf(conn.db_type)`. Do not consume this field in UI
+   * code yet — the wiring is deferred to Sprint 65+.
+   */
+  paradigm?: Paradigm;
 }
 
 /**
@@ -67,6 +84,21 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   mongodb: 27017,
   redis: 6379,
 };
+
+/** Map a DatabaseType to its paradigm tag. Mirrors
+ *  `DatabaseType::paradigm` on the backend. */
+export function paradigmOf(dbType: DatabaseType): Paradigm {
+  switch (dbType) {
+    case "postgresql":
+    case "mysql":
+    case "sqlite":
+      return "rdb";
+    case "mongodb":
+      return "document";
+    case "redis":
+      return "kv";
+  }
+}
 
 export function createEmptyDraft(): ConnectionDraft {
   return {

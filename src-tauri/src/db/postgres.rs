@@ -1830,6 +1830,28 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.get_view_definition(namespace, view).await })
     }
 
+    fn get_view_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+        view: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.get_view_columns(namespace, view).await })
+    }
+
+    fn list_schema_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move { self.list_schema_columns(namespace).await })
+    }
+
     fn get_function_source<'a>(
         &'a self,
         namespace: &'a str,

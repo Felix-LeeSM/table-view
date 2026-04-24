@@ -8,9 +8,27 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::db::postgres::PostgresAdapter;
+use crate::db::ActiveAdapter;
 use crate::error::AppError;
-use crate::models::{ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus};
+use crate::models::{
+    ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus, DatabaseType,
+};
 use crate::storage;
+
+/// Build an `ActiveAdapter` for the given database type.
+///
+/// Sprint 64 only supports PostgreSQL — every other `DatabaseType` maps to
+/// `AppError::Unsupported`. MongoAdapter/MySQL/SQLite wiring lands in
+/// Sprint 65+.
+pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
+    match db_type {
+        DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
+        other => Err(AppError::Unsupported(format!(
+            "Database type {:?} is not supported yet",
+            other
+        ))),
+    }
+}
 
 /// Request body for `save_connection`. Splitting `password` from the
 /// `ConnectionConfigPublic` body lets the frontend express three distinct
@@ -47,7 +65,14 @@ struct StatusChangeEvent {
 }
 
 pub struct AppState {
-    pub active_connections: Mutex<HashMap<String, PostgresAdapter>>,
+    /// Active adapter handles keyed by `ConnectionConfig::id`.
+    ///
+    /// Sprint 64 replaces the previous `HashMap<_, PostgresAdapter>` with an
+    /// `ActiveAdapter` enum so the same map can hold relational, document,
+    /// search, or kv adapters. Command handlers dispatch through
+    /// `ActiveAdapter::as_rdb()?` / `as_document()?` / … to regain a typed
+    /// reference.
+    pub active_connections: Mutex<HashMap<String, ActiveAdapter>>,
     pub connection_status: Mutex<HashMap<String, ConnectionStatus>>,
     pub keep_alive_handles: Mutex<HashMap<String, JoinHandle<()>>>,
     pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
@@ -83,12 +108,12 @@ async fn keep_alive_loop(
     loop {
         tokio::time::sleep(Duration::from_secs(interval_secs)).await;
 
-        // Ping check
+        // Ping check — dispatch through the paradigm-neutral lifecycle trait.
         let ping_ok = {
             let state = app.state::<AppState>();
             let connections = state.active_connections.lock().await;
             match connections.get(&conn_id) {
-                Some(adapter) => adapter.ping().await.is_ok(),
+                Some(adapter) => adapter.lifecycle().ping().await.is_ok(),
                 None => return, // Adapter removed — task should stop
             }
         };
@@ -135,9 +160,20 @@ async fn keep_alive_loop(
         );
         tokio::time::sleep(backoff).await;
 
-        // Try reconnect
-        let new_adapter = PostgresAdapter::new();
-        match new_adapter.connect_pool(&config).await {
+        // Try reconnect — rebuild via the factory so adapter paradigm tracks
+        // `DatabaseType` changes instead of being hard-coded here.
+        let new_adapter = match make_adapter(&config.db_type) {
+            Ok(a) => a,
+            Err(e) => {
+                warn!(
+                    conn_id = %conn_id,
+                    error = %e,
+                    "Reconnection aborted: adapter factory rejected db_type"
+                );
+                return;
+            }
+        };
+        match new_adapter.lifecycle().connect(&config).await {
             Ok(()) => {
                 info!(conn_id = %conn_id, "Reconnected successfully");
                 let state = app.state::<AppState>();
@@ -242,13 +278,13 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
     full.password = resolved_password;
 
     match full.db_type {
-        crate::models::DatabaseType::Postgresql => {
+        DatabaseType::Postgresql => {
             PostgresAdapter::test(&full).await?;
         }
-        _ => {
-            return Err(AppError::Validation(format!(
-                "Unsupported database type: {:?}",
-                full.db_type
+        other => {
+            return Err(AppError::Unsupported(format!(
+                "Database type {:?} is not supported yet",
+                other
             )));
         }
     }
@@ -268,8 +304,8 @@ pub async fn connect(
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::NotFound(format!("Connection '{}' not found", id)))?;
 
-    let adapter = PostgresAdapter::new();
-    adapter.connect_pool(&config).await?;
+    let adapter = make_adapter(&config.db_type)?;
+    adapter.lifecycle().connect(&config).await?;
 
     // Abort any previous keep-alive task for this connection
     {
@@ -319,7 +355,7 @@ pub async fn disconnect(state: tauri::State<'_, AppState>, id: String) -> Result
         connections.remove(&id)
     };
     if let Some(adapter) = adapter {
-        adapter.disconnect_pool().await?;
+        adapter.lifecycle().disconnect().await?;
     }
     {
         let mut status = state.connection_status.lock().await;
@@ -1066,6 +1102,7 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
+                paradigm: "rdb".into(),
             }],
             groups: vec![],
         };
@@ -1110,6 +1147,7 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
+                paradigm: "rdb".into(),
             }],
             groups: vec![],
         };
@@ -1146,6 +1184,7 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
+                paradigm: "rdb".into(),
             }],
             groups: vec![], // group_id refers to nothing
         };
@@ -1184,6 +1223,7 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
+                paradigm: "rdb".into(),
             }],
             groups: vec![ConnectionGroup {
                 id: "g-new".into(),
