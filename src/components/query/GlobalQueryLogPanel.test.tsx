@@ -125,7 +125,14 @@ describe("GlobalQueryLogPanel", () => {
     });
 
     render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
-    expect(screen.getByText("2")).toBeInTheDocument();
+    // The count badge renders the entry count next to the "Query Log"
+    // title. It uses a distinct bg-muted class; use an accessible lookup
+    // that scopes to the panel header rather than searching the whole
+    // document (which now also surfaces tokenised `2` spans inside the
+    // QuerySyntax preview for the `SELECT 2` entry).
+    const title = screen.getByText("Query Log");
+    const badge = title.nextElementSibling as HTMLElement | null;
+    expect(badge?.textContent).toBe("2");
   });
 
   it("displays log entries with SQL text", () => {
@@ -145,7 +152,11 @@ describe("GlobalQueryLogPanel", () => {
     });
 
     render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
-    expect(screen.getByText(/SELECT \* FROM users/)).toBeInTheDocument();
+    // QuerySyntax splits the SQL across multiple tokenised `<span>`s, so
+    // the aggregate text lives on the entry row rather than on a single
+    // leaf node. Assert against the row's textContent.
+    const row = screen.getByTestId("global-log-entry-h-1");
+    expect(row.textContent).toMatch(/SELECT \* FROM users/);
   });
 
   it("displays connection name badge for entries", () => {
@@ -228,8 +239,14 @@ describe("GlobalQueryLogPanel", () => {
       fireEvent.change(searchInput, { target: { value: "users" } });
     });
 
-    expect(screen.getByText(/SELECT \* FROM users/)).toBeInTheDocument();
-    expect(screen.queryByText(/SELECT \* FROM orders/)).not.toBeInTheDocument();
+    // QuerySyntax splits the SQL across tokenised spans; scope to the
+    // surviving entry row and assert via textContent.
+    expect(screen.getByTestId("global-log-entry-h-1").textContent).toMatch(
+      /SELECT \* FROM users/,
+    );
+    expect(
+      screen.queryByTestId("global-log-entry-h-2"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows no matching queries message when search has no results", async () => {
@@ -291,8 +308,13 @@ describe("GlobalQueryLogPanel", () => {
       fireEvent.change(filterSelect, { target: { value: "conn-1" } });
     });
 
-    expect(screen.getByText(/SELECT \* FROM users/)).toBeInTheDocument();
-    expect(screen.queryByText(/SELECT \* FROM orders/)).not.toBeInTheDocument();
+    // QuerySyntax splits the SQL across tokenised spans; scope by entry id.
+    expect(screen.getByTestId("global-log-entry-h-1").textContent).toMatch(
+      /SELECT \* FROM users/,
+    );
+    expect(
+      screen.queryByTestId("global-log-entry-h-2"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows status icons for entries", () => {
@@ -348,22 +370,26 @@ describe("GlobalQueryLogPanel", () => {
 
     render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
 
-    // Initially truncated
+    const row = screen.getByTestId("global-log-entry-h-1");
+
+    // Initially truncated — QuerySyntax renders tokenised spans, so assert
+    // against the row's aggregate textContent (which ends in the `...`
+    // the truncate helper appends).
     const truncatedText = "A".repeat(80) + "...";
-    expect(screen.getByText(truncatedText)).toBeInTheDocument();
+    expect(row.textContent).toContain(truncatedText);
+    expect(row.querySelector("pre")).toBeNull();
 
     // Click to expand
-    const entry = screen.getByTestId("global-log-entry-h-1");
     await act(async () => {
-      entry.click();
+      row.click();
     });
 
-    // Now should show full SQL in both the inline span and expanded pre
-    const allFullSql = screen.getAllByText(longSql);
-    expect(allFullSql.length).toBeGreaterThanOrEqual(1);
-    // The expanded pre should be present
-    const preElement = allFullSql.find((el) => el.tagName === "PRE");
-    expect(preElement).toBeDefined();
+    // After expansion the entry should contain the full SQL and a `<pre>`
+    // wrapper holding the QuerySyntax preview.
+    expect(row.textContent).toContain(longSql);
+    const preElement = row.querySelector("pre");
+    expect(preElement).not.toBeNull();
+    expect(preElement?.textContent).toBe(longSql);
   });
 
   it("calls onClose when close button is clicked", async () => {
@@ -519,5 +545,140 @@ describe("GlobalQueryLogPanel", () => {
       "global-log-search",
     ) as HTMLInputElement;
     expect(newSearchInput.value).toBe("");
+  });
+
+  // ── Sprint 85: paradigm-aware syntax preview ─────────────────────────────
+
+  // AC-03 — rdb entry collapsed row routes through QuerySyntax → SqlSyntax,
+  // so SQL keyword token class (`text-syntax-keyword`) appears in the DOM.
+  it("renders SQL coloration for rdb entries in the collapsed row (AC-03 rdb)", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "h-rdb",
+          sql: "SELECT 1",
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+      ],
+    });
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+    const row = screen.getByTestId("global-log-entry-h-rdb");
+    expect(row.querySelector(".text-syntax-keyword")).not.toBeNull();
+    expect(row.querySelector(".cm-mql-operator")).toBeNull();
+  });
+
+  // AC-03 — document entry collapsed row routes through QuerySyntax →
+  // MongoSyntax, so operator tokens (`$match`) carry the
+  // `cm-mql-operator` class. No SQL keyword class should leak in.
+  it("renders MQL operator class for document entries in the collapsed row (AC-03 document)", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "h-doc",
+          sql: '{"$match": {}}',
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "document",
+          queryMode: "find",
+          database: "mydb",
+          collection: "users",
+        },
+      ],
+    });
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+    const row = screen.getByTestId("global-log-entry-h-doc");
+    const operator = row.querySelector(".cm-mql-operator");
+    expect(operator).not.toBeNull();
+    expect(operator?.textContent).toBe('"$match"');
+  });
+
+  // AC-03 — legacy entry (paradigm undefined) falls back to SqlSyntax.
+  it("falls back to SQL coloration when paradigm is undefined (AC-03 legacy)", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "h-legacy",
+          sql: "SELECT legacy",
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+        } as unknown as ReturnType<
+          typeof useQueryHistoryStore.getState
+        >["globalLog"][number],
+      ],
+    });
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+    const row = screen.getByTestId("global-log-entry-h-legacy");
+    expect(row.querySelector(".text-syntax-keyword")).not.toBeNull();
+    expect(row.querySelector(".cm-mql-operator")).toBeNull();
+  });
+
+  // AC-04 — expanded `<pre>` body on a document entry also carries the
+  // `cm-mql-operator` class, so both the collapsed and expanded views
+  // share the same renderer.
+  it("carries cm-mql-operator into the expanded body for a document entry (AC-04)", async () => {
+    // Sprint 85 entry body needs to exceed 80 chars so the expanded <pre>
+    // block renders (the component only opens it when sql.length > 80).
+    const longDocSql =
+      '{"$match": {"x": "' + "y".repeat(90) + '"}, "$limit": 10}';
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "h-doc-long",
+          sql: longDocSql,
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "document",
+          queryMode: "aggregate",
+        },
+      ],
+    });
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+    const row = screen.getByTestId("global-log-entry-h-doc-long");
+
+    await act(async () => {
+      row.click();
+    });
+
+    const pre = row.querySelector("pre");
+    expect(pre).not.toBeNull();
+    const operator = pre?.querySelector(".cm-mql-operator");
+    expect(operator).not.toBeNull();
+    expect(operator?.textContent).toBe('"$match"');
+  });
+
+  // AC-05 — long SQL is still truncated to 80 chars in the collapsed row
+  // regardless of paradigm. QuerySyntax renders the already-sliced string
+  // so the `...` suffix remains visible without falling out of the Mongo
+  // tokenisation path.
+  it("keeps the 80 char truncate behaviour in the collapsed row (AC-05)", () => {
+    const longRdb = "A".repeat(100);
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "h-long-rdb",
+          sql: longRdb,
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+      ],
+    });
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+    const row = screen.getByTestId("global-log-entry-h-long-rdb");
+    expect(row.textContent).toContain("A".repeat(80) + "...");
   });
 });

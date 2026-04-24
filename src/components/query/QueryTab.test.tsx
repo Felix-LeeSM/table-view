@@ -1669,4 +1669,82 @@ describe("QueryTab", () => {
       expect(qt.queryMode).toBe("sql");
     }
   });
+
+  // ── Sprint 85: paradigm-aware history row coloration ────────────────────
+
+  // AC-01 — rdb entry in the in-tab history panel routes through
+  // QuerySyntax → SqlSyntax, so the SQL keyword class is present in the row.
+  it("renders SQL coloration for rdb history rows (AC-01)", async () => {
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "hist-rdb-sprint85",
+          sql: "SELECT sprint85",
+          executedAt: 1,
+          duration: 5,
+          status: "success",
+          connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+      ],
+    });
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT sprint85/,
+    });
+    const row = loadBtn.closest("li")!;
+    // SqlSyntax tags `SELECT` as keyword → `text-syntax-keyword`.
+    expect(row.querySelector(".text-syntax-keyword")).not.toBeNull();
+    expect(row.querySelector(".cm-mql-operator")).toBeNull();
+  });
+
+  // AC-02 — document entry in the in-tab history panel routes through
+  // QuerySyntax → MongoSyntax; operator tokens expose `cm-mql-operator`.
+  it("renders MQL operator class for document history rows (AC-02)", async () => {
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "hist-doc-sprint85",
+          sql: '{"$match": {"x": 1}}',
+          executedAt: 1,
+          duration: 5,
+          status: "success",
+          connectionId: "conn-mongo",
+          paradigm: "document",
+          queryMode: "find",
+          database: "testdb",
+          collection: "users",
+        },
+      ],
+    });
+    // The history panel only shows entries for the active query tab's
+    // connection-agnostic entries list (useQueryHistoryStore.entries), so
+    // any active tab will surface this document entry.
+    const tab = makeDocTab({ id: "query-1" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: /,
+    });
+    const row = loadBtn.closest("li")!;
+    const operator = row.querySelector(".cm-mql-operator");
+    expect(operator).not.toBeNull();
+    expect(operator?.textContent).toBe('"$match"');
+    expect(row.querySelector(".text-syntax-keyword")?.textContent).not.toBe(
+      "SELECT",
+    );
+  });
 });

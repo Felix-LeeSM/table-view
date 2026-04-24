@@ -5,6 +5,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import ConfirmDialog from "@components/shared/ConfirmDialog";
+import QuerySyntax from "@components/shared/QuerySyntax";
 import { cn } from "@lib/utils";
 
 function truncateSql(sql: string, maxLen: number): string {
@@ -184,11 +185,16 @@ export default function GlobalQueryLogPanel({
                   )}
                 </span>
                 {/* SQL text */}
-                <span className="flex-1 truncate font-mono text-foreground">
-                  {expandedEntry === entry.id
-                    ? entry.sql
-                    : truncateSql(entry.sql, 80)}
-                </span>
+                <QuerySyntax
+                  className="flex-1 truncate text-foreground"
+                  sql={
+                    expandedEntry === entry.id
+                      ? entry.sql
+                      : truncateSql(entry.sql, 80)
+                  }
+                  paradigm={entry.paradigm}
+                  queryMode={entry.queryMode}
+                />
                 {/* Copy button */}
                 <Button
                   variant="ghost"
@@ -215,7 +221,11 @@ export default function GlobalQueryLogPanel({
               {/* Expanded SQL view */}
               {expandedEntry === entry.id && entry.sql.length > 80 && (
                 <pre className="mt-1 whitespace-pre-wrap break-all border-t border-border pl-7 pt-1 font-mono text-2xs text-foreground">
-                  {entry.sql}
+                  <QuerySyntax
+                    sql={entry.sql}
+                    paradigm={entry.paradigm}
+                    queryMode={entry.queryMode}
+                  />
                 </pre>
               )}
             </div>

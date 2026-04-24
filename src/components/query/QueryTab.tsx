@@ -22,7 +22,7 @@ import { useResizablePanel } from "@hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import FavoritesPanel from "./FavoritesPanel";
-import SqlSyntax from "@components/shared/SqlSyntax";
+import QuerySyntax from "@components/shared/QuerySyntax";
 import type { FindBody } from "@/types/document";
 import {
   Play,
@@ -826,8 +826,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
                       }`}
                       title={entry.status}
                     />
-                    <SqlSyntax
+                    <QuerySyntax
                       sql={entry.sql}
+                      paradigm={entry.paradigm}
+                      queryMode={entry.queryMode}
                       className="min-w-0 flex-1 select-text cursor-text truncate text-xs"
                     />
                     <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
