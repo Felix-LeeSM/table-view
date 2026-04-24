@@ -12,6 +12,7 @@ import { useResizablePanel } from "@hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import FavoritesPanel from "./FavoritesPanel";
+import SqlSyntax from "@components/shared/SqlSyntax";
 import {
   Play,
   Square,
@@ -24,6 +25,7 @@ import {
   Star,
   Save,
   X,
+  CornerDownLeft,
 } from "lucide-react";
 
 interface QueryTabProps {
@@ -500,32 +502,42 @@ export default function QueryTab({ tab }: QueryTabProps) {
             <span>History ({historyEntries.length})</span>
           </Button>
           {historyExpanded && (
-            <div className="max-h-40 overflow-y-auto">
+            <ul className="max-h-40 overflow-y-auto">
               {historyEntries.map((entry) => (
-                <Button
+                <li
                   key={entry.id}
-                  variant="ghost"
-                  size="xs"
-                  className="w-full justify-start gap-2 border-t border-border px-3 py-1 text-left font-normal rounded-none h-auto"
-                  onClick={() => updateQuerySql(tab.id, entry.sql)}
-                  aria-label={entry.sql}
+                  className="group flex items-center gap-2 border-t border-border px-3 py-1 hover:bg-muted"
+                  onDoubleClick={() => updateQuerySql(tab.id, entry.sql)}
+                  title="Double-click to load into editor"
                 >
                   <span
-                    className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                    className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background ${
                       entry.status === "success"
                         ? "bg-success"
                         : "bg-destructive"
                     }`}
+                    title={entry.status}
                   />
-                  <span className="truncate font-mono text-foreground">
-                    {entry.sql}
-                  </span>
-                  <span className="ml-auto shrink-0 text-muted-foreground">
+                  <SqlSyntax
+                    sql={entry.sql}
+                    className="min-w-0 flex-1 select-text cursor-text truncate text-xs"
+                  />
+                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                     {entry.duration}ms
                   </span>
-                </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
+                    onClick={() => updateQuerySql(tab.id, entry.sql)}
+                    aria-label={`Load query into editor: ${entry.sql}`}
+                    title="Load into editor"
+                  >
+                    <CornerDownLeft />
+                  </Button>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
           <div className="flex items-center justify-end border-t border-border px-2 py-0.5">
             <Button

@@ -30,6 +30,9 @@
   --color-border: var(--tv-border);
   --color-input: var(--tv-input);
   --color-ring: var(--tv-ring);
+  --color-syntax-keyword: var(--tv-syntax-keyword);
+  --color-syntax-string: var(--tv-syntax-string);
+  --color-syntax-number: var(--tv-syntax-number);
   --radius-sm: calc(var(--tv-radius) - 4px);
   --radius-md: calc(var(--tv-radius) - 2px);
   --radius-lg: var(--tv-radius);

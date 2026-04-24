@@ -418,45 +418,107 @@ describe("QueryTab", () => {
       historyToggle.click();
     });
 
-    // The history panel should show the SQL text
+    // History rows render SQL via the SqlSyntax component, which splits the
+    // text across multiple tokenised spans. The SQL itself is still present —
+    // the row `<li>` contains the concatenated text. The Load button carries
+    // the full SQL in its aria-label for accessibility + test targeting.
     await waitFor(() => {
-      expect(screen.getByText("SELECT 1")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", {
+          name: /Load query into editor: SELECT 1/,
+        }),
+      ).toBeInTheDocument();
     });
   });
 
-  it("clicking history item updates editor SQL", async () => {
+  it("history row text is selectable (not wrapped in a button)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
     useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
     render(<QueryTab tab={tab} />);
 
-    const executeBtn = screen.getByTestId("execute-btn");
     await act(async () => {
-      executeBtn.click();
+      screen.getByTestId("execute-btn").click();
     });
-
-    // Wait for history entry
     await waitFor(() => {
       expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
     });
-
-    // Expand the history panel
-    const historyToggle = screen.getByText(/History \(1\)/);
     await act(async () => {
-      historyToggle.click();
+      screen.getByText(/History \(1\)/).click();
     });
 
-    // Find and click the history item
-    const historyItem = screen.getByRole("button", { name: /SELECT 1/ });
+    // The row itself must NOT be a button — otherwise the browser suppresses
+    // text selection inside it, which was the original drag-to-copy bug.
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT 1/,
+    });
+    const row = loadBtn.closest("li");
+    expect(row).not.toBeNull();
+    expect(row?.tagName).toBe("LI");
+    // The SQL preview span carries `select-text` so users can drag to copy.
+    expect(row?.querySelector(".select-text")).toBeInTheDocument();
+  });
+
+  it("clicking the Load button on a history row updates editor SQL", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
     await act(async () => {
-      historyItem.click();
+      screen.getByTestId("execute-btn").click();
+    });
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
     });
 
-    // Check that the SQL was updated in the store
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT 1/,
+    });
+    await act(async () => {
+      loadBtn.click();
+    });
+
     const state = useTabStore.getState();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("SELECT 1");
+    }
+  });
+
+  it("double-clicking a history row updates editor SQL", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab({ sql: "SELECT 2" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT 2/,
+    });
+    const row = loadBtn.closest("li")!;
+    await act(async () => {
+      row.dispatchEvent(
+        new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    const state = useTabStore.getState();
+    const updatedTab = state.tabs.find((t) => t.id === "query-1");
+    if (updatedTab && updatedTab.type === "query") {
+      expect(updatedTab.sql).toBe("SELECT 2");
     }
   });
 
