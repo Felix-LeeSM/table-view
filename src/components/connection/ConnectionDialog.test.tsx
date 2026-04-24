@@ -797,4 +797,49 @@ describe("ConnectionDialog", () => {
       expect(draft.tls_enabled).toBe(true);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Sprint 79: Footer layout + dialog width + Test result aria-live
+  // -----------------------------------------------------------------------
+  describe("Sprint 79: layout + inline Test feedback polish", () => {
+    it("places Test Connection on the left group of the footer", () => {
+      renderDialog();
+      const testBtn = screen.getByRole("button", { name: /test connection/i });
+      const cancelBtn = screen.getByRole("button", { name: /^cancel$/i });
+
+      // Left (Test) and right (Cancel/Save) groups must be distinct parent
+      // containers so justify-between separates them visually.
+      expect(testBtn.parentElement).not.toBe(cancelBtn.parentElement);
+
+      // DOM order: Test button appears before Cancel in the footer flow.
+      const position = testBtn.compareDocumentPosition(cancelBtn);
+      expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("applies w-dialog-sm width token (no w-dialog-xs regression)", () => {
+      renderDialog();
+      const dialog = screen.getByRole("dialog");
+      // DialogContent carries the width class directly.
+      expect(dialog.className).toContain("w-dialog-sm");
+      expect(dialog.className).not.toContain("w-dialog-xs");
+      // Inner wrapper should also use the same token — guards the two-call-site
+      // replacement from regressing to a single-side change.
+      expect(document.querySelector('[class*="w-dialog-xs"]')).toBeNull();
+    });
+
+    it("marks Test result alert as aria-live='polite' for screen readers", async () => {
+      renderDialog();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Connection successful")).toBeInTheDocument();
+      });
+
+      const alert = screen.getByRole("alert");
+      expect(alert.getAttribute("aria-live")).toBe("polite");
+    });
+  });
 });

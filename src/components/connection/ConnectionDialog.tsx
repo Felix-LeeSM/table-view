@@ -139,10 +139,10 @@ export default function ConnectionDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="w-dialog-xs bg-secondary p-0"
+        className="w-dialog-sm bg-secondary p-0"
         showCloseButton={false}
       >
-        <div className="w-dialog-xs rounded-lg bg-secondary shadow-xl">
+        <div className="w-dialog-sm rounded-lg bg-secondary shadow-xl">
           {/* Header */}
           <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogTitle
@@ -542,6 +542,7 @@ export default function ConnectionDialog({
                 {testResult && (
                   <div
                     role="alert"
+                    aria-live="polite"
                     className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${
                       testResult.success
                         ? "bg-success/10 text-success"
@@ -571,26 +572,30 @@ export default function ConnectionDialog({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleTest}
-              disabled={testing}
-            >
-              {testing ? (
-                <Loader2 className="animate-spin size-3.5" />
-              ) : (
-                <Plug />
-              )}
-              Test Connection
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving}>
-              {saving ? "Saving..." : isEditing ? "Update" : "Save"}
-            </Button>
+          <div className="flex items-center justify-between gap-2 border-t border-border px-4 py-3">
+            <div className="flex items-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleTest}
+                disabled={testing}
+              >
+                {testing ? (
+                  <Loader2 className="animate-spin size-3.5" />
+                ) : (
+                  <Plug />
+                )}
+                Test Connection
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : isEditing ? "Update" : "Save"}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
