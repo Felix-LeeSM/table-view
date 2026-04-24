@@ -181,6 +181,26 @@ describe("TabBar", () => {
     expect(tablist.className).toContain("select-none");
   });
 
+  // ── Sprint 77: Compact tab bar height ──
+
+  // AC-01 — the tab row must stay in the compact regime. `py-1 text-sm`
+  // yields ~28px content (20px line-height + 4px+4px padding); combined
+  // with the 1px bottom border the row is ≤ 32px as the contract requires.
+  // `text-sm` keeps the close button (size-6 = 24px) inside a ≥ 28px
+  // vertical hit target. Failing this assertion means someone bumped the
+  // padding / font size back up — revisit AC-01 intentionally.
+  it("compact tab metrics — py-1 + text-sm, not py-1.5", () => {
+    addTableTab({ title: "public.users", table: "users" });
+
+    render(<TabBar />);
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    expect(tab.className).toContain("py-1");
+    expect(tab.className).toContain("text-sm");
+    // Guard against regression to the pre-Sprint 77 padding.
+    expect(tab.className).not.toContain("py-1.5");
+    expect(tab.className).not.toContain("py-2");
+  });
+
   // ── Sprint 28: Tab Connection Color Display ──
 
   function makeConnection(

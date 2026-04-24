@@ -75,7 +75,13 @@ export default function TabBar() {
             data-tab-id={tab.id}
             aria-selected={tab.id === activeTabId}
             tabIndex={tab.id === activeTabId ? 0 : -1}
-            className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1.5 text-sm cursor-pointer select-none transition-opacity ${
+            // Sprint 77 — Compact tab metrics. `py-1 text-sm` keeps the
+            // row ≤ 32px (≈20px line-height + 8px vertical padding + 1px
+            // bottom border) while leaving the close button (`size-6` =
+            // 24px) inside a comfortable hit target. `text-xs` would
+            // have tightened things further but dropped the close button
+            // below the ADR 0008 accessibility floor.
+            className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1 text-sm cursor-pointer select-none transition-opacity ${
               tab.id === activeTabId
                 ? "bg-background text-foreground border-b-2 border-b-primary"
                 : "text-secondary-foreground hover:bg-muted"
@@ -221,7 +227,7 @@ export default function TabBar() {
       {ghostStyle && (
         <div
           aria-hidden
-          className="pointer-events-none fixed z-50 flex items-center gap-1.5 rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground opacity-90 shadow-md"
+          className="pointer-events-none fixed z-50 flex items-center gap-1.5 rounded border border-border bg-background px-3 py-1 text-sm text-foreground opacity-90 shadow-md"
           style={{
             left: ghostStyle.x,
             top: ghostStyle.y,
