@@ -1642,6 +1642,203 @@ impl PostgresAdapter {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint A1: paradigm-separated trait layer.
+//
+// These impl blocks connect `PostgresAdapter` to the new `DbAdapter` /
+// `RdbAdapter` traits declared in `db/mod.rs`. Each trait method is a
+// **thin delegate** to the existing concrete inherent method — no behavior
+// change. `list_schemas` maps to `list_namespaces` and `(namespace, table)`
+// trait arg order is reordered where necessary (e.g. `drop_table`).
+// ─────────────────────────────────────────────────────────────────────────
+
+use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
+use crate::models::DatabaseType;
+use std::future::Future;
+use std::pin::Pin;
+
+impl DbAdapter for PostgresAdapter {
+    fn kind(&self) -> DatabaseType {
+        DatabaseType::Postgresql
+    }
+
+    fn connect<'a>(
+        &'a self,
+        config: &'a ConnectionConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.connect_pool(config).await })
+    }
+
+    fn disconnect<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.disconnect_pool().await })
+    }
+
+    fn ping<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { PostgresAdapter::ping(self).await })
+    }
+}
+
+impl RdbAdapter for PostgresAdapter {
+    fn namespace_label(&self) -> NamespaceLabel {
+        NamespaceLabel::Schema
+    }
+
+    fn list_namespaces<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<NamespaceInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            let schemas = self.list_schemas().await?;
+            Ok(schemas.into_iter().map(NamespaceInfo::from).collect())
+        })
+    }
+
+    fn list_tables<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<TableInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.list_tables(namespace).await })
+    }
+
+    fn get_columns<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
+        // Concrete signature is `(table, schema)`; trait passes `(namespace, table)`.
+        Box::pin(async move { self.get_table_columns(table, namespace).await })
+    }
+
+    fn execute_sql<'a>(
+        &'a self,
+        sql: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<RdbQueryResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.execute_query(sql, cancel).await })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn query_table_data<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&'a str>,
+        filters: Option<&'a [FilterCondition]>,
+        raw_where: Option<&'a str>,
+    ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            // Concrete signature is `(table, schema, ...)`.
+            self.query_table_data(
+                table, namespace, page, page_size, order_by, filters, raw_where,
+            )
+            .await
+        })
+    }
+
+    fn drop_table<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        // Concrete signature is `(table, schema)`.
+        Box::pin(async move { self.drop_table(table, namespace).await })
+    }
+
+    fn rename_table<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        new_name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        // Concrete signature is `(table, schema, new_name)`.
+        Box::pin(async move { self.rename_table(table, namespace, new_name).await })
+    }
+
+    fn alter_table<'a>(
+        &'a self,
+        req: &'a AlterTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.alter_table(req).await })
+    }
+
+    fn create_index<'a>(
+        &'a self,
+        req: &'a CreateIndexRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.create_index(req).await })
+    }
+
+    fn drop_index<'a>(
+        &'a self,
+        req: &'a DropIndexRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.drop_index(req).await })
+    }
+
+    fn add_constraint<'a>(
+        &'a self,
+        req: &'a AddConstraintRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.add_constraint(req).await })
+    }
+
+    fn drop_constraint<'a>(
+        &'a self,
+        req: &'a DropConstraintRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.drop_constraint(req).await })
+    }
+
+    fn get_table_indexes<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>> {
+        // Concrete signature is `(table, schema)`.
+        Box::pin(async move { self.get_table_indexes(table, namespace).await })
+    }
+
+    fn get_table_constraints<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ConstraintInfo>, AppError>> + Send + 'a>> {
+        // Concrete signature is `(table, schema)`.
+        Box::pin(async move { self.get_table_constraints(table, namespace).await })
+    }
+
+    fn list_views<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<ViewInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.list_views(namespace).await })
+    }
+
+    fn list_functions<'a>(
+        &'a self,
+        namespace: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<FunctionInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.list_functions(namespace).await })
+    }
+
+    fn get_view_definition<'a>(
+        &'a self,
+        namespace: &'a str,
+        view: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.get_view_definition(namespace, view).await })
+    }
+
+    fn get_function_source<'a>(
+        &'a self,
+        namespace: &'a str,
+        function: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.get_function_source(namespace, function).await })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
