@@ -65,6 +65,8 @@ describe("QueryLog", () => {
           duration: 120,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
         {
           id: "h-2",
@@ -73,6 +75,8 @@ describe("QueryLog", () => {
           duration: 50,
           status: "error",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -101,6 +105,8 @@ describe("QueryLog", () => {
           duration: 120,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
         {
           id: "h-2",
@@ -109,6 +115,8 @@ describe("QueryLog", () => {
           duration: 50,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -143,6 +151,8 @@ describe("QueryLog", () => {
           duration: 100,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -178,6 +188,8 @@ describe("QueryLog", () => {
           duration: 100,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -221,6 +233,8 @@ describe("QueryLog", () => {
           duration: 100,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -299,6 +313,8 @@ describe("QueryLog", () => {
           duration: 100,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -330,6 +346,8 @@ describe("QueryLog", () => {
           duration: 100,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -356,6 +374,8 @@ describe("QueryLog", () => {
           duration: 50,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -381,6 +401,8 @@ describe("QueryLog", () => {
           duration: 250,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -405,6 +427,8 @@ describe("QueryLog", () => {
           duration: 50,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -432,6 +456,8 @@ describe("QueryLog", () => {
           duration: 50,
           status: "success",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -457,6 +483,8 @@ describe("QueryLog", () => {
           duration: 50,
           status: "error",
           connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });

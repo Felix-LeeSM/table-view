@@ -281,4 +281,144 @@ describe("queryHistoryStore", () => {
       expect(state.globalLog).toHaveLength(0);
     });
   });
+
+  // -- Sprint 84: paradigm / queryMode metadata --------------------------
+  // AC-01..AC-05 map to these tests. The store is the single write boundary
+  // for every executed query, so paradigm/queryMode must flow through both
+  // `entries` and `globalLog` and selectors must normalise legacy shapes.
+
+  describe("Sprint 84 paradigm metadata", () => {
+    // AC-01 — RDB entry records paradigm:"rdb" + queryMode:"sql", no db/coll.
+    it("records an rdb/sql entry with paradigm + queryMode (AC-01)", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "SELECT 1",
+        executedAt: Date.now(),
+        duration: 50,
+        status: "success",
+        connectionId: "conn-rdb",
+        paradigm: "rdb",
+        queryMode: "sql",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.entries[0]).toMatchObject({
+        sql: "SELECT 1",
+        paradigm: "rdb",
+        queryMode: "sql",
+        connectionId: "conn-rdb",
+      });
+      expect(state.entries[0]!.database).toBeUndefined();
+      expect(state.entries[0]!.collection).toBeUndefined();
+      // AC-04 — globalLog mirrors entries for every write.
+      expect(state.globalLog[0]).toMatchObject({
+        paradigm: "rdb",
+        queryMode: "sql",
+      });
+    });
+
+    // AC-02 — Document + find carries database/collection context.
+    it("records a document/find entry with database + collection (AC-02)", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: '{"active":true}',
+        executedAt: Date.now(),
+        duration: 10,
+        status: "success",
+        connectionId: "conn-mongo",
+        paradigm: "document",
+        queryMode: "find",
+        database: "table_view_test",
+        collection: "users",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.entries[0]).toMatchObject({
+        paradigm: "document",
+        queryMode: "find",
+        database: "table_view_test",
+        collection: "users",
+      });
+      expect(state.globalLog[0]).toMatchObject({
+        paradigm: "document",
+        queryMode: "find",
+        database: "table_view_test",
+        collection: "users",
+      });
+    });
+
+    // AC-03 — Aggregate mode preserves queryMode="aggregate" alongside db/coll.
+    it("records a document/aggregate entry with queryMode aggregate (AC-03)", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: '[{"$match":{"active":true}}]',
+        executedAt: Date.now(),
+        duration: 15,
+        status: "success",
+        connectionId: "conn-mongo",
+        paradigm: "document",
+        queryMode: "aggregate",
+        database: "table_view_test",
+        collection: "orders",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.entries[0]).toMatchObject({
+        paradigm: "document",
+        queryMode: "aggregate",
+        database: "table_view_test",
+        collection: "orders",
+      });
+      expect(state.globalLog[0]!.queryMode).toBe("aggregate");
+    });
+
+    // Payload-defaulting regression — `addHistoryEntry` must accept entries
+    // that omit paradigm + queryMode and still produce a valid entry.
+    it("defaults paradigm/queryMode to rdb/sql when the payload omits them", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "SELECT 1",
+        executedAt: Date.now(),
+        duration: 50,
+        status: "success",
+        connectionId: "conn-rdb",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.entries[0]!.paradigm).toBe("rdb");
+      expect(state.entries[0]!.queryMode).toBe("sql");
+      expect(state.globalLog[0]!.paradigm).toBe("rdb");
+      expect(state.globalLog[0]!.queryMode).toBe("sql");
+    });
+
+    // AC-05 — Legacy entries seeded via setState (simulating a future
+    // persisted migration or a pre-Sprint-84 store snapshot) normalise to
+    // rdb/sql when read through `filteredGlobalLog` without throwing.
+    it("normalises legacy entries lacking paradigm via filteredGlobalLog (AC-05)", () => {
+      // Cast through `unknown` because the public shape requires paradigm/
+      // queryMode. The runtime-only escape hatch reproduces what a legacy
+      // persisted entry would look like if read back verbatim.
+      useQueryHistoryStore.setState({
+        globalLog: [
+          {
+            id: "legacy-1",
+            sql: "SELECT 1",
+            executedAt: 1000,
+            duration: 10,
+            status: "success",
+            connectionId: "conn-rdb",
+          },
+        ] as unknown as ReturnType<
+          typeof useQueryHistoryStore.getState
+        >["globalLog"],
+      });
+
+      // filteredGlobalLog() must not throw and must return an entry whose
+      // paradigm/queryMode were defaulted to rdb/sql.
+      expect(() =>
+        useQueryHistoryStore.getState().filteredGlobalLog(),
+      ).not.toThrow();
+
+      const normalised = useQueryHistoryStore.getState().filteredGlobalLog();
+      expect(normalised).toHaveLength(1);
+      expect(normalised[0]!.paradigm).toBe("rdb");
+      expect(normalised[0]!.queryMode).toBe("sql");
+    });
+  });
 });

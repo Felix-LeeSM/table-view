@@ -108,6 +108,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
         {
           id: "h-2",
@@ -116,6 +118,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 30,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -134,6 +138,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 120,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -152,6 +158,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -172,6 +180,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 250,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -195,6 +205,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 120,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
         {
           id: "h-2",
@@ -203,6 +215,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-2",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -228,6 +242,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 100,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -252,6 +268,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 120,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
         {
           id: "h-2",
@@ -260,6 +278,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-2",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -285,6 +305,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
         {
           id: "h-2",
@@ -293,6 +315,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 10,
           status: "error",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -316,6 +340,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -361,6 +387,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -396,6 +424,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -430,6 +460,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });
@@ -457,6 +489,8 @@ describe("GlobalQueryLogPanel", () => {
           duration: 50,
           status: "success",
           connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
     });

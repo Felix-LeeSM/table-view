@@ -1375,4 +1375,298 @@ describe("QueryTab", () => {
     expect(mockEditorProps.lastMongoExtensions).toBe(before);
     expect(mockEditorProps.lastParadigm).toBe("rdb");
   });
+
+  // ── Sprint 84: history paradigm metadata + paradigm-aware restore ──────
+
+  // AC-01 — RDB tab execution records paradigm:"rdb" + queryMode:"sql".
+  it("records rdb/sql metadata on history entry after RDB execute", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      const entries = useQueryHistoryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+    });
+
+    const entry = useQueryHistoryStore.getState().entries[0]!;
+    expect(entry.paradigm).toBe("rdb");
+    expect(entry.queryMode).toBe("sql");
+    expect(entry.database).toBeUndefined();
+    expect(entry.collection).toBeUndefined();
+    // AC-04 — globalLog mirrors the same metadata.
+    const logEntry = useQueryHistoryStore.getState().globalLog[0]!;
+    expect(logEntry.paradigm).toBe("rdb");
+    expect(logEntry.queryMode).toBe("sql");
+  });
+
+  // AC-02 — Document+find execution records document/find + db/coll.
+  it("records document/find metadata + database + collection on successful find", async () => {
+    mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    const tab = makeDocTab({ sql: '{"active":true}' });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      const entries = useQueryHistoryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+    });
+
+    const entry = useQueryHistoryStore.getState().entries[0]!;
+    expect(entry.paradigm).toBe("document");
+    expect(entry.queryMode).toBe("find");
+    expect(entry.database).toBe("table_view_test");
+    expect(entry.collection).toBe("users");
+    expect(entry.status).toBe("success");
+    // AC-04 — globalLog mirrors entry metadata.
+    const log = useQueryHistoryStore.getState().globalLog[0]!;
+    expect(log).toMatchObject({
+      paradigm: "document",
+      queryMode: "find",
+      database: "table_view_test",
+      collection: "users",
+    });
+  });
+
+  // AC-03 — Document+aggregate execution records document/aggregate + db/coll.
+  it("records document/aggregate metadata on successful aggregate", async () => {
+    mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    const tab = makeDocTab({
+      queryMode: "aggregate",
+      sql: '[{"$match":{"active":true}}]',
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      const entries = useQueryHistoryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+    });
+
+    const entry = useQueryHistoryStore.getState().entries[0]!;
+    expect(entry.paradigm).toBe("document");
+    expect(entry.queryMode).toBe("aggregate");
+    expect(entry.database).toBe("table_view_test");
+    expect(entry.collection).toBe("users");
+  });
+
+  // AC-09 — double-click on a history row routes through loadQueryIntoTab
+  // and the tab's sql (+ queryMode where applicable) shifts. The observable
+  // effect is the tabStore mutation: in-place updates replace `tab.sql`,
+  // paradigm mismatches spawn a new tab. Either way, `loadQueryIntoTab`
+  // is the only path that can produce the observed state transition.
+  it("double-click on a history row routes through loadQueryIntoTab (AC-09 in-place)", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab({ sql: "SELECT original" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+
+    // Replace the tab's sql with a distinct value so we can observe the
+    // restore overwriting it.
+    await act(async () => {
+      useTabStore.getState().updateQuerySql("query-1", "CHANGED");
+    });
+
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT original/,
+    });
+    const row = loadBtn.closest("li")!;
+    await act(async () => {
+      row.dispatchEvent(
+        new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    // Same paradigm + same connection → in-place update, tab count unchanged.
+    const state = useTabStore.getState();
+    expect(state.tabs).toHaveLength(1);
+    expect(state.activeTabId).toBe("query-1");
+    const qt = state.tabs[0];
+    if (qt && qt.type === "query") {
+      expect(qt.sql).toBe("SELECT original");
+      expect(qt.paradigm).toBe("rdb");
+      expect(qt.queryMode).toBe("sql");
+    }
+  });
+
+  // AC-09 — "Load into editor" button routes through the same helper and
+  // produces the same observable state transition as the double-click path.
+  it("Load into editor button routes through loadQueryIntoTab (AC-09 in-place)", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+    await waitFor(() => {
+      expect(useQueryHistoryStore.getState().entries).toHaveLength(1);
+    });
+
+    await act(async () => {
+      useTabStore.getState().updateQuerySql("query-1", "CHANGED");
+    });
+
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT 1/,
+    });
+    await act(async () => {
+      loadBtn.click();
+    });
+
+    const state = useTabStore.getState();
+    // Same paradigm + same connection → in-place update, tab count unchanged.
+    expect(state.tabs).toHaveLength(1);
+    expect(state.activeTabId).toBe("query-1");
+    const qt = state.tabs[0];
+    if (qt && qt.type === "query") {
+      expect(qt.sql).toBe("SELECT 1");
+    }
+  });
+
+  // AC-07 + AC-09 — cross-paradigm restore from a history row spawns a new
+  // tab. This proves the double-click / "Load into editor" buttons route
+  // through the paradigm-aware helper (otherwise they would only overwrite
+  // the active tab's sql without spawning).
+  it("history row double-click spawns a new tab when paradigms differ (AC-07)", async () => {
+    // Seed a Document+find history entry directly so no real query runs.
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "hist-doc-1",
+          sql: '{"active":true}',
+          executedAt: 1,
+          duration: 2,
+          status: "success",
+          connectionId: "conn-mongo",
+          paradigm: "document",
+          queryMode: "find",
+          database: "table_view_test",
+          collection: "users",
+        },
+      ],
+    });
+
+    // Active tab is RDB — restoring a document entry must spawn a new tab.
+    // Use a bespoke id ("query-rdb-original") so it can never collide with
+    // ids minted by `addQueryTab` (which mint `query-${counter}` starting
+    // at 1).
+    const rdbTab = makeQueryTab({ id: "query-rdb-original" });
+    useTabStore.setState({
+      tabs: [rdbTab],
+      activeTabId: "query-rdb-original",
+    });
+    render(<QueryTab tab={rdbTab} />);
+
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: /,
+    });
+    const row = loadBtn.closest("li")!;
+    await act(async () => {
+      row.dispatchEvent(
+        new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+      );
+    });
+
+    const state = useTabStore.getState();
+    expect(state.tabs).toHaveLength(2);
+    // Original RDB tab is untouched (AC-10).
+    const original = state.tabs.find((t) => t.id === "query-rdb-original");
+    expect(original).toBeDefined();
+    if (original && original.type === "query") {
+      expect(original.paradigm).toBe("rdb");
+      expect(original.sql).toBe("SELECT 1");
+    }
+    // New tab inherits the entry's paradigm + queryMode + db/coll (AC-08).
+    const spawned = state.tabs.find((t) => t.id === state.activeTabId);
+    expect(spawned?.type).toBe("query");
+    if (spawned && spawned.type === "query") {
+      expect(spawned.id).not.toBe("query-rdb-original");
+      expect(spawned.paradigm).toBe("document");
+      expect(spawned.queryMode).toBe("find");
+      expect(spawned.database).toBe("table_view_test");
+      expect(spawned.collection).toBe("users");
+      expect(spawned.sql).toBe('{"active":true}');
+    }
+  });
+
+  // AC-09 — legacy entries (missing paradigm / queryMode) are safely
+  // normalised by the QueryTab restore path, which reads the entry with
+  // `?? "rdb"` / `?? "sql"` defaults.
+  it("loading a legacy entry without paradigm defaults to rdb/sql in the handler", async () => {
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "legacy-1",
+          sql: "SELECT legacy",
+          executedAt: 1000,
+          duration: 10,
+          status: "success",
+          connectionId: "conn1",
+        },
+      ] as unknown as ReturnType<
+        typeof useQueryHistoryStore.getState
+      >["entries"],
+    });
+
+    const tab = makeQueryTab({ sql: "CHANGED" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByText(/History \(1\)/).click();
+    });
+
+    const loadBtn = screen.getByRole("button", {
+      name: /Load query into editor: SELECT legacy/,
+    });
+    await act(async () => {
+      loadBtn.click();
+    });
+
+    // Same connection + default paradigm ("rdb") matches the active RDB tab,
+    // so the restore should succeed via the in-place branch and write the
+    // legacy SQL onto the active tab without throwing.
+    const state = useTabStore.getState();
+    expect(state.tabs).toHaveLength(1);
+    const qt = state.tabs[0];
+    if (qt && qt.type === "query") {
+      expect(qt.sql).toBe("SELECT legacy");
+      expect(qt.paradigm).toBe("rdb");
+      expect(qt.queryMode).toBe("sql");
+    }
+  });
 });

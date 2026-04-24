@@ -395,6 +395,208 @@ describe("tabStore", () => {
     });
   });
 
+  // -- Sprint 84: loadQueryIntoTab helper -----------------------------------
+  // AC-06..AC-10 map to the branches below. The helper is paradigm-aware:
+  // it spawns a new tab when the entry targets a different paradigm or
+  // connection, and updates in place when the active tab is compatible.
+
+  describe("loadQueryIntoTab", () => {
+    // AC-07 branch: no active tab → spawn new query tab.
+    it("spawns a new query tab when there is no active tab", () => {
+      expect(useTabStore.getState().tabs).toHaveLength(0);
+
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn1",
+        paradigm: "rdb",
+        queryMode: "sql",
+        sql: "SELECT 1",
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      const qt = getQueryTab(state, 0);
+      expect(qt.connectionId).toBe("conn1");
+      expect(qt.paradigm).toBe("rdb");
+      expect(qt.queryMode).toBe("sql");
+      expect(qt.sql).toBe("SELECT 1");
+      expect(state.activeTabId).toBe(qt.id);
+    });
+
+    // AC-07 branch: active tab is a table tab → spawn new query tab so the
+    // table context is preserved.
+    it("spawns a new query tab when the active tab is a table tab", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+      const tableTabId = useTabStore.getState().tabs[0]!.id;
+      expect(useTabStore.getState().activeTabId).toBe(tableTabId);
+
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn1",
+        paradigm: "rdb",
+        queryMode: "sql",
+        sql: "SELECT 1",
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+      // The original table tab stays put, the new tab is a query tab.
+      expect(state.tabs[0]!.type).toBe("table");
+      expect(state.tabs[1]!.type).toBe("query");
+      expect(state.activeTabId).toBe(state.tabs[1]!.id);
+      expect(getQueryTab(state, 1).sql).toBe("SELECT 1");
+    });
+
+    // AC-06 branch: same paradigm + same connection → in-place update.
+    it("updates in place when the active query tab shares paradigm + connection (AC-06)", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      const tabId = useTabStore.getState().activeTabId!;
+      const tabsBefore = useTabStore.getState().tabs;
+
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn1",
+        paradigm: "rdb",
+        queryMode: "sql",
+        sql: "SELECT 42",
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(tabsBefore.length);
+      expect(state.activeTabId).toBe(tabId);
+      const qt = getQueryTab(state, 0);
+      expect(qt.id).toBe(tabId);
+      expect(qt.sql).toBe("SELECT 42");
+      expect(qt.queryMode).toBe("sql");
+    });
+
+    // AC-07 branch: different paradigm than the active tab → spawn new tab.
+    it("spawns a new tab when paradigms differ and leaves the original untouched (AC-07, AC-10)", () => {
+      // Start with an RDB query tab.
+      useTabStore.getState().addQueryTab("conn1");
+      const rdbTabId = useTabStore.getState().activeTabId!;
+      useTabStore.getState().updateQuerySql(rdbTabId, "SELECT 1");
+
+      // Load a document paradigm entry — new tab expected.
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn-mongo",
+        paradigm: "document",
+        queryMode: "aggregate",
+        database: "table_view_test",
+        collection: "users",
+        sql: '[{"$match":{"active":true}}]',
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+      const originalTab = state.tabs.find((t) => t.id === rdbTabId);
+      // AC-10 — the RDB tab's sql + paradigm stay unchanged.
+      expect(originalTab).toBeDefined();
+      if (originalTab && originalTab.type === "query") {
+        expect(originalTab.sql).toBe("SELECT 1");
+        expect(originalTab.paradigm).toBe("rdb");
+        expect(originalTab.queryMode).toBe("sql");
+      }
+      const newTabId = state.activeTabId!;
+      expect(newTabId).not.toBe(rdbTabId);
+      const newTab = state.tabs.find((t) => t.id === newTabId);
+      expect(newTab?.type).toBe("query");
+      if (newTab && newTab.type === "query") {
+        expect(newTab.paradigm).toBe("document");
+        expect(newTab.queryMode).toBe("aggregate");
+        // AC-08 — database/collection propagate onto the new tab.
+        expect(newTab.database).toBe("table_view_test");
+        expect(newTab.collection).toBe("users");
+        expect(newTab.sql).toBe('[{"$match":{"active":true}}]');
+      }
+    });
+
+    // AC-07 branch: different connectionId, same paradigm → still spawn new tab.
+    it("spawns a new tab when paradigms match but connectionId differs", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      const firstTabId = useTabStore.getState().activeTabId!;
+
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn-other",
+        paradigm: "rdb",
+        queryMode: "sql",
+        sql: "SELECT other",
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+      expect(state.activeTabId).not.toBe(firstTabId);
+      const newTab = state.tabs.find((t) => t.id === state.activeTabId);
+      if (newTab && newTab.type === "query") {
+        expect(newTab.connectionId).toBe("conn-other");
+        expect(newTab.sql).toBe("SELECT other");
+      }
+    });
+
+    // Document mode: find → aggregate within the same tab should flip
+    // queryMode while preserving database / collection already on the tab.
+    it("flips queryMode from find to aggregate in place on a document tab (AC-08)", () => {
+      useTabStore.getState().addQueryTab("conn-mongo", {
+        paradigm: "document",
+        queryMode: "find",
+        database: "table_view_test",
+        collection: "users",
+      });
+      const docTabId = useTabStore.getState().activeTabId!;
+
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn-mongo",
+        paradigm: "document",
+        queryMode: "aggregate",
+        database: "table_view_test",
+        collection: "users",
+        sql: '[{"$match":{"active":true}}]',
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.activeTabId).toBe(docTabId);
+      const qt = getQueryTab(state, 0);
+      expect(qt.queryMode).toBe("aggregate");
+      expect(qt.sql).toBe('[{"$match":{"active":true}}]');
+      // AC-08 — database/collection on the tab are preserved.
+      expect(qt.database).toBe("table_view_test");
+      expect(qt.collection).toBe("users");
+    });
+
+    // Execution-brief assumption: when loading into an existing document
+    // tab the user's collection context should NOT be overwritten by the
+    // entry's collection. Document/document spawns a tab only on paradigm
+    // or connectionId mismatch.
+    it("preserves the active tab's database/collection when loading a document entry in place", () => {
+      useTabStore.getState().addQueryTab("conn-mongo", {
+        paradigm: "document",
+        queryMode: "find",
+        database: "table_view_test",
+        collection: "users",
+      });
+      const docTabId = useTabStore.getState().activeTabId!;
+
+      // Entry points at a different collection within the same connection.
+      useTabStore.getState().loadQueryIntoTab({
+        connectionId: "conn-mongo",
+        paradigm: "document",
+        queryMode: "find",
+        database: "table_view_test",
+        collection: "orders",
+        sql: '{"status":"open"}',
+      });
+
+      const state = useTabStore.getState();
+      // Still a single tab — in-place update.
+      expect(state.tabs).toHaveLength(1);
+      expect(state.activeTabId).toBe(docTabId);
+      const qt = getQueryTab(state, 0);
+      // Editor updated with the entry's SQL, but the tab's collection
+      // context stays pinned to what the user was looking at.
+      expect(qt.sql).toBe('{"status":"open"}');
+      expect(qt.database).toBe("table_view_test");
+      expect(qt.collection).toBe("users");
+    });
+  });
+
   // -- Sprint 29: Preview Tab System ----------------------------------------
 
   describe("preview tab system", () => {

@@ -149,6 +149,22 @@ interface TabState {
   updateQuerySql: (tabId: string, sql: string) => void;
   updateQueryState: (tabId: string, state: QueryState) => void;
   setQueryMode: (tabId: string, mode: QueryMode) => void;
+  /**
+   * Sprint 84 — paradigm-aware restore helper used when the user loads a
+   * history entry. Routes the payload to either an in-place update on the
+   * active tab (when the active tab is a query tab on the same connection +
+   * paradigm) or a brand-new query tab that inherits the entry's paradigm,
+   * queryMode, and (for document paradigms) database/collection. See the
+   * implementation below for branch details.
+   */
+  loadQueryIntoTab: (payload: {
+    connectionId: string;
+    paradigm: Paradigm;
+    queryMode: QueryMode;
+    database?: string;
+    collection?: string;
+    sql: string;
+  }) => void;
 
   // Reopen last closed tab
   reopenLastClosedTab: () => void;
@@ -167,7 +183,7 @@ interface TabState {
 let tabCounter = 0;
 let queryCounter = 0;
 
-export const useTabStore = create<TabState>((set) => ({
+export const useTabStore = create<TabState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   closedTabHistory: [],
@@ -336,6 +352,59 @@ export const useTabStore = create<TabState>((set) => ({
         return { ...t, queryMode: mode };
       }),
     })),
+
+  loadQueryIntoTab: (payload) => {
+    const { connectionId, paradigm, queryMode, database, collection, sql } =
+      payload;
+    const state = get();
+    const activeTab =
+      state.activeTabId === null
+        ? null
+        : (state.tabs.find((t) => t.id === state.activeTabId) ?? null);
+
+    // Branch decision — the restore is paradigm-aware:
+    //   1. No active tab                       → spawn new query tab.
+    //   2. Active tab is not a query tab       → spawn new query tab.
+    //   3. Active tab targets a different
+    //      connectionId                        → spawn new query tab.
+    //   4. Active tab's paradigm differs       → spawn new query tab.
+    //   5. Otherwise (same paradigm + same
+    //      connectionId)                       → in-place update of the
+    //                                            active tab's sql + queryMode.
+    const canInPlace =
+      activeTab !== null &&
+      activeTab.type === "query" &&
+      activeTab.connectionId === connectionId &&
+      activeTab.paradigm === paradigm;
+
+    if (!canInPlace) {
+      // Delegating to `addQueryTab` keeps the `queryCounter` tick +
+      // activeTabId promotion logic in one place. `addQueryTab` updates
+      // `activeTabId` synchronously via `set`, so we can recover the new
+      // tab id by reading `getState().activeTabId` immediately after.
+      get().addQueryTab(connectionId, {
+        paradigm,
+        queryMode,
+        database,
+        collection,
+      });
+      const newTabId = get().activeTabId;
+      if (newTabId) {
+        get().updateQuerySql(newTabId, sql);
+      }
+      return;
+    }
+
+    // Same paradigm + same connection — stamp the payload onto the active
+    // tab. Per the Sprint 84 execution brief, `database` / `collection`
+    // on the tab are intentionally preserved: the user's current context
+    // (e.g. a Mongo tab focused on a specific collection) should not be
+    // overwritten by the entry's originally-executed collection, which may
+    // differ. Only the editor contents (sql + queryMode) change.
+    const targetId = activeTab.id;
+    get().updateQuerySql(targetId, sql);
+    get().setQueryMode(targetId, queryMode);
+  },
 
   moveTab: (fromId, toId, position = "before") => {
     if (fromId === toId) return;

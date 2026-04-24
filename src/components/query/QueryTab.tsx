@@ -71,6 +71,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const updateQueryState = useTabStore((s) => s.updateQueryState);
   const setQueryMode = useTabStore((s) => s.setQueryMode);
+  const loadQueryIntoTab = useTabStore((s) => s.loadQueryIntoTab);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);
@@ -265,6 +266,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
           duration: Date.now() - startTime,
           status: "success",
           connectionId: tab.connectionId,
+          paradigm: tab.paradigm,
+          queryMode: tab.queryMode,
+          database: tab.database,
+          collection: tab.collection,
         });
       } catch (err) {
         useTabStore.setState((state) => {
@@ -298,6 +303,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
           duration: Date.now() - startTime,
           status: "error",
           connectionId: tab.connectionId,
+          paradigm: tab.paradigm,
+          queryMode: tab.queryMode,
+          database: tab.database,
+          collection: tab.collection,
         });
       }
       return;
@@ -352,6 +361,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
           duration: Date.now() - startTime,
           status: "success",
           connectionId: tab.connectionId,
+          paradigm: tab.paradigm,
+          queryMode: tab.queryMode,
+          database: tab.database,
+          collection: tab.collection,
         });
       } catch (err) {
         useTabStore.setState((state) => {
@@ -385,6 +398,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
           duration: Date.now() - startTime,
           status: "error",
           connectionId: tab.connectionId,
+          paradigm: tab.paradigm,
+          queryMode: tab.queryMode,
+          database: tab.database,
+          collection: tab.collection,
         });
       }
       return;
@@ -457,6 +474,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
       duration: Date.now() - startTime,
       status: errors.length > 0 ? "error" : "success",
       connectionId: tab.connectionId,
+      paradigm: tab.paradigm,
+      queryMode: tab.queryMode,
+      database: tab.database,
+      collection: tab.collection,
     });
     // The original Sprint 25 callback intentionally excluded
     // addHistoryEntry/updateQueryState from the dependency list so stale
@@ -774,40 +795,57 @@ export default function QueryTab({ tab }: QueryTabProps) {
           </Button>
           {historyExpanded && (
             <ul className="max-h-40 overflow-y-auto">
-              {historyEntries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="group flex items-center gap-2 border-t border-border px-3 py-1 hover:bg-muted"
-                  onDoubleClick={() => updateQuerySql(tab.id, entry.sql)}
-                  title="Double-click to load into editor"
-                >
-                  <span
-                    className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background ${
-                      entry.status === "success"
-                        ? "bg-success"
-                        : "bg-destructive"
-                    }`}
-                    title={entry.status}
-                  />
-                  <SqlSyntax
-                    sql={entry.sql}
-                    className="min-w-0 flex-1 select-text cursor-text truncate text-xs"
-                  />
-                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                    {entry.duration}ms
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
-                    onClick={() => updateQuerySql(tab.id, entry.sql)}
-                    aria-label={`Load query into editor: ${entry.sql}`}
-                    title="Load into editor"
+              {historyEntries.map((entry) => {
+                // Sprint 84 — both the double-click row and the explicit
+                // "Load into editor" button route through the paradigm-aware
+                // `loadQueryIntoTab` helper so the restore branches (same
+                // paradigm / different paradigm / new tab) live in a single
+                // store-owned function. Entry-level defaults guard against
+                // legacy entries missing paradigm / queryMode fields.
+                const handleLoad = () =>
+                  loadQueryIntoTab({
+                    connectionId: entry.connectionId,
+                    paradigm: entry.paradigm ?? "rdb",
+                    queryMode: entry.queryMode ?? "sql",
+                    database: entry.database,
+                    collection: entry.collection,
+                    sql: entry.sql,
+                  });
+                return (
+                  <li
+                    key={entry.id}
+                    className="group flex items-center gap-2 border-t border-border px-3 py-1 hover:bg-muted"
+                    onDoubleClick={handleLoad}
+                    title="Double-click to load into editor"
                   >
-                    <CornerDownLeft />
-                  </Button>
-                </li>
-              ))}
+                    <span
+                      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background ${
+                        entry.status === "success"
+                          ? "bg-success"
+                          : "bg-destructive"
+                      }`}
+                      title={entry.status}
+                    />
+                    <SqlSyntax
+                      sql={entry.sql}
+                      className="min-w-0 flex-1 select-text cursor-text truncate text-xs"
+                    />
+                    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                      {entry.duration}ms
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:text-foreground"
+                      onClick={handleLoad}
+                      aria-label={`Load query into editor: ${entry.sql}`}
+                      title="Load into editor"
+                    >
+                      <CornerDownLeft />
+                    </Button>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <div className="flex items-center justify-end border-t border-border px-2 py-0.5">
