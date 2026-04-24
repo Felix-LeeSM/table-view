@@ -2,14 +2,22 @@ import { useEffect, useState } from "react";
 import { ArrowDownUp, Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
-import { useTheme } from "@hooks/useTheme";
+import { useThemeStore } from "@stores/themeStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
+import { THEME_CATALOG } from "@lib/themeCatalog";
+import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { Button } from "@components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@components/ui/popover";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
 import ConnectionList from "@components/connection/ConnectionList";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
 import { LogoWordmark } from "@components/shared/Logo";
+import ThemePicker from "@components/theme/ThemePicker";
 import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
 const WIDTH_KEY = "table-view.sidebar.width";
@@ -45,7 +53,14 @@ export default function Sidebar() {
   const activeTabConnId = activeTab?.connectionId ?? null;
   const addQueryTab = useTabStore((s) => s.addQueryTab);
 
-  const { theme, setTheme } = useTheme();
+  const themeId = useThemeStore((s) => s.themeId);
+  const themeMode = useThemeStore((s) => s.mode);
+  const handleSystemChange = useThemeStore((s) => s.handleSystemChange);
+
+  useEffect(() => {
+    if (themeMode !== "system") return;
+    return subscribeSystemModeChange(handleSystemChange);
+  }, [themeMode, handleSystemChange]);
 
   // Focus the active tab's connection so its schema tree comes into view.
   useEffect(() => {
@@ -106,13 +121,10 @@ export default function Sidebar() {
     }
   }, [sidebarWidth]);
 
-  const cycleTheme = () => {
-    const next =
-      theme === "system" ? "light" : theme === "light" ? "dark" : "system";
-    setTheme(next);
-  };
-
-  const ThemeIcon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  const activeEntry =
+    THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
+  const ThemeIcon =
+    themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
 
   // Listen for Cmd+N keyboard shortcut dispatched from App
   useEffect(() => {
@@ -230,18 +242,34 @@ export default function Sidebar() {
           )}
         </div>
 
-        {/* Theme toggle footer */}
+        {/* Theme picker footer */}
         <div className="border-t border-border px-3 py-2">
-          <Button
-            variant="ghost"
-            size="xs"
-            className="w-full justify-start text-muted-foreground"
-            onClick={cycleTheme}
-            aria-label={`Theme: ${theme}. Click to change.`}
-          >
-            <ThemeIcon />
-            <span className="capitalize">{theme}</span>
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="w-full justify-start text-muted-foreground"
+                aria-label={`Theme picker: currently ${activeEntry.name} (${themeMode})`}
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 shrink-0 rounded-full border border-border"
+                  style={{ backgroundColor: activeEntry.swatch }}
+                />
+                <span className="truncate">{activeEntry.name}</span>
+                <ThemeIcon className="ml-auto" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="top"
+              sideOffset={8}
+              className="w-80"
+            >
+              <ThemePicker />
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Resize handle */}

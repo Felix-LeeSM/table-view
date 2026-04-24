@@ -28,14 +28,10 @@ import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
   });
 }
 
-// Mock useTheme to avoid localStorage issues in jsdom
-let mockTheme: string = "system";
-const mockSetTheme = vi.fn((t: string) => {
-  mockTheme = t;
-});
-
-vi.mock("@hooks/useTheme", () => ({
-  useTheme: () => ({ theme: mockTheme, setTheme: mockSetTheme }),
+// Isolate Sidebar from the full ThemePicker (and its transitive radix portals)
+// so we can assert the trigger contract without rendering 72 cards.
+vi.mock("@components/theme/ThemePicker", () => ({
+  default: () => <div data-testid="theme-picker-mock" />,
 }));
 
 // Mock children to isolate Sidebar wiring.
@@ -127,7 +123,6 @@ function setStores(opts: {
 
 describe("Sidebar", () => {
   beforeEach(() => {
-    mockTheme = "system";
     vi.clearAllMocks();
     window.localStorage.clear();
     setStores({});
@@ -461,13 +456,25 @@ describe("Sidebar", () => {
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
     });
 
-    it("renders the theme toggle and cycles theme on click", () => {
+    it("renders the theme picker trigger with current theme in aria-label", () => {
       render(<Sidebar />);
-      const btn = screen.getByLabelText(/Theme:/);
+      const btn = screen.getByRole("button", {
+        name: /theme picker: currently/i,
+      });
+      expect(btn).toBeInTheDocument();
+    });
+
+    it("opens the theme picker popover when the trigger is clicked", () => {
+      render(<Sidebar />);
+      const btn = screen.getByRole("button", {
+        name: /theme picker: currently/i,
+      });
+      // Popover portal content is not mounted until the trigger is clicked.
+      expect(screen.queryByTestId("theme-picker-mock")).toBeNull();
       act(() => {
         fireEvent.click(btn);
       });
-      expect(mockSetTheme).toHaveBeenCalled();
+      expect(screen.getByTestId("theme-picker-mock")).toBeInTheDocument();
     });
 
     it("has a resize handle on the right edge", () => {
