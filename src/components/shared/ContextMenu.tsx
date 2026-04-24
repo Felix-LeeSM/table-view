@@ -113,7 +113,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       aria-label="Context menu"
       className={measured ? "select-none" : "select-none invisible"}
     >
-      <div className="min-w-[160px] rounded-md border border-border bg-secondary py-1 shadow-lg">
+      <div className="min-w-40 rounded-md border border-border bg-secondary py-1 shadow-lg">
         {items.map((item, index) =>
           item.separator ? (
             <div

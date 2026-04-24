@@ -245,7 +245,7 @@ export default function FilterBar({
               {opInfo(filter.operator)?.needsValue && (
                 <Input
                   type="text"
-                  className="h-7 min-w-[120px] flex-1 border-border bg-background px-2 py-1 text-xs text-foreground"
+                  className="h-7 min-w-30 flex-1 border-border bg-background px-2 py-1 text-xs text-foreground"
                   placeholder="Value..."
                   value={filter.value ?? ""}
                   onChange={(e) =>

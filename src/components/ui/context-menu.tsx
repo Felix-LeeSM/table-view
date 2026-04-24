@@ -14,7 +14,7 @@ function ContextMenuContent({
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         className={cn(
-          "z-50 min-w-[140px] rounded-md border border-border bg-popover py-1 shadow-md",
+          "z-50 min-w-35 rounded-md border border-border bg-popover py-1 shadow-md",
           "animate-in fade-in-0 zoom-in-95",
           className,
         )}

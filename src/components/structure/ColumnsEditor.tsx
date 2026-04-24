@@ -128,7 +128,7 @@ function EditableColumnRow({
           <span className="font-medium text-foreground">NO</span>
         )}
       </td>
-      <td className="max-w-[200px] truncate border-r border-border px-3 py-1 text-xs">
+      <td className="max-w-50 truncate border-r border-border px-3 py-1 text-xs">
         {isEditing ? (
           <input
             className={inputClass}
@@ -143,10 +143,10 @@ function EditableColumnRow({
           </span>
         )}
       </td>
-      <td className="max-w-[200px] truncate border-r border-border px-3 py-1 text-xs text-primary">
+      <td className="max-w-50 truncate border-r border-border px-3 py-1 text-xs text-primary">
         {col.fk_reference ?? "\u2014"}
       </td>
-      <td className="max-w-[200px] truncate px-3 py-1 text-xs text-muted-foreground">
+      <td className="max-w-50 truncate px-3 py-1 text-xs text-muted-foreground">
         {col.comment ?? "\u2014"}
       </td>
       <td className="w-20 border-l border-border px-1 py-1 text-center">
