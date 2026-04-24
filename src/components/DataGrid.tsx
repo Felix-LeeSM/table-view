@@ -336,7 +336,7 @@ export default function DataGrid({
       {error && (
         <div
           role="alert"
-          className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-destructive"
+          className="border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </div>
@@ -470,7 +470,7 @@ export default function DataGrid({
               </button>
               <button
                 autoFocus
-                className="rounded bg-green-600 px-3 py-1.5 text-xs text-white hover:bg-green-700"
+                className="rounded bg-success px-3 py-1.5 text-xs text-success-foreground hover:bg-success/90"
                 onClick={editState.handleExecuteCommit}
                 aria-label="Execute SQL"
               >

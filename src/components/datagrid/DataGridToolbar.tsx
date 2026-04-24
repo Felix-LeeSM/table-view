@@ -82,12 +82,12 @@ export default function DataGridToolbar({
               </span>
             )}
             {pendingEditsSize > 0 && (
-              <span className="text-yellow-500">
+              <span className="text-warning">
                 {pendingEditsSize} edit{pendingEditsSize !== 1 ? "s" : ""}
               </span>
             )}
             {(pendingNewRowsCount > 0 || pendingDeletedRowKeysSize > 0) && (
-              <span className="text-yellow-500">
+              <span className="text-warning">
                 {pendingNewRowsCount > 0 && `${pendingNewRowsCount} new`}
                 {pendingNewRowsCount > 0 &&
                   pendingDeletedRowKeysSize > 0 &&
@@ -101,7 +101,7 @@ export default function DataGridToolbar({
                 <Button
                   variant="ghost"
                   size="xs"
-                  className="bg-green-600/20 text-green-400 hover:bg-green-600/30 hover:text-green-400"
+                  className="bg-success/20 text-success hover:bg-success/30 hover:text-success"
                   onClick={onCommit}
                   aria-label="Commit changes"
                   title="Commit changes"
@@ -112,7 +112,7 @@ export default function DataGridToolbar({
                 <Button
                   variant="ghost"
                   size="xs"
-                  className="bg-red-600/20 text-red-400 hover:bg-red-600/30 hover:text-red-400"
+                  className="bg-destructive/20 text-destructive hover:bg-destructive/30 hover:text-destructive"
                   onClick={onDiscard}
                   aria-label="Discard changes"
                   title="Discard changes"

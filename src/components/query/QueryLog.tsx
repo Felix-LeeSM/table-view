@@ -106,9 +106,7 @@ export default function QueryLog() {
               {/* Status dot */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                  entry.status === "success"
-                    ? "bg-emerald-500 dark:bg-emerald-400"
-                    : "bg-destructive"
+                  entry.status === "success" ? "bg-success" : "bg-destructive"
                 }`}
                 title={entry.status}
               />

@@ -443,7 +443,7 @@ describe("QueryLog", () => {
     });
 
     const dot = screen.getByTitle("success");
-    expect(dot.className).toContain("emerald-500");
+    expect(dot.className).toContain("bg-success");
   });
 
   it("uses theme CSS variable for error status dot", () => {

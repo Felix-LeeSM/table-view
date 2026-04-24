@@ -464,7 +464,7 @@ export default function DataGridTable({
                       <span title="Primary Key">
                         <Key
                           size={12}
-                          className="shrink-0 text-amber-500"
+                          className="shrink-0 text-warning"
                           aria-label="Primary Key"
                         />
                       </span>
@@ -543,7 +543,7 @@ export default function DataGridTable({
                         isEditing
                           ? " bg-primary/10 ring-2 ring-inset ring-primary"
                           : hasPendingEdit
-                            ? " bg-yellow-500/20"
+                            ? " bg-highlight/20"
                             : ""
                       }`}
                       style={{
@@ -671,7 +671,7 @@ export default function DataGridTable({
           {pendingNewRows.map((newRow, newIdx) => (
             <tr
               key={`new-row-${newIdx}`}
-              className="border-b border-border bg-yellow-500/5 hover:bg-muted"
+              className="border-b border-border bg-warning/5 hover:bg-muted"
             >
               {order.map((dIdx, visualIdx) => {
                 const cell = (newRow as unknown[])[dIdx];

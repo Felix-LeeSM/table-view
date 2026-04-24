@@ -92,7 +92,7 @@ export default function ViewStructurePanel({
       {error && (
         <div
           role="alert"
-          className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-destructive"
+          className="border-b border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </div>
@@ -226,7 +226,7 @@ function ViewDefinition({ sql }: { sql: string }) {
         >
           {copied ? (
             <>
-              <Check className="text-emerald-500" />
+              <Check className="text-success" />
               <span>Copied</span>
             </>
           ) : (

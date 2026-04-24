@@ -92,7 +92,7 @@ export default function CellDetailDialog({
           >
             {copied ? (
               <>
-                <Check className="text-emerald-500" />
+                <Check className="text-success" />
                 <span>Copied</span>
               </>
             ) : (

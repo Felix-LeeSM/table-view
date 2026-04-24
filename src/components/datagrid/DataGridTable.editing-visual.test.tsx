@@ -113,7 +113,7 @@ describe("DataGridTable editing visual emphasis", () => {
     const tds = document.querySelectorAll("tbody td");
     // The 2nd td of the 1st row is the pending cell
     const pendingTd = tds[1] as HTMLElement;
-    expect(pendingTd.className).toMatch(/bg-yellow/);
+    expect(pendingTd.className).toMatch(/bg-highlight/);
     expect(pendingTd.className).not.toMatch(/ring-primary/);
   });
 });

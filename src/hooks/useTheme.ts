@@ -1,48 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useThemeStore } from "@stores/themeStore";
+import { subscribeSystemModeChange, type ThemeMode } from "@lib/themeBoot";
 
-type Theme = "system" | "light" | "dark";
+type Theme = ThemeMode;
 
-const STORAGE_KEY = "table-view-theme";
-
-function getSystemPreference(): boolean {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches;
-}
-
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  root.classList.remove("light", "dark");
-
-  if (theme === "dark" || (theme === "system" && getSystemPreference())) {
-    root.classList.add("dark");
-  } else {
-    root.classList.add("light");
-  }
-}
-
+/**
+ * Backwards-compatible shim over `useThemeStore`. New call sites that need
+ * access to the selected `themeId` or `resolvedMode` should consume the store
+ * directly.
+ */
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    return stored ?? "system";
-  });
-
-  const setTheme = (t: Theme) => {
-    setThemeState(t);
-    localStorage.setItem(STORAGE_KEY, t);
-    applyTheme(t);
-  };
+  const mode = useThemeStore((s) => s.mode);
+  const setMode = useThemeStore((s) => s.setMode);
+  const handleSystemChange = useThemeStore((s) => s.handleSystemChange);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    if (mode !== "system") return;
+    return subscribeSystemModeChange(handleSystemChange);
+  }, [mode, handleSystemChange]);
 
-  // Listen for system preference changes
-  useEffect(() => {
-    if (theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => applyTheme("system");
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, [theme]);
-
-  return { theme, setTheme } as const;
+  return { theme: mode, setTheme: (t: Theme) => setMode(t) } as const;
 }

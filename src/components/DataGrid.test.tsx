@@ -875,9 +875,9 @@ describe("DataGrid", () => {
     // Input should be gone
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
 
-    // Cell should show the new value with yellow background indicator
+    // Cell should show the new value with highlight background indicator
     expect(nameCell.textContent).toContain("Bob");
-    expect(nameCell.className).toContain("bg-yellow-500/20");
+    expect(nameCell.className).toContain("bg-highlight/20");
 
     // Pending edit count should be shown
     expect(screen.getByText(/1 edit/)).toBeInTheDocument();
@@ -908,7 +908,7 @@ describe("DataGrid", () => {
     expect(nameCell.textContent).toContain("Alice");
 
     // No yellow bg
-    expect(nameCell.className).not.toContain("bg-yellow-500/20");
+    expect(nameCell.className).not.toContain("bg-highlight/20");
   });
 
   // 38. Shows pending edit count in toolbar
@@ -963,7 +963,7 @@ describe("DataGrid", () => {
     // First cell should have saved the edit
     expect(nameCell.querySelector("input")).not.toBeInTheDocument();
     expect(nameCell.textContent).toContain("Bob");
-    expect(nameCell.className).toContain("bg-yellow-500/20");
+    expect(nameCell.className).toContain("bg-highlight/20");
   });
 
   // ── Sprint 31: Commit & SQL Preview ──
@@ -1025,7 +1025,7 @@ describe("DataGrid", () => {
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
     // Yellow bg should be gone
     const cells = screen.getAllByRole("cell");
-    expect(cells[1]!.className).not.toContain("bg-yellow-500/20");
+    expect(cells[1]!.className).not.toContain("bg-highlight/20");
   });
 
   // 43. Commit shows SQL preview modal

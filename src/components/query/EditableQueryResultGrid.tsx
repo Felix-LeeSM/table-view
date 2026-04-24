@@ -235,7 +235,7 @@ export default function EditableQueryResultGrid({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Edit toolbar — only visible when there are pending changes. */}
       {hasPendingChanges && (
-        <div className="flex items-center justify-between border-b border-border bg-yellow-500/10 px-3 py-1.5 text-xs">
+        <div className="flex items-center justify-between border-b border-border bg-warning/10 px-3 py-1.5 text-xs">
           <span className="text-foreground">
             {pendingEdits.size} edit{pendingEdits.size !== 1 ? "s" : ""},{" "}
             {pendingDeletedRowKeys.size} delete
@@ -279,7 +279,7 @@ export default function EditableQueryResultGrid({
                       {isPk && (
                         <span
                           title="Primary Key"
-                          className="text-amber-500"
+                          className="text-warning"
                           aria-label="Primary key"
                         >
                           🔑
@@ -326,7 +326,7 @@ export default function EditableQueryResultGrid({
                           isEditing
                             ? "bg-primary/10 ring-2 ring-inset ring-primary"
                             : hasPendingEdit
-                              ? "bg-yellow-500/20"
+                              ? "bg-highlight/20"
                               : ""
                         }`}
                         title={formatCellDisplay(cell)}
@@ -486,7 +486,7 @@ export default function EditableQueryResultGrid({
               <Button
                 autoFocus
                 size="sm"
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-success hover:bg-success/90"
                 onClick={handleExecute}
                 aria-label="Execute SQL"
                 disabled={executing}

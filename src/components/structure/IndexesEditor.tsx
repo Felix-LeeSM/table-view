@@ -180,7 +180,7 @@ function CreateIndexModal({
 
           {/* Error */}
           {error && (
-            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-destructive">
+            <div className="mx-4 mb-3 rounded bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
@@ -406,7 +406,7 @@ export default function IndexesEditor({
                   <td className="border-r border-border px-3 py-1 text-xs">
                     <div className="flex items-center gap-2">
                       {idx.is_primary && (
-                        <span className="flex items-center gap-0.5 text-amber-500">
+                        <span className="flex items-center gap-0.5 text-warning">
                           <Key size={10} aria-hidden="true" /> PK
                         </span>
                       )}

@@ -178,10 +178,7 @@ export default function GlobalQueryLogPanel({
                   data-status={entry.status}
                 >
                   {entry.status === "success" ? (
-                    <CheckCircle2
-                      size={12}
-                      className="text-emerald-500 dark:text-emerald-400"
-                    />
+                    <CheckCircle2 size={12} className="text-success" />
                   ) : (
                     <XCircle size={12} className="text-destructive" />
                   )}

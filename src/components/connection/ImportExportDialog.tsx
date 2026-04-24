@@ -179,7 +179,7 @@ function ExportPanel() {
                 ({c.db_type} @ {c.host}:{c.port})
               </span>
               {c.has_password && (
-                <span className="ml-auto rounded bg-emerald-500/10 px-1.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                <span className="ml-auto rounded bg-success/10 px-1.5 text-[10px] font-medium text-success">
                   pw set
                 </span>
               )}
@@ -206,7 +206,7 @@ function ExportPanel() {
           >
             {copied ? (
               <>
-                <Check size={12} className="text-emerald-500" /> Copied
+                <Check size={12} className="text-success" /> Copied
               </>
             ) : (
               <>
@@ -220,7 +220,7 @@ function ExportPanel() {
       {error && (
         <div
           role="alert"
-          className="rounded bg-red-500/10 px-3 py-2 text-xs text-destructive"
+          className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
           {error}
         </div>
@@ -305,7 +305,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
       {error && (
         <div
           role="alert"
-          className="rounded bg-red-500/10 px-3 py-2 text-xs text-destructive"
+          className="rounded bg-destructive/10 px-3 py-2 text-xs text-destructive"
         >
           {error}
         </div>
@@ -324,7 +324,7 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
   return (
     <div className="space-y-2 rounded border border-border bg-background px-3 py-2 text-xs">
       <div className="flex items-center gap-2">
-        <Check size={12} className="text-emerald-500" />
+        <Check size={12} className="text-success" />
         <span className="font-medium text-foreground">
           Imported {result.imported.length} connection
           {result.imported.length === 1 ? "" : "s"}
@@ -354,7 +354,7 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
       )}
       {skippedCount > 0 && (
         <details>
-          <summary className="cursor-pointer text-amber-600 dark:text-amber-400">
+          <summary className="cursor-pointer text-warning">
             {skippedCount} connection
             {skippedCount === 1 ? "" : "s"} placed at root (missing group)
           </summary>

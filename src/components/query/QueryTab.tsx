@@ -359,7 +359,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
             disabled={!tab.sql.trim()}
             aria-label="Run query"
           >
-            <Play className="text-emerald-500 dark:text-emerald-400" />
+            <Play className="text-success" />
             <span>Run</span>
             <span className="text-[10px] text-muted-foreground">
               {"\u2318\u23CE"}
@@ -513,7 +513,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   <span
                     className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                       entry.status === "success"
-                        ? "bg-emerald-500 dark:bg-emerald-400"
+                        ? "bg-success"
                         : "bg-destructive"
                     }`}
                   />

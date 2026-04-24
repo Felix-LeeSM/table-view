@@ -89,7 +89,7 @@ function EditableColumnRow({
           <span title="Primary Key">
             <Key
               size={12}
-              className="shrink-0 text-amber-500"
+              className="shrink-0 text-warning"
               aria-label="Primary Key"
             />
           </span>
@@ -156,7 +156,7 @@ function EditableColumnRow({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="text-emerald-500 dark:text-emerald-400"
+                className="text-success"
                 onClick={handleSave}
                 aria-label={`Save changes for ${col.name}`}
                 title="Save"
@@ -280,7 +280,7 @@ function NewColumnRow({
           <Button
             variant="ghost"
             size="icon-xs"
-            className="text-emerald-500 dark:text-emerald-400"
+            className="text-success"
             onClick={onConfirm}
             disabled={!draft.name.trim() || !draft.data_type.trim()}
             aria-label="Confirm add column"
@@ -578,11 +578,11 @@ export default function ColumnsEditor({
                   return (
                     <tr
                       key={p.trackingId}
-                      className="border-b border-border bg-green-500/5"
+                      className="border-b border-border bg-success/5"
                     >
-                      <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs text-green-600">
+                      <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs text-success">
                         {change.name}
-                        <span className="rounded bg-green-500/10 px-1 py-0.5 text-[10px] font-medium">
+                        <span className="rounded bg-success/10 px-1 py-0.5 text-[10px] font-medium">
                           new
                         </span>
                       </td>

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTheme } from "./useTheme";
+import { useThemeStore } from "@stores/themeStore";
 
 // Mock localStorage for jsdom
 const localStorageMock = (() => {
@@ -21,10 +22,16 @@ const localStorageMock = (() => {
 
 Object.defineProperty(window, "localStorage", { value: localStorageMock });
 
+function hydrateStore() {
+  useThemeStore.getState().hydrate();
+}
+
 describe("useTheme", () => {
   beforeEach(() => {
     localStorageMock.clear();
-    document.documentElement.classList.remove("light", "dark");
+    document.documentElement.removeAttribute("data-theme");
+    document.documentElement.removeAttribute("data-mode");
+    hydrateStore();
   });
 
   it("defaults to system theme when no stored preference", () => {
@@ -32,25 +39,33 @@ describe("useTheme", () => {
     expect(result.current.theme).toBe("system");
   });
 
-  it("reads stored theme from localStorage", () => {
+  it("reads stored theme from legacy string localStorage value", () => {
     localStorage.setItem("table-view-theme", "dark");
+    hydrateStore();
     const { result } = renderHook(() => useTheme());
     expect(result.current.theme).toBe("dark");
   });
 
-  it("applies dark class for dark theme", () => {
+  it("applies data-mode=dark for dark theme", () => {
     localStorage.setItem("table-view-theme", "dark");
+    hydrateStore();
     renderHook(() => useTheme());
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(document.documentElement.getAttribute("data-mode")).toBe("dark");
   });
 
-  it("applies light class for light theme", () => {
+  it("applies data-mode=light for light theme", () => {
     localStorage.setItem("table-view-theme", "light");
+    hydrateStore();
     renderHook(() => useTheme());
-    expect(document.documentElement.classList.contains("light")).toBe(true);
+    expect(document.documentElement.getAttribute("data-mode")).toBe("light");
   });
 
-  it("setTheme updates state and localStorage", () => {
+  it("sets data-theme=slate on mount by default", () => {
+    renderHook(() => useTheme());
+    expect(document.documentElement.getAttribute("data-theme")).toBe("slate");
+  });
+
+  it("setTheme persists JSON state and updates data-mode", () => {
     const { result } = renderHook(() => useTheme());
 
     act(() => {
@@ -58,12 +73,15 @@ describe("useTheme", () => {
     });
 
     expect(result.current.theme).toBe("dark");
-    expect(localStorage.getItem("table-view-theme")).toBe("dark");
-    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    const raw = localStorage.getItem("table-view-theme");
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw!)).toEqual({ themeId: "slate", mode: "dark" });
+    expect(document.documentElement.getAttribute("data-mode")).toBe("dark");
   });
 
   it("switches from dark to light", () => {
     localStorage.setItem("table-view-theme", "dark");
+    hydrateStore();
     const { result } = renderHook(() => useTheme());
 
     act(() => {
@@ -71,7 +89,24 @@ describe("useTheme", () => {
     });
 
     expect(result.current.theme).toBe("light");
-    expect(document.documentElement.classList.contains("light")).toBe(true);
-    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    expect(document.documentElement.getAttribute("data-mode")).toBe("light");
+  });
+
+  it("falls back to system when legacy localStorage value is unparseable", () => {
+    localStorage.setItem("table-view-theme", "invalid-value");
+    hydrateStore();
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.theme).toBe("system");
+  });
+
+  it("reads JSON-formatted stored state", () => {
+    localStorage.setItem(
+      "table-view-theme",
+      JSON.stringify({ themeId: "github", mode: "dark" }),
+    );
+    hydrateStore();
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.theme).toBe("dark");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("github");
   });
 });

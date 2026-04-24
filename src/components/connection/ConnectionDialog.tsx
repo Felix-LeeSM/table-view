@@ -211,7 +211,7 @@ export default function ConnectionDialog({
                 {urlError && (
                   <div
                     role="alert"
-                    className="rounded bg-red-500/10 px-3 py-2 text-sm text-destructive"
+                    className="rounded bg-destructive/10 px-3 py-2 text-sm text-destructive"
                   >
                     {urlError}
                   </div>
@@ -371,7 +371,7 @@ export default function ConnectionDialog({
                       <span
                         className={`mb-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                           hadPassword
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            ? "bg-success/10 text-success"
                             : "bg-muted text-muted-foreground"
                         }`}
                         data-testid="password-status-badge"
@@ -544,8 +544,8 @@ export default function ConnectionDialog({
                     role="alert"
                     className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${
                       testResult.success
-                        ? "bg-green-500/10 text-emerald-500 dark:text-emerald-400"
-                        : "bg-red-500/10 text-destructive"
+                        ? "bg-success/10 text-success"
+                        : "bg-destructive/10 text-destructive"
                     }`}
                   >
                     {testResult.success ? (
@@ -561,7 +561,7 @@ export default function ConnectionDialog({
                 {error && (
                   <div
                     role="alert"
-                    className="rounded bg-red-500/10 px-3 py-2 text-sm text-destructive"
+                    className="rounded bg-destructive/10 px-3 py-2 text-sm text-destructive"
                   >
                     {error}
                   </div>

@@ -100,8 +100,8 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
             className={cn(
               "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold",
               value
-                ? "bg-green-500/15 text-green-600 dark:text-green-400"
-                : "bg-red-500/15 text-red-600 dark:text-red-400",
+                ? "bg-success/15 text-success"
+                : "bg-destructive/15 text-destructive",
             )}
           >
             {value ? "true" : "false"}

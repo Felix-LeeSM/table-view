@@ -203,7 +203,7 @@ function SelectResultArea({
   if (editability && editability.editable) {
     return (
       <>
-        <div className="flex items-center gap-1.5 border-b border-border bg-emerald-500/10 px-3 py-1 text-xs text-emerald-700 dark:text-emerald-400">
+        <div className="flex items-center gap-1.5 border-b border-border bg-success/10 px-3 py-1 text-xs text-success">
           <Pencil size={12} />
           <span>
             Editable — double-click a cell to edit, right-click for delete

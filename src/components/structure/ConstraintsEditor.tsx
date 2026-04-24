@@ -263,7 +263,7 @@ function AddConstraintModal({
 
           {/* Error */}
           {error && (
-            <div className="mx-4 mb-3 rounded bg-red-500/10 px-3 py-2 text-sm text-destructive">
+            <div className="mx-4 mb-3 rounded bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}

@@ -59,7 +59,7 @@ function StatusIndicator({ status }: { status: ConnectionStatus }) {
   if (status.type === "connected") {
     return (
       <span
-        className="inline-block h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400"
+        className="inline-block h-2 w-2 rounded-full bg-success"
         aria-label="Connected"
       />
     );
