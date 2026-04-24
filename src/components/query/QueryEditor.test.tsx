@@ -188,7 +188,7 @@ describe("QueryEditor", () => {
     expect(onSqlChange).not.toHaveBeenCalled();
   });
 
-  it("recreates the editor when schemaNamespace changes", () => {
+  it("keeps the editor alive when schemaNamespace identity changes", () => {
     const { rerender } = render(
       <QueryEditor
         sql="SELECT 1"
@@ -198,21 +198,24 @@ describe("QueryEditor", () => {
       />,
     );
 
-    // Change schemaNamespace — triggers editor recreation via useEffect
+    const viewBefore = getEditorView();
+
     rerender(
       <QueryEditor
         sql="SELECT 1"
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        schemaNamespace={{} as any}
+        schemaNamespace={{ users: {} } as any}
       />,
     );
 
-    const container = getContainer();
-    expect(container).toBeInTheDocument();
-    const content = container.querySelector(".cm-content");
-    expect(content?.textContent).toContain("SELECT 1");
+    // Same EditorView instance — schemaNamespace reconfigures via Compartment,
+    // which is what lets the cursor/selection/doc survive schemaStore updates
+    // that previously rebuilt the editor on every keystroke.
+    const viewAfter = getEditorView();
+    expect(viewAfter).toBe(viewBefore);
+    expect(viewAfter.state.doc.toString()).toBe("SELECT 1");
   });
 
   it("updates onExecute callback ref without recreating editor", () => {

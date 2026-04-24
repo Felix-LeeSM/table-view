@@ -1,5 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -44,6 +44,22 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
     // Keep a ref to the latest sql so we can avoid recreating the editor on every keystroke.
     const sqlRef = useRef(sql);
 
+    // Schema identity flips whenever the schema store's columnsCache updates
+    // (e.g. after a query runs and lazily fetches column metadata). Reconfiguring
+    // through a Compartment keeps the editor alive across those updates — without
+    // it the editor was being torn down and rebuilt mid-keystroke, which looked
+    // like the query was re-executing on every character.
+    const sqlLangCompartment = useRef(new Compartment());
+    const schemaNamespaceRef = useRef(schemaNamespace);
+    schemaNamespaceRef.current = schemaNamespace;
+
+    const buildSqlLang = (ns: SQLNamespace | undefined) =>
+      sqlLanguage({
+        dialect: StandardSQL,
+        schema: ns,
+        upperCaseKeywords: true,
+      });
+
     // Create the CodeMirror editor once.
     useEffect(() => {
       if (!containerRef.current) return;
@@ -55,11 +71,9 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           highlightActiveLine(),
           indentOnInput(),
           bracketMatching(),
-          sqlLanguage({
-            dialect: StandardSQL,
-            schema: schemaNamespace,
-            upperCaseKeywords: true,
-          }),
+          sqlLangCompartment.current.of(
+            buildSqlLang(schemaNamespaceRef.current),
+          ),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
           keymap.of([
@@ -140,6 +154,20 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
         view.destroy();
         viewRef.current = null;
       };
+      // The editor is created once; schema updates are reconfigured below without
+      // tearing the view down.
+    }, []);
+
+    // Reconfigure the SQL language extension in place when schemaNamespace
+    // changes identity — keeps cursor/selection/doc intact.
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        effects: sqlLangCompartment.current.reconfigure(
+          buildSqlLang(schemaNamespace),
+        ),
+      });
     }, [schemaNamespace]);
 
     // Sync external sql changes into the editor (e.g. when switching tabs).
