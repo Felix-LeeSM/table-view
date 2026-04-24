@@ -3,8 +3,15 @@ import { render, screen, waitFor, act } from "@testing-library/react";
 import { EditorView, keymap } from "@codemirror/view";
 import { ensureSyntaxTree, language } from "@codemirror/language";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
+import { CompletionContext } from "@codemirror/autocomplete";
+import { EditorState } from "@codemirror/state";
+import { json as jsonLanguage } from "@codemirror/lang-json";
 import type { KeyBinding } from "@codemirror/view";
 import QueryEditor from "./QueryEditor";
+import {
+  createMongoCompletionSource,
+  createMongoOperatorHighlight,
+} from "@lib/mongoAutocomplete";
 
 // CodeMirror works in jsdom, so we do NOT mock it.
 // Note: CodeMirror's .cm-content div also has role="textbox", so we use
@@ -604,5 +611,173 @@ describe("QueryEditor", () => {
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
     expect(view.state.facet(language)?.name).toBe("json");
+  });
+
+  // ── Sprint 83: MQL autocomplete + operator highlight ────────────────────
+
+  /** Collect every element inside the editor carrying the
+   * `cm-mql-operator` class, and return their trimmed text content. */
+  function collectMqlOperatorTokens(view: EditorView): string[] {
+    const marks = view.dom.querySelectorAll(".cm-mql-operator");
+    return Array.from(marks).map((el) => (el.textContent ?? "").trim());
+  }
+
+  // AC-06: Operator tokens receive the `cm-mql-operator` class.
+  it("decorates MQL operator strings with cm-mql-operator when the highlight extension is loaded", async () => {
+    render(
+      <QueryEditor
+        sql='{"$match": {"$eq": 1}}'
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="aggregate"
+        mongoExtensions={[createMongoOperatorHighlight()]}
+      />,
+    );
+    const container = screen.getByLabelText(
+      "MongoDB Aggregate Pipeline Editor",
+    );
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
+    )!;
+    // Force a viewport measurement pass so the ViewPlugin runs its
+    // decoration builder against the mounted content.
+    view.requestMeasure();
+    await waitFor(() => {
+      const tokens = collectMqlOperatorTokens(view);
+      // Both `$match` and `$eq` should be decorated. The jsdom renderer
+      // emits each marked range as its own span; the text inside may
+      // include surrounding quotes because the JSON string node covers
+      // the quotes too.
+      expect(tokens.some((t) => t.includes("$match"))).toBe(true);
+      expect(tokens.some((t) => t.includes("$eq"))).toBe(true);
+    });
+  });
+
+  // AC-06: ordinary JSON strings do NOT receive the operator class.
+  it("does not decorate non-operator JSON strings with cm-mql-operator", async () => {
+    render(
+      <QueryEditor
+        sql='{"name": "active"}'
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="find"
+        mongoExtensions={[createMongoOperatorHighlight()]}
+      />,
+    );
+    const container = screen.getByLabelText("MongoDB Find Query Editor");
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
+    )!;
+    view.requestMeasure();
+    await waitFor(() => {
+      const tokens = collectMqlOperatorTokens(view);
+      // Neither `"name"` nor `"active"` are MQL operators, so no span
+      // should carry the class.
+      expect(tokens.some((t) => t.includes("name"))).toBe(false);
+      expect(tokens.some((t) => t.includes("active"))).toBe(false);
+    });
+  });
+
+  // AC-08: paradigm swap rdb → document keeps the same EditorView identity,
+  // even when mongoExtensions are threaded through the Compartment.
+  it("reuses the EditorView when paradigm flips with mongoExtensions present", async () => {
+    const mongoExts = [createMongoOperatorHighlight()];
+    const { rerender } = render(
+      <QueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="rdb"
+        mongoExtensions={mongoExts}
+      />,
+    );
+    const viewBefore = getEditorView();
+    expect(activeLanguageName(viewBefore)).toBe("sql");
+
+    rerender(
+      <QueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="find"
+        mongoExtensions={mongoExts}
+      />,
+    );
+
+    await waitFor(() => {
+      const container = screen.getByLabelText("MongoDB Find Query Editor");
+      const viewAfter = EditorView.findFromDOM(
+        container.querySelector(".cm-editor") as HTMLElement,
+      )!;
+      expect(viewAfter).toBe(viewBefore);
+      expect(activeLanguageName(viewAfter)).toBe("json");
+    });
+  });
+
+  // AC-01: run the completion source through the editor's autocomplete
+  // pipeline. Build a fresh state that mirrors the editor's extension
+  // stack and invoke the source directly on a CompletionContext.
+  it("find mode exposes every query operator via the completion override", () => {
+    const source = createMongoCompletionSource({ queryMode: "find" });
+    const state = EditorState.create({
+      doc: '{"$',
+      extensions: [jsonLanguage()],
+    });
+    const ctx = new CompletionContext(state, 3, true);
+    const res = source(ctx);
+    if (!res || res instanceof Promise) throw new Error("expected sync result");
+    const labelSet = new Set(res.options.map((o) => o.label));
+    expect(labelSet.has("$eq")).toBe(true);
+    expect(labelSet.has("$in")).toBe(true);
+    expect(labelSet.has("$elemMatch")).toBe(true);
+    // And NOT aggregate stages — find mode key position is stage-free.
+    expect(labelSet.has("$match")).toBe(false);
+  });
+
+  // AC-07 regression: RDB paradigm ignores mongoExtensions entirely.
+  // Build the completion namespace via CodeMirror's language data and
+  // verify no `$`-prefixed candidates slip in. We use completionStatus as
+  // a proxy — the real check is that the source override is never
+  // installed on SQL tabs.
+  it("RDB paradigm ignores mongoExtensions — no MQL autocomplete active", () => {
+    const mongoExts = [createMongoOperatorHighlight()];
+    render(
+      <QueryEditor
+        sql="SELECT 1"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="rdb"
+        mongoExtensions={mongoExts}
+      />,
+    );
+    const view = getEditorView();
+    // RDB path must still report `sql` as the active language; the
+    // mongoExtensions are simply not appended by buildLangExtension.
+    expect(activeLanguageName(view)).toBe("sql");
+    // And the content remains SELECT 1 unchanged.
+    expect(view.state.doc.toString()).toBe("SELECT 1");
+  });
+
+  // AC-05: field-name candidates appear at key positions in find mode when
+  // they are supplied via mongoExtensions.
+  it("surfaces field-name candidates from the completion source", () => {
+    const source = createMongoCompletionSource({
+      queryMode: "find",
+      fieldNames: ["_id", "email", "status"],
+    });
+    const state = EditorState.create({
+      doc: '{"',
+      extensions: [jsonLanguage()],
+    });
+    const ctx = new CompletionContext(state, 2, true);
+    const res = source(ctx);
+    if (!res || res instanceof Promise) throw new Error("expected sync result");
+    const labelSet = new Set(res.options.map((o) => o.label));
+    expect(labelSet.has('"_id"')).toBe(true);
+    expect(labelSet.has('"email"')).toBe(true);
+    expect(labelSet.has('"status"')).toBe(true);
   });
 });

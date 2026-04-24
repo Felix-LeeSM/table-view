@@ -50,6 +50,14 @@ interface QueryEditorProps {
    * been deleted) keep working unchanged.
    */
   sqlDialect?: SQLDialect;
+  /**
+   * Sprint 83 — optional MongoDB-aware CodeMirror extensions (autocomplete
+   * override + operator highlight) produced by `useMongoAutocomplete`. Only
+   * applied when `paradigm === "document"`. RDB paradigm ignores the prop
+   * so callers can pass it unconditionally without affecting SQL behaviour
+   * (AC-07 regression guard).
+   */
+  mongoExtensions?: readonly Extension[];
 }
 
 const buildSqlLang = (
@@ -67,18 +75,27 @@ const buildJsonLang = (): Extension => jsonLanguage();
 /**
  * Pick the CodeMirror language extension for the current paradigm.
  * `"document"` always uses JSON regardless of `queryMode`; `"rdb"` and any
- * future paradigms fall back to SQL. `schemaNamespace` is ignored for JSON
- * since MQL autocomplete isn't wired yet (Sprint 80).
+ * future paradigms fall back to SQL.
  *
  * Sprint 82: `dialect` drives the SQL dialect when `p === "rdb"`. JSON paths
  * are unaffected — the dialect argument is simply not read for documents.
+ *
+ * Sprint 83: `mongoExtensions` are appended to the JSON language extension
+ * when `p === "document"`. They carry the MQL autocomplete override + the
+ * operator highlight decoration. RDB paradigm discards them — the
+ * Compartment swap remains byte-for-byte identical to pre-Sprint-83.
  */
 const buildLangExtension = (
   p: Paradigm,
   dialect: SQLDialect,
   ns: SQLNamespace | undefined,
+  mongoExtensions: readonly Extension[],
 ): Extension =>
-  p === "document" ? buildJsonLang() : buildSqlLang(dialect, ns);
+  p === "document"
+    ? [buildJsonLang(), ...mongoExtensions]
+    : buildSqlLang(dialect, ns);
+
+const EMPTY_EXTENSIONS: readonly Extension[] = [];
 
 const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
   function QueryEditor(
@@ -90,6 +107,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       paradigm = "rdb",
       queryMode,
       sqlDialect,
+      mongoExtensions,
     },
     ref,
   ) {
@@ -97,6 +115,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
     // paths always share the same "effective" dialect value. StandardSQL
     // keeps pre-Sprint-82 callers working byte-for-byte.
     const effectiveDialect: SQLDialect = sqlDialect ?? StandardSQL;
+    const effectiveMongoExtensions = mongoExtensions ?? EMPTY_EXTENSIONS;
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -132,6 +151,13 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
     // dialect-aware parent has already passed its first render's prop.
     const dialectRef = useRef<SQLDialect>(effectiveDialect);
     dialectRef.current = effectiveDialect;
+    // Sprint 83 — mongo extension ref mirrors the dialect ref pattern so the
+    // initial editor construction picks up the latest prop value even when
+    // React mounts late.
+    const mongoExtensionsRef = useRef<readonly Extension[]>(
+      effectiveMongoExtensions,
+    );
+    mongoExtensionsRef.current = effectiveMongoExtensions;
 
     // Create the CodeMirror editor once.
     useEffect(() => {
@@ -149,6 +175,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
               paradigmRef.current,
               dialectRef.current,
               schemaNamespaceRef.current,
+              mongoExtensionsRef.current,
             ),
           ),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -239,18 +266,23 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
     // schemaNamespace, or the SQL dialect changes identity — keeps
     // cursor/selection/doc intact. Sprint 73 widened the dependency set
     // from `schemaNamespace` to `(paradigm, schemaNamespace)`; Sprint 82
-    // further widens it to include `effectiveDialect` so switching the
-    // active connection (e.g. Postgres → MySQL) re-runs the Compartment
-    // reconfigure instead of rebuilding the editor.
+    // further widened it to include `effectiveDialect`; Sprint 83 widens
+    // it again to track MongoDB extension identity so switching queryMode
+    // or fieldNames causes a Compartment reconfigure instead of a teardown.
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       view.dispatch({
         effects: langCompartment.current.reconfigure(
-          buildLangExtension(paradigm, effectiveDialect, schemaNamespace),
+          buildLangExtension(
+            paradigm,
+            effectiveDialect,
+            schemaNamespace,
+            effectiveMongoExtensions,
+          ),
         ),
       });
-    }, [paradigm, effectiveDialect, schemaNamespace]);
+    }, [paradigm, effectiveDialect, schemaNamespace, effectiveMongoExtensions]);
 
     // Sync external sql changes into the editor (e.g. when switching tabs).
     useEffect(() => {

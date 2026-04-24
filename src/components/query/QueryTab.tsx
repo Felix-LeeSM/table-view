@@ -16,6 +16,8 @@ import {
 import { splitSqlStatements, formatSql, uglifySql } from "@lib/sqlUtils";
 import { databaseTypeToSqlDialect } from "@lib/sqlDialect";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
+import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
+import { useDocumentStore } from "@stores/documentStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
@@ -84,6 +86,33 @@ export default function QueryTab({ tab }: QueryTabProps) {
   }, [connections, tab.connectionId]);
   const schemaNamespace = useSqlAutocomplete(tab.connectionId, {
     dialect: sqlDialect,
+  });
+  // Sprint 83 — surface cached Mongo field names for autocomplete. The
+  // document store stores columns under `${connectionId}:${db}:${collection}`;
+  // we read the single slice relevant to this tab and map to a string array
+  // so the hook's memo key is stable across unrelated cache updates. RDB
+  // paradigm tabs compute `undefined` here and the hook receives a no-op
+  // extension set that remains unused because `QueryEditor` gates on
+  // `paradigm === "document"`.
+  const fieldsCache = useDocumentStore((s) => s.fieldsCache);
+  const mongoFieldNames = useMemo(() => {
+    if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
+      return undefined;
+    }
+    const cacheKey = `${tab.connectionId}:${tab.database}:${tab.collection}`;
+    const columns = fieldsCache[cacheKey];
+    if (!columns) return undefined;
+    return columns.map((c) => c.name);
+  }, [
+    fieldsCache,
+    tab.connectionId,
+    tab.database,
+    tab.collection,
+    tab.paradigm,
+  ]);
+  const mongoExtensions = useMongoAutocomplete({
+    queryMode: tab.queryMode === "aggregate" ? "aggregate" : "find",
+    fieldNames: mongoFieldNames,
   });
   const isDocument = tab.paradigm === "document";
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -709,6 +738,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
           paradigm={tab.paradigm}
           queryMode={tab.queryMode}
           sqlDialect={sqlDialect}
+          mongoExtensions={mongoExtensions}
         />
       </div>
 
