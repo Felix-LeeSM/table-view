@@ -1,12 +1,14 @@
 ---
 title: Lessons 인덱스
 type: index
-updated: 2026-04-22
+updated: 2026-04-24
 ---
 
 # Lessons 인덱스
 
-아직 등록된 교훈 없음. 새 교훈은 `/remember`로 기록한다.
+## 등록된 교훈
+
+- [2026-04-24 · user-facing SQL 필드에 내부 row_to_json 래퍼가 누출된 버그](2026-04-24-user-facing-sql-vs-internal-wrapper/memory.md)
 
 ## 형식
 

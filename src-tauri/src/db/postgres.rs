@@ -618,12 +618,16 @@ impl PostgresAdapter {
             }
         }
 
-        let data_sql = format!(
-            "SELECT row_to_json(q)::text FROM (SELECT * FROM {}{}{} LIMIT {} OFFSET {}) q",
+        // `executed_query` is what the user sees in the grid's "Query" panel,
+        // so it must be the user-facing SQL — not the `row_to_json(q)` wrapper
+        // we use internally to coerce arbitrary PG types into a JSON string
+        // (see `execute_query` for the same pattern and rationale).
+        let inner_sql = format!(
+            "SELECT * FROM {}{}{} LIMIT {} OFFSET {}",
             qualified_table, where_clause, order_clause, page_size, offset
         );
-
-        let executed_query = data_sql.clone();
+        let data_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", inner_sql);
+        let executed_query = inner_sql;
 
         let mut data_query = sqlx::query_as::<_, (String,)>(&data_sql);
         for val in &param_values {
