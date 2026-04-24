@@ -75,12 +75,39 @@ vi.mock("@components/ui/context-menu", async () => {
     );
   }
 
+  // Sub-menu mocks — render submenu content inline so tests can reach the
+  // nested items with a single query (no portal, no hover timing). The
+  // SubTrigger forwards aria-label so `getByRole('button', { name: ... })`
+  // still resolves the top-level "Move to group" item.
+  function ContextMenuSub({ children }: { children: React.ReactNode }) {
+    return <div data-testid="context-menu-sub">{children}</div>;
+  }
+  function ContextMenuSubTrigger({
+    children,
+    "aria-label": ariaLabel,
+  }: {
+    children: React.ReactNode;
+    "aria-label"?: string;
+  }) {
+    return (
+      <div role="menuitem" aria-label={ariaLabel} data-testid="sub-trigger">
+        {children}
+      </div>
+    );
+  }
+  function ContextMenuSubContent({ children }: { children: React.ReactNode }) {
+    return <div data-testid="sub-content">{children}</div>;
+  }
+
   return {
     ContextMenu,
     ContextMenuTrigger,
     ContextMenuContent,
     ContextMenuItem,
     ContextMenuSeparator: () => <hr />,
+    ContextMenuSub,
+    ContextMenuSubTrigger,
+    ContextMenuSubContent,
   };
 });
 
@@ -124,13 +151,22 @@ function setStoreState(overrides: {
   connectToDatabase?: () => Promise<void>;
   disconnectFromDatabase?: () => Promise<void>;
   removeConnection?: () => Promise<void>;
+  groups?: Array<{
+    id: string;
+    name: string;
+    color: string | null;
+    collapsed: boolean;
+  }>;
+  moveConnectionToGroup?: (id: string, g: string | null) => Promise<void>;
 }) {
   useConnectionStore.setState({
     connections: [],
     activeStatuses: {},
+    groups: [],
     connectToDatabase: vi.fn().mockResolvedValue(undefined),
     disconnectFromDatabase: vi.fn().mockResolvedValue(undefined),
     removeConnection: vi.fn().mockResolvedValue(undefined),
+    moveConnectionToGroup: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
 }
@@ -908,6 +944,162 @@ describe("ConnectionItem", () => {
 
       expect(connectFn).toHaveBeenCalled();
       expect(onActivate).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 78 AC-03 — "Move to group" context-menu submenu
+  // -----------------------------------------------------------------------
+  describe("Move to group submenu", () => {
+    it("exposes a 'Move to group' submenu trigger in the context menu", () => {
+      setStoreState({});
+      render(<ConnectionItem connection={makeConnection()} />);
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      expect(
+        screen.getByRole("menuitem", { name: /move to group/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("always lists a 'No group' option in the submenu", () => {
+      setStoreState({});
+      render(<ConnectionItem connection={makeConnection()} />);
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      expect(screen.getByText(/^No group$/)).toBeInTheDocument();
+    });
+
+    it("renders every existing group as a submenu entry", () => {
+      setStoreState({
+        groups: [
+          { id: "g1", name: "Production", color: null, collapsed: false },
+          { id: "g2", name: "Staging", color: null, collapsed: false },
+        ],
+      });
+
+      render(<ConnectionItem connection={makeConnection()} />);
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      expect(screen.getByText("Production")).toBeInTheDocument();
+      expect(screen.getByText("Staging")).toBeInTheDocument();
+    });
+
+    it("disables the entry for the connection's current group", () => {
+      setStoreState({
+        groups: [
+          { id: "g1", name: "Production", color: null, collapsed: false },
+          { id: "g2", name: "Staging", color: null, collapsed: false },
+        ],
+      });
+
+      render(
+        <ConnectionItem connection={makeConnection({ group_id: "g1" })} />,
+      );
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      const currentBtn = screen.getByRole("button", { name: /production/i });
+      expect(currentBtn).toBeDisabled();
+    });
+
+    it("disables 'No group' when the connection is already ungrouped", () => {
+      setStoreState({
+        groups: [{ id: "g1", name: "Prod", color: null, collapsed: false }],
+      });
+
+      render(
+        <ConnectionItem connection={makeConnection({ group_id: null })} />,
+      );
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      const noGroupBtn = screen.getByRole("button", { name: /no group/i });
+      expect(noGroupBtn).toBeDisabled();
+    });
+
+    it("calls moveConnectionToGroup with the group id when a group is picked", async () => {
+      const mockMove = vi.fn().mockResolvedValue(undefined);
+      setStoreState({
+        groups: [
+          { id: "g1", name: "Production", color: null, collapsed: false },
+          { id: "g2", name: "Staging", color: null, collapsed: false },
+        ],
+        moveConnectionToGroup: mockMove,
+      });
+
+      render(
+        <ConnectionItem connection={makeConnection({ group_id: null })} />,
+      );
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /staging/i }));
+      });
+
+      expect(mockMove).toHaveBeenCalledWith("conn-1", "g2");
+    });
+
+    it("calls moveConnectionToGroup with null when 'No group' is picked", async () => {
+      const mockMove = vi.fn().mockResolvedValue(undefined);
+      setStoreState({
+        groups: [{ id: "g1", name: "Prod", color: null, collapsed: false }],
+        moveConnectionToGroup: mockMove,
+      });
+
+      render(
+        <ConnectionItem connection={makeConnection({ group_id: "g1" })} />,
+      );
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /no group/i }));
+      });
+
+      expect(mockMove).toHaveBeenCalledWith("conn-1", null);
+    });
+
+    it("renders submenu with no extra entries when there are zero groups (edge: only 'No group')", () => {
+      setStoreState({ groups: [] });
+
+      render(
+        <ConnectionItem connection={makeConnection({ group_id: null })} />,
+      );
+
+      const item = screen.getByRole("button", { name: /Test DB/ });
+      act(() => {
+        fireEvent.contextMenu(item, { clientX: 100, clientY: 200 });
+      });
+
+      // The sub-content only contains the "No group" item when no groups
+      // are defined — the separator is skipped.
+      const subContent = screen.getByTestId("sub-content");
+      expect(subContent.textContent).toMatch(/no group/i);
     });
   });
 });

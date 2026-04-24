@@ -1,6 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { ChevronRight, ChevronDown, Trash2, Pencil } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronDown,
+  Trash2,
+  Pencil,
+  Palette,
+} from "lucide-react";
 import { Input } from "@components/ui/input";
+import { Button } from "@components/ui/button";
 import type {
   ConnectionConfig,
   ConnectionGroup as ConnectionGroupType,
@@ -13,6 +20,17 @@ import {
   ContextMenuContent,
   ContextMenuItem,
 } from "@components/ui/context-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@components/ui/alert-dialog";
+import GroupDialog from "./GroupDialog";
 
 interface ConnectionGroupProps {
   group: ConnectionGroupType;
@@ -34,6 +52,8 @@ export default function ConnectionGroup({
   const [renameValue, setRenameValue] = useState(group.name);
   const renameRef = useRef<HTMLInputElement>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const removeGroup = useConnectionStore((s) => s.removeGroup);
   const updateGroup = useConnectionStore((s) => s.updateGroup);
   const moveConnectionToGroup = useConnectionStore(
@@ -97,6 +117,19 @@ export default function ConnectionGroup({
             }}
           >
             {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            {/* Color accent dot — Sprint 78. Legacy groups with color=null
+                fall back to a muted border-only dot so the column stays
+                balanced across the list. */}
+            <span
+              data-testid="group-color-accent"
+              aria-hidden="true"
+              className={`inline-block h-2 w-2 shrink-0 rounded-full border ${
+                group.color
+                  ? "border-transparent"
+                  : "border-border bg-transparent"
+              }`}
+              style={group.color ? { backgroundColor: group.color } : undefined}
+            />
             {renaming ? (
               <Input
                 ref={renameRef}
@@ -128,7 +161,10 @@ export default function ConnectionGroup({
           >
             <Pencil size={14} /> Rename
           </ContextMenuItem>
-          <ContextMenuItem danger onClick={() => removeGroup(group.id)}>
+          <ContextMenuItem onClick={() => setShowEditDialog(true)}>
+            <Palette size={14} /> Change Color
+          </ContextMenuItem>
+          <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
             <Trash2 size={14} /> Delete Group
           </ContextMenuItem>
         </ContextMenuContent>
@@ -144,6 +180,53 @@ export default function ConnectionGroup({
             onActivate={onActivate}
           />
         ))}
+
+      {showEditDialog && (
+        <GroupDialog group={group} onClose={() => setShowEditDialog(false)} />
+      )}
+
+      <AlertDialog
+        open={showDeleteConfirm}
+        onOpenChange={(open) => !open && setShowDeleteConfirm(false)}
+      >
+        <AlertDialogContent
+          role="alertdialog"
+          aria-label={`Delete group ${group.name}`}
+          className="w-96 bg-secondary p-4"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-semibold text-foreground">
+              Delete Group
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-secondary-foreground">
+              Only the group &quot;{group.name}&quot; will be removed. The{" "}
+              {connections.length}{" "}
+              {connections.length === 1 ? "connection" : "connections"} inside
+              will be moved to the ungrouped list — no connection data is
+              deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-3 flex justify-end gap-2">
+            <AlertDialogCancel asChild>
+              <Button variant="ghost" size="sm">
+                Cancel
+              </Button>
+            </AlertDialogCancel>
+            <AlertDialogAction asChild>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  await removeGroup(group.id);
+                  setShowDeleteConfirm(false);
+                }}
+              >
+                Delete
+              </Button>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

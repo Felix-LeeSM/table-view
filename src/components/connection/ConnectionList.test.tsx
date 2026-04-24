@@ -456,6 +456,55 @@ describe("ConnectionList", () => {
     expect(rootDiv.className).toContain("select-none");
   });
 
+  // -----------------------------------------------------------------------
+  // Sprint 78 AC-04 — explicit textual drop-target hint
+  // -----------------------------------------------------------------------
+  describe("Ungrouped drop hint", () => {
+    it("does not render the drop hint at rest (no active drag)", () => {
+      setStoreState({
+        connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
+        groups: [makeGroup({ id: "g1", name: "G" })],
+      });
+
+      _draggedConnectionId = null;
+      render(<ConnectionList />);
+      expect(screen.queryByTestId("ungrouped-drop-hint")).toBeNull();
+    });
+
+    it("renders an explicit 'Drop here to remove from group' hint during drag-over", () => {
+      setStoreState({
+        connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
+        groups: [makeGroup({ id: "g1", name: "G" })],
+      });
+
+      _draggedConnectionId = "c1";
+
+      const { container } = render(<ConnectionList />);
+      const dropZone = container.firstElementChild as HTMLElement;
+
+      act(() => {
+        fireEvent.dragOver(dropZone, {
+          dataTransfer: { dropEffect: "" },
+        });
+      });
+
+      const hint = screen.getByTestId("ungrouped-drop-hint");
+      expect(hint).toBeInTheDocument();
+      expect(hint.textContent).toMatch(/drop here to remove from group/i);
+      // AC-04: border adornment is part of the "explicit" affordance.
+      expect(hint.className).toMatch(/border/);
+    });
+
+    it("root drop zone carries an aria-label for ungrouped drop region", () => {
+      setStoreState({ connections: [], groups: [] });
+      const { container } = render(<ConnectionList />);
+      const dropZone = container.firstElementChild as HTMLElement;
+      expect(dropZone.getAttribute("aria-label")).toMatch(
+        /ungrouped connections drop area/i,
+      );
+    });
+  });
+
   describe("Selection forwarding", () => {
     it("marks the matching root connection as selected", () => {
       setStoreState({

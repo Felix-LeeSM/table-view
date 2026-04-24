@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowDownUp, Sun, Moon, Monitor, Plus } from "lucide-react";
+import {
+  ArrowDownUp,
+  Sun,
+  Moon,
+  Monitor,
+  Plus,
+  FolderPlus,
+} from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
@@ -14,6 +21,7 @@ import {
 } from "@components/ui/popover";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
 import ConnectionList from "@components/connection/ConnectionList";
+import GroupDialog from "@components/connection/GroupDialog";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
 import { LogoWordmark } from "@components/shared/Logo";
@@ -41,6 +49,7 @@ function readWidth(): number {
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
+  const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [mode, setMode] = useState<SidebarMode>("connections");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
@@ -184,6 +193,18 @@ export default function Sidebar() {
           variant="ghost"
           size="icon-xs"
           className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+          aria-label="New Group"
+          title="New Group"
+          onClick={() => setShowNewGroupDialog(true)}
+        >
+          <FolderPlus />
+        </Button>
+      )}
+      {mode === "connections" && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
           aria-label="New Connection"
           title="New Connection"
           onClick={() => setShowNewDialog(true)}
@@ -286,6 +307,10 @@ export default function Sidebar() {
 
       {showImportExport && (
         <ImportExportDialog onClose={() => setShowImportExport(false)} />
+      )}
+
+      {showNewGroupDialog && (
+        <GroupDialog onClose={() => setShowNewGroupDialog(false)} />
       )}
     </>
   );

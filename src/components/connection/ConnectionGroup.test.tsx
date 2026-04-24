@@ -4,6 +4,7 @@ import {
   screen,
   fireEvent,
   waitFor,
+  within,
   act,
 } from "@testing-library/react";
 import ConnectionGroup from "./ConnectionGroup";
@@ -32,6 +33,17 @@ vi.mock("./ConnectionItem", () => ({
   set draggedConnectionId(v: string | null) {
     _draggedConnectionId = v;
   },
+}));
+
+// Stub the GroupDialog — the ConnectionGroup tests only care that the
+// "Change Color" menu opens *something*; the dialog's own flow is covered in
+// GroupDialog.test.tsx.
+vi.mock("./GroupDialog", () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="group-dialog">
+      <button onClick={onClose}>close group dialog</button>
+    </div>
+  ),
 }));
 
 // ---------------------------------------------------------------------------
@@ -474,9 +486,9 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // AC-10: Delete Group calls removeGroup
+  // AC-10 / Sprint 78 AC-05: Delete Group shows confirmation dialog first
   // -----------------------------------------------------------------------
-  it("calls removeGroup when Delete Group menu item is clicked", () => {
+  it("shows confirmation dialog (not immediate delete) when Delete Group menu item is clicked", () => {
     render(<ConnectionGroup group={makeGroup()} connections={[]} />);
 
     const header = screen.getByRole("button");
@@ -489,7 +501,57 @@ describe("ConnectionGroup", () => {
       fireEvent.click(deleteBtn);
     });
 
-    expect(mockRemoveGroup).toHaveBeenCalledWith("g1");
+    // Sprint 78 AC-05: removeGroup must NOT fire until the user confirms.
+    expect(mockRemoveGroup).not.toHaveBeenCalled();
+
+    // The alert dialog should be visible with the explanation text.
+    const dialog = screen.getByRole("alertdialog", { name: /delete group/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.textContent).toMatch(/ungrouped list/i);
+  });
+
+  it("calls removeGroup only after the user confirms in the dialog", async () => {
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
+
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Delete Group"));
+    });
+
+    const dialog = screen.getByRole("alertdialog");
+    // The "Delete" action button inside the dialog confirms the destructive op.
+    const confirmBtn = within(dialog).getByRole("button", { name: /delete/i });
+    act(() => {
+      fireEvent.click(confirmBtn);
+    });
+
+    await waitFor(() => {
+      expect(mockRemoveGroup).toHaveBeenCalledWith("g1");
+    });
+  });
+
+  it("does not call removeGroup when the confirmation dialog is cancelled", () => {
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
+
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Delete Group"));
+    });
+
+    const dialog = screen.getByRole("alertdialog");
+    const cancelBtn = within(dialog).getByRole("button", { name: /cancel/i });
+    act(() => {
+      fireEvent.click(cancelBtn);
+    });
+
+    expect(mockRemoveGroup).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -933,5 +995,101 @@ describe("ConnectionGroup", () => {
     const rootDiv = container.firstElementChild as HTMLElement;
     expect(rootDiv).toBeTruthy();
     expect(rootDiv.className).toContain("select-none");
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 78 AC-02 — Color accent visible in header
+  // -----------------------------------------------------------------------
+  it("renders the color accent swatch with the group color as background", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup({ color: "#ef4444" })}
+        connections={[]}
+      />,
+    );
+
+    const accent = screen.getByTestId("group-color-accent");
+    expect(accent).toBeInTheDocument();
+    expect(accent.getAttribute("style")).toMatch(/background-color/);
+    // Normalized to rgb in jsdom
+    expect(accent.getAttribute("style")).toMatch(
+      /rgb\(239, ?68, ?68\)|#ef4444/i,
+    );
+  });
+
+  it("renders an accent placeholder (no background) for legacy color=null groups", () => {
+    render(
+      <ConnectionGroup group={makeGroup({ color: null })} connections={[]} />,
+    );
+
+    const accent = screen.getByTestId("group-color-accent");
+    expect(accent).toBeInTheDocument();
+    // The placeholder uses a bordered transparent swatch so header metrics
+    // stay consistent but there is no raw background color.
+    expect(accent.getAttribute("style")).toBeFalsy();
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 78 — "Change Color" menu opens the edit dialog
+  // -----------------------------------------------------------------------
+  it("opens the GroupDialog when 'Change Color' is chosen", () => {
+    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Change Color"));
+    });
+    expect(screen.getByTestId("group-dialog")).toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 78 AC-05 — Delete dialog mentions ungrouped behaviour and
+  // connection count copy changes with pluralization
+  // -----------------------------------------------------------------------
+  it("uses singular copy when the group contains exactly one connection", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup({ name: "Solo" })}
+        connections={[makeConnection()]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Delete Group"));
+    });
+
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/1 connection /i);
+    expect(dialog.textContent).not.toMatch(/1 connections/i);
+  });
+
+  it("uses plural copy when the group contains multiple connections", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup()}
+        connections={[
+          makeConnection(),
+          makeConnection({ id: "c2" }),
+          makeConnection({ id: "c3" }),
+        ]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.contextMenu(header, { clientX: 100, clientY: 200 });
+    });
+    act(() => {
+      fireEvent.click(screen.getByTestId("menu-item-Delete Group"));
+    });
+
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/3 connections/i);
   });
 });

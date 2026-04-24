@@ -12,6 +12,10 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuSeparator,
 } from "@components/ui/context-menu";
 import ConnectionDialog from "./ConnectionDialog";
 import { DB_TYPE_META } from "@lib/db-meta";
@@ -31,6 +35,8 @@ import {
   Trash2,
   Loader2,
   X,
+  FolderInput,
+  Check,
 } from "lucide-react";
 
 /** Module-level drag state shared between ConnectionItem, ConnectionGroup, ConnectionList */
@@ -98,6 +104,10 @@ export default function ConnectionItem({
     (s) => s.disconnectFromDatabase,
   );
   const removeConnection = useConnectionStore((s) => s.removeConnection);
+  const groups = useConnectionStore((s) => s.groups);
+  const moveConnectionToGroup = useConnectionStore(
+    (s) => s.moveConnectionToGroup,
+  );
 
   const status = activeStatuses[connection.id] ?? { type: "disconnected" };
   const isConnected = status.type === "connected";
@@ -209,6 +219,56 @@ export default function ConnectionItem({
           <ContextMenuItem onClick={() => setShowEditDialog(true)}>
             <Pencil size={14} /> Edit
           </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger aria-label="Move to group">
+              <FolderInput size={14} /> Move to group
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              <ContextMenuItem
+                disabled={connection.group_id === null}
+                onClick={async () => {
+                  if (connection.group_id !== null) {
+                    await moveConnectionToGroup(connection.id, null);
+                  }
+                }}
+              >
+                {connection.group_id === null ? (
+                  <Check size={14} />
+                ) : (
+                  <span className="inline-block w-3.5" aria-hidden="true" />
+                )}
+                No group
+              </ContextMenuItem>
+              {groups.length > 0 && <ContextMenuSeparator />}
+              {groups.map((g) => {
+                const isCurrent = connection.group_id === g.id;
+                return (
+                  <ContextMenuItem
+                    key={g.id}
+                    disabled={isCurrent}
+                    onClick={async () => {
+                      if (!isCurrent) {
+                        await moveConnectionToGroup(connection.id, g.id);
+                      }
+                    }}
+                  >
+                    {isCurrent ? (
+                      <Check size={14} />
+                    ) : (
+                      <span
+                        className="inline-block h-2 w-2 shrink-0 rounded-full border border-border"
+                        style={
+                          g.color ? { backgroundColor: g.color } : undefined
+                        }
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="truncate">{g.name}</span>
+                  </ContextMenuItem>
+                );
+              })}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
             <Trash2 size={14} /> Delete
           </ContextMenuItem>

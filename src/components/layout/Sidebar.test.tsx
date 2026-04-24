@@ -84,6 +84,14 @@ vi.mock("@components/connection/ImportExportDialog", () => ({
   ),
 }));
 
+vi.mock("@components/connection/GroupDialog", () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="group-dialog">
+      <button onClick={onClose}>Close Group</button>
+    </div>
+  ),
+}));
+
 function makeConnection(id: string): ConnectionConfig {
   return {
     id,
@@ -380,6 +388,52 @@ describe("Sidebar", () => {
       expect(
         screen.getByRole("button", { name: /new connection/i }),
       ).toBeInTheDocument();
+    });
+
+    // ---------------------------------------------------------------------
+    // Sprint 78 — AC-01 — "New Group" button discoverability + flow.
+    // ---------------------------------------------------------------------
+    it("connections mode: New Group button is visible with accessible name", () => {
+      setStores({});
+      render(<Sidebar />);
+      expect(
+        screen.getByRole("button", { name: /new group/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("connections mode: New Group button opens the GroupDialog", () => {
+      setStores({});
+      render(<Sidebar />);
+      expect(screen.queryByTestId("group-dialog")).toBeNull();
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new group/i }));
+      });
+      expect(screen.getByTestId("group-dialog")).toBeInTheDocument();
+    });
+
+    it("schemas mode: New Group button is hidden", () => {
+      setStores({
+        connections: [makeConnection("c1")],
+        active: ["c1"],
+      });
+      render(<Sidebar />);
+      act(() => {
+        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
+      });
+      expect(screen.queryByRole("button", { name: /new group/i })).toBeNull();
+    });
+
+    it("closes the GroupDialog via its onClose", () => {
+      setStores({});
+      render(<Sidebar />);
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new group/i }));
+      });
+      expect(screen.getByTestId("group-dialog")).toBeInTheDocument();
+      act(() => {
+        fireEvent.click(screen.getByText("Close Group"));
+      });
+      expect(screen.queryByTestId("group-dialog")).toBeNull();
     });
 
     it("schemas mode: + opens a new query tab when connected", () => {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import ConnectionGroup from "./ConnectionGroup";
-import { Database, GripVertical } from "lucide-react";
+import { Database, GripVertical, FolderX } from "lucide-react";
 
 interface ConnectionListProps {
   environmentFilter?: string | null;
@@ -39,7 +39,13 @@ export default function ConnectionList({
 
   return (
     <div
-      className={`py-1 select-none ${dropActive ? "bg-primary/5" : ""}`}
+      data-testid="connection-list-root"
+      aria-label="Ungrouped connections drop area"
+      className={`flex min-h-full flex-col py-1 select-none transition-colors ${
+        dropActive
+          ? "bg-primary/5 outline outline-2 outline-dashed outline-primary/60 -outline-offset-2"
+          : ""
+      }`}
       onDragOver={(e) => {
         if (draggedConnectionId) {
           e.preventDefault();
@@ -80,6 +86,21 @@ export default function ConnectionList({
           onActivate={onActivate}
         />
       ))}
+
+      {/* Explicit drop target hint — visible while the user is dragging a
+          connection out of a group. Without it, the bg tint alone is too
+          subtle to read as "drop here to ungroup" (Sprint 78 AC-04). */}
+      {dropActive && (
+        <div
+          data-testid="ungrouped-drop-hint"
+          role="status"
+          aria-live="polite"
+          className="mt-2 mx-3 flex items-center gap-2 rounded-md border border-dashed border-primary/60 bg-primary/10 px-3 py-2 text-xs font-medium text-primary"
+        >
+          <FolderX size={14} />
+          <span>Drop here to remove from group</span>
+        </div>
+      )}
 
       {/* Group hint — show only when there are connections but no groups */}
       {allConnections.length > 0 && groups.length === 0 && (
