@@ -383,3 +383,22 @@ export async function findDocuments(
     body: body ?? null,
   });
 }
+
+/**
+ * Execute a MongoDB aggregation pipeline and return the flattened
+ * DataGrid-ready result. The backend (Sprint 72) expects `pipeline` as a
+ * JSON array of stages, each serialisable into `bson::Document`.
+ */
+export async function aggregateDocuments(
+  connectionId: string,
+  database: string,
+  collection: string,
+  pipeline: Record<string, unknown>[],
+): Promise<DocumentQueryResult> {
+  return invoke<DocumentQueryResult>("aggregate_documents", {
+    connectionId,
+    database,
+    collection,
+    pipeline,
+  });
+}

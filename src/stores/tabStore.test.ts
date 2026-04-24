@@ -284,6 +284,114 @@ describe("tabStore", () => {
       expect(state.tabs[0]!.type).toBe("table");
       // Table tab should not have sql property modified
     });
+
+    // -- Sprint 73: paradigm + queryMode fields ------------------------------
+
+    it("addQueryTab without opts defaults to paradigm=rdb + queryMode=sql", () => {
+      useTabStore.getState().addQueryTab("conn1");
+
+      const state = useTabStore.getState();
+      const qt = getQueryTab(state, 0);
+      expect(qt.paradigm).toBe("rdb");
+      expect(qt.queryMode).toBe("sql");
+      // database/collection must be undefined for rdb tabs.
+      expect(qt.database).toBeUndefined();
+      expect(qt.collection).toBeUndefined();
+    });
+
+    it("addQueryTab with document + aggregate preserves the opts", () => {
+      useTabStore.getState().addQueryTab("conn-mongo", {
+        paradigm: "document",
+        queryMode: "aggregate",
+        database: "table_view_test",
+        collection: "users",
+      });
+
+      const state = useTabStore.getState();
+      const qt = getQueryTab(state, 0);
+      expect(qt.paradigm).toBe("document");
+      expect(qt.queryMode).toBe("aggregate");
+      expect(qt.database).toBe("table_view_test");
+      expect(qt.collection).toBe("users");
+    });
+
+    it("addQueryTab with paradigm=document defaults queryMode to find", () => {
+      useTabStore.getState().addQueryTab("conn-mongo", {
+        paradigm: "document",
+      });
+
+      const state = useTabStore.getState();
+      const qt = getQueryTab(state, 0);
+      expect(qt.paradigm).toBe("document");
+      expect(qt.queryMode).toBe("find");
+    });
+
+    it("addQueryTab with paradigm=rdb forces queryMode to sql even if caller asks otherwise", () => {
+      useTabStore.getState().addQueryTab("conn1", {
+        paradigm: "rdb",
+        // Nonsensical combination — the store must normalize to "sql" so the
+        // UI can't wedge itself into an unreachable state.
+        queryMode: "aggregate",
+      });
+
+      const state = useTabStore.getState();
+      const qt = getQueryTab(state, 0);
+      expect(qt.paradigm).toBe("rdb");
+      expect(qt.queryMode).toBe("sql");
+    });
+
+    it("setQueryMode toggles between find and aggregate on document tabs", () => {
+      useTabStore.getState().addQueryTab("conn-mongo", {
+        paradigm: "document",
+        queryMode: "find",
+        database: "db",
+        collection: "users",
+      });
+
+      const tabId = useTabStore.getState().tabs[0]!.id;
+      useTabStore.getState().setQueryMode(tabId, "aggregate");
+
+      let qt = getQueryTab(useTabStore.getState(), 0);
+      expect(qt.queryMode).toBe("aggregate");
+
+      useTabStore.getState().setQueryMode(tabId, "find");
+      qt = getQueryTab(useTabStore.getState(), 0);
+      expect(qt.queryMode).toBe("find");
+    });
+
+    it("setQueryMode on an rdb tab rejects non-sql modes", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      const tabId = useTabStore.getState().tabs[0]!.id;
+
+      useTabStore.getState().setQueryMode(tabId, "aggregate");
+
+      const qt = getQueryTab(useTabStore.getState(), 0);
+      // Must stay "sql" — the store guards against paradigm/mode drift.
+      expect(qt.queryMode).toBe("sql");
+    });
+
+    it("setQueryMode on a non-existent tab is a no-op", () => {
+      useTabStore.getState().addQueryTab("conn1");
+      // Should not throw.
+      useTabStore.getState().setQueryMode("ghost-id", "aggregate");
+
+      const qt = getQueryTab(useTabStore.getState(), 0);
+      expect(qt.queryMode).toBe("sql");
+    });
+
+    it("setQueryMode is a no-op when mode already matches current value", () => {
+      useTabStore.getState().addQueryTab("conn-mongo", {
+        paradigm: "document",
+        queryMode: "find",
+      });
+      const snapshotBefore = useTabStore.getState().tabs[0];
+
+      useTabStore.getState().setQueryMode(snapshotBefore!.id, "find");
+
+      // Referential equality — the tab object is not replaced when unchanged.
+      const snapshotAfter = useTabStore.getState().tabs[0];
+      expect(snapshotAfter).toBe(snapshotBefore);
+    });
   });
 
   // -- Sprint 29: Preview Tab System ----------------------------------------

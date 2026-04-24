@@ -44,6 +44,12 @@ interface DocumentState {
     collection: string,
     body?: FindBody,
   ) => Promise<DocumentQueryResult>;
+  runAggregate: (
+    connectionId: string,
+    database: string,
+    collection: string,
+    pipeline: Record<string, unknown>[],
+  ) => Promise<DocumentQueryResult>;
   clearConnection: (connectionId: string) => void;
 }
 
@@ -145,11 +151,38 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     return result;
   },
 
+  /**
+   * Run an aggregation pipeline. Mirrors `runFind`'s stale-guard pattern so
+   * a slow response can never overwrite a newer fast one. The result is
+   * stashed under an `agg:`-prefixed cache key so it stays distinct from
+   * the `find` result for the same `${connectionId}:${database}:${collection}`
+   * tuple — both wire types are `DocumentQueryResult`, and mixing them
+   * would let a cached find result leak into an aggregate-mode grid render.
+   */
+  runAggregate: async (connectionId, database, collection, pipeline) => {
+    const cacheKey = `agg:${connectionId}:${database}:${collection}:${JSON.stringify(pipeline)}`;
+    const key = `aggregate:${cacheKey}`;
+    const reqId = nextRequestId(key);
+    const result = await tauri.aggregateDocuments(
+      connectionId,
+      database,
+      collection,
+      pipeline,
+    );
+    if (isLatestRequest(key, reqId)) {
+      set((state) => ({
+        queryResults: { ...state.queryResults, [cacheKey]: result },
+      }));
+    }
+    return result;
+  },
+
   clearConnection: (connectionId) => {
     set((state) => {
       const databases = { ...state.databases };
       delete databases[connectionId];
       const prefix = `${connectionId}:`;
+      const aggPrefix = `agg:${connectionId}:`;
       const collections = Object.fromEntries(
         Object.entries(state.collections).filter(
           ([k]) => !k.startsWith(prefix),
@@ -162,7 +195,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       );
       const queryResults = Object.fromEntries(
         Object.entries(state.queryResults).filter(
-          ([k]) => !k.startsWith(prefix),
+          ([k]) => !k.startsWith(prefix) && !k.startsWith(aggPrefix),
         ),
       );
       return { databases, collections, fieldsCache, queryResults };
@@ -173,7 +206,8 @@ export const useDocumentStore = create<DocumentState>((set) => ({
         key === `databases:${connectionId}` ||
         key.startsWith(`collections:${connectionId}:`) ||
         key.startsWith(`fields:${connectionId}:`) ||
-        key.startsWith(`find:${connectionId}:`)
+        key.startsWith(`find:${connectionId}:`) ||
+        key.startsWith(`aggregate:agg:${connectionId}:`)
       ) {
         requestCounters.delete(key);
       }

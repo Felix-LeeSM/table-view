@@ -47,7 +47,13 @@ export interface TableTab {
   paradigm?: Paradigm;
 }
 
-/** A tab that hosts the SQL query editor. */
+/** Execution mode for a query tab. SQL statements belong to `"sql"`, while
+ * document paradigms split into a MongoDB `find` body and an aggregation
+ * `pipeline`. Sprint 73 introduced the field so the editor + handleExecute
+ * branch can route the user's payload to the right Tauri command. */
+export type QueryMode = "sql" | "find" | "aggregate";
+
+/** A tab that hosts the SQL / document query editor. */
 export interface QueryTab {
   type: "query";
   id: string;
@@ -56,6 +62,23 @@ export interface QueryTab {
   closable: boolean;
   sql: string;
   queryState: QueryState;
+  /**
+   * Paradigm of the connection this tab is bound to. Sprint 73 introduced
+   * this field so the editor can swap CodeMirror language extensions
+   * (SQL ↔ JSON) and `handleExecute` can dispatch to the correct backend
+   * command. Defaults to `"rdb"` for legacy persisted tabs.
+   */
+  paradigm: Paradigm;
+  /**
+   * Execution mode within the paradigm. RDB tabs are always `"sql"`;
+   * document tabs toggle between `"find"` (filter body) and `"aggregate"`
+   * (pipeline array). Legacy persisted tabs default to `"sql"`.
+   */
+  queryMode: QueryMode;
+  /** Optional MongoDB database name for document paradigm execution. */
+  database?: string;
+  /** Optional MongoDB collection name for document paradigm execution. */
+  collection?: string;
 }
 
 export type Tab = TableTab | QueryTab;
@@ -102,9 +125,18 @@ interface TabState {
   promoteTab: (tabId: string) => void;
 
   // Query-tab actions
-  addQueryTab: (connectionId: string) => void;
+  addQueryTab: (
+    connectionId: string,
+    opts?: {
+      paradigm?: Paradigm;
+      queryMode?: QueryMode;
+      database?: string;
+      collection?: string;
+    },
+  ) => void;
   updateQuerySql: (tabId: string, sql: string) => void;
   updateQueryState: (tabId: string, state: QueryState) => void;
+  setQueryMode: (tabId: string, mode: QueryMode) => void;
 
   // Reopen last closed tab
   reopenLastClosedTab: () => void;
@@ -229,10 +261,15 @@ export const useTabStore = create<TabState>((set) => ({
 
   // -- Query tab actions ----------------------------------------------------
 
-  addQueryTab: (connectionId) => {
+  addQueryTab: (connectionId, opts = {}) => {
     queryCounter++;
     const id = `query-${queryCounter}`;
     const title = `Query ${queryCounter}`;
+    const paradigm: Paradigm = opts.paradigm ?? "rdb";
+    // RDB tabs force "sql"; document tabs default to "find" when omitted so
+    // users land on the simpler of the two Mongo modes by default.
+    const queryMode: QueryMode =
+      paradigm === "rdb" ? "sql" : (opts.queryMode ?? "find");
     set((state) => ({
       tabs: [
         ...state.tabs,
@@ -244,6 +281,10 @@ export const useTabStore = create<TabState>((set) => ({
           closable: true,
           sql: "",
           queryState: { status: "idle" } as QueryState,
+          paradigm,
+          queryMode,
+          database: opts.database,
+          collection: opts.collection,
         },
       ],
       activeTabId: id,
@@ -262,6 +303,19 @@ export const useTabStore = create<TabState>((set) => ({
       tabs: state.tabs.map((t) =>
         t.id === tabId && t.type === "query" ? { ...t, queryState } : t,
       ),
+    })),
+
+  setQueryMode: (tabId, mode) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => {
+        if (t.id !== tabId || t.type !== "query") return t;
+        // RDB tabs only speak SQL; reject `"find"`/`"aggregate"` writes so
+        // the tab state can't drift out of sync with its paradigm. Other
+        // mode writes are accepted as-is (including re-setting to "sql").
+        if (t.paradigm === "rdb" && mode !== "sql") return t;
+        if (t.queryMode === mode) return t;
+        return { ...t, queryMode: mode };
+      }),
     })),
 
   moveTab: (fromId, toId, position = "before") => {
@@ -292,7 +346,18 @@ export const useTabStore = create<TabState>((set) => ({
       // Reset all query states to idle (can't resume running queries)
       const tabs = data.tabs.map((t) => {
         if (t.type === "query") {
-          return { ...t, queryState: { status: "idle" as const } };
+          // Sprint 73: migrate pre-existing QueryTabs that predate the
+          // paradigm / queryMode fields. Every legacy tab is a SQL tab
+          // against an RDB connection, so defaulting is loss-free.
+          const paradigm: Paradigm = t.paradigm ?? "rdb";
+          const queryMode: QueryMode =
+            t.queryMode ?? (paradigm === "rdb" ? "sql" : "find");
+          return {
+            ...t,
+            queryState: { status: "idle" as const },
+            paradigm,
+            queryMode,
+          };
         }
         // Reset preview flag on persisted tabs. Sprint 66: migrate
         // pre-existing TableTabs that were saved before the `paradigm`

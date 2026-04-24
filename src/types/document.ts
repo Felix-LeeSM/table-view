@@ -64,6 +64,17 @@ export interface FindBody {
 }
 
 /**
+ * Request body for `aggregate_documents` (Sprint 72 backend, Sprint 73
+ * frontend). The backend expects a JSON array of stages; each element is
+ * passed through to `bson::Document` via serde. This type exists so call
+ * sites can spell the shape once (`AggregateBody["pipeline"]`) rather than
+ * re-typing the `Record<string, unknown>[]` at every boundary.
+ */
+export interface AggregateBody {
+  pipeline: Record<string, unknown>[];
+}
+
+/**
  * The flattened result shape consumed by the DataGrid. `rows` carry
  * already-sentinelised cell values; `raw_documents` preserve the original
  * document so the Quick Look panel (Sprint 67+) can render the full tree.

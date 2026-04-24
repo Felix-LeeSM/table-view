@@ -2014,6 +2014,8 @@ describe("SchemaTree", () => {
           closable: true,
           sql: "SELECT 1",
           queryState: { status: "idle" },
+          paradigm: "rdb",
+          queryMode: "sql",
         },
       ],
       activeTabId: "query-1",

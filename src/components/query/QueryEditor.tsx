@@ -1,5 +1,5 @@
 import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -11,6 +11,7 @@ import {
   StandardSQL,
   type SQLNamespace,
 } from "@codemirror/lang-sql";
+import { json as jsonLanguage } from "@codemirror/lang-json";
 import { defaultKeymap } from "@codemirror/commands";
 import {
   syntaxHighlighting,
@@ -19,16 +20,61 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
+import type { Paradigm } from "@/types/connection";
+import type { QueryMode } from "@stores/tabStore";
 
 interface QueryEditorProps {
   sql: string;
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
   schemaNamespace?: SQLNamespace;
+  /**
+   * Sprint 73 — paradigm of the hosting tab. `"rdb"` (default) keeps the
+   * existing SQL language extension; `"document"` swaps in the JSON
+   * language. Optional so pre-existing callers that always render SQL can
+   * omit it without changing behaviour.
+   */
+  paradigm?: Paradigm;
+  /**
+   * Sprint 73 — query mode inside the paradigm. Document tabs pass
+   * `"find"` or `"aggregate"` but the editor currently treats both as JSON
+   * (stored for future differentiation such as MQL preview).
+   */
+  queryMode?: QueryMode;
 }
 
+const buildSqlLang = (ns: SQLNamespace | undefined): Extension =>
+  sqlLanguage({
+    dialect: StandardSQL,
+    schema: ns,
+    upperCaseKeywords: true,
+  });
+
+const buildJsonLang = (): Extension => jsonLanguage();
+
+/**
+ * Pick the CodeMirror language extension for the current paradigm.
+ * `"document"` always uses JSON regardless of `queryMode`; `"rdb"` and any
+ * future paradigms fall back to SQL. `schemaNamespace` is ignored for JSON
+ * since MQL autocomplete isn't wired yet (Sprint 80).
+ */
+const buildLangExtension = (
+  p: Paradigm,
+  ns: SQLNamespace | undefined,
+): Extension => (p === "document" ? buildJsonLang() : buildSqlLang(ns));
+
 const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
-  function QueryEditor({ sql, onSqlChange, onExecute, schemaNamespace }, ref) {
+  function QueryEditor(
+    {
+      sql,
+      onSqlChange,
+      onExecute,
+      schemaNamespace,
+      paradigm = "rdb",
+      queryMode,
+    },
+    ref,
+  ) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
 
@@ -49,16 +95,16 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
     // through a Compartment keeps the editor alive across those updates — without
     // it the editor was being torn down and rebuilt mid-keystroke, which looked
     // like the query was re-executing on every character.
-    const sqlLangCompartment = useRef(new Compartment());
+    //
+    // Sprint 73 reuses the same Compartment for paradigm-driven language
+    // swaps (SQL ↔ JSON). Paradigm changes are rare compared to schema
+    // updates, and bundling both into one Compartment keeps the editor
+    // alive across every reconfigure path.
+    const langCompartment = useRef(new Compartment());
     const schemaNamespaceRef = useRef(schemaNamespace);
     schemaNamespaceRef.current = schemaNamespace;
-
-    const buildSqlLang = (ns: SQLNamespace | undefined) =>
-      sqlLanguage({
-        dialect: StandardSQL,
-        schema: ns,
-        upperCaseKeywords: true,
-      });
+    const paradigmRef = useRef<Paradigm>(paradigm);
+    paradigmRef.current = paradigm;
 
     // Create the CodeMirror editor once.
     useEffect(() => {
@@ -71,8 +117,8 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
           highlightActiveLine(),
           indentOnInput(),
           bracketMatching(),
-          sqlLangCompartment.current.of(
-            buildSqlLang(schemaNamespaceRef.current),
+          langCompartment.current.of(
+            buildLangExtension(paradigmRef.current, schemaNamespaceRef.current),
           ),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
@@ -158,17 +204,20 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       // tearing the view down.
     }, []);
 
-    // Reconfigure the SQL language extension in place when schemaNamespace
-    // changes identity — keeps cursor/selection/doc intact.
+    // Reconfigure the language extension in place when paradigm or
+    // schemaNamespace changes identity — keeps cursor/selection/doc intact.
+    // Sprint 73 widened the dependency set from `schemaNamespace` to
+    // `(paradigm, schemaNamespace)` so paradigm flips also reuse the
+    // Compartment reconfigure path instead of tearing the editor down.
     useEffect(() => {
       const view = viewRef.current;
       if (!view) return;
       view.dispatch({
-        effects: sqlLangCompartment.current.reconfigure(
-          buildSqlLang(schemaNamespace),
+        effects: langCompartment.current.reconfigure(
+          buildLangExtension(paradigm, schemaNamespace),
         ),
       });
-    }, [schemaNamespace]);
+    }, [paradigm, schemaNamespace]);
 
     // Sync external sql changes into the editor (e.g. when switching tabs).
     useEffect(() => {
@@ -183,13 +232,22 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       }
     }, [sql]);
 
+    const ariaLabel =
+      paradigm === "document"
+        ? queryMode === "aggregate"
+          ? "MongoDB Aggregate Pipeline Editor"
+          : "MongoDB Find Query Editor"
+        : "SQL Query Editor";
+
     return (
       <div
         ref={containerRef}
         className="h-full w-full overflow-hidden"
         role="textbox"
-        aria-label="SQL Query Editor"
+        aria-label={ariaLabel}
         aria-multiline="true"
+        data-paradigm={paradigm}
+        data-query-mode={queryMode ?? (paradigm === "rdb" ? "sql" : "find")}
       />
     );
   },

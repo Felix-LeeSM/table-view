@@ -18,23 +18,33 @@ const MOCK_RESULT: QueryResult = {
 
 const mockExecuteQuery = vi.fn();
 const mockCancelQuery = vi.fn();
+const mockFindDocuments = vi.fn();
+const mockAggregateDocuments = vi.fn();
 
 vi.mock("@lib/tauri", () => ({
   executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
   cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
+  findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
+  aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
 }));
 
 vi.mock("./QueryEditor", async () => {
   const React = await import("react");
-  const MockQueryEditor = React.forwardRef(
-    (props: { onExecute: () => void; sql: string }) => (
+  // Tests target the editor through the DOM (data-testid), so the forwarded
+  // ref is intentionally ignored — the real QueryEditor uses useImperativeHandle
+  // to expose the CodeMirror view, which we don't need here.
+  const MockQueryEditor = React.forwardRef<
+    unknown,
+    { onExecute: () => void; sql: string }
+  >(function MockQueryEditor(props) {
+    return (
       <div data-testid="mock-editor" data-sql={props.sql}>
         <button data-testid="execute-btn" onClick={props.onExecute}>
           Execute
         </button>
       </div>
-    ),
-  );
+    );
+  });
   MockQueryEditor.displayName = "MockQueryEditor";
   return { default: MockQueryEditor };
 });
@@ -71,6 +81,8 @@ function makeQueryTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" },
+    paradigm: "rdb",
+    queryMode: "sql",
     ...overrides,
   };
 }
@@ -81,6 +93,8 @@ describe("QueryTab", () => {
     useQueryHistoryStore.setState({ entries: [] });
     mockExecuteQuery.mockReset();
     mockCancelQuery.mockReset();
+    mockFindDocuments.mockReset();
+    mockAggregateDocuments.mockReset();
   });
 
   it("renders editor and result grid in idle state", () => {
@@ -805,5 +819,278 @@ describe("QueryTab", () => {
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("   ");
     }
+  });
+
+  // ── Sprint 73: Document paradigm (Find / Aggregate) branches ─────────────
+
+  const MOCK_DOC_RESULT = {
+    columns: [
+      { name: "_id", data_type: "objectId" },
+      { name: "name", data_type: "string" },
+    ],
+    rows: [[1, "Alice"]],
+    raw_documents: [{ _id: 1, name: "Alice" }],
+    total_count: 1,
+    execution_time_ms: 4,
+  };
+
+  function makeDocTab(overrides: Partial<QueryTabType> = {}): QueryTabType {
+    return makeQueryTab({
+      connectionId: "conn-mongo",
+      sql: "{}",
+      paradigm: "document",
+      queryMode: "find",
+      database: "table_view_test",
+      collection: "users",
+      ...overrides,
+    });
+  }
+
+  it("rdb paradigm routes handleExecute through executeQuery (regression)", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    const tab = makeQueryTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockExecuteQuery).toHaveBeenCalled();
+    expect(mockFindDocuments).not.toHaveBeenCalled();
+    expect(mockAggregateDocuments).not.toHaveBeenCalled();
+  });
+
+  it("document+find calls findDocuments with the parsed filter", async () => {
+    mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    const tab = makeDocTab({ sql: '{"active":true}' });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    expect(mockAggregateDocuments).not.toHaveBeenCalled();
+    expect(mockFindDocuments).toHaveBeenCalledTimes(1);
+    expect(mockFindDocuments).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      { filter: { active: true } },
+    );
+
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updated = state.tabs.find((t) => t.id === "query-1");
+      if (updated && updated.type === "query") {
+        expect(updated.queryState.status).toBe("completed");
+      }
+    });
+  });
+
+  it("document+find accepts a full FindBody shape when the user wraps filter themselves", async () => {
+    mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    const tab = makeDocTab({
+      sql: '{"filter":{"active":true},"sort":{"name":1},"limit":10}',
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockFindDocuments).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      { filter: { active: true }, sort: { name: 1 }, limit: 10 },
+    );
+  });
+
+  it("document+aggregate calls aggregateDocuments with the pipeline array", async () => {
+    mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    const tab = makeDocTab({
+      queryMode: "aggregate",
+      sql: '[{"$match":{"active":true}},{"$limit":10}]',
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockFindDocuments).not.toHaveBeenCalled();
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
+    expect(mockAggregateDocuments).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      [{ $match: { active: true } }, { $limit: 10 }],
+    );
+  });
+
+  it("surfaces an Invalid JSON error when the body can't be parsed", async () => {
+    const tab = makeDocTab({ sql: "{not valid}" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockFindDocuments).not.toHaveBeenCalled();
+    expect(mockAggregateDocuments).not.toHaveBeenCalled();
+
+    // The store's queryState is what QueryResultGrid reads in production —
+    // validating that the error message lands there (with a recognisable
+    // "Invalid JSON" prefix) covers the AC-08 contract without requiring
+    // the mocked QueryResultGrid to observe prop changes.
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updated = state.tabs.find((t) => t.id === "query-1");
+      expect(updated?.type).toBe("query");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+        if (updated.queryState.status === "error") {
+          expect(updated.queryState.error).toMatch(/Invalid JSON/);
+        }
+      }
+    });
+  });
+
+  it("rejects a find body that is not a JSON object", async () => {
+    const tab = makeDocTab({ sql: "[1,2,3]" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockFindDocuments).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updated = state.tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query" && updated.queryState.status === "error") {
+        expect(updated.queryState.error).toMatch(/Find body/);
+      }
+    });
+  });
+
+  it("rejects an aggregate body that is not an array of stage objects", async () => {
+    const tab = makeDocTab({
+      queryMode: "aggregate",
+      sql: '{"$match":{}}',
+    });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockAggregateDocuments).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updated = state.tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query" && updated.queryState.status === "error") {
+        expect(updated.queryState.error).toMatch(/Pipeline/);
+      }
+    });
+  });
+
+  it("errors out when a document tab is missing database/collection context", async () => {
+    const tab = makeDocTab({ database: undefined, collection: undefined });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockFindDocuments).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updated = state.tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query" && updated.queryState.status === "error") {
+        expect(updated.queryState.error).toMatch(/database and collection/);
+      }
+    });
+  });
+
+  it("renders the Find | Aggregate toggle only for document paradigm", () => {
+    const rdbTab = makeQueryTab();
+    const { rerender } = render(<QueryTab tab={rdbTab} />);
+    expect(screen.queryByLabelText("Find mode")).toBeNull();
+    expect(screen.queryByLabelText("Aggregate mode")).toBeNull();
+
+    const docTab = makeDocTab({ id: "query-1" });
+    useTabStore.setState({ tabs: [docTab], activeTabId: "query-1" });
+    rerender(<QueryTab tab={docTab} />);
+    expect(screen.getByLabelText("Find mode")).toBeInTheDocument();
+    expect(screen.getByLabelText("Aggregate mode")).toBeInTheDocument();
+  });
+
+  it("clicking the Aggregate toggle calls setQueryMode and flips tab state", async () => {
+    const tab = makeDocTab({ queryMode: "find" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByLabelText("Aggregate mode").click();
+    });
+
+    const state = useTabStore.getState();
+    const updated = state.tabs.find((t) => t.id === "query-1");
+    if (updated?.type === "query") {
+      expect(updated.queryMode).toBe("aggregate");
+    }
+  });
+
+  it("hides the Format SQL button on document tabs", () => {
+    const tab = makeDocTab();
+    render(<QueryTab tab={tab} />);
+    expect(screen.queryByLabelText("Format SQL")).toBeNull();
+  });
+
+  it("document tabs survive a successful run followed by a JSON error (idempotent)", async () => {
+    mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    const tab = makeDocTab({ sql: '{"active":true}' });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    const { rerender } = render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+    await waitFor(() => {
+      const s = useTabStore.getState();
+      const updated = s.tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("completed");
+      }
+    });
+
+    // Flip the SQL to an invalid body and re-run; the error must replace the
+    // previous success state so the user sees the new failure.
+    const broken = makeDocTab({ sql: "{not json}" });
+    useTabStore.setState({ tabs: [broken], activeTabId: "query-1" });
+    rerender(<QueryTab tab={broken} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      const s = useTabStore.getState();
+      const updated = s.tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query") {
+        expect(updated.queryState.status).toBe("error");
+      }
+    });
   });
 });

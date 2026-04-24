@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { EditorView, keymap } from "@codemirror/view";
+import { language } from "@codemirror/language";
 import type { KeyBinding } from "@codemirror/view";
 import QueryEditor from "./QueryEditor";
 
@@ -311,5 +312,123 @@ describe("QueryEditor", () => {
 
     expect(modEnterBinding).toBeDefined();
     expect(typeof modEnterBinding!.run).toBe("function");
+  });
+
+  // ── Sprint 73: paradigm-aware language extension ─────────────────────────
+
+  /** Pull the active `Language` out of the editor state via the language
+   * facet. CodeMirror stores the top-level Language instance here once a
+   * `LanguageSupport` extension is added, so this is the cleanest way to
+   * verify that paradigm="document" actually swapped in JSON. */
+  function activeLanguageName(view: EditorView): string | undefined {
+    return view.state.facet(language)?.name;
+  }
+
+  it("uses the SQL language extension by default (paradigm=rdb)", () => {
+    render(
+      <QueryEditor sql="" onSqlChange={onSqlChange} onExecute={onExecute} />,
+    );
+    expect(activeLanguageName(getEditorView())).toBe("sql");
+  });
+
+  it("swaps to the JSON language when paradigm=document (find mode)", () => {
+    render(
+      <QueryEditor
+        sql="{}"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="find"
+      />,
+    );
+    const container = screen.getByLabelText("MongoDB Find Query Editor");
+    expect(container).toBeInTheDocument();
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
+    )!;
+    expect(activeLanguageName(view)).toBe("json");
+    expect(container).toHaveAttribute("data-paradigm", "document");
+    expect(container).toHaveAttribute("data-query-mode", "find");
+  });
+
+  it("uses JSON for document paradigm + aggregate mode", () => {
+    render(
+      <QueryEditor
+        sql="[]"
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="aggregate"
+      />,
+    );
+    const container = screen.getByLabelText(
+      "MongoDB Aggregate Pipeline Editor",
+    );
+    const view = EditorView.findFromDOM(
+      container.querySelector(".cm-editor") as HTMLElement,
+    )!;
+    expect(activeLanguageName(view)).toBe("json");
+    expect(container).toHaveAttribute("data-query-mode", "aggregate");
+  });
+
+  it("reconfigures the language in-place when paradigm flips (editor survives)", async () => {
+    const { rerender } = render(
+      <QueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="rdb"
+      />,
+    );
+
+    const viewBefore = getEditorView();
+    expect(activeLanguageName(viewBefore)).toBe("sql");
+
+    rerender(
+      <QueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="find"
+      />,
+    );
+
+    // Same EditorView instance — the Compartment swap must reuse the editor
+    // so cursor/selection/history survive the paradigm flip.
+    await waitFor(() => {
+      const container = screen.getByLabelText("MongoDB Find Query Editor");
+      const viewAfter = EditorView.findFromDOM(
+        container.querySelector(".cm-editor") as HTMLElement,
+      )!;
+      expect(viewAfter).toBe(viewBefore);
+      expect(activeLanguageName(viewAfter)).toBe("json");
+    });
+  });
+
+  it("flips the aria-label when paradigm changes", () => {
+    const { rerender } = render(
+      <QueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="find"
+      />,
+    );
+    expect(screen.getByLabelText("MongoDB Find Query Editor")).toBeDefined();
+
+    rerender(
+      <QueryEditor
+        sql=""
+        onSqlChange={onSqlChange}
+        onExecute={onExecute}
+        paradigm="document"
+        queryMode="aggregate"
+      />,
+    );
+    expect(
+      screen.getByLabelText("MongoDB Aggregate Pipeline Editor"),
+    ).toBeDefined();
   });
 });

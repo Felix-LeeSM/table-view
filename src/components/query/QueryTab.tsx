@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import type { EditorView } from "@codemirror/view";
-import type { QueryTab } from "@stores/tabStore";
+import type { QueryTab, QueryMode } from "@stores/tabStore";
 import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
-import { executeQuery, cancelQuery } from "@lib/tauri";
+import {
+  executeQuery,
+  cancelQuery,
+  findDocuments,
+  aggregateDocuments,
+} from "@lib/tauri";
 import { splitSqlStatements, formatSql, uglifySql } from "@lib/sqlUtils";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useResizablePanel } from "@hooks/useResizablePanel";
@@ -13,6 +19,7 @@ import QueryEditor from "./QueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import FavoritesPanel from "./FavoritesPanel";
 import SqlSyntax from "@components/shared/SqlSyntax";
+import type { FindBody } from "@/types/document";
 import {
   Play,
   Square,
@@ -28,6 +35,30 @@ import {
   CornerDownLeft,
 } from "lucide-react";
 
+// ─── Document paradigm helpers ─────────────────────────────────────────────
+// Document-paradigm query tabs execute raw JSON that the backend consumes
+// as MongoDB find bodies or aggregation pipelines. The backend requires
+// `database` + `collection`, so we surface a clear error whenever the tab
+// is missing that context instead of silently failing the `invoke` call.
+
+interface DocumentQueryContext {
+  database: string;
+  collection: string;
+}
+
+function readDocumentContext(tab: QueryTab): DocumentQueryContext | null {
+  if (!tab.database || !tab.collection) return null;
+  return { database: tab.database, collection: tab.collection };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRecordArray(value: unknown): value is Record<string, unknown>[] {
+  return Array.isArray(value) && value.every(isRecord);
+}
+
 interface QueryTabProps {
   tab: QueryTab;
 }
@@ -35,10 +66,12 @@ interface QueryTabProps {
 export default function QueryTab({ tab }: QueryTabProps) {
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const updateQueryState = useTabStore((s) => s.updateQueryState);
+  const setQueryMode = useTabStore((s) => s.setQueryMode);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);
   const schemaNamespace = useSqlAutocomplete(tab.connectionId);
+  const isDocument = tab.paradigm === "document";
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [favoriteName, setFavoriteName] = useState("");
@@ -72,6 +105,157 @@ export default function QueryTab({ tab }: QueryTabProps) {
         await cancelQuery(tab.queryState.queryId);
       } catch {
         // Query may have already completed
+      }
+      return;
+    }
+
+    // Sprint 73 — document paradigm (MongoDB find / aggregate). Runs on a
+    // separate code path from the SQL flow below: parses the editor body
+    // as JSON, dispatches to the matching Tauri command, and funnels the
+    // DocumentQueryResult into the existing queryState via a synthesized
+    // QueryResult shape so the downstream QueryResultGrid can render rows
+    // unchanged. Errors (invalid JSON, wrong pipeline type, backend
+    // failures) land in `queryState: "error"` with a descriptive message.
+    if (tab.paradigm === "document") {
+      const docCtx = readDocumentContext(tab);
+      if (!docCtx) {
+        updateQueryState(tab.id, {
+          status: "error",
+          error:
+            "Document query tabs require a target database and collection.",
+        });
+        return;
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(sql);
+      } catch (err) {
+        updateQueryState(tab.id, {
+          status: "error",
+          error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        return;
+      }
+
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+
+      try {
+        let docResult;
+        if (tab.queryMode === "aggregate") {
+          if (!isRecordArray(parsed)) {
+            throw new Error("Pipeline must be a JSON array of stage objects.");
+          }
+          docResult = await aggregateDocuments(
+            tab.connectionId,
+            docCtx.database,
+            docCtx.collection,
+            parsed,
+          );
+        } else {
+          // Default find path. Accept either an object (treated as the
+          // filter) or the full FindBody shape if the user already wrapped
+          // it.
+          if (!isRecord(parsed)) {
+            throw new Error(
+              "Find body must be a JSON object (filter or FindBody).",
+            );
+          }
+          const candidate = parsed as Record<string, unknown>;
+          const looksLikeFindBody =
+            "filter" in candidate ||
+            "sort" in candidate ||
+            "projection" in candidate ||
+            "skip" in candidate ||
+            "limit" in candidate;
+          const body: FindBody = looksLikeFindBody
+            ? (candidate as FindBody)
+            : { filter: candidate };
+          docResult = await findDocuments(
+            tab.connectionId,
+            docCtx.database,
+            docCtx.collection,
+            body,
+          );
+        }
+
+        // Adapt DocumentQueryResult → QueryResult so the existing grid
+        // can render the flattened rows without forking the result panel.
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: docResult.columns,
+          rows: docResult.rows,
+          total_count: docResult.total_count,
+          execution_time_ms: docResult.execution_time_ms,
+          query_type: "select",
+        };
+
+        useTabStore.setState((state) => {
+          const current = state.tabs.find((t) => t.id === tab.id);
+          if (
+            current &&
+            current.type === "query" &&
+            current.queryState.status === "running" &&
+            "queryId" in current.queryState &&
+            current.queryState.queryId === queryId
+          ) {
+            return {
+              tabs: state.tabs.map((t) =>
+                t.id === tab.id && t.type === "query"
+                  ? {
+                      ...t,
+                      queryState: {
+                        status: "completed" as const,
+                        result: queryResult,
+                      },
+                    }
+                  : t,
+              ),
+            };
+          }
+          return state;
+        });
+        addHistoryEntry({
+          sql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          connectionId: tab.connectionId,
+        });
+      } catch (err) {
+        useTabStore.setState((state) => {
+          const current = state.tabs.find((t) => t.id === tab.id);
+          if (
+            current &&
+            current.type === "query" &&
+            current.queryState.status === "running" &&
+            "queryId" in current.queryState &&
+            current.queryState.queryId === queryId
+          ) {
+            return {
+              tabs: state.tabs.map((t) =>
+                t.id === tab.id && t.type === "query"
+                  ? {
+                      ...t,
+                      queryState: {
+                        status: "error" as const,
+                        error: err instanceof Error ? err.message : String(err),
+                      },
+                    }
+                  : t,
+              ),
+            };
+          }
+          return state;
+        });
+        addHistoryEntry({
+          sql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          connectionId: tab.connectionId,
+        });
       }
       return;
     }
@@ -231,7 +415,21 @@ export default function QueryTab({ tab }: QueryTabProps) {
       status: errors.length > 0 ? "error" : "success",
       connectionId: tab.connectionId,
     });
-  }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // The original Sprint 25 callback intentionally excluded
+    // addHistoryEntry/updateQueryState from the dependency list so stale
+    // closure issues don't fire on every store subscription. Sprint 73
+    // reuses that contract.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tab.id,
+    tab.sql,
+    tab.queryState.status,
+    tab.connectionId,
+    tab.paradigm,
+    tab.queryMode,
+    tab.database,
+    tab.collection,
+  ]);
   useEffect(() => {
     const handler = (e: Event) => {
       const { queryId } = (e as CustomEvent<{ queryId: string }>).detail;
@@ -249,8 +447,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
     return () => window.removeEventListener("cancel-query", handler);
   }, [tab.id, tab.queryState]);
 
-  // Format SQL event listener (Cmd+I) — supports selection-only formatting
+  // Format SQL event listener (Cmd+I) — supports selection-only formatting.
+  // Skipped on document paradigm tabs; JSON bodies should not be run through
+  // the SQL formatter.
   useEffect(() => {
+    if (tab.paradigm === "document") return;
     const handler = () => {
       // Only format if this tab is the active tab
       const { activeTabId } = useTabStore.getState();
@@ -276,10 +477,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
     };
     window.addEventListener("format-sql", handler);
     return () => window.removeEventListener("format-sql", handler);
-  }, [tab.id, tab.sql, updateQuerySql]);
+  }, [tab.id, tab.sql, tab.paradigm, updateQuerySql]);
 
-  // Uglify SQL event listener (Cmd+Shift+I)
+  // Uglify SQL event listener (Cmd+Shift+I). Also skipped for document tabs.
   useEffect(() => {
+    if (tab.paradigm === "document") return;
     const handler = () => {
       const { activeTabId } = useTabStore.getState();
       if (activeTabId !== tab.id) return;
@@ -289,7 +491,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
     };
     window.addEventListener("uglify-sql", handler);
     return () => window.removeEventListener("uglify-sql", handler);
-  }, [tab.id, tab.sql, updateQuerySql]);
+  }, [tab.id, tab.sql, tab.paradigm, updateQuerySql]);
 
   // Toggle favorites panel event listener (Cmd+Shift+F)
   useEffect(() => {
@@ -368,17 +570,39 @@ export default function QueryTab({ tab }: QueryTabProps) {
             </span>
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={handleFormat}
-          disabled={!tab.sql.trim()}
-          aria-label="Format SQL"
-          title="Format SQL (Cmd+I)"
-        >
-          <Paintbrush />
-          <span>Format</span>
-        </Button>
+        {!isDocument && (
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={handleFormat}
+            disabled={!tab.sql.trim()}
+            aria-label="Format SQL"
+            title="Format SQL (Cmd+I)"
+          >
+            <Paintbrush />
+            <span>Format</span>
+          </Button>
+        )}
+        {isDocument && (
+          <ToggleGroup
+            type="single"
+            value={tab.queryMode}
+            onValueChange={(value) => {
+              if (value === "find" || value === "aggregate") {
+                setQueryMode(tab.id, value as QueryMode);
+              }
+            }}
+            aria-label="Mongo query mode"
+            className="ml-1"
+          >
+            <ToggleGroupItem value="find" aria-label="Find mode">
+              Find
+            </ToggleGroupItem>
+            <ToggleGroupItem value="aggregate" aria-label="Aggregate mode">
+              Aggregate
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
         <div className="ml-auto flex items-center gap-1 relative">
           <Button
             variant="ghost"
@@ -468,6 +692,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
           onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
           onExecute={handleExecute}
           schemaNamespace={schemaNamespace}
+          paradigm={tab.paradigm}
+          queryMode={tab.queryMode}
         />
       </div>
 

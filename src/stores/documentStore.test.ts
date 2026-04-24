@@ -38,6 +38,15 @@ vi.mock("@lib/tauri", () => ({
       execution_time_ms: 5,
     }),
   ),
+  aggregateDocuments: vi.fn(() =>
+    Promise.resolve({
+      columns: [{ name: "_id", data_type: "objectId" }],
+      rows: [[1]],
+      raw_documents: [{ _id: 1 }],
+      total_count: 1,
+      execution_time_ms: 5,
+    }),
+  ),
 }));
 
 import * as tauri from "@lib/tauri";
@@ -176,5 +185,114 @@ describe("documentStore", () => {
     expect(Object.keys(s.collections)).toHaveLength(0);
     expect(Object.keys(s.fieldsCache)).toHaveLength(0);
     expect(Object.keys(s.queryResults)).toHaveLength(0);
+  });
+
+  // -- Sprint 73: runAggregate -----------------------------------------------
+
+  it("runAggregate calls aggregateDocuments with the pipeline and caches the result", async () => {
+    const pipeline = [{ $match: { active: true } }, { $limit: 10 }];
+    const result = await useDocumentStore
+      .getState()
+      .runAggregate("conn-1", "db", "users", pipeline);
+
+    expect(tauri.aggregateDocuments).toHaveBeenCalledWith(
+      "conn-1",
+      "db",
+      "users",
+      pipeline,
+    );
+    expect(result.total_count).toBe(1);
+
+    // Cache key is prefixed with `agg:` so it does not collide with find.
+    const cacheKey = `agg:conn-1:db:users:${JSON.stringify(pipeline)}`;
+    expect(
+      useDocumentStore.getState().queryResults[cacheKey]?.rows,
+    ).toHaveLength(1);
+  });
+
+  it("runAggregate stale response does not overwrite a newer response", async () => {
+    const pipeline = [{ $match: {} }];
+    let resolveSlow: (value: unknown) => void = () => {};
+    const slow = new Promise((r) => {
+      resolveSlow = r;
+    });
+    const freshResult = {
+      columns: [],
+      rows: [],
+      raw_documents: [],
+      total_count: 77,
+      execution_time_ms: 1,
+    };
+    vi.mocked(tauri.aggregateDocuments)
+      .mockImplementationOnce(() => slow as Promise<never>)
+      .mockResolvedValueOnce(freshResult);
+
+    const p1 = useDocumentStore
+      .getState()
+      .runAggregate("conn-1", "db", "users", pipeline);
+    const p2 = useDocumentStore
+      .getState()
+      .runAggregate("conn-1", "db", "users", pipeline);
+    await p2;
+
+    const cacheKey = `agg:conn-1:db:users:${JSON.stringify(pipeline)}`;
+    expect(
+      useDocumentStore.getState().queryResults[cacheKey]?.total_count,
+    ).toBe(77);
+
+    // Let the first (slow) call resolve last — its write must be dropped.
+    resolveSlow({
+      columns: [],
+      rows: [],
+      raw_documents: [],
+      total_count: 999,
+      execution_time_ms: 99,
+    });
+    await p1;
+    expect(
+      useDocumentStore.getState().queryResults[cacheKey]?.total_count,
+    ).toBe(77);
+  });
+
+  it("runAggregate caches separately from runFind for the same collection", async () => {
+    // Reset the default mocks so each path gets its own distinguishing result.
+    vi.mocked(tauri.findDocuments).mockResolvedValueOnce({
+      columns: [],
+      rows: [],
+      raw_documents: [],
+      total_count: 3,
+      execution_time_ms: 1,
+    });
+    vi.mocked(tauri.aggregateDocuments).mockResolvedValueOnce({
+      columns: [],
+      rows: [],
+      raw_documents: [],
+      total_count: 7,
+      execution_time_ms: 1,
+    });
+
+    await useDocumentStore.getState().runFind("conn-1", "db", "users");
+    await useDocumentStore
+      .getState()
+      .runAggregate("conn-1", "db", "users", [{ $match: {} }]);
+
+    const s = useDocumentStore.getState();
+    // find caches under bare `connectionId:db:collection`.
+    expect(s.queryResults["conn-1:db:users"]?.total_count).toBe(3);
+    // aggregate caches under an `agg:` prefix so the two never collide.
+    const aggKey = `agg:conn-1:db:users:${JSON.stringify([{ $match: {} }])}`;
+    expect(s.queryResults[aggKey]?.total_count).toBe(7);
+  });
+
+  it("clearConnection also drops cached aggregate results", async () => {
+    await useDocumentStore
+      .getState()
+      .runAggregate("conn-1", "db", "users", [{ $match: {} }]);
+    const aggKey = `agg:conn-1:db:users:${JSON.stringify([{ $match: {} }])}`;
+    expect(useDocumentStore.getState().queryResults[aggKey]).toBeDefined();
+
+    useDocumentStore.getState().clearConnection("conn-1");
+
+    expect(useDocumentStore.getState().queryResults[aggKey]).toBeUndefined();
   });
 });

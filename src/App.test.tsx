@@ -57,6 +57,8 @@ function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
     closable: true,
     sql: "SELECT 1",
     queryState: { status: "idle" },
+    paradigm: "rdb",
+    queryMode: "sql",
     ...overrides,
   };
 }
