@@ -50,6 +50,19 @@
   --text-4xs--line-height: 0.8125rem; /* 13px */
   --text-5xs: 0.5rem; /* 8px */
   --text-5xs--line-height: 0.75rem; /* 12px */
+
+  /* Layout sizing tokens — anchored in --spacing-* so width/height/min/max
+     utilities all resolve them (e.g. w-dialog-md, max-h-scroll-lg). Values
+     preserve the existing pixel call sites one-to-one to keep this migration
+     visually neutral; the naming just replaces repeated arbitrary values. */
+  --spacing-dialog-xs: 27.5rem; /* 440px */
+  --spacing-dialog-sm: 30rem; /* 480px */
+  --spacing-dialog-md: 32.5rem; /* 520px */
+  --spacing-dialog-lg: 35rem; /* 560px */
+  --spacing-dialog-xl: 37.5rem; /* 600px */
+  --spacing-scroll-sm: 7.5rem; /* 120px */
+  --spacing-scroll-md: 12.5rem; /* 200px */
+  --spacing-scroll-lg: 18.75rem; /* 300px */
 }
 
 body {
