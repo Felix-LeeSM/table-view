@@ -37,6 +37,19 @@
   --radius-md: calc(var(--tv-radius) - 2px);
   --radius-lg: var(--tv-radius);
   --radius-xl: calc(var(--tv-radius) + 4px);
+
+  /* Sub-xs typography for dense labels / metadata. Tailwind's default
+     scale stops at text-xs (12px); we extend downward with 2xs→5xs so
+     dense UI (tree rows, badges, status chips) can avoid `text-[Npx]`
+     arbitrary values while keeping naming consistent with `text-xs`. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-2xs--line-height: 1rem; /* 16px */
+  --text-3xs: 0.625rem; /* 10px */
+  --text-3xs--line-height: 0.875rem; /* 14px */
+  --text-4xs: 0.5625rem; /* 9px */
+  --text-4xs--line-height: 0.8125rem; /* 13px */
+  --text-5xs: 0.5rem; /* 8px */
+  --text-5xs--line-height: 0.75rem; /* 12px */
 }
 
 body {
