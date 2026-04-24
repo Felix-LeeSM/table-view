@@ -1,6 +1,8 @@
 # Phase 9: MySQL + SQLite 지원
 
-> 추가 RDB 어댑터 + RDB trait 일반화 — **계획**
+> 추가 RDB 어댑터 + RDB trait 일반화 — **계획 (초안)**
+>
+> **본 문서는 Phase 6·7·8 완료 후 착수 직전에 다시 다듬는다.** 현재 담긴 스프린트 분해·F-번호·DTO 설계는 그 시점의 코드 현실을 반영해 재평가할 임시 스케치이며, 실제 착수 시 contract/execution-brief로 재작성한다.
 
 ## 배경 / 판단 기준
 
