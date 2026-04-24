@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import type { TableData } from "@/types/schema";
-import { generateSql } from "./sqlGenerator";
+import { generateSql, type CoerceError } from "./sqlGenerator";
 
 /**
  * Edit key helper: maps row/col indices to a unique string key.
@@ -222,6 +222,16 @@ export interface DataGridEditState {
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
 
+  /**
+   * Sprint 75 — per-cell validation errors produced when a pending edit's
+   * value could not be coerced to its column's data type at commit time.
+   * Keyed by the same `"rowIdx-colIdx"` shape as {@link pendingEdits} so the
+   * UI can look up the error for the active cell in O(1). Cleared entry-by-
+   * entry when the user edits the cell, and wholesale on a successful commit
+   * or `handleDiscard`.
+   */
+  pendingEditErrors: Map<string, string>;
+
   // SQL preview modal
   sqlPreview: string[] | null;
   setSqlPreview: (v: string[] | null) => void;
@@ -279,6 +289,12 @@ export function useDataGridEdit({
   const [pendingEdits, setPendingEdits] = useState<Map<string, string | null>>(
     new Map(),
   );
+  // Sprint 75 — per-cell coercion-error map. Populated during commit when a
+  // pending edit fails `coerceToSqlLiteral`; cleared entry-by-entry when the
+  // user modifies the cell via `setEditValue`/`setEditNull`.
+  const [pendingEditErrors, setPendingEditErrors] = useState<
+    Map<string, string>
+  >(new Map());
 
   // SQL preview modal state
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
@@ -315,9 +331,36 @@ export function useDataGridEdit({
     setEditValue("");
   }, []);
 
+  /**
+   * Clear the coercion-error entry (if any) for the currently editing cell.
+   * Called whenever the user modifies the active cell's value so the inline
+   * hint disappears in response to input — the user has acknowledged the error
+   * by editing. The error will reappear on the next commit only if the new
+   * value also fails coercion.
+   */
+  const clearActiveEditorError = useCallback(() => {
+    setPendingEditErrors((prev) => {
+      if (prev.size === 0 || !editingCell) return prev;
+      const key = editKey(editingCell.row, editingCell.col);
+      if (!prev.has(key)) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, [editingCell]);
+
+  const setEditValueWithErrorClear = useCallback(
+    (v: string | null) => {
+      setEditValue(v);
+      clearActiveEditorError();
+    },
+    [clearActiveEditorError],
+  );
+
   const setEditNull = useCallback(() => {
     setEditValue(null);
-  }, []);
+    clearActiveEditorError();
+  }, [clearActiveEditorError]);
 
   const handleSelectRow = useCallback(
     (rowIdx: number, metaKey: boolean, shiftKey: boolean) => {
@@ -384,6 +427,10 @@ export function useDataGridEdit({
 
   const handleCommit = useCallback(() => {
     if (!data) return;
+    // Collect coercion failures in a fresh map so the commit-time view replaces
+    // (not appends to) any stale errors from a previous batch — each commit is
+    // a complete re-validation of the current pending state.
+    const nextErrors = new Map<string, string>();
     const sqlStatements = generateSql(
       data,
       schema,
@@ -391,7 +438,13 @@ export function useDataGridEdit({
       pendingEdits,
       pendingDeletedRowKeys,
       pendingNewRows,
+      {
+        onCoerceError: (err: CoerceError) => {
+          nextErrors.set(err.key, err.message);
+        },
+      },
     );
+    setPendingEditErrors(nextErrors);
     if (sqlStatements.length === 0) return;
     setSqlPreview(sqlStatements);
   }, [
@@ -411,6 +464,7 @@ export function useDataGridEdit({
       }
       setSqlPreview(null);
       setPendingEdits(new Map());
+      setPendingEditErrors(new Map());
       setPendingNewRows([]);
       setPendingDeletedRowKeys(new Set());
       setSelectedRowIds(new Set());
@@ -428,6 +482,7 @@ export function useDataGridEdit({
 
   const handleDiscard = useCallback(() => {
     setPendingEdits(new Map());
+    setPendingEditErrors(new Map());
     setEditingCell(null);
     setEditValue("");
     setPendingNewRows([]);
@@ -497,6 +552,7 @@ export function useDataGridEdit({
           editValue,
           originalValue,
         );
+        const nextErrors = new Map<string, string>();
         const sqlStatements = generateSql(
           data,
           schema,
@@ -504,8 +560,19 @@ export function useDataGridEdit({
           merged,
           pendingDeletedRowKeys,
           pendingNewRows,
+          {
+            onCoerceError: (err: CoerceError) => {
+              nextErrors.set(err.key, err.message);
+            },
+          },
         );
-        if (sqlStatements.length === 0) return;
+        setPendingEditErrors(nextErrors);
+        if (sqlStatements.length === 0) {
+          // Preserve the pending edit so the user sees the failing value
+          // (and the inline hint) instead of silently losing it.
+          setPendingEdits(merged);
+          return;
+        }
         setPendingEdits(merged);
         setEditingCell(null);
         setEditValue("");
@@ -536,9 +603,10 @@ export function useDataGridEdit({
   return {
     editingCell,
     editValue,
-    setEditValue,
+    setEditValue: setEditValueWithErrorClear,
     setEditNull,
     pendingEdits,
+    pendingEditErrors,
     pendingNewRows,
     pendingDeletedRowKeys,
     sqlPreview,

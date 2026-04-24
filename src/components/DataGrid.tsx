@@ -358,6 +358,7 @@ export default function DataGrid({
           editingCell={editState.editingCell}
           editValue={editState.editValue}
           pendingEdits={editState.pendingEdits}
+          pendingEditErrors={editState.pendingEditErrors}
           selectedRowIds={editState.selectedRowIds}
           pendingDeletedRowKeys={editState.pendingDeletedRowKeys}
           pendingNewRows={editState.pendingNewRows}

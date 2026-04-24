@@ -70,6 +70,14 @@ export interface DataGridTableProps {
   editingCell: { row: number; col: number } | null;
   editValue: string | null;
   pendingEdits: Map<string, string | null>;
+  /**
+   * Sprint 75 — per-cell coercion errors keyed by `"rowIdx-colIdx"`. When the
+   * active editing cell has an entry, an inline validation hint is rendered
+   * beneath the editor. Optional to keep the prop surface backwards-compatible
+   * with existing callers that haven't adopted the error map yet; defaults to
+   * an empty map internally.
+   */
+  pendingEditErrors?: Map<string, string>;
   selectedRowIds: Set<number>;
   pendingDeletedRowKeys: Set<string>;
   pendingNewRows: unknown[][];
@@ -109,6 +117,7 @@ export default function DataGridTable({
   editingCell,
   editValue,
   pendingEdits,
+  pendingEditErrors,
   selectedRowIds,
   pendingDeletedRowKeys,
   pendingNewRows,
@@ -603,115 +612,140 @@ export default function DataGridTable({
                       }}
                     >
                       {isEditing ? (
-                        editValue === null ? (
-                          <div
-                            ref={(el) => {
-                              editorFocusRef.current = el;
-                            }}
-                            className="flex items-center gap-2 outline-none"
-                            role="textbox"
-                            aria-label={`Editing ${col.name} — currently NULL`}
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Tab") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                moveEditCursor(
-                                  rowIdx,
-                                  dIdx,
-                                  e.shiftKey ? "prev-col" : "next-col",
-                                );
-                              } else if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                moveEditCursor(
-                                  rowIdx,
-                                  dIdx,
-                                  e.shiftKey ? "prev-row" : "next-row",
-                                );
-                              } else if (e.key === "Escape") {
-                                e.stopPropagation();
-                                onCancelEdit();
-                              } else if (
-                                (e.metaKey || e.ctrlKey) &&
-                                e.key === "Backspace"
-                              ) {
-                                // Already NULL — just eat the shortcut.
-                                e.preventDefault();
-                              } else if (
-                                e.key.length === 1 &&
-                                !e.metaKey &&
-                                !e.ctrlKey &&
-                                !e.altKey
-                              ) {
-                                // Printable key flips NULL → typed editor.
-                                // The column's data type picks both the seed
-                                // value (often `""` for pickers) and the
-                                // `<input type>` on the next render — routed
-                                // through `deriveEditorSeed` so the flip lands
-                                // on a type-appropriate editor, not a bare
-                                // text input with the raw character seeded in.
-                                e.preventDefault();
-                                const { seed, accept } = deriveEditorSeed(
-                                  col.data_type,
-                                  e.key,
-                                );
-                                if (!accept) return;
-                                onSetEditValue(seed);
-                              }
-                            }}
-                          >
-                            <span
-                              className="italic text-muted-foreground"
-                              aria-hidden="true"
-                            >
-                              NULL
-                            </span>
-                            <span className="text-2xs text-muted-foreground">
-                              Type to edit · Esc to cancel
-                            </span>
-                          </div>
-                        ) : (
-                          <input
-                            ref={(el) => {
-                              editorFocusRef.current = el;
-                            }}
-                            type={getInputTypeForColumn(col.data_type)}
-                            className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
-                            value={editValue}
-                            aria-label={`Editing ${col.name}`}
-                            onChange={(e) => onSetEditValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (
-                                (e.metaKey || e.ctrlKey) &&
-                                e.key === "Backspace"
-                              ) {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                onSetEditNull();
-                              } else if (e.key === "Tab") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                moveEditCursor(
-                                  rowIdx,
-                                  dIdx,
-                                  e.shiftKey ? "prev-col" : "next-col",
-                                );
-                              } else if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                moveEditCursor(
-                                  rowIdx,
-                                  dIdx,
-                                  e.shiftKey ? "prev-row" : "next-row",
-                                );
-                              } else if (e.key === "Escape") {
-                                e.stopPropagation();
-                                onCancelEdit();
-                              }
-                            }}
-                          />
-                        )
+                        (() => {
+                          // Sprint 75 — inline validation hint for the active
+                          // cell. When a previous commit attempt left a
+                          // coercion error on this cell, render a
+                          // `text-destructive` message beneath the editor. The
+                          // error is cleared entry-by-entry by the hook when
+                          // `onSetEditValue`/`onSetEditNull` is called, so the
+                          // hint disappears as soon as the user edits.
+                          const errorMessage = pendingEditErrors?.get(key);
+                          return (
+                            <div className="flex flex-col">
+                              {editValue === null ? (
+                                <div
+                                  ref={(el) => {
+                                    editorFocusRef.current = el;
+                                  }}
+                                  className="flex items-center gap-2 outline-none"
+                                  role="textbox"
+                                  aria-label={`Editing ${col.name} — currently NULL`}
+                                  tabIndex={0}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Tab") {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveEditCursor(
+                                        rowIdx,
+                                        dIdx,
+                                        e.shiftKey ? "prev-col" : "next-col",
+                                      );
+                                    } else if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveEditCursor(
+                                        rowIdx,
+                                        dIdx,
+                                        e.shiftKey ? "prev-row" : "next-row",
+                                      );
+                                    } else if (e.key === "Escape") {
+                                      e.stopPropagation();
+                                      onCancelEdit();
+                                    } else if (
+                                      (e.metaKey || e.ctrlKey) &&
+                                      e.key === "Backspace"
+                                    ) {
+                                      // Already NULL — just eat the shortcut.
+                                      e.preventDefault();
+                                    } else if (
+                                      e.key.length === 1 &&
+                                      !e.metaKey &&
+                                      !e.ctrlKey &&
+                                      !e.altKey
+                                    ) {
+                                      // Printable key flips NULL → typed editor.
+                                      // The column's data type picks both the seed
+                                      // value (often `""` for pickers) and the
+                                      // `<input type>` on the next render — routed
+                                      // through `deriveEditorSeed` so the flip lands
+                                      // on a type-appropriate editor, not a bare
+                                      // text input with the raw character seeded in.
+                                      e.preventDefault();
+                                      const { seed, accept } = deriveEditorSeed(
+                                        col.data_type,
+                                        e.key,
+                                      );
+                                      if (!accept) return;
+                                      onSetEditValue(seed);
+                                    }
+                                  }}
+                                >
+                                  <span
+                                    className="italic text-muted-foreground"
+                                    aria-hidden="true"
+                                  >
+                                    NULL
+                                  </span>
+                                  <span className="text-2xs text-muted-foreground">
+                                    Type to edit · Esc to cancel
+                                  </span>
+                                </div>
+                              ) : (
+                                <input
+                                  ref={(el) => {
+                                    editorFocusRef.current = el;
+                                  }}
+                                  type={getInputTypeForColumn(col.data_type)}
+                                  className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                                  value={editValue}
+                                  aria-label={`Editing ${col.name}`}
+                                  onChange={(e) =>
+                                    onSetEditValue(e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (
+                                      (e.metaKey || e.ctrlKey) &&
+                                      e.key === "Backspace"
+                                    ) {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      onSetEditNull();
+                                    } else if (e.key === "Tab") {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveEditCursor(
+                                        rowIdx,
+                                        dIdx,
+                                        e.shiftKey ? "prev-col" : "next-col",
+                                      );
+                                    } else if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      moveEditCursor(
+                                        rowIdx,
+                                        dIdx,
+                                        e.shiftKey ? "prev-row" : "next-row",
+                                      );
+                                    } else if (e.key === "Escape") {
+                                      e.stopPropagation();
+                                      onCancelEdit();
+                                    }
+                                  }}
+                                />
+                              )}
+                              {errorMessage && (
+                                <span
+                                  role="alert"
+                                  aria-live="polite"
+                                  className="mt-0.5 text-2xs text-destructive"
+                                >
+                                  {errorMessage}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()
                       ) : hasPendingEdit ? (
                         pendingValue === null ? (
                           <span
