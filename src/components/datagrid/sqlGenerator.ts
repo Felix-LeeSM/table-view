@@ -33,7 +33,7 @@ export function generateSql(
   data: TableData,
   schema: string,
   table: string,
-  pendingEdits: Map<string, string>,
+  pendingEdits: Map<string, string | null>,
   pendingDeletedRowKeys: Set<string>,
   pendingNewRows: unknown[][],
 ): string[] {
@@ -54,7 +54,7 @@ export function generateSql(
 
     const whereClause = buildWhereClause(row, data.columns, pkCols);
     const escapedValue =
-      newValue === "" ? "NULL" : `'${newValue.replace(/'/g, "''")}'`;
+      newValue === null ? "NULL" : `'${newValue.replace(/'/g, "''")}'`;
     statements.push(
       `UPDATE ${qualifiedTable} SET ${col.name} = ${escapedValue} WHERE ${whereClause};`,
     );

@@ -122,11 +122,11 @@ describe("useDataGridEdit — unchanged value should not become a pending edit",
     expect(result.current.hasPendingChanges).toBe(false);
   });
 
-  it("handleStartEdit on a NULL cell with unchanged empty value adds nothing", () => {
+  it("handleStartEdit on a NULL cell with unchanged null value adds nothing", () => {
     const { result } = renderEditHook();
-    // Cell at row 1 col 1 is null → edit string is ""
+    // Cell at row 1 col 1 is null → edit value is null (tri-state)
     act(() => {
-      result.current.handleStartEdit(1, 1, "");
+      result.current.handleStartEdit(1, 1, null);
     });
     // Switch to another cell without changing value
     act(() => {
@@ -146,7 +146,7 @@ describe("useDataGridEdit — unchanged value should not become a pending edit",
     });
     // Switch — should persist the changed value
     act(() => {
-      result.current.handleStartEdit(1, 1, "");
+      result.current.handleStartEdit(1, 1, null);
     });
 
     expect(result.current.pendingEdits.get("0-1")).toBe("Alicia");

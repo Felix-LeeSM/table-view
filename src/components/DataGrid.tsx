@@ -365,6 +365,7 @@ export default function DataGrid({
           schema={schema}
           table={table}
           onSetEditValue={editState.setEditValue}
+          onSetEditNull={editState.setEditNull}
           onSaveCurrentEdit={editState.saveCurrentEdit}
           onCancelEdit={editState.cancelEdit}
           onStartEdit={editState.handleStartEdit}

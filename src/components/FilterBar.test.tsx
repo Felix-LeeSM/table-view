@@ -380,8 +380,8 @@ describe("FilterBar", () => {
     expect(applyButtons).toHaveLength(0);
   });
 
-  // 24. Value input clears to null when emptied
-  it("sets value to null when value input is cleared", async () => {
+  // 24. Value input preserves empty string when emptied (NULL vs '' distinction)
+  it("preserves empty string when value input is cleared", async () => {
     const user = userEvent.setup();
     const onFiltersChange = vi.fn();
     const filterWithValue: FilterCondition = {
@@ -400,7 +400,7 @@ describe("FilterBar", () => {
     const lastCall = onFiltersChange.mock.calls[
       onFiltersChange.mock.calls.length - 1
     ]![0] as FilterCondition[];
-    expect(lastCall[0]!.value).toBeNull();
+    expect(lastCall[0]!.value).toBe("");
   });
 
   // -----------------------------------------------------------------------

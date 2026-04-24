@@ -5,7 +5,7 @@ import { truncateCell } from "@lib/format";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   editKey,
-  cellToEditString,
+  cellToEditValue,
   getInputTypeForColumn,
 } from "./useDataGridEdit";
 import {
@@ -21,6 +21,7 @@ import {
   FileText,
   Database,
   Maximize2,
+  CircleSlash,
 } from "lucide-react";
 import BlobViewerDialog from "./BlobViewerDialog";
 import CellDetailDialog from "./CellDetailDialog";
@@ -66,18 +67,23 @@ export interface DataGridTableProps {
   columnWidths: Record<string, number>;
   columnOrder: number[];
   editingCell: { row: number; col: number } | null;
-  editValue: string;
-  pendingEdits: Map<string, string>;
+  editValue: string | null;
+  pendingEdits: Map<string, string | null>;
   selectedRowIds: Set<number>;
   pendingDeletedRowKeys: Set<string>;
   pendingNewRows: unknown[][];
   page: number;
   schema: string;
   table: string;
-  onSetEditValue: (v: string) => void;
+  onSetEditValue: (v: string | null) => void;
+  onSetEditNull: () => void;
   onSaveCurrentEdit: () => void;
   onCancelEdit: () => void;
-  onStartEdit: (rowIdx: number, colIdx: number, currentValue: string) => void;
+  onStartEdit: (
+    rowIdx: number,
+    colIdx: number,
+    currentValue: string | null,
+  ) => void;
   onSelectRow: (rowIdx: number, metaKey: boolean, shiftKey: boolean) => void;
   onSort: (columnName: string, shiftKey: boolean) => void;
   onColumnWidthsChange: (
@@ -109,6 +115,7 @@ export default function DataGridTable({
   schema,
   table,
   onSetEditValue,
+  onSetEditNull,
   onSaveCurrentEdit,
   onCancelEdit,
   onStartEdit,
@@ -225,7 +232,7 @@ export default function DataGridTable({
       const editKeyStr = editKey(nextRow, nextDataCol);
       const pendingValue = pendingEdits.get(editKeyStr);
       const startValue =
-        pendingValue !== undefined ? pendingValue : cellToEditString(nextCell);
+        pendingValue !== undefined ? pendingValue : cellToEditValue(nextCell);
 
       // onStartEdit persists the current in-flight edit before opening
       // the next cell, so callers don't need to call onSaveCurrentEdit.
@@ -282,8 +289,16 @@ export default function DataGridTable({
           icon: <Pencil size={14} />,
           onClick: () => {
             const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
-            const cellStr = cellToEditString(cell);
-            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, cellStr);
+            const editVal = cellToEditValue(cell);
+            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, editVal);
+          },
+        },
+        {
+          label: "Set to NULL",
+          icon: <CircleSlash size={14} />,
+          onClick: () => {
+            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, null);
+            onSetEditNull();
           },
         },
         {
@@ -522,10 +537,13 @@ export default function DataGridTable({
                   const isEditing =
                     editingCell?.row === rowIdx && editingCell?.col === dIdx;
                   const hasPendingEdit = pendingEdits.has(key);
-                  const cellStr = cellToEditString(cell);
-                  const displayValue = hasPendingEdit
-                    ? pendingEdits.get(key)!
-                    : cellStr;
+                  const cellEditValue = cellToEditValue(cell);
+                  const pendingValue: string | null = hasPendingEdit
+                    ? (pendingEdits.get(key) as string | null)
+                    : null;
+                  const editStartValue = hasPendingEdit
+                    ? pendingValue
+                    : cellEditValue;
                   const isBlob = isBlobColumn(col.data_type);
 
                   const fkRef =
@@ -555,7 +573,9 @@ export default function DataGridTable({
                             ? JSON.stringify(cell, null, 2)
                             : String(cell)
                       }
-                      onDoubleClick={() => onStartEdit(rowIdx, dIdx, cellStr)}
+                      onDoubleClick={() =>
+                        onStartEdit(rowIdx, dIdx, editStartValue)
+                      }
                       onClick={() => {
                         if (editingCell) {
                           onSaveCurrentEdit();
@@ -569,38 +589,113 @@ export default function DataGridTable({
                       }}
                     >
                       {isEditing ? (
-                        <input
-                          type={getInputTypeForColumn(col.data_type)}
-                          className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
-                          value={editValue}
-                          autoFocus
-                          aria-label={`Editing ${col.name}`}
-                          onChange={(e) => onSetEditValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Tab") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveEditCursor(
-                                rowIdx,
-                                dIdx,
-                                e.shiftKey ? "prev-col" : "next-col",
-                              );
-                            } else if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveEditCursor(
-                                rowIdx,
-                                dIdx,
-                                e.shiftKey ? "prev-row" : "next-row",
-                              );
-                            } else if (e.key === "Escape") {
-                              e.stopPropagation();
-                              onCancelEdit();
-                            }
-                          }}
-                        />
+                        editValue === null ? (
+                          <div
+                            className="flex items-center gap-2 outline-none"
+                            role="textbox"
+                            aria-label={`Editing ${col.name} — currently NULL`}
+                            tabIndex={0}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Tab") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveEditCursor(
+                                  rowIdx,
+                                  dIdx,
+                                  e.shiftKey ? "prev-col" : "next-col",
+                                );
+                              } else if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveEditCursor(
+                                  rowIdx,
+                                  dIdx,
+                                  e.shiftKey ? "prev-row" : "next-row",
+                                );
+                              } else if (e.key === "Escape") {
+                                e.stopPropagation();
+                                onCancelEdit();
+                              } else if (
+                                (e.metaKey || e.ctrlKey) &&
+                                e.key === "Backspace"
+                              ) {
+                                // Already NULL — just eat the shortcut.
+                                e.preventDefault();
+                              } else if (
+                                e.key.length === 1 &&
+                                !e.metaKey &&
+                                !e.ctrlKey &&
+                                !e.altKey
+                              ) {
+                                // Printable key flips NULL → text, seeded with
+                                // that character. The re-rendered <input> will
+                                // take focus via autoFocus on the next tick.
+                                e.preventDefault();
+                                onSetEditValue(e.key);
+                              }
+                            }}
+                          >
+                            <span
+                              className="italic text-muted-foreground"
+                              aria-hidden="true"
+                            >
+                              NULL
+                            </span>
+                            <span className="text-2xs text-muted-foreground">
+                              Type to edit · Esc to cancel
+                            </span>
+                          </div>
+                        ) : (
+                          <input
+                            type={getInputTypeForColumn(col.data_type)}
+                            className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                            value={editValue}
+                            autoFocus
+                            aria-label={`Editing ${col.name}`}
+                            onChange={(e) => onSetEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (
+                                (e.metaKey || e.ctrlKey) &&
+                                e.key === "Backspace"
+                              ) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onSetEditNull();
+                              } else if (e.key === "Tab") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveEditCursor(
+                                  rowIdx,
+                                  dIdx,
+                                  e.shiftKey ? "prev-col" : "next-col",
+                                );
+                              } else if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveEditCursor(
+                                  rowIdx,
+                                  dIdx,
+                                  e.shiftKey ? "prev-row" : "next-row",
+                                );
+                              } else if (e.key === "Escape") {
+                                e.stopPropagation();
+                                onCancelEdit();
+                              }
+                            }}
+                          />
+                        )
                       ) : hasPendingEdit ? (
-                        <span className="line-clamp-3">{displayValue}</span>
+                        pendingValue === null ? (
+                          <span
+                            className="italic text-muted-foreground"
+                            aria-label="NULL"
+                          >
+                            NULL
+                          </span>
+                        ) : (
+                          <span className="line-clamp-3">{pendingValue}</span>
+                        )
                       ) : isBlob && cell != null ? (
                         <Button
                           variant="ghost"

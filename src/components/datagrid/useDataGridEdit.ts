@@ -30,9 +30,9 @@ export function getInputTypeForColumn(dataType: string): string {
 }
 
 /**
- * Render a raw cell value as the string the editor input would show.
- * Used both for opening the editor and for detecting "no change" on save.
- * Object cells use indented JSON so the editor and the comparison agree.
+ * Render a raw cell value as a displayable string.
+ * NULL collapses to `""` — use only for tooltip/title or read-only display
+ * where that's acceptable. For edit flows, prefer `cellToEditValue`.
  */
 export function cellToEditString(cell: unknown): string {
   if (cell == null) return "";
@@ -41,17 +41,29 @@ export function cellToEditString(cell: unknown): string {
 }
 
 /**
+ * Edit-path counterpart of `cellToEditString`. Preserves SQL NULL intent:
+ * a null/undefined cell returns `null`, an empty-string cell returns `""`.
+ * Downstream code can then distinguish `SET col = NULL` from `SET col = ''`.
+ */
+export function cellToEditValue(cell: unknown): string | null {
+  if (cell == null) return null;
+  if (typeof cell === "object") return JSON.stringify(cell, null, 2);
+  return String(cell);
+}
+
+/**
  * Apply a cell edit, but skip (or remove) the pending entry when the value
  * matches the original cell — opening and closing an editor without typing,
  * or undoing a change back to the original, should not leave a phantom
- * pending state behind.
+ * pending state behind. `null` is a first-class value representing explicit
+ * SQL NULL intent; `null === null` is a "no change" when the cell was NULL.
  */
 function applyEditOrClear(
-  prev: Map<string, string>,
+  prev: Map<string, string | null>,
   key: string,
-  value: string,
-  originalValue: string,
-): Map<string, string> {
+  value: string | null,
+  originalValue: string | null,
+): Map<string, string | null> {
   if (value === originalValue) {
     if (!prev.has(key)) return prev;
     const next = new Map(prev);
@@ -84,11 +96,12 @@ export interface UseDataGridEditParams {
 export interface DataGridEditState {
   // Cell editing
   editingCell: { row: number; col: number } | null;
-  editValue: string;
-  setEditValue: (v: string) => void;
+  editValue: string | null;
+  setEditValue: (v: string | null) => void;
+  setEditNull: () => void;
 
   // Pending changes
-  pendingEdits: Map<string, string>;
+  pendingEdits: Map<string, string | null>;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
 
@@ -112,7 +125,7 @@ export interface DataGridEditState {
   handleStartEdit: (
     rowIdx: number,
     colIdx: number,
-    currentValue: string,
+    currentValue: string | null,
   ) => void;
   handleSelectRow: (
     rowIdx: number,
@@ -145,8 +158,8 @@ export function useDataGridEdit({
     row: number;
     col: number;
   } | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [pendingEdits, setPendingEdits] = useState<Map<string, string>>(
+  const [editValue, setEditValue] = useState<string | null>("");
+  const [pendingEdits, setPendingEdits] = useState<Map<string, string | null>>(
     new Map(),
   );
 
@@ -172,9 +185,9 @@ export function useDataGridEdit({
     if (!editingCell) return;
     const key = editKey(editingCell.row, editingCell.col);
     const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
-    const originalStr = cellToEditString(originalCell);
+    const originalValue = cellToEditValue(originalCell);
     setPendingEdits((prev) =>
-      applyEditOrClear(prev, key, editValue, originalStr),
+      applyEditOrClear(prev, key, editValue, originalValue),
     );
     setEditingCell(null);
     setEditValue("");
@@ -183,6 +196,10 @@ export function useDataGridEdit({
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
     setEditValue("");
+  }, []);
+
+  const setEditNull = useCallback(() => {
+    setEditValue(null);
   }, []);
 
   const handleSelectRow = useCallback(
@@ -223,7 +240,7 @@ export function useDataGridEdit({
   );
 
   const handleStartEdit = useCallback(
-    (rowIdx: number, colIdx: number, currentValue: string) => {
+    (rowIdx: number, colIdx: number, currentValue: string | null) => {
       // Sprint 66: block editing for document-paradigm grids. Write support
       // requires MQL-flavoured updates that are out of scope for Sprint 66
       // (P0 read-only). We intentionally do not start an edit session even
@@ -235,9 +252,9 @@ export function useDataGridEdit({
       if (editingCell) {
         const key = editKey(editingCell.row, editingCell.col);
         const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
-        const originalStr = cellToEditString(originalCell);
+        const originalValue = cellToEditValue(originalCell);
         setPendingEdits((prev) =>
-          applyEditOrClear(prev, key, editValue, originalStr),
+          applyEditOrClear(prev, key, editValue, originalValue),
         );
       }
       setEditingCell({ row: rowIdx, col: colIdx });
@@ -281,6 +298,10 @@ export function useDataGridEdit({
       setPendingDeletedRowKeys(new Set());
       setSelectedRowIds(new Set());
       setAnchorRowIdx(null);
+      // Any cell editor that moved along with Tab/Enter during commit is now
+      // stale (pointing at soon-to-be-refetched data). Close it.
+      setEditingCell(null);
+      setEditValue("");
       // Refresh data
       fetchData();
     } catch {
@@ -352,12 +373,12 @@ export function useDataGridEdit({
         if (!data) return;
         const key = editKey(editingCell.row, editingCell.col);
         const originalCell = data.rows[editingCell.row]?.[editingCell.col];
-        const originalStr = cellToEditString(originalCell);
+        const originalValue = cellToEditValue(originalCell);
         const merged = applyEditOrClear(
           pendingEdits,
           key,
           editValue,
-          originalStr,
+          originalValue,
         );
         const sqlStatements = generateSql(
           data,
@@ -399,6 +420,7 @@ export function useDataGridEdit({
     editingCell,
     editValue,
     setEditValue,
+    setEditNull,
     pendingEdits,
     pendingNewRows,
     pendingDeletedRowKeys,

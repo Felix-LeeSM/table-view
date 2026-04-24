@@ -249,7 +249,7 @@ export default function FilterBar({
                   placeholder="Value..."
                   value={filter.value ?? ""}
                   onChange={(e) =>
-                    updateFilter(index, { value: e.target.value || null })
+                    updateFilter(index, { value: e.target.value })
                   }
                   onKeyDown={(e) => {
                     if (e.key === "Enter") onApply();
