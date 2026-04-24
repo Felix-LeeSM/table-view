@@ -472,15 +472,13 @@ export default function DataGridTable({
                     <span className="truncate">{col.name}</span>
                     {sortInfo && (
                       <span className="flex shrink-0 items-center gap-0.5 text-primary">
-                        <span className="text-[10px] font-bold">
-                          {sortRank}
-                        </span>
+                        <span className="text-3xs font-bold">{sortRank}</span>
                         {sortInfo.direction === "ASC" ? "\u25B2" : "\u25BC"}
                       </span>
                     )}
                   </div>
                   <div
-                    className="mt-0.5 truncate text-[10px] text-muted-foreground"
+                    className="mt-0.5 truncate text-3xs text-muted-foreground"
                     title={col.data_type}
                   >
                     {col.data_type}

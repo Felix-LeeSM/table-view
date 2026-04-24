@@ -162,7 +162,7 @@ export default function FilterBar({
             aria-label="Raw SQL WHERE clause"
           />
           {rawSqlError && (
-            <div className="mt-1 text-[11px] text-destructive" role="alert">
+            <div className="mt-1 text-2xs text-destructive" role="alert">
               {rawSqlError}
             </div>
           )}

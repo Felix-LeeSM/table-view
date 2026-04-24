@@ -436,7 +436,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
       {/* "Schemas" header label + refresh button */}
       <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
           Schemas
         </span>
         <Button
@@ -600,7 +600,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                         {/* Category header */}
                         <button
                           type="button"
-                          className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-[11px] font-medium hover:bg-muted ${
+                          className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-2xs font-medium hover:bg-muted ${
                             isCatSelected
                               ? "bg-muted text-foreground"
                               : "text-secondary-foreground"
@@ -626,7 +626,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           />
                           <span>{cat.label}</span>
                           {itemCount > 0 && (
-                            <span className="ml-auto text-[10px] text-muted-foreground">
+                            <span className="ml-auto text-3xs text-muted-foreground">
                               {itemCount}
                             </span>
                           )}
@@ -645,7 +645,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                   />
                                   <input
                                     type="text"
-                                    className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                                    className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                                     placeholder="Filter tables..."
                                     value={searchValue}
                                     onChange={(e) =>
@@ -675,7 +675,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 </div>
                               )}
                             {items.length === 0 ? (
-                              <div className="px-10 py-1 text-[11px] italic text-muted-foreground">
+                              <div className="px-10 py-1 text-2xs italic text-muted-foreground">
                                 {cat.key === "tables" && searchValue
                                   ? "No matching tables"
                                   : cat.emptyLabel}
@@ -762,7 +762,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                           "row_count" in item &&
                                           (item as TableInfo).row_count !=
                                             null && (
-                                            <span className="ml-auto text-[10px] text-muted-foreground">
+                                            <span className="ml-auto text-3xs text-muted-foreground">
                                               {(
                                                 item as TableInfo
                                               ).row_count!.toLocaleString()}
@@ -771,7 +771,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                         {isFunc &&
                                           "arguments" in item &&
                                           (item as FunctionInfo).arguments && (
-                                            <span className="ml-auto truncate text-[10px] text-muted-foreground">
+                                            <span className="ml-auto truncate text-3xs text-muted-foreground">
                                               {(item as FunctionInfo).arguments}
                                             </span>
                                           )}

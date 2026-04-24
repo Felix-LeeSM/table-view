@@ -116,7 +116,7 @@ export default function ConnectionGroup({
             ) : (
               <span className="truncate">{group.name}</span>
             )}
-            <span className="ml-1 text-[10px]">({connections.length})</span>
+            <span className="ml-1 text-3xs">({connections.length})</span>
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>

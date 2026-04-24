@@ -103,19 +103,19 @@ export default function DocumentDataGrid({
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
-            className="rounded border border-border px-2 py-0.5 text-[11px] disabled:opacity-50"
+            className="rounded border border-border px-2 py-0.5 text-2xs disabled:opacity-50"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1 || loading}
             aria-label="Previous page"
           >
             Prev
           </button>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             {page} / {totalPages}
           </span>
           <button
             type="button"
-            className="rounded border border-border px-2 py-0.5 text-[11px] disabled:opacity-50"
+            className="rounded border border-border px-2 py-0.5 text-2xs disabled:opacity-50"
             onClick={() => setPage((p) => p + 1)}
             disabled={page >= totalPages || loading}
             aria-label="Next page"
@@ -161,7 +161,7 @@ export default function DocumentDataGrid({
                     <div className="flex items-center gap-1">
                       <span className="truncate">{col.name}</span>
                     </div>
-                    <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                    <div className="mt-0.5 truncate text-3xs text-muted-foreground">
                       {col.data_type}
                     </div>
                   </th>

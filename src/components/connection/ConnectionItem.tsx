@@ -162,7 +162,7 @@ export default function ConnectionItem({
             {connection.environment &&
               connection.environment in ENVIRONMENT_META && (
                 <span
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
+                  className="shrink-0 rounded px-1.5 py-0.5 text-3xs font-medium leading-none"
                   style={{
                     backgroundColor: `${ENVIRONMENT_META[connection.environment as EnvironmentTag].color}20`,
                     color:
@@ -181,7 +181,7 @@ export default function ConnectionItem({
                 </span>
               )}
             <span
-              className="ml-auto shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold leading-none"
+              className="ml-auto shrink-0 rounded px-1 py-0.5 text-4xs font-semibold leading-none"
               style={{
                 backgroundColor: `${DB_TYPE_META[connection.db_type].color}20`,
                 color: DB_TYPE_META[connection.db_type].color,
@@ -224,7 +224,7 @@ export default function ConnectionItem({
           aria-label="Show error details"
         >
           <span className="shrink-0 w-2" />
-          <span className="truncate text-[10px] text-destructive">
+          <span className="truncate text-3xs text-destructive">
             {errorMessage}
           </span>
         </Button>
@@ -232,7 +232,7 @@ export default function ConnectionItem({
       {errorMessage && showErrorDetail && (
         <div className="flex w-full items-start gap-2 px-3 py-0">
           <span className="shrink-0 w-2" />
-          <span className="break-all text-[10px] text-destructive">
+          <span className="break-all text-3xs text-destructive">
             {errorMessage}
           </span>
           <Button

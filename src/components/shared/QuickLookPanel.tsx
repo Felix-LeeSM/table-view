@@ -86,9 +86,7 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
         title={column.data_type}
       >
         <span className="font-mono">{column.name}</span>
-        <span className="ml-1.5 text-[10px] opacity-60">
-          {column.data_type}
-        </span>
+        <span className="ml-1.5 text-3xs opacity-60">{column.data_type}</span>
       </div>
 
       {/* Value */}
@@ -98,7 +96,7 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
         ) : isBool ? (
           <span
             className={cn(
-              "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold",
+              "inline-flex items-center rounded px-1.5 py-0.5 text-3xs font-semibold",
               value
                 ? "bg-success/15 text-success"
                 : "bg-destructive/15 text-destructive",

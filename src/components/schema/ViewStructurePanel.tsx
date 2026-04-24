@@ -82,7 +82,7 @@ export default function ViewStructurePanel({
               {tab.label}
             </TabsTrigger>
           ))}
-          <span className="ml-auto pr-3 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="ml-auto pr-3 text-3xs uppercase tracking-wider text-muted-foreground">
             Read-only
           </span>
         </TabsList>

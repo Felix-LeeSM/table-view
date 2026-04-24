@@ -56,7 +56,7 @@ function ResultTable({ result }: { result: QueryResult }) {
                 className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
               >
                 <div>{col.name}</div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground">
+                <div className="mt-0.5 text-3xs text-muted-foreground">
                   {col.data_type}
                 </div>
               </th>

@@ -582,7 +582,7 @@ export default function ColumnsEditor({
                     >
                       <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs text-success">
                         {change.name}
-                        <span className="rounded bg-success/10 px-1 py-0.5 text-[10px] font-medium">
+                        <span className="rounded bg-success/10 px-1 py-0.5 text-3xs font-medium">
                           new
                         </span>
                       </td>

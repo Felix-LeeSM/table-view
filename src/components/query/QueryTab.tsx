@@ -363,7 +363,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
           >
             <Play className="text-success" />
             <span>Run</span>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="text-3xs text-muted-foreground">
               {"\u2318\u23CE"}
             </span>
           </Button>

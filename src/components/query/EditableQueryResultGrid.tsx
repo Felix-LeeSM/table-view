@@ -287,7 +287,7 @@ export default function EditableQueryResultGrid({
                       )}
                       <span>{col.name}</span>
                     </div>
-                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                    <div className="mt-0.5 text-3xs text-muted-foreground">
                       {col.data_type}
                     </div>
                   </th>

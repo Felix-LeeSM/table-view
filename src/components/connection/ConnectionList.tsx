@@ -83,7 +83,7 @@ export default function ConnectionList({
 
       {/* Group hint — show only when there are connections but no groups */}
       {allConnections.length > 0 && groups.length === 0 && (
-        <div className="flex items-center gap-1.5 px-3 py-2 text-[10px] text-muted-foreground opacity-60">
+        <div className="flex items-center gap-1.5 px-3 py-2 text-3xs text-muted-foreground opacity-60">
           <GripVertical size={10} />
           <span>Drag connections onto each other to create groups</span>
         </div>

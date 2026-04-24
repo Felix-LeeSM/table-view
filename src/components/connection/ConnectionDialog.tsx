@@ -369,7 +369,7 @@ export default function ConnectionDialog({
                     </label>
                     {isEditing && (
                       <span
-                        className={`mb-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        className={`mb-1 rounded px-1.5 py-0.5 text-3xs font-medium ${
                           hadPassword
                             ? "bg-success/10 text-success"
                             : "bg-muted text-muted-foreground"
@@ -394,7 +394,7 @@ export default function ConnectionDialog({
                     }
                   />
                   {isEditing && hadPassword && (
-                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <label className="mt-1 flex items-center gap-1.5 text-2xs text-muted-foreground">
                       <input
                         type="checkbox"
                         className="cursor-pointer"

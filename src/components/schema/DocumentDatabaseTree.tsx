@@ -107,7 +107,7 @@ export default function DocumentDatabaseTree({
   return (
     <div className="flex flex-col select-none">
       <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
           Databases
         </span>
         <Button
@@ -201,7 +201,7 @@ export default function DocumentDatabaseTree({
                     Loading...
                   </div>
                 ) : collections.length === 0 ? (
-                  <div className="px-8 py-1 text-[11px] italic text-muted-foreground">
+                  <div className="px-8 py-1 text-2xs italic text-muted-foreground">
                     No collections
                   </div>
                 ) : (
@@ -235,7 +235,7 @@ export default function DocumentDatabaseTree({
                         />
                         <span className="truncate text-xs">{coll.name}</span>
                         {coll.document_count != null && (
-                          <span className="ml-auto text-[10px] text-muted-foreground">
+                          <span className="ml-auto text-3xs text-muted-foreground">
                             {coll.document_count.toLocaleString()}
                           </span>
                         )}

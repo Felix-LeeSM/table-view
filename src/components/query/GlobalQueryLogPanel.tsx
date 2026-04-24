@@ -90,7 +90,7 @@ export default function GlobalQueryLogPanel({
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
         <span className="text-xs font-medium text-foreground">Query Log</span>
-        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="rounded bg-muted px-1.5 py-0.5 text-3xs font-medium text-muted-foreground">
           {globalLog.length}
         </span>
         <div className="flex flex-1 items-center gap-1.5">
@@ -109,7 +109,7 @@ export default function GlobalQueryLogPanel({
         <div className="relative">
           <select
             data-testid="global-log-connection-filter"
-            className="h-5 rounded border border-border bg-transparent px-1 text-[10px] text-foreground"
+            className="h-5 rounded border border-border bg-transparent px-1 text-3xs text-foreground"
             value={connectionFilter ?? ""}
             onChange={(e) => setConnectionFilter(e.target.value || null)}
           >
@@ -214,7 +214,7 @@ export default function GlobalQueryLogPanel({
               </div>
               {/* Expanded SQL view */}
               {expandedEntry === entry.id && entry.sql.length > 80 && (
-                <pre className="mt-1 whitespace-pre-wrap break-all border-t border-border pl-7 pt-1 font-mono text-[11px] text-foreground">
+                <pre className="mt-1 whitespace-pre-wrap break-all border-t border-border pl-7 pt-1 font-mono text-2xs text-foreground">
                   {entry.sql}
                 </pre>
               )}

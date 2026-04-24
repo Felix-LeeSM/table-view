@@ -41,7 +41,7 @@ export default function ThemePicker() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">
           Appearance
         </span>
         <ToggleGroup
@@ -110,10 +110,10 @@ export default function ThemePicker() {
                 style={{ backgroundColor: entry.swatch }}
               />
               <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-[11px] font-semibold text-foreground">
+                <span className="truncate text-2xs font-semibold text-foreground">
                   {entry.name}
                 </span>
-                <span className="truncate text-[10px] text-muted-foreground">
+                <span className="truncate text-3xs text-muted-foreground">
                   {entry.vibe}
                 </span>
               </span>

@@ -179,7 +179,7 @@ function ExportPanel() {
                 ({c.db_type} @ {c.host}:{c.port})
               </span>
               {c.has_password && (
-                <span className="ml-auto rounded bg-success/10 px-1.5 text-[10px] font-medium text-success">
+                <span className="ml-auto rounded bg-success/10 px-1.5 text-3xs font-medium text-success">
                   pw set
                 </span>
               )}
@@ -228,7 +228,7 @@ function ExportPanel() {
 
       {json.length > 0 && (
         <textarea
-          className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-[11px] text-foreground outline-none focus:border-primary"
+          className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary"
           value={json}
           readOnly
           aria-label="Generated export JSON"
@@ -279,7 +279,7 @@ function ImportPanel({ onImported }: ImportPanelProps) {
       </p>
 
       <textarea
-        className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-[11px] text-foreground outline-none focus:border-primary"
+        className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary"
         placeholder='{"schema_version":1,"connections":[...],"groups":[...]}'
         value={text}
         onChange={(e) => setText(e.target.value)}

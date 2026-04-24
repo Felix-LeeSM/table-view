@@ -109,7 +109,7 @@ export default function FavoritesPanel({
                     />
                   )}
                 </div>
-                <div className="mt-0.5 text-[10px] font-mono text-muted-foreground truncate">
+                <div className="mt-0.5 text-3xs font-mono text-muted-foreground truncate">
                   {fav.sql}
                 </div>
               </div>
