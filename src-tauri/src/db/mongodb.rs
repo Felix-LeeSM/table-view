@@ -19,10 +19,18 @@
 //!   pass over the batch, and returns canonical extended-JSON `raw_documents`
 //!   alongside `estimated_document_count()` as `total_count`.
 //!
-//! The still-stubbed methods (`aggregate`, `insert_document`,
-//! `update_document`, `delete_document`) retain their Sprint 65 placeholder
-//! behaviour; regression tests below continue to assert the `Unsupported`
-//! error path so future sprints notice when they're uplifted.
+//! Sprint 72 (Phase 6 plan E-1) lifts the third stub by providing the
+//! `aggregate` implementation that mirrors `find`'s cursor / flattening path
+//! so the new `aggregate_documents` Tauri command (see
+//! `commands/document/query.rs`) can drive the frontend Aggregate mode.
+//! `total_count` for aggregate results is the number of returned rows —
+//! `estimated_document_count()` is deliberately *not* used because it would
+//! reflect raw collection cardinality rather than pipeline output.
+//!
+//! The still-stubbed methods (`insert_document`, `update_document`,
+//! `delete_document`) retain their Sprint 65 placeholder behaviour;
+//! regression tests below continue to assert the `Unsupported` error path so
+//! future sprints notice when they're uplifted.
 //!
 //! ## State
 //!
@@ -386,14 +394,58 @@ impl DocumentAdapter for MongoAdapter {
 
     fn aggregate<'a>(
         &'a self,
-        _db: &'a str,
-        _collection: &'a str,
-        _pipeline: Vec<Document>,
+        db: &'a str,
+        collection: &'a str,
+        pipeline: Vec<Document>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
-        Box::pin(async {
-            Err(AppError::Unsupported(
-                "MongoAdapter::aggregate is not implemented until Sprint 68".into(),
-            ))
+        Box::pin(async move {
+            validate_ns(db, collection)?;
+            let started = Instant::now();
+            let client = self.current_client().await?;
+            let coll = client.database(db).collection::<Document>(collection);
+
+            let mut cursor = coll
+                .aggregate(pipeline)
+                .await
+                .map_err(|e| AppError::Database(format!("aggregate failed: {e}")))?;
+
+            let mut raw_documents: Vec<Document> = Vec::new();
+            while let Some(next) = cursor.next().await {
+                match next {
+                    Ok(d) => raw_documents.push(d),
+                    Err(e) => {
+                        return Err(AppError::Database(format!(
+                            "aggregate cursor iteration failed: {e}"
+                        )));
+                    }
+                }
+            }
+
+            // Derive the column order from the pipeline output so grid layout
+            // is stable without a pre-inference round-trip. Mirrors `find`.
+            let columns = columns_from_docs(&raw_documents);
+            let rows: Vec<Vec<serde_json::Value>> = raw_documents
+                .iter()
+                .map(|doc| project_row(doc, &columns))
+                .collect();
+
+            // `total_count` reflects aggregate output cardinality, not the
+            // backing collection's document count. `estimated_document_count`
+            // is deliberately NOT called here: pipelines like `$match` /
+            // `$group` / `$limit` reshape the row set, so the upstream
+            // estimate would be misleading.
+            let total_count = rows.len() as i64;
+
+            let elapsed = started.elapsed();
+            let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
+
+            Ok(DocumentQueryResult {
+                columns,
+                rows,
+                raw_documents,
+                total_count,
+                execution_time_ms,
+            })
         })
     }
 
@@ -811,8 +863,9 @@ mod tests {
     // -- Unsupported stub coverage ------------------------------------------
     //
     // Sprint 66 lifted `infer_collection_fields` and `find` out of the
-    // Unsupported path; the remaining four stubs keep their regression
-    // guard so the next sprint notices when they're uplifted.
+    // Unsupported path; Sprint 72 lifted `aggregate`. The remaining three
+    // stubs keep their regression guard so the next sprint notices when
+    // they're uplifted.
 
     #[tokio::test]
     async fn infer_collection_fields_without_connection_returns_connection_error() {
@@ -987,11 +1040,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn aggregate_returns_unsupported() {
+    async fn test_aggregate_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter.aggregate("db", "c", Vec::new()).await {
-            Err(AppError::Unsupported(msg)) => assert!(msg.contains("aggregate")),
-            other => panic!("expected Unsupported, got ok? {}", other.is_ok()),
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_aggregate_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter.aggregate("", "c", Vec::new()).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+        match adapter.aggregate("db", "   ", Vec::new()).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
         }
     }
 

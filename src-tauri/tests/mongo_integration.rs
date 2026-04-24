@@ -1,4 +1,4 @@
-//! MongoAdapter integration test (Sprints 65 + 66).
+//! MongoAdapter integration test (Sprints 65 + 66 + 72).
 //!
 //! Sprint 65 walks the catalog happy path:
 //! `connect → ping → list_databases → list_collections → disconnect`.
@@ -7,6 +7,13 @@
 //! (`table_view_test.users`) with heterogeneous documents, invoking
 //! `infer_collection_fields` and `find`, and verifying the expected column
 //! shape + sentinel flattening before dropping the fixture.
+//!
+//! Sprint 72 (Phase 6 plan E-1) adds aggregate-pipeline coverage:
+//!   * `test_mongo_adapter_aggregate_match_sort` — `$match` + `$sort` stage
+//!     pair filters/orders the seeded users deterministically.
+//!   * `test_mongo_adapter_aggregate_group_count` — `$group` with `$sum`
+//!     returns a single count row whose `total` column reflects the seeded
+//!     document count.
 //!
 //! When the MongoDB test container is not available the setup helper prints a
 //! skip message and the test exits with status 0 — matching the existing
@@ -292,6 +299,195 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
     // ── cleanup ──────────────────────────────────────────────────────────
     coll.drop().await.expect("cleanup drop_collection");
 
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 72 — `$match` + `$sort` pipeline returns a deterministic subset.
+///
+/// Seeds the same three-user fixture as the Sprint 66 test, then runs
+/// `[{ $match: { age: { $gt: 25 } } }, { $sort: { _id: 1 } }]`. With the
+/// seeded ages (Ada=30, Grace=85, Alan=no age), only Ada and Grace pass the
+/// `$match`, and `$sort` pins `_id: 1` (Ada) first.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_aggregate_match_sort() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+    let db = seed.database("table_view_test");
+    let coll = db.collection::<Document>("users");
+
+    // Idempotency.
+    let _ = coll.drop().await;
+
+    let seeds = vec![
+        doc! { "_id": 1, "name": "Ada", "age": 30 },
+        doc! { "_id": 2, "name": "Grace", "age": 85 },
+        doc! { "_id": 3, "name": "Alan" },
+    ];
+    coll.insert_many(seeds)
+        .await
+        .expect("seed insert_many should succeed");
+
+    let pipeline: Vec<Document> = vec![
+        doc! { "$match": { "age": { "$gt": 25 } } },
+        doc! { "$sort": { "_id": 1 } },
+    ];
+
+    let result = adapter
+        .aggregate("table_view_test", "users", pipeline)
+        .await
+        .expect("aggregate should succeed");
+
+    // Two documents match `age > 25` (Ada=30, Grace=85). Alan has no age.
+    assert_eq!(
+        result.rows.len(),
+        2,
+        "expected 2 rows from aggregate, got {}",
+        result.rows.len()
+    );
+    assert_eq!(
+        result.total_count, 2,
+        "total_count must reflect aggregate output cardinality"
+    );
+    assert_eq!(
+        result.raw_documents.len(),
+        result.rows.len(),
+        "raw_documents must mirror rows length"
+    );
+
+    // _id is forced to the leading column (see columns_from_docs contract).
+    assert_eq!(
+        result.columns.first().map(|c| c.name.as_str()),
+        Some("_id"),
+        "columns must lead with _id"
+    );
+
+    // `$sort: _id asc` → first raw document should have `_id: 1`.
+    let first_id = result
+        .raw_documents
+        .first()
+        .and_then(|d| d.get_i32("_id").ok())
+        .expect("first raw document must contain _id");
+    assert_eq!(first_id, 1, "first row after $sort must be _id=1 (Ada)");
+
+    let second_id = result
+        .raw_documents
+        .get(1)
+        .and_then(|d| d.get_i32("_id").ok())
+        .expect("second raw document must contain _id");
+    assert_eq!(second_id, 2, "second row after $sort must be _id=2 (Grace)");
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 72 — `$group` with `$sum` returns a single count row.
+///
+/// Seeds the same three-user fixture then runs
+/// `[{ $group: { _id: null, total: { $sum: 1 } } }]`. The pipeline output is
+/// a single synthetic document `{ _id: null, total: 3 }` — the grid must
+/// expose `total` as a column and carry the integer value in row 0.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_aggregate_group_count() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+    let db = seed.database("table_view_test");
+    let coll = db.collection::<Document>("users");
+
+    // Idempotency.
+    let _ = coll.drop().await;
+
+    let seeds = vec![
+        doc! { "_id": 1, "name": "Ada", "age": 30 },
+        doc! { "_id": 2, "name": "Grace", "age": 85 },
+        doc! { "_id": 3, "name": "Alan" },
+    ];
+    coll.insert_many(seeds)
+        .await
+        .expect("seed insert_many should succeed");
+
+    let pipeline: Vec<Document> = vec![doc! {
+        "$group": { "_id": null, "total": { "$sum": 1 } }
+    }];
+
+    let result = adapter
+        .aggregate("table_view_test", "users", pipeline)
+        .await
+        .expect("aggregate should succeed");
+
+    assert_eq!(
+        result.rows.len(),
+        1,
+        "$group with _id:null must collapse to a single row, got {}",
+        result.rows.len()
+    );
+    assert_eq!(result.total_count, 1, "total_count must be 1");
+
+    // `total` must surface as a column on the result.
+    let total_idx = result
+        .columns
+        .iter()
+        .position(|c| c.name == "total")
+        .expect("aggregate result must expose 'total' column");
+
+    // The row cell must equal the seeded document count (3). `flatten_cell`
+    // routes BSON scalars through canonical extended JSON, which wraps
+    // integer variants as `{"$numberInt": "N"}` (Int32) or
+    // `{"$numberLong": "N"}` (Int64) depending on which variant the driver
+    // returned. A bare JSON integer is also accepted in case a future server
+    // version widens the representation further.
+    let total_cell = &result.rows[0][total_idx];
+    let parse_wrapped = |key: &str| -> Option<i64> {
+        total_cell
+            .get(key)
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse().ok())
+    };
+    let total_value = total_cell
+        .as_i64()
+        .or_else(|| parse_wrapped("$numberInt"))
+        .or_else(|| parse_wrapped("$numberLong"))
+        .unwrap_or_else(|| panic!("unexpected total cell shape: {total_cell}"));
+    assert_eq!(
+        total_value, 3,
+        "total must equal the seeded document count (3)"
+    );
+
+    // Also confirm the raw_documents carry the underlying BSON value.
+    let raw_total = result
+        .raw_documents
+        .first()
+        .expect("raw_documents must contain the grouped row")
+        .get("total")
+        .expect("raw document must contain 'total' field");
+    // `$sum: 1` may yield Int32 or Int64 — accept either.
+    let raw_total_i64 = raw_total
+        .as_i32()
+        .map(i64::from)
+        .or_else(|| raw_total.as_i64())
+        .unwrap_or_else(|| panic!("unexpected raw total variant: {raw_total:?}"));
+    assert_eq!(raw_total_i64, 3, "raw total must equal seeded count");
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
     adapter
         .disconnect()
         .await

@@ -49,6 +49,7 @@ pub fn run() {
             commands::document::browse::list_mongo_collections,
             commands::document::browse::infer_collection_fields,
             commands::document::query::find_documents,
+            commands::document::query::aggregate_documents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
