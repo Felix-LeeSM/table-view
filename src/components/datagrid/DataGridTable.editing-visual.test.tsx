@@ -177,7 +177,10 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
     expect(onSetEditNull).toHaveBeenCalledTimes(1);
   });
 
-  it("printable key in NULL mode flips editValue back to that character", () => {
+  it("printable key in NULL mode on a text column seeds the character", () => {
+    // Sprint 74: text-column NULL → text input flip must still seed with the
+    // literal keystroke (regression guard on the text-family branch of
+    // deriveEditorSeed). Other types are covered in the type-aware block below.
     const onSetEditValue = vi.fn();
     render(
       <DataGridTable
@@ -305,5 +308,314 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
 
     const input = screen.getByLabelText("Editing name");
     expect(document.activeElement).toBe(input);
+  });
+});
+
+// Sprint 74 — Type-aware NULL re-entry. Fixtures below exercise column-type
+// variations so the NULL-chip → typed-editor flip routes through
+// deriveEditorSeed and renders the correct `<input type>`.
+const DATE_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "integer",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "birthday",
+      data_type: "date",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, "2026-04-24"]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+};
+
+const INT_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "integer",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "score",
+      data_type: "integer",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, 42]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+};
+
+const BOOL_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "integer",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "active",
+      data_type: "boolean",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, true]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+};
+
+const TS_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "integer",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "created_at",
+      data_type: "timestamp",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, "2026-04-24T10:00:00Z"]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+};
+
+describe("DataGridTable — Sprint 74: type-aware NULL → typed editor flip", () => {
+  it("date column: 'a' from NULL chip flips with empty seed (not 'a')", () => {
+    const onSetEditValue = vi.fn();
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: DATE_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+          onSetEditValue,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole("textbox", {
+      name: /Editing birthday — currently NULL/,
+    });
+    act(() => {
+      fireEvent.keyDown(chip, { key: "a" });
+    });
+    // date editors cannot meaningfully accept a seeded letter; helper returns
+    // { seed: "", accept: true }, so parent is told to flip to empty string.
+    expect(onSetEditValue).toHaveBeenCalledTimes(1);
+    expect(onSetEditValue).toHaveBeenCalledWith("");
+  });
+
+  it("date column renders <input type='date'> once editValue is a string", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: DATE_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: "",
+        })}
+      />,
+    );
+    const input = screen.getByLabelText("Editing birthday") as HTMLInputElement;
+    expect(input.type).toBe("date");
+    expect(input.value).toBe("");
+  });
+
+  it("integer column: non-numeric key ('x') is swallowed — no state change", () => {
+    const onSetEditValue = vi.fn();
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: INT_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+          onSetEditValue,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole("textbox", {
+      name: /Editing score — currently NULL/,
+    });
+    act(() => {
+      fireEvent.keyDown(chip, { key: "x" });
+    });
+    expect(onSetEditValue).not.toHaveBeenCalled();
+  });
+
+  it("integer column: digit ('5') seeds the editor with '5'", () => {
+    const onSetEditValue = vi.fn();
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: INT_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+          onSetEditValue,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole("textbox", {
+      name: /Editing score — currently NULL/,
+    });
+    act(() => {
+      fireEvent.keyDown(chip, { key: "5" });
+    });
+    expect(onSetEditValue).toHaveBeenCalledWith("5");
+  });
+
+  it("boolean column: 't' flips with empty seed (Sprint 75 will coerce)", () => {
+    const onSetEditValue = vi.fn();
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: BOOL_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+          onSetEditValue,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole("textbox", {
+      name: /Editing active — currently NULL/,
+    });
+    act(() => {
+      fireEvent.keyDown(chip, { key: "t" });
+    });
+    expect(onSetEditValue).toHaveBeenCalledWith("");
+  });
+
+  it("timestamp column renders <input type='datetime-local'>", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: TS_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: "",
+        })}
+      />,
+    );
+    const input = screen.getByLabelText(
+      "Editing created_at",
+    ) as HTMLInputElement;
+    expect(input.type).toBe("datetime-local");
+  });
+
+  it("timestamp column: printable key flips to empty typed editor", () => {
+    const onSetEditValue = vi.fn();
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: TS_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+          onSetEditValue,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole("textbox", {
+      name: /Editing created_at — currently NULL/,
+    });
+    act(() => {
+      fireEvent.keyDown(chip, { key: "a" });
+    });
+    expect(onSetEditValue).toHaveBeenCalledWith("");
+  });
+
+  it("Cmd+Backspace from typed (date) editor returns to NULL chip", () => {
+    // AC-04: NULL re-entry via Cmd/Ctrl+Backspace must work across typed
+    // editors, not just the text editor.
+    const onSetEditNull = vi.fn();
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: DATE_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: "2026-04-24",
+          onSetEditNull,
+        })}
+      />,
+    );
+
+    const input = screen.getByLabelText("Editing birthday");
+    act(() => {
+      fireEvent.keyDown(input, { key: "Backspace", metaKey: true });
+    });
+    expect(onSetEditNull).toHaveBeenCalledTimes(1);
+  });
+
+  it("integer editor renders as <input type='text'> (native number filter deferred to Sprint 75)", () => {
+    // Integer columns still render with type="text" because native
+    // <input type="number"> behaviour conflicts with our string-based
+    // editValue pipeline; Sprint 74 only gates the NULL-chip flip, SQL-side
+    // coercion is Sprint 75.
+    render(
+      <DataGridTable
+        {...makeProps({
+          data: INT_DATA,
+          editingCell: { row: 0, col: 1 },
+          editValue: "42",
+        })}
+      />,
+    );
+    const input = screen.getByLabelText("Editing score") as HTMLInputElement;
+    expect(input.type).toBe("text");
   });
 });

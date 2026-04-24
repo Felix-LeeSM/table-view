@@ -6,6 +6,7 @@ import type { SortInfo, TableData } from "@/types/schema";
 import {
   editKey,
   cellToEditValue,
+  deriveEditorSeed,
   getInputTypeForColumn,
 } from "./useDataGridEdit";
 import {
@@ -643,11 +644,20 @@ export default function DataGridTable({
                                 !e.ctrlKey &&
                                 !e.altKey
                               ) {
-                                // Printable key flips NULL → text, seeded with
-                                // that character. The re-rendered <input> will
-                                // take focus via autoFocus on the next tick.
+                                // Printable key flips NULL → typed editor.
+                                // The column's data type picks both the seed
+                                // value (often `""` for pickers) and the
+                                // `<input type>` on the next render — routed
+                                // through `deriveEditorSeed` so the flip lands
+                                // on a type-appropriate editor, not a bare
+                                // text input with the raw character seeded in.
                                 e.preventDefault();
-                                onSetEditValue(e.key);
+                                const { seed, accept } = deriveEditorSeed(
+                                  col.data_type,
+                                  e.key,
+                                );
+                                if (!accept) return;
+                                onSetEditValue(seed);
                               }
                             }}
                           >

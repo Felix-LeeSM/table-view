@@ -30,6 +30,123 @@ export function getInputTypeForColumn(dataType: string): string {
 }
 
 /**
+ * Result of {@link deriveEditorSeed}. `accept: false` means the keystroke is
+ * not a legal first character for this column type and the caller should
+ * swallow the event without changing state (e.g. typing "a" on an integer
+ * column). Otherwise the seed is the initial text for the typed editor —
+ * which may be `""` for picker-based editors (date/datetime/time/boolean/uuid)
+ * where the literal character carries no useful meaning and native pickers
+ * do not benefit from a seeded first character.
+ *
+ * Invariant (ADR 0009): `seed: ""` is an empty string, NOT SQL NULL. Flipping
+ * NULL → typed editor seeds with `""` means the editor is now in tri-state
+ * "empty string" mode; the user can type to replace it.
+ */
+export interface EditorSeed {
+  seed: string;
+  accept: boolean;
+}
+
+/**
+ * Classify a column's data type family. Matches {@link getInputTypeForColumn}'s
+ * lowercasing/includes pattern so classification stays consistent with the
+ * HTML input-type rendering.
+ */
+function classifyDataType(
+  dataType: string,
+):
+  | "integer"
+  | "numeric"
+  | "date"
+  | "datetime"
+  | "time"
+  | "boolean"
+  | "uuid"
+  | "text" {
+  const lower = dataType.toLowerCase();
+  // `timestamp` and `timestamptz` must beat `time` — `timestamp` includes
+  // `time` as a substring. Order matters.
+  if (lower.includes("timestamp") || lower.includes("datetime")) {
+    return "datetime";
+  }
+  if (lower === "date") return "date";
+  if (lower.includes("time")) return "time";
+  if (lower === "bool" || lower.includes("boolean")) return "boolean";
+  if (lower.includes("uuid")) return "uuid";
+  // Integer family — check before numeric so `bigint` doesn't get trapped by
+  // a future `numeric` contains-check ordering bug. `int` catches int, int4,
+  // int8, integer, bigint, smallint, tinyint, mediumint.
+  if (
+    lower.includes("int") ||
+    lower === "serial" ||
+    lower === "bigserial" ||
+    lower === "smallserial"
+  ) {
+    return "integer";
+  }
+  if (
+    lower.includes("numeric") ||
+    lower.includes("decimal") ||
+    lower.includes("float") ||
+    lower.includes("double") ||
+    lower.includes("real")
+  ) {
+    return "numeric";
+  }
+  return "text";
+}
+
+/**
+ * Given a column's data type and a printable keystroke, decide whether to
+ * resume editing (and with what seed) when the user types from the NULL chip
+ * state. Separate from {@link getInputTypeForColumn} because the HTML input
+ * type is decided purely by column family, while the seed depends on both
+ * family AND the pressed key.
+ *
+ * Rules:
+ * - text/json/unknown: seed = key, accept = true (legacy behaviour).
+ * - integer: accept only digits and leading `-`; reject `.` and anything else.
+ * - numeric: accept digits, `-`, and `.`.
+ * - date/datetime/time/boolean/uuid: accept = true but seed = `""` — native
+ *   pickers and coercion-based editors do not benefit from a seeded first
+ *   character, and for boolean the literal character is usually unrelated
+ *   to the final `true`/`false` value anyway.
+ *
+ * All matching is case-insensitive and uses substring matches consistent with
+ * {@link getInputTypeForColumn}.
+ */
+export function deriveEditorSeed(dataType: string, key: string): EditorSeed {
+  const family = classifyDataType(dataType);
+  switch (family) {
+    case "integer": {
+      // Legal integer first chars: digit or leading minus. Reject `.` (decimals
+      // belong to numeric/float) and any letter/punctuation.
+      if (/^[0-9-]$/.test(key)) return { seed: key, accept: true };
+      return { seed: "", accept: false };
+    }
+    case "numeric": {
+      // Legal numeric first chars: digit, leading minus, leading decimal point.
+      if (/^[0-9.-]$/.test(key)) return { seed: key, accept: true };
+      return { seed: "", accept: false };
+    }
+    case "date":
+    case "datetime":
+    case "time":
+    case "boolean":
+    case "uuid": {
+      // Picker / coercion editors — flip into an empty typed editor and let
+      // the user interact via the native control (or re-type). We still
+      // accept the event so the NULL chip transitions out; the literal
+      // character is intentionally discarded.
+      return { seed: "", accept: true };
+    }
+    case "text":
+    default:
+      return { seed: key, accept: true };
+  }
+}
+
+/**
  * Render a raw cell value as a displayable string.
  * NULL collapses to `""` — use only for tooltip/title or read-only display
  * where that's acceptable. For edit flows, prefer `cellToEditValue`.
