@@ -70,6 +70,15 @@ export interface UseDataGridEditParams {
   connectionId: string;
   page: number;
   fetchData: () => void;
+  /**
+   * Sprint 66 — when `"document"`, `handleStartEdit` becomes a no-op so
+   * clicking a collection cell (including the `"{...}"` / `"[N items]"`
+   * sentinels) doesn't try to compose a SQL UPDATE statement. Write-path
+   * support for the document paradigm is Sprint 68+.
+   *
+   * Optional; defaults to `"rdb"` behaviour to preserve existing callers.
+   */
+  paradigm?: "rdb" | "document" | "search" | "kv";
 }
 
 export interface DataGridEditState {
@@ -125,6 +134,7 @@ export function useDataGridEdit({
   connectionId,
   page,
   fetchData,
+  paradigm = "rdb",
 }: UseDataGridEditParams): DataGridEditState {
   const executeQuery = useSchemaStore((s) => s.executeQuery);
   const activeTabId = useTabStore((s) => s.activeTabId);
@@ -214,6 +224,13 @@ export function useDataGridEdit({
 
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string) => {
+      // Sprint 66: block editing for document-paradigm grids. Write support
+      // requires MQL-flavoured updates that are out of scope for Sprint 66
+      // (P0 read-only). We intentionally do not start an edit session even
+      // for non-sentinel cells so the user sees a consistent read-only
+      // experience across a mongo collection.
+      if (paradigm === "document") return;
+
       // Save any existing edit first — but skip pending when value unchanged
       if (editingCell) {
         const key = editKey(editingCell.row, editingCell.col);
@@ -228,7 +245,7 @@ export function useDataGridEdit({
       // Promote preview tab on inline edit start
       if (activeTabId) promoteTab(activeTabId);
     },
-    [editingCell, editValue, data, activeTabId, promoteTab],
+    [editingCell, editValue, data, activeTabId, promoteTab, paradigm],
   );
 
   const handleCommit = useCallback(() => {

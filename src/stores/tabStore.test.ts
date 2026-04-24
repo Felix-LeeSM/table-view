@@ -506,6 +506,66 @@ describe("tabStore", () => {
       expect(state.tabs).toEqual([]);
       expect(state.activeTabId).toBeNull();
     });
+
+    it("migrates legacy TableTabs without paradigm to rdb", () => {
+      // Sprint 66: the `paradigm` field didn't exist on TableTab before this
+      // sprint. All legacy persisted tabs targeted an RDB connection, so the
+      // migration must default them to "rdb" instead of leaving `undefined`.
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      const tt = state.tabs[0];
+      expect(tt?.type).toBe("table");
+      if (tt && tt.type === "table") {
+        expect(tt.paradigm).toBe("rdb");
+        expect(tt.isPreview).toBe(false);
+      }
+    });
+
+    it("preserves a persisted paradigm=document TableTab on load", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "table_view_test.users",
+            connectionId: "conn-mongo",
+            closable: true,
+            schema: "table_view_test",
+            table: "users",
+            subView: "records",
+            paradigm: "document",
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      const tt = state.tabs[0];
+      if (tt && tt.type === "table") {
+        expect(tt.paradigm).toBe("document");
+      }
+    });
   });
 
   // -- Tab drag reorder --

@@ -4583,6 +4583,7 @@ dependencies = [
  "base64 0.22.1",
  "bson",
  "dirs",
+ "futures-util",
  "mongodb",
  "serde",
  "serde_json",

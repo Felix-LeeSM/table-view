@@ -45,6 +45,10 @@ pub fn run() {
             commands::rdb::schema::get_function_source,
             commands::rdb::query::execute_query,
             commands::rdb::query::cancel_query,
+            commands::document::browse::list_mongo_databases,
+            commands::document::browse::list_mongo_collections,
+            commands::document::browse::infer_collection_fields,
+            commands::document::query::find_documents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

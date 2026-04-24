@@ -22,6 +22,12 @@ import type {
   TableInfo,
   ViewInfo,
 } from "@/types/schema";
+import type {
+  CollectionInfo,
+  DatabaseInfo,
+  DocumentQueryResult,
+  FindBody,
+} from "@/types/document";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke<ConnectionConfig[]>("list_connections");
@@ -318,5 +324,62 @@ export async function getFunctionSource(
     connectionId,
     schema,
     functionName,
+  });
+}
+
+// ── Document paradigm (Sprint 66) ──────────────────────────────────────────
+// Each wrapper is a thin JSON passthrough to the matching Rust command. The
+// backend enforces paradigm via `ActiveAdapter::as_document()`, so calling
+// these against an RDB connection surfaces `AppError::Unsupported` rather
+// than silently returning empty results.
+
+/** List every database visible to the connected MongoDB user. */
+export async function listMongoDatabases(
+  connectionId: string,
+): Promise<DatabaseInfo[]> {
+  return invoke<DatabaseInfo[]>("list_mongo_databases", { connectionId });
+}
+
+/** List every collection inside `database` for the connected MongoDB client. */
+export async function listMongoCollections(
+  connectionId: string,
+  database: string,
+): Promise<CollectionInfo[]> {
+  return invoke<CollectionInfo[]>("list_mongo_collections", {
+    connectionId,
+    database,
+  });
+}
+
+/**
+ * Infer the top-level column layout of `collection` by sampling up to
+ * `sampleSize` documents. Defaults to 100 on the backend when omitted.
+ */
+export async function inferCollectionFields(
+  connectionId: string,
+  database: string,
+  collection: string,
+  sampleSize?: number,
+): Promise<ColumnInfo[]> {
+  return invoke<ColumnInfo[]>("infer_collection_fields", {
+    connectionId,
+    database,
+    collection,
+    sampleSize: sampleSize ?? null,
+  });
+}
+
+/** Execute a MongoDB `find` and return a flattened DataGrid-ready result. */
+export async function findDocuments(
+  connectionId: string,
+  database: string,
+  collection: string,
+  body?: FindBody,
+): Promise<DocumentQueryResult> {
+  return invoke<DocumentQueryResult>("find_documents", {
+    connectionId,
+    database,
+    collection,
+    body: body ?? null,
   });
 }

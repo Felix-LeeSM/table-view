@@ -10,6 +10,12 @@ vi.mock("./SchemaTree", () => ({
   ),
 }));
 
+vi.mock("./DocumentDatabaseTree", () => ({
+  default: ({ connectionId }: { connectionId: string }) => (
+    <div data-testid="document-database-tree">{connectionId}</div>
+  ),
+}));
+
 function makeConn(id: string): ConnectionConfig {
   return {
     id,
@@ -133,5 +139,20 @@ describe("SchemaPanel", () => {
     setupStore({ connections: [makeConn("c1")] });
     const { container } = render(<SchemaPanel selectedId="ghost" />);
     expect(container.textContent).toBe("");
+  });
+
+  it("renders DocumentDatabaseTree when connection paradigm is document", () => {
+    const mongoConn: ConnectionConfig = {
+      ...makeConn("m1"),
+      db_type: "mongodb",
+      paradigm: "document",
+    };
+    setupStore({ connections: [mongoConn], active: ["m1"] });
+    render(<SchemaPanel selectedId="m1" />);
+    expect(screen.getByTestId("document-database-tree")).toHaveTextContent(
+      "m1",
+    );
+    // SchemaTree (RDB) must NOT appear for a document connection.
+    expect(screen.queryByTestId("schema-tree")).toBeNull();
   });
 });

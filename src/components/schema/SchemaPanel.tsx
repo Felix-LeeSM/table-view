@@ -1,6 +1,7 @@
 import { Database, MousePointerClick, Plug } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
+import DocumentDatabaseTree from "./DocumentDatabaseTree";
 import SchemaTree from "./SchemaTree";
 
 interface SchemaPanelProps {
@@ -97,9 +98,18 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
     );
   }
 
+  // Sprint 66: document-paradigm connections (MongoDB) branch to the
+  // dedicated databases/collections tree instead of the RDB SchemaTree so
+  // the sidebar always shows the idioms of the underlying store.
+  const isDocument = selected.paradigm === "document";
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <SchemaTree connectionId={selectedId} />
+      {isDocument ? (
+        <DocumentDatabaseTree connectionId={selectedId} />
+      ) : (
+        <SchemaTree connectionId={selectedId} />
+      )}
     </div>
   );
 }

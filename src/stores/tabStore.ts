@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import type { FilterCondition } from "@/types/schema";
 
@@ -35,6 +36,15 @@ export interface TableTab {
   isPreview?: boolean;
   /** Pre-applied filters when the tab is opened (e.g. from FK navigation). Consumed once on mount. */
   initialFilters?: FilterCondition[];
+  /**
+   * Paradigm of the connection this tab belongs to. Sprint 66 introduces
+   * this field so the MainArea / DataGrid can route a document-paradigm
+   * tab through the MongoDB read path without inspecting connection state.
+   *
+   * Optional on the type for backwards compatibility; legacy persisted
+   * tabs without this field are migrated to `"rdb"` in `loadPersistedTabs`.
+   */
+  paradigm?: Paradigm;
 }
 
 /** A tab that hosts the SQL query editor. */
@@ -284,9 +294,16 @@ export const useTabStore = create<TabState>((set) => ({
         if (t.type === "query") {
           return { ...t, queryState: { status: "idle" as const } };
         }
-        // Reset preview flag on persisted tabs
+        // Reset preview flag on persisted tabs. Sprint 66: migrate
+        // pre-existing TableTabs that were saved before the `paradigm`
+        // field existed. Every legacy persisted tab targeted an RDB, so
+        // defaulting to `"rdb"` matches user expectations.
         if (t.type === "table") {
-          return { ...t, isPreview: false };
+          return {
+            ...t,
+            isPreview: false,
+            paradigm: t.paradigm ?? ("rdb" as const),
+          };
         }
         return t;
       });

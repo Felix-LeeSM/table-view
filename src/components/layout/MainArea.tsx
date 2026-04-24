@@ -4,6 +4,7 @@ import { useTabStore, type TableTab, type TabSubView } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Database, Plus } from "lucide-react";
 import DataGrid from "@components/DataGrid";
+import DocumentDataGrid from "@components/DocumentDataGrid";
 import StructurePanel from "@components/schema/StructurePanel";
 import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
@@ -16,6 +17,23 @@ interface TableTabProps {
 }
 
 function TableTabView({ tab, onSubViewChange }: TableTabProps) {
+  // Sprint 66: document-paradigm tabs bypass the Records/Structure sub-tabs
+  // for the P0 milestone. Structure inspection for collections is tracked
+  // by Sprint 67 (schema inference panel) and deliberately omitted here.
+  const isDocument = tab.paradigm === "document";
+
+  if (isDocument) {
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <DocumentDataGrid
+          connectionId={tab.connectionId}
+          database={tab.schema!}
+          collection={tab.table!}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Sub-tab bar */}
