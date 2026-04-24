@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import ThemePicker from "./ThemePicker";
 import { useThemeStore } from "@stores/themeStore";
-import { THEME_CATALOG, DEFAULT_THEME_ID } from "@lib/themeCatalog";
+import { DEFAULT_THEME_ID, FEATURED_THEME_IDS } from "@lib/themeCatalog";
 import { THEME_STORAGE_KEY } from "@lib/themeBoot";
 
 const localStorageMock = (() => {
@@ -31,12 +31,16 @@ describe("ThemePicker", () => {
     useThemeStore.getState().hydrate();
   });
 
-  it("renders a card for every entry in THEME_CATALOG", () => {
+  it("renders a card for every featured theme id", () => {
     render(<ThemePicker />);
     const grid = screen.getByTestId("theme-picker-grid");
     const cards = within(grid).getAllByRole("button");
-    expect(cards).toHaveLength(THEME_CATALOG.length);
-    expect(THEME_CATALOG.length).toBe(72);
+    expect(cards).toHaveLength(FEATURED_THEME_IDS.length);
+    // Sanity: every rendered card's id is in the featured set.
+    const ids = cards.map((el) => el.getAttribute("data-theme-id"));
+    for (const id of ids) {
+      expect(FEATURED_THEME_IDS).toContain(id);
+    }
   });
 
   it("marks the currently selected themeId as active", () => {
@@ -85,59 +89,37 @@ describe("ThemePicker", () => {
     expect(useThemeStore.getState().mode).toBe("dark");
   });
 
-  it("search filters out non-matching cards", () => {
+  it("hovering a card previews that theme on the DOM without touching the store", () => {
     render(<ThemePicker />);
-    const grid = screen.getByTestId("theme-picker-grid");
-    expect(within(grid).getAllByRole("button")).toHaveLength(
-      THEME_CATALOG.length,
+    expect(document.documentElement.getAttribute("data-theme")).toBe(
+      DEFAULT_THEME_ID,
     );
 
-    const input = screen.getByLabelText(/search themes/i);
+    const card = screen.getByRole("button", { name: /theme github primer/i });
     act(() => {
-      fireEvent.change(input, { target: { value: "mong" } });
+      fireEvent.mouseEnter(card);
     });
 
-    const remaining = within(grid).getAllByRole("button");
-    expect(remaining.length).toBeLessThan(THEME_CATALOG.length);
-    // MongoDB must survive the "mong" filter.
-    expect(
-      remaining.some((el) => el.getAttribute("data-theme-id") === "mongodb"),
-    ).toBe(true);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("github");
+    // Store stays untouched — preview is DOM-only.
+    expect(useThemeStore.getState().themeId).toBe(DEFAULT_THEME_ID);
   });
 
-  it("search is case-insensitive and matches id / name / vibe", () => {
+  it("leaving the grid clears the preview and restores the stored theme", () => {
     render(<ThemePicker />);
-    const input = screen.getByLabelText(/search themes/i);
     const grid = screen.getByTestId("theme-picker-grid");
 
-    // Matches name ("GitHub Primer")
+    const card = screen.getByRole("button", { name: /theme github primer/i });
     act(() => {
-      fireEvent.change(input, { target: { value: "GITHUB" } });
+      fireEvent.mouseEnter(card);
     });
-    const githubHits = within(grid).getAllByRole("button");
-    expect(
-      githubHits.some((el) => el.getAttribute("data-theme-id") === "github"),
-    ).toBe(true);
+    expect(document.documentElement.getAttribute("data-theme")).toBe("github");
 
-    // Matches vibe ("enterprise")
     act(() => {
-      fireEvent.change(input, { target: { value: "enterprise" } });
+      fireEvent.mouseLeave(grid);
     });
-    const vibeHits = within(grid).getAllByRole("button");
-    expect(
-      vibeHits.some((el) => el.getAttribute("data-theme-id") === "ibm"),
-    ).toBe(true);
-  });
-
-  it("shows the 'No themes match' placeholder when search has no results", () => {
-    render(<ThemePicker />);
-    const input = screen.getByLabelText(/search themes/i);
-    act(() => {
-      fireEvent.change(input, { target: { value: "zzzz-never-matches" } });
-    });
-
-    expect(screen.getByText(/no themes match/i)).toBeInTheDocument();
-    const grid = screen.getByTestId("theme-picker-grid");
-    expect(within(grid).queryAllByRole("button")).toHaveLength(0);
+    expect(document.documentElement.getAttribute("data-theme")).toBe(
+      DEFAULT_THEME_ID,
+    );
   });
 });

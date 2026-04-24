@@ -229,6 +229,22 @@ export type ThemeId = (typeof THEME_CATALOG)[number]["id"];
 
 export const THEME_IDS: readonly ThemeId[] = THEME_CATALOG.map((t) => t.id);
 
+/**
+ * Curated subset surfaced in the ThemePicker. The full THEME_CATALOG stays
+ * valid (so previously-saved user selections outside this list keep working
+ * on load), but the picker itself only offers these as choices.
+ */
+export const FEATURED_THEME_IDS: readonly ThemeId[] = [
+  "slate",
+  "github",
+  "arc",
+  "claude",
+  "darcula",
+  "posthog",
+  "ibm",
+  "kraken",
+];
+
 export const DEFAULT_THEME_ID: ThemeId = "slate";
 
 const THEME_ID_SET = new Set<string>(THEME_IDS);

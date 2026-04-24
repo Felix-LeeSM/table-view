@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-04-22
+updated: 2026-04-24
 ---
 
 # ADR 인덱스
@@ -16,6 +16,7 @@ updated: 2026-04-22
 | [0004](./0004-sidebar-connection-schema-mode-toggle/memory.md) | Sidebar Connections/Schemas 모드 토글 | Accepted | 2026-04-20 | — |
 | [0005](./0005-plaintext-password-never-leaves-backend/memory.md) | plaintext 비밀번호는 IPC 경계를 넘지 않는다 | Accepted | 2026-04-20 | — |
 | [0006](./0006-raw-query-edit-gated-by-query-analyzer/memory.md) | Raw query 편집은 queryAnalyzer gate 통과 시만 허용 | Accepted | 2026-04-20 | — |
+| [0007](./0007-theme-picker-dom-only-hover-preview/memory.md) | ThemePicker hover preview는 DOM-only | Accepted | 2026-04-24 | — |
 
 ## 역사 (Superseded / Deprecated)
 
