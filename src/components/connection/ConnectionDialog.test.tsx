@@ -30,6 +30,7 @@ function makeConnection(
     group_id: null,
     color: null,
     environment: null,
+    paradigm: "rdb",
     ...overrides,
   };
 }
@@ -715,6 +716,85 @@ describe("ConnectionDialog", () => {
       expect(
         screen.queryByLabelText(/clear stored password on save/i),
       ).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 65: MongoDB-specific conditional fields
+  // -----------------------------------------------------------------------
+  describe("MongoDB conditional fields", () => {
+    it("does not render mongo-only fields when db_type is postgresql", () => {
+      renderDialog();
+      expect(screen.queryByLabelText("Auth Source")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Replica Set")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Enable TLS")).not.toBeInTheDocument();
+    });
+
+    it("renders auth source, replica set, and TLS fields when switching to MongoDB", async () => {
+      renderDialog();
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mongodb" } });
+      });
+
+      expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
+      expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
+      expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
+    });
+
+    it("relabels Database as optional when MongoDB is selected", async () => {
+      renderDialog();
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mongodb" } });
+      });
+
+      expect(screen.getByText("Database (optional)")).toBeInTheDocument();
+    });
+
+    it("includes auth_source, replica_set, tls_enabled in the saved draft", async () => {
+      renderDialog();
+      const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: "Mongo DB" } });
+        fireEvent.change(select, { target: { value: "mongodb" } });
+      });
+
+      const authSource = screen.getByLabelText(
+        "Auth Source",
+      ) as HTMLInputElement;
+      const replicaSet = screen.getByLabelText(
+        "Replica Set",
+      ) as HTMLInputElement;
+      const tls = screen.getByLabelText("Enable TLS") as HTMLInputElement;
+
+      await act(async () => {
+        fireEvent.change(authSource, { target: { value: "admin" } });
+        fireEvent.change(replicaSet, { target: { value: "rs0" } });
+        fireEvent.click(tls);
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      expect(mockAddConnection).toHaveBeenCalledTimes(1);
+      const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.db_type).toBe("mongodb");
+      expect(draft.paradigm).toBe("document");
+      expect(draft.auth_source).toBe("admin");
+      expect(draft.replica_set).toBe("rs0");
+      expect(draft.tls_enabled).toBe(true);
     });
   });
 });

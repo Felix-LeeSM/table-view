@@ -34,6 +34,7 @@ function makeConn(id: string, name: string): ConnectionConfig {
     group_id: null,
     color: null,
     environment: null,
+    paradigm: "rdb",
   };
 }
 

@@ -11,6 +11,7 @@ import {
   draftFromConnection,
   DATABASE_DEFAULTS,
   parseConnectionUrl,
+  paradigmOf,
   ENVIRONMENT_META,
   ENVIRONMENT_OPTIONS,
 } from "@/types/connection";
@@ -71,8 +72,11 @@ export default function ConnectionDialog({
       ...f,
       db_type: dbType,
       port: DATABASE_DEFAULTS[dbType],
+      paradigm: paradigmOf(dbType),
     }));
   };
+
+  const isMongo = form.db_type === "mongodb";
 
   /** Resolve the password value to send to the backend. */
   const resolvePassword = (): string | null => {
@@ -408,7 +412,7 @@ export default function ConnectionDialog({
                 {/* Database */}
                 <div>
                   <label htmlFor="conn-database" className={labelClass}>
-                    Database
+                    Database{isMongo ? " (optional)" : ""}
                   </label>
                   <input
                     id="conn-database"
@@ -417,9 +421,69 @@ export default function ConnectionDialog({
                     onChange={(e) =>
                       setForm((f) => ({ ...f, database: e.target.value }))
                     }
-                    placeholder="mydb"
+                    placeholder={isMongo ? "Leave blank to default" : "mydb"}
                   />
                 </div>
+
+                {/* MongoDB-specific fields (Sprint 65). Only rendered when
+                    the selected db_type is mongodb. Auth source + replica
+                    set are optional strings; TLS is a boolean toggle. */}
+                {isMongo && (
+                  <div className="space-y-3 rounded border border-border bg-background/40 p-3">
+                    <div className="text-xs font-semibold text-secondary-foreground">
+                      MongoDB Options
+                    </div>
+                    <div>
+                      <label htmlFor="conn-auth-source" className={labelClass}>
+                        Auth Source
+                      </label>
+                      <input
+                        id="conn-auth-source"
+                        className={inputClass}
+                        value={form.auth_source ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            auth_source: e.target.value || null,
+                          }))
+                        }
+                        placeholder="admin"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="conn-replica-set" className={labelClass}>
+                        Replica Set
+                      </label>
+                      <input
+                        id="conn-replica-set"
+                        className={inputClass}
+                        value={form.replica_set ?? ""}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            replica_set: e.target.value || null,
+                          }))
+                        }
+                        placeholder="rs0"
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-secondary-foreground">
+                      <input
+                        id="conn-tls-enabled"
+                        type="checkbox"
+                        className="cursor-pointer"
+                        checked={!!form.tls_enabled}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            tls_enabled: e.target.checked,
+                          }))
+                        }
+                      />
+                      Enable TLS
+                    </label>
+                  </div>
+                )}
 
                 {/* Advanced Settings */}
                 <div className="border-t border-border pt-3">

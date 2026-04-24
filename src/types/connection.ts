@@ -7,9 +7,10 @@ export type DatabaseType =
 
 /**
  * Broad paradigm classification mirrored from the backend. Each
- * `DatabaseType` maps to exactly one paradigm. Sprint 64 added this tag so
- * future sprints can branch UI on paradigm rather than per-DBMS. Do not
- * consume this in UI code yet — that wiring lands in Sprint 65+.
+ * `DatabaseType` maps to exactly one paradigm. Sprint 64 introduced the tag;
+ * Sprint 65 tightens consumption so the UI can branch on paradigm (e.g.
+ * mongo → document tree placeholder) without falling back to the raw
+ * `db_type` string.
  */
 export type Paradigm = "rdb" | "document" | "search" | "kv";
 
@@ -35,14 +36,23 @@ export interface ConnectionConfig {
   /** Whether a password is currently stored on disk for this connection. */
   has_password: boolean;
   /**
-   * Paradigm tag derived from `db_type` on the backend. Present on every
-   * connection returned from the backend after Sprint 64. Marked optional
-   * so that pre-Sprint 64 JSON fixtures (e.g. legacy tests, localStorage
-   * payloads) still type-check; consumers that need the value should fall
-   * back to `paradigmOf(conn.db_type)`. Do not consume this field in UI
-   * code yet — the wiring is deferred to Sprint 65+.
+   * Paradigm tag derived from `db_type` on the backend. Sprint 65 promotes
+   * this from optional to **required** — the backend now emits a typed
+   * `Paradigm` enum on every response (no `#[serde(default)]` fallback), so
+   * consumers can rely on it being present instead of falling back to
+   * `paradigmOf(conn.db_type)` for undefined safety.
    */
-  paradigm?: Paradigm;
+  paradigm: Paradigm;
+  // ── MongoDB-specific optional fields (Sprint 65). ────────────────────
+  // All three are serialised by the backend only when the user fills them
+  // in, and the frontend treats them as optional so non-mongo connections
+  // type-check without boilerplate.
+  /** MongoDB auth source (`authSource`). */
+  auth_source?: string | null;
+  /** MongoDB replica set name. */
+  replica_set?: string | null;
+  /** Whether TLS is enabled for this MongoDB connection. */
+  tls_enabled?: boolean | null;
 }
 
 /**
@@ -112,6 +122,7 @@ export function createEmptyDraft(): ConnectionDraft {
     database: "",
     group_id: null,
     color: null,
+    paradigm: "rdb",
   };
 }
 
@@ -132,6 +143,10 @@ export function draftFromConnection(conn: ConnectionConfig): ConnectionDraft {
     connection_timeout: conn.connection_timeout,
     keep_alive_interval: conn.keep_alive_interval,
     environment: conn.environment,
+    paradigm: conn.paradigm,
+    auth_source: conn.auth_source,
+    replica_set: conn.replica_set,
+    tls_enabled: conn.tls_enabled,
     password: null,
   };
 }
@@ -157,6 +172,7 @@ export function parseConnectionUrl(
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
       database: parsed.pathname.replace(/^\//, ""),
+      paradigm: paradigmOf(dbType),
     };
   } catch {
     return null;

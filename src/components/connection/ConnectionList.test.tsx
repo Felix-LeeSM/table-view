@@ -83,6 +83,7 @@ function makeConnection(
     database: "testdb",
     group_id: null,
     color: null,
+    paradigm: "rdb",
     ...overrides,
   };
 }

@@ -17,6 +17,7 @@ function makeConn(overrides: Partial<ConnectionConfig> = {}): ConnectionConfig {
     database: "db",
     group_id: null,
     color: null,
+    paradigm: "rdb",
     ...overrides,
   };
 }

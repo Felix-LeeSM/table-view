@@ -50,6 +50,7 @@ function makeConn(id: string, hasPw = false): ConnectionConfig {
     group_id: null,
     color: null,
     environment: null,
+    paradigm: "rdb",
   };
 }
 

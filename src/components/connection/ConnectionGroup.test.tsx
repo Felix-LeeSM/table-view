@@ -151,6 +151,7 @@ function makeConnection(
     database: "testdb",
     group_id: "g1",
     color: null,
+    paradigm: "rdb",
     ...overrides,
   };
 }

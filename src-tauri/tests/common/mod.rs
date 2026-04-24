@@ -5,7 +5,9 @@
 //! database is unavailable, and a helper to enumerate which DBMS types have
 //! running instances.
 
+use table_view_lib::db::mongodb::MongoAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
+use table_view_lib::db::DbAdapter;
 use table_view_lib::models::{ConnectionConfig, DatabaseType};
 
 /// Default host, port, user, password, and database for each DBMS when running
@@ -20,6 +22,7 @@ fn env_or(key: &str, default: &str) -> String {
 /// Environment variable overrides (per DBMS prefix):
 ///   PostgreSQL — `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
 ///   MySQL      — `MYSQL_HOST`, `MYSQL_TCP_PORT`, `MYSQL_USER`, `MYSQL_PWD`, `MYSQL_DATABASE`
+///   MongoDB    — `MONGO_HOST`, `MONGO_PORT`, `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_DATABASE`
 pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
     match db_type {
         DatabaseType::Postgresql => ConnectionConfig {
@@ -36,6 +39,9 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             connection_timeout: Some(5),
             keep_alive_interval: None,
             environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
         },
         DatabaseType::Mysql => ConnectionConfig {
             id: "test-conn".to_string(),
@@ -51,6 +57,30 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             connection_timeout: Some(5),
             keep_alive_interval: None,
             environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
+        },
+        DatabaseType::Mongodb => ConnectionConfig {
+            id: "test-conn".to_string(),
+            name: "TestMongo".to_string(),
+            db_type: DatabaseType::Mongodb,
+            host: env_or("MONGO_HOST", "localhost"),
+            port: env_or("MONGO_PORT", "27017").parse().unwrap_or(27017),
+            user: env_or("MONGO_USER", "testuser"),
+            password: env_or("MONGO_PASSWORD", "testpass"),
+            database: env_or("MONGO_DATABASE", "table_view_test"),
+            group_id: None,
+            color: None,
+            connection_timeout: Some(5),
+            keep_alive_interval: None,
+            environment: None,
+            // docker-compose.test.yml initialises mongo with the default
+            // auth database `admin`, so auth_source must point there when
+            // credentials are exercised.
+            auth_source: Some("admin".to_string()),
+            replica_set: None,
+            tls_enabled: None,
         },
         other => panic!("test_config: unsupported DatabaseType {:?}", other),
     }
@@ -61,11 +91,15 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
 /// Returns `Some(adapter)` on success, or `None` with a skip message when the
 /// database is unavailable. This pattern lets integration tests exit with code 0
 /// even when Docker is not running.
+#[allow(dead_code)]
 pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
-    // Currently only PostgresAdapter exists in the codebase.
+    // Currently only PostgresAdapter is returned by this helper; the mongo
+    // variant has its own dedicated helper (`setup_mongo_adapter`) because
+    // the concrete adapter type differs.
     assert!(
         matches!(db_type, DatabaseType::Postgresql),
-        "setup_adapter: only PostgreSQL is supported at this time"
+        "setup_adapter: only PostgreSQL is supported at this time. \
+         Use setup_mongo_adapter for MongoDB."
     );
 
     let config = test_config(db_type);
@@ -83,6 +117,27 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
     }
 }
 
+/// Attempt to connect to the MongoDB test database and return a connected
+/// `MongoAdapter`. Returns `None` with a skip message when the database is
+/// unavailable — mirrors the Postgres skip pattern so the integration test
+/// can exit 0 when Docker is not running.
+#[allow(dead_code)]
+pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
+    let config = test_config(DatabaseType::Mongodb);
+    let adapter = MongoAdapter::new();
+    match adapter.connect(&config).await {
+        Ok(()) => Some(adapter),
+        Err(e) => {
+            println!(
+                "SKIP: MongoDB database not available ({}). \
+                 Start with: docker compose -f docker-compose.test.yml up -d mongodb",
+                e
+            );
+            None
+        }
+    }
+}
+
 /// Return the list of DBMS types that are currently reachable.
 ///
 /// Probes each supported DBMS by attempting a short-lived connection using
@@ -91,14 +146,26 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
 /// selection in future multi-DBMS integration suites.
 #[allow(dead_code)]
 pub async fn available_dbms() -> Vec<DatabaseType> {
-    let candidates = vec![DatabaseType::Postgresql];
+    let candidates = vec![DatabaseType::Postgresql, DatabaseType::Mongodb];
     let mut available = Vec::new();
 
     for db_type in candidates {
-        let config = test_config(db_type.clone());
-        let adapter = PostgresAdapter::new();
-        if adapter.connect_pool(&config).await.is_ok() {
-            available.push(db_type);
+        match db_type {
+            DatabaseType::Postgresql => {
+                let config = test_config(db_type.clone());
+                let adapter = PostgresAdapter::new();
+                if adapter.connect_pool(&config).await.is_ok() {
+                    available.push(db_type);
+                }
+            }
+            DatabaseType::Mongodb => {
+                let config = test_config(db_type.clone());
+                let adapter = MongoAdapter::new();
+                if adapter.connect(&config).await.is_ok() {
+                    available.push(db_type);
+                }
+            }
+            _ => {}
         }
     }
 

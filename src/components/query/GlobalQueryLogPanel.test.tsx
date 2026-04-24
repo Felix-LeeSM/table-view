@@ -66,6 +66,7 @@ describe("GlobalQueryLogPanel", () => {
           database: "testdb",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
         {
           id: "conn-2",
@@ -78,6 +79,7 @@ describe("GlobalQueryLogPanel", () => {
           database: "otherdb",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
     });

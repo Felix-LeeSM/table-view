@@ -4,7 +4,7 @@ pub mod schema;
 
 pub use connection::{
     ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus, DatabaseType,
-    StorageData,
+    Paradigm, StorageData,
 };
 pub use query::{QueryColumn, QueryResult, QueryType};
 pub use schema::{

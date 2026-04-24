@@ -1,5 +1,7 @@
+pub mod mongodb;
 pub mod postgres;
 
+pub use mongodb::MongoAdapter;
 pub use postgres::PostgresAdapter;
 
 use std::future::Future;
@@ -52,37 +54,49 @@ pub type RdbQueryResult = QueryResult;
 
 /// MongoDB document identifier (Phase 6).
 ///
-/// The underlying `bson::ObjectId` type is introduced by Sprint B together
-/// with the `bson` crate dependency. For Sprint A1 we keep a thin placeholder
-/// keyed by the extended-JSON string representation so that the trait
-/// compiles without pulling `bson` into `Cargo.toml` prematurely.
+/// Sprint 65 promotes this from a `serde_json::Value`-backed placeholder to a
+/// native BSON representation now that the `bson` crate is a first-class
+/// dependency. `Raw` retains an escape hatch for exotic `_id` shapes
+/// (composite documents, binary types) that do not fit the top three cases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DocumentId {
     ObjectId(String),
     String(String),
     Number(i64),
-    Raw(serde_json::Value),
+    Raw(bson::Bson),
 }
 
 /// Parameter bundle for `DocumentAdapter::find` (Phase 6).
 ///
-/// Represented as `serde_json::Value` for Sprint A1 — Sprint B will migrate
-/// these to `bson::Document` once the `bson` crate is added.
+/// Sprint 65 migrates the filter/sort/projection fields from
+/// `serde_json::Value` placeholders to native `bson::Document` so the
+/// MongoDB driver can consume them without a JSON → BSON conversion pass.
+/// `filter` defaults to an empty document (= no constraint) and the optional
+/// `sort`/`projection` remain `None` by default.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FindBody {
-    pub filter: serde_json::Value,
-    pub sort: Option<serde_json::Value>,
-    pub projection: Option<serde_json::Value>,
+    #[serde(default)]
+    pub filter: bson::Document,
+    pub sort: Option<bson::Document>,
+    pub projection: Option<bson::Document>,
+    #[serde(default)]
     pub skip: u64,
+    #[serde(default)]
     pub limit: i64,
 }
 
 /// Result shape for document-oriented query/aggregation (Phase 6).
+///
+/// `raw_documents` now carries native `bson::Document` values — the Quick
+/// Look panel (Sprint 66+) will render these directly without a lossy
+/// JSON-Value intermediary. `rows` still uses `serde_json::Value` because the
+/// data grid consumer projects scalar cells through the same JSON pipeline
+/// that the RDB paradigm uses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentQueryResult {
     pub columns: Vec<crate::models::QueryColumn>,
     pub rows: Vec<Vec<serde_json::Value>>,
-    pub raw_documents: Vec<serde_json::Value>,
+    pub raw_documents: Vec<bson::Document>,
     pub total_count: i64,
     pub execution_time_ms: u64,
 }
@@ -259,14 +273,14 @@ pub trait DocumentAdapter: DbAdapter {
         &'a self,
         db: &'a str,
         collection: &'a str,
-        pipeline: Vec<serde_json::Value>,
+        pipeline: Vec<bson::Document>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
     fn insert_document<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
-        doc: serde_json::Value,
+        doc: bson::Document,
     ) -> BoxFuture<'a, Result<DocumentId, AppError>>;
 
     fn update_document<'a>(
@@ -274,7 +288,7 @@ pub trait DocumentAdapter: DbAdapter {
         db: &'a str,
         collection: &'a str,
         id: DocumentId,
-        patch: serde_json::Value,
+        patch: bson::Document,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
     fn delete_document<'a>(
@@ -445,7 +459,7 @@ mod tests {
                 &'a self,
                 _db: &'a str,
                 _collection: &'a str,
-                _pipeline: Vec<serde_json::Value>,
+                _pipeline: Vec<bson::Document>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {
@@ -461,7 +475,7 @@ mod tests {
                 &'a self,
                 _db: &'a str,
                 _collection: &'a str,
-                _doc: serde_json::Value,
+                _doc: bson::Document,
             ) -> BoxFuture<'a, Result<DocumentId, AppError>> {
                 Box::pin(async { Ok(DocumentId::Number(0)) })
             }
@@ -470,7 +484,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _id: DocumentId,
-                _patch: serde_json::Value,
+                _patch: bson::Document,
             ) -> BoxFuture<'a, Result<(), AppError>> {
                 Box::pin(async { Ok(()) })
             }

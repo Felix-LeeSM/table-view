@@ -997,6 +997,7 @@ describe("SchemaTree", () => {
           database: "testdb",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
     });

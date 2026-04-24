@@ -17,6 +17,7 @@ describe("parseConnectionUrl", () => {
       user: "admin",
       password: "pass123",
       database: "mydb",
+      paradigm: "rdb",
     });
   });
 
@@ -35,6 +36,7 @@ describe("parseConnectionUrl", () => {
       user: "root",
       password: "secret",
       database: "app",
+      paradigm: "rdb",
     });
   });
 
@@ -75,5 +77,28 @@ describe("createEmptyDraft", () => {
     expect(conn.host).toBe("localhost");
     expect(conn.id).toBe("");
     expect(conn.password).toBe("");
+  });
+
+  it("populates paradigm as rdb for the default draft (Sprint 65)", () => {
+    const conn = createEmptyDraft();
+    expect(conn.paradigm).toBe("rdb");
+  });
+});
+
+describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
+  it("tags mongodb URLs with the document paradigm", () => {
+    const result = parseConnectionUrl(
+      "mongodb://user:pass@localhost:27017/app",
+    );
+    expect(result).not.toBeNull();
+    expect(result!.db_type).toBe("mongodb");
+    expect(result!.paradigm).toBe("document");
+  });
+
+  it("tags redis URLs with the kv paradigm", () => {
+    const result = parseConnectionUrl("redis://localhost:6379");
+    expect(result).not.toBeNull();
+    expect(result!.db_type).toBe("redis");
+    expect(result!.paradigm).toBe("kv");
   });
 });

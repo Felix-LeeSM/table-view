@@ -23,17 +23,32 @@ impl DatabaseType {
         }
     }
 
-    /// Paradigm tag exposed to the frontend. Sprint 64 introduces this so the
-    /// UI can (eventually) branch on relational vs document vs search vs kv
-    /// connections. This sprint only serializes the tag — consumers do not
-    /// yet branch on it.
-    pub fn paradigm(&self) -> &'static str {
+    /// Paradigm tag exposed to the frontend. Sprint 65 promotes this from the
+    /// previous `&'static str` return type to a typed `Paradigm` enum so the
+    /// wire format is a validated discriminated tag rather than a free-form
+    /// string.
+    pub fn paradigm(&self) -> Paradigm {
         match self {
-            DatabaseType::Postgresql | DatabaseType::Mysql | DatabaseType::Sqlite => "rdb",
-            DatabaseType::Mongodb => "document",
-            DatabaseType::Redis => "kv",
+            DatabaseType::Postgresql | DatabaseType::Mysql | DatabaseType::Sqlite => Paradigm::Rdb,
+            DatabaseType::Mongodb => Paradigm::Document,
+            DatabaseType::Redis => Paradigm::Kv,
         }
     }
+}
+
+/// Database paradigm tag. Serialized lowercase (`"rdb"`, `"document"`,
+/// `"search"`, `"kv"`) to match the frontend `Paradigm` string-literal union.
+///
+/// Sprint 65 promotes this from a bare `String` on `ConnectionConfigPublic` to
+/// a typed enum so that wire payloads can no longer carry an arbitrary empty
+/// string via `#[serde(default)]`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Paradigm {
+    Rdb,
+    Document,
+    Search,
+    Kv,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +69,20 @@ pub struct ConnectionConfig {
     pub keep_alive_interval: Option<u32>,
     #[serde(default)]
     pub environment: Option<String>,
+    // ── MongoDB-specific optional fields (Sprint 65). ─────────────────────
+    // All three are `#[serde(default)]` so existing non-mongo persisted JSON
+    // (which lacks these keys entirely) still deserializes unchanged.
+    /// MongoDB authentication database (`authSource`). Ignored by non-mongo
+    /// adapters.
+    #[serde(default)]
+    pub auth_source: Option<String>,
+    /// MongoDB replica set name. Ignored by non-mongo adapters.
+    #[serde(default)]
+    pub replica_set: Option<String>,
+    /// Whether to enable TLS for the MongoDB connection. Ignored by non-mongo
+    /// adapters.
+    #[serde(default)]
+    pub tls_enabled: Option<bool>,
 }
 
 /// Public-facing connection shape returned to the frontend and exported to
@@ -80,13 +109,20 @@ pub struct ConnectionConfigPublic {
     /// Whether a password is stored on disk. Derived, never persisted.
     #[serde(default)]
     pub has_password: bool,
-    /// Paradigm tag derived from `db_type` (`"rdb"`, `"document"`, `"search"`,
-    /// `"kv"`). Added in Sprint 64 so the frontend can route UI off it in
-    /// future phases. Serialized on every response; deserialization defaults
-    /// to the empty string so that older persisted JSON (which lacks this
-    /// field) still loads.
+    /// Paradigm tag derived from `db_type`. Sprint 65 tightens this from the
+    /// previous `String` + `#[serde(default)]` shape into a typed
+    /// [`Paradigm`] enum; payloads lacking this field now fail to
+    /// deserialize instead of silently defaulting to `""`. The frontend
+    /// `Paradigm` string-literal union (`"rdb" | "document" | "search" |
+    /// "kv"`) mirrors the lowercase serialization.
+    pub paradigm: Paradigm,
+    // ── MongoDB-specific optional fields (Sprint 65) ─────────────────────
     #[serde(default)]
-    pub paradigm: String,
+    pub auth_source: Option<String>,
+    #[serde(default)]
+    pub replica_set: Option<String>,
+    #[serde(default)]
+    pub tls_enabled: Option<bool>,
 }
 
 impl From<&ConnectionConfig> for ConnectionConfigPublic {
@@ -94,7 +130,7 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
         Self {
             id: c.id.clone(),
             name: c.name.clone(),
-            paradigm: c.db_type.paradigm().to_string(),
+            paradigm: c.db_type.paradigm(),
             db_type: c.db_type.clone(),
             host: c.host.clone(),
             port: c.port,
@@ -106,6 +142,9 @@ impl From<&ConnectionConfig> for ConnectionConfigPublic {
             keep_alive_interval: c.keep_alive_interval,
             environment: c.environment.clone(),
             has_password: !c.password.is_empty(),
+            auth_source: c.auth_source.clone(),
+            replica_set: c.replica_set.clone(),
+            tls_enabled: c.tls_enabled,
         }
     }
 }
@@ -130,6 +169,9 @@ impl ConnectionConfigPublic {
             connection_timeout: self.connection_timeout,
             keep_alive_interval: self.keep_alive_interval,
             environment: self.environment,
+            auth_source: self.auth_source,
+            replica_set: self.replica_set,
+            tls_enabled: self.tls_enabled,
         }
     }
 }
@@ -214,11 +256,25 @@ mod tests {
 
     #[test]
     fn database_type_paradigm_maps_expected_tags() {
-        assert_eq!(DatabaseType::Postgresql.paradigm(), "rdb");
-        assert_eq!(DatabaseType::Mysql.paradigm(), "rdb");
-        assert_eq!(DatabaseType::Sqlite.paradigm(), "rdb");
-        assert_eq!(DatabaseType::Mongodb.paradigm(), "document");
-        assert_eq!(DatabaseType::Redis.paradigm(), "kv");
+        assert_eq!(DatabaseType::Postgresql.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Mysql.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Sqlite.paradigm(), Paradigm::Rdb);
+        assert_eq!(DatabaseType::Mongodb.paradigm(), Paradigm::Document);
+        assert_eq!(DatabaseType::Redis.paradigm(), Paradigm::Kv);
+    }
+
+    #[test]
+    fn paradigm_serializes_to_expected_lowercase_tags() {
+        assert_eq!(serde_json::to_string(&Paradigm::Rdb).unwrap(), "\"rdb\"");
+        assert_eq!(
+            serde_json::to_string(&Paradigm::Document).unwrap(),
+            "\"document\""
+        );
+        assert_eq!(
+            serde_json::to_string(&Paradigm::Search).unwrap(),
+            "\"search\""
+        );
+        assert_eq!(serde_json::to_string(&Paradigm::Kv).unwrap(), "\"kv\"");
     }
 
     #[test]
@@ -237,9 +293,12 @@ mod tests {
             connection_timeout: None,
             keep_alive_interval: None,
             environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
         };
         let public = ConnectionConfigPublic::from(&conn);
-        assert_eq!(public.paradigm, "rdb");
+        assert_eq!(public.paradigm, Paradigm::Rdb);
 
         let json = serde_json::to_string(&public).unwrap();
         assert!(
@@ -265,14 +324,42 @@ mod tests {
             connection_timeout: None,
             keep_alive_interval: None,
             environment: None,
+            auth_source: Some("admin".into()),
+            replica_set: Some("rs0".into()),
+            tls_enabled: Some(true),
         };
         let public = ConnectionConfigPublic::from(&conn);
-        assert_eq!(public.paradigm, "document");
+        assert_eq!(public.paradigm, Paradigm::Document);
+
+        let json = serde_json::to_string(&public).unwrap();
+        assert!(
+            json.contains("\"paradigm\":\"document\""),
+            "paradigm tag missing from payload: {}",
+            json
+        );
+        assert!(
+            json.contains("\"auth_source\":\"admin\""),
+            "auth_source missing from payload: {}",
+            json
+        );
+        assert!(
+            json.contains("\"replica_set\":\"rs0\""),
+            "replica_set missing from payload: {}",
+            json
+        );
+        assert!(
+            json.contains("\"tls_enabled\":true"),
+            "tls_enabled missing from payload: {}",
+            json
+        );
     }
 
     #[test]
-    fn connection_config_public_deserializes_without_paradigm_field() {
-        // Payload shape from older Sprint 63 clients — no `paradigm` key.
+    fn connection_config_public_rejects_payload_without_paradigm_field() {
+        // Sprint 65 tightens this: a payload lacking `paradigm` must no
+        // longer silently default to an empty string. (Sprint 64 allowed it
+        // via `#[serde(default)]`; the ability to round-trip old clients
+        // without a paradigm tag is now removed by design.)
         let json = r#"{
             "id": "c1",
             "name": "DB",
@@ -284,10 +371,11 @@ mod tests {
             "group_id": null,
             "color": null
         }"#;
-        let public: ConnectionConfigPublic = serde_json::from_str(json).unwrap();
-        // Default is empty string; callers must reconstruct via From<&ConnectionConfig>
-        // when they need the derived value.
-        assert_eq!(public.paradigm, "");
+        let result: Result<ConnectionConfigPublic, _> = serde_json::from_str(json);
+        assert!(
+            result.is_err(),
+            "expected missing paradigm field to fail deserialization"
+        );
     }
 
     #[test]
@@ -334,6 +422,9 @@ mod tests {
             connection_timeout: Some(60),
             keep_alive_interval: Some(15),
             environment: Some("production".into()),
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
@@ -348,6 +439,7 @@ mod tests {
     #[test]
     fn connection_config_optional_fields_default_to_none() {
         // Simulates data saved before timeout/keep_alive/environment were added
+        // — and, from Sprint 65, before auth_source/replica_set/tls_enabled.
         let json = r#"{
             "id": "test",
             "name": "test",
@@ -364,6 +456,37 @@ mod tests {
         assert_eq!(config.connection_timeout, None);
         assert_eq!(config.keep_alive_interval, None);
         assert_eq!(config.environment, None);
+        // Sprint 65 additions remain None for legacy payloads.
+        assert_eq!(config.auth_source, None);
+        assert_eq!(config.replica_set, None);
+        assert_eq!(config.tls_enabled, None);
+    }
+
+    #[test]
+    fn connection_config_preserves_mongo_fields_across_roundtrip() {
+        let config = ConnectionConfig {
+            id: "mongo-1".into(),
+            name: "Mongo".into(),
+            db_type: DatabaseType::Mongodb,
+            host: "localhost".into(),
+            port: 27017,
+            user: "u".into(),
+            password: "p".into(),
+            database: "d".into(),
+            group_id: None,
+            color: None,
+            connection_timeout: None,
+            keep_alive_interval: None,
+            environment: None,
+            auth_source: Some("admin".into()),
+            replica_set: Some("rs0".into()),
+            tls_enabled: Some(true),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.auth_source.as_deref(), Some("admin"));
+        assert_eq!(deserialized.replica_set.as_deref(), Some("rs0"));
+        assert_eq!(deserialized.tls_enabled, Some(true));
     }
 
     #[test]
@@ -383,6 +506,9 @@ mod tests {
                 connection_timeout: None,
                 keep_alive_interval: None,
                 environment: None,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
             }],
             groups: vec![ConnectionGroup {
                 id: "g1".into(),

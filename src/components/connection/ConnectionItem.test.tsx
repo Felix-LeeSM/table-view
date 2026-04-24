@@ -113,6 +113,7 @@ function makeConnection(
     group_id: null,
     color: null,
     environment: null,
+    paradigm: "rdb",
     ...overrides,
   };
 }

@@ -45,6 +45,9 @@ fn sample_connection(id: &str, name: &str) -> ConnectionConfig {
         connection_timeout: None,
         keep_alive_interval: None,
         environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
     }
 }
 

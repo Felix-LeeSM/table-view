@@ -7,6 +7,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::db::mongodb::MongoAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
@@ -17,12 +18,12 @@ use crate::storage;
 
 /// Build an `ActiveAdapter` for the given database type.
 ///
-/// Sprint 64 only supports PostgreSQL — every other `DatabaseType` maps to
-/// `AppError::Unsupported`. MongoAdapter/MySQL/SQLite wiring lands in
-/// Sprint 65+.
+/// Sprint 65 adds MongoDB dispatch on top of Sprint 64's Postgres wiring.
+/// MySQL/SQLite still map to `AppError::Unsupported` pending Phase 9.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
+        DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         other => Err(AppError::Unsupported(format!(
             "Database type {:?} is not supported yet",
             other
@@ -585,6 +586,9 @@ pub fn import_connections(json: String) -> Result<ImportResult, AppError> {
             connection_timeout: conn.connection_timeout,
             keep_alive_interval: conn.keep_alive_interval,
             environment: conn.environment.clone(),
+            auth_source: conn.auth_source.clone(),
+            replica_set: conn.replica_set.clone(),
+            tls_enabled: conn.tls_enabled,
         };
 
         // Save with explicit empty password (no preserve / no encrypt)
@@ -627,6 +631,9 @@ mod tests {
             connection_timeout: None,
             keep_alive_interval: None,
             environment: None,
+            auth_source: None,
+            replica_set: None,
+            tls_enabled: None,
         }
     }
 
@@ -1102,7 +1109,10 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
-                paradigm: "rdb".into(),
+                paradigm: crate::models::Paradigm::Rdb,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
             }],
             groups: vec![],
         };
@@ -1147,7 +1157,10 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
-                paradigm: "rdb".into(),
+                paradigm: crate::models::Paradigm::Rdb,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
             }],
             groups: vec![],
         };
@@ -1184,7 +1197,10 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
-                paradigm: "rdb".into(),
+                paradigm: crate::models::Paradigm::Rdb,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
             }],
             groups: vec![], // group_id refers to nothing
         };
@@ -1223,7 +1239,10 @@ mod tests {
                 keep_alive_interval: None,
                 environment: None,
                 has_password: false,
-                paradigm: "rdb".into(),
+                paradigm: crate::models::Paradigm::Rdb,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
             }],
             groups: vec![ConnectionGroup {
                 id: "g-new".into(),
@@ -1308,5 +1327,55 @@ mod tests {
         assert_eq!(loaded.connections[0].group_id, Some("g1".to_string()));
 
         cleanup_test_env();
+    }
+
+    // -------------------------------------------------------------------
+    // make_adapter factory tests (Sprint 65)
+    // -------------------------------------------------------------------
+
+    #[test]
+    fn test_make_adapter_postgres_returns_rdb_variant() {
+        let adapter = make_adapter(&DatabaseType::Postgresql).expect("postgres should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Rdb(_)),
+            "expected Rdb variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Postgresql));
+    }
+
+    #[test]
+    fn test_make_adapter_mongodb_returns_document_variant() {
+        let adapter = make_adapter(&DatabaseType::Mongodb).expect("mongodb should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Document(_)),
+            "expected Document variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Mongodb));
+    }
+
+    #[test]
+    fn test_make_adapter_mysql_returns_unsupported() {
+        match make_adapter(&DatabaseType::Mysql) {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("Mysql"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Unsupported, got: {:?}", other.is_ok()),
+        }
+    }
+
+    #[test]
+    fn test_make_adapter_sqlite_returns_unsupported() {
+        assert!(matches!(
+            make_adapter(&DatabaseType::Sqlite),
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[test]
+    fn test_make_adapter_redis_returns_unsupported() {
+        assert!(matches!(
+            make_adapter(&DatabaseType::Redis),
+            Err(AppError::Unsupported(_))
+        ));
     }
 }

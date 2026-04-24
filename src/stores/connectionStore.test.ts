@@ -85,6 +85,7 @@ describe("connectionStore", () => {
       database: "newdb",
       group_id: null,
       color: null,
+      paradigm: "rdb" as const,
     };
     const saved = await useConnectionStore.getState().addConnection(draft);
     expect(saved.id).toBe("new-id");
@@ -105,6 +106,7 @@ describe("connectionStore", () => {
           database: "db",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
     });
@@ -121,6 +123,7 @@ describe("connectionStore", () => {
       database: existing.database,
       group_id: existing.group_id,
       color: existing.color,
+      paradigm: existing.paradigm,
     });
 
     // updateConnection replaces with the value returned by saveConnection,
@@ -144,6 +147,7 @@ describe("connectionStore", () => {
           database: "db",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
     });
@@ -224,6 +228,7 @@ describe("connectionStore", () => {
           database: "db",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
     });
@@ -246,6 +251,7 @@ describe("connectionStore", () => {
           database: "db",
           group_id: "g1",
           color: null,
+          paradigm: "rdb",
         },
       ],
       groups: [{ id: "g1", name: "Prod", color: null, collapsed: false }],
@@ -273,6 +279,7 @@ describe("connectionStore", () => {
           database: "db",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
       activeStatuses: { c1: { type: "connected" } },
@@ -303,6 +310,7 @@ describe("connectionStore", () => {
           database: "db",
           group_id: null,
           color: null,
+          paradigm: "rdb",
         },
       ],
       activeStatuses: { c1: { type: "disconnected" } },
@@ -350,6 +358,7 @@ describe("connectionStore", () => {
       database: "db",
       group_id: null,
       color: null,
+      paradigm: "rdb" as const,
     };
 
     const result = await useConnectionStore.getState().testConnection(draft);
@@ -404,6 +413,7 @@ describe("connectionStore", () => {
             database: "a",
             group_id: null,
             color: null,
+            paradigm: "rdb",
           },
           {
             id: "c2",
@@ -416,6 +426,7 @@ describe("connectionStore", () => {
             database: "b",
             group_id: null,
             color: null,
+            paradigm: "rdb",
           },
         ],
       });
