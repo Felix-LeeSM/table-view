@@ -17,6 +17,7 @@ updated: 2026-04-24
 | [0005](./0005-plaintext-password-never-leaves-backend/memory.md) | plaintext 비밀번호는 IPC 경계를 넘지 않는다 | Accepted | 2026-04-20 | — |
 | [0006](./0006-raw-query-edit-gated-by-query-analyzer/memory.md) | Raw query 편집은 queryAnalyzer gate 통과 시만 허용 | Accepted | 2026-04-20 | — |
 | [0007](./0007-theme-picker-dom-only-hover-preview/memory.md) | ThemePicker hover preview는 DOM-only | Accepted | 2026-04-24 | — |
+| [0008](./0008-styling-tokens-over-arbitrary-px/memory.md) | Tailwind 크기·간격: @theme 토큰 + 기본 스케일, arbitrary px는 로컬 ESLint 룰로 차단 | Accepted | 2026-04-24 | — |
 
 ## 역사 (Superseded / Deprecated)
 
