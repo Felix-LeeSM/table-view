@@ -423,7 +423,7 @@ export default function DataGrid({
         onOpenChange={(open) => !open && editState.setSqlPreview(null)}
       >
         <DialogContent
-          className="w-[600px] max-h-[80vh] bg-background p-0"
+          className="w-dialog-xl max-h-[80vh] bg-background p-0"
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">

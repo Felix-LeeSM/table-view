@@ -120,7 +120,7 @@ function AddConstraintModal({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
-        className="w-[480px] bg-secondary p-0"
+        className="w-dialog-sm bg-secondary p-0"
         showCloseButton={false}
       >
         <div className="rounded-lg bg-secondary shadow-xl">
@@ -189,7 +189,7 @@ function AddConstraintModal({
                 <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                   Columns
                 </label>
-                <div className="max-h-[120px] overflow-auto rounded border border-border bg-background p-2">
+                <div className="max-h-scroll-sm overflow-auto rounded border border-border bg-background p-2">
                   {columns.map((col) => (
                     <label
                       key={col.name}

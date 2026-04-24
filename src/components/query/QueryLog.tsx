@@ -87,7 +87,7 @@ export default function QueryLog() {
       </div>
 
       {/* Entries */}
-      <div className="max-h-[200px] overflow-auto">
+      <div className="max-h-scroll-md overflow-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {entries.length === 0

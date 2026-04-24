@@ -31,10 +31,10 @@ export default function ImportExportDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="w-[560px] bg-secondary p-0"
+        className="w-dialog-lg bg-secondary p-0"
         showCloseButton={false}
       >
-        <div className="w-[560px] rounded-lg bg-secondary shadow-xl">
+        <div className="w-dialog-lg rounded-lg bg-secondary shadow-xl">
           <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-semibold text-foreground">
               Import / Export Connections

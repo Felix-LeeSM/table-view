@@ -27,7 +27,7 @@ export default function SqlPreviewDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent
-        className="w-[520px] bg-secondary p-0"
+        className="w-dialog-md bg-secondary p-0"
         showCloseButton={false}
       >
         <div className="rounded-lg bg-secondary shadow-xl">
@@ -51,7 +51,7 @@ export default function SqlPreviewDialog({
 
           {/* SQL content */}
           <div className="px-4 py-3">
-            <pre className="max-h-[300px] overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
+            <pre className="max-h-scroll-lg overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
               {sql || "-- No changes to preview"}
             </pre>
           </div>

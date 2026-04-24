@@ -139,10 +139,10 @@ export default function ConnectionDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="w-[440px] bg-secondary p-0"
+        className="w-dialog-xs bg-secondary p-0"
         showCloseButton={false}
       >
-        <div className="w-[440px] rounded-lg bg-secondary shadow-xl">
+        <div className="w-dialog-xs rounded-lg bg-secondary shadow-xl">
           {/* Header */}
           <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
             <DialogTitle

@@ -144,7 +144,7 @@ export default function GlobalQueryLogPanel({
       </div>
 
       {/* Entries */}
-      <div className="max-h-[300px] overflow-auto">
+      <div className="max-h-scroll-lg overflow-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {globalLog.length === 0
