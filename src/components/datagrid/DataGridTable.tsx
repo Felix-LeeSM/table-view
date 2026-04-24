@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Key, Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { truncateCell } from "@lib/format";
@@ -138,6 +138,19 @@ export default function DataGridTable({
     startTableWidth: number;
     colIdx: number;
   } | null>(null);
+
+  // Active cell editor focus target. Only one cell edits at a time, so a
+  // single ref is enough — wired to either the <input> or the NULL chip <div>.
+  // React's `autoFocus` prop only calls .focus() for form controls, so the
+  // NULL chip (a <div role="textbox">) would silently lose focus when flipping
+  // from input → chip via Cmd+Backspace without this.
+  const editorFocusRef = useRef<HTMLElement | null>(null);
+  const isNullEditor = editValue === null;
+  useEffect(() => {
+    if (editingCell && editorFocusRef.current) {
+      editorFocusRef.current.focus();
+    }
+  }, [editingCell, isNullEditor]);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -591,11 +604,13 @@ export default function DataGridTable({
                       {isEditing ? (
                         editValue === null ? (
                           <div
+                            ref={(el) => {
+                              editorFocusRef.current = el;
+                            }}
                             className="flex items-center gap-2 outline-none"
                             role="textbox"
                             aria-label={`Editing ${col.name} — currently NULL`}
                             tabIndex={0}
-                            autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Tab") {
                                 e.preventDefault();
@@ -648,10 +663,12 @@ export default function DataGridTable({
                           </div>
                         ) : (
                           <input
+                            ref={(el) => {
+                              editorFocusRef.current = el;
+                            }}
                             type={getInputTypeForColumn(col.data_type)}
                             className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
                             value={editValue}
-                            autoFocus
                             aria-label={`Editing ${col.name}`}
                             onChange={(e) => onSetEditValue(e.target.value)}
                             onKeyDown={(e) => {

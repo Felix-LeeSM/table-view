@@ -227,4 +227,83 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
     const tds = container.querySelectorAll("tbody td");
     expect(tds[1]!.className).toMatch(/bg-highlight/);
   });
+
+  it("focuses the <input> when a string-valued edit begins", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          editingCell: { row: 0, col: 1 },
+          editValue: "Alice",
+        })}
+      />,
+    );
+    const input = screen.getByLabelText("Editing name");
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("focuses the NULL chip when editor is in NULL state", () => {
+    render(
+      <DataGridTable
+        {...makeProps({
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+        })}
+      />,
+    );
+    const chip = screen.getByRole("textbox", {
+      name: /currently NULL/,
+    });
+    expect(document.activeElement).toBe(chip);
+  });
+
+  it("moves focus from <input> to NULL chip when editValue flips to null", () => {
+    const { rerender } = render(
+      <DataGridTable
+        {...makeProps({
+          editingCell: { row: 0, col: 1 },
+          editValue: "Alice",
+        })}
+      />,
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText("Editing name"));
+
+    // Simulate parent flipping editValue → null (e.g. after Cmd+Backspace)
+    rerender(
+      <DataGridTable
+        {...makeProps({
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+        })}
+      />,
+    );
+
+    const chip = screen.getByRole("textbox", { name: /currently NULL/ });
+    expect(document.activeElement).toBe(chip);
+  });
+
+  it("moves focus back to <input> when editValue flips from null to a string", () => {
+    const { rerender } = render(
+      <DataGridTable
+        {...makeProps({
+          editingCell: { row: 0, col: 1 },
+          editValue: null,
+        })}
+      />,
+    );
+    const chip = screen.getByRole("textbox", { name: /currently NULL/ });
+    expect(document.activeElement).toBe(chip);
+
+    // Printable key flips NULL → seeded string
+    rerender(
+      <DataGridTable
+        {...makeProps({
+          editingCell: { row: 0, col: 1 },
+          editValue: "a",
+        })}
+      />,
+    );
+
+    const input = screen.getByLabelText("Editing name");
+    expect(document.activeElement).toBe(input);
+  });
 });
