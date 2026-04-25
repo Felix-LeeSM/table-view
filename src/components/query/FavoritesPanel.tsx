@@ -36,7 +36,7 @@ export default function FavoritesPanel({
   ];
 
   return (
-    <div className="flex flex-col border border-border bg-background shadow-lg rounded-md w-80 max-h-96">
+    <div className="flex flex-col border border-border bg-background shadow-lg rounded-md w-[clamp(20rem,32vw,32rem)] max-h-[min(60vh,40rem)]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-secondary rounded-t-md">
         <div className="flex items-center gap-1.5 text-sm font-medium text-secondary-foreground">
@@ -94,7 +94,10 @@ export default function FavoritesPanel({
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-foreground truncate">
+                  <span
+                    className="text-xs font-medium text-foreground truncate"
+                    title={fav.name}
+                  >
                     {fav.name}
                   </span>
                   {fav.connectionId === null ? (
@@ -109,7 +112,10 @@ export default function FavoritesPanel({
                     />
                   )}
                 </div>
-                <div className="mt-0.5 text-3xs font-mono text-muted-foreground truncate">
+                <div
+                  className="mt-0.5 text-3xs font-mono text-muted-foreground truncate"
+                  title={fav.sql}
+                >
                   {fav.sql}
                 </div>
               </div>

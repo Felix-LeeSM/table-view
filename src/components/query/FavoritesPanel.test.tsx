@@ -109,6 +109,47 @@ describe("FavoritesPanel", () => {
     expect(useFavoritesStore.getState().favorites).toHaveLength(0);
   });
 
+  it("uses viewport-fluid panel sizing (sprint-111 #LOG-3)", () => {
+    useFavoritesStore.getState().addFavorite("Q1", "SELECT 1", null);
+
+    const { container } = render(
+      <FavoritesPanel
+        connectionId="conn-1"
+        onLoadSql={mockOnLoadSql}
+        onClose={mockOnClose}
+      />,
+    );
+
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain("w-[clamp(20rem,32vw,32rem)]");
+    expect(root.className).toContain("max-h-[min(60vh,40rem)]");
+    expect(root.className).not.toContain("w-80");
+    expect(root.className).not.toContain("max-h-96");
+  });
+
+  it("exposes name and full SQL via title tooltip (sprint-111 #LOG-3)", () => {
+    useFavoritesStore
+      .getState()
+      .addFavorite("LongQuery", "SELECT a, b, c FROM t WHERE id = 1", null);
+
+    render(
+      <FavoritesPanel
+        connectionId="conn-1"
+        onLoadSql={mockOnLoadSql}
+        onClose={mockOnClose}
+      />,
+    );
+
+    const nameSpan = screen.getByText("LongQuery");
+    expect(nameSpan).toHaveAttribute("title", "LongQuery");
+
+    const sqlDiv = screen.getByText("SELECT a, b, c FROM t WHERE id = 1");
+    expect(sqlDiv).toHaveAttribute(
+      "title",
+      "SELECT a, b, c FROM t WHERE id = 1",
+    );
+  });
+
   it("calls onClose when close button is clicked", () => {
     render(
       <FavoritesPanel
