@@ -3,6 +3,7 @@ import ErrorBoundary from "./components/shared/ErrorBoundary";
 import Sidebar from "./components/layout/Sidebar";
 import MainArea from "./components/layout/MainArea";
 import QuickOpen from "./components/shared/QuickOpen";
+import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "./stores/connectionStore";
@@ -268,6 +269,7 @@ export default function App() {
         <Sidebar />
         <MainArea />
         <QuickOpen />
+        <ShortcutCheatsheet />
         <QueryLog />
         {/* Sprint 94 — global toaster. Mounted at the App root (NOT inside any
             Radix dialog portal) so a toast surfaced from inside a modal
