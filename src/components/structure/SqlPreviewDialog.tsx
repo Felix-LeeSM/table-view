@@ -31,8 +31,8 @@ export default function SqlPreviewDialog({
         showCloseButton={false}
       >
         <div className="rounded-lg bg-secondary shadow-xl">
-          {/* Header */}
-          <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
+          {/* Header — DialogHeader is row-based by default (sprint-91). */}
+          <DialogHeader className="border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-semibold text-foreground">
               Review SQL Changes
             </DialogTitle>

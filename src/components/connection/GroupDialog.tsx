@@ -72,7 +72,9 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
       }}
     >
       <DialogContent className="w-96 bg-secondary p-4" showCloseButton={false}>
-        <DialogHeader>
+        {/* Stacked title + description — override the row-based default
+            (sprint-91) since this header has no inline close button. */}
+        <DialogHeader className="flex-col items-start justify-start">
           <DialogTitle className="text-sm font-semibold text-foreground">
             {isEditing ? "Edit Group" : "New Group"}
           </DialogTitle>

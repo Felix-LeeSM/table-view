@@ -80,10 +80,18 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
+  // Sprint 91: row-based default. The header is always title + (optional) close
+  // button on the same row, so the X aligns with the title's vertical centre
+  // and never wraps below it. `min-w-0` lets long titles flex-shrink so a
+  // `truncate` on the title can take effect; callers that need stacked
+  // title + description should override with `flex-col`.
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      className={cn(
+        "flex flex-row items-center justify-between gap-2 min-w-0 text-left",
+        className,
+      )}
       {...props}
     />
   );
@@ -120,10 +128,13 @@ function DialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  // Sprint 91: `min-w-0` lets the title shrink inside a flex-row header so a
+  // `truncate` class on a long title actually takes effect (without it, flex
+  // children default to min-content sizing).
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn("min-w-0 text-lg leading-none font-semibold", className)}
       {...props}
     />
   );

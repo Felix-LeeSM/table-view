@@ -35,7 +35,8 @@ export default function ImportExportDialog({
         showCloseButton={false}
       >
         <div className="w-dialog-lg rounded-lg bg-secondary shadow-xl">
-          <DialogHeader className="flex items-center justify-between border-b border-border px-4 py-3">
+          {/* Header — DialogHeader is row-based by default (sprint-91). */}
+          <DialogHeader className="border-b border-border px-4 py-3">
             <DialogTitle className="text-sm font-semibold text-foreground">
               Import / Export Connections
             </DialogTitle>
