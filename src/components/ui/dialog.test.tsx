@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFeedback,
+  DialogHeader,
+  DialogTitle,
+} from "./dialog";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
 import GroupDialog from "@components/connection/GroupDialog";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
@@ -254,4 +260,236 @@ describe("close-button matrix (sprint-91 AC-04)", () => {
       expect(closes.length).toBeLessThan(2);
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// Sprint 95 — Dialog 2-Layer Primitive Layer 1
+// ---------------------------------------------------------------------------
+
+describe("DialogContent tone (sprint-95 AC-01)", () => {
+  it("AC-01: default tone applies the neutral border token", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Default tone</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = screen.getByRole("dialog");
+    expect(content.getAttribute("data-tone")).toBe("default");
+    expect(content.className).toContain("border-border");
+    expect(content.className).not.toContain("border-destructive");
+    expect(content.className).not.toContain("border-warning");
+  });
+
+  it("AC-01: destructive tone swaps to the destructive border token", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent tone="destructive">
+          <DialogHeader>
+            <DialogTitle>Destructive</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = screen.getByRole("dialog");
+    expect(content.getAttribute("data-tone")).toBe("destructive");
+    expect(content.className).toContain("border-destructive");
+  });
+
+  it("AC-01: warning tone swaps to the warning border token", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent tone="warning">
+          <DialogHeader>
+            <DialogTitle>Warning</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const content = screen.getByRole("dialog");
+    expect(content.getAttribute("data-tone")).toBe("warning");
+    expect(content.className).toContain("border-warning");
+  });
+});
+
+describe("DialogHeader layout prop (sprint-95 AC-02)", () => {
+  it("AC-02: row layout (default) carries flex-row + items-center", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogHeader data-testid="header">
+            <DialogTitle>Row</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const header = screen.getByTestId("header");
+    expect(header.getAttribute("data-layout")).toBe("row");
+    expect(header.className).toContain("flex-row");
+    expect(header.className).toContain("items-center");
+    expect(header.className).not.toContain("flex-col");
+  });
+
+  it("AC-02: column layout applies flex-col instead of flex-row", () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogHeader layout="column" data-testid="header">
+            <DialogTitle>Column</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const header = screen.getByTestId("header");
+    expect(header.getAttribute("data-layout")).toBe("column");
+    expect(header.className).toContain("flex-col");
+    expect(header.className).not.toContain("flex-row");
+  });
+});
+
+describe("DialogFeedback (sprint-95 AC-03)", () => {
+  it("AC-03: idle state mounts an empty placeholder slot", () => {
+    render(<DialogFeedback state="idle" />);
+
+    const slot = document.querySelector('[data-slot="dialog-feedback"]');
+    expect(slot).not.toBeNull();
+    expect(slot!.getAttribute("data-state")).toBe("idle");
+    // Idle placeholder is aria-hidden and exposes its own testid.
+    const placeholder = slot!.querySelector(
+      '[data-testid="dialog-feedback-idle"]',
+    );
+    expect(placeholder).not.toBeNull();
+    expect(placeholder!.getAttribute("aria-hidden")).toBe("true");
+    // No alert / status announcements while idle.
+    expect(slot!.querySelector('[role="status"]')).toBeNull();
+    expect(slot!.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("AC-03: loading state shows a spinner + provided loadingText with role=status", () => {
+    render(<DialogFeedback state="loading" loadingText="Working..." />);
+
+    const slot = document.querySelector(
+      '[data-slot="dialog-feedback"]',
+    ) as HTMLElement;
+    expect(slot.getAttribute("data-state")).toBe("loading");
+
+    const status = slot.querySelector('[role="status"]') as HTMLElement;
+    expect(status).not.toBeNull();
+    expect(status.getAttribute("aria-live")).toBe("polite");
+    // Spinner is rendered by Loader2 which carries the animate-spin class.
+    expect(status.querySelector(".animate-spin")).not.toBeNull();
+    expect(status.textContent).toContain("Working...");
+  });
+
+  it("AC-03: success state shows the message inside a polite alert with success tokens", () => {
+    render(<DialogFeedback state="success" message="Saved." />);
+
+    const slot = document.querySelector(
+      '[data-slot="dialog-feedback"]',
+    ) as HTMLElement;
+    expect(slot.getAttribute("data-state")).toBe("success");
+    const alert = slot.querySelector('[role="alert"]') as HTMLElement;
+    expect(alert).not.toBeNull();
+    expect(alert.getAttribute("aria-live")).toBe("polite");
+    expect(alert.textContent).toContain("Saved.");
+    expect(alert.className).toContain("text-success");
+    expect(alert.className).toContain("bg-success/10");
+  });
+
+  it("AC-03: error state shows the message inside a polite alert with destructive tokens", () => {
+    render(<DialogFeedback state="error" message="Boom." />);
+
+    const slot = document.querySelector(
+      '[data-slot="dialog-feedback"]',
+    ) as HTMLElement;
+    expect(slot.getAttribute("data-state")).toBe("error");
+    const alert = slot.querySelector('[role="alert"]') as HTMLElement;
+    expect(alert).not.toBeNull();
+    expect(alert.getAttribute("aria-live")).toBe("polite");
+    expect(alert.textContent).toContain("Boom.");
+    expect(alert.className).toContain("text-destructive");
+    expect(alert.className).toContain("bg-destructive/10");
+  });
+
+  it("AC-03: slotName override changes the data-slot attribute (sprint-92 compat)", () => {
+    render(<DialogFeedback state="idle" slotName="test-feedback" />);
+
+    expect(
+      document.querySelector('[data-slot="test-feedback"]'),
+    ).not.toBeNull();
+    // The default slot name is gone — sprint-92 selector contract holds.
+    expect(document.querySelector('[data-slot="dialog-feedback"]')).toBeNull();
+  });
+
+  it("AC-03: outer wrapper persists across state changes (stable identity)", () => {
+    const { rerender } = render(<DialogFeedback state="idle" />);
+
+    const slotIdle = document.querySelector('[data-slot="dialog-feedback"]');
+    expect(slotIdle).not.toBeNull();
+
+    rerender(<DialogFeedback state="loading" loadingText="..." />);
+    const slotLoading = document.querySelector('[data-slot="dialog-feedback"]');
+    // Same DOM node — only inner content varies. This is the stable-identity
+    // contract that sprint-92 `expectNodeStable` relies on.
+    expect(slotLoading).toBe(slotIdle);
+
+    rerender(<DialogFeedback state="success" message="ok" />);
+    expect(document.querySelector('[data-slot="dialog-feedback"]')).toBe(
+      slotIdle,
+    );
+
+    rerender(<DialogFeedback state="error" message="bad" />);
+    expect(document.querySelector('[data-slot="dialog-feedback"]')).toBe(
+      slotIdle,
+    );
+  });
+});
+
+describe("ConfirmDialog tone (sprint-95 AC-05)", () => {
+  it("AC-05: danger=true forwards tone='destructive' to AlertDialogContent", () => {
+    render(
+      <ConfirmDialog
+        title="Delete?"
+        message="This cannot be undone."
+        confirmLabel="Delete"
+        danger
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const content = document.querySelector(
+      '[data-slot="alert-dialog-content"]',
+    ) as HTMLElement;
+    expect(content).not.toBeNull();
+    expect(content.getAttribute("data-tone")).toBe("destructive");
+    expect(content.className).toContain("border-destructive");
+  });
+
+  it("AC-05: danger=false (default) keeps the neutral default tone", () => {
+    render(
+      <ConfirmDialog
+        title="Save?"
+        message="Confirm save."
+        confirmLabel="Save"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const content = document.querySelector(
+      '[data-slot="alert-dialog-content"]',
+    ) as HTMLElement;
+    expect(content).not.toBeNull();
+    expect(content.getAttribute("data-tone")).toBe("default");
+    expect(content.className).not.toContain("border-destructive");
+  });
 });

@@ -16,18 +16,12 @@ import {
   ENVIRONMENT_OPTIONS,
 } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
-import {
-  X,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-  Plug,
-  Link,
-  List,
-} from "lucide-react";
+import { X, Loader2, Plug, Link, List } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogFeedback,
+  type DialogFeedbackState,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -76,6 +70,16 @@ export default function ConnectionDialog({
   const testing = testResult.status === "pending";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sprint-95 Layer-1 migration: project the local 4-state union onto the
+  // generic DialogFeedback contract. `pending` → `loading` is the only naming
+  // delta; messages flow through unchanged.
+  const feedbackState: DialogFeedbackState =
+    testResult.status === "pending" ? "loading" : testResult.status;
+  const feedbackMessage =
+    testResult.status === "success" || testResult.status === "error"
+      ? testResult.message
+      : undefined;
 
   const addConnection = useConnectionStore((s) => s.addConnection);
   const updateConnection = useConnectionStore((s) => s.updateConnection);
@@ -560,53 +564,20 @@ export default function ConnectionDialog({
               save error are always visible regardless of scroll position or
               Advanced Settings being open.
 
-              Sprint-92 (#CONN-DIALOG-6): the test-feedback slot is **always
-              mounted** so back-to-back Test clicks (idle → pending → success
-              → pending → ...) never unmount the alert region. `min-h` reserves
-              vertical space so the dialog height does not jump between
-              empty/filled states. The save-error region remains conditional
-              because it has no pending intermediate state of its own. */}
-        <div
-          data-slot="test-feedback"
+              Sprint-95 Layer-1 migration: this slot is now rendered by the
+              base `<DialogFeedback>` primitive. The `slotName` override keeps
+              the sprint-92 `data-slot="test-feedback"` selector contract
+              intact so `expectNodeStable` continues to track the same DOM
+              node across state transitions. `DialogFeedback` itself owns the
+              "always mounted + min-h reserved" guarantee that previously
+              lived inline here. */}
+        <DialogFeedback
+          slotName="test-feedback"
+          state={feedbackState}
+          message={feedbackMessage}
+          loadingText="Testing..."
           className="border-t border-border px-4 py-3"
-        >
-          {testResult.status === "idle" ? (
-            // idle slot: rendered as an empty placeholder block so the slot
-            // node still exists and reserves height. aria-hidden so screen
-            // readers don't announce the empty region.
-            <div
-              aria-hidden="true"
-              className="min-h-[2.25rem]"
-              data-testid="test-feedback-idle"
-            />
-          ) : testResult.status === "pending" ? (
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex min-h-[2.25rem] items-center gap-2 rounded bg-muted/40 px-3 py-2 text-sm text-muted-foreground duration-200 animate-in fade-in"
-            >
-              <Loader2 className="size-4 animate-spin" />
-              <span>Testing...</span>
-            </div>
-          ) : (
-            <div
-              role="alert"
-              aria-live="polite"
-              className={`flex min-h-[2.25rem] items-center gap-2 rounded px-3 py-2 text-sm duration-200 animate-in fade-in slide-in-from-top-1 ${
-                testResult.status === "success"
-                  ? "bg-success/10 text-success"
-                  : "bg-destructive/10 text-destructive"
-              }`}
-            >
-              {testResult.status === "success" ? (
-                <CheckCircle size={16} />
-              ) : (
-                <AlertCircle size={16} />
-              )}
-              <span className="break-words">{testResult.message}</span>
-            </div>
-          )}
-        </div>
+        />
         {error && (
           <div
             role="alert"

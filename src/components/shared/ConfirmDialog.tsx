@@ -29,7 +29,10 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <AlertDialog open onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent className="w-80 bg-secondary p-4">
+      <AlertDialogContent
+        className="w-80 bg-secondary p-4"
+        tone={danger ? "destructive" : "default"}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle className="text-sm font-semibold text-foreground">
             {title}

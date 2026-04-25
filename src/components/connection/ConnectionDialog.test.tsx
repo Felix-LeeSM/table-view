@@ -861,10 +861,12 @@ describe("ConnectionDialog", () => {
       renderDialog();
       const slot = getSlot();
       expect(slot).not.toBeNull();
-      // Idle slot is a placeholder (aria-hidden) — no role=alert yet.
-      expect(slot.querySelector('[data-testid="test-feedback-idle"]')).not.toBe(
-        null,
-      );
+      // Idle slot is a placeholder (aria-hidden) — no role=alert yet. After
+      // the sprint-95 migration to `<DialogFeedback>`, the idle placeholder
+      // carries the primitive's testid (`dialog-feedback-idle`).
+      expect(
+        slot.querySelector('[data-testid="dialog-feedback-idle"]'),
+      ).not.toBeNull();
     });
 
     it("preserves slot DOM identity across idle → pending → success", async () => {
