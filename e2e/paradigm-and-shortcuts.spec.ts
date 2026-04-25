@@ -202,8 +202,10 @@ describe("Paradigm cues + global shortcuts (sprint 100/103/123)", () => {
   });
 
   it("multi-statement SELECT renders a Statement results tablist (sprint 100)", async () => {
-    // Open a fresh query tab.
-    const newQueryBtn = await $('[aria-label="New Query"]');
+    // Open a fresh query tab. The Sidebar header button's accessible name
+    // is "New Query Tab" (Sidebar.tsx:166) — keep this in sync to avoid
+    // the missing-element flake we hit in sprint-124's first CI run.
+    const newQueryBtn = await $('[aria-label="New Query Tab"]');
     await newQueryBtn.waitForDisplayed({ timeout: 5000 });
     await newQueryBtn.click();
 

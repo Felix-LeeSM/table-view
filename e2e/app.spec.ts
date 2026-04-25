@@ -17,7 +17,10 @@ describe("Table View — Smoke Tests", () => {
     let text = ((await header.getProperty("textContent")) as string) ?? "";
     expect(text.trim().toLowerCase()).toContain("connections");
 
-    const schemasTab = await $('[role="tab"][aria-selected="false"]');
+    // Sprint-124 fixup: the sidebar mode picker is a Radix ToggleGroup
+    // (items render with role="radio", not role="tab"). Query by the stable
+    // `aria-label="Schemas mode"` attribute instead.
+    const schemasTab = await $('[aria-label="Schemas mode"]');
     await schemasTab.waitForDisplayed({ timeout: 5000 });
     await schemasTab.click();
 

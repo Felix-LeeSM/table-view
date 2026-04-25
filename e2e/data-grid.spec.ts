@@ -180,7 +180,7 @@ describe("Data Grid & Query Execution", () => {
 
   it("shows Format button in query tab toolbar", async () => {
     // Open a new query tab
-    const newQueryBtn = await $('[aria-label="New Query"]');
+    const newQueryBtn = await $('[aria-label="New Query Tab"]');
     await newQueryBtn.waitForDisplayed({ timeout: 5000 });
     await newQueryBtn.click();
 
@@ -199,7 +199,7 @@ describe("Data Grid & Query Execution", () => {
 
   it("executes a SELECT query and shows real values", async () => {
     // Open a new query tab
-    const newQueryBtn = await $('[aria-label="New Query"]');
+    const newQueryBtn = await $('[aria-label="New Query Tab"]');
     await newQueryBtn.waitForDisplayed({ timeout: 5000 });
     await newQueryBtn.click();
 

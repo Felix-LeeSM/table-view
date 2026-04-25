@@ -82,7 +82,7 @@ async function ensureConnected() {
 }
 
 async function openNewQueryTab() {
-  const newQueryBtn = await $('[aria-label="New Query"]');
+  const newQueryBtn = await $('[aria-label="New Query Tab"]');
   await newQueryBtn.waitForDisplayed({ timeout: 5000 });
   await newQueryBtn.click();
   const editor = await $(".cm-editor");

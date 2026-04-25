@@ -182,6 +182,12 @@ describe("Connection Import/Export", () => {
           keep_alive_interval: null,
           environment: null,
           has_password: false,
+          // Sprint-65 promoted `paradigm` to a required typed field on
+          // ConnectionConfigPublic (no #[serde(default)]); imports without it
+          // fail with "missing field `paradigm`". For a postgresql db_type the
+          // backend derives the same value, but the wire payload still has to
+          // carry it.
+          paradigm: "rdb",
         },
       ],
       groups: [],
