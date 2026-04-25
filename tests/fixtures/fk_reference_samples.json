@@ -1,0 +1,28 @@
+{
+  "$schema": "fk_reference_samples@1",
+  "description": "Shared fixture for FK reference parser/serializer round-trips. Consumed by both vitest (TS) and cargo test (Rust). The expected serialized format is `<schema>.<table>(<column>)` — sprint-89 (#FK-1) is responsible for making the parser conform to this contract; sprint-88 only guarantees the fixture is loadable from both sides.",
+  "format": "<schema>.<table>(<column>)",
+  "samples": [
+    {
+      "name": "happy_path_public_users_id",
+      "schema": "public",
+      "table": "users",
+      "column": "id",
+      "expected": "public.users(id)"
+    },
+    {
+      "name": "schema_with_underscore_orders_user_id",
+      "schema": "sales_v2",
+      "table": "orders",
+      "column": "user_id",
+      "expected": "sales_v2.orders(user_id)"
+    },
+    {
+      "name": "quoted_identifier_special_chars",
+      "schema": "audit-log",
+      "table": "events",
+      "column": "event id",
+      "expected": "audit-log.events(event id)"
+    }
+  ]
+}
