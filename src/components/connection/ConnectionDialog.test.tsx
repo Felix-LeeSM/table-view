@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import ConnectionDialog from "./ConnectionDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
+import { expectNodeStable } from "@/__tests__/utils/expectNodeStable";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -840,6 +841,199 @@ describe("ConnectionDialog", () => {
 
       const alert = screen.getByRole("alert");
       expect(alert.getAttribute("aria-live")).toBe("polite");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 92 (#CONN-DIALOG-6): Test feedback slot stability + 4-state model
+  //
+  // The alert region for the Test Connection result must be mounted at all
+  // four states (idle / pending / success / error) so back-to-back clicks
+  // never unmount the slot. Identity is asserted via the `expectNodeStable`
+  // helper from sprint-88; jsdom can't measure offsetHeight reliably, so the
+  // contract uses DOM identity as the proxy for "no height jump".
+  // -----------------------------------------------------------------------
+  describe("Sprint 92: test-feedback slot stability + 4-state model", () => {
+    const getSlot = () =>
+      document.querySelector('[data-slot="test-feedback"]') as HTMLElement;
+
+    it("mounts the test-feedback slot in idle state on initial render", () => {
+      renderDialog();
+      const slot = getSlot();
+      expect(slot).not.toBeNull();
+      // Idle slot is a placeholder (aria-hidden) — no role=alert yet.
+      expect(slot.querySelector('[data-testid="test-feedback-idle"]')).not.toBe(
+        null,
+      );
+    });
+
+    it("preserves slot DOM identity across idle → pending → success", async () => {
+      // Use a deferred promise so we can observe the pending state distinctly.
+      let resolveTest!: (value: string) => void;
+      mockTestConnection.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolveTest = resolve;
+        }),
+      );
+
+      renderDialog();
+
+      // Snapshot the slot at idle.
+      const stable = expectNodeStable(getSlot);
+      expect(stable.initial).toBeInTheDocument();
+
+      // Click Test → pending state. Slot must still be the same node.
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      stable.assertStillSame("after pending");
+      expect(screen.getByText("Testing...")).toBeInTheDocument();
+      // Spinner inside the slot
+      expect(stable.initial.querySelector(".animate-spin")).not.toBeNull();
+
+      // Resolve → success state. Slot identity must persist.
+      await act(async () => {
+        resolveTest("Connection successful");
+      });
+      await waitFor(() => {
+        expect(screen.getByText("Connection successful")).toBeInTheDocument();
+      });
+      stable.assertStillSame("after success");
+    });
+
+    it("preserves slot DOM identity across idle → pending → error", async () => {
+      let rejectTest!: (reason: unknown) => void;
+      mockTestConnection.mockReturnValue(
+        new Promise<string>((_, reject) => {
+          rejectTest = reject;
+        }),
+      );
+
+      renderDialog();
+      const stable = expectNodeStable(getSlot);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      stable.assertStillSame("after pending");
+      expect(screen.getByText("Testing...")).toBeInTheDocument();
+
+      await act(async () => {
+        rejectTest(new Error("Connection refused"));
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByText("Error: Connection refused"),
+        ).toBeInTheDocument();
+      });
+      stable.assertStillSame("after error");
+    });
+
+    it("preserves slot DOM identity across 3 rapid Test clicks (race)", async () => {
+      // Each click creates a new pending promise. The slot must remain the
+      // same DOM node throughout — this is the regression test for the
+      // unmount/remount height-jump described in #CONN-DIALOG-6.
+      const resolvers: Array<(value: string) => void> = [];
+      mockTestConnection.mockImplementation(
+        () =>
+          new Promise<string>((resolve) => {
+            resolvers.push(resolve);
+          }),
+      );
+
+      renderDialog();
+      const stable = expectNodeStable(getSlot);
+
+      // Click 1 → pending
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      stable.assertStillSame("click 1 pending");
+
+      // Resolve click 1 → success. Slot identity persists.
+      await act(async () => {
+        resolvers[0]!("ok-1");
+      });
+      await waitFor(() => {
+        expect(screen.getByText("ok-1")).toBeInTheDocument();
+      });
+      stable.assertStillSame("click 1 success");
+
+      // Click 2 → pending again (transition success → pending must not
+      // unmount the slot).
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      stable.assertStillSame("click 2 pending");
+
+      // Resolve click 2 → success.
+      await act(async () => {
+        resolvers[1]!("ok-2");
+      });
+      await waitFor(() => {
+        expect(screen.getByText("ok-2")).toBeInTheDocument();
+      });
+      stable.assertStillSame("click 2 success");
+
+      // Click 3 → pending again.
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      stable.assertStillSame("click 3 pending");
+
+      // Resolve click 3 → success.
+      await act(async () => {
+        resolvers[2]!("ok-3");
+      });
+      await waitFor(() => {
+        expect(screen.getByText("ok-3")).toBeInTheDocument();
+      });
+      stable.assertStillSame("click 3 success");
+    });
+
+    it("renders spinner + 'Testing...' inside the slot during pending state", async () => {
+      // Never-resolving promise → component sticks in pending state.
+      mockTestConnection.mockReturnValue(new Promise(() => {}));
+
+      renderDialog();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+
+      const slot = getSlot();
+      expect(slot).not.toBeNull();
+      // Spinner is inside the slot
+      const slotSpinner = slot.querySelector(".animate-spin");
+      expect(slotSpinner).not.toBeNull();
+      // "Testing..." text is inside the slot
+      expect(slot.textContent).toContain("Testing...");
+    });
+
+    it("removes pending content when transitioning back to success state", async () => {
+      let resolveTest!: (value: string) => void;
+      mockTestConnection.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolveTest = resolve;
+        }),
+      );
+
+      renderDialog();
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Test Connection"));
+      });
+      // pending
+      expect(screen.getByText("Testing...")).toBeInTheDocument();
+
+      await act(async () => {
+        resolveTest("Connection successful");
+      });
+      await waitFor(() => {
+        expect(screen.getByText("Connection successful")).toBeInTheDocument();
+      });
+      // pending placeholder is gone
+      expect(screen.queryByText("Testing...")).not.toBeInTheDocument();
     });
   });
 });

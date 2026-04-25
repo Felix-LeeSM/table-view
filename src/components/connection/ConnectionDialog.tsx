@@ -38,6 +38,21 @@ interface ConnectionDialogProps {
   onClose: () => void;
 }
 
+/**
+ * Sprint-92 (#CONN-DIALOG-6): Test Connection result state is modelled as a
+ * discriminated union over four explicit states. Previously this was a
+ * combination of `testing: boolean` + `testResult: {success, message} | null`,
+ * which left the (testing=true, testResult=non-null) corner ambiguous and
+ * caused the alert slot to unmount/remount between clicks. The slot is now
+ * always mounted (see `data-slot="test-feedback"` below) and only its content
+ * varies with `status`.
+ */
+type TestResultState =
+  | { status: "idle" }
+  | { status: "pending" }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
+
 export default function ConnectionDialog({
   connection,
   onClose,
@@ -55,11 +70,10 @@ export default function ConnectionDialog({
   // explicitly checks "Clear password".
   const [passwordInput, setPasswordInput] = useState("");
   const [clearPassword, setClearPassword] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  const [testResult, setTestResult] = useState<TestResultState>({
+    status: "idle",
+  });
+  const testing = testResult.status === "pending";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,16 +105,17 @@ export default function ConnectionDialog({
   };
 
   const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
+    // Sprint-92: publish pending first so the alert slot shows the spinner +
+    // "Testing..." while the request is in flight; the slot itself stays
+    // mounted across this transition.
+    setTestResult({ status: "pending" });
     try {
       const draft: ConnectionDraft = { ...form, password: resolvePassword() };
       const msg = await testConnection(draft, connection?.id ?? null);
-      setTestResult({ success: true, message: msg });
+      setTestResult({ status: "success", message: msg });
     } catch (e) {
-      setTestResult({ success: false, message: String(e) });
+      setTestResult({ status: "error", message: String(e) });
     }
-    setTesting(false);
   };
 
   const handleSave = async () => {
@@ -543,36 +558,61 @@ export default function ConnectionDialog({
 
         {/* Alerts — pinned outside the scroll container so Test result /
               save error are always visible regardless of scroll position or
-              Advanced Settings being open. The fade + slide softens the
-              height jump when the alert appears. */}
-        {(testResult || error) && (
-          <div className="space-y-2 border-t border-border px-4 py-3 duration-200 animate-in fade-in slide-in-from-top-1">
-            {testResult && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className={`flex items-center gap-2 rounded px-3 py-2 text-sm ${
-                  testResult.success
-                    ? "bg-success/10 text-success"
-                    : "bg-destructive/10 text-destructive"
-                }`}
-              >
-                {testResult.success ? (
-                  <CheckCircle size={16} />
-                ) : (
-                  <AlertCircle size={16} />
-                )}
-                <span className="break-words">{testResult.message}</span>
-              </div>
-            )}
-            {error && (
-              <div
-                role="alert"
-                className="rounded bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              >
-                {error}
-              </div>
-            )}
+              Advanced Settings being open.
+
+              Sprint-92 (#CONN-DIALOG-6): the test-feedback slot is **always
+              mounted** so back-to-back Test clicks (idle → pending → success
+              → pending → ...) never unmount the alert region. `min-h` reserves
+              vertical space so the dialog height does not jump between
+              empty/filled states. The save-error region remains conditional
+              because it has no pending intermediate state of its own. */}
+        <div
+          data-slot="test-feedback"
+          className="border-t border-border px-4 py-3"
+        >
+          {testResult.status === "idle" ? (
+            // idle slot: rendered as an empty placeholder block so the slot
+            // node still exists and reserves height. aria-hidden so screen
+            // readers don't announce the empty region.
+            <div
+              aria-hidden="true"
+              className="min-h-[2.25rem]"
+              data-testid="test-feedback-idle"
+            />
+          ) : testResult.status === "pending" ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex min-h-[2.25rem] items-center gap-2 rounded bg-muted/40 px-3 py-2 text-sm text-muted-foreground duration-200 animate-in fade-in"
+            >
+              <Loader2 className="size-4 animate-spin" />
+              <span>Testing...</span>
+            </div>
+          ) : (
+            <div
+              role="alert"
+              aria-live="polite"
+              className={`flex min-h-[2.25rem] items-center gap-2 rounded px-3 py-2 text-sm duration-200 animate-in fade-in slide-in-from-top-1 ${
+                testResult.status === "success"
+                  ? "bg-success/10 text-success"
+                  : "bg-destructive/10 text-destructive"
+              }`}
+            >
+              {testResult.status === "success" ? (
+                <CheckCircle size={16} />
+              ) : (
+                <AlertCircle size={16} />
+              )}
+              <span className="break-words">{testResult.message}</span>
+            </div>
+          )}
+        </div>
+        {error && (
+          <div
+            role="alert"
+            className="border-t border-border bg-destructive/10 px-4 py-3 text-sm text-destructive duration-200 animate-in fade-in slide-in-from-top-1"
+          >
+            {error}
           </div>
         )}
 
