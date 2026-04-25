@@ -9,6 +9,7 @@ import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
+import { useMruStore } from "./stores/mruStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 
 export default function App() {
@@ -18,13 +19,21 @@ export default function App() {
   const loadPersistedFavorites = useFavoritesStore(
     (s) => s.loadPersistedFavorites,
   );
+  const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
 
   useEffect(() => {
     loadConnections();
     loadGroups();
     initEventListeners();
     loadPersistedFavorites();
-  }, [loadConnections, loadGroups, initEventListeners, loadPersistedFavorites]);
+    loadPersistedMru();
+  }, [
+    loadConnections,
+    loadGroups,
+    initEventListeners,
+    loadPersistedFavorites,
+    loadPersistedMru,
+  ]);
 
   // Cmd+W / Ctrl+W closes the active tab (does NOT close the app)
   useEffect(() => {

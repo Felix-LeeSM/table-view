@@ -7,6 +7,7 @@ import {
   type QueryTab as QueryTabType,
 } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 // Mock child components to isolate MainArea routing logic
@@ -141,6 +142,9 @@ describe("MainArea", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
     setConnections({});
+    // Sprint 119 (#SHELL-1) — reset MRU before each test so a stale MRU
+    // from a prior test cannot leak into the EmptyState fallback chain.
+    __resetMruStoreForTests();
   });
 
   // AC-05: empty state placeholder
@@ -470,7 +474,10 @@ describe("MainArea", () => {
       ).toBeInTheDocument();
     });
 
-    it("picks the first connected connection when multiple exist", () => {
+    it("falls back to first-connected when MRU is empty (multiple actives)", () => {
+      // Sprint 119 (#SHELL-1) — without an MRU seed the policy reverts to
+      // the legacy "first connected wins" behavior, so the order in the
+      // list (c1 inactive, c2 first connected) decides the target.
       setConnections({
         connections: [
           makeConnection("c1"),
@@ -488,6 +495,85 @@ describe("MainArea", () => {
 
       const state = useTabStore.getState();
       expect(state.tabs[0]!.connectionId).toBe("c2");
+    });
+  });
+
+  // Sprint 119 (#SHELL-1) — MRU policy specifics. These tests pin (a) the
+  // MRU-wins case, (b) the stale-MRU fallback, and (c) tab creation as the
+  // MRU signal source.
+  describe("Empty state MRU policy (sprint 119)", () => {
+    it("AC-01 — picks the MRU connection over first-connected when both are connected", () => {
+      setConnections({
+        connections: [
+          makeConnection("c1"),
+          makeConnection("c2"),
+          makeConnection("c3"),
+        ],
+        active: ["c2", "c3"],
+      });
+      // Seed MRU=c3 directly (the persistence path is exercised by
+      // mruStore.test.ts; here we only care about MainArea's read).
+      useMruStore.setState({ lastUsedConnectionId: "c3" });
+
+      render(<MainArea />);
+
+      // The CTA's contextual hint shows the target connection's name.
+      expect(screen.getByText(/c3 DB/)).toBeInTheDocument();
+      // first-connected (c2) must NOT be referenced.
+      expect(screen.queryByText(/c2 DB/)).toBeNull();
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs[0]!.connectionId).toBe("c3");
+    });
+
+    it("AC-03 — falls back to first-connected when MRU connection is currently disconnected", () => {
+      setConnections({
+        connections: [makeConnection("c1"), makeConnection("c2")],
+        // c2 (the previous MRU) is NOT in the active set anymore.
+        active: ["c1"],
+      });
+      useMruStore.setState({ lastUsedConnectionId: "c2" });
+
+      render(<MainArea />);
+
+      // CTA points at c1, NOT the stale MRU c2.
+      expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
+      expect(screen.queryByText(/c2 DB/)).toBeNull();
+    });
+
+    it("AC-03 — falls back to first-connected when MRU id no longer exists in the connection list", () => {
+      // Edge case: the previously-used connection was deleted between
+      // sessions. We must not crash and must defer to first-connected.
+      setConnections({
+        connections: [makeConnection("c1")],
+        active: ["c1"],
+      });
+      useMruStore.setState({ lastUsedConnectionId: "c-deleted" });
+
+      render(<MainArea />);
+
+      expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
+    });
+
+    it("AC-01/AC-04 — opening a query tab via the CTA marks that connection as MRU", () => {
+      setConnections({
+        connections: [makeConnection("c1"), makeConnection("c2")],
+        active: ["c1", "c2"],
+      });
+
+      render(<MainArea />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /new query/i }));
+      });
+
+      // First-connected fallback fired (c1) → tab open against c1 →
+      // tabStore.addQueryTab dispatches markConnectionUsed("c1").
+      expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
     });
   });
 });

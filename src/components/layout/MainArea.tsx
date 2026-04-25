@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import TabBar from "./TabBar";
 import { useTabStore, type TableTab, type TabSubView } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
 import { Plus } from "lucide-react";
 import DataGrid from "@components/DataGrid";
 import DocumentDataGrid from "@components/DocumentDataGrid";
@@ -115,29 +116,41 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
 function EmptyState() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const lastUsedConnectionId = useMruStore((s) => s.lastUsedConnectionId);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
 
+  // Sprint 119 (#SHELL-1) — MRU-first policy with first-connected fallback.
+  // The MRU id is null on first run (or after a reset), and stale-MRU (the
+  // previously-used connection is currently disconnected) also falls back
+  // to first-connected so the CTA never points at a connection the user
+  // can't actually query.
+  const mruConnection =
+    lastUsedConnectionId !== null
+      ? connections.find(
+          (c) =>
+            c.id === lastUsedConnectionId &&
+            activeStatuses[c.id]?.type === "connected",
+        )
+      : undefined;
   const firstConnected = connections.find(
     (c) => activeStatuses[c.id]?.type === "connected",
   );
+  const target = mruConnection ?? firstConnected;
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-muted-foreground">
       <LogoWordmark className="h-20 w-auto" />
-      {firstConnected ? (
+      {target ? (
         <>
           <p className="text-sm">
             Open a table from the sidebar, or start writing SQL against{" "}
-            <span className="font-medium text-foreground">
-              {firstConnected.name}
-            </span>
-            .
+            <span className="font-medium text-foreground">{target.name}</span>.
           </p>
           <Button
             variant="outline"
             size="sm"
             className="mt-1"
-            onClick={() => addQueryTab(firstConnected.id)}
+            onClick={() => addQueryTab(target.id)}
           >
             <Plus />
             New Query

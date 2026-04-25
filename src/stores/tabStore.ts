@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
+import { useMruStore } from "@stores/mruStore";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -214,6 +215,11 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   addTab: (tab) => {
     tabCounter++;
+    // Sprint 119 (#SHELL-1) — opening a tab against a connection is the
+    // strongest signal that the user is "actively working with" it, so we
+    // mark it as MRU. MainArea's EmptyState reads this to decide which
+    // connection the New Query CTA should default to.
+    useMruStore.getState().markConnectionUsed(tab.connectionId);
     set((state) => {
       const exists = state.tabs.find(
         (t): t is TableTab =>
@@ -347,6 +353,10 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   addQueryTab: (connectionId, opts = {}) => {
     queryCounter++;
+    // Sprint 119 (#SHELL-1) — see comment in `addTab`. Query tab creation
+    // is an equivalent MRU signal; both paths must mark or the EmptyState
+    // would only update for table-tab opens.
+    useMruStore.getState().markConnectionUsed(connectionId);
     const id = `query-${queryCounter}`;
     const title = `Query ${queryCounter}`;
     const paradigm: Paradigm = opts.paradigm ?? "rdb";
