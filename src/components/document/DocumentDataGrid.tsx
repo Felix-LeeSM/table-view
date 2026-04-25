@@ -13,6 +13,7 @@ import {
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import AddDocumentModal from "@components/document/AddDocumentModal";
 import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
+import DocumentFilterBar from "@components/document/DocumentFilterBar";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
 import { insertDocument } from "@lib/tauri";
 import { cn } from "@lib/utils";
@@ -53,17 +54,32 @@ export default function DocumentDataGrid({
   const queryResult = useDocumentStore(
     (s) => s.queryResults[`${connectionId}:${database}:${collection}`],
   );
+  const fieldsCacheEntry = useDocumentStore(
+    (s) => s.fieldsCache[`${connectionId}:${database}:${collection}`],
+  );
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showQuickLook, setShowQuickLook] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<Record<string, unknown>>({});
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const fetchIdRef = useRef(0);
+
+  const filterFieldNames = useMemo<readonly string[]>(
+    () => (fieldsCacheEntry ? fieldsCacheEntry.map((c) => c.name) : []),
+    [fieldsCacheEntry],
+  );
+
+  const activeFilterCount = useMemo(
+    () => Object.keys(activeFilter).length,
+    [activeFilter],
+  );
 
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current;
@@ -71,6 +87,7 @@ export default function DocumentDataGrid({
     setError(null);
     try {
       await runFind(connectionId, database, collection, {
+        filter: activeFilterCount > 0 ? activeFilter : undefined,
         skip: (page - 1) * pageSize,
         limit: pageSize,
       });
@@ -79,7 +96,16 @@ export default function DocumentDataGrid({
     } finally {
       if (fetchIdRef.current === fetchId) setLoading(false);
     }
-  }, [runFind, connectionId, database, collection, page, pageSize]);
+  }, [
+    runFind,
+    connectionId,
+    database,
+    collection,
+    page,
+    pageSize,
+    activeFilter,
+    activeFilterCount,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -237,8 +263,8 @@ export default function DocumentDataGrid({
         pageSize={pageSize}
         totalPages={totalPages}
         sorts={[]}
-        activeFilterCount={0}
-        showFilters={false}
+        activeFilterCount={activeFilterCount}
+        showFilters={showFilters}
         hasPendingChanges={editState.hasPendingChanges}
         pendingEditsSize={editState.pendingEdits.size}
         pendingNewRowsCount={editState.pendingNewRows.length}
@@ -253,11 +279,7 @@ export default function DocumentDataGrid({
           setPageSize(size);
           setPage(1);
         }}
-        onToggleFilters={() => {
-          /* document filters not yet wired — Sprint 87 keeps the toolbar
-             surface consistent with the RDB grid but the toggle is a no-op
-             because the MongoDB filter bar ships in a later sprint. */
-        }}
+        onToggleFilters={() => setShowFilters((prev) => !prev)}
         showQuickLook={showQuickLook}
         onToggleQuickLook={() => setShowQuickLook((prev) => !prev)}
         onCommit={editState.handleCommit}
@@ -266,6 +288,21 @@ export default function DocumentDataGrid({
         onDeleteRow={editState.handleDeleteRow}
         onDuplicateRow={editState.handleDuplicateRow}
       />
+
+      {showFilters && (
+        <DocumentFilterBar
+          fieldNames={filterFieldNames}
+          onApply={(filter) => {
+            setActiveFilter(filter);
+            setPage(1);
+          }}
+          onClose={() => setShowFilters(false)}
+          onClear={() => {
+            setActiveFilter({});
+            setPage(1);
+          }}
+        />
+      )}
 
       {error && (
         <div
