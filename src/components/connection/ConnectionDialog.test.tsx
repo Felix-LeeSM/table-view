@@ -1038,4 +1038,171 @@ describe("ConnectionDialog", () => {
       expect(screen.queryByText("Testing...")).not.toBeInTheDocument();
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Sprint 108 (#CONN-DIALOG-2): DB type change custom-port guard
+  //
+  // When the user changes DB type while the port is at the default for the
+  // current type (or 0/empty), the port auto-updates silently. When the port
+  // is a user-customised value, a ConfirmDialog asks for explicit consent
+  // before replacement; cancel leaves dbType + port untouched.
+  // -----------------------------------------------------------------------
+  describe("Sprint 108: DB type change port guard", () => {
+    it("auto-updates port when current port is the default (postgres 5432 → mysql 3306)", async () => {
+      renderDialog();
+
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+      const portInput = screen.getByLabelText("Port") as HTMLInputElement;
+      // Sanity: starting at postgres default.
+      expect(select.value).toBe("postgresql");
+      expect(portInput.value).toBe("5432");
+
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mysql" } });
+      });
+
+      expect(select.value).toBe("mysql");
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "3306",
+      );
+      // No ConfirmDialog rendered.
+      expect(
+        screen.queryByText("Replace custom port?"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("auto-updates port when current port is 0 (sqlite default → mysql)", async () => {
+      renderDialog();
+
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+      // Switch to sqlite first → port becomes 0.
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "sqlite" } });
+      });
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "0",
+      );
+
+      // Now switch sqlite → mysql; port must auto-update without modal.
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mysql" } });
+      });
+
+      expect(select.value).toBe("mysql");
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "3306",
+      );
+      expect(
+        screen.queryByText("Replace custom port?"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("renders ConfirmDialog when current port is custom (15432) and dbType changes", async () => {
+      renderDialog();
+
+      const portInput = screen.getByLabelText("Port") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(portInput, { target: { value: "15432" } });
+      });
+
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mysql" } });
+      });
+
+      // ConfirmDialog visible with the contract message + confirmLabel.
+      expect(screen.getByText("Replace custom port?")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Switching from postgresql to mysql will reset port 15432 → 3306\. Continue\?/,
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Use default port 3306" }),
+      ).toBeInTheDocument();
+
+      // Form remains unchanged until the user decides.
+      expect(
+        (screen.getByLabelText("Database Type") as HTMLSelectElement).value,
+      ).toBe("postgresql");
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "15432",
+      );
+    });
+
+    it("Confirm 'Use default port 3306' applies dbType=mysql + port=3306 and closes the modal", async () => {
+      renderDialog();
+
+      const portInput = screen.getByLabelText("Port") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(portInput, { target: { value: "15432" } });
+      });
+
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mysql" } });
+      });
+
+      const confirmBtn = screen.getByRole("button", {
+        name: "Use default port 3306",
+      });
+      await act(async () => {
+        fireEvent.click(confirmBtn);
+      });
+
+      expect(
+        (screen.getByLabelText("Database Type") as HTMLSelectElement).value,
+      ).toBe("mysql");
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "3306",
+      );
+      expect(
+        screen.queryByText("Replace custom port?"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("Cancel keeps dbType=postgres + port=15432 and closes the modal", async () => {
+      renderDialog();
+
+      const portInput = screen.getByLabelText("Port") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(portInput, { target: { value: "15432" } });
+      });
+
+      const select = screen.getByLabelText(
+        "Database Type",
+      ) as HTMLSelectElement;
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "mysql" } });
+      });
+
+      // The footer has its own "Cancel" button — scope to the AlertDialog.
+      const alertDialog = screen.getByRole("alertdialog");
+      const cancelBtn = Array.from(alertDialog.querySelectorAll("button")).find(
+        (b) => b.textContent?.trim() === "Cancel",
+      );
+      expect(cancelBtn).toBeDefined();
+      await act(async () => {
+        fireEvent.click(cancelBtn!);
+      });
+
+      expect(
+        (screen.getByLabelText("Database Type") as HTMLSelectElement).value,
+      ).toBe("postgresql");
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "15432",
+      );
+      expect(
+        screen.queryByText("Replace custom port?"),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

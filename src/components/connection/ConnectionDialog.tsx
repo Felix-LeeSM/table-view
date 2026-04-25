@@ -48,6 +48,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@components/ui/dialog";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 
 interface ConnectionDialogProps {
   connection?: ConnectionConfig;
@@ -92,6 +93,12 @@ export default function ConnectionDialog({
   const testing = testResult.status === "pending";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Sprint-108 (#CONN-DIALOG-2): when the user changes DB type with a custom
+  // port set, defer the swap until they confirm port replacement. The form
+  // mutation only applies on confirm; cancel leaves dbType + port untouched.
+  const [pendingDbTypeChange, setPendingDbTypeChange] = useState<{
+    to: DatabaseType;
+  } | null>(null);
 
   // Sprint-95 Layer-1 migration: project the local 4-state union onto the
   // generic DialogFeedback contract. `pending` → `loading` is the only naming
@@ -107,13 +114,38 @@ export default function ConnectionDialog({
   const updateConnection = useConnectionStore((s) => s.updateConnection);
   const testConnection = useConnectionStore((s) => s.testConnection);
 
-  const handleDbTypeChange = (dbType: DatabaseType) => {
+  const applyDbTypeChange = (dbType: DatabaseType) => {
     setForm((f) => ({
       ...f,
       db_type: dbType,
       port: DATABASE_DEFAULTS[dbType],
       paradigm: paradigmOf(dbType),
     }));
+  };
+
+  const handleDbTypeChange = (newDbType: DatabaseType) => {
+    const oldDbType = form.db_type;
+    if (newDbType === oldDbType) return;
+    const currentPort = form.port;
+    // "Default-or-empty" port → safe to overwrite silently (legacy behaviour).
+    // Anything else is a user-customised port and must be confirmed.
+    const isDefaultOrEmpty =
+      currentPort === DATABASE_DEFAULTS[oldDbType] || currentPort === 0;
+    if (isDefaultOrEmpty) {
+      applyDbTypeChange(newDbType);
+      return;
+    }
+    setPendingDbTypeChange({ to: newDbType });
+  };
+
+  const handleConfirmDbTypeReplace = () => {
+    if (!pendingDbTypeChange) return;
+    applyDbTypeChange(pendingDbTypeChange.to);
+    setPendingDbTypeChange(null);
+  };
+
+  const handleCancelDbTypeReplace = () => {
+    setPendingDbTypeChange(null);
   };
 
   const isMongo = form.db_type === "mongodb";
@@ -636,6 +668,15 @@ export default function ConnectionDialog({
           </div>
         </div>
       </DialogContent>
+      {pendingDbTypeChange && (
+        <ConfirmDialog
+          title="Replace custom port?"
+          message={`Switching from ${form.db_type} to ${pendingDbTypeChange.to} will reset port ${form.port} → ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}. Continue?`}
+          confirmLabel={`Use default port ${DATABASE_DEFAULTS[pendingDbTypeChange.to]}`}
+          onConfirm={handleConfirmDbTypeReplace}
+          onCancel={handleCancelDbTypeReplace}
+        />
+      )}
     </Dialog>
   );
 }
