@@ -860,10 +860,15 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
 
-    // The SQL should appear in the modal
-    expect(
-      screen.getByText("ALTER TABLE public.users DROP COLUMN name;"),
-    ).toBeInTheDocument();
+    // The SQL should appear in the modal. SqlSyntax tokenises the SQL into
+    // multiple <span>s, so assert against the preview <pre>'s textContent.
+    const preview = screen
+      .getByRole("dialog")
+      .querySelector("pre") as HTMLPreElement | null;
+    expect(preview).not.toBeNull();
+    expect(preview!.textContent).toBe(
+      "ALTER TABLE public.users DROP COLUMN name;",
+    );
   });
 
   // -----------------------------------------------------------------------
@@ -1414,10 +1419,15 @@ describe("StructurePanel", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    // The SQL preview should be visible
-    expect(
-      screen.getByText("CREATE INDEX idx_name ON public.users (name);"),
-    ).toBeInTheDocument();
+    // The SQL preview should be visible. SqlSyntax tokenises the SQL into
+    // multiple <span>s, so assert against the preview <pre>'s textContent.
+    const preview = screen
+      .getByRole("dialog")
+      .querySelector("pre") as HTMLPreElement | null;
+    expect(preview).not.toBeNull();
+    expect(preview!.textContent).toBe(
+      "CREATE INDEX idx_name ON public.users (name);",
+    );
 
     // Clear previous calls
     vi.mocked(tauri.createIndex).mockClear();

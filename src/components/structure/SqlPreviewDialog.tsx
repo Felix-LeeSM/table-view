@@ -1,5 +1,6 @@
 import { Loader2, Play } from "lucide-react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import SqlSyntax from "@components/shared/SqlSyntax";
 
 /**
  * Sprint 93 — surfaced commit failure passed through from `useDataGridEdit`'s
@@ -62,7 +63,13 @@ export default function SqlPreviewDialog({
       className="w-dialog-md bg-secondary"
       preview={
         <pre className="max-h-scroll-lg overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
-          {sql || "-- No changes to preview"}
+          {sql.trim() ? (
+            <SqlSyntax sql={sql} />
+          ) : (
+            <span className="italic text-muted-foreground">
+              -- No changes to preview
+            </span>
+          )}
         </pre>
       }
       error={error}
