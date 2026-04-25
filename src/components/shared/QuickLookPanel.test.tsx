@@ -472,5 +472,135 @@ describe("QuickLookPanel", () => {
         screen.queryByTestId("blob-viewer-dialog"),
       ).not.toBeInTheDocument();
     });
+
+    // ── Sprint 105 #QL-1: keyboard-accessible resizer (document mode) ─
+    it("exposes the resize handle as a focusable separator with ARIA in document mode", () => {
+      render(<QuickLookPanel {...documentDefaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      expect(handle).toHaveAttribute("tabindex", "0");
+      expect(handle).toHaveAttribute("aria-orientation", "horizontal");
+      expect(handle).toHaveAttribute("aria-valuemin", "120");
+      expect(handle).toHaveAttribute("aria-valuemax", "600");
+      // Default height is 280.
+      expect(handle).toHaveAttribute("aria-valuenow", "280");
+      expect(handle).not.toHaveAttribute("aria-hidden");
+    });
+  });
+
+  // ── Sprint 105 #QL-1: keyboard-accessible resizer (RDB mode) ───────
+  describe("keyboard resizer (sprint-105 #QL-1)", () => {
+    const MIN_HEIGHT = 120;
+    const MAX_HEIGHT = 600;
+    const STEP = 8;
+    const DEFAULT_HEIGHT = 280;
+
+    it("renders the resize handle with role=separator, tabIndex=0 and ARIA attributes", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      expect(handle).toBeInTheDocument();
+      expect(handle).toHaveAttribute("tabindex", "0");
+      expect(handle).toHaveAttribute("aria-orientation", "horizontal");
+      expect(handle).toHaveAttribute("aria-valuemin", String(MIN_HEIGHT));
+      expect(handle).toHaveAttribute("aria-valuemax", String(MAX_HEIGHT));
+      expect(handle).toHaveAttribute("aria-valuenow", String(DEFAULT_HEIGHT));
+      expect(handle).not.toHaveAttribute("aria-hidden");
+    });
+
+    it("Shift+ArrowUp grows the panel by 8px and updates aria-valuenow", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      fireEvent.keyDown(handle, { key: "ArrowUp", shiftKey: true });
+
+      expect(handle).toHaveAttribute(
+        "aria-valuenow",
+        String(DEFAULT_HEIGHT + STEP),
+      );
+    });
+
+    it("Shift+ArrowDown shrinks the panel by 8px and updates aria-valuenow", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      fireEvent.keyDown(handle, { key: "ArrowDown", shiftKey: true });
+
+      expect(handle).toHaveAttribute(
+        "aria-valuenow",
+        String(DEFAULT_HEIGHT - STEP),
+      );
+    });
+
+    it("Shift+ArrowUp clamps to MAX_HEIGHT (600)", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      // Default height is 280; need (600-280)/8 = 40 steps to reach max.
+      // Press 50 times to confirm the clamp holds beyond the upper bound.
+      for (let i = 0; i < 50; i++) {
+        fireEvent.keyDown(handle, { key: "ArrowUp", shiftKey: true });
+      }
+
+      expect(handle).toHaveAttribute("aria-valuenow", String(MAX_HEIGHT));
+    });
+
+    it("Shift+ArrowDown clamps to MIN_HEIGHT (120)", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      // Default height is 280; need (280-120)/8 = 20 steps to reach min.
+      // Press 30 times to confirm the clamp holds below the lower bound.
+      for (let i = 0; i < 30; i++) {
+        fireEvent.keyDown(handle, { key: "ArrowDown", shiftKey: true });
+      }
+
+      expect(handle).toHaveAttribute("aria-valuenow", String(MIN_HEIGHT));
+    });
+
+    it("ignores plain ArrowUp without Shift (no-op)", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      fireEvent.keyDown(handle, { key: "ArrowUp", shiftKey: false });
+
+      expect(handle).toHaveAttribute("aria-valuenow", String(DEFAULT_HEIGHT));
+    });
+
+    it("ignores plain ArrowDown without Shift (no-op)", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      fireEvent.keyDown(handle, { key: "ArrowDown", shiftKey: false });
+
+      expect(handle).toHaveAttribute("aria-valuenow", String(DEFAULT_HEIGHT));
+    });
+
+    it("ignores other keys with Shift (e.g. Shift+Enter)", () => {
+      render(<QuickLookPanel {...defaultProps} />);
+
+      const handle = screen.getByRole("separator", {
+        name: "Resize Quick Look panel",
+      });
+      fireEvent.keyDown(handle, { key: "Enter", shiftKey: true });
+
+      expect(handle).toHaveAttribute("aria-valuenow", String(DEFAULT_HEIGHT));
+    });
   });
 });

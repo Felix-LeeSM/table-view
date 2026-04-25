@@ -176,6 +176,11 @@ export type QuickLookPanelProps =
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT = 600;
 const DEFAULT_HEIGHT = 280;
+const KEYBOARD_RESIZE_STEP = 8;
+
+function clampHeight(value: number): number {
+  return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, value));
+}
 
 export default function QuickLookPanel(props: QuickLookPanelProps) {
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
@@ -195,10 +200,7 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
 
       const handleMouseMove = (moveEvent: MouseEvent) => {
         const delta = startY - moveEvent.clientY; // dragging up = increase height
-        const newHeight = Math.max(
-          MIN_HEIGHT,
-          Math.min(MAX_HEIGHT, startHeight + delta),
-        );
+        const newHeight = clampHeight(startHeight + delta);
         setHeight(newHeight);
       };
 
@@ -217,6 +219,22 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
     [height],
   );
 
+  // Keyboard resize: Shift+ArrowUp/Down adjusts the panel height in
+  // KEYBOARD_RESIZE_STEP (8px) increments, clamped to [MIN_HEIGHT, MAX_HEIGHT].
+  // Dragging up = bigger panel, so ArrowUp grows and ArrowDown shrinks.
+  // Plain arrow keys (no Shift) are intentionally ignored so they remain
+  // available for caret/scroll behaviour elsewhere.
+  const handleResizeKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!e.shiftKey) return;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHeight((h) => clampHeight(h + KEYBOARD_RESIZE_STEP));
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHeight((h) => clampHeight(h - KEYBOARD_RESIZE_STEP));
+    }
+  }, []);
+
   if (props.mode === "document") {
     return (
       <DocumentModeBody
@@ -228,6 +246,7 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
         firstSelectedId={firstSelectedId}
         height={height}
         onResizeMouseDown={handleMouseDown}
+        onResizeKeyDown={handleResizeKeyDown}
       />
     );
   }
@@ -242,6 +261,7 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
       firstSelectedId={firstSelectedId}
       height={height}
       onResizeMouseDown={handleMouseDown}
+      onResizeKeyDown={handleResizeKeyDown}
     />
   );
 }
@@ -257,6 +277,7 @@ interface RdbBodyProps {
   firstSelectedId: number | null;
   height: number;
   onResizeMouseDown: (e: React.MouseEvent) => void;
+  onResizeKeyDown: (e: React.KeyboardEvent) => void;
 }
 
 function RdbModeBody({
@@ -268,6 +289,7 @@ function RdbModeBody({
   firstSelectedId,
   height,
   onResizeMouseDown,
+  onResizeKeyDown,
 }: RdbBodyProps) {
   const [blobViewer, setBlobViewer] = useState<{
     data: unknown;
@@ -301,9 +323,16 @@ function RdbModeBody({
     >
       {/* Resize handle */}
       <div
-        className="flex h-2 cursor-row-resize items-center justify-center border-b border-border bg-muted/30 hover:bg-muted"
+        className="flex h-2 cursor-row-resize items-center justify-center border-b border-border bg-muted/30 hover:bg-muted focus-visible:outline-1 focus-visible:outline-ring"
         onMouseDown={onResizeMouseDown}
-        aria-hidden="true"
+        onKeyDown={onResizeKeyDown}
+        tabIndex={0}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize Quick Look panel"
+        aria-valuemin={MIN_HEIGHT}
+        aria-valuemax={MAX_HEIGHT}
+        aria-valuenow={height}
       >
         <GripHorizontal className="h-3 w-3 text-muted-foreground" />
       </div>
@@ -372,6 +401,7 @@ interface DocumentBodyProps {
   firstSelectedId: number | null;
   height: number;
   onResizeMouseDown: (e: React.MouseEvent) => void;
+  onResizeKeyDown: (e: React.KeyboardEvent) => void;
 }
 
 function DocumentModeBody({
@@ -383,6 +413,7 @@ function DocumentModeBody({
   firstSelectedId,
   height,
   onResizeMouseDown,
+  onResizeKeyDown,
 }: DocumentBodyProps) {
   // Out-of-range or missing selection → pass `null` so BsonTreeViewer's
   // built-in empty state takes over. This keeps the panel mounted (so the
@@ -409,9 +440,16 @@ function DocumentModeBody({
     >
       {/* Resize handle */}
       <div
-        className="flex h-2 cursor-row-resize items-center justify-center border-b border-border bg-muted/30 hover:bg-muted dark:bg-muted/20"
+        className="flex h-2 cursor-row-resize items-center justify-center border-b border-border bg-muted/30 hover:bg-muted focus-visible:outline-1 focus-visible:outline-ring dark:bg-muted/20"
         onMouseDown={onResizeMouseDown}
-        aria-hidden="true"
+        onKeyDown={onResizeKeyDown}
+        tabIndex={0}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize Quick Look panel"
+        aria-valuemin={MIN_HEIGHT}
+        aria-valuemax={MAX_HEIGHT}
+        aria-valuenow={height}
       >
         <GripHorizontal className="h-3 w-3 text-muted-foreground" />
       </div>
