@@ -12,6 +12,7 @@ import {
 } from "@components/datagrid/useDataGridEdit";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import AddDocumentModal from "@components/document/AddDocumentModal";
+import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
 import { insertDocument } from "@lib/tauri";
 import { cn } from "@lib/utils";
 
@@ -226,6 +227,7 @@ export default function DocumentDataGrid({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <CollectionReadOnlyBanner />
       <DataGridToolbar
         data={data}
         schema={database}

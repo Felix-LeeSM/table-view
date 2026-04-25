@@ -9,6 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import DataGrid from "./DataGrid";
 import type { SortInfo, TableData } from "@/types/schema";
+import { COLLECTION_READONLY_BANNER_TEXT } from "@lib/strings/document";
 
 // Mock FilterBar — test DataGrid in isolation
 vi.mock("./FilterBar", () => ({
@@ -1689,6 +1690,20 @@ describe("DataGrid", () => {
     // Tab A's state object is untouched by tab B's render.
     const tabA = mockTabStoreState.tabs.find((t) => t.id === "tab-A")!;
     expect(tabA.sorts).toEqual([{ column: "id", direction: "ASC" }]);
+  });
+
+  // ── Sprint 101 — RDB regression guard ──
+  // The MongoDB collection beta banner must NOT leak into the relational
+  // DataGrid. Asserting both the text and the absence of role="status"
+  // catches accidental cross-paradigm imports.
+  it("does not render the MongoDB collection beta banner in the RDB grid", async () => {
+    renderDataGrid();
+    await screen.findByText("3 rows");
+
+    expect(
+      screen.queryByText(COLLECTION_READONLY_BANNER_TEXT),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   // Regression guard — with a legacy tab that has no `sorts` key (as
