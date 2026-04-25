@@ -41,3 +41,8 @@ test-results/
 
 # tmo
 tmp/
+
+# Local-only evaluation/plan drafts (commit per-sprint specs instead)
+docs/ui-evaluation.md
+docs/ui-evaluation-results.md
+docs/ui-fixes-plan.md
