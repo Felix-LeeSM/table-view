@@ -36,3 +36,20 @@ if (typeof Element !== "undefined") {
     Element.prototype.scrollIntoView = () => {};
   }
 }
+
+// Sprint-114: `@tanstack/react-virtual` reads a ResizeObserver from the
+// scroll container to react to viewport resizes. jsdom doesn't ship one,
+// so the virtualizer crashes during render without this polyfill. We only
+// need the no-op surface — tests drive size via `getBoundingClientRect` /
+// `clientHeight` overrides where needed.
+if (typeof globalThis !== "undefined") {
+  const g = globalThis as unknown as { ResizeObserver?: unknown };
+  if (!g.ResizeObserver) {
+    class NoopResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    g.ResizeObserver = NoopResizeObserver;
+  }
+}

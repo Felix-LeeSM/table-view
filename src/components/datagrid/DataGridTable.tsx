@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Loader2, Key, Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { truncateCell } from "@lib/format";
@@ -35,6 +36,23 @@ import {
 import type { CopyRowData } from "@lib/format";
 
 const MIN_COL_WIDTH = 60;
+
+/**
+ * Sprint-114 (#PERF-1, #GRID-3) — page sizes above this threshold switch the
+ * tbody render path to a `@tanstack/react-virtual` viewport. Below it we
+ * keep the eager render so the 73 existing DataGrid tests (which use small
+ * fixtures) continue to assert against full DOM output without spacers.
+ */
+const VIRTUALIZE_THRESHOLD = 200;
+
+/**
+ * Sprint-114 — single-source row height for the virtualizer. The body cells
+ * use `px-3 py-1 text-xs` which renders ~28-32px in the table; we estimate
+ * 32px to include the `border-b` and stay slightly conservative so overscan
+ * doesn't clip when row content varies. `react-virtual` measures actual DOM
+ * heights as rows render, so the estimate only governs initial layout.
+ */
+const ROW_HEIGHT_ESTIMATE = 32;
 
 /**
  * Parse a foreign-key reference string of the form
@@ -482,8 +500,332 @@ export default function DataGridTable({
 
   const rowKeyFn = (rowIdx: number) => `row-${page}-${rowIdx}`;
 
+  /**
+   * Sprint-114 — once the dataset crosses `VIRTUALIZE_THRESHOLD` rows we let
+   * `useVirtualizer` decide which rows enter the DOM. Counting includes
+   * `pendingNewRows` because they share the tbody scroll surface; the
+   * threshold is conservative so small queries (≤ 200) keep the eager
+   * render path that the 73 existing DataGrid tests assert against.
+   */
+  const totalBodyRowCount = data.rows.length + pendingNewRows.length;
+  const shouldVirtualize = totalBodyRowCount > VIRTUALIZE_THRESHOLD;
+
+  // Scroll container for the virtualizer. The wrapper div (overflow-auto) is
+  // the actual scroll surface; the <table> inside lives at its natural size
+  // so sticky thead and column-resize logic continue to work unchanged.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // We always wire up the virtualizer (count=0 when below threshold so it
+  // does no work) — calling hooks unconditionally keeps the React rules
+  // satisfied across the threshold transition.
+  const rowVirtualizer = useVirtualizer({
+    count: shouldVirtualize ? data.rows.length : 0,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    overscan: 10,
+  });
+
+  // When the underlying dataset changes (sort/filter/page change), reset
+  // scroll position so the user always lands on the first row of the new
+  // result set instead of staring at a viewport that pointed into the old
+  // ordering. `data.executed_query` flips on every server fetch so it's a
+  // safe identity for "the rows changed".
+  useEffect(() => {
+    if (!shouldVirtualize) return;
+    rowVirtualizer.scrollToIndex(0, { align: "start" });
+    // We intentionally only react to identity changes of the rendered set;
+    // including the virtualizer instance would re-fire on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.executed_query, sorts, shouldVirtualize]);
+
+  /**
+   * Render a single body row by data-row index. Extracted so the eager and
+   * virtualized branches share exactly one cell-rendering implementation
+   * (sprint-114). The return is a `<tr>` so callers can drop it directly
+   * into `<tbody>`. `aria-rowindex` is always `rowIdx + 2` (header is row 1)
+   * regardless of which path is rendering — preserving sprint-106 ARIA
+   * after virtualization.
+   */
+  const renderDataRow = (rowIdx: number) => {
+    const row = data.rows[rowIdx] as unknown[] | undefined;
+    if (!row) return null;
+    const rk = rowKeyFn(rowIdx);
+    const isDeleted = pendingDeletedRowKeys.has(rk);
+    const isSelected = selectedRowIds.has(rowIdx);
+    return (
+      <tr
+        key={rk}
+        role="row"
+        aria-rowindex={rowIdx + 2}
+        className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+        onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
+        onContextMenu={(e) => {
+          // Fallback when the right-click lands between cells.
+          // Cell-level handlers below override this when the click
+          // hits a real td so the context menu reflects that cell.
+          handleContextMenu(e, rowIdx, 0);
+        }}
+      >
+        {order.map((dIdx, visualIdx) => {
+          const cell = row[dIdx];
+          const col = data.columns[dIdx]!;
+          const key = editKey(rowIdx, dIdx);
+          const isEditing =
+            editingCell?.row === rowIdx && editingCell?.col === dIdx;
+          const hasPendingEdit = pendingEdits.has(key);
+          const cellEditValue = cellToEditValue(cell);
+          const pendingValue: string | null = hasPendingEdit
+            ? (pendingEdits.get(key) as string | null)
+            : null;
+          const editStartValue = hasPendingEdit ? pendingValue : cellEditValue;
+          const isBlob = isBlobColumn(col.data_type);
+
+          const fkRef =
+            col.is_foreign_key && col.fk_reference && cell != null
+              ? parseFkReference(col.fk_reference)
+              : null;
+
+          return (
+            <td
+              key={`${dIdx}-${visualIdx}`}
+              role="gridcell"
+              aria-colindex={visualIdx + 1}
+              data-editing={isEditing ? "true" : undefined}
+              className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
+                isEditing
+                  ? " bg-primary/10 ring-2 ring-inset ring-primary"
+                  : hasPendingEdit
+                    ? " bg-highlight/20"
+                    : ""
+              }`}
+              style={{
+                width: getColumnWidth(col.name, col.data_type),
+                minWidth: MIN_COL_WIDTH,
+              }}
+              title={
+                cell == null
+                  ? "NULL"
+                  : typeof cell === "object" && cell !== null
+                    ? JSON.stringify(cell, null, 2)
+                    : String(cell)
+              }
+              onDoubleClick={() => onStartEdit(rowIdx, dIdx, editStartValue)}
+              onClick={() => {
+                if (editingCell) {
+                  onSaveCurrentEdit();
+                }
+              }}
+              onContextMenu={(e) => {
+                // Stop the row-level handler from overwriting our
+                // accurate per-cell coordinates with colIdx=0.
+                e.stopPropagation();
+                handleContextMenu(e, rowIdx, dIdx);
+              }}
+            >
+              {isEditing ? (
+                (() => {
+                  // Sprint 75 — inline validation hint for the active
+                  // cell. When a previous commit attempt left a
+                  // coercion error on this cell, render a
+                  // `text-destructive` message beneath the editor. The
+                  // error is cleared entry-by-entry by the hook when
+                  // `onSetEditValue`/`onSetEditNull` is called, so the
+                  // hint disappears as soon as the user edits.
+                  const errorMessage = pendingEditErrors?.get(key);
+                  return (
+                    <div className="flex flex-col">
+                      {editValue === null ? (
+                        <div
+                          ref={(el) => {
+                            editorFocusRef.current = el;
+                          }}
+                          className="flex items-center gap-2 outline-none"
+                          role="textbox"
+                          aria-label={`Editing ${col.name} — currently NULL`}
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Tab") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveEditCursor(
+                                rowIdx,
+                                dIdx,
+                                e.shiftKey ? "prev-col" : "next-col",
+                              );
+                            } else if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveEditCursor(
+                                rowIdx,
+                                dIdx,
+                                e.shiftKey ? "prev-row" : "next-row",
+                              );
+                            } else if (e.key === "Escape") {
+                              e.stopPropagation();
+                              onCancelEdit();
+                            } else if (
+                              (e.metaKey || e.ctrlKey) &&
+                              e.key === "Backspace"
+                            ) {
+                              // Already NULL — just eat the shortcut.
+                              e.preventDefault();
+                            } else if (
+                              e.key.length === 1 &&
+                              !e.metaKey &&
+                              !e.ctrlKey &&
+                              !e.altKey
+                            ) {
+                              // Printable key flips NULL → typed editor.
+                              // The column's data type picks both the seed
+                              // value (often `""` for pickers) and the
+                              // `<input type>` on the next render — routed
+                              // through `deriveEditorSeed` so the flip lands
+                              // on a type-appropriate editor, not a bare
+                              // text input with the raw character seeded in.
+                              e.preventDefault();
+                              const { seed, accept } = deriveEditorSeed(
+                                col.data_type,
+                                e.key,
+                              );
+                              if (!accept) return;
+                              onSetEditValue(seed);
+                            }
+                          }}
+                        >
+                          <span
+                            className="italic text-muted-foreground"
+                            aria-hidden="true"
+                          >
+                            NULL
+                          </span>
+                          <span className="text-2xs text-muted-foreground">
+                            Type to edit · Esc to cancel
+                          </span>
+                        </div>
+                      ) : (
+                        <input
+                          ref={(el) => {
+                            editorFocusRef.current = el;
+                          }}
+                          type={getInputTypeForColumn(col.data_type)}
+                          className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                          value={editValue}
+                          aria-label={`Editing ${col.name}`}
+                          onChange={(e) => onSetEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (
+                              (e.metaKey || e.ctrlKey) &&
+                              e.key === "Backspace"
+                            ) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              onSetEditNull();
+                            } else if (e.key === "Tab") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveEditCursor(
+                                rowIdx,
+                                dIdx,
+                                e.shiftKey ? "prev-col" : "next-col",
+                              );
+                            } else if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              moveEditCursor(
+                                rowIdx,
+                                dIdx,
+                                e.shiftKey ? "prev-row" : "next-row",
+                              );
+                            } else if (e.key === "Escape") {
+                              e.stopPropagation();
+                              onCancelEdit();
+                            }
+                          }}
+                        />
+                      )}
+                      {errorMessage && (
+                        <span
+                          role="alert"
+                          aria-live="polite"
+                          className="mt-0.5 text-2xs text-destructive"
+                        >
+                          {errorMessage}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()
+              ) : hasPendingEdit ? (
+                pendingValue === null ? (
+                  <span
+                    className="italic text-muted-foreground"
+                    aria-label="NULL"
+                  >
+                    NULL
+                  </span>
+                ) : (
+                  <span className="line-clamp-3">{pendingValue}</span>
+                )
+              ) : isBlob && cell != null ? (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBlobViewer({ data: cell, columnName: col.name });
+                  }}
+                  aria-label={`View BLOB data for ${col.name}`}
+                >
+                  <Binary />
+                  <span>(BLOB)</span>
+                </Button>
+              ) : cell == null ? (
+                <span className="italic text-muted-foreground">NULL</span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <span className="line-clamp-3">
+                    {truncateCell(
+                      typeof cell === "object" && cell !== null
+                        ? JSON.stringify(cell, null, 2)
+                        : String(cell),
+                    )}
+                  </span>
+                  {fkRef && onNavigateToFk && (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      // Sprint-89 (#FK-3): icon stays visible on every
+                      // FK + non-null cell so users can discover the
+                      // jump without first hovering. Hover lifts the
+                      // opacity to full strength.
+                      className="shrink-0 opacity-40 transition-opacity group-hover/cell:opacity-100 text-muted-foreground hover:text-foreground"
+                      aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
+                      title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNavigateToFk(
+                          fkRef.schema,
+                          fkRef.table,
+                          fkRef.column,
+                          String(cell),
+                        );
+                      }}
+                    >
+                      <ArrowUpRight size={10} />
+                    </Button>
+                  )}
+                </span>
+              )}
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
+
   return (
-    <div className="relative flex-1 overflow-auto">
+    <div className="relative flex-1 overflow-auto" ref={scrollContainerRef}>
       {loading && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
           <Loader2 className="animate-spin text-muted-foreground" size={24} />
@@ -573,291 +915,49 @@ export default function DataGridTable({
           </tr>
         </thead>
         <tbody>
-          {data.rows.map((row, rowIdx) => {
-            const rk = rowKeyFn(rowIdx);
-            const isDeleted = pendingDeletedRowKeys.has(rk);
-            const isSelected = selectedRowIds.has(rowIdx);
-            return (
-              <tr
-                key={rk}
-                role="row"
-                aria-rowindex={rowIdx + 2}
-                className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
-                onClick={(e) =>
-                  onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)
-                }
-                onContextMenu={(e) => {
-                  // Fallback when the right-click lands between cells.
-                  // Cell-level handlers below override this when the click
-                  // hits a real td so the context menu reflects that cell.
-                  handleContextMenu(e, rowIdx, 0);
-                }}
-              >
-                {order.map((dIdx, visualIdx) => {
-                  const cell = (row as unknown[])[dIdx];
-                  const col = data.columns[dIdx]!;
-                  const key = editKey(rowIdx, dIdx);
-                  const isEditing =
-                    editingCell?.row === rowIdx && editingCell?.col === dIdx;
-                  const hasPendingEdit = pendingEdits.has(key);
-                  const cellEditValue = cellToEditValue(cell);
-                  const pendingValue: string | null = hasPendingEdit
-                    ? (pendingEdits.get(key) as string | null)
-                    : null;
-                  const editStartValue = hasPendingEdit
-                    ? pendingValue
-                    : cellEditValue;
-                  const isBlob = isBlobColumn(col.data_type);
-
-                  const fkRef =
-                    col.is_foreign_key && col.fk_reference && cell != null
-                      ? parseFkReference(col.fk_reference)
-                      : null;
-
-                  return (
-                    <td
-                      key={`${dIdx}-${visualIdx}`}
-                      role="gridcell"
-                      aria-colindex={visualIdx + 1}
-                      data-editing={isEditing ? "true" : undefined}
-                      className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
-                        isEditing
-                          ? " bg-primary/10 ring-2 ring-inset ring-primary"
-                          : hasPendingEdit
-                            ? " bg-highlight/20"
-                            : ""
-                      }`}
-                      style={{
-                        width: getColumnWidth(col.name, col.data_type),
-                        minWidth: MIN_COL_WIDTH,
-                      }}
-                      title={
-                        cell == null
-                          ? "NULL"
-                          : typeof cell === "object" && cell !== null
-                            ? JSON.stringify(cell, null, 2)
-                            : String(cell)
-                      }
-                      onDoubleClick={() =>
-                        onStartEdit(rowIdx, dIdx, editStartValue)
-                      }
-                      onClick={() => {
-                        if (editingCell) {
-                          onSaveCurrentEdit();
-                        }
-                      }}
-                      onContextMenu={(e) => {
-                        // Stop the row-level handler from overwriting our
-                        // accurate per-cell coordinates with colIdx=0.
-                        e.stopPropagation();
-                        handleContextMenu(e, rowIdx, dIdx);
-                      }}
-                    >
-                      {isEditing ? (
-                        (() => {
-                          // Sprint 75 — inline validation hint for the active
-                          // cell. When a previous commit attempt left a
-                          // coercion error on this cell, render a
-                          // `text-destructive` message beneath the editor. The
-                          // error is cleared entry-by-entry by the hook when
-                          // `onSetEditValue`/`onSetEditNull` is called, so the
-                          // hint disappears as soon as the user edits.
-                          const errorMessage = pendingEditErrors?.get(key);
-                          return (
-                            <div className="flex flex-col">
-                              {editValue === null ? (
-                                <div
-                                  ref={(el) => {
-                                    editorFocusRef.current = el;
-                                  }}
-                                  className="flex items-center gap-2 outline-none"
-                                  role="textbox"
-                                  aria-label={`Editing ${col.name} — currently NULL`}
-                                  tabIndex={0}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Tab") {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      moveEditCursor(
-                                        rowIdx,
-                                        dIdx,
-                                        e.shiftKey ? "prev-col" : "next-col",
-                                      );
-                                    } else if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      moveEditCursor(
-                                        rowIdx,
-                                        dIdx,
-                                        e.shiftKey ? "prev-row" : "next-row",
-                                      );
-                                    } else if (e.key === "Escape") {
-                                      e.stopPropagation();
-                                      onCancelEdit();
-                                    } else if (
-                                      (e.metaKey || e.ctrlKey) &&
-                                      e.key === "Backspace"
-                                    ) {
-                                      // Already NULL — just eat the shortcut.
-                                      e.preventDefault();
-                                    } else if (
-                                      e.key.length === 1 &&
-                                      !e.metaKey &&
-                                      !e.ctrlKey &&
-                                      !e.altKey
-                                    ) {
-                                      // Printable key flips NULL → typed editor.
-                                      // The column's data type picks both the seed
-                                      // value (often `""` for pickers) and the
-                                      // `<input type>` on the next render — routed
-                                      // through `deriveEditorSeed` so the flip lands
-                                      // on a type-appropriate editor, not a bare
-                                      // text input with the raw character seeded in.
-                                      e.preventDefault();
-                                      const { seed, accept } = deriveEditorSeed(
-                                        col.data_type,
-                                        e.key,
-                                      );
-                                      if (!accept) return;
-                                      onSetEditValue(seed);
-                                    }
-                                  }}
-                                >
-                                  <span
-                                    className="italic text-muted-foreground"
-                                    aria-hidden="true"
-                                  >
-                                    NULL
-                                  </span>
-                                  <span className="text-2xs text-muted-foreground">
-                                    Type to edit · Esc to cancel
-                                  </span>
-                                </div>
-                              ) : (
-                                <input
-                                  ref={(el) => {
-                                    editorFocusRef.current = el;
-                                  }}
-                                  type={getInputTypeForColumn(col.data_type)}
-                                  className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
-                                  value={editValue}
-                                  aria-label={`Editing ${col.name}`}
-                                  onChange={(e) =>
-                                    onSetEditValue(e.target.value)
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (
-                                      (e.metaKey || e.ctrlKey) &&
-                                      e.key === "Backspace"
-                                    ) {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      onSetEditNull();
-                                    } else if (e.key === "Tab") {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      moveEditCursor(
-                                        rowIdx,
-                                        dIdx,
-                                        e.shiftKey ? "prev-col" : "next-col",
-                                      );
-                                    } else if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      moveEditCursor(
-                                        rowIdx,
-                                        dIdx,
-                                        e.shiftKey ? "prev-row" : "next-row",
-                                      );
-                                    } else if (e.key === "Escape") {
-                                      e.stopPropagation();
-                                      onCancelEdit();
-                                    }
-                                  }}
-                                />
-                              )}
-                              {errorMessage && (
-                                <span
-                                  role="alert"
-                                  aria-live="polite"
-                                  className="mt-0.5 text-2xs text-destructive"
-                                >
-                                  {errorMessage}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })()
-                      ) : hasPendingEdit ? (
-                        pendingValue === null ? (
-                          <span
-                            className="italic text-muted-foreground"
-                            aria-label="NULL"
-                          >
-                            NULL
-                          </span>
-                        ) : (
-                          <span className="line-clamp-3">{pendingValue}</span>
-                        )
-                      ) : isBlob && cell != null ? (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="text-muted-foreground hover:text-foreground"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBlobViewer({ data: cell, columnName: col.name });
-                          }}
-                          aria-label={`View BLOB data for ${col.name}`}
-                        >
-                          <Binary />
-                          <span>(BLOB)</span>
-                        </Button>
-                      ) : cell == null ? (
-                        <span className="italic text-muted-foreground">
-                          NULL
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <span className="line-clamp-3">
-                            {truncateCell(
-                              typeof cell === "object" && cell !== null
-                                ? JSON.stringify(cell, null, 2)
-                                : String(cell),
-                            )}
-                          </span>
-                          {fkRef && onNavigateToFk && (
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              // Sprint-89 (#FK-3): icon stays visible on every
-                              // FK + non-null cell so users can discover the
-                              // jump without first hovering. Hover lifts the
-                              // opacity to full strength.
-                              className="shrink-0 opacity-40 transition-opacity group-hover/cell:opacity-100 text-muted-foreground hover:text-foreground"
-                              aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
-                              title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onNavigateToFk(
-                                  fkRef.schema,
-                                  fkRef.table,
-                                  fkRef.column,
-                                  String(cell),
-                                );
-                              }}
-                            >
-                              <ArrowUpRight size={10} />
-                            </Button>
-                          )}
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
+          {shouldVirtualize
+            ? (() => {
+                // Sprint-114 — virtualized branch. The virtualizer reports a
+                // total scroll height (`getTotalSize()`) and a window of
+                // visible items; we pad before/after with two spacer rows so
+                // the table preserves its full height + the rendered slice
+                // sits at the correct vertical offset. We can't use
+                // `position: absolute` directly on `<tr>` (table layout
+                // model fights it), and `transform` on `<tbody>` would
+                // reposition every row instead of leaving spacers.
+                const virtualItems = rowVirtualizer.getVirtualItems();
+                const totalSize = rowVirtualizer.getTotalSize();
+                const paddingTop = virtualItems.length
+                  ? virtualItems[0]!.start
+                  : 0;
+                const paddingBottom = virtualItems.length
+                  ? totalSize - virtualItems[virtualItems.length - 1]!.end
+                  : 0;
+                return (
+                  <>
+                    {paddingTop > 0 && (
+                      <tr aria-hidden="true" style={{ height: paddingTop }}>
+                        <td
+                          colSpan={data.columns.length}
+                          style={{ padding: 0, border: 0 }}
+                        />
+                      </tr>
+                    )}
+                    {virtualItems.map((virtualRow) =>
+                      renderDataRow(virtualRow.index),
+                    )}
+                    {paddingBottom > 0 && (
+                      <tr aria-hidden="true" style={{ height: paddingBottom }}>
+                        <td
+                          colSpan={data.columns.length}
+                          style={{ padding: 0, border: 0 }}
+                        />
+                      </tr>
+                    )}
+                  </>
+                );
+              })()
+            : data.rows.map((_row, rowIdx) => renderDataRow(rowIdx))}
           {data.rows.length === 0 && pendingNewRows.length === 0 && (
             <tr role="row">
               <td
