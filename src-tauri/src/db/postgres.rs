@@ -13,6 +13,27 @@ use crate::models::{
     QueryResult, QueryType, SchemaChangeResult, SchemaInfo, TableData, TableInfo, ViewInfo,
 };
 
+/// Serialize a foreign-key reference into the canonical
+/// `<schema>.<table>(<column>)` string consumed by the frontend
+/// (`parseFkReference` in `DataGridTable.tsx`).
+///
+/// Sprint-89 (#FK-1): the previous implementation built this string in SQL
+/// (`ccu.table_name || '.' || ccu.column_name`) which (a) silently dropped
+/// the schema and (b) made the format un-testable. This pure helper is the
+/// single source of truth for the wire format and is exercised by both unit
+/// tests in this file and by the `tests/fixtures/fk_reference_samples.json`
+/// shared fixture.
+///
+/// **Input assumptions**: callers must pass identifiers that do **not**
+/// contain `.`, `(`, or `)` characters. The fixture intentionally exercises
+/// hyphens, underscores, and spaces (which round-trip cleanly through the
+/// regex on the TS side) but the format does not currently quote or escape
+/// reserved characters — adding that is tracked separately and is not in
+/// sprint-89's scope.
+pub(crate) fn format_fk_reference(schema: &str, table: &str, column: &str) -> String {
+    format!("{schema}.{table}({column})")
+}
+
 /// Strip leading SQL comments and whitespace so that query type detection
 /// works on `-- comment\nSELECT ...` and `/* block */ SELECT ...` inputs.
 fn strip_leading_comments(sql: &str) -> &str {
@@ -700,8 +721,12 @@ impl PostgresAdapter {
         let pk_columns: std::collections::HashSet<String> =
             pk_rows.into_iter().map(|(col,)| col).collect();
 
-        let fk_rows: Vec<(String, String)> = sqlx::query_as(
-            "SELECT kcu.column_name, ccu.table_name || '.' || ccu.column_name \
+        // Sprint-89 (#FK-1): select schema/table/column as 3 separate columns
+        // so we can format the FK reference in Rust via `format_fk_reference`,
+        // matching the `<schema>.<table>(<column>)` contract that the
+        // frontend's `parseFkReference` expects.
+        let fk_rows: Vec<(String, String, String, String)> = sqlx::query_as(
+            "SELECT kcu.column_name, ccu.table_schema, ccu.table_name, ccu.column_name \
              FROM information_schema.table_constraints tc \
              JOIN information_schema.key_column_usage kcu \
                ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema \
@@ -715,7 +740,15 @@ impl PostgresAdapter {
         .await
         .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        let fk_map: std::collections::HashMap<String, String> = fk_rows.into_iter().collect();
+        let fk_map: std::collections::HashMap<String, String> = fk_rows
+            .into_iter()
+            .map(|(local_col, ref_schema, ref_table, ref_column)| {
+                (
+                    local_col,
+                    format_fk_reference(&ref_schema, &ref_table, &ref_column),
+                )
+            })
+            .collect();
 
         // Get column comments via col_description()
         let comment_rows: Vec<(String, Option<String>)> = sqlx::query_as(
@@ -794,10 +827,12 @@ impl PostgresAdapter {
         .await
         .map_err(|e| AppError::Connection(e.to_string()))?;
 
-        // Foreign keys for all tables in the schema
-        let fk_rows: Vec<(String, String, String)> = sqlx::query_as(
+        // Foreign keys for all tables in the schema.
+        // Sprint-89 (#FK-1): same restructuring as `get_table_columns` —
+        // separate schema/table/column columns + Rust-side formatting.
+        let fk_rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
             "SELECT kcu.table_name, kcu.column_name, \
-                    ccu.table_name || '.' || ccu.column_name \
+                    ccu.table_schema, ccu.table_name, ccu.column_name \
              FROM information_schema.table_constraints tc \
              JOIN information_schema.key_column_usage kcu \
                ON tc.constraint_name = kcu.constraint_name \
@@ -829,8 +864,15 @@ impl PostgresAdapter {
         // Build lookup sets/maps keyed by (table, column)
         let pk_set: std::collections::HashSet<(String, String)> = pk_rows.into_iter().collect();
 
-        let fk_map: std::collections::HashMap<(String, String), String> =
-            fk_rows.into_iter().map(|(t, c, r)| ((t, c), r)).collect();
+        let fk_map: std::collections::HashMap<(String, String), String> = fk_rows
+            .into_iter()
+            .map(|(t, c, ref_schema, ref_table, ref_column)| {
+                (
+                    (t, c),
+                    format_fk_reference(&ref_schema, &ref_table, &ref_column),
+                )
+            })
+            .collect();
 
         let comment_map: std::collections::HashMap<(String, String), Option<String>> = comment_rows
             .into_iter()
@@ -2886,5 +2928,69 @@ mod tests {
             err_msg.contains("Not connected"),
             "Expected 'Not connected' error, got: {err_msg}"
         );
+    }
+
+    // ── Sprint-89 (#FK-1) — `format_fk_reference` unit + fixture tests ──
+
+    #[test]
+    fn format_fk_reference_happy_path() {
+        assert_eq!(
+            format_fk_reference("public", "users", "id"),
+            "public.users(id)"
+        );
+    }
+
+    #[test]
+    fn format_fk_reference_underscored_identifiers() {
+        assert_eq!(
+            format_fk_reference("sales_v2", "orders", "user_id"),
+            "sales_v2.orders(user_id)"
+        );
+    }
+
+    #[test]
+    fn format_fk_reference_special_chars_in_identifiers() {
+        // Hyphens and spaces survive the round-trip because the TS regex
+        // (`/^(.+)\.(.+)\((.+)\)$/`) is greedy on each segment.
+        assert_eq!(
+            format_fk_reference("audit-log", "events", "event id"),
+            "audit-log.events(event id)"
+        );
+    }
+
+    #[test]
+    fn format_fk_reference_matches_sprint_88_fixture() {
+        // Round-trip every sample from the shared fixture so any future
+        // drift between the Rust serializer and the JSON contract is caught
+        // by `cargo test`. The TS side does the inverse direction.
+        const FIXTURE_RAW: &str = include_str!("../../../tests/fixtures/fk_reference_samples.json");
+
+        #[derive(serde::Deserialize)]
+        struct Sample {
+            schema: String,
+            table: String,
+            column: String,
+            expected: String,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            samples: Vec<Sample>,
+        }
+
+        let fixture: Fixture =
+            serde_json::from_str(FIXTURE_RAW).expect("fixture must be valid JSON");
+        assert!(
+            fixture.samples.len() >= 3,
+            "fixture must define at least 3 samples"
+        );
+        for sample in &fixture.samples {
+            assert_eq!(
+                format_fk_reference(&sample.schema, &sample.table, &sample.column),
+                sample.expected,
+                "format_fk_reference must round-trip sample {:?}",
+                sample.expected
+            );
+        }
     }
 }

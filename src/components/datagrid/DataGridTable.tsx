@@ -36,7 +36,22 @@ import type { CopyRowData } from "@lib/format";
 
 const MIN_COL_WIDTH = 60;
 
-function parseFkReference(
+/**
+ * Parse a foreign-key reference string of the form
+ * `"<schema>.<table>(<column>)"` (the canonical contract aligned by
+ * sprint-89 / #FK-1) into its three components.
+ *
+ * Returns `null` when the input does not match the expected shape — for
+ * example bare `"<table>.<column>"` strings (the pre-sprint-89 backend
+ * shape) or empty input.
+ *
+ * Exported so that both the production `DataGridTable` render path and the
+ * vitest contract tests (`DataGridTable.parseFkReference.test.ts`) consume
+ * exactly one implementation. The Rust counterpart is
+ * `format_fk_reference` in `src-tauri/src/db/postgres.rs` and the two
+ * sides are kept in lock-step via `tests/fixtures/fk_reference_samples.json`.
+ */
+export function parseFkReference(
   ref: string,
 ): { schema: string; table: string; column: string } | null {
   const match = ref.match(/^(.+)\.(.+)\((.+)\)$/);
@@ -788,7 +803,11 @@ export default function DataGridTable({
                             <Button
                               variant="ghost"
                               size="icon-xs"
-                              className="invisible shrink-0 group-hover/cell:visible text-muted-foreground hover:text-foreground"
+                              // Sprint-89 (#FK-3): icon stays visible on every
+                              // FK + non-null cell so users can discover the
+                              // jump without first hovering. Hover lifts the
+                              // opacity to full strength.
+                              className="shrink-0 opacity-40 transition-opacity group-hover/cell:opacity-100 text-muted-foreground hover:text-foreground"
                               aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
                               title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
                               onClick={(e) => {
