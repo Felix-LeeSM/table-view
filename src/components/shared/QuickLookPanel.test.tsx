@@ -262,6 +262,106 @@ describe("QuickLookPanel", () => {
       expect(screen.getByText("jsonb")).toBeInTheDocument();
       expect(screen.getByText("bytea")).toBeInTheDocument();
     });
+
+    // ── Sprint 90 #QL-2: column name / type 2-line split ─────────────
+    describe("column header 2-line split (sprint-90 #QL-2)", () => {
+      it("renders column name and data type as separate sibling blocks under a flex flex-col parent", () => {
+        render(<QuickLookPanel {...defaultProps} />);
+
+        // The "id" column name node lives inside a flex-flex-col header cell.
+        const nameNode = screen.getByText("id");
+        const typeNode = screen.getByText("integer");
+
+        // They must not be the same DOM node and must not be one a child of the other —
+        // they are sibling spans inside the header cell.
+        expect(nameNode).not.toBe(typeNode);
+        expect(nameNode.contains(typeNode)).toBe(false);
+        expect(typeNode.contains(nameNode)).toBe(false);
+
+        // Shared parent is the header cell with `flex flex-col`.
+        const parent = nameNode.parentElement;
+        expect(parent).not.toBeNull();
+        expect(parent).toBe(typeNode.parentElement);
+        expect(parent?.className).toMatch(/\bflex\b/);
+        expect(parent?.className).toMatch(/\bflex-col\b/);
+      });
+
+      it("applies the visual hierarchy classes (font-mono + text-xs on name, text-3xs + opacity-60 on type)", () => {
+        render(<QuickLookPanel {...defaultProps} />);
+
+        const nameNode = screen.getByText("id");
+        expect(nameNode.className).toMatch(/\bfont-mono\b/);
+        expect(nameNode.className).toMatch(/\btext-xs\b/);
+
+        const typeNode = screen.getByText("integer");
+        expect(typeNode.className).toMatch(/\btext-3xs\b/);
+        expect(typeNode.className).toMatch(/\bopacity-60\b/);
+      });
+
+      it("does not truncate a long column name when the data type is long (character varying(255), timestamp with time zone)", () => {
+        const longColumns = [
+          {
+            name: "extremely_long_column_name_that_should_not_be_truncated",
+            data_type: "character varying(255)",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+          {
+            name: "another_long_column_name_with_timestamp",
+            data_type: "timestamp with time zone",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ];
+        const longData: TableData = {
+          columns: longColumns,
+          rows: [["short value", "2026-04-25T00:00:00Z"]],
+          total_count: 1,
+          page: 1,
+          page_size: 100,
+          executed_query: "SELECT * FROM long_columns LIMIT 1 OFFSET 0",
+        };
+
+        render(
+          <QuickLookPanel
+            {...defaultProps}
+            data={longData}
+            selectedRowIds={new Set([0])}
+          />,
+        );
+
+        // Long column names are matched in full — proving no truncation by ellipsis/text-clip.
+        const longNameNode = screen.getByText(
+          "extremely_long_column_name_that_should_not_be_truncated",
+        );
+        const longTypeNode = screen.getByText("character varying(255)");
+        expect(longNameNode).toBeInTheDocument();
+        expect(longTypeNode).toBeInTheDocument();
+
+        // Even with a long type next to it, the name node has no truncation
+        // utility (no `truncate`, no `text-ellipsis`) and explicitly wraps.
+        expect(longNameNode.className).not.toMatch(/\btruncate\b/);
+        expect(longNameNode.className).not.toMatch(/\btext-ellipsis\b/);
+        expect(longNameNode.className).toMatch(/\bwhitespace-normal\b/);
+        expect(longNameNode.className).toMatch(/\bbreak-words\b/);
+
+        // The second long column is rendered too.
+        expect(
+          screen.getByText("another_long_column_name_with_timestamp"),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByText("timestamp with time zone"),
+        ).toBeInTheDocument();
+      });
+    });
   });
 
   describe("document mode", () => {
