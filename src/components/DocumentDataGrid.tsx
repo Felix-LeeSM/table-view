@@ -13,6 +13,7 @@ import {
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import AddDocumentModal from "@components/document/AddDocumentModal";
 import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
+import { DOCUMENT_LABELS } from "@/lib/strings/document";
 import { insertDocument } from "@lib/tauri";
 import { cn } from "@lib/utils";
 
@@ -211,13 +212,13 @@ export default function DocumentDataGrid({
         if (err.kind === "id-in-patch") {
           return {
             row: err.rowIdx,
-            message: `cannot edit ${err.column} in a patch`,
+            message: `cannot edit field ${err.column} in a patch`,
           };
         }
         if (err.kind === "sentinel-edit") {
           return {
             row: err.rowIdx,
-            message: `nested ${err.column} is not editable`,
+            message: `nested field ${err.column} is not editable`,
           };
         }
         return { row: err.rowIdx, message: err.reason };
@@ -243,6 +244,10 @@ export default function DocumentDataGrid({
         pendingNewRowsCount={editState.pendingNewRows.length}
         pendingDeletedRowKeysSize={editState.pendingDeletedRowKeys.size}
         selectedRowIdsCount={editState.selectedRowIds.size}
+        rowCountLabel={DOCUMENT_LABELS.rowCountLabel}
+        addRowLabel={DOCUMENT_LABELS.addRowLabel}
+        deleteRowLabel={DOCUMENT_LABELS.deleteRowLabel}
+        duplicateRowLabel={DOCUMENT_LABELS.duplicateRowLabel}
         onSetPage={setPage}
         onSetPageSize={(size) => {
           setPageSize(size);

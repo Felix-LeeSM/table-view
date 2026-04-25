@@ -49,6 +49,16 @@ export interface DataGridToolbarProps {
   pendingNewRowsCount: number;
   pendingDeletedRowKeysSize: number;
   selectedRowIdsCount: number;
+  /**
+   * Sprint 118 (#PAR-2) — optional wording overrides so the document
+   * paradigm grid can render `"documents"` / `"Add document"` etc.
+   * Defaults preserve RDB wording so existing RDB tests stay green
+   * without touching the toolbar from the call site.
+   */
+  rowCountLabel?: string;
+  addRowLabel?: string;
+  deleteRowLabel?: string;
+  duplicateRowLabel?: string;
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
@@ -77,6 +87,10 @@ export default function DataGridToolbar({
   pendingNewRowsCount,
   pendingDeletedRowKeysSize,
   selectedRowIdsCount,
+  rowCountLabel = "rows",
+  addRowLabel = "Add row",
+  deleteRowLabel = "Delete row",
+  duplicateRowLabel = "Duplicate row",
   onSetPage,
   onSetPageSize,
   onToggleFilters,
@@ -92,7 +106,7 @@ export default function DataGridToolbar({
       <div className="flex items-center gap-2 text-xs text-secondary-foreground">
         {data ? (
           <>
-            {data.total_count.toLocaleString()} rows
+            {data.total_count.toLocaleString()} {rowCountLabel}
             {sorts.length > 0 && (
               <span className="text-muted-foreground">
                 Sorted by{" "}
@@ -168,8 +182,8 @@ export default function DataGridToolbar({
               size="icon-xs"
               className="text-muted-foreground"
               onClick={onAddRow}
-              aria-label="Add row"
-              title="Add row"
+              aria-label={addRowLabel}
+              title={addRowLabel}
             >
               <Plus />
             </Button>
@@ -179,8 +193,8 @@ export default function DataGridToolbar({
               className="text-muted-foreground"
               onClick={onDeleteRow}
               disabled={selectedRowIdsCount === 0}
-              aria-label="Delete row"
-              title="Delete row"
+              aria-label={deleteRowLabel}
+              title={deleteRowLabel}
             >
               <Trash2 />
             </Button>
@@ -190,8 +204,8 @@ export default function DataGridToolbar({
               className="text-muted-foreground"
               onClick={onDuplicateRow}
               disabled={selectedRowIdsCount === 0}
-              aria-label="Duplicate row"
-              title="Duplicate row"
+              aria-label={duplicateRowLabel}
+              title={duplicateRowLabel}
             >
               <Copy />
             </Button>

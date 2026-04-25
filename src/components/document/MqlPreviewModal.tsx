@@ -92,12 +92,13 @@ export default function MqlPreviewModal({
               className="rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive"
             >
               <p className="mb-1 font-semibold">
-                {errors.length} row{errors.length !== 1 ? "s" : ""} skipped:
+                {errors.length} document{errors.length !== 1 ? "s" : ""}{" "}
+                skipped:
               </p>
               <ul className="list-inside list-disc space-y-0.5">
                 {errors.map((err, idx) => (
                   <li key={`${err.row}-${idx}`}>
-                    row {err.row}: {err.message}
+                    document {err.row}: {err.message}
                   </li>
                 ))}
               </ul>

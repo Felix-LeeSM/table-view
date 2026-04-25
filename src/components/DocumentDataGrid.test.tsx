@@ -137,9 +137,11 @@ describe("DocumentDataGrid", () => {
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
     // Sprint 87: the DataGridToolbar now drives the header row. It surfaces
-    // the row count (e.g. "2 rows") once data is loaded; before data loads,
-    // it falls back to "{schema}.{table}". Bob still renders in the body.
-    expect(screen.getByText(/2 rows/)).toBeInTheDocument();
+    // the row count (e.g. "2 documents") once data is loaded; before data
+    // loads, it falls back to "{schema}.{table}". Bob still renders in the
+    // body. Sprint 118 (#PAR-2) — DocumentDataGrid passes the document
+    // wording overrides so the row label says "documents", not "rows".
+    expect(screen.getByText(/2 documents/)).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
@@ -380,7 +382,7 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Add row" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add document" }));
 
     const textarea = await screen.findByLabelText("Document JSON");
     fireEvent.change(textarea, { target: { value: '{"name":"Carol"}' } });

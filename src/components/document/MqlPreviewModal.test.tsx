@@ -40,10 +40,16 @@ describe("MqlPreviewModal", () => {
 
     const list = screen.getByLabelText("MQL generation errors");
     expect(list).toBeInTheDocument();
-    expect(list.textContent).toContain("row 3: missing or unsupported _id");
-    expect(list.textContent).toContain("row 5: nested meta is not editable");
-    // "2 rows skipped:" header reflects the plural form.
-    expect(list.textContent).toContain("2 rows skipped");
+    // Sprint 118 (#PAR-2) — paradigm-correct wording: "document N:" prefix,
+    // "N documents skipped" header.
+    expect(list.textContent).toContain(
+      "document 3: missing or unsupported _id",
+    );
+    expect(list.textContent).toContain(
+      "document 5: nested meta is not editable",
+    );
+    // "2 documents skipped:" header reflects the plural form.
+    expect(list.textContent).toContain("2 documents skipped");
   });
 
   it("invokes onExecute when the Execute button is clicked", () => {

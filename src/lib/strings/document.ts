@@ -16,3 +16,20 @@
  */
 export const COLLECTION_READONLY_BANNER_TEXT =
   "Beta — schema and DDL operations are not yet supported.";
+
+/**
+ * Document-paradigm wording overrides for the shared `DataGridToolbar`.
+ *
+ * Sprint 118 (#PAR-2) — `DataGridToolbar` is mounted by both the RDB grid
+ * (`DataGrid`) and the document grid (`DocumentDataGrid`). The toolbar's
+ * default props keep RDB wording (`"rows"`, `"Add row"`, …) so existing
+ * RDB tests stay green; document callers spread `DOCUMENT_LABELS` to swap
+ * the user-visible strings without touching paradigm-coupling code in the
+ * toolbar itself.
+ */
+export const DOCUMENT_LABELS = {
+  rowCountLabel: "documents",
+  addRowLabel: "Add document",
+  deleteRowLabel: "Delete document",
+  duplicateRowLabel: "Duplicate document",
+} as const;
