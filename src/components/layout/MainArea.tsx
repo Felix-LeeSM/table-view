@@ -4,14 +4,15 @@ import { useTabStore, type TableTab, type TabSubView } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
 import { Plus } from "lucide-react";
-import DataGrid from "@components/DataGrid";
-import DocumentDataGrid from "@components/DocumentDataGrid";
+import DataGrid from "@components/rdb/DataGrid";
+import DocumentDataGrid from "@components/document/DocumentDataGrid";
 import StructurePanel from "@components/schema/StructurePanel";
 import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
 import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";
 import { LogoWordmark } from "@components/shared/Logo";
+import { assertNever, type Paradigm } from "@/lib/paradigm";
 
 interface TableTabProps {
   tab: TableTab;
@@ -22,95 +23,102 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   // Sprint 66: document-paradigm tabs bypass the Records/Structure sub-tabs
   // for the P0 milestone. Structure inspection for collections is tracked
   // by Sprint 67 (schema inference panel) and deliberately omitted here.
-  const isDocument = tab.paradigm === "document";
+  // Sprint 120: paradigm dispatch wrapped in an exhaustive switch so adding
+  // a new variant to the `Paradigm` union surfaces a TypeScript error here.
+  const paradigm: Paradigm = tab.paradigm ?? "rdb";
 
-  if (isDocument) {
-    return (
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <DocumentDataGrid
-          connectionId={tab.connectionId}
-          database={tab.schema!}
-          collection={tab.table!}
-        />
-      </div>
-    );
+  switch (paradigm) {
+    case "document":
+      return (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <DocumentDataGrid
+            connectionId={tab.connectionId}
+            database={tab.schema!}
+            collection={tab.table!}
+          />
+        </div>
+      );
+    case "rdb":
+    case "search":
+    case "kv":
+      return (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Sub-tab bar */}
+          <div
+            className="flex items-center border-b border-border bg-secondary"
+            role="tablist"
+            aria-label="Table view"
+          >
+            <button
+              role="tab"
+              aria-selected={tab.subView === "records"}
+              tabIndex={tab.subView === "records" ? 0 : -1}
+              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                tab.subView === "records"
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground hover:text-secondary-foreground"
+              }`}
+              onClick={() => onSubViewChange("records")}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  onSubViewChange(
+                    tab.subView === "records" ? "structure" : "records",
+                  );
+                }
+              }}
+            >
+              Records
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab.subView === "structure"}
+              tabIndex={tab.subView === "structure" ? 0 : -1}
+              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                tab.subView === "structure"
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground hover:text-secondary-foreground"
+              }`}
+              onClick={() => onSubViewChange("structure")}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  onSubViewChange(
+                    tab.subView === "structure" ? "records" : "structure",
+                  );
+                }
+              }}
+            >
+              Structure
+            </button>
+          </div>
+
+          {/* Content */}
+          {tab.subView === "records" ? (
+            <DataGrid
+              connectionId={tab.connectionId}
+              table={tab.table!}
+              schema={tab.schema!}
+              initialFilters={tab.initialFilters}
+            />
+          ) : tab.objectKind === "view" ? (
+            <ViewStructurePanel
+              connectionId={tab.connectionId}
+              view={tab.table!}
+              schema={tab.schema!}
+            />
+          ) : (
+            <StructurePanel
+              connectionId={tab.connectionId}
+              table={tab.table!}
+              schema={tab.schema!}
+            />
+          )}
+        </div>
+      );
+    default:
+      return assertNever(paradigm);
   }
-
-  return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Sub-tab bar */}
-      <div
-        className="flex items-center border-b border-border bg-secondary"
-        role="tablist"
-        aria-label="Table view"
-      >
-        <button
-          role="tab"
-          aria-selected={tab.subView === "records"}
-          tabIndex={tab.subView === "records" ? 0 : -1}
-          className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-            tab.subView === "records"
-              ? "border-b-2 border-primary text-foreground"
-              : "text-muted-foreground hover:text-secondary-foreground"
-          }`}
-          onClick={() => onSubViewChange("records")}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-              e.preventDefault();
-              onSubViewChange(
-                tab.subView === "records" ? "structure" : "records",
-              );
-            }
-          }}
-        >
-          Records
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab.subView === "structure"}
-          tabIndex={tab.subView === "structure" ? 0 : -1}
-          className={`px-4 py-1.5 text-xs font-medium transition-colors ${
-            tab.subView === "structure"
-              ? "border-b-2 border-primary text-foreground"
-              : "text-muted-foreground hover:text-secondary-foreground"
-          }`}
-          onClick={() => onSubViewChange("structure")}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-              e.preventDefault();
-              onSubViewChange(
-                tab.subView === "structure" ? "records" : "structure",
-              );
-            }
-          }}
-        >
-          Structure
-        </button>
-      </div>
-
-      {/* Content */}
-      {tab.subView === "records" ? (
-        <DataGrid
-          connectionId={tab.connectionId}
-          table={tab.table!}
-          schema={tab.schema!}
-          initialFilters={tab.initialFilters}
-        />
-      ) : tab.objectKind === "view" ? (
-        <ViewStructurePanel
-          connectionId={tab.connectionId}
-          view={tab.table!}
-          schema={tab.schema!}
-        />
-      ) : (
-        <StructurePanel
-          connectionId={tab.connectionId}
-          table={tab.table!}
-          schema={tab.schema!}
-        />
-      )}
-    </div>
-  );
 }
 
 function EmptyState() {

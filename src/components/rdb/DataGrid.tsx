@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
-import FilterBar from "@components/FilterBar";
+import FilterBar from "@components/rdb/FilterBar";
 import {
   Dialog,
   DialogContent,

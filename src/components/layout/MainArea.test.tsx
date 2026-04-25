@@ -11,7 +11,7 @@ import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 // Mock child components to isolate MainArea routing logic
-vi.mock("@components/DataGrid", () => ({
+vi.mock("@components/rdb/DataGrid", () => ({
   default: ({
     connectionId,
     table,
