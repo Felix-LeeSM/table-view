@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronRight,
   ChevronDown,
@@ -86,6 +87,25 @@ function nodeIdToString(id: NodeId): string {
 /** Default expanded categories for a newly-opened schema. */
 const DEFAULT_EXPANDED = new Set<CategoryKey>(["tables"]);
 
+/**
+ * Sprint-115 (#PERF-2, #TREE-4) — when the flattened "visible rows" list grows
+ * past this threshold we hand `<tbody>` rendering off to `useVirtualizer` so
+ * the DOM only carries a viewport-sized slice of rows. Below the threshold we
+ * keep the eager nested layout, which means the 100 existing SchemaTree tests
+ * (whose fixtures are all well under 200 rows) continue to assert against full
+ * DOM output without virtualization spacers and with zero behavioral drift.
+ */
+const VIRTUALIZE_THRESHOLD = 200;
+
+/**
+ * Sprint-115 — estimated row height for the virtualizer. Schema, category, and
+ * item rows all use compact text (`text-2xs` / `text-xs` with `py-0.5` / `py-1`)
+ * which renders ~22-26px. We round up to 26 to keep overscan slightly
+ * conservative; `react-virtual` measures actual DOM after first paint, so the
+ * estimate only governs initial layout.
+ */
+const ROW_HEIGHT_ESTIMATE = 26;
+
 /** Confirmation dialog state. */
 interface ConfirmDialog {
   title: string;
@@ -104,6 +124,258 @@ interface RenameDialog {
 
 interface SchemaTreeProps {
   connectionId: string;
+}
+
+/**
+ * Sprint-115 — flat row representation produced by `getVisibleRows`. Each row
+ * carries enough information for the virtualizer path to render the schema /
+ * category / item cell variant without re-walking the original nested data.
+ *
+ * `kind === "schema-separator"` represents the thin divider line that the
+ * eager path renders between sibling schemas; the virtualized path needs the
+ * same hairline so the DOM stays visually consistent across the threshold.
+ *
+ * `kind === "loading"` and `kind === "empty"` and `kind === "search"` cover
+ * the placeholder rows the eager path renders inside expanded categories so
+ * the virtualizer can still hand the user the same affordances (filter input,
+ * "No tables" message, loading spinner) when the dataset is huge.
+ */
+type VisibleRow =
+  | { kind: "schema-separator"; key: string }
+  | {
+      kind: "schema";
+      key: string;
+      schemaName: string;
+      isExpanded: boolean;
+      isLoadingTables: boolean;
+      isSelected: boolean;
+    }
+  | {
+      kind: "loading";
+      key: string;
+      schemaName: string;
+    }
+  | {
+      kind: "category";
+      key: string;
+      schemaName: string;
+      category: (typeof CATEGORIES)[number];
+      isExpanded: boolean;
+      isSelected: boolean;
+      itemCount: number;
+    }
+  | {
+      kind: "search";
+      key: string;
+      schemaName: string;
+      searchValue: string;
+    }
+  | {
+      kind: "empty";
+      key: string;
+      schemaName: string;
+      category: (typeof CATEGORIES)[number];
+      hasActiveSearch: boolean;
+    }
+  | {
+      kind: "item";
+      key: string;
+      schemaName: string;
+      categoryKey: CategoryKey;
+      item: TableInfo | ViewInfo | FunctionInfo;
+      itemKind: "table" | "view" | "function";
+      isSelected: boolean;
+      isActive: boolean;
+    };
+
+interface BuildVisibleRowsArgs {
+  schemas: ReadonlyArray<{ name: string }>;
+  expandedSchemas: Set<string>;
+  expandedCategories: Record<string, Set<CategoryKey>>;
+  loadingTables: Set<string>;
+  tables: Record<string, TableInfo[]>;
+  views: Record<string, ViewInfo[]>;
+  functions: Record<string, FunctionInfo[]>;
+  connectionId: string;
+  selectedNodeId: string | null;
+  activeSchema: string | null;
+  activeTable: string | null;
+  tableSearch: Record<string, string>;
+}
+
+/**
+ * Sprint-115 — flatten the currently-expanded portion of the schema tree into
+ * a single list so `useVirtualizer` can window over it. The order here mirrors
+ * the visual order of the eager nested render exactly: separator (between
+ * sibling schemas) → schema row → categories → category rows → search input
+ * → item rows / empty placeholder. Tests assert against this ordering when
+ * the virtualized path is active.
+ */
+function getVisibleRows({
+  schemas,
+  expandedSchemas,
+  expandedCategories,
+  loadingTables,
+  tables,
+  views,
+  functions,
+  connectionId,
+  selectedNodeId,
+  activeSchema,
+  activeTable,
+  tableSearch,
+}: BuildVisibleRowsArgs): VisibleRow[] {
+  const rows: VisibleRow[] = [];
+
+  schemas.forEach((schema, schemaIndex) => {
+    if (schemaIndex > 0) {
+      rows.push({ kind: "schema-separator", key: `sep:${schema.name}` });
+    }
+
+    const schemaId = nodeIdToString({ type: "schema", schema: schema.name });
+    const isExpanded = expandedSchemas.has(schema.name);
+    const isLoadingTables = loadingTables.has(schema.name);
+    const tableKey = `${connectionId}:${schema.name}`;
+    const schemaTables: TableInfo[] = tables[tableKey] ?? [];
+
+    rows.push({
+      kind: "schema",
+      key: schemaId,
+      schemaName: schema.name,
+      isExpanded,
+      isLoadingTables,
+      isSelected: selectedNodeId === schemaId,
+    });
+
+    if (!isExpanded) return;
+
+    if (isLoadingTables && schemaTables.length === 0) {
+      rows.push({
+        kind: "loading",
+        key: `loading:${schema.name}`,
+        schemaName: schema.name,
+      });
+      return;
+    }
+
+    for (const cat of CATEGORIES) {
+      const expanded = expandedCategories[schema.name] ?? DEFAULT_EXPANDED;
+      const catExpanded = expanded.has(cat.key);
+      const categoryId = nodeIdToString({
+        type: "category",
+        schema: schema.name,
+        category: cat.key,
+      });
+      const isCatSelected = selectedNodeId === categoryId;
+
+      const schemaKey = `${connectionId}:${schema.name}`;
+      const schemaViews: ViewInfo[] = views[schemaKey] ?? [];
+      const schemaFunctions: FunctionInfo[] = functions[schemaKey] ?? [];
+
+      const isTableCat = cat.key === "tables";
+      const isViewCat = cat.key === "views";
+      const isFunctionCat = cat.key === "functions";
+      const isProcedureCat = cat.key === "procedures";
+
+      const unfilteredItems: (TableInfo | ViewInfo | FunctionInfo)[] =
+        isTableCat
+          ? schemaTables
+          : isViewCat
+            ? schemaViews
+            : isFunctionCat
+              ? schemaFunctions.filter(
+                  (f) =>
+                    f.kind === "function" ||
+                    f.kind === "aggregate" ||
+                    f.kind === "window",
+                )
+              : isProcedureCat
+                ? schemaFunctions.filter((f) => f.kind === "procedure")
+                : [];
+      const searchValue = isTableCat ? (tableSearch[schema.name] ?? "") : "";
+      const searchLower = searchValue.toLowerCase();
+      const items: (TableInfo | ViewInfo | FunctionInfo)[] = isTableCat
+        ? searchLower
+          ? unfilteredItems.filter((t) =>
+              t.name.toLowerCase().includes(searchLower),
+            )
+          : unfilteredItems
+        : unfilteredItems;
+
+      rows.push({
+        kind: "category",
+        key: categoryId,
+        schemaName: schema.name,
+        category: cat,
+        isExpanded: catExpanded,
+        isSelected: isCatSelected,
+        itemCount: items.length,
+      });
+
+      if (!catExpanded) continue;
+
+      if (isTableCat && unfilteredItems.length > 0) {
+        rows.push({
+          kind: "search",
+          key: `search:${schema.name}`,
+          schemaName: schema.name,
+          searchValue,
+        });
+      }
+
+      if (items.length === 0) {
+        rows.push({
+          kind: "empty",
+          key: `empty:${schema.name}:${cat.key}`,
+          schemaName: schema.name,
+          category: cat,
+          hasActiveSearch: isTableCat && !!searchValue,
+        });
+        continue;
+      }
+
+      for (const item of items) {
+        const itemKind: "table" | "view" | "function" = isTableCat
+          ? "table"
+          : isViewCat
+            ? "view"
+            : "function";
+        const itemId =
+          itemKind === "table"
+            ? nodeIdToString({
+                type: "table",
+                schema: schema.name,
+                table: item.name,
+              })
+            : itemKind === "view"
+              ? nodeIdToString({
+                  type: "view",
+                  schema: schema.name,
+                  view: item.name,
+                })
+              : nodeIdToString({
+                  type: "function",
+                  schema: schema.name,
+                  functionName: item.name,
+                });
+        rows.push({
+          kind: "item",
+          key: `${cat.key}:${schema.name}:${item.name}`,
+          schemaName: schema.name,
+          categoryKey: cat.key,
+          item,
+          itemKind,
+          isSelected: selectedNodeId === itemId,
+          isActive:
+            itemKind === "table" &&
+            activeSchema === schema.name &&
+            activeTable === item.name,
+        });
+      }
+    }
+  });
+
+  return rows;
 }
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
@@ -429,8 +701,341 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     return expanded.has(key);
   };
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Sprint-115 — virtualization plumbing.
+  //
+  // We compute the flat visible-rows list unconditionally (it's just an
+  // array walk over already-derived state) so the threshold check is a
+  // single comparison and so the virtualized branch can index into the
+  // same data the eager branch reads. The eager branch keeps its existing
+  // nested JSX so the 100 baseline tests continue to assert against the
+  // same DOM tree they were written against.
+  // ──────────────────────────────────────────────────────────────────────
+  const visibleRows = getVisibleRows({
+    schemas,
+    expandedSchemas,
+    expandedCategories,
+    loadingTables,
+    tables,
+    views,
+    functions,
+    connectionId,
+    selectedNodeId,
+    activeSchema: activeSchema ?? null,
+    activeTable: activeTable ?? null,
+    tableSearch,
+  });
+
+  const shouldVirtualize = visibleRows.length > VIRTUALIZE_THRESHOLD;
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Hooks must run unconditionally; when virtualization is off the count is 0
+  // so the virtualizer holds no rows and does no measurement work.
+  const rowVirtualizer = useVirtualizer({
+    count: shouldVirtualize ? visibleRows.length : 0,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    overscan: 8,
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Sprint-115 — row render helpers shared by the eager + virtualized
+  // paths. Each helper returns the same JSX the inline render previously
+  // produced, so a row rendered through the virtualizer is byte-for-byte
+  // identical to one rendered through the nested path. This keeps F2
+  // rename, ContextMenu, search filter, and aria-* contracts intact
+  // across the threshold.
+  // ──────────────────────────────────────────────────────────────────────
+
+  const renderSchemaRow = (row: Extract<VisibleRow, { kind: "schema" }>) => {
+    const schemaId = row.key;
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button
+            type="button"
+            className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
+              row.isSelected
+                ? "bg-muted text-foreground"
+                : "text-secondary-foreground"
+            }`}
+            aria-expanded={row.isExpanded}
+            aria-label={`${row.schemaName} schema`}
+            onClick={() => {
+              handleExpandSchema(row.schemaName);
+              setSelectedNodeId(schemaId);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleExpandSchema(row.schemaName);
+                setSelectedNodeId(schemaId);
+              }
+            }}
+          >
+            {row.isExpanded ? (
+              <ChevronDown size={12} className="shrink-0" />
+            ) : (
+              <ChevronRight size={12} className="shrink-0" />
+            )}
+            {row.isExpanded ? (
+              <FolderOpen
+                size={13}
+                className="shrink-0 text-muted-foreground"
+              />
+            ) : (
+              <Folder size={13} className="shrink-0 text-muted-foreground" />
+            )}
+            <span className="truncate">{row.schemaName}</span>
+            {row.isLoadingTables && (
+              <Loader2 size={10} className="ml-auto animate-spin" />
+            )}
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem onClick={() => handleRefreshSchema(row.schemaName)}>
+            <RefreshCw size={14} />
+            Refresh
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  };
+
+  const renderCategoryRow = (
+    row: Extract<VisibleRow, { kind: "category" }>,
+  ) => {
+    const cat = row.category;
+    return (
+      <button
+        type="button"
+        className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-2xs font-medium hover:bg-muted ${
+          row.isSelected
+            ? "bg-muted text-foreground"
+            : "text-secondary-foreground"
+        }`}
+        aria-expanded={row.isExpanded}
+        aria-label={`${cat.label} in ${row.schemaName}`}
+        onClick={() => toggleCategory(row.schemaName, cat.key)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            toggleCategory(row.schemaName, cat.key);
+          }
+        }}
+      >
+        {row.isExpanded ? (
+          <ChevronDown size={11} className="shrink-0" />
+        ) : (
+          <ChevronRight size={11} className="shrink-0" />
+        )}
+        <cat.Icon size={12} className="shrink-0 text-muted-foreground" />
+        <span>{cat.label}</span>
+        {row.itemCount > 0 && (
+          <span className="ml-auto text-3xs text-muted-foreground">
+            {row.itemCount}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  const renderSearchRow = (row: Extract<VisibleRow, { kind: "search" }>) => (
+    <div className="flex items-center gap-1 px-8 py-0.5">
+      <Search size={11} className="shrink-0 text-muted-foreground" />
+      <input
+        type="text"
+        className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+        placeholder="Filter tables..."
+        value={row.searchValue}
+        onChange={(e) =>
+          setTableSearch((prev) => ({
+            ...prev,
+            [row.schemaName]: e.target.value,
+          }))
+        }
+        aria-label={`Filter tables in ${row.schemaName}`}
+      />
+      {row.searchValue && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={() =>
+            setTableSearch((prev) => {
+              const next = { ...prev };
+              delete next[row.schemaName];
+              return next;
+            })
+          }
+          aria-label={`Clear table filter in ${row.schemaName}`}
+        >
+          <X />
+        </Button>
+      )}
+    </div>
+  );
+
+  const renderEmptyRow = (row: Extract<VisibleRow, { kind: "empty" }>) => (
+    <div className="px-10 py-1 text-2xs italic text-muted-foreground">
+      {row.category.key === "tables" && row.hasActiveSearch
+        ? "No matching tables"
+        : row.category.emptyLabel}
+    </div>
+  );
+
+  const renderItemRow = (row: Extract<VisibleRow, { kind: "item" }>) => {
+    const item = row.item;
+    const isTableItem = row.itemKind === "table";
+    const isView = row.itemKind === "view";
+    const isFunc = row.itemKind === "function";
+
+    const handleClick = () => {
+      if (isView) {
+        handleViewClick(item.name, row.schemaName);
+      } else if (isFunc) {
+        handleFunctionClick(item.name, row.schemaName);
+      } else {
+        handleTableClick(item.name, row.schemaName);
+      }
+    };
+
+    return (
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
+              row.isSelected || row.isActive
+                ? "bg-primary/10 text-primary font-semibold"
+                : "text-foreground",
+            )}
+            aria-label={`${item.name} ${
+              isView ? "view" : isFunc ? "function" : "table"
+            }`}
+            onClick={handleClick}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleClick();
+              } else if (e.key === "F2" && isTableItem) {
+                e.preventDefault();
+                handleStartRename(item.name, row.schemaName);
+              }
+            }}
+          >
+            {isView ? (
+              <Eye size={12} className="shrink-0 text-muted-foreground" />
+            ) : isFunc ? (
+              <Code2 size={12} className="shrink-0 text-muted-foreground" />
+            ) : (
+              <Table2 size={12} className="shrink-0 text-muted-foreground" />
+            )}
+            <span className="truncate text-xs">{item.name}</span>
+            {isTableItem &&
+              "row_count" in item &&
+              (item as TableInfo).row_count != null && (
+                <span className="ml-auto text-3xs text-muted-foreground">
+                  {(item as TableInfo).row_count!.toLocaleString()}
+                </span>
+              )}
+            {isFunc &&
+              "arguments" in item &&
+              (item as FunctionInfo).arguments && (
+                <span className="ml-auto truncate text-3xs text-muted-foreground">
+                  {(item as FunctionInfo).arguments}
+                </span>
+              )}
+          </button>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          {isTableItem ? (
+            <>
+              <ContextMenuItem
+                onClick={() => handleOpenStructure(item.name, row.schemaName)}
+              >
+                <Columns3 size={14} /> Structure
+              </ContextMenuItem>
+              <ContextMenuItem
+                onClick={() => handleTableClick(item.name, row.schemaName)}
+              >
+                <Table2 size={14} /> Data
+              </ContextMenuItem>
+              <ContextMenuItem
+                onClick={() => handleStartRename(item.name, row.schemaName)}
+              >
+                <Pencil size={14} /> Rename
+              </ContextMenuItem>
+              <ContextMenuItem
+                danger
+                onClick={() => handleDropTable(item.name, row.schemaName)}
+              >
+                <Trash2 size={14} /> Drop
+              </ContextMenuItem>
+            </>
+          ) : isView ? (
+            <>
+              <ContextMenuItem
+                onClick={() =>
+                  handleOpenViewStructure(item.name, row.schemaName)
+                }
+              >
+                <Columns3 size={14} /> Structure
+              </ContextMenuItem>
+              <ContextMenuItem
+                onClick={() => handleViewClick(item.name, row.schemaName)}
+              >
+                <Table2 size={14} /> Data
+              </ContextMenuItem>
+            </>
+          ) : (
+            <ContextMenuItem
+              onClick={() => handleFunctionClick(item.name, row.schemaName)}
+            >
+              <Code2 size={14} /> View Source
+            </ContextMenuItem>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  };
+
+  const renderVisibleRow = (row: VisibleRow): React.ReactNode => {
+    switch (row.kind) {
+      case "schema-separator":
+        return <div className="mx-3 my-0.5 border-t border-border" />;
+      case "schema":
+        return renderSchemaRow(row);
+      case "loading":
+        return (
+          <div className="px-8 py-1 text-xs text-muted-foreground">
+            Loading...
+          </div>
+        );
+      case "category":
+        return renderCategoryRow(row);
+      case "search":
+        return renderSearchRow(row);
+      case "empty":
+        return renderEmptyRow(row);
+      case "item":
+        return renderItemRow(row);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Body — eager nested layout vs. virtualized flat layout. The threshold
+  // is `VIRTUALIZE_THRESHOLD` visible rows; below it the existing nested
+  // JSX runs unchanged so the 100 baseline tests keep passing without
+  // adjustment, above it `useVirtualizer` windows the flat list and we
+  // render only the rows currently in the viewport.
+  // ──────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="flex flex-col select-none">
+    <div
+      ref={scrollContainerRef}
+      className="flex flex-col select-none overflow-y-auto"
+    >
       {/* sr-only connection name for accessibility */}
       <span className="sr-only">{connectionName || connectionId}</span>
 
@@ -455,435 +1060,483 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         </Button>
       </div>
 
-      {schemas.map((schema, schemaIndex) => {
-        const isExpanded = expandedSchemas.has(schema.name);
-        const tableKey = `${connectionId}:${schema.name}`;
-        const schemaTables: TableInfo[] = tables[tableKey] ?? [];
-        const isLoadingTables = loadingTables.has(schema.name);
-        const schemaId = nodeIdToString({
-          type: "schema",
-          schema: schema.name,
-        });
-        const isSchemaSelected = selectedNodeId === schemaId;
-
-        return (
-          <div key={schema.name}>
-            {/* Section separator between schemas */}
-            {schemaIndex > 0 && (
-              <div className="mx-3 my-0.5 border-t border-border" />
-            )}
-
-            {/* Schema row */}
-            <ContextMenu>
-              <ContextMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
-                    isSchemaSelected
-                      ? "bg-muted text-foreground"
-                      : "text-secondary-foreground"
-                  }`}
-                  aria-expanded={isExpanded}
-                  aria-label={`${schema.name} schema`}
-                  onClick={() => {
-                    handleExpandSchema(schema.name);
-                    setSelectedNodeId(schemaId);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleExpandSchema(schema.name);
-                      setSelectedNodeId(schemaId);
-                    }
-                  }}
-                >
-                  {isExpanded ? (
-                    <ChevronDown size={12} className="shrink-0" />
-                  ) : (
-                    <ChevronRight size={12} className="shrink-0" />
-                  )}
-                  {isExpanded ? (
-                    <FolderOpen
-                      size={13}
-                      className="shrink-0 text-muted-foreground"
-                    />
-                  ) : (
-                    <Folder
-                      size={13}
-                      className="shrink-0 text-muted-foreground"
-                    />
-                  )}
-                  <span className="truncate">{schema.name}</span>
-                  {isLoadingTables && (
-                    <Loader2 size={10} className="ml-auto animate-spin" />
-                  )}
-                </button>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem
-                  onClick={() => handleRefreshSchema(schema.name)}
-                >
-                  <RefreshCw size={14} />
-                  Refresh
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-
-            {/* Category sections under expanded schema */}
-            {isExpanded && (
-              <div>
-                {isLoadingTables && schemaTables.length === 0 ? (
-                  <div className="px-8 py-1 text-xs text-muted-foreground">
-                    Loading...
-                  </div>
-                ) : (
-                  CATEGORIES.map((cat) => {
-                    const catExpanded = isCategoryExpanded(
-                      schema.name,
-                      cat.key,
-                    );
-                    const categoryId = nodeIdToString({
-                      type: "category",
-                      schema: schema.name,
-                      category: cat.key,
-                    });
-                    const isCatSelected = selectedNodeId === categoryId;
-
-                    const schemaKey = `${connectionId}:${schema.name}`;
-                    const schemaViews: ViewInfo[] = views[schemaKey] ?? [];
-                    const schemaFunctions: FunctionInfo[] =
-                      functions[schemaKey] ?? [];
-
-                    // Build items based on category type
-                    const isTableCat = cat.key === "tables";
-                    const isViewCat = cat.key === "views";
-                    const isFunctionCat = cat.key === "functions";
-                    const isProcedureCat = cat.key === "procedures";
-
-                    const unfilteredItems: (
-                      | TableInfo
-                      | ViewInfo
-                      | FunctionInfo
-                    )[] = isTableCat
-                      ? schemaTables
-                      : isViewCat
-                        ? schemaViews
-                        : isFunctionCat
-                          ? schemaFunctions.filter(
-                              (f) =>
-                                f.kind === "function" ||
-                                f.kind === "aggregate" ||
-                                f.kind === "window",
-                            )
-                          : isProcedureCat
-                            ? schemaFunctions.filter(
-                                (f) => f.kind === "procedure",
-                              )
-                            : [];
-                    const searchValue = isTableCat
-                      ? (tableSearch[schema.name] ?? "")
-                      : "";
-                    const searchLower = searchValue.toLowerCase();
-                    const items: (TableInfo | ViewInfo | FunctionInfo)[] =
-                      isTableCat
-                        ? searchLower
-                          ? unfilteredItems.filter((t) =>
-                              t.name.toLowerCase().includes(searchLower),
-                            )
-                          : unfilteredItems
-                        : unfilteredItems;
-
-                    const itemCount = items.length;
-
-                    return (
-                      <div key={cat.key}>
-                        {/* Category header */}
-                        <button
-                          type="button"
-                          className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-2xs font-medium hover:bg-muted ${
-                            isCatSelected
-                              ? "bg-muted text-foreground"
-                              : "text-secondary-foreground"
-                          }`}
-                          aria-expanded={catExpanded}
-                          aria-label={`${cat.label} in ${schema.name}`}
-                          onClick={() => toggleCategory(schema.name, cat.key)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              toggleCategory(schema.name, cat.key);
-                            }
-                          }}
-                        >
-                          {catExpanded ? (
-                            <ChevronDown size={11} className="shrink-0" />
-                          ) : (
-                            <ChevronRight size={11} className="shrink-0" />
-                          )}
-                          <cat.Icon
-                            size={12}
-                            className="shrink-0 text-muted-foreground"
-                          />
-                          <span>{cat.label}</span>
-                          {itemCount > 0 && (
-                            <span className="ml-auto text-3xs text-muted-foreground">
-                              {itemCount}
-                            </span>
-                          )}
-                        </button>
-
-                        {/* Category content */}
-                        {catExpanded && (
-                          <div>
-                            {/* Search input for Tables category */}
-                            {cat.key === "tables" &&
-                              unfilteredItems.length > 0 && (
-                                <div className="flex items-center gap-1 px-8 py-0.5">
-                                  <Search
-                                    size={11}
-                                    className="shrink-0 text-muted-foreground"
-                                  />
-                                  <input
-                                    type="text"
-                                    className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                                    placeholder="Filter tables..."
-                                    value={searchValue}
-                                    onChange={(e) =>
-                                      setTableSearch((prev) => ({
-                                        ...prev,
-                                        [schema.name]: e.target.value,
-                                      }))
-                                    }
-                                    aria-label={`Filter tables in ${schema.name}`}
-                                  />
-                                  {searchValue && (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      onClick={() =>
-                                        setTableSearch((prev) => {
-                                          const next = { ...prev };
-                                          delete next[schema.name];
-                                          return next;
-                                        })
-                                      }
-                                      aria-label={`Clear table filter in ${schema.name}`}
-                                    >
-                                      <X />
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            {items.length === 0 ? (
-                              <div className="px-10 py-1 text-2xs italic text-muted-foreground">
-                                {cat.key === "tables" && searchValue
-                                  ? "No matching tables"
-                                  : cat.emptyLabel}
-                              </div>
-                            ) : (
-                              items.map((item) => {
-                                // Determine item type and rendering
-                                const isTableView = isTableCat;
-                                const isView = isViewCat;
-                                const isFunc = isFunctionCat || isProcedureCat;
-
-                                const itemId = isTableView
-                                  ? nodeIdToString({
-                                      type: "table",
-                                      schema: schema.name,
-                                      table: item.name,
-                                    })
-                                  : isView
-                                    ? nodeIdToString({
-                                        type: "view",
-                                        schema: schema.name,
-                                        view: item.name,
-                                      })
-                                    : nodeIdToString({
-                                        type: "function",
-                                        schema: schema.name,
-                                        functionName: item.name,
-                                      });
-
-                                const isSelected = selectedNodeId === itemId;
-                                const isActive =
-                                  activeSchema === schema.name &&
-                                  activeTable === item.name;
-
-                                const handleClick = () => {
-                                  if (isView) {
-                                    handleViewClick(item.name, schema.name);
-                                  } else if (isFunc) {
-                                    handleFunctionClick(item.name, schema.name);
-                                  } else {
-                                    handleTableClick(item.name, schema.name);
-                                  }
-                                };
-
-                                return (
-                                  <ContextMenu key={`${cat.key}-${item.name}`}>
-                                    <ContextMenuTrigger asChild>
-                                      <button
-                                        type="button"
-                                        className={cn(
-                                          "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
-                                          isSelected || isActive
-                                            ? "bg-primary/10 text-primary font-semibold"
-                                            : "text-foreground",
-                                        )}
-                                        aria-label={`${item.name} ${isView ? "view" : isFunc ? "function" : "table"}`}
-                                        onClick={handleClick}
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") {
-                                            handleClick();
-                                          } else if (
-                                            e.key === "F2" &&
-                                            isTableView &&
-                                            !isView &&
-                                            !isFunc
-                                          ) {
-                                            e.preventDefault();
-                                            handleStartRename(
-                                              item.name,
-                                              schema.name,
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        {isView ? (
-                                          <Eye
-                                            size={12}
-                                            className="shrink-0 text-muted-foreground"
-                                          />
-                                        ) : isFunc ? (
-                                          <Code2
-                                            size={12}
-                                            className="shrink-0 text-muted-foreground"
-                                          />
-                                        ) : (
-                                          <Table2
-                                            size={12}
-                                            className="shrink-0 text-muted-foreground"
-                                          />
-                                        )}
-                                        <span className="truncate text-xs">
-                                          {item.name}
-                                        </span>
-                                        {isTableView &&
-                                          "row_count" in item &&
-                                          (item as TableInfo).row_count !=
-                                            null && (
-                                            <span className="ml-auto text-3xs text-muted-foreground">
-                                              {(
-                                                item as TableInfo
-                                              ).row_count!.toLocaleString()}
-                                            </span>
-                                          )}
-                                        {isFunc &&
-                                          "arguments" in item &&
-                                          (item as FunctionInfo).arguments && (
-                                            <span className="ml-auto truncate text-3xs text-muted-foreground">
-                                              {(item as FunctionInfo).arguments}
-                                            </span>
-                                          )}
-                                      </button>
-                                    </ContextMenuTrigger>
-                                    <ContextMenuContent>
-                                      {isTableView ? (
-                                        <>
-                                          <ContextMenuItem
-                                            onClick={() =>
-                                              handleOpenStructure(
-                                                item.name,
-                                                schema.name,
-                                              )
-                                            }
-                                          >
-                                            <Columns3 size={14} /> Structure
-                                          </ContextMenuItem>
-                                          <ContextMenuItem
-                                            onClick={() =>
-                                              handleTableClick(
-                                                item.name,
-                                                schema.name,
-                                              )
-                                            }
-                                          >
-                                            <Table2 size={14} /> Data
-                                          </ContextMenuItem>
-                                          <ContextMenuItem
-                                            onClick={() =>
-                                              handleStartRename(
-                                                item.name,
-                                                schema.name,
-                                              )
-                                            }
-                                          >
-                                            <Pencil size={14} /> Rename
-                                          </ContextMenuItem>
-                                          <ContextMenuItem
-                                            danger
-                                            onClick={() =>
-                                              handleDropTable(
-                                                item.name,
-                                                schema.name,
-                                              )
-                                            }
-                                          >
-                                            <Trash2 size={14} /> Drop
-                                          </ContextMenuItem>
-                                        </>
-                                      ) : isView ? (
-                                        <>
-                                          <ContextMenuItem
-                                            onClick={() =>
-                                              handleOpenViewStructure(
-                                                item.name,
-                                                schema.name,
-                                              )
-                                            }
-                                          >
-                                            <Columns3 size={14} /> Structure
-                                          </ContextMenuItem>
-                                          <ContextMenuItem
-                                            onClick={() =>
-                                              handleViewClick(
-                                                item.name,
-                                                schema.name,
-                                              )
-                                            }
-                                          >
-                                            <Table2 size={14} /> Data
-                                          </ContextMenuItem>
-                                        </>
-                                      ) : (
-                                        <ContextMenuItem
-                                          onClick={() =>
-                                            handleFunctionClick(
-                                              item.name,
-                                              schema.name,
-                                            )
-                                          }
-                                        >
-                                          <Code2 size={14} /> View Source
-                                        </ContextMenuItem>
-                                      )}
-                                    </ContextMenuContent>
-                                  </ContextMenu>
-                                );
-                              })
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+      {shouldVirtualize
+        ? (() => {
+            // Sprint-115 — virtualized branch. The virtualizer reports
+            // a total scroll height (`getTotalSize()`) and a window of
+            // visible items; we pad before/after with two `aria-hidden`
+            // spacer divs so the inner content preserves the full scroll
+            // height while only the windowed rows live in the DOM.
+            const virtualItems = rowVirtualizer.getVirtualItems();
+            const totalSize = rowVirtualizer.getTotalSize();
+            const paddingTop = virtualItems.length ? virtualItems[0]!.start : 0;
+            const paddingBottom = virtualItems.length
+              ? totalSize - virtualItems[virtualItems.length - 1]!.end
+              : 0;
+            return (
+              <div style={{ position: "relative" }}>
+                {paddingTop > 0 && (
+                  <div aria-hidden="true" style={{ height: paddingTop }} />
+                )}
+                {virtualItems.map((virtualRow) => {
+                  const row = visibleRows[virtualRow.index]!;
+                  return (
+                    <div key={row.key} data-index={virtualRow.index}>
+                      {renderVisibleRow(row)}
+                    </div>
+                  );
+                })}
+                {paddingBottom > 0 && (
+                  <div aria-hidden="true" style={{ height: paddingBottom }} />
                 )}
               </div>
-            )}
-          </div>
-        );
-      })}
+            );
+          })()
+        : schemas.map((schema, schemaIndex) => {
+            const isExpanded = expandedSchemas.has(schema.name);
+            const tableKey = `${connectionId}:${schema.name}`;
+            const schemaTables: TableInfo[] = tables[tableKey] ?? [];
+            const isLoadingTables = loadingTables.has(schema.name);
+            const schemaId = nodeIdToString({
+              type: "schema",
+              schema: schema.name,
+            });
+            const isSchemaSelected = selectedNodeId === schemaId;
+
+            return (
+              <div key={schema.name}>
+                {/* Section separator between schemas */}
+                {schemaIndex > 0 && (
+                  <div className="mx-3 my-0.5 border-t border-border" />
+                )}
+
+                {/* Schema row */}
+                <ContextMenu>
+                  <ContextMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
+                        isSchemaSelected
+                          ? "bg-muted text-foreground"
+                          : "text-secondary-foreground"
+                      }`}
+                      aria-expanded={isExpanded}
+                      aria-label={`${schema.name} schema`}
+                      onClick={() => {
+                        handleExpandSchema(schema.name);
+                        setSelectedNodeId(schemaId);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleExpandSchema(schema.name);
+                          setSelectedNodeId(schemaId);
+                        }
+                      }}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown size={12} className="shrink-0" />
+                      ) : (
+                        <ChevronRight size={12} className="shrink-0" />
+                      )}
+                      {isExpanded ? (
+                        <FolderOpen
+                          size={13}
+                          className="shrink-0 text-muted-foreground"
+                        />
+                      ) : (
+                        <Folder
+                          size={13}
+                          className="shrink-0 text-muted-foreground"
+                        />
+                      )}
+                      <span className="truncate">{schema.name}</span>
+                      {isLoadingTables && (
+                        <Loader2 size={10} className="ml-auto animate-spin" />
+                      )}
+                    </button>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem
+                      onClick={() => handleRefreshSchema(schema.name)}
+                    >
+                      <RefreshCw size={14} />
+                      Refresh
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+
+                {/* Category sections under expanded schema */}
+                {isExpanded && (
+                  <div>
+                    {isLoadingTables && schemaTables.length === 0 ? (
+                      <div className="px-8 py-1 text-xs text-muted-foreground">
+                        Loading...
+                      </div>
+                    ) : (
+                      CATEGORIES.map((cat) => {
+                        const catExpanded = isCategoryExpanded(
+                          schema.name,
+                          cat.key,
+                        );
+                        const categoryId = nodeIdToString({
+                          type: "category",
+                          schema: schema.name,
+                          category: cat.key,
+                        });
+                        const isCatSelected = selectedNodeId === categoryId;
+
+                        const schemaKey = `${connectionId}:${schema.name}`;
+                        const schemaViews: ViewInfo[] = views[schemaKey] ?? [];
+                        const schemaFunctions: FunctionInfo[] =
+                          functions[schemaKey] ?? [];
+
+                        // Build items based on category type
+                        const isTableCat = cat.key === "tables";
+                        const isViewCat = cat.key === "views";
+                        const isFunctionCat = cat.key === "functions";
+                        const isProcedureCat = cat.key === "procedures";
+
+                        const unfilteredItems: (
+                          | TableInfo
+                          | ViewInfo
+                          | FunctionInfo
+                        )[] = isTableCat
+                          ? schemaTables
+                          : isViewCat
+                            ? schemaViews
+                            : isFunctionCat
+                              ? schemaFunctions.filter(
+                                  (f) =>
+                                    f.kind === "function" ||
+                                    f.kind === "aggregate" ||
+                                    f.kind === "window",
+                                )
+                              : isProcedureCat
+                                ? schemaFunctions.filter(
+                                    (f) => f.kind === "procedure",
+                                  )
+                                : [];
+                        const searchValue = isTableCat
+                          ? (tableSearch[schema.name] ?? "")
+                          : "";
+                        const searchLower = searchValue.toLowerCase();
+                        const items: (TableInfo | ViewInfo | FunctionInfo)[] =
+                          isTableCat
+                            ? searchLower
+                              ? unfilteredItems.filter((t) =>
+                                  t.name.toLowerCase().includes(searchLower),
+                                )
+                              : unfilteredItems
+                            : unfilteredItems;
+
+                        const itemCount = items.length;
+
+                        return (
+                          <div key={cat.key}>
+                            {/* Category header */}
+                            <button
+                              type="button"
+                              className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-2xs font-medium hover:bg-muted ${
+                                isCatSelected
+                                  ? "bg-muted text-foreground"
+                                  : "text-secondary-foreground"
+                              }`}
+                              aria-expanded={catExpanded}
+                              aria-label={`${cat.label} in ${schema.name}`}
+                              onClick={() =>
+                                toggleCategory(schema.name, cat.key)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  toggleCategory(schema.name, cat.key);
+                                }
+                              }}
+                            >
+                              {catExpanded ? (
+                                <ChevronDown size={11} className="shrink-0" />
+                              ) : (
+                                <ChevronRight size={11} className="shrink-0" />
+                              )}
+                              <cat.Icon
+                                size={12}
+                                className="shrink-0 text-muted-foreground"
+                              />
+                              <span>{cat.label}</span>
+                              {itemCount > 0 && (
+                                <span className="ml-auto text-3xs text-muted-foreground">
+                                  {itemCount}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* Category content */}
+                            {catExpanded && (
+                              <div>
+                                {/* Search input for Tables category */}
+                                {cat.key === "tables" &&
+                                  unfilteredItems.length > 0 && (
+                                    <div className="flex items-center gap-1 px-8 py-0.5">
+                                      <Search
+                                        size={11}
+                                        className="shrink-0 text-muted-foreground"
+                                      />
+                                      <input
+                                        type="text"
+                                        className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-0.5 text-2xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                                        placeholder="Filter tables..."
+                                        value={searchValue}
+                                        onChange={(e) =>
+                                          setTableSearch((prev) => ({
+                                            ...prev,
+                                            [schema.name]: e.target.value,
+                                          }))
+                                        }
+                                        aria-label={`Filter tables in ${schema.name}`}
+                                      />
+                                      {searchValue && (
+                                        <Button
+                                          variant="ghost"
+                                          size="icon-xs"
+                                          onClick={() =>
+                                            setTableSearch((prev) => {
+                                              const next = { ...prev };
+                                              delete next[schema.name];
+                                              return next;
+                                            })
+                                          }
+                                          aria-label={`Clear table filter in ${schema.name}`}
+                                        >
+                                          <X />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                {items.length === 0 ? (
+                                  <div className="px-10 py-1 text-2xs italic text-muted-foreground">
+                                    {cat.key === "tables" && searchValue
+                                      ? "No matching tables"
+                                      : cat.emptyLabel}
+                                  </div>
+                                ) : (
+                                  items.map((item) => {
+                                    // Determine item type and rendering
+                                    const isTableView = isTableCat;
+                                    const isView = isViewCat;
+                                    const isFunc =
+                                      isFunctionCat || isProcedureCat;
+
+                                    const itemId = isTableView
+                                      ? nodeIdToString({
+                                          type: "table",
+                                          schema: schema.name,
+                                          table: item.name,
+                                        })
+                                      : isView
+                                        ? nodeIdToString({
+                                            type: "view",
+                                            schema: schema.name,
+                                            view: item.name,
+                                          })
+                                        : nodeIdToString({
+                                            type: "function",
+                                            schema: schema.name,
+                                            functionName: item.name,
+                                          });
+
+                                    const isSelected =
+                                      selectedNodeId === itemId;
+                                    const isActive =
+                                      activeSchema === schema.name &&
+                                      activeTable === item.name;
+
+                                    const handleClick = () => {
+                                      if (isView) {
+                                        handleViewClick(item.name, schema.name);
+                                      } else if (isFunc) {
+                                        handleFunctionClick(
+                                          item.name,
+                                          schema.name,
+                                        );
+                                      } else {
+                                        handleTableClick(
+                                          item.name,
+                                          schema.name,
+                                        );
+                                      }
+                                    };
+
+                                    return (
+                                      <ContextMenu
+                                        key={`${cat.key}-${item.name}`}
+                                      >
+                                        <ContextMenuTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className={cn(
+                                              "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-10 hover:bg-muted",
+                                              isSelected || isActive
+                                                ? "bg-primary/10 text-primary font-semibold"
+                                                : "text-foreground",
+                                            )}
+                                            aria-label={`${item.name} ${isView ? "view" : isFunc ? "function" : "table"}`}
+                                            onClick={handleClick}
+                                            onKeyDown={(e) => {
+                                              if (e.key === "Enter") {
+                                                handleClick();
+                                              } else if (
+                                                e.key === "F2" &&
+                                                isTableView &&
+                                                !isView &&
+                                                !isFunc
+                                              ) {
+                                                e.preventDefault();
+                                                handleStartRename(
+                                                  item.name,
+                                                  schema.name,
+                                                );
+                                              }
+                                            }}
+                                          >
+                                            {isView ? (
+                                              <Eye
+                                                size={12}
+                                                className="shrink-0 text-muted-foreground"
+                                              />
+                                            ) : isFunc ? (
+                                              <Code2
+                                                size={12}
+                                                className="shrink-0 text-muted-foreground"
+                                              />
+                                            ) : (
+                                              <Table2
+                                                size={12}
+                                                className="shrink-0 text-muted-foreground"
+                                              />
+                                            )}
+                                            <span className="truncate text-xs">
+                                              {item.name}
+                                            </span>
+                                            {isTableView &&
+                                              "row_count" in item &&
+                                              (item as TableInfo).row_count !=
+                                                null && (
+                                                <span className="ml-auto text-3xs text-muted-foreground">
+                                                  {(
+                                                    item as TableInfo
+                                                  ).row_count!.toLocaleString()}
+                                                </span>
+                                              )}
+                                            {isFunc &&
+                                              "arguments" in item &&
+                                              (item as FunctionInfo)
+                                                .arguments && (
+                                                <span className="ml-auto truncate text-3xs text-muted-foreground">
+                                                  {
+                                                    (item as FunctionInfo)
+                                                      .arguments
+                                                  }
+                                                </span>
+                                              )}
+                                          </button>
+                                        </ContextMenuTrigger>
+                                        <ContextMenuContent>
+                                          {isTableView ? (
+                                            <>
+                                              <ContextMenuItem
+                                                onClick={() =>
+                                                  handleOpenStructure(
+                                                    item.name,
+                                                    schema.name,
+                                                  )
+                                                }
+                                              >
+                                                <Columns3 size={14} /> Structure
+                                              </ContextMenuItem>
+                                              <ContextMenuItem
+                                                onClick={() =>
+                                                  handleTableClick(
+                                                    item.name,
+                                                    schema.name,
+                                                  )
+                                                }
+                                              >
+                                                <Table2 size={14} /> Data
+                                              </ContextMenuItem>
+                                              <ContextMenuItem
+                                                onClick={() =>
+                                                  handleStartRename(
+                                                    item.name,
+                                                    schema.name,
+                                                  )
+                                                }
+                                              >
+                                                <Pencil size={14} /> Rename
+                                              </ContextMenuItem>
+                                              <ContextMenuItem
+                                                danger
+                                                onClick={() =>
+                                                  handleDropTable(
+                                                    item.name,
+                                                    schema.name,
+                                                  )
+                                                }
+                                              >
+                                                <Trash2 size={14} /> Drop
+                                              </ContextMenuItem>
+                                            </>
+                                          ) : isView ? (
+                                            <>
+                                              <ContextMenuItem
+                                                onClick={() =>
+                                                  handleOpenViewStructure(
+                                                    item.name,
+                                                    schema.name,
+                                                  )
+                                                }
+                                              >
+                                                <Columns3 size={14} /> Structure
+                                              </ContextMenuItem>
+                                              <ContextMenuItem
+                                                onClick={() =>
+                                                  handleViewClick(
+                                                    item.name,
+                                                    schema.name,
+                                                  )
+                                                }
+                                              >
+                                                <Table2 size={14} /> Data
+                                              </ContextMenuItem>
+                                            </>
+                                          ) : (
+                                            <ContextMenuItem
+                                              onClick={() =>
+                                                handleFunctionClick(
+                                                  item.name,
+                                                  schema.name,
+                                                )
+                                              }
+                                            >
+                                              <Code2 size={14} /> View Source
+                                            </ContextMenuItem>
+                                          )}
+                                        </ContextMenuContent>
+                                      </ContextMenu>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
       {/* Drop table confirmation dialog */}
       <Dialog
