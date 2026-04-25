@@ -240,6 +240,28 @@ export default function GlobalQueryLogPanel({
                 <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
                   {getConnectionName(entry.connectionId)}
                 </span>
+                {/* Paradigm badge — SQL for relational entries, MQL for
+                    document entries. Sprint 123 introduces this so the
+                    mixed log is scannable at a glance without inspecting
+                    the truncated query text. */}
+                <span
+                  className="shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-secondary-foreground"
+                  data-paradigm={entry.paradigm}
+                >
+                  {entry.paradigm === "document" ? "MQL" : "SQL"}
+                </span>
+                {/* Secondary queryMode tag — only meaningful for document
+                    entries (find / aggregate). RDB entries are always
+                    queryMode === "sql", which is redundant with the
+                    paradigm badge, so suppress it there. */}
+                {entry.paradigm === "document" && entry.queryMode && (
+                  <span
+                    className="shrink-0 rounded bg-secondary px-2 py-0.5 text-secondary-foreground"
+                    data-query-mode={entry.queryMode}
+                  >
+                    {entry.queryMode}
+                  </span>
+                )}
               </div>
               {/* Expanded SQL view */}
               {expandedEntry === entry.id && entry.sql.length > 80 && (

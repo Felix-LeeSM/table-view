@@ -615,6 +615,59 @@ describe("TabBar", () => {
     expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
   });
 
+  // ── Sprint 123: paradigm visual cues ──
+
+  it("renders a Mongo paradigm marker for document-paradigm tabs", () => {
+    addTableTab({
+      title: "users",
+      table: "users",
+      connectionId: "conn1",
+      paradigm: "document",
+    });
+
+    render(<TabBar />);
+    const marker = screen.getByLabelText("MongoDB collection tab");
+    expect(marker).toBeInTheDocument();
+  });
+
+  it("does not render the Mongo marker for RDB tabs (snapshot parity)", () => {
+    addTableTab({
+      title: "users",
+      table: "users",
+      connectionId: "conn1",
+      // paradigm omitted → legacy "rdb" path
+    });
+
+    render(<TabBar />);
+    expect(screen.queryByLabelText("MongoDB collection tab")).toBeNull();
+    expect(screen.queryByLabelText("MongoDB query tab")).toBeNull();
+  });
+
+  it("labels a Mongo query tab as a query (not a collection)", () => {
+    useTabStore.setState({
+      tabs: [
+        {
+          id: "q1",
+          type: "query",
+          title: "find()",
+          connectionId: "conn1",
+          closable: true,
+          sql: "{}",
+          queryState: { status: "idle" },
+          paradigm: "document",
+          queryMode: "find",
+        },
+      ],
+      activeTabId: "q1",
+      closedTabHistory: [],
+    });
+
+    render(<TabBar />);
+    expect(screen.getByLabelText("MongoDB query tab")).toBeInTheDocument();
+    // The collection-tab label must not surface for a query tab.
+    expect(screen.queryByLabelText("MongoDB collection tab")).toBeNull();
+  });
+
   // Middle-click on a dirty tab also routes through the gate so the user
   // can never lose unsaved work via a stray scroll-wheel button press.
   it("middle-click on dirty tab triggers the confirm gate", () => {

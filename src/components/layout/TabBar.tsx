@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Table2, Code2 } from "lucide-react";
+import { X, Table2, Code2, Leaf } from "lucide-react";
 import { useTabStore, type Tab, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
@@ -212,6 +212,17 @@ export default function TabBar() {
               <Code2 size={12} className="shrink-0 text-muted-foreground" />
             ) : (
               <Table2 size={12} className="shrink-0 text-muted-foreground" />
+            )}
+            {tab.paradigm === "document" && (
+              <Leaf
+                size={10}
+                className="shrink-0 text-muted-foreground"
+                aria-label={
+                  tab.type === "table"
+                    ? "MongoDB collection tab"
+                    : "MongoDB query tab"
+                }
+              />
             )}
             <span
               className={`max-w-30 truncate${tab.type === "table" && (tab as TableTab).isPreview ? " italic opacity-70" : ""}`}

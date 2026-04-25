@@ -693,4 +693,117 @@ describe("GlobalQueryLogPanel", () => {
     const row = screen.getByTestId("global-log-entry-h-long-rdb");
     expect(row.textContent).toContain("A".repeat(80) + "...");
   });
+
+  // ── Sprint 123: paradigm visual cues ──
+
+  it("renders a SQL paradigm badge for relational entries", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "rdb-1",
+          sql: "SELECT 1",
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+
+    const row = screen.getByTestId("global-log-entry-rdb-1");
+    const sqlBadge = row.querySelector('[data-paradigm="rdb"]');
+    expect(sqlBadge).not.toBeNull();
+    expect(sqlBadge?.textContent).toBe("SQL");
+    // RDB entries do not surface a redundant queryMode tag.
+    expect(row.querySelector("[data-query-mode]")).toBeNull();
+  });
+
+  it("renders an MQL paradigm badge for document entries", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "doc-1",
+          sql: '{"_id": 1}',
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "document",
+          queryMode: "find",
+        },
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+
+    const row = screen.getByTestId("global-log-entry-doc-1");
+    const mqlBadge = row.querySelector('[data-paradigm="document"]');
+    expect(mqlBadge).not.toBeNull();
+    expect(mqlBadge?.textContent).toBe("MQL");
+  });
+
+  it("surfaces the queryMode tag next to the MQL badge for document entries", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "agg-1",
+          sql: "[]",
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "document",
+          queryMode: "aggregate",
+        },
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+
+    const row = screen.getByTestId("global-log-entry-agg-1");
+    const modeTag = row.querySelector('[data-query-mode="aggregate"]');
+    expect(modeTag).not.toBeNull();
+    expect(modeTag?.textContent).toBe("aggregate");
+  });
+
+  it("renders SQL/MQL badges for a mixed-paradigm log without crosstalk", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "rdb-2",
+          sql: "SELECT 2",
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+        {
+          id: "doc-2",
+          sql: '{"x":1}',
+          executedAt: Date.now(),
+          duration: 5,
+          status: "success",
+          connectionId: "conn-1",
+          paradigm: "document",
+          queryMode: "find",
+        },
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+
+    const rdbRow = screen.getByTestId("global-log-entry-rdb-2");
+    const docRow = screen.getByTestId("global-log-entry-doc-2");
+    expect(rdbRow.querySelector("[data-paradigm]")?.textContent).toBe("SQL");
+    expect(docRow.querySelector("[data-paradigm]")?.textContent).toBe("MQL");
+    // SQL row stays clean; MQL row carries the secondary queryMode tag.
+    expect(rdbRow.querySelector("[data-query-mode]")).toBeNull();
+    expect(docRow.querySelector("[data-query-mode]")?.textContent).toBe("find");
+  });
 });
