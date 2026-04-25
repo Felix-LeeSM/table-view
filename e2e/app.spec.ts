@@ -54,22 +54,39 @@ describe("Table View — Smoke Tests", () => {
     expect(label).toContain("Theme");
   });
 
-  it("cycles the theme on toggle click", async () => {
-    const themeButton = await $('[aria-label*="Theme"]');
+  it("opens the theme picker and applies a mode change", async () => {
+    // The footer Theme control is no longer a cycle-on-click toggle — it is a
+    // Popover trigger that opens a ThemePicker (Appearance ToggleGroup +
+    // featured swatches). Clicking it once just opens the popover; to verify
+    // the picker actually re-themes the app we have to interact with one of
+    // the items inside.
+    const themeButton = await $('[aria-label*="Theme picker"]');
     await themeButton.waitForDisplayed({ timeout: 10000 });
 
-    // Get initial theme label
     const initialLabel = await themeButton.getAttribute("aria-label");
 
-    // Click to cycle theme
+    // Open the picker.
     await themeButton.click();
 
-    // Wait for theme to update
-    await browser.pause(500);
+    // Pick whichever Appearance mode is NOT currently active so the label is
+    // guaranteed to change. The default mode is "system"; if for some reason
+    // the persisted state already says "system" we toggle to "dark" first.
+    const target = initialLabel.includes("(dark)") ? "Light mode" : "Dark mode";
+    const targetItem = await $(`[aria-label="${target}"]`);
+    await targetItem.waitForDisplayed({ timeout: 5000 });
+    await targetItem.click();
 
-    // Label should have changed (e.g., "Theme: system" -> "Theme: light")
-    const newLabel = await themeButton.getAttribute("aria-label");
-    expect(newLabel).not.toBe(initialLabel);
+    // Dismiss the popover so the trigger button is the focused element again.
+    await browser.keys(["Escape"]);
+
+    await browser.waitUntil(
+      async () =>
+        (await themeButton.getAttribute("aria-label")) !== initialLabel,
+      {
+        timeout: 5000,
+        timeoutMsg: "Theme picker label never updated after mode change",
+      },
+    );
   });
 
   it("shows the New Connection button", async () => {
