@@ -28,6 +28,7 @@ import type {
   DocumentQueryResult,
   FindBody,
 } from "@/types/document";
+import type { DocumentId } from "@/types/documentMutate";
 
 export async function listConnections(): Promise<ConnectionConfig[]> {
   return invoke<ConnectionConfig[]>("list_connections");
@@ -400,5 +401,73 @@ export async function aggregateDocuments(
     database,
     collection,
     pipeline,
+  });
+}
+
+// ── Document paradigm — mutate (Sprint 86) ─────────────────────────────────
+// Wrappers for the Sprint 80 backend `insert_document` / `update_document` /
+// `delete_document` Tauri commands. Payloads use the `DocumentId` tagged
+// union from `@/types/documentMutate`, whose shape matches Rust's default
+// serde encoding (`{"ObjectId": "<hex>"}`, `{"String": "<s>"}`, etc.) so no
+// translation layer is needed between TS and the Tauri bridge.
+
+/**
+ * Insert a single document into `collection`. When the document carries an
+ * `_id` field that value is used verbatim; otherwise the MongoDB server
+ * generates one. The returned `DocumentId` is the inserted id in either case,
+ * so the UI can pair the returned payload with the row the user just added.
+ */
+export async function insertDocument(
+  connectionId: string,
+  database: string,
+  collection: string,
+  document: Record<string, unknown>,
+): Promise<DocumentId> {
+  return invoke<DocumentId>("insert_document", {
+    connectionId,
+    database,
+    collection,
+    document,
+  });
+}
+
+/**
+ * Apply `{ $set: patch }` to the document identified by `documentId`. The
+ * backend rejects a patch that contains a top-level `_id` field; the
+ * frontend `mqlGenerator` also guards the same case so the preview never
+ * contains an unexecutable statement.
+ */
+export async function updateDocument(
+  connectionId: string,
+  database: string,
+  collection: string,
+  documentId: DocumentId,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  return invoke<void>("update_document", {
+    connectionId,
+    database,
+    collection,
+    documentId,
+    patch,
+  });
+}
+
+/**
+ * Delete the document identified by `documentId`. The backend surfaces an
+ * `AppError::NotFound` when the filter matches nothing (deleted_count == 0);
+ * callers should propagate that via the standard fetch-data error path.
+ */
+export async function deleteDocument(
+  connectionId: string,
+  database: string,
+  collection: string,
+  documentId: DocumentId,
+): Promise<void> {
+  return invoke<void>("delete_document", {
+    connectionId,
+    database,
+    collection,
+    documentId,
   });
 }

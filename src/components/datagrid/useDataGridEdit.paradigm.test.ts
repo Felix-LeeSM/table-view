@@ -49,16 +49,22 @@ const MOCK_DATA: TableData = {
   executed_query: "db.users.find({})",
 };
 
-describe("useDataGridEdit — document paradigm guard (Sprint 66)", () => {
+describe("useDataGridEdit — document paradigm edit permission (Sprint 86)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("handleStartEdit is a no-op when paradigm === 'document'", () => {
+  // Sprint 66 used to assert a no-op for the document paradigm. Sprint 86
+  // removes that guard because the hook now routes document edits through
+  // the MQL generator + Tauri mutate wrappers, so `handleStartEdit` must
+  // open an editor for document grids identically to RDB grids. This case
+  // preserves the original intent (the default parameter path stays
+  // backward-compatible) while documenting the behaviour change.
+  it("handleStartEdit sets editingCell/editValue when paradigm === 'document'", () => {
     const { result } = renderHook(() =>
       useDataGridEdit({
         data: MOCK_DATA,
-        schema: "table_view_test",
+        schema: "app",
         table: "users",
         connectionId: "conn-mongo",
         page: 1,
@@ -71,8 +77,9 @@ describe("useDataGridEdit — document paradigm guard (Sprint 66)", () => {
       result.current.handleStartEdit(0, 1, "Ada");
     });
 
-    expect(result.current.editingCell).toBeNull();
-    expect(result.current.editValue).toBe("");
+    expect(result.current.editingCell).toEqual({ row: 0, col: 1 });
+    expect(result.current.editValue).toBe("Ada");
+    // Editor is open, no edit has been saved yet.
     expect(result.current.pendingEdits.size).toBe(0);
   });
 

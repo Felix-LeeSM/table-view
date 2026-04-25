@@ -103,18 +103,20 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
     expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
-  // Negative AC — the document paradigm short-circuits before any
-  // edit state is touched, so promotion must also stay quiet. Otherwise
-  // a user double-clicking a Mongo cell would accidentally promote a
-  // read-only preview tab.
-  it("handleStartEdit does NOT promote when paradigm is 'document'", () => {
+  // Sprint 86 — the document paradigm's no-op guard was removed because the
+  // hook now routes document edits through the MQL generator + Tauri mutate
+  // wrappers (see `useDataGridEdit.document.test.ts`). Starting an edit for
+  // a Mongo cell therefore promotes the active tab just like an RDB grid —
+  // the user's edit is a legitimate "I want to keep this tab" signal.
+  it("handleStartEdit promotes the active tab for document paradigm (Sprint 86)", () => {
     const { result } = renderEditHook("document");
 
     act(() => {
       result.current.handleStartEdit(0, 1, "Alice");
     });
 
-    expect(mockPromoteTab).not.toHaveBeenCalled();
+    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+    expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
   // AC-03 — row add.

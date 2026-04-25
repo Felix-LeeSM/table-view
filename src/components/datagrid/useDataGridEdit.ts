@@ -3,6 +3,12 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import type { TableData } from "@/types/schema";
 import { generateSql, type CoerceError } from "./sqlGenerator";
+import {
+  generateMqlPreview,
+  type MqlCommand,
+  type MqlPreview,
+} from "@/lib/mongo/mqlGenerator";
+import { insertDocument, updateDocument, deleteDocument } from "@/lib/tauri";
 
 /**
  * Edit key helper: maps row/col indices to a unique string key.
@@ -200,12 +206,17 @@ export interface UseDataGridEditParams {
   page: number;
   fetchData: () => void;
   /**
-   * Sprint 66 — when `"document"`, `handleStartEdit` becomes a no-op so
-   * clicking a collection cell (including the `"{...}"` / `"[N items]"`
-   * sentinels) doesn't try to compose a SQL UPDATE statement. Write-path
-   * support for the document paradigm is Sprint 68+.
+   * Data paradigm of the grid. `"rdb"` (default) keeps the SQL edit path.
+   * `"document"` (Sprint 86) routes `handleCommit` / `handleExecuteCommit`
+   * through the MQL generator + Tauri mutate wrappers so a Mongo collection
+   * grid can propose insert/update/delete operations with the same pending
+   * state the RDB grid uses. `search` / `kv` are not yet wired to this hook.
    *
-   * Optional; defaults to `"rdb"` behaviour to preserve existing callers.
+   * For the document paradigm the hook treats the `schema` argument as the
+   * MongoDB database name and `table` as the collection name — the two
+   * coordinates that `insertDocument` / `updateDocument` / `deleteDocument`
+   * need. Sprint 87 will pass these explicitly; Sprint 86 only consumes the
+   * existing argument shape so the RDB callers do not break.
    */
   paradigm?: "rdb" | "document" | "search" | "kv";
 }
@@ -235,6 +246,16 @@ export interface DataGridEditState {
   // SQL preview modal
   sqlPreview: string[] | null;
   setSqlPreview: (v: string[] | null) => void;
+
+  /**
+   * MQL preview for the document paradigm (Sprint 86). Populated by
+   * `handleCommit` when `paradigm === "document"` and consumed by
+   * `handleExecuteCommit` to dispatch insert/update/delete Tauri commands.
+   * Null for the RDB paradigm. Sprint 87 will render this in the
+   * generalised preview modal alongside `sqlPreview.previewLines`.
+   */
+  mqlPreview: MqlPreview | null;
+  setMqlPreview: (v: MqlPreview | null) => void;
 
   // Row selection (multi-row)
   selectedRowIds: Set<number>;
@@ -298,6 +319,11 @@ export function useDataGridEdit({
 
   // SQL preview modal state
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
+  // Sprint 86 — parallel MQL preview state for the document paradigm. Lives
+  // next to `sqlPreview` so `hasPendingChanges` and the commit shortcut can
+  // reason about both in a single place. Mutually exclusive in practice: a
+  // single grid is either RDB or document, never both.
+  const [mqlPreview, setMqlPreview] = useState<MqlPreview | null>(null);
 
   // Row selection state (multi-row)
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
@@ -401,12 +427,13 @@ export function useDataGridEdit({
 
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string | null) => {
-      // Sprint 66: block editing for document-paradigm grids. Write support
-      // requires MQL-flavoured updates that are out of scope for Sprint 66
-      // (P0 read-only). We intentionally do not start an edit session even
-      // for non-sentinel cells so the user sees a consistent read-only
-      // experience across a mongo collection.
-      if (paradigm === "document") return;
+      // Sprint 86: the document paradigm now participates in editing. Earlier
+      // sprints returned a no-op here because write support was not wired;
+      // Sprint 86 introduces the MQL generator + dispatch branch (see
+      // `handleCommit` / `handleExecuteCommit` below) so `editingCell` +
+      // `editValue` are set for every paradigm. Sprint 87 will hide
+      // sentinel/composite cells at the UI layer — the generator already
+      // guards against committing a sentinel edit.
 
       // Save any existing edit first — but skip pending when value unchanged
       if (editingCell) {
@@ -422,11 +449,58 @@ export function useDataGridEdit({
       // Promote preview tab on inline edit start
       if (activeTabId) promoteTab(activeTabId);
     },
-    [editingCell, editValue, data, activeTabId, promoteTab, paradigm],
+    [editingCell, editValue, data, activeTabId, promoteTab],
   );
 
   const handleCommit = useCallback(() => {
     if (!data) return;
+    if (paradigm === "document") {
+      // Sprint 86 — document paradigm dispatch. The MQL generator accepts the
+      // same pending diff shape the RDB path uses, but expects record-keyed
+      // new rows so each insert's document layout is explicit. We
+      // reconstruct records from positional `pendingNewRows` using the
+      // current column layout; cells that are still `null` / `undefined` are
+      // dropped so the Tauri payload matches what JSON serialisation
+      // allows. `schema` / `table` double as MongoDB database / collection
+      // names — Sprint 87 will pass these via dedicated props.
+      const columns = data.columns.map((c) => ({
+        name: c.name,
+        data_type: c.data_type,
+        is_primary_key: c.is_primary_key,
+      }));
+      const insertRecords: Record<string, unknown>[] = pendingNewRows.map(
+        (row) => {
+          const record: Record<string, unknown> = {};
+          columns.forEach((col, idx) => {
+            const value = row[idx];
+            if (value !== null && value !== undefined) {
+              record[col.name] = value;
+            }
+          });
+          return record;
+        },
+      );
+      const preview = generateMqlPreview({
+        database: schema,
+        collection: table,
+        columns,
+        rows: data.rows,
+        page,
+        pendingEdits,
+        pendingDeletedRowKeys,
+        pendingNewRows: insertRecords,
+      });
+      // Clear RDB-shaped per-cell errors — the MQL path reports per-row
+      // errors on the preview itself, not through `pendingEditErrors`.
+      setPendingEditErrors(new Map());
+      if (preview.commands.length === 0) {
+        // Expose the preview even if empty so callers can inspect errors.
+        // Only open it when there's something actionable.
+        return;
+      }
+      setMqlPreview(preview);
+      return;
+    }
     // Collect coercion failures in a fresh map so the commit-time view replaces
     // (not appends to) any stale errors from a previous batch — each commit is
     // a complete re-validation of the current pending state.
@@ -454,9 +528,71 @@ export function useDataGridEdit({
     pendingNewRows,
     schema,
     table,
+    paradigm,
+    page,
   ]);
 
+  const dispatchMqlCommand = useCallback(
+    async (cmd: MqlCommand): Promise<void> => {
+      switch (cmd.kind) {
+        case "insertOne":
+          await insertDocument(
+            connectionId,
+            cmd.database,
+            cmd.collection,
+            cmd.document,
+          );
+          return;
+        case "updateOne":
+          await updateDocument(
+            connectionId,
+            cmd.database,
+            cmd.collection,
+            cmd.documentId,
+            cmd.patch,
+          );
+          return;
+        case "deleteOne":
+          await deleteDocument(
+            connectionId,
+            cmd.database,
+            cmd.collection,
+            cmd.documentId,
+          );
+          return;
+        default: {
+          // Exhaustiveness guard — adding a new MqlCommand variant without
+          // updating this switch will fail to compile.
+          const never: never = cmd;
+          return never;
+        }
+      }
+    },
+    [connectionId],
+  );
+
   const handleExecuteCommit = useCallback(async () => {
+    if (paradigm === "document") {
+      if (!mqlPreview || mqlPreview.commands.length === 0) return;
+      try {
+        for (const cmd of mqlPreview.commands) {
+          await dispatchMqlCommand(cmd);
+        }
+        setMqlPreview(null);
+        setPendingEdits(new Map());
+        setPendingEditErrors(new Map());
+        setPendingNewRows([]);
+        setPendingDeletedRowKeys(new Set());
+        setSelectedRowIds(new Set());
+        setAnchorRowIdx(null);
+        setEditingCell(null);
+        setEditValue("");
+        fetchData();
+      } catch {
+        // Mirror the RDB branch: surface via fetchData's error path.
+      }
+      return;
+    }
     if (!sqlPreview) return;
     try {
       for (const sql of sqlPreview) {
@@ -478,7 +614,15 @@ export function useDataGridEdit({
     } catch {
       // Error handling is done via the fetchData flow
     }
-  }, [sqlPreview, executeQuery, connectionId, fetchData]);
+  }, [
+    sqlPreview,
+    mqlPreview,
+    executeQuery,
+    connectionId,
+    fetchData,
+    paradigm,
+    dispatchMqlCommand,
+  ]);
 
   const handleDiscard = useCallback(() => {
     setPendingEdits(new Map());
@@ -489,6 +633,10 @@ export function useDataGridEdit({
     setPendingDeletedRowKeys(new Set());
     setSelectedRowIds(new Set());
     setAnchorRowIdx(null);
+    // Sprint 86 — clear the MQL preview alongside the pending diff so a
+    // subsequent commit doesn't replay stale commands in the document
+    // paradigm. No-op for RDB grids (mqlPreview is always null there).
+    setMqlPreview(null);
   }, []);
 
   const handleAddRow = useCallback(() => {
@@ -531,7 +679,12 @@ export function useDataGridEdit({
   const hasPendingChanges =
     pendingEdits.size > 0 ||
     pendingNewRows.length > 0 ||
-    pendingDeletedRowKeys.size > 0;
+    pendingDeletedRowKeys.size > 0 ||
+    // Sprint 86 — the document paradigm parks its dispatch payload in
+    // `mqlPreview` until the user confirms the preview modal. Treat an
+    // open preview with pending commands as "changes still pending" so
+    // the commit button / Cmd+S shortcut stay enabled.
+    (mqlPreview !== null && mqlPreview.commands.length > 0);
 
   // Listen for global Cmd+S commit shortcut. Only the active tab's grid
   // should react — gate on activeTabId being present and pending changes
@@ -611,6 +764,8 @@ export function useDataGridEdit({
     pendingDeletedRowKeys,
     sqlPreview,
     setSqlPreview,
+    mqlPreview,
+    setMqlPreview,
     selectedRowIds,
     anchorRowIdx,
     selectedRowIdx,
