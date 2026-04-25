@@ -42,6 +42,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Theme contrast (WCAG AA)
+        run: pnpm contrast:check
+
       - name: Build
         run: pnpm build
 

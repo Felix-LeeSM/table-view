@@ -14,6 +14,7 @@
     "format:docs": "prettier --write README.md CLAUDE.md \"docs/**/*.md\" \".claude/**/*.md\"",
     "format:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
     "test": "vitest run",
+    "contrast:check": "tsx scripts/check-theme-contrast.ts",
     "test:docker": "docker compose -f docker-compose.test.yml up -d && ./scripts/wait-for-test-db.sh && cd src-tauri && cargo test --test schema_integration --test query_integration; cd .. && docker compose -f docker-compose.test.yml down",
     "test:e2e": "wdio run wdio.conf.ts",
     "tauri": "tauri"

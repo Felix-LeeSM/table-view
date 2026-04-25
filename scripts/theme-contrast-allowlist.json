@@ -1,0 +1,454 @@
+{
+  "$schema": "Each entry waives a known WCAG AA contrast violation. New violations not listed here will fail the contrast check.",
+  "policy": "Add an entry only when the brand identity dictates the color and a darker/lighter foreground would compromise it. Track follow-up tightening in docs/RISKS.md.",
+  "entries": [
+    {
+      "theme": "apple",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.65,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "apple",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 4.02,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "arc",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.68,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "binance",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 1.8,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "claude",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.11,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "claude",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 4.23,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "clickhouse",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 1.07,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "cohere",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.61,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "coinbase",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.53,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "composio",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.98,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "composio",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 4.47,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "darcula",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.33,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "expo",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.98,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "ferrari",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.55,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "figma",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.88,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "figma",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.05,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "framer",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "framer",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "github",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.1,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "ibm",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.35,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "intercom",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.21,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "intercom",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 4.47,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "kraken",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.1,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "linear",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.17,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "lovable",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.8,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "mastercard",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.05,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "meta",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.9,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "minimax",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.94,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "mintlify",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.28,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "mintlify",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.3,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "miro",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 1.47,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "mistral",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.34,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "mongodb",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 1.58,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "nvidia",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.41,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "nvidia",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.41,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "opencode",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 1.79,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "pinterest",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.83,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "playstation",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.53,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "posthog",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.52,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "posthog",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.52,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "raycast",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.91,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "raycast",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.91,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "renault",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 1.51,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "revolut",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 4.43,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "revolut",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 4.43,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "sanity",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.79,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "sanity",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.86,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "shopify",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.22,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "slate",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.98,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "spotify",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 1.92,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "spotify",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2.59,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "stripe",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.05,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "supabase",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 2,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "theverge",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.37,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "theverge",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.37,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "together",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.83,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "together",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 4.43,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "vodafone",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.47,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "voltagent",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 1.53,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "warp",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.37,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "warp",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.37,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "webflow",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 3.08,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "zapier",
+      "mode": "dark",
+      "pair": "primary button",
+      "ratio": 2.84,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    },
+    {
+      "theme": "zapier",
+      "mode": "light",
+      "pair": "primary button",
+      "ratio": 3.37,
+      "reason": "Brand-color compromise: pre-existing as of sprint-113."
+    }
+  ]
+}
