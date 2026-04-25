@@ -1,4 +1,4 @@
-//! MongoAdapter integration test (Sprints 65 + 66 + 72).
+//! MongoAdapter integration test (Sprints 65 + 66 + 72 + 80).
 //!
 //! Sprint 65 walks the catalog happy path:
 //! `connect → ping → list_databases → list_collections → disconnect`.
@@ -15,17 +15,26 @@
 //!     returns a single count row whose `total` column reflects the seeded
 //!     document count.
 //!
+//! Sprint 80 (Phase 6 plan F-1) adds write-path coverage against
+//! per-test collections under `table_view_test.mutate_*` so the read-path
+//! fixtures above are never touched:
+//!   * `test_mongo_adapter_insert_roundtrip` / `_update_applies_set` /
+//!     `_delete_removes_document` — happy paths.
+//!   * `test_mongo_adapter_update_rejects_id_in_patch` / `_missing_id_*` —
+//!     Validation + NotFound error paths.
+//!
 //! When the MongoDB test container is not available the setup helper prints a
 //! skip message and the test exits with status 0 — matching the existing
 //! Postgres integration-test pattern (see `query_integration.rs`).
 
 mod common;
 
-use bson::{doc, Document};
+use bson::{doc, oid::ObjectId, Bson, Document};
 use mongodb::options::{ClientOptions, Credential, ServerAddress};
 use mongodb::Client;
 use serde_json::Value;
-use table_view_lib::db::{DbAdapter, DocumentAdapter, FindBody};
+use table_view_lib::db::{DbAdapter, DocumentAdapter, DocumentId, FindBody};
+use table_view_lib::error::AppError;
 use table_view_lib::models::ConnectionConfig;
 
 /// Build a raw mongodb `Client` from the shared test config so the
@@ -485,6 +494,383 @@ async fn test_mongo_adapter_aggregate_group_count() {
         .or_else(|| raw_total.as_i64())
         .unwrap_or_else(|| panic!("unexpected raw total variant: {raw_total:?}"));
     assert_eq!(raw_total_i64, 3, "raw total must equal seeded count");
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+// ── Sprint 80 (Phase 6 plan F-1) — mutate coverage ────────────────────────
+//
+// Each test uses its own collection name under `table_view_test` so the
+// read-path fixtures above remain untouched and parallel-safe collection
+// access is explicit. `#[serial_test::serial]` serialises with the other
+// tests in this binary to avoid any shared-state races around the single
+// test MongoDB container.
+
+/// Seed a single document into the per-test collection and return the
+/// driver-assigned `_id` as a `Bson`. Drops the collection first so
+/// re-runs after an aborted test always start from a clean slate.
+async fn seed_one_doc(seed: &Client, collection: &str, document: Document) -> Bson {
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>(collection);
+    // Idempotent setup.
+    let _ = coll.drop().await;
+    let res = coll
+        .insert_one(document)
+        .await
+        .expect("seed insert_one should succeed");
+    res.inserted_id
+}
+
+/// Sprint 80 — `insert_document` round-trip.
+///
+/// `adapter.insert_document` inserts a single document then `adapter.find`
+/// confirms exactly one row is visible in the target collection. The
+/// returned `DocumentId` must be a recognisable variant (`ObjectId` when
+/// the server autogenerates the id).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_insert_roundtrip() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("mutate_roundtrip");
+
+    // Idempotency — drop any leftovers before we touch the fixture.
+    let _ = coll.drop().await;
+
+    let inserted_id = adapter
+        .insert_document(
+            "table_view_test",
+            "mutate_roundtrip",
+            doc! { "name": "alice", "age": 30_i32 },
+        )
+        .await
+        .expect("insert_document should succeed");
+
+    match &inserted_id {
+        DocumentId::ObjectId(hex) => {
+            assert_eq!(hex.len(), 24, "ObjectId hex must be 24 characters: {hex}");
+        }
+        other => panic!("expected DocumentId::ObjectId, got {other:?}"),
+    }
+
+    // Use the adapter's find to verify the document is visible through the
+    // same read path the frontend will consume.
+    let find_result = adapter
+        .find("table_view_test", "mutate_roundtrip", FindBody::default())
+        .await
+        .expect("find should succeed");
+    assert_eq!(
+        find_result.rows.len(),
+        1,
+        "expected exactly one row after insert"
+    );
+
+    // Confirm via the seed client that `name` / `age` survived the round-trip.
+    let stored = coll
+        .find_one(doc! {})
+        .await
+        .expect("find_one should succeed")
+        .expect("seeded document must exist");
+    assert_eq!(
+        stored.get_str("name").expect("name present"),
+        "alice",
+        "inserted name must survive round-trip"
+    );
+    assert_eq!(
+        stored.get_i32("age").expect("age present"),
+        30,
+        "inserted age must survive round-trip"
+    );
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 80 — `update_document` wraps the patch with `$set`.
+///
+/// Seeds a document with a known ObjectId, calls `update_document` with a
+/// `{ name: "new" }` patch, and confirms the post-update document reflects
+/// the change while other fields remain intact.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_update_applies_set() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+
+    let oid = ObjectId::new();
+    let inserted_id = seed_one_doc(
+        &seed,
+        "mutate_update",
+        doc! { "_id": oid, "name": "old", "age": 1_i32 },
+    )
+    .await;
+
+    match inserted_id {
+        Bson::ObjectId(o) => assert_eq!(o, oid),
+        other => panic!("expected ObjectId from seed, got {other:?}"),
+    }
+
+    adapter
+        .update_document(
+            "table_view_test",
+            "mutate_update",
+            DocumentId::ObjectId(oid.to_hex()),
+            doc! { "name": "new" },
+        )
+        .await
+        .expect("update_document should succeed");
+
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("mutate_update");
+    let after = coll
+        .find_one(doc! { "_id": oid })
+        .await
+        .expect("find_one should succeed")
+        .expect("updated document must exist");
+    assert_eq!(
+        after.get_str("name").expect("name present"),
+        "new",
+        "$set must have updated the name field"
+    );
+    // `$set` is a partial update — other fields must remain intact.
+    assert_eq!(
+        after.get_i32("age").expect("age present"),
+        1,
+        "unrelated fields must not be touched by $set"
+    );
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 80 — `update_document` rejects `_id` in the patch.
+///
+/// The adapter must guard against identity mutation before any network
+/// round-trip. This test exercises the guard with a patch containing a
+/// fresh `_id`; the result must be `AppError::Validation`.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_update_rejects_id_in_patch() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+
+    let oid = ObjectId::new();
+    let _ = seed_one_doc(
+        &seed,
+        "mutate_reject_id",
+        doc! { "_id": oid, "name": "keep" },
+    )
+    .await;
+
+    let err = adapter
+        .update_document(
+            "table_view_test",
+            "mutate_reject_id",
+            DocumentId::ObjectId(oid.to_hex()),
+            doc! { "_id": ObjectId::new(), "name": "changed" },
+        )
+        .await
+        .expect_err("patch with _id must be rejected");
+
+    match err {
+        AppError::Validation(msg) => assert!(
+            msg.contains("patch must not contain _id"),
+            "unexpected message: {msg}"
+        ),
+        other => panic!("expected Validation error, got {other:?}"),
+    }
+
+    // The document must be untouched on this failure path.
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("mutate_reject_id");
+    let untouched = coll
+        .find_one(doc! { "_id": oid })
+        .await
+        .expect("find_one should succeed")
+        .expect("original document must still exist");
+    assert_eq!(
+        untouched.get_str("name").expect("name present"),
+        "keep",
+        "rejected update must not have modified the document"
+    );
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 80 — `update_document` on an unknown `_id` returns NotFound.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_update_on_missing_id_returns_not_found() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+
+    // Ensure the collection exists but does NOT contain the target id.
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("mutate_missing_update");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "_id": ObjectId::new(), "name": "other" })
+        .await
+        .expect("seed insert should succeed");
+
+    let missing = ObjectId::new();
+    let err = adapter
+        .update_document(
+            "table_view_test",
+            "mutate_missing_update",
+            DocumentId::ObjectId(missing.to_hex()),
+            doc! { "name": "changed" },
+        )
+        .await
+        .expect_err("update against a missing id must fail");
+
+    match err {
+        AppError::NotFound(msg) => assert!(
+            msg.contains("not found"),
+            "unexpected NotFound message: {msg}"
+        ),
+        other => panic!("expected NotFound error, got {other:?}"),
+    }
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 80 — `delete_document` removes the target document.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_delete_removes_document() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+
+    let oid = ObjectId::new();
+    let _ = seed_one_doc(
+        &seed,
+        "mutate_delete",
+        doc! { "_id": oid, "name": "to-delete" },
+    )
+    .await;
+
+    adapter
+        .delete_document(
+            "table_view_test",
+            "mutate_delete",
+            DocumentId::ObjectId(oid.to_hex()),
+        )
+        .await
+        .expect("delete_document should succeed");
+
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("mutate_delete");
+    let gone = coll
+        .find_one(doc! { "_id": oid })
+        .await
+        .expect("find_one should succeed");
+    assert!(
+        gone.is_none(),
+        "document must be gone after delete_document"
+    );
+
+    // cleanup
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 80 — `delete_document` on an unknown `_id` returns NotFound.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_delete_on_missing_id_returns_not_found() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::test_config(table_view_lib::models::DatabaseType::Mongodb);
+    let seed = seed_client(&config).await;
+
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("mutate_missing_delete");
+    let _ = coll.drop().await;
+    // Seed an unrelated document so the collection exists but the target
+    // id is genuinely absent.
+    coll.insert_one(doc! { "_id": ObjectId::new(), "name": "other" })
+        .await
+        .expect("seed insert should succeed");
+
+    let missing = ObjectId::new();
+    let err = adapter
+        .delete_document(
+            "table_view_test",
+            "mutate_missing_delete",
+            DocumentId::ObjectId(missing.to_hex()),
+        )
+        .await
+        .expect_err("delete against a missing id must fail");
+
+    match err {
+        AppError::NotFound(msg) => assert!(
+            msg.contains("not found"),
+            "unexpected NotFound message: {msg}"
+        ),
+        other => panic!("expected NotFound error, got {other:?}"),
+    }
 
     // cleanup
     coll.drop().await.expect("cleanup drop_collection");

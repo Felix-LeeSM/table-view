@@ -27,10 +27,23 @@
 //! `estimated_document_count()` is deliberately *not* used because it would
 //! reflect raw collection cardinality rather than pipeline output.
 //!
-//! The still-stubbed methods (`insert_document`, `update_document`,
-//! `delete_document`) retain their Sprint 65 placeholder behaviour;
-//! regression tests below continue to assert the `Unsupported` error path so
-//! future sprints notice when they're uplifted.
+//! Sprint 80 (Phase 6 plan F-1) replaces the last three `AppError::Unsupported`
+//! stubs with real driver-backed implementations:
+//!
+//! * `insert_document(db, coll, doc)` — `collection.insert_one` then maps the
+//!   returned `Bson` id back into a `DocumentId` variant via
+//!   `bson_id_to_document_id`.
+//! * `update_document(db, coll, id, patch)` — rejects `_id` in `patch` to
+//!   block identity mutation, wraps the patch in `{ $set: patch }` and calls
+//!   `collection.update_one`. A zero `matched_count` surfaces as
+//!   `AppError::NotFound` so the frontend can distinguish "no match" from
+//!   genuine driver errors.
+//! * `delete_document(db, coll, id)` — `collection.delete_one`; zero
+//!   `deleted_count` again becomes `AppError::NotFound`.
+//!
+//! All three share two private helpers (`document_id_to_bson`,
+//! `bson_id_to_document_id`) for the BSON ↔ `DocumentId` round-trip. The
+//! Tauri command layer lives in `commands/document/mutate.rs`.
 //!
 //! ## State
 //!
@@ -451,41 +464,95 @@ impl DocumentAdapter for MongoAdapter {
 
     fn insert_document<'a>(
         &'a self,
-        _db: &'a str,
-        _collection: &'a str,
-        _doc: Document,
+        db: &'a str,
+        collection: &'a str,
+        doc: Document,
     ) -> BoxFuture<'a, Result<DocumentId, AppError>> {
-        Box::pin(async {
-            Err(AppError::Unsupported(
-                "MongoAdapter::insert_document is not implemented until Sprint 69".into(),
-            ))
+        Box::pin(async move {
+            validate_ns(db, collection)?;
+            let client = self.current_client().await?;
+            let coll = client.database(db).collection::<Document>(collection);
+
+            let inserted = coll
+                .insert_one(doc)
+                .await
+                .map_err(|e| AppError::Database(format!("insert_one failed: {e}")))?;
+
+            Ok(bson_id_to_document_id(&inserted.inserted_id))
         })
     }
 
     fn update_document<'a>(
         &'a self,
-        _db: &'a str,
-        _collection: &'a str,
-        _id: DocumentId,
-        _patch: Document,
+        db: &'a str,
+        collection: &'a str,
+        id: DocumentId,
+        patch: Document,
     ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async {
-            Err(AppError::Unsupported(
-                "MongoAdapter::update_document is not implemented until Sprint 69".into(),
-            ))
+        Box::pin(async move {
+            validate_ns(db, collection)?;
+
+            // Sprint 80 contract: reject `_id` in the patch up-front so the
+            // driver never sees a mutating update on the identity column.
+            // The guard runs before `current_client()` so a misuse does not
+            // burn a connection/round-trip.
+            if patch.contains_key("_id") {
+                return Err(AppError::Validation(
+                    "update_document: patch must not contain _id".into(),
+                ));
+            }
+
+            let filter_value = document_id_to_bson(&id)?;
+            let client = self.current_client().await?;
+            let coll = client.database(db).collection::<Document>(collection);
+
+            let filter = doc! { "_id": filter_value };
+            let update = doc! { "$set": patch };
+
+            let result = coll
+                .update_one(filter, update)
+                .await
+                .map_err(|e| AppError::Database(format!("update_one failed: {e}")))?;
+
+            if result.matched_count == 0 {
+                return Err(AppError::NotFound(format!(
+                    "document with _id {} not found",
+                    describe_document_id(&id)
+                )));
+            }
+
+            Ok(())
         })
     }
 
     fn delete_document<'a>(
         &'a self,
-        _db: &'a str,
-        _collection: &'a str,
-        _id: DocumentId,
+        db: &'a str,
+        collection: &'a str,
+        id: DocumentId,
     ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async {
-            Err(AppError::Unsupported(
-                "MongoAdapter::delete_document is not implemented until Sprint 69".into(),
-            ))
+        Box::pin(async move {
+            validate_ns(db, collection)?;
+
+            let filter_value = document_id_to_bson(&id)?;
+            let client = self.current_client().await?;
+            let coll = client.database(db).collection::<Document>(collection);
+
+            let filter = doc! { "_id": filter_value };
+
+            let result = coll
+                .delete_one(filter)
+                .await
+                .map_err(|e| AppError::Database(format!("delete_one failed: {e}")))?;
+
+            if result.deleted_count == 0 {
+                return Err(AppError::NotFound(format!(
+                    "document with _id {} not found",
+                    describe_document_id(&id)
+                )));
+            }
+
+            Ok(())
         })
     }
 }
@@ -721,6 +788,59 @@ fn project_row(doc: &Document, columns: &[QueryColumn]) -> Vec<serde_json::Value
             None => serde_json::Value::Null,
         })
         .collect()
+}
+
+// ── Mutate helpers (Sprint 80) ─────────────────────────────────────────
+
+/// Convert a `DocumentId` into the `Bson` shape MongoDB expects in an
+/// `_id` filter position.
+///
+/// The four `DocumentId` variants map as follows:
+///   * `ObjectId(hex)` — parsed via `bson::oid::ObjectId::parse_str`; an
+///     invalid hex string surfaces as `AppError::Validation` so the caller
+///     can distinguish "bad client input" from a driver failure.
+///   * `String(s)`     — `Bson::String` (pass-through).
+///   * `Number(n)`     — `Bson::Int64` (the wire type of `DocumentId::Number`).
+///   * `Raw(b)`        — the wrapped `Bson` is cloned through, reserving an
+///     escape hatch for composite / binary `_id` shapes that do not fit the
+///     top three cases.
+fn document_id_to_bson(id: &DocumentId) -> Result<Bson, AppError> {
+    match id {
+        DocumentId::ObjectId(hex) => bson::oid::ObjectId::parse_str(hex)
+            .map(Bson::ObjectId)
+            .map_err(|e| AppError::Validation(format!("invalid ObjectId hex '{hex}': {e}"))),
+        DocumentId::String(s) => Ok(Bson::String(s.clone())),
+        DocumentId::Number(n) => Ok(Bson::Int64(*n)),
+        DocumentId::Raw(b) => Ok(b.clone()),
+    }
+}
+
+/// Convert the BSON `_id` emitted by the driver (e.g. `InsertOneResult::inserted_id`)
+/// into the `DocumentId` shape that the frontend consumes.
+///
+/// Reverses `document_id_to_bson` for the three well-typed variants and
+/// falls through to `DocumentId::Raw` for everything else so new BSON types
+/// do not force a breaking change to the public enum.
+fn bson_id_to_document_id(value: &Bson) -> DocumentId {
+    match value {
+        Bson::ObjectId(oid) => DocumentId::ObjectId(oid.to_hex()),
+        Bson::String(s) => DocumentId::String(s.clone()),
+        Bson::Int32(n) => DocumentId::Number(i64::from(*n)),
+        Bson::Int64(n) => DocumentId::Number(*n),
+        other => DocumentId::Raw(other.clone()),
+    }
+}
+
+/// Short, human-friendly rendering of a `DocumentId` for error messages —
+/// keeps the `AppError::NotFound` payload informative without leaking the
+/// full `Bson` shape when the id is a `Raw` variant.
+fn describe_document_id(id: &DocumentId) -> String {
+    match id {
+        DocumentId::ObjectId(hex) => hex.clone(),
+        DocumentId::String(s) => s.clone(),
+        DocumentId::Number(n) => n.to_string(),
+        DocumentId::Raw(b) => format!("{b:?}"),
+    }
 }
 
 #[cfg(test)]
@@ -1067,36 +1187,203 @@ mod tests {
         }
     }
 
+    // -- Mutate coverage (Sprint 80) ---------------------------------------
+    //
+    // The three `*_returns_unsupported` predecessors have been retired now
+    // that `insert_document` / `update_document` / `delete_document` carry
+    // real driver-backed bodies. The replacements exercise the pre-driver
+    // error paths (no connection, empty namespace, `_id` in patch) plus the
+    // two `document_id` helpers so the Sprint 80 contract can be verified
+    // without Docker.
+
     #[tokio::test]
-    async fn insert_document_returns_unsupported() {
+    async fn insert_document_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter.insert_document("db", "c", Document::new()).await {
-            Err(AppError::Unsupported(msg)) => assert!(msg.contains("insert_document")),
-            other => panic!("expected Unsupported, got ok? {}", other.is_ok()),
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
         }
     }
 
     #[tokio::test]
-    async fn update_document_returns_unsupported() {
+    async fn insert_document_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter.insert_document("   ", "c", Document::new()).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+        match adapter.insert_document("db", "   ", Document::new()).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_document_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter
-            .update_document("db", "c", DocumentId::Number(1), Document::new())
+            .update_document("db", "c", DocumentId::Number(1), doc! { "name": "x" })
             .await
         {
-            Err(AppError::Unsupported(msg)) => assert!(msg.contains("update_document")),
-            other => panic!("expected Unsupported, got ok? {}", other.is_ok()),
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
         }
     }
 
     #[tokio::test]
-    async fn delete_document_returns_unsupported() {
+    async fn update_document_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .update_document("   ", "c", DocumentId::Number(1), doc! { "name": "x" })
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_document_rejects_id_in_patch() {
+        use bson::oid::ObjectId;
+        let adapter = MongoAdapter::new();
+        // Guard runs before the connection probe so this does not need a
+        // live MongoDB instance to exercise.
+        let patch = doc! { "_id": ObjectId::new(), "name": "x" };
+        match adapter
+            .update_document("db", "c", DocumentId::Number(1), patch)
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("patch must not contain _id"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_document_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter
             .delete_document("db", "c", DocumentId::Number(1))
             .await
         {
-            Err(AppError::Unsupported(msg)) => assert!(msg.contains("delete_document")),
-            other => panic!("expected Unsupported, got ok? {}", other.is_ok()),
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_document_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .delete_document("db", "   ", DocumentId::Number(1))
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // -- document_id helpers (Sprint 80) -----------------------------------
+
+    #[test]
+    fn document_id_to_bson_parses_objectid_hex() {
+        let hex = "507f1f77bcf86cd799439011";
+        let bson = document_id_to_bson(&DocumentId::ObjectId(hex.into()))
+            .expect("valid ObjectId hex should parse");
+        match bson {
+            Bson::ObjectId(oid) => assert_eq!(oid.to_hex(), hex),
+            other => panic!("expected Bson::ObjectId, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn document_id_to_bson_rejects_invalid_objectid_hex() {
+        let err = document_id_to_bson(&DocumentId::ObjectId("not-hex".into()))
+            .expect_err("invalid hex must surface a Validation error");
+        match err {
+            AppError::Validation(msg) => assert!(
+                msg.contains("invalid ObjectId hex"),
+                "unexpected message: {msg}"
+            ),
+            other => panic!("expected Validation error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn document_id_to_bson_preserves_string_and_number() {
+        let s = document_id_to_bson(&DocumentId::String("abc".into()))
+            .expect("string id should pass through");
+        assert_eq!(s, Bson::String("abc".into()));
+
+        let n = document_id_to_bson(&DocumentId::Number(42))
+            .expect("number id should pass through as Int64");
+        assert_eq!(n, Bson::Int64(42));
+    }
+
+    #[test]
+    fn document_id_to_bson_preserves_raw_variant() {
+        let raw = Bson::Boolean(true);
+        let out = document_id_to_bson(&DocumentId::Raw(raw.clone()))
+            .expect("raw variant should pass through");
+        assert_eq!(out, raw);
+    }
+
+    #[test]
+    fn bson_id_to_document_id_maps_objectid_and_int32() {
+        use bson::oid::ObjectId;
+        let oid = ObjectId::new();
+        let id = bson_id_to_document_id(&Bson::ObjectId(oid));
+        match id {
+            DocumentId::ObjectId(hex) => assert_eq!(hex, oid.to_hex()),
+            other => panic!("expected DocumentId::ObjectId, got {other:?}"),
+        }
+
+        // Int32 must widen to i64.
+        let id32 = bson_id_to_document_id(&Bson::Int32(5));
+        match id32 {
+            DocumentId::Number(n) => assert_eq!(n, 5_i64),
+            other => panic!("expected DocumentId::Number(5), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn bson_id_to_document_id_maps_string_int64_and_raw() {
+        let id_str = bson_id_to_document_id(&Bson::String("x".into()));
+        match id_str {
+            DocumentId::String(s) => assert_eq!(s, "x"),
+            other => panic!("expected DocumentId::String, got {other:?}"),
+        }
+
+        let id64 = bson_id_to_document_id(&Bson::Int64(9_999_999_999));
+        match id64 {
+            DocumentId::Number(n) => assert_eq!(n, 9_999_999_999_i64),
+            other => panic!("expected DocumentId::Number, got {other:?}"),
+        }
+
+        // Boolean falls through to Raw — it has no lossless DocumentId
+        // representation so the enum escape hatch is the correct mapping.
+        let id_raw = bson_id_to_document_id(&Bson::Boolean(true));
+        match id_raw {
+            DocumentId::Raw(b) => assert_eq!(b, Bson::Boolean(true)),
+            other => panic!("expected DocumentId::Raw, got {other:?}"),
         }
     }
 

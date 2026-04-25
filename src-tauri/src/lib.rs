@@ -50,6 +50,9 @@ pub fn run() {
             commands::document::browse::infer_collection_fields,
             commands::document::query::find_documents,
             commands::document::query::aggregate_documents,
+            commands::document::mutate::insert_document,
+            commands::document::mutate::update_document,
+            commands::document::mutate::delete_document,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
