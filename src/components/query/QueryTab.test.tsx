@@ -422,7 +422,11 @@ describe("QueryTab", () => {
     });
   });
 
-  it("combines errors from multi-statement execution", async () => {
+  it("retains per-statement breakdown on partial multi-statement failure", async () => {
+    // Sprint 100 — partial failure no longer collapses to `status: "error"`.
+    // Instead, the run remains `completed` so the Tabs view can show one
+    // tab per statement (success rows / failed marker). The store's
+    // `statements` array carries per-stmt status + error message + result.
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce(new Error("Table not found"));
@@ -439,10 +443,88 @@ describe("QueryTab", () => {
     await waitFor(() => {
       const state = useTabStore.getState();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      expect(updatedTab).toBeDefined();
+      if (updatedTab && updatedTab.type === "query") {
+        // Partial failure → completed (not error) with statements[].
+        expect(updatedTab.queryState.status).toBe("completed");
+        if (updatedTab.queryState.status === "completed") {
+          const stmts = updatedTab.queryState.statements;
+          expect(stmts).toBeDefined();
+          expect(stmts).toHaveLength(2);
+          expect(stmts![0]!.status).toBe("success");
+          expect(stmts![0]!.result).toBeDefined();
+          expect(stmts![1]!.status).toBe("error");
+          expect(stmts![1]!.error).toContain("Table not found");
+          // `result` falls back to the LAST SUCCESSFUL result.
+          expect(updatedTab.queryState.result).toBe(MOCK_RESULT);
+        }
+      }
+    });
+  });
+
+  it("collapses to error status when ALL statements fail", async () => {
+    // Sprint 100 — when every statement fails, the run still reports
+    // `status: "error"` (joined message) so single-statement-error
+    // consumers (history list, error banner) keep working unchanged.
+    mockExecuteQuery
+      .mockRejectedValueOnce(new Error("Syntax error 1"))
+      .mockRejectedValueOnce(new Error("Syntax error 2"));
+
+    const tab = makeQueryTab({ sql: "BAD 1; BAD 2" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("error");
         if (updatedTab.queryState.status === "error") {
-          expect(updatedTab.queryState.error).toContain("Table not found");
+          expect(updatedTab.queryState.error).toContain("Syntax error 1");
+          expect(updatedTab.queryState.error).toContain("Syntax error 2");
+        }
+      }
+    });
+  });
+
+  it("populates statements[] with all-success on multi-statement happy path", async () => {
+    // Sprint 100 — every statement succeeds → statements[] has N
+    // success entries and `result` mirrors the last successful result.
+    const secondResult: QueryResult = {
+      columns: [{ name: "n", data_type: "integer" }],
+      rows: [[42]],
+      total_count: 1,
+      execution_time_ms: 2,
+      query_type: "select",
+    };
+    mockExecuteQuery
+      .mockResolvedValueOnce(MOCK_RESULT)
+      .mockResolvedValueOnce(secondResult);
+
+    const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const executeBtn = screen.getByTestId("execute-btn");
+    await act(async () => {
+      executeBtn.click();
+    });
+
+    await waitFor(() => {
+      const state = useTabStore.getState();
+      const updatedTab = state.tabs.find((t) => t.id === "query-1");
+      if (updatedTab && updatedTab.type === "query") {
+        expect(updatedTab.queryState.status).toBe("completed");
+        if (updatedTab.queryState.status === "completed") {
+          const stmts = updatedTab.queryState.statements;
+          expect(stmts).toHaveLength(2);
+          expect(stmts!.every((s) => s.status === "success")).toBe(true);
+          expect(updatedTab.queryState.result).toBe(secondResult);
         }
       }
     });
@@ -825,6 +907,10 @@ describe("QueryTab", () => {
   });
 
   it("handles non-Error rejection in multi-statement execution", async () => {
+    // Sprint 100 — partial-failure now stays `completed` with statements[].
+    // The non-Error rejection ("raw error" string) is coerced via
+    // String(err) and recorded on the failing statement entry, not on the
+    // collapsed top-level error message.
     mockExecuteQuery
       .mockResolvedValueOnce(MOCK_RESULT)
       .mockRejectedValueOnce("raw error");
@@ -842,9 +928,12 @@ describe("QueryTab", () => {
       const state = useTabStore.getState();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
-        expect(updatedTab.queryState.status).toBe("error");
-        if (updatedTab.queryState.status === "error") {
-          expect(updatedTab.queryState.error).toContain("raw error");
+        expect(updatedTab.queryState.status).toBe("completed");
+        if (updatedTab.queryState.status === "completed") {
+          const stmts = updatedTab.queryState.statements;
+          expect(stmts).toHaveLength(2);
+          expect(stmts![1]!.status).toBe("error");
+          expect(stmts![1]!.error).toBe("raw error");
         }
       }
     });

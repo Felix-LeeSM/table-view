@@ -407,25 +407,45 @@ export default function QueryTab({ tab }: QueryTabProps) {
       return;
     }
 
-    // Multiple statements — execute sequentially
+    // Multiple statements — execute sequentially.
+    // Sprint 100 — collect a per-statement breakdown so the result panel
+    // can render one tab per statement. Each iteration pushes either a
+    // `success` entry (with `result`) or an `error` entry (with `error`).
+    // We track wall-clock duration per statement around `executeQuery`.
     const queryId = `${tab.id}-${Date.now()}`;
     const startTime = Date.now();
     updateQueryState(tab.id, { status: "running", queryId });
 
     let lastResult: import("@/types/query").QueryResult | null = null;
-    const errors: string[] = [];
+    const statementResults: import("@/types/query").QueryStatementResult[] = [];
 
-    for (const stmt of statements) {
-      const stmtQueryId = `${queryId}-${statements.indexOf(stmt)}`;
+    for (let i = 0; i < statements.length; i++) {
+      const stmt = statements[i]!;
+      const stmtQueryId = `${queryId}-${i}`;
+      const stmtStart = Date.now();
       try {
         const result = await executeQuery(tab.connectionId, stmt, stmtQueryId);
         lastResult = result;
+        statementResults.push({
+          sql: stmt,
+          status: "success",
+          result,
+          durationMs: Date.now() - stmtStart,
+        });
       } catch (err) {
-        errors.push(
-          `Statement ${statements.indexOf(stmt) + 1}: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        statementResults.push({
+          sql: stmt,
+          status: "error",
+          error: err instanceof Error ? err.message : String(err),
+          durationMs: Date.now() - stmtStart,
+        });
       }
     }
+
+    const successCount = statementResults.filter(
+      (s) => s.status === "success",
+    ).length;
+    const allFailed = successCount === 0;
 
     useTabStore.setState((state) => {
       const current = state.tabs.find((t) => t.id === tab.id);
@@ -436,7 +456,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
         "queryId" in current.queryState &&
         current.queryState.queryId === queryId
       ) {
-        if (errors.length > 0) {
+        if (allFailed) {
+          // All statements failed — collapse to `error` (same shape as the
+          // single-statement failure path) with a joined error message.
+          const joinedErrors = statementResults
+            .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
+            .join("\n");
           return {
             tabs: state.tabs.map((t) =>
               t.id === tab.id && t.type === "query"
@@ -444,21 +469,27 @@ export default function QueryTab({ tab }: QueryTabProps) {
                     ...t,
                     queryState: {
                       status: "error" as const,
-                      error: errors.join("\n"),
+                      error: joinedErrors,
                     },
                   }
                 : t,
             ),
           };
         }
+        // At least one success — keep `status: "completed"` and surface the
+        // full per-statement breakdown via `statements`. `result` mirrors
+        // the LAST SUCCESSFUL result so single-result fallbacks (history,
+        // grid collapse) keep working when callers ignore `statements`.
+        const fallbackResult = lastResult!;
         return {
           tabs: state.tabs.map((t) =>
-            t.id === tab.id && t.type === "query" && lastResult
+            t.id === tab.id && t.type === "query"
               ? {
                   ...t,
                   queryState: {
                     status: "completed" as const,
-                    result: lastResult,
+                    result: fallbackResult,
+                    statements: statementResults,
                   },
                 }
               : t,
@@ -472,7 +503,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
       sql,
       executedAt: Date.now(),
       duration: Date.now() - startTime,
-      status: errors.length > 0 ? "error" : "success",
+      // History entry status reflects whether *any* statement failed —
+      // partial failure still surfaces a destructive marker in the
+      // history list so users can spot it without opening the tab.
+      status: successCount === statements.length ? "success" : "error",
       connectionId: tab.connectionId,
       paradigm: tab.paradigm,
       queryMode: tab.queryMode,
