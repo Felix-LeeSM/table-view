@@ -317,11 +317,12 @@ describe("DataGridTable — context menu", () => {
     };
     renderTable({ data: emptyData });
 
-    // With no data rows, there should be a "No data" cell but no context menu
-    expect(screen.getByText("No data")).toBeInTheDocument();
+    // With no data rows, there should be a "Table is empty" cell but no context menu
+    // (Sprint 99 — empty state without filters reads "Table is empty".)
+    expect(screen.getByText("Table is empty")).toBeInTheDocument();
 
-    // Try right-clicking the "No data" row — no menu should appear
-    const noDataRow = screen.getByText("No data").closest("tr");
+    // Try right-clicking the empty-state row — no menu should appear
+    const noDataRow = screen.getByText("Table is empty").closest("tr");
     if (noDataRow) {
       fireEvent.contextMenu(noDataRow, { clientX: 100, clientY: 200 });
     }

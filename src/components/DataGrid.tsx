@@ -310,6 +310,18 @@ export default function DataGrid({
     setPage(1);
   };
 
+  // Sprint 99 — full clear used by the empty-state Clear filter affordance.
+  // We must clear BOTH the structured (filters/appliedFilters) and the raw
+  // (rawSql/appliedRawSql) tracks; otherwise either an unapplied raw SQL
+  // would slip back in on the next Apply, or vice versa.
+  const handleClearAllFiltersFromEmptyState = useCallback(() => {
+    setFilters([]);
+    setAppliedFilters([]);
+    setRawSql("");
+    setAppliedRawSql("");
+    setPage(1);
+  }, []);
+
   const activeFilterCount =
     appliedRawSql.trim().length > 0 ? 1 : appliedFilters.length;
 
@@ -407,6 +419,8 @@ export default function DataGrid({
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
           onNavigateToFk={handleNavigateToFk}
+          activeFilterCount={activeFilterCount}
+          onClearFilters={handleClearAllFiltersFromEmptyState}
         />
       )}
 

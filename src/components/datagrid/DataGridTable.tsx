@@ -99,6 +99,22 @@ export interface DataGridTableProps {
   page: number;
   schema: string;
   table: string;
+  /**
+   * Sprint 99 — number of currently active filters (structured + raw SQL).
+   * Drives the empty-state branch:
+   *   - `> 0` → "0 rows match current filter" + Clear filter button
+   *   - `=== 0` (default) → "Table is empty"
+   * The component itself does not interpret the value beyond `> 0`; the
+   * parent (DataGrid) computes it from `appliedRawSql` + `appliedFilters`.
+   */
+  activeFilterCount?: number;
+  /**
+   * Sprint 99 — invoked when the user clicks the Clear filter button in the
+   * filtered-empty branch. Parent must clear `filters`, `appliedFilters`,
+   * `rawSql`, and `appliedRawSql` so the next fetch returns the unfiltered
+   * dataset.
+   */
+  onClearFilters?: () => void;
   onSetEditValue: (v: string | null) => void;
   onSetEditNull: () => void;
   onSaveCurrentEdit: () => void;
@@ -139,6 +155,8 @@ export default function DataGridTable({
   page,
   schema,
   table,
+  activeFilterCount = 0,
+  onClearFilters,
   onSetEditValue,
   onSetEditNull,
   onSaveCurrentEdit,
@@ -837,7 +855,25 @@ export default function DataGridTable({
                 colSpan={data.columns.length}
                 className="px-3 py-4 text-center text-xs text-muted-foreground"
               >
-                No data
+                {activeFilterCount > 0 ? (
+                  // Sprint 99 — filtered empty state. The Clear filter button
+                  // is co-located with the message so users don't have to
+                  // scroll back to the FilterBar to recover from a
+                  // mis-typed filter that happens to match zero rows.
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span>0 rows match current filter</span>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      aria-label="Clear filters"
+                      onClick={() => onClearFilters?.()}
+                    >
+                      Clear filter
+                    </Button>
+                  </div>
+                ) : (
+                  "Table is empty"
+                )}
               </td>
             </tr>
           )}

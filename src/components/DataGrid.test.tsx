@@ -649,8 +649,8 @@ describe("DataGrid", () => {
     document.body.style.userSelect = "";
   });
 
-  // 21. Empty result set shows "No data" row
-  it("shows No data message when rows are empty", async () => {
+  // 21. Empty result set without filters shows "Table is empty" row
+  it("shows Table is empty message when rows are empty and no filters active", async () => {
     mockQueryTableData.mockResolvedValue({
       ...MOCK_DATA,
       rows: [],
@@ -658,7 +658,69 @@ describe("DataGrid", () => {
     });
     renderDataGrid();
     await screen.findByText("0 rows");
-    expect(screen.getByText("No data")).toBeInTheDocument();
+    // Sprint 99 — branch B: no active filters → unfiltered empty message,
+    // no Clear filter affordance.
+    expect(screen.getByText("Table is empty")).toBeInTheDocument();
+    expect(
+      screen.queryByText("0 rows match current filter"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Clear filters" }),
+    ).not.toBeInTheDocument();
+  });
+
+  // 21a. Empty result set WITH filters shows the filtered-empty message + Clear filter button
+  // (Sprint 99 AC-01/AC-03)
+  it("shows '0 rows match current filter' + Clear filter button when filters are active", async () => {
+    // First fetch (with the seeded initialFilters) returns 0 rows;
+    // second fetch (after Clear filter clicks through) returns the
+    // unfiltered MOCK_DATA. We sequence the resolver so the same mock
+    // serves both calls deterministically.
+    mockQueryTableData.mockReset();
+    mockQueryTableData
+      .mockResolvedValueOnce({ ...MOCK_DATA, rows: [], total_count: 0 })
+      .mockResolvedValue({ ...MOCK_DATA });
+
+    renderDataGrid({
+      initialFilters: [
+        { id: "f1", column: "name", operator: "Eq", value: "nonexistent" },
+      ],
+    });
+
+    // Wait for the filtered empty state to render.
+    await screen.findByText("0 rows match current filter");
+
+    // The Clear filter button is present and accessible.
+    const clearBtn = screen.getByRole("button", { name: "Clear filters" });
+    expect(clearBtn).toBeInTheDocument();
+
+    // Sanity — the alternative empty message is NOT shown in this branch.
+    expect(screen.queryByText("Table is empty")).not.toBeInTheDocument();
+
+    // Capture the call count BEFORE clicking so we can assert a follow-up
+    // refetch happened (independent of how many setup fetches the mount
+    // produced).
+    const callsBefore = mockQueryTableData.mock.calls.length;
+
+    await act(async () => {
+      fireEvent.click(clearBtn);
+    });
+
+    // After clearing, the data refetches with NO filters applied. The 7th
+    // positional arg to queryTableData is `filters` — it must be undefined
+    // (DataGrid passes `undefined` when `appliedFilters.length === 0`).
+    await waitFor(() => {
+      expect(mockQueryTableData.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    const lastCall = mockQueryTableData.mock.calls[
+      mockQueryTableData.mock.calls.length - 1
+    ] as unknown[];
+    expect(lastCall[6]).toBeUndefined();
+    // raw SQL slot (8th arg) must also be cleared.
+    expect(lastCall[7]).toBeUndefined();
+
+    // After the unfiltered fetch resolves, the unfiltered rows render.
+    await screen.findByText("3 rows");
   });
 
   // 22. Props change resets column widths
