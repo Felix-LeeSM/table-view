@@ -13,7 +13,7 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
-import SchemaPanel from "@components/schema/SchemaPanel";
+import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
 import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
 
@@ -178,10 +178,12 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Body — schemas only. The connections-mode branch was removed in
-            sprint 125 (now lives on HomePage). */}
+        {/* Body — paradigm-aware sidebar slot (sprint 126). The
+            connections-mode branch was removed in sprint 125 (now lives on
+            HomePage). `WorkspaceSidebar` resolves the driving connection
+            with active-tab priority and falls back to `focusedConnId`. */}
         <div className="flex flex-1 flex-col overflow-auto">
-          <SchemaPanel selectedId={focusedConnId} />
+          <WorkspaceSidebar selectedId={focusedConnId} />
         </div>
 
         {/* Theme picker footer */}

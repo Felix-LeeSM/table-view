@@ -34,8 +34,11 @@ vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
-// Mock SchemaPanel so we don't have to render the full schema tree.
-vi.mock("@components/schema/SchemaPanel", () => ({
+// Mock WorkspaceSidebar (sprint 126 swap-in for SchemaPanel) so we don't
+// have to render the full paradigm-aware tree. The test still asserts on
+// `data-testid="schema-panel"` for stability — the slot's role from
+// Sidebar's perspective is unchanged.
+vi.mock("@components/workspace/WorkspaceSidebar", () => ({
   default: ({ selectedId }: { selectedId: string | null }) => (
     <div data-testid="schema-panel">{selectedId ?? "none"}</div>
   ),
