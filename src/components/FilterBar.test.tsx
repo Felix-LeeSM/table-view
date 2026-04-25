@@ -168,10 +168,12 @@ describe("FilterBar", () => {
     };
     renderFilterBar({ filters: [filterWithValue], onFiltersChange });
 
-    // Find the operator select (second combobox)
-    const selects = screen.getAllByRole("combobox");
-    const operatorSelect = selects[1]!; // second select is operator
-    await user.selectOptions(operatorSelect, "IsNull");
+    // Sprint-112: Radix Select migration — open the operator trigger and
+    // pick the IS NULL option (label `∅` — the rendered HTML uses the
+    // accessibility name "IS NULL" via the option text content).
+    const operatorTrigger = screen.getByLabelText("Filter operator");
+    await user.click(operatorTrigger);
+    await user.click(screen.getByRole("option", { name: "IS NULL" }));
 
     expect(onFiltersChange).toHaveBeenCalledTimes(1);
     const updated = onFiltersChange.mock.calls[0]![0] as FilterCondition[];
@@ -292,9 +294,11 @@ describe("FilterBar", () => {
     const onFiltersChange = vi.fn();
     renderFilterBar({ onFiltersChange });
 
-    const selects = screen.getAllByRole("combobox");
-    const columnSelect = selects[0]!;
-    await user.selectOptions(columnSelect, "name");
+    // Sprint-112: Radix Select migration — open the column trigger then
+    // click the option with the column name we want to switch to.
+    const columnTrigger = screen.getByLabelText("Filter column");
+    await user.click(columnTrigger);
+    await user.click(screen.getByRole("option", { name: "name" }));
 
     expect(onFiltersChange).toHaveBeenCalledTimes(1);
     const updated = onFiltersChange.mock.calls[0]![0] as FilterCondition[];
@@ -313,9 +317,11 @@ describe("FilterBar", () => {
     };
     renderFilterBar({ filters: [isNullFilter], onFiltersChange });
 
-    const selects = screen.getAllByRole("combobox");
-    const operatorSelect = selects[1]!;
-    await user.selectOptions(operatorSelect, "Eq");
+    // Sprint-112: Radix Select migration — open the operator trigger and
+    // click the "=" option (Eq).
+    const operatorTrigger = screen.getByLabelText("Filter operator");
+    await user.click(operatorTrigger);
+    await user.click(screen.getByRole("option", { name: "=" }));
 
     expect(onFiltersChange).toHaveBeenCalledTimes(1);
     const updated = onFiltersChange.mock.calls[0]![0] as FilterCondition[];

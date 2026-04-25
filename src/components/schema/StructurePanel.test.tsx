@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import StructurePanel from "./StructurePanel";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
@@ -1639,6 +1640,7 @@ describe("StructurePanel", () => {
   });
 
   it("selecting FOREIGN KEY shows reference fields", async () => {
+    const user = userEvent.setup();
     await act(async () => {
       renderPanel();
     });
@@ -1651,18 +1653,18 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add constraint" }));
     });
 
-    // Select FOREIGN KEY type
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText("Constraint type"), {
-        target: { value: "foreign_key" },
-      });
-    });
+    // Sprint-112: Radix Select migration — open the constraint type
+    // trigger and click the FOREIGN KEY option.
+    const trigger = screen.getByLabelText("Constraint type");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "FOREIGN KEY" }));
 
     expect(screen.getByLabelText("Reference table")).toBeInTheDocument();
     expect(screen.getByLabelText("Reference columns")).toBeInTheDocument();
   });
 
   it("selecting CHECK shows expression field", async () => {
+    const user = userEvent.setup();
     await act(async () => {
       renderPanel();
     });
@@ -1675,12 +1677,11 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add constraint" }));
     });
 
-    // Select CHECK type
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText("Constraint type"), {
-        target: { value: "check" },
-      });
-    });
+    // Sprint-112: Radix Select migration — open the constraint type
+    // trigger and click the CHECK option.
+    const trigger = screen.getByLabelText("Constraint type");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "CHECK" }));
 
     expect(screen.getByLabelText("Check expression")).toBeInTheDocument();
   });

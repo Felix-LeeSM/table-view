@@ -21,3 +21,18 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => false,
   }),
 });
+
+// Sprint-112: Radix Select uses pointer-capture + scrollIntoView APIs that
+// jsdom doesn't implement. Polyfill them here so the Radix-based <Select>
+// component can be opened, navigated, and have its options clicked in tests.
+if (typeof Element !== "undefined") {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = () => {};
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+}

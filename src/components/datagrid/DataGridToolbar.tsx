@@ -14,6 +14,13 @@ import {
 } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
 import { Button } from "@components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 
@@ -289,20 +296,24 @@ export default function DataGridToolbar({
           </div>
         )}
         {data && (
-          <select
-            className="rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground"
-            value={pageSize}
-            aria-label="Page size"
-            onChange={(e) => {
-              onSetPageSize(Number(e.target.value));
-            }}
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => onSetPageSize(Number(v))}
           >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              className="rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground"
+              aria-label="Page size"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
     </div>

@@ -441,25 +441,28 @@ describe("ConnectionDialog", () => {
   });
 
   it("updates database type and port when selecting MySQL", async () => {
+    const user = userEvent.setup();
     renderDialog();
 
-    const select = screen.getByLabelText("Database Type") as HTMLSelectElement;
-    await act(async () => {
-      fireEvent.change(select, { target: { value: "mysql" } });
-    });
+    // Sprint-112: Radix Select migration — open the trigger then click
+    // the desired option. The trigger reflects the current value through
+    // its accessible name, so subsequent assertions use textContent.
+    const trigger = screen.getByLabelText("Database Type");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "MySQL" }));
 
-    expect(select.value).toBe("mysql");
+    expect(trigger).toHaveTextContent("MySQL");
     const portInput = screen.getByLabelText("Port") as HTMLInputElement;
     expect(portInput.value).toBe("3306");
   });
 
   it("updates database type and port when selecting MongoDB", async () => {
+    const user = userEvent.setup();
     renderDialog();
 
-    const select = screen.getByLabelText("Database Type") as HTMLSelectElement;
-    await act(async () => {
-      fireEvent.change(select, { target: { value: "mongodb" } });
-    });
+    const trigger = screen.getByLabelText("Database Type");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
     const portInput = screen.getByLabelText("Port") as HTMLInputElement;
     expect(portInput.value).toBe("27017");
@@ -538,71 +541,84 @@ describe("ConnectionDialog", () => {
 
   // -----------------------------------------------------------------------
   // Sprint 59: Environment select field
+  // Sprint 112: migrated from native HTML select to Radix-based Select;
+  // assertions now read the trigger's accessible name (textContent) instead
+  // of an HTMLSelectElement.value, and option-pick uses userEvent.
   // -----------------------------------------------------------------------
   it("renders Environment select field with default None", () => {
     renderDialog();
-    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
-    expect(select).toBeInTheDocument();
-    expect(select.value).toBe("");
+    const trigger = screen.getByLabelText("Environment");
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveTextContent("None");
   });
 
-  it("renders all environment options", () => {
+  it("renders all environment options", async () => {
+    const user = userEvent.setup();
     renderDialog();
-    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
-    const options = Array.from(select.options).map((o) => o.value);
-    expect(options).toContain("");
-    expect(options).toContain("local");
-    expect(options).toContain("testing");
-    expect(options).toContain("development");
-    expect(options).toContain("staging");
-    expect(options).toContain("production");
+    const trigger = screen.getByLabelText("Environment");
+    await user.click(trigger);
+    // Open the Radix popover and assert each option is reachable by
+    // accessible name. "None" maps to the sentinel; the rest are the
+    // canonical environment labels.
+    expect(screen.getByRole("option", { name: "None" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Local" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Testing" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Development" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Staging" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Production" }),
+    ).toBeInTheDocument();
   });
 
   it("pre-selects environment when editing connection with environment", () => {
     renderDialog({
       connection: makeConnection({ environment: "production" }),
     });
-    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
-    expect(select.value).toBe("production");
+    const trigger = screen.getByLabelText("Environment");
+    expect(trigger).toHaveTextContent("Production");
   });
 
   it("pre-selects empty when editing connection without environment", () => {
     renderDialog({ connection: makeConnection({ environment: null }) });
-    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
-    expect(select.value).toBe("");
+    const trigger = screen.getByLabelText("Environment");
+    expect(trigger).toHaveTextContent("None");
   });
 
   it("updates environment in form state when selecting an option", async () => {
+    const user = userEvent.setup();
     renderDialog();
-    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
-    await act(async () => {
-      fireEvent.change(select, { target: { value: "staging" } });
-    });
-    expect(select.value).toBe("staging");
+    const trigger = screen.getByLabelText("Environment");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "Staging" }));
+    expect(trigger).toHaveTextContent("Staging");
   });
 
   it("sets environment to null when selecting None option", async () => {
+    const user = userEvent.setup();
     renderDialog({
       connection: makeConnection({ environment: "production" }),
     });
-    const select = screen.getByLabelText("Environment") as HTMLSelectElement;
-    expect(select.value).toBe("production");
+    const trigger = screen.getByLabelText("Environment");
+    expect(trigger).toHaveTextContent("Production");
 
-    await act(async () => {
-      fireEvent.change(select, { target: { value: "" } });
-    });
-    expect(select.value).toBe("");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "None" }));
+    expect(trigger).toHaveTextContent("None");
   });
 
   it("includes environment in saved form data", async () => {
+    const user = userEvent.setup();
     renderDialog();
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
-    const envSelect = screen.getByLabelText("Environment") as HTMLSelectElement;
-
     await act(async () => {
       fireEvent.change(nameInput, { target: { value: "Test DB" } });
-      fireEvent.change(envSelect, { target: { value: "local" } });
     });
+
+    const envTrigger = screen.getByLabelText("Environment");
+    await user.click(envTrigger);
+    await user.click(screen.getByRole("option", { name: "Local" }));
 
     await act(async () => {
       fireEvent.click(screen.getByText("Save"));
@@ -732,14 +748,12 @@ describe("ConnectionDialog", () => {
     });
 
     it("renders auth source, replica set, and TLS fields when switching to MongoDB", async () => {
+      const user = userEvent.setup();
       renderDialog();
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
+      const trigger = screen.getByLabelText("Database Type");
 
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mongodb" } });
-      });
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
       expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
       expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
@@ -747,29 +761,27 @@ describe("ConnectionDialog", () => {
     });
 
     it("relabels Database as optional when MongoDB is selected", async () => {
+      const user = userEvent.setup();
       renderDialog();
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
+      const trigger = screen.getByLabelText("Database Type");
 
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mongodb" } });
-      });
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
       expect(screen.getByText("Database (optional)")).toBeInTheDocument();
     });
 
     it("includes auth_source, replica_set, tls_enabled in the saved draft", async () => {
+      const user = userEvent.setup();
       renderDialog();
       const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
-
       await act(async () => {
         fireEvent.change(nameInput, { target: { value: "Mongo DB" } });
-        fireEvent.change(select, { target: { value: "mongodb" } });
       });
+
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
       const authSource = screen.getByLabelText(
         "Auth Source",
@@ -1049,21 +1061,19 @@ describe("ConnectionDialog", () => {
   // -----------------------------------------------------------------------
   describe("Sprint 108: DB type change port guard", () => {
     it("auto-updates port when current port is the default (postgres 5432 → mysql 3306)", async () => {
+      const user = userEvent.setup();
       renderDialog();
 
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
+      const trigger = screen.getByLabelText("Database Type");
       const portInput = screen.getByLabelText("Port") as HTMLInputElement;
       // Sanity: starting at postgres default.
-      expect(select.value).toBe("postgresql");
+      expect(trigger).toHaveTextContent("PostgreSQL");
       expect(portInput.value).toBe("5432");
 
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mysql" } });
-      });
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
 
-      expect(select.value).toBe("mysql");
+      expect(trigger).toHaveTextContent("MySQL");
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "3306",
       );
@@ -1074,25 +1084,22 @@ describe("ConnectionDialog", () => {
     });
 
     it("auto-updates port when current port is 0 (sqlite default → mysql)", async () => {
+      const user = userEvent.setup();
       renderDialog();
 
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
+      const trigger = screen.getByLabelText("Database Type");
       // Switch to sqlite first → port becomes 0.
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "sqlite" } });
-      });
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "SQLite" }));
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "0",
       );
 
       // Now switch sqlite → mysql; port must auto-update without modal.
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mysql" } });
-      });
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
 
-      expect(select.value).toBe("mysql");
+      expect(trigger).toHaveTextContent("MySQL");
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "3306",
       );
@@ -1102,6 +1109,7 @@ describe("ConnectionDialog", () => {
     });
 
     it("renders ConfirmDialog when current port is custom (15432) and dbType changes", async () => {
+      const user = userEvent.setup();
       renderDialog();
 
       const portInput = screen.getByLabelText("Port") as HTMLInputElement;
@@ -1109,12 +1117,9 @@ describe("ConnectionDialog", () => {
         fireEvent.change(portInput, { target: { value: "15432" } });
       });
 
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mysql" } });
-      });
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
 
       // ConfirmDialog visible with the contract message + confirmLabel.
       expect(screen.getByText("Replace custom port?")).toBeInTheDocument();
@@ -1128,15 +1133,16 @@ describe("ConnectionDialog", () => {
       ).toBeInTheDocument();
 
       // Form remains unchanged until the user decides.
-      expect(
-        (screen.getByLabelText("Database Type") as HTMLSelectElement).value,
-      ).toBe("postgresql");
+      expect(screen.getByLabelText("Database Type")).toHaveTextContent(
+        "PostgreSQL",
+      );
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "15432",
       );
     });
 
     it("Confirm 'Use default port 3306' applies dbType=mysql + port=3306 and closes the modal", async () => {
+      const user = userEvent.setup();
       renderDialog();
 
       const portInput = screen.getByLabelText("Port") as HTMLInputElement;
@@ -1144,12 +1150,9 @@ describe("ConnectionDialog", () => {
         fireEvent.change(portInput, { target: { value: "15432" } });
       });
 
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mysql" } });
-      });
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
 
       const confirmBtn = screen.getByRole("button", {
         name: "Use default port 3306",
@@ -1158,9 +1161,7 @@ describe("ConnectionDialog", () => {
         fireEvent.click(confirmBtn);
       });
 
-      expect(
-        (screen.getByLabelText("Database Type") as HTMLSelectElement).value,
-      ).toBe("mysql");
+      expect(screen.getByLabelText("Database Type")).toHaveTextContent("MySQL");
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "3306",
       );
@@ -1170,6 +1171,7 @@ describe("ConnectionDialog", () => {
     });
 
     it("Cancel keeps dbType=postgres + port=15432 and closes the modal", async () => {
+      const user = userEvent.setup();
       renderDialog();
 
       const portInput = screen.getByLabelText("Port") as HTMLInputElement;
@@ -1177,12 +1179,9 @@ describe("ConnectionDialog", () => {
         fireEvent.change(portInput, { target: { value: "15432" } });
       });
 
-      const select = screen.getByLabelText(
-        "Database Type",
-      ) as HTMLSelectElement;
-      await act(async () => {
-        fireEvent.change(select, { target: { value: "mysql" } });
-      });
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
 
       // The footer has its own "Cancel" button — scope to the AlertDialog.
       const alertDialog = screen.getByRole("alertdialog");
@@ -1194,9 +1193,9 @@ describe("ConnectionDialog", () => {
         fireEvent.click(cancelBtn!);
       });
 
-      expect(
-        (screen.getByLabelText("Database Type") as HTMLSelectElement).value,
-      ).toBe("postgresql");
+      expect(screen.getByLabelText("Database Type")).toHaveTextContent(
+        "PostgreSQL",
+      );
       expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
         "15432",
       );

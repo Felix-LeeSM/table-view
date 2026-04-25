@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, act, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import GlobalQueryLogPanel from "./GlobalQueryLogPanel";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -13,6 +14,12 @@ vi.mock("lucide-react", () => ({
   CheckCircle2: () => <span data-testid="icon-check" />,
   XCircle: () => <span data-testid="icon-x-circle" />,
   ChevronDown: () => <span data-testid="icon-chevron" />,
+  // Sprint-112: Radix-based <Select> from @components/ui/select pulls
+  // these three icons. Stub them so the dropdown renders in the test
+  // environment without breaking other icon assertions.
+  ChevronDownIcon: () => <span data-testid="icon-chevron-down" />,
+  ChevronUpIcon: () => <span data-testid="icon-chevron-up" />,
+  CheckIcon: () => <span data-testid="icon-check-icon" />,
 }));
 
 // Mock ConfirmDialog
@@ -176,9 +183,11 @@ describe("GlobalQueryLogPanel", () => {
     });
 
     render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
-    // "My DB" appears in both the connection filter dropdown and the entry badge
+    // Sprint-112: with Radix-based <Select>, options live in a portal and
+    // only mount when the trigger is opened, so the entry badge is the
+    // sole place "My DB" appears in the closed-state DOM.
     const allMyDb = screen.getAllByText("My DB");
-    expect(allMyDb.length).toBeGreaterThanOrEqual(2);
+    expect(allMyDb.length).toBeGreaterThanOrEqual(1);
   });
 
   it("displays duration badge for entries", () => {
@@ -276,6 +285,7 @@ describe("GlobalQueryLogPanel", () => {
   });
 
   it("filters by connection using dropdown", async () => {
+    const user = userEvent.setup();
     useQueryHistoryStore.setState({
       globalLog: [
         {
@@ -303,10 +313,12 @@ describe("GlobalQueryLogPanel", () => {
 
     render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
 
-    const filterSelect = screen.getByTestId("global-log-connection-filter");
-    await act(async () => {
-      fireEvent.change(filterSelect, { target: { value: "conn-1" } });
-    });
+    // Sprint-112: Radix Select migration — open the trigger and click the
+    // option named after the target connection ("My DB" maps to conn-1 via
+    // the connections fixture in beforeEach).
+    const trigger = screen.getByTestId("global-log-connection-filter");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "My DB" }));
 
     // QuerySyntax splits the SQL across tokenised spans; scope by entry id.
     expect(screen.getByTestId("global-log-entry-h-1").textContent).toMatch(

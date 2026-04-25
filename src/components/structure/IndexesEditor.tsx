@@ -9,6 +9,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
@@ -152,18 +159,21 @@ function CreateIndexModal({
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                 Index Type
               </label>
-              <select
-                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
-                value={indexType}
-                onChange={(e) => setIndexType(e.target.value)}
-                aria-label="Index type"
-              >
-                {INDEX_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.toUpperCase()}
-                  </option>
-                ))}
-              </select>
+              <Select value={indexType} onValueChange={(v) => setIndexType(v)}>
+                <SelectTrigger
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                  aria-label="Index type"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INDEX_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t.toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Unique */}

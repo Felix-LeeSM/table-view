@@ -70,4 +70,20 @@ export default tseslint.config(
       "tv-local/no-tailwind-arbitrary-px": "error",
     },
   },
+  // Sprint-112: forbid new native <select> JSX. All dropdowns must use the
+  // Radix-based <Select> primitive from @components/ui/select to keep the
+  // design system / accessibility behaviour consistent.
+  {
+    files: ["src/**/*.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXOpeningElement[name.name='select']",
+          message:
+            "Use <Select> from @components/ui/select instead of native <select>.",
+        },
+      ],
+    },
+  },
 );

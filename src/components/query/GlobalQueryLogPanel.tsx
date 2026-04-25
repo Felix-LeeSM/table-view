@@ -4,9 +4,21 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import ConfirmDialog from "@components/shared/ConfirmDialog";
 import QuerySyntax from "@components/shared/QuerySyntax";
 import { cn } from "@lib/utils";
+
+// Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
+// sentinel string `__all__` for the "All connections" option. The component
+// state still keeps `null` (canonical "no filter").
+const CONN_FILTER_ALL_SENTINEL = "__all__";
 
 function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
@@ -108,19 +120,30 @@ export default function GlobalQueryLogPanel({
 
         {/* Connection filter dropdown */}
         <div className="relative">
-          <select
-            data-testid="global-log-connection-filter"
-            className="h-5 rounded border border-border bg-transparent px-1 text-3xs text-foreground"
-            value={connectionFilter ?? ""}
-            onChange={(e) => setConnectionFilter(e.target.value || null)}
+          <Select
+            value={connectionFilter ?? CONN_FILTER_ALL_SENTINEL}
+            onValueChange={(v) =>
+              setConnectionFilter(v === CONN_FILTER_ALL_SENTINEL ? null : v)
+            }
           >
-            <option value="">All connections</option>
-            {connectionIds.map((id) => (
-              <option key={id} value={id}>
-                {getConnectionName(id)}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              data-testid="global-log-connection-filter"
+              className="h-5 rounded border border-border bg-transparent px-1 text-3xs text-foreground"
+              aria-label="Connection filter"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={CONN_FILTER_ALL_SENTINEL}>
+                All connections
+              </SelectItem>
+              {connectionIds.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {getConnectionName(id)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <Button

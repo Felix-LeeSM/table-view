@@ -3,6 +3,13 @@ import { Plus, Trash2, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import type {
   ColumnInfo,
   FilterCondition,
@@ -202,28 +209,30 @@ export default function FilterBar({
           {filters.map((filter, index) => (
             <div key={filter.id} className="mb-1.5 flex items-center gap-2">
               {/* Column selector */}
-              <select
-                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                aria-label="Filter column"
+              <Select
                 value={filter.column}
-                onChange={(e) =>
-                  updateFilter(index, { column: e.target.value })
-                }
+                onValueChange={(v) => updateFilter(index, { column: v })}
               >
-                {columns.map((col) => (
-                  <option key={col.name} value={col.name}>
-                    {col.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                  aria-label="Filter column"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {columns.map((col) => (
+                    <SelectItem key={col.name} value={col.name}>
+                      {col.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               {/* Operator selector */}
-              <select
-                className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-                aria-label="Filter operator"
+              <Select
                 value={filter.operator}
-                onChange={(e) => {
-                  const newOp = e.target.value as FilterOperator;
+                onValueChange={(v) => {
+                  const newOp = v as FilterOperator;
                   const patch: Partial<FilterCondition> = { operator: newOp };
                   const info = opInfo(newOp);
                   if (!info.needsValue) {
@@ -234,12 +243,20 @@ export default function FilterBar({
                   updateFilter(index, patch);
                 }}
               >
-                {OPERATORS.map((op) => (
-                  <option key={op.value} value={op.value}>
-                    {op.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                  aria-label="Filter operator"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPERATORS.map((op) => (
+                    <SelectItem key={op.value} value={op.value}>
+                      {op.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               {/* Value input (hidden for IS NULL / IS NOT NULL) */}
               {opInfo(filter.operator)?.needsValue && (

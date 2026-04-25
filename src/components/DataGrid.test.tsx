@@ -857,22 +857,26 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("250 rows");
 
-    const select = screen.getByLabelText("Page size") as HTMLSelectElement;
-    expect(select).toBeInTheDocument();
-    expect(select.value).toBe("300");
+    // Sprint-112: Radix Select trigger advertises the current value via
+    // its accessible text, not via a `.value` property.
+    const trigger = screen.getByLabelText("Page size");
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveTextContent("300");
   });
 
   // 30. Changes page size when selector changes
   it("changes page size when selector changes", async () => {
+    const user = userEvent.setup();
     const bigData: TableData = { ...MOCK_DATA, total_count: 500 };
     mockQueryTableData.mockResolvedValue(bigData);
     renderDataGrid();
     await screen.findByText("500 rows");
 
-    const select = screen.getByLabelText("Page size");
-    await act(async () => {
-      fireEvent.change(select, { target: { value: "300" } });
-    });
+    // Sprint-112: Radix Select migration — open the trigger and pick
+    // the desired page size option.
+    const trigger = screen.getByLabelText("Page size");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "300" }));
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];

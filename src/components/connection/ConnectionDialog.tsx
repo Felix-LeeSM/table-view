@@ -49,6 +49,18 @@ import {
   DialogDescription,
 } from "@components/ui/dialog";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
+
+// Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
+// sentinel string `__none__` to represent the "None" environment option.
+// The form's `environment` field still stores `null` (canonical empty).
+const ENV_NONE_SENTINEL = "__none__";
 
 interface ConnectionDialogProps {
   connection?: ConnectionConfig;
@@ -342,20 +354,25 @@ export default function ConnectionDialog({
                 <label htmlFor="conn-db-type" className={labelClass}>
                   Database Type
                 </label>
-                <select
-                  id="conn-db-type"
-                  className={inputClass}
+                <Select
                   value={form.db_type}
-                  onChange={(e) =>
-                    handleDbTypeChange(e.target.value as DatabaseType)
-                  }
+                  onValueChange={(v) => handleDbTypeChange(v as DatabaseType)}
                 >
-                  <option value="postgresql">PostgreSQL</option>
-                  <option value="mysql">MySQL</option>
-                  <option value="sqlite">SQLite</option>
-                  <option value="mongodb">MongoDB</option>
-                  <option value="redis">Redis</option>
-                </select>
+                  <SelectTrigger
+                    id="conn-db-type"
+                    className={inputClass}
+                    aria-label="Database Type"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                    <SelectItem value="mysql">MySQL</SelectItem>
+                    <SelectItem value="sqlite">SQLite</SelectItem>
+                    <SelectItem value="mongodb">MongoDB</SelectItem>
+                    <SelectItem value="redis">Redis</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Environment */}
@@ -363,24 +380,31 @@ export default function ConnectionDialog({
                 <label htmlFor="conn-environment" className={labelClass}>
                   Environment
                 </label>
-                <select
-                  id="conn-environment"
-                  className={inputClass}
-                  value={form.environment ?? ""}
-                  onChange={(e) =>
+                <Select
+                  value={form.environment ?? ENV_NONE_SENTINEL}
+                  onValueChange={(v) =>
                     setForm((f) => ({
                       ...f,
-                      environment: e.target.value || null,
+                      environment: v === ENV_NONE_SENTINEL ? null : v,
                     }))
                   }
                 >
-                  <option value="">None</option>
-                  {ENVIRONMENT_OPTIONS.map((env) => (
-                    <option key={env} value={env}>
-                      {ENVIRONMENT_META[env].label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id="conn-environment"
+                    className={inputClass}
+                    aria-label="Environment"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ENV_NONE_SENTINEL}>None</SelectItem>
+                    {ENVIRONMENT_OPTIONS.map((env) => (
+                      <SelectItem key={env} value={env}>
+                        {ENVIRONMENT_META[env].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Host & Port */}

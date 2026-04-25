@@ -9,6 +9,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import type {
   ColumnInfo,
   ConstraintInfo,
@@ -164,23 +171,29 @@ function AddConstraintModal({
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                 Type
               </label>
-              <select
-                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+              <Select
                 value={constraintType}
-                onChange={(e) => {
-                  setConstraintType(e.target.value as ConstraintType);
+                onValueChange={(v) => {
+                  setConstraintType(v as ConstraintType);
                   setSelectedColumns([]);
                   setReferenceTable("");
                   setReferenceColumns("");
                   setCheckExpression("");
                 }}
-                aria-label="Constraint type"
               >
-                <option value="primary_key">PRIMARY KEY</option>
-                <option value="unique">UNIQUE</option>
-                <option value="foreign_key">FOREIGN KEY</option>
-                <option value="check">CHECK</option>
-              </select>
+                <SelectTrigger
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                  aria-label="Constraint type"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="primary_key">PRIMARY KEY</SelectItem>
+                  <SelectItem value="unique">UNIQUE</SelectItem>
+                  <SelectItem value="foreign_key">FOREIGN KEY</SelectItem>
+                  <SelectItem value="check">CHECK</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Dynamic fields based on type */}
