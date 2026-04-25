@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Key, Link2, Plus, Pencil, Trash2, X, Eye } from "lucide-react";
+import { Key, Link2, Plus, Pencil, Trash2, X, Check, Eye } from "lucide-react";
 import type { ColumnInfo, ColumnChange } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
@@ -161,7 +161,7 @@ function EditableColumnRow({
                 aria-label={`Save changes for ${col.name}`}
                 title="Save"
               >
-                <Eye />
+                <Check />
               </Button>
               <Button
                 variant="ghost"
@@ -286,7 +286,7 @@ function NewColumnRow({
             aria-label="Confirm add column"
             title="Confirm"
           >
-            <Eye />
+            <Check />
           </Button>
           <Button
             variant="ghost"
