@@ -317,7 +317,35 @@ export interface GenerateSqlOptions {
  *
  * DELETE path is unchanged by Sprint 75.
  */
-export function generateSql(
+/**
+ * One emitted SQL statement paired with the originating pending-edit key. The
+ * key follows the same shape as `pendingEdits` / `pendingNewRows` /
+ * `pendingDeletedRowKeys` so the commit caller can route an
+ * `executeQuery`-time failure back to the offending cell:
+ *
+ * - UPDATE: `${rowIdx}-${colIdx}` — cell key shared with `pendingEdits`.
+ * - DELETE: `row-${page}-${rowIdx}` — row key shared with
+ *   `pendingDeletedRowKeys`.
+ * - INSERT: `new-${newRowIdx}-${colIdx}`. INSERTs touch every column of a
+ *   new row, so we pick the first column's coordinates as a stable identifier
+ *   the UI can use to surface the failure on a specific new-row cell.
+ *
+ * `key` is optional because, in pathological cases (e.g. a row index that
+ * disappeared between generation and execution), the producer may not have a
+ * meaningful key. Callers should fall back to a generic message in that case.
+ */
+export interface GeneratedSqlStatement {
+  sql: string;
+  key?: string;
+}
+
+/**
+ * Sprint 93 — statement-keyed counterpart of {@link generateSql}. Same pure
+ * generation logic, but each statement is paired with the pending-edit key it
+ * came from so `handleExecuteCommit` can map an `executeQuery` rejection back
+ * to the failing cell. Existing callers of `generateSql` are untouched.
+ */
+export function generateSqlWithKeys(
   data: TableData,
   schema: string,
   table: string,
@@ -325,12 +353,13 @@ export function generateSql(
   pendingDeletedRowKeys: Set<string>,
   pendingNewRows: unknown[][],
   options: GenerateSqlOptions = {},
-): string[] {
+): GeneratedSqlStatement[] {
   const pkCols = data.columns.filter((c) => c.is_primary_key);
-  const statements: string[] = [];
+  const statements: GeneratedSqlStatement[] = [];
   const qualifiedTable = schema ? `${schema}.${table}` : table;
 
-  // UPDATE statements for cell edits
+  // UPDATE statements for cell edits — emit using the pendingEdits key so a
+  // commit-time failure routes back to the exact "rowIdx-colIdx" cell.
   pendingEdits.forEach((newValue, key) => {
     const [rowStr, colStr] = key.split("-");
     const rowIdx = parseInt(rowStr!, 10);
@@ -353,29 +382,31 @@ export function generateSql(
     }
 
     const whereClause = buildWhereClause(row, data.columns, pkCols);
-    statements.push(
-      `UPDATE ${qualifiedTable} SET ${col.name} = ${coerced.sql} WHERE ${whereClause};`,
-    );
+    statements.push({
+      sql: `UPDATE ${qualifiedTable} SET ${col.name} = ${coerced.sql} WHERE ${whereClause};`,
+      key,
+    });
   });
 
-  // DELETE statements for deleted rows
+  // DELETE statements for deleted rows — emit using the row key so the UI can
+  // highlight the failed row on commit error.
   pendingDeletedRowKeys.forEach((delKey) => {
-    // delKey format: "row-{page}-{rowIdx}"
     const parts = delKey.split("-");
     const rowIdx = parseInt(parts[2]!, 10);
     const row = data.rows[rowIdx] as unknown[];
     if (!row) return;
 
     const whereClause = buildWhereClause(row, data.columns, pkCols);
-    statements.push(`DELETE FROM ${qualifiedTable} WHERE ${whereClause};`);
+    statements.push({
+      sql: `DELETE FROM ${qualifiedTable} WHERE ${whereClause};`,
+      key: delKey,
+    });
   });
 
-  // INSERT statements for new rows — Sprint 75 attempt 2. Each cell is
-  // normalised to `string | null` and routed through `coerceToSqlLiteral` so
-  // INSERT emits the same type-aware literals as UPDATE. If any cell fails
-  // coercion, the entire row's INSERT is dropped and each failing cell
-  // reports its own error via `onCoerceError` (keyed `new-${idx}-${col}`) so
-  // the UI can highlight every offending cell rather than just the first.
+  // INSERT statements for new rows. INSERT touches every column, so we pick
+  // `new-${newRowIdx}-0` as the canonical cell key — the UI can highlight the
+  // first cell of the offending row, which is enough for the user to locate
+  // the failed insert. Per-cell coercion errors keep their own granular keys.
   pendingNewRows.forEach((newRow, newRowIdx) => {
     const cells = newRow as unknown[];
     const literals: string[] = [];
@@ -397,10 +428,36 @@ export function generateSql(
     });
     if (rowHasError) return;
     const colList = data.columns.map((c) => c.name).join(", ");
-    statements.push(
-      `INSERT INTO ${qualifiedTable} (${colList}) VALUES (${literals.join(", ")});`,
-    );
+    statements.push({
+      sql: `INSERT INTO ${qualifiedTable} (${colList}) VALUES (${literals.join(", ")});`,
+      key: `new-${newRowIdx}-0`,
+    });
   });
 
   return statements;
+}
+
+/**
+ * Backward-compatible wrapper around {@link generateSqlWithKeys}. Callers that
+ * only need the SQL strings (the SQL preview modal, the structure editors)
+ * keep working unchanged; the commit path uses the keyed variant.
+ */
+export function generateSql(
+  data: TableData,
+  schema: string,
+  table: string,
+  pendingEdits: Map<string, string | null>,
+  pendingDeletedRowKeys: Set<string>,
+  pendingNewRows: unknown[][],
+  options: GenerateSqlOptions = {},
+): string[] {
+  return generateSqlWithKeys(
+    data,
+    schema,
+    table,
+    pendingEdits,
+    pendingDeletedRowKeys,
+    pendingNewRows,
+    options,
+  ).map((s) => s.sql);
 }

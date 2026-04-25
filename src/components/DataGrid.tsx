@@ -484,14 +484,44 @@ export default function DataGrid({
               </button>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {editState.sqlPreview?.map((sql, i) => (
-                <pre
-                  key={i}
-                  className="mb-2 whitespace-pre-wrap break-all rounded bg-secondary p-2 text-xs text-secondary-foreground"
+              {editState.sqlPreview?.map((sql, i) => {
+                const isFailed = editState.commitError?.statementIndex === i;
+                return (
+                  <pre
+                    key={i}
+                    className={
+                      isFailed
+                        ? "mb-2 whitespace-pre-wrap break-all rounded border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive"
+                        : "mb-2 whitespace-pre-wrap break-all rounded bg-secondary p-2 text-xs text-secondary-foreground"
+                    }
+                  >
+                    {sql}
+                  </pre>
+                );
+              })}
+              {/* Sprint 93 — commit failure banner. Renders inside the modal
+                  so the modal stays open after a failed executeQuery and the
+                  user sees which statement failed + DB message + count. */}
+              {editState.commitError && (
+                <div
+                  role="alert"
+                  aria-live="assertive"
+                  className="mt-2 rounded border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  data-testid="datagrid-commit-error"
                 >
-                  {sql}
-                </pre>
-              ))}
+                  <div className="font-semibold">
+                    executed: {editState.commitError.statementIndex}, failed at:{" "}
+                    {editState.commitError.statementIndex + 1} of{" "}
+                    {editState.commitError.statementCount}
+                  </div>
+                  <div className="mt-1 break-words">
+                    {editState.commitError.message}
+                  </div>
+                  <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-destructive/30 bg-background/40 p-2 text-xs font-mono">
+                    {editState.commitError.sql}
+                  </pre>
+                </div>
+              )}
             </div>
             <DialogFooter className="border-t border-border px-4 py-3">
               <button

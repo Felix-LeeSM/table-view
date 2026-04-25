@@ -2,7 +2,11 @@ import { useState, useCallback, useEffect } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import type { TableData } from "@/types/schema";
-import { generateSql, type CoerceError } from "./sqlGenerator";
+import {
+  generateSqlWithKeys,
+  type CoerceError,
+  type GeneratedSqlStatement,
+} from "./sqlGenerator";
 import {
   generateMqlPreview,
   type MqlCommand,
@@ -221,6 +225,33 @@ export interface UseDataGridEditParams {
   paradigm?: "rdb" | "document" | "search" | "kv";
 }
 
+/**
+ * Sprint 93 — surfaced commit failure for the SQL preview modal. Populated by
+ * `handleExecuteCommit` when an `executeQuery` call rejects. `null` means the
+ * last commit succeeded (or no commit has run yet).
+ *
+ * Fields:
+ * - `statementIndex`: 0-indexed position of the failing statement in
+ *   `sqlPreview`. The UI converts this to a 1-indexed "failed at: K" label
+ *   so non-developers don't trip on 0-vs-1 indexing.
+ * - `statementCount`: total statements in the batch — used to show
+ *   "executed: N, failed at: K" so partial-failure context is preserved.
+ * - `sql`: raw SQL text of the failing statement so the user can see exactly
+ *   what was sent to the DB.
+ * - `message`: DB-reported error message (or fallback string when the reject
+ *   value isn't an Error/string).
+ * - `failedKey`: optional pendingEdits key for the failing statement. When
+ *   present, the cell is also flagged in `pendingEditErrors` so an inline
+ *   hint appears next to the offending cell.
+ */
+export interface CommitError {
+  statementIndex: number;
+  statementCount: number;
+  sql: string;
+  message: string;
+  failedKey?: string;
+}
+
 export interface DataGridEditState {
   // Cell editing
   editingCell: { row: number; col: number } | null;
@@ -246,6 +277,16 @@ export interface DataGridEditState {
   // SQL preview modal
   sqlPreview: string[] | null;
   setSqlPreview: (v: string[] | null) => void;
+
+  /**
+   * Sprint 93 — surfaced commit failure. Set when `handleExecuteCommit`'s
+   * `executeQuery` loop rejects so the SQL preview modal can keep showing
+   * the batch and overlay the failed-statement banner. Cleared by
+   * `setCommitError(null)` (the user dismissing the banner) or by a fresh
+   * `handleCommit` (re-opening the preview with a new batch).
+   */
+  commitError: CommitError | null;
+  setCommitError: (v: CommitError | null) => void;
 
   /**
    * MQL preview for the document paradigm (Sprint 86). Populated by
@@ -319,11 +360,36 @@ export function useDataGridEdit({
 
   // SQL preview modal state
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
+  // Sprint 93 — keyed statements that produced `sqlPreview`. Kept in lockstep
+  // with `sqlPreview` (every `setSqlPreview(...)` call has a matching
+  // `setSqlPreviewStatements(...)` so the two arrays never drift). Used by
+  // `handleExecuteCommit` to map a failing statement index back to the
+  // pending-edit cell key.
+  const [sqlPreviewStatements, setSqlPreviewStatements] = useState<
+    GeneratedSqlStatement[] | null
+  >(null);
+  // Sprint 93 — commit error state for the SQL branch. Populated only when
+  // `handleExecuteCommit` catches a rejected `executeQuery`; cleared on
+  // successful commit, on `handleDiscard`, and when a fresh `handleCommit`
+  // re-opens the preview with a new batch.
+  const [commitError, setCommitError] = useState<CommitError | null>(null);
   // Sprint 86 — parallel MQL preview state for the document paradigm. Lives
   // next to `sqlPreview` so `hasPendingChanges` and the commit shortcut can
   // reason about both in a single place. Mutually exclusive in practice: a
   // single grid is either RDB or document, never both.
   const [mqlPreview, setMqlPreview] = useState<MqlPreview | null>(null);
+
+  // Sprint 93 — wrapped setter exposed to consumers. When the caller dismisses
+  // the SQL preview modal (passing `null`), we also clear the keyed-statement
+  // list and any surfaced commit failure so a re-open starts clean. Setting a
+  // new array goes through unchanged for backwards compatibility.
+  const setSqlPreviewExposed = useCallback((v: string[] | null) => {
+    setSqlPreview(v);
+    if (v === null) {
+      setSqlPreviewStatements(null);
+      setCommitError(null);
+    }
+  }, []);
 
   // Row selection state (multi-row)
   const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
@@ -505,7 +571,7 @@ export function useDataGridEdit({
     // (not appends to) any stale errors from a previous batch — each commit is
     // a complete re-validation of the current pending state.
     const nextErrors = new Map<string, string>();
-    const sqlStatements = generateSql(
+    const keyedStatements = generateSqlWithKeys(
       data,
       schema,
       table,
@@ -519,8 +585,11 @@ export function useDataGridEdit({
       },
     );
     setPendingEditErrors(nextErrors);
-    if (sqlStatements.length === 0) return;
-    setSqlPreview(sqlStatements);
+    if (keyedStatements.length === 0) return;
+    setSqlPreview(keyedStatements.map((s) => s.sql));
+    setSqlPreviewStatements(keyedStatements);
+    // Reset any previous commit failure so the preview opens clean.
+    setCommitError(null);
   }, [
     data,
     pendingEdits,
@@ -594,11 +663,57 @@ export function useDataGridEdit({
       return;
     }
     if (!sqlPreview) return;
+    // Prefer the keyed statement list (set in lockstep with `sqlPreview`) so a
+    // commit failure can route back to the offending cell. Fall back to a
+    // key-less view of `sqlPreview` if the keyed list is somehow absent — this
+    // keeps the catch block safe even in the (theoretical) event of state
+    // skew between the two parallel arrays.
+    const statements: GeneratedSqlStatement[] =
+      sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
+    const statementCount = statements.length;
+    let executedCount = 0;
     try {
-      for (const sql of sqlPreview) {
-        await executeQuery(connectionId, sql, `edit-${Date.now()}`);
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i]!;
+        try {
+          await executeQuery(connectionId, stmt.sql, `edit-${Date.now()}`);
+          executedCount = i + 1;
+        } catch (err) {
+          // Sprint 93 — surface the failure instead of swallowing it. We keep
+          // `sqlPreview` populated (no `setSqlPreview(null)`) so the modal
+          // stays open with the failed-statement banner. `pendingEditErrors`
+          // gets the failed cell key so the inline hint also lights up when
+          // the user dismisses the modal.
+          const message =
+            err instanceof Error
+              ? err.message
+              : typeof err === "string"
+                ? err
+                : "Failed to execute statement.";
+          setCommitError({
+            statementIndex: i,
+            statementCount,
+            sql: stmt.sql,
+            message: `executed: ${executedCount}, failed at: ${i + 1} of ${statementCount} — ${message}`,
+            failedKey: stmt.key,
+          });
+          if (stmt.key) {
+            setPendingEditErrors((prev) => {
+              const next = new Map(prev);
+              next.set(stmt.key!, message);
+              return next;
+            });
+          }
+          // Stop on first failure — `executeQuery` runs statements serially
+          // outside a transaction, so already-applied statements stay applied.
+          // The user can re-open the preview after fixing the failed row.
+          return;
+        }
       }
+      // Happy path: all statements succeeded.
       setSqlPreview(null);
+      setSqlPreviewStatements(null);
+      setCommitError(null);
       setPendingEdits(new Map());
       setPendingEditErrors(new Map());
       setPendingNewRows([]);
@@ -611,11 +726,29 @@ export function useDataGridEdit({
       setEditValue("");
       // Refresh data
       fetchData();
-    } catch {
-      // Error handling is done via the fetchData flow
+    } catch (err) {
+      // Defensive outer catch — the inner try/catch already handles
+      // `executeQuery` rejections. This branch only runs if a synchronous
+      // throw escapes the loop (e.g. a programming error inside the loop
+      // body). Surface it through the same channel so the user is never left
+      // with a silent failure. Empty catch is explicitly forbidden here
+      // (sprint-93 / sprint-88 catch-audit).
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : "Unexpected commit failure.";
+      setCommitError({
+        statementIndex: executedCount,
+        statementCount,
+        sql: statements[executedCount]?.sql ?? "",
+        message: `executed: ${executedCount}, failed at: ${executedCount + 1} of ${statementCount} — ${message}`,
+      });
     }
   }, [
     sqlPreview,
+    sqlPreviewStatements,
     mqlPreview,
     executeQuery,
     connectionId,
@@ -637,6 +770,10 @@ export function useDataGridEdit({
     // subsequent commit doesn't replay stale commands in the document
     // paradigm. No-op for RDB grids (mqlPreview is always null there).
     setMqlPreview(null);
+    // Sprint 93 — wipe any surfaced commit failure so a fresh commit starts
+    // clean and the dismissed banner doesn't reappear on re-open.
+    setSqlPreviewStatements(null);
+    setCommitError(null);
   }, []);
 
   const handleAddRow = useCallback(() => {
@@ -706,7 +843,7 @@ export function useDataGridEdit({
           originalValue,
         );
         const nextErrors = new Map<string, string>();
-        const sqlStatements = generateSql(
+        const keyedStatements = generateSqlWithKeys(
           data,
           schema,
           table,
@@ -720,7 +857,7 @@ export function useDataGridEdit({
           },
         );
         setPendingEditErrors(nextErrors);
-        if (sqlStatements.length === 0) {
+        if (keyedStatements.length === 0) {
           // Preserve the pending edit so the user sees the failing value
           // (and the inline hint) instead of silently losing it.
           setPendingEdits(merged);
@@ -729,7 +866,10 @@ export function useDataGridEdit({
         setPendingEdits(merged);
         setEditingCell(null);
         setEditValue("");
-        setSqlPreview(sqlStatements);
+        setSqlPreview(keyedStatements.map((s) => s.sql));
+        setSqlPreviewStatements(keyedStatements);
+        // Reset any previous commit failure so the preview opens clean.
+        setCommitError(null);
         return;
       }
       handleCommit();
@@ -763,7 +903,9 @@ export function useDataGridEdit({
     pendingNewRows,
     pendingDeletedRowKeys,
     sqlPreview,
-    setSqlPreview,
+    setSqlPreview: setSqlPreviewExposed,
+    commitError,
+    setCommitError,
     mqlPreview,
     setMqlPreview,
     selectedRowIds,
