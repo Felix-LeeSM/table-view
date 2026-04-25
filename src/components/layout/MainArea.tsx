@@ -13,6 +13,7 @@ import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";
 import { LogoWordmark } from "@components/shared/Logo";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
+import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 
 interface TableTabProps {
   tab: TableTab;
@@ -192,6 +193,7 @@ export default function MainArea() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <WorkspaceToolbar />
       <TabBar />
       <div className="flex flex-1 overflow-hidden bg-background">
         {activeTab?.type === "table" && activeTab.table && activeTab.schema ? (

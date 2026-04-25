@@ -537,3 +537,84 @@ export const useTabStore = create<TabState>((set, get) => ({
 useTabStore.subscribe((state) => {
   debouncePersist(state.tabs, state.activeTabId);
 });
+
+// ---------------------------------------------------------------------------
+// Selector helpers (sprint 127)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sprint 127 — selector hook returning the currently-active tab object (or
+ * `null` when no tab is focused). The lookup runs against `tabs` +
+ * `activeTabId` inside the selector so subscribers re-render whenever the
+ * active tab changes or the active tab's own fields (paradigm, schema,
+ * database, connectionId, …) update — i.e. the toolbar labels stay in sync
+ * with the tab without requiring an extra `useEffect`.
+ *
+ * Returning `null` (rather than `undefined`) keeps the consumer-side
+ * narrowing simple (`if (activeTab === null) …`).
+ */
+export function useActiveTab(): Tab | null {
+  return useTabStore((state) => {
+    const id = state.activeTabId;
+    if (!id) return null;
+    return state.tabs.find((t) => t.id === id) ?? null;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Last-active-tab tracker (sprint 127)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sprint 127 — per-connection "last active tab" tracker for the
+ * `<ConnectionSwitcher>` graceful-fallback chain (last active tab → first
+ * tab → new query tab).
+ *
+ * Implementation note: this is deliberately a module-scoped `Map`, **not**
+ * a zustand-persisted slice. The contract for sprint 127 explicitly
+ * forbids persisting the value (it is "last active in this session" only),
+ * and a plain Map keeps the public store API of `useTabStore` unchanged.
+ * The Map is updated by a single subscriber installed below — every
+ * `setActiveTab` (and every action that mutates `activeTabId` such as
+ * `addTab` / `addQueryTab` / `removeTab`) flows through that subscriber,
+ * so there is no need to instrument each individual action.
+ */
+const lastActiveTabIdByConnection = new Map<string, string>();
+
+useTabStore.subscribe((state) => {
+  const id = state.activeTabId;
+  if (!id) return;
+  const tab = state.tabs.find((t) => t.id === id);
+  if (!tab) return;
+  lastActiveTabIdByConnection.set(tab.connectionId, tab.id);
+});
+
+/**
+ * Returns the last-active tab id for a given connection, or `undefined`
+ * when no tab from that connection has ever been focused this session
+ * (or all such tabs have been closed and pruned by
+ * {@link pruneLastActiveTabIds}).
+ */
+export function getLastActiveTabIdForConnection(
+  connectionId: string,
+): string | undefined {
+  const tracked = lastActiveTabIdByConnection.get(connectionId);
+  if (!tracked) return undefined;
+  // Defensive prune — if the tracked tab has since been closed we treat
+  // the connection as having no last-active tab so the
+  // `<ConnectionSwitcher>` fallback chain advances to the next step.
+  const tabs = useTabStore.getState().tabs;
+  if (!tabs.some((t) => t.id === tracked)) {
+    lastActiveTabIdByConnection.delete(connectionId);
+    return undefined;
+  }
+  return tracked;
+}
+
+/**
+ * Test-only helper to clear the in-memory tracker. Production code never
+ * needs to reset the map — when a tab closes the next read auto-prunes.
+ */
+export function __resetLastActiveTabsForTests(): void {
+  lastActiveTabIdByConnection.clear();
+}
