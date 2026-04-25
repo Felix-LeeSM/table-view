@@ -2,7 +2,11 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-19 (Sprint 61 완료 후 검증)
+Last updated: 2026-04-25 (Sprint 116 — UI evaluation follow-up 링크 추가)
+
+## 참고 문서
+
+- [`docs/ui-evaluation-followup.md`](./ui-evaluation-followup.md) — 정적 평가에서 판정 불가하여 ⚠️ 가 붙은 UX / 성능 / a11y 실측 큐. 본 RISKS.md (코드 측 잔여 위험) 와 역할 분담.
 
 ## Summary
 
