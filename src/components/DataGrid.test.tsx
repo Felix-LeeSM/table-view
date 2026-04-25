@@ -233,7 +233,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
     // JSON.stringify with indent produces multiline text — use title attribute for matching
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const cellTexts = cells.map((c) => c.textContent);
     expect(cellTexts).toContain(JSON.stringify({ key: "value" }, null, 2));
     expect(cellTexts).toContain(JSON.stringify([1, 2, 3], null, 2));
@@ -962,7 +962,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!; // "Alice" cell (row 0, col 1)
 
     await act(async () => {
@@ -980,7 +980,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!; // "Alice"
 
     await act(async () => {
@@ -1009,7 +1009,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!; // "Alice"
 
     await act(async () => {
@@ -1040,7 +1040,7 @@ describe("DataGrid", () => {
     // No pending edits initially
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!;
 
     await act(async () => {
@@ -1062,7 +1062,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!; // "Alice"
 
     // Start editing
@@ -1091,7 +1091,7 @@ describe("DataGrid", () => {
 
   // Helper: make a pending edit
   async function makePendingEdit() {
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!; // "Alice"
     await act(async () => {
       fireEvent.dblClick(nameCell);
@@ -1145,7 +1145,7 @@ describe("DataGrid", () => {
     // Pending edits should be cleared
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();
     // Yellow bg should be gone
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     expect(cells[1]!.className).not.toContain("bg-highlight/20");
   });
 
@@ -1215,7 +1215,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     // Click on first cell of first data row
     const firstRowCell = cells[0]!;
     await act(async () => {
@@ -1233,7 +1233,7 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
 
     // Select a row first
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const firstRowCell = cells[0]!;
     await act(async () => {
       fireEvent.click(firstRowCell);
@@ -1256,7 +1256,7 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
 
     // Select and delete the first row
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     await act(async () => {
       fireEvent.click(cells[0]!);
     });
@@ -1280,7 +1280,7 @@ describe("DataGrid", () => {
     });
 
     // Delete a row
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     await act(async () => {
       fireEvent.click(cells[0]!);
     });
@@ -1325,7 +1325,7 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
     mockPromoteTab.mockClear();
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     await act(async () => {
       fireEvent.dblClick(cells[1]!);
     });
@@ -1352,7 +1352,7 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
     mockPromoteTab.mockClear();
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     await act(async () => {
       fireEvent.click(cells[0]!);
     });
@@ -1377,7 +1377,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("1 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!;
     // Display should be truncated
     const displayedText = nameCell.querySelector(".line-clamp-3")?.textContent;
@@ -1418,7 +1418,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const dateCell = cells[3]!; // created_at column
 
     await act(async () => {
@@ -1437,7 +1437,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const rows = [
       cells[0]!.closest("tr")!,
       cells[3]!.closest("tr")!,
@@ -1463,7 +1463,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const rows = [
       cells[0]!.closest("tr")!,
       cells[3]!.closest("tr")!,
@@ -1491,7 +1491,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const rows = [
       cells[0]!.closest("tr")!,
       cells[3]!.closest("tr")!,
@@ -1523,7 +1523,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
 
     // Select first row
     await act(async () => {
@@ -1543,7 +1543,7 @@ describe("DataGrid", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    const cells = screen.getAllByRole("cell");
+    const cells = screen.getAllByRole("gridcell");
     const rows = [
       cells[0]!.closest("tr")!,
       cells[3]!.closest("tr")!,

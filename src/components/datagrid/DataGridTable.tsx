@@ -492,9 +492,12 @@ export default function DataGridTable({
       <table
         className="min-w-full table-fixed border-collapse text-sm"
         ref={tableRef}
+        role="grid"
+        aria-rowcount={1 + data.rows.length + pendingNewRows.length}
+        aria-colcount={data.columns.length}
       >
         <thead className="sticky top-0 z-10 bg-secondary">
-          <tr>
+          <tr role="row" aria-rowindex={1}>
             {order.map((dIdx, visualIdx) => {
               const col = data.columns[dIdx]!;
               const sortInfo = sorts.find((s) => s.column === col.name);
@@ -502,6 +505,8 @@ export default function DataGridTable({
               return (
                 <th
                   key={col.name}
+                  role="columnheader"
+                  aria-colindex={visualIdx + 1}
                   className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
                   style={{
                     width: getColumnWidth(col.name, col.data_type),
@@ -575,6 +580,8 @@ export default function DataGridTable({
             return (
               <tr
                 key={rk}
+                role="row"
+                aria-rowindex={rowIdx + 2}
                 className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
                 onClick={(e) =>
                   onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)
@@ -610,6 +617,8 @@ export default function DataGridTable({
                   return (
                     <td
                       key={`${dIdx}-${visualIdx}`}
+                      role="gridcell"
+                      aria-colindex={visualIdx + 1}
                       data-editing={isEditing ? "true" : undefined}
                       className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
                         isEditing
@@ -850,8 +859,10 @@ export default function DataGridTable({
             );
           })}
           {data.rows.length === 0 && pendingNewRows.length === 0 && (
-            <tr>
+            <tr role="row">
               <td
+                role="gridcell"
+                aria-colindex={1}
                 colSpan={data.columns.length}
                 className="px-3 py-4 text-center text-xs text-muted-foreground"
               >
@@ -880,6 +891,8 @@ export default function DataGridTable({
           {pendingNewRows.map((newRow, newIdx) => (
             <tr
               key={`new-row-${newIdx}`}
+              role="row"
+              aria-rowindex={data.rows.length + newIdx + 2}
               className="border-b border-border bg-warning/5 hover:bg-muted"
             >
               {order.map((dIdx, visualIdx) => {
@@ -888,6 +901,8 @@ export default function DataGridTable({
                 return (
                   <td
                     key={`${dIdx}-${visualIdx}`}
+                    role="gridcell"
+                    aria-colindex={visualIdx + 1}
                     className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground"
                     style={{
                       width: getColumnWidth(col.name, col.data_type),
