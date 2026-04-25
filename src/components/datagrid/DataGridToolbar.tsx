@@ -4,6 +4,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Check,
+  Loader2,
   X,
   Plus,
   Trash2,
@@ -28,6 +29,15 @@ export interface DataGridToolbarProps {
   showFilters: boolean;
   showQuickLook: boolean;
   hasPendingChanges: boolean;
+  /**
+   * Sprint 98 — short-lived flash flag from `useDataGridEdit`. When `true`,
+   * the Commit button swaps its `Check` icon for a spinning `Loader2` and
+   * advertises `aria-busy="true"` + `data-committing="true"` so screen
+   * readers + DOM-driven tests can observe the immediate Cmd+S feedback
+   * before the SQL Preview modal mounts. Defaults to `false` so existing
+   * callers that don't pass the prop keep their current rendering.
+   */
+  isCommitFlashing?: boolean;
   pendingEditsSize: number;
   pendingNewRowsCount: number;
   pendingDeletedRowKeysSize: number;
@@ -55,6 +65,7 @@ export default function DataGridToolbar({
   showFilters,
   showQuickLook,
   hasPendingChanges,
+  isCommitFlashing = false,
   pendingEditsSize,
   pendingNewRowsCount,
   pendingDeletedRowKeysSize,
@@ -105,8 +116,23 @@ export default function DataGridToolbar({
                   onClick={onCommit}
                   aria-label="Commit changes"
                   title="Commit changes"
+                  // Sprint 98 — surface the flash state to AT + tests. We
+                  // intentionally do NOT set `disabled` here: the button is
+                  // sync-only, so the click handler returns immediately, and
+                  // existing tests (commit-shortcut, multi-select, paradigm)
+                  // assume the button stays enabled while pending changes
+                  // exist. Disabling on flash would either need a follow-up
+                  // sprint to update those tests or bake in a 400ms gap
+                  // where the user can't click — both worse than the status
+                  // quo for the AC-04 invariant.
+                  aria-busy={isCommitFlashing || undefined}
+                  data-committing={isCommitFlashing ? "true" : undefined}
                 >
-                  <Check />
+                  {isCommitFlashing ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Check />
+                  )}
                   Commit
                 </Button>
                 <Button

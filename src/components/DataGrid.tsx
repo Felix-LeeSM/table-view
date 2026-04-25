@@ -327,6 +327,7 @@ export default function DataGrid({
         activeFilterCount={activeFilterCount}
         showFilters={showFilters}
         hasPendingChanges={editState.hasPendingChanges}
+        isCommitFlashing={editState.isCommitFlashing}
         pendingEditsSize={editState.pendingEdits.size}
         pendingNewRowsCount={editState.pendingNewRows.length}
         pendingDeletedRowKeysSize={editState.pendingDeletedRowKeys.size}

@@ -47,6 +47,7 @@ const defaultProps = {
   activeFilterCount: 0,
   showFilters: false,
   hasPendingChanges: false,
+  isCommitFlashing: false,
   pendingEditsSize: 0,
   pendingNewRowsCount: 0,
   pendingDeletedRowKeysSize: 0,
@@ -112,5 +113,35 @@ describe("DataGridToolbar — Duplicate Row button", () => {
     // Clicking a disabled button should not fire the handler
     fireEvent.click(btn);
     expect(onDuplicateRow).not.toHaveBeenCalled();
+  });
+});
+
+// Sprint 98 — Cmd+S immediate visual feedback. The Commit button must
+// advertise an aria-busy/data-committing state and swap its icon for a
+// spinner when the flashing flag is on.
+describe("DataGridToolbar — Sprint 98 commit flashing", () => {
+  it("shows the Commit button in non-busy state when isCommitFlashing is false", () => {
+    renderToolbar({ hasPendingChanges: true, isCommitFlashing: false });
+    const btn = screen.getByRole("button", { name: "Commit changes" });
+    // Without the flash, no aria-busy / data-committing markers — the
+    // baseline rendering matches sprint-79 / sprint-93 callers that have
+    // never opted into the new prop.
+    expect(btn).not.toHaveAttribute("aria-busy", "true");
+    expect(btn).not.toHaveAttribute("data-committing", "true");
+  });
+
+  it("renders aria-busy + data-committing + spinner when isCommitFlashing is true", () => {
+    const { container } = renderToolbar({
+      hasPendingChanges: true,
+      isCommitFlashing: true,
+    });
+    const btn = screen.getByRole("button", { name: "Commit changes" });
+    expect(btn).toHaveAttribute("aria-busy", "true");
+    expect(btn).toHaveAttribute("data-committing", "true");
+    // Loader2 is a lucide-react SVG with the `animate-spin` class — query the
+    // button subtree directly so we don't depend on lucide's internal data
+    // attributes (they change between major versions).
+    const spinner = container.querySelector(".animate-spin");
+    expect(spinner).not.toBeNull();
   });
 });

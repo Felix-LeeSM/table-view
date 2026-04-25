@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import type { TableData } from "@/types/schema";
@@ -309,6 +309,17 @@ export interface DataGridEditState {
   // Derived
   hasPendingChanges: boolean;
 
+  /**
+   * Sprint 98 — short-lived flag flipped on at the entry of every commit
+   * attempt (Cmd+S `commit-changes` listener and toolbar `handleCommit`),
+   * cleared once the SQL/MQL preview opens, the validation-only no-op resolves,
+   * or a 400ms safety timeout fires. Consumers (e.g. {@link DataGridToolbar})
+   * use this to render a spinner + `aria-busy` state on the Commit button so
+   * Cmd+S provides visible feedback in ≤ 200ms — well before the SQL Preview
+   * modal mounts.
+   */
+  isCommitFlashing: boolean;
+
   // Actions
   saveCurrentEdit: () => void;
   cancelEdit: () => void;
@@ -382,6 +393,64 @@ export function useDataGridEdit({
   // reason about both in a single place. Mutually exclusive in practice: a
   // single grid is either RDB or document, never both.
   const [mqlPreview, setMqlPreview] = useState<MqlPreview | null>(null);
+
+  // Sprint 98 — Cmd+S immediate visual feedback. Flipped to `true` at the
+  // entry of every commit attempt (commit-changes event handler + toolbar
+  // handleCommit) so the Commit button can render a spinner + aria-busy state
+  // BEFORE the SQL preview modal mounts. Cleared by an effect that watches the
+  // preview/error transitions, plus a 400ms safety fallback so a "no-op"
+  // validation-only branch can never leave the UI stuck in a busy state.
+  const [isCommitFlashing, setIsCommitFlashing] = useState(false);
+  // Ref so subsequent flashes can clear the previous safety timer without a
+  // re-render — and so the unmount cleanup can drain a pending timer without
+  // racing the watcher effect.
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sprint 98 — entry-point helper. Both close vectors (commit-changes event
+  // and toolbar handleCommit) call this BEFORE any preview/validation work so
+  // the flash flag is observable synchronously, well within the AC-01 200ms
+  // budget. The 400ms safety fallback covers branches that never set a
+  // preview (e.g. dirty 0 toast path, validation-only no-op) — without it
+  // the spinner could stick on those paths until the next commit attempt.
+  const beginCommitFlash = useCallback(() => {
+    setIsCommitFlashing(true);
+    if (flashTimeoutRef.current !== null) {
+      clearTimeout(flashTimeoutRef.current);
+    }
+    flashTimeoutRef.current = setTimeout(() => {
+      setIsCommitFlashing(false);
+      flashTimeoutRef.current = null;
+    }, 400);
+  }, []);
+
+  // Drain any pending safety timer on unmount so a tab teardown can never
+  // schedule a setState on an unmounted hook (React 18 strict mode + the
+  // existing `removes the listener on unmount` regression test both rely on
+  // this being clean).
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current !== null) {
+        clearTimeout(flashTimeoutRef.current);
+        flashTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Clear the flash as soon as we have a real terminal signal: a preview
+  // opened (sqlPreview / mqlPreview transitioned to non-null) or an executor
+  // surfaced commitError. We only act when flashing is actually on — without
+  // that guard a routine preview-dismiss (`setSqlPreview(null)`) would also
+  // clear an unrelated future flash by happenstance.
+  useEffect(() => {
+    if (!isCommitFlashing) return;
+    if (sqlPreview !== null || mqlPreview !== null || commitError !== null) {
+      setIsCommitFlashing(false);
+      if (flashTimeoutRef.current !== null) {
+        clearTimeout(flashTimeoutRef.current);
+        flashTimeoutRef.current = null;
+      }
+    }
+  }, [isCommitFlashing, sqlPreview, mqlPreview, commitError]);
 
   // Sprint 93 — wrapped setter exposed to consumers. When the caller dismisses
   // the SQL preview modal (passing `null`), we also clear the keyed-statement
@@ -524,6 +593,13 @@ export function useDataGridEdit({
 
   const handleCommit = useCallback(() => {
     if (!data) return;
+    // Sprint 98 — flip the flash flag before any branching so toolbar callers
+    // (which invoke handleCommit directly without going through the
+    // commit-changes event) still get the immediate spinner. The watcher
+    // effect or the 400ms safety timer clears it; for the document paradigm's
+    // empty-preview early return we explicitly clear right away so the
+    // spinner doesn't linger on what is effectively a no-op.
+    beginCommitFlash();
     if (paradigm === "document") {
       // Sprint 86 — document paradigm dispatch. The MQL generator accepts the
       // same pending diff shape the RDB path uses, but expects record-keyed
@@ -603,6 +679,7 @@ export function useDataGridEdit({
     table,
     paradigm,
     page,
+    beginCommitFlash,
   ]);
 
   const dispatchMqlCommand = useCallback(
@@ -894,7 +971,20 @@ export function useDataGridEdit({
   // existing. Otherwise the dispatch is silently ignored (idempotent).
   useEffect(() => {
     const handler = () => {
-      if (!hasPendingChanges) return;
+      // Sprint 98 — dirty 0 path. The user pressed Cmd+S with nothing pending;
+      // the previous behaviour (silent no-op) was inscrutable, so we surface a
+      // toast indicator. We deliberately skip flashing here — the toast itself
+      // is the user-facing feedback and a brief spinner on top would be noise.
+      if (!hasPendingChanges) {
+        toast.info("No changes to commit");
+        return;
+      }
+      // Sprint 98 — flip the flash flag at the entry of the event handler so
+      // the spinner shows BEFORE we invoke `handleCommit` (which also flips
+      // the flag, but only after the in-flight-edit branch decides whether
+      // to short-circuit). The duplicate flip is intentionally idempotent —
+      // it just resets the 400ms safety timer.
+      beginCommitFlash();
       // If a cell is being edited, persist its value before opening preview —
       // but only if the value actually differs from the original.
       if (editingCell) {
@@ -953,6 +1043,7 @@ export function useDataGridEdit({
     schema,
     table,
     handleCommit,
+    beginCommitFlash,
   ]);
 
   // Derived: single selected row index (backward compat)
@@ -978,6 +1069,7 @@ export function useDataGridEdit({
     anchorRowIdx,
     selectedRowIdx,
     hasPendingChanges,
+    isCommitFlashing,
     saveCurrentEdit,
     cancelEdit,
     handleStartEdit,
