@@ -9,6 +9,7 @@ import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
+import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -29,6 +30,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         const activeTabId = useTabStore.getState().activeTabId;
         if (activeTabId) {
@@ -44,6 +46,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "t") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         const { activeTabId, tabs } = useTabStore.getState();
         const activeTab = activeTabId
@@ -63,6 +66,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ".") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         const { activeTabId, tabs } = useTabStore.getState();
         const activeTab = activeTabId
@@ -104,14 +108,7 @@ export default function App() {
       if (!eventName) return;
 
       // Skip if focus is inside a text input, textarea, select, or contenteditable
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        (e.target as HTMLElement)?.isContentEditable
-      )
-        return;
+      if (isEditableTarget(e.target)) return;
 
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(eventName));
@@ -127,9 +124,8 @@ export default function App() {
         (e.key === "r" && (e.metaKey || e.ctrlKey)) || e.key === "F5";
       if (!isRefresh) return;
 
-      // Skip if focus is inside a text input, textarea, or select
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      // Skip if focus is inside a text input, textarea, select, or contenteditable
+      if (isEditableTarget(e.target)) return;
 
       e.preventDefault();
 
@@ -158,6 +154,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "i") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("format-sql"));
       }
@@ -170,6 +167,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "I") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("uglify-sql"));
       }
@@ -182,6 +180,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         useTabStore.getState().reopenLastClosedTab();
       }
@@ -194,6 +193,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "F") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("toggle-favorites"));
       }
@@ -206,6 +206,7 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "C") {
+        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
       }

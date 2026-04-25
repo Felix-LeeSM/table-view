@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import { isEditableTarget } from "@/lib/keyboard/isEditableTarget";
 
 // ---------------------------------------------------------------------------
 // Sprint-103 — Global keyboard shortcut cheatsheet.
@@ -82,18 +83,6 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
     ],
   },
 ];
-
-/**
- * Returns true when focus is inside a text-entry element where a literal
- * `?` keystroke must remain a typable character (so it shouldn't open the
- * cheatsheet). Mirrors the guard used by other shortcuts in `App.tsx`.
- */
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  return target.isContentEditable;
-}
 
 function matchesShortcut(item: ShortcutItem, query: string): boolean {
   if (!query) return true;
