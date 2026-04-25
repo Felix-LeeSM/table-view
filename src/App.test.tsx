@@ -3,13 +3,16 @@ import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
 import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
 
-// Mock child components to isolate shortcut testing
-vi.mock("./components/layout/Sidebar", () => ({
-  default: () => <div data-testid="sidebar" />,
+// Mock page components to isolate shortcut testing — App.tsx now renders one
+// of HomePage / WorkspacePage based on the appShell screen, but the global
+// shortcuts under test are wired at the App level and don't depend on which
+// page is mounted.
+vi.mock("./pages/HomePage", () => ({
+  default: () => <div data-testid="home-page" />,
 }));
 
-vi.mock("./components/layout/MainArea", () => ({
-  default: () => <div data-testid="main-area" />,
+vi.mock("./pages/WorkspacePage", () => ({
+  default: () => <div data-testid="workspace-page" />,
 }));
 
 // Mock tauri IPC and event listeners

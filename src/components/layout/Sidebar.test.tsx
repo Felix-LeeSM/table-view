@@ -34,34 +34,7 @@ vi.mock("@components/theme/ThemePicker", () => ({
   default: () => <div data-testid="theme-picker-mock" />,
 }));
 
-// Mock children to isolate Sidebar wiring.
-// ConnectionList exposes the props it received as data attributes so we can
-// assert the contract without rendering the real list (which transitively
-// pulls in store + DnD).
-vi.mock("@components/connection/ConnectionList", () => ({
-  default: ({
-    selectedId,
-    onSelect,
-    onActivate,
-  }: {
-    selectedId: string | null;
-    onSelect?: (id: string) => void;
-    onActivate?: (id: string) => void;
-  }) => (
-    <div data-testid="connection-list" data-selected={selectedId ?? ""}>
-      <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
-        pick c1
-      </button>
-      <button data-testid="list-pick-c2" onClick={() => onSelect?.("c2")}>
-        pick c2
-      </button>
-      <button data-testid="list-activate-c2" onClick={() => onActivate?.("c2")}>
-        activate c2
-      </button>
-    </div>
-  ),
-}));
-
+// Mock SchemaPanel so we don't have to render the full schema tree.
 vi.mock("@components/schema/SchemaPanel", () => ({
   default: ({ selectedId }: { selectedId: string | null }) => (
     <div data-testid="schema-panel">{selectedId ?? "none"}</div>
@@ -72,22 +45,6 @@ vi.mock("@components/connection/ConnectionDialog", () => ({
   default: ({ onClose }: { onClose: () => void }) => (
     <div data-testid="connection-dialog">
       <button onClick={onClose}>Close</button>
-    </div>
-  ),
-}));
-
-vi.mock("@components/connection/ImportExportDialog", () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="import-export-dialog">
-      <button onClick={onClose}>Close IE</button>
-    </div>
-  ),
-}));
-
-vi.mock("@components/connection/GroupDialog", () => ({
-  default: ({ onClose }: { onClose: () => void }) => (
-    <div data-testid="group-dialog">
-      <button onClick={onClose}>Close Group</button>
     </div>
   ),
 }));
@@ -129,159 +86,53 @@ function setStores(opts: {
   useTabStore.setState({ tabs: [], activeTabId: null });
 }
 
-describe("Sidebar", () => {
+// Sprint 125 — Sidebar is now Workspace-only (schemas mode). Connection
+// management was extracted to HomePage; the SidebarModeToggle and the
+// connections-mode rendering branch were removed.
+describe("Sidebar (schemas-only)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.localStorage.clear();
     setStores({});
   });
 
-  it("renders both mode toggle tabs", () => {
+  it("does NOT render the SidebarModeToggle (sprint 125)", () => {
     render(<Sidebar />);
     expect(
-      screen.getByRole("radio", { name: /connections/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /schemas/i })).toBeInTheDocument();
+      screen.queryByRole("radio", { name: /connections mode/i }),
+    ).toBeNull();
+    expect(screen.queryByRole("radio", { name: /schemas mode/i })).toBeNull();
   });
 
-  it("starts in connections mode by default and renders ConnectionList", () => {
+  it("renders the SchemaPanel", () => {
     render(<Sidebar />);
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-    expect(screen.queryByTestId("schema-panel")).toBeNull();
+    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
   });
 
-  it("switches to schemas mode when the Schemas tab is clicked", () => {
+  it("shows connection name in the header when a connection is focused", () => {
     setStores({
       connections: [makeConnection("c1")],
       active: ["c1"],
     });
     render(<Sidebar />);
-
-    act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-    });
-
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
-    expect(screen.queryByTestId("connection-list")).toBeNull();
-  });
-
-  it("shows connection name header strip in schemas mode", () => {
-    setStores({
-      connections: [makeConnection("c1"), makeConnection("c2")],
-      active: ["c1"],
-    });
-    render(<Sidebar />);
-
-    act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-    });
-
+    // Sidebar's seed effect focuses the first-connected connection.
     expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
   });
 
-  it("falls back to 'Schemas' header when no connection is selected", () => {
+  it("falls back to 'Schemas' header when no connection is focused", () => {
     setStores({});
     render(<Sidebar />);
-
-    act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-    });
-
     expect(screen.getByTestId("sidebar-connection-header")).toHaveTextContent(
       "Schemas",
     );
   });
 
-  it("shows 'Connections' header in connections mode", () => {
-    setStores({});
-    render(<Sidebar />);
-    // Default mode is connections — header should reflect it
-    expect(screen.getByTestId("sidebar-connection-header")).toHaveTextContent(
-      "Connections",
-    );
-  });
-
-  it("single-click on a connection in the list updates selectedId", () => {
+  it("auto-syncs focus when active tab's connectionId changes", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
     });
     render(<Sidebar />);
-
-    act(() => {
-      screen.getByTestId("list-pick-c2").click();
-    });
-
-    // Single click also flips the sidebar into schemas mode so the tree for
-    // the newly focused connection is immediately visible.
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
-  });
-
-  it("single-click from connections mode flips to schemas mode", () => {
-    setStores({
-      connections: [makeConnection("c1"), makeConnection("c2")],
-      active: ["c1", "c2"],
-    });
-    render(<Sidebar />);
-    // We're in connections mode
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-
-    act(() => {
-      screen.getByTestId("list-pick-c2").click();
-    });
-
-    expect(screen.queryByTestId("connection-list")).toBeNull();
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
-  });
-
-  it("single-click on a disconnected connection keeps connections mode so double-click can connect", () => {
-    // Disconnected items must not unmount from under the user's fingers mid
-    // double-click — otherwise the second click + dblclick never reach
-    // ConnectionItem and the connect trigger is lost.
-    setStores({
-      connections: [makeConnection("c1"), makeConnection("c2")],
-      active: [],
-    });
-    render(<Sidebar />);
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-
-    act(() => {
-      screen.getByTestId("list-pick-c2").click();
-    });
-
-    // Focus moved, but we're still in connections mode
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-    expect(screen.queryByTestId("schema-panel")).toBeNull();
-    expect(screen.getByTestId("connection-list")).toHaveAttribute(
-      "data-selected",
-      "c2",
-    );
-  });
-
-  it("activate (double-click) auto-switches to schemas mode", () => {
-    setStores({
-      connections: [makeConnection("c1"), makeConnection("c2")],
-      active: ["c1", "c2"],
-    });
-    render(<Sidebar />);
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-
-    act(() => {
-      screen.getByTestId("list-activate-c2").click();
-    });
-
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
-  });
-
-  it("auto-syncs selection AND switches to schemas when active tab changes", () => {
-    setStores({
-      connections: [makeConnection("c1"), makeConnection("c2")],
-      active: ["c1", "c2"],
-    });
-    render(<Sidebar />);
-    // Default mode is connections; selection is the first connected (c1)
 
     act(() => {
       useTabStore.setState({
@@ -301,12 +152,10 @@ describe("Sidebar", () => {
       });
     });
 
-    // Mode should have flipped to schemas with c2 selected
-    expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
-  it("clears selection when the selected connection is removed", () => {
+  it("clears selection when the focused connection is removed", () => {
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
@@ -321,130 +170,17 @@ describe("Sidebar", () => {
     });
     rerender(<Sidebar />);
 
-    // Falls back to c2 (the surviving connected one)
-    act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-    });
+    // Falls back to c2 (the surviving connected one).
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
   });
 
-  it("does not persist mode to localStorage; always starts in connections on remount", () => {
-    const { unmount } = render(<Sidebar />);
-    act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-    });
-    expect(window.localStorage.getItem("table-view.sidebar.mode")).toBeNull();
-    unmount();
-
-    render(<Sidebar />);
-    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-    expect(screen.queryByTestId("schema-panel")).toBeNull();
-  });
-
-  describe("Action button (mode-context)", () => {
-    it("connections mode: + opens ConnectionDialog", () => {
-      render(<Sidebar />);
-      const btn = screen.getByRole("button", { name: /new connection/i });
-      act(() => {
-        fireEvent.click(btn);
-      });
-      expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
-    });
-
-    it("connections mode: Import/Export button opens the dialog", () => {
-      render(<Sidebar />);
-      const btn = screen.getByRole("button", { name: /import \/ export/i });
-      act(() => {
-        fireEvent.click(btn);
-      });
-      expect(screen.getByTestId("import-export-dialog")).toBeInTheDocument();
-    });
-
-    it("schemas mode: New Connection and Import/Export are both hidden", () => {
+  describe("New Query Tab button", () => {
+    it("opens a new query tab when connected", () => {
       setStores({
         connections: [makeConnection("c1")],
         active: ["c1"],
       });
       render(<Sidebar />);
-      act(() => {
-        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-      });
-
-      expect(
-        screen.queryByRole("button", { name: /new connection/i }),
-      ).toBeNull();
-      expect(
-        screen.queryByRole("button", { name: /import \/ export/i }),
-      ).toBeNull();
-    });
-
-    it("connections mode: Import/Export and New Connection are both visible", () => {
-      setStores({});
-      render(<Sidebar />);
-
-      expect(
-        screen.getByRole("button", { name: /import \/ export/i }),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /new connection/i }),
-      ).toBeInTheDocument();
-    });
-
-    // ---------------------------------------------------------------------
-    // Sprint 78 — AC-01 — "New Group" button discoverability + flow.
-    // ---------------------------------------------------------------------
-    it("connections mode: New Group button is visible with accessible name", () => {
-      setStores({});
-      render(<Sidebar />);
-      expect(
-        screen.getByRole("button", { name: /new group/i }),
-      ).toBeInTheDocument();
-    });
-
-    it("connections mode: New Group button opens the GroupDialog", () => {
-      setStores({});
-      render(<Sidebar />);
-      expect(screen.queryByTestId("group-dialog")).toBeNull();
-      act(() => {
-        fireEvent.click(screen.getByRole("button", { name: /new group/i }));
-      });
-      expect(screen.getByTestId("group-dialog")).toBeInTheDocument();
-    });
-
-    it("schemas mode: New Group button is hidden", () => {
-      setStores({
-        connections: [makeConnection("c1")],
-        active: ["c1"],
-      });
-      render(<Sidebar />);
-      act(() => {
-        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-      });
-      expect(screen.queryByRole("button", { name: /new group/i })).toBeNull();
-    });
-
-    it("closes the GroupDialog via its onClose", () => {
-      setStores({});
-      render(<Sidebar />);
-      act(() => {
-        fireEvent.click(screen.getByRole("button", { name: /new group/i }));
-      });
-      expect(screen.getByTestId("group-dialog")).toBeInTheDocument();
-      act(() => {
-        fireEvent.click(screen.getByText("Close Group"));
-      });
-      expect(screen.queryByTestId("group-dialog")).toBeNull();
-    });
-
-    it("schemas mode: + opens a new query tab when connected", () => {
-      setStores({
-        connections: [makeConnection("c1")],
-        active: ["c1"],
-      });
-      render(<Sidebar />);
-      act(() => {
-        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-      });
 
       const btn = screen.getByRole("button", { name: /new query tab/i });
       expect(btn).not.toBeDisabled();
@@ -458,15 +194,12 @@ describe("Sidebar", () => {
       expect(state.tabs[0]!.connectionId).toBe("c1");
     });
 
-    it("schemas mode: New Query is disabled when not connected", () => {
+    it("is disabled when there is no connected connection", () => {
       setStores({
         connections: [makeConnection("c1")],
         active: [],
       });
       render(<Sidebar />);
-      act(() => {
-        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-      });
 
       const btn = screen.getByRole("button", { name: /new query tab/i });
       expect(btn).toBeDisabled();
@@ -474,7 +207,7 @@ describe("Sidebar", () => {
   });
 
   describe("Misc", () => {
-    it("new-connection event opens the dialog", () => {
+    it("new-connection event opens the ConnectionDialog", () => {
       render(<Sidebar />);
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
 
@@ -485,23 +218,7 @@ describe("Sidebar", () => {
       expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
     });
 
-    it("connection-added event flips the sidebar to connections mode", () => {
-      render(<Sidebar />);
-      // Start in schemas mode
-      act(() => {
-        fireEvent.click(screen.getByRole("radio", { name: /schemas/i }));
-      });
-      expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
-
-      act(() => {
-        window.dispatchEvent(new Event("connection-added"));
-      });
-
-      expect(screen.getByTestId("connection-list")).toBeInTheDocument();
-      expect(screen.queryByTestId("schema-panel")).toBeNull();
-    });
-
-    it("removes new-connection listener on unmount", () => {
+    it("removes the new-connection listener on unmount", () => {
       const { unmount } = render(<Sidebar />);
       unmount();
       act(() => {

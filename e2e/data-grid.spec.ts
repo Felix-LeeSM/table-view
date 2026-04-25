@@ -1,4 +1,5 @@
 import { expect } from "@wdio/globals";
+import { openTestPgWorkspace } from "./_helpers";
 
 /**
  * Expand a schema node only if it is not already expanded.
@@ -24,85 +25,13 @@ async function ensureCategoryExpanded(selector: string) {
   }
 }
 
-/** Make sure the sidebar is showing the connections list so that items
- * created by previous specs are visible in the DOM. No-op when already in
- * connections mode. */
-async function ensureConnectionsMode() {
-  const tab = await $('[aria-label="Connections mode"]');
-  await tab.waitForDisplayed({ timeout: 5000 });
-  const selected = await tab.getAttribute("aria-selected");
-  if (selected !== "true") {
-    await tab.click();
-  }
-}
-
 describe("Data Grid & Query Execution", () => {
-  // Ensure connection exists and is connected
+  // Sprint 125 — every spec must navigate Home → Open before interacting
+  // with the schema tree / tab bar. `openTestPgWorkspace` is idempotent
+  // (no-op when already on Workspace with Test PG) so the cross-spec ordering
+  // doesn't flake.
   beforeEach(async () => {
-    await ensureConnectionsMode();
-
-    const existingConn = await $('[aria-label^="Test PG"]');
-    let exists = false;
-    try {
-      await existingConn.waitForExist({ timeout: 5000 });
-      exists = true;
-    } catch {
-      exists = false;
-    }
-
-    if (!exists) {
-      const newBtn = await $('[aria-label="New Connection"]');
-      await newBtn.waitForDisplayed({ timeout: 10000 });
-      await newBtn.click();
-
-      const dialog = await $('[role="dialog"]');
-      await dialog.waitForDisplayed({ timeout: 5000 });
-
-      const nameInput = await $("#conn-name");
-      await nameInput.setValue("Test PG");
-
-      const hostInput = await $("#conn-host");
-      await hostInput.clearValue();
-      await hostInput.setValue("localhost");
-
-      const portInput = await $("#conn-port");
-      await portInput.clearValue();
-      await portInput.setValue("5432");
-
-      const userInput = await $("#conn-user");
-      await userInput.clearValue();
-      await userInput.setValue("testuser");
-
-      const passwordInput = await $("#conn-password");
-      await passwordInput.setValue("testpass");
-
-      const dbInput = await $("#conn-database");
-      await dbInput.clearValue();
-      await dbInput.setValue("table_view_test");
-
-      const saveBtn = await $("button=Save");
-      await saveBtn.click();
-
-      await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
-    }
-
-    const publicSchemaCheck = await $('[aria-label="public schema"]');
-    let alreadyConnected = false;
-    try {
-      await publicSchemaCheck.waitForDisplayed({ timeout: 3000 });
-      alreadyConnected = true;
-    } catch {
-      alreadyConnected = false;
-    }
-
-    if (!alreadyConnected) {
-      const connItem = await $('[aria-label^="Test PG"]');
-      await connItem.waitForDisplayed({ timeout: 5000 });
-      await connItem.doubleClick();
-
-      const publicSchema = await $('[aria-label="public schema"]');
-      await publicSchema.waitForDisplayed({ timeout: 15000 });
-    }
+    await openTestPgWorkspace();
   });
 
   it("shows data grid with real values when table is clicked", async () => {

@@ -1,7 +1,13 @@
 import { expect } from "@wdio/globals";
+import { ensureHomeScreen } from "./_helpers";
 
 describe("Database Connection Flow", () => {
-  it("creates a PostgreSQL connection via the dialog", async () => {
+  it("creates a PostgreSQL connection via the dialog (from Home, sprint 125)", async () => {
+    // Sprint 125 — connection management now lives on the Home screen. The
+    // New Connection button is rendered in the Home header strip; the
+    // dialog flow itself is unchanged.
+    await ensureHomeScreen();
+
     // 1. Open the New Connection dialog
     const newBtn = await $('[aria-label="New Connection"]');
     await newBtn.waitForDisplayed({ timeout: 10000 });
@@ -42,28 +48,35 @@ describe("Database Connection Flow", () => {
     // 5. Verify dialog closed
     await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
 
-    // 6. Verify connection appears in sidebar
+    // 6. Verify connection appears in the Home screen's ConnectionList
     const connItem = await $('[aria-label^="Test PG"]');
     await connItem.waitForDisplayed({ timeout: 5000 });
     expect(await connItem.getAttribute("aria-label")).toContain("Test PG");
   });
 
-  it("connects to PostgreSQL and shows schemas", async () => {
-    // Double-click on the connection item to connect
+  it("connects to PostgreSQL and shows schemas (Home → Workspace swap)", async () => {
+    // Sprint 125 — double-click on the Home connection list item connects
+    // and swaps the app shell to the Workspace screen. The schema tree is
+    // rendered by Workspace's Sidebar.
+    await ensureHomeScreen();
+
     const connItem = await $('[aria-label^="Test PG"]');
     await connItem.waitForDisplayed({ timeout: 5000 });
     await connItem.doubleClick();
 
+    // Workspace has mounted — the back button is the Workspace sentinel.
+    const back = await $('[aria-label="Back to connections"]');
+    await back.waitForDisplayed({ timeout: 15000 });
+
     // Wait for connection to establish and schemas to load.
-    // The "public" schema should appear with an aria-label.
     const publicSchema = await $('[aria-label="public schema"]');
     await publicSchema.waitForDisplayed({ timeout: 15000 });
     expect(await publicSchema.isDisplayed()).toBe(true);
   });
 
   it("opens a query tab from the sidebar header New Query button", async () => {
-    // After the previous test connected and auto-switched to schemas mode,
-    // the sidebar header renders a "New Query Tab" button. Click it.
+    // After the previous test connected and swapped to Workspace, the
+    // Workspace Sidebar header renders a "New Query Tab" button. Click it.
     const newQueryBtn = await $('[aria-label="New Query Tab"]');
     await newQueryBtn.waitForDisplayed({ timeout: 5000 });
     await newQueryBtn.click();

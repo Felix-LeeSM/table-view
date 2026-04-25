@@ -1,4 +1,5 @@
 import { expect } from "@wdio/globals";
+import { ensureHomeScreen, ensureTestPgConnection } from "./_helpers";
 
 /**
  * Phase C-2 — ImportExportDialog smoke tests.
@@ -7,54 +8,11 @@ import { expect } from "@wdio/globals";
  * "Generate JSON" must NOT freeze the app, and verifies the export payload
  * is well-formed and password-free.
  *
- * The dialog is reachable from the Sidebar's connections-mode header only.
+ * Sprint 125 — the Import/Export entry point now lives on the Home screen
+ * (paradigm-agnostic connection management). These tests start from Home;
+ * a previous spec that left the user inside the Workspace will be returned
+ * to Home by `ensureHomeScreen` before the dialog is opened.
  */
-
-async function ensureConnectionsMode() {
-  const tab = await $('[aria-label="Connections mode"]');
-  await tab.waitForDisplayed({ timeout: 10000 });
-  const selected = await tab.getAttribute("aria-selected");
-  if (selected !== "true") {
-    await tab.click();
-  }
-}
-
-/** Create the standard Test PG connection if it doesn't already exist. */
-async function ensureTestPgConnection() {
-  await ensureConnectionsMode();
-  const existing = await $('[aria-label^="Test PG"]');
-  try {
-    await existing.waitForExist({ timeout: 5000 });
-    return;
-  } catch {
-    // fall through to create
-  }
-
-  const newBtn = await $('[aria-label="New Connection"]');
-  await newBtn.waitForDisplayed({ timeout: 10000 });
-  await newBtn.click();
-
-  const dialog = await $('[role="dialog"]');
-  await dialog.waitForDisplayed({ timeout: 5000 });
-
-  await (await $("#conn-name")).setValue("Test PG");
-  const hostInput = await $("#conn-host");
-  await hostInput.clearValue();
-  await hostInput.setValue("localhost");
-  const portInput = await $("#conn-port");
-  await portInput.clearValue();
-  await portInput.setValue("5432");
-  const userInput = await $("#conn-user");
-  await userInput.clearValue();
-  await userInput.setValue("testuser");
-  await (await $("#conn-password")).setValue("testpass");
-  const dbInput = await $("#conn-database");
-  await dbInput.clearValue();
-  await dbInput.setValue("table_view_test");
-
-  await (await $("button=Save")).click();
-  await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
-}
 
 async function openImportExportDialog() {
   const btn = await $('[aria-label="Import / Export"]');
@@ -85,6 +43,10 @@ async function closeAnyDialogIfOpen() {
 describe("Connection Import/Export", () => {
   beforeEach(async () => {
     await closeAnyDialogIfOpen();
+    // Sprint 125 — return to Home before each test so the
+    // [aria-label="Import / Export"] button is reachable. ensureTestPgConnection
+    // also lives on Home and is idempotent.
+    await ensureHomeScreen();
     await ensureTestPgConnection();
   });
 

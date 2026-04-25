@@ -1,4 +1,5 @@
 import { expect } from "@wdio/globals";
+import { openTestPgWorkspace } from "./_helpers";
 
 /**
  * Sprint 61: raw query result editing.
@@ -7,79 +8,9 @@ import { expect } from "@wdio/globals";
  * for SELECT results, plus the cell detail dialog now reachable from
  * raw query rows.
  *
- * Assumes the connection from earlier specs (`Test PG` against
- * `table_view_test`) is already configured by the schema-tree / data-grid
- * specs that run before this one.
+ * Sprint 125 — every test enters via `openTestPgWorkspace`, which navigates
+ * Home → Open before interacting with the schema tree / query editor.
  */
-
-async function ensureConnectionsMode() {
-  const tab = await $('[aria-label="Connections mode"]');
-  await tab.waitForDisplayed({ timeout: 5000 });
-  const selected = await tab.getAttribute("aria-selected");
-  if (selected !== "true") {
-    await tab.click();
-  }
-}
-
-async function ensureConnected() {
-  await ensureConnectionsMode();
-  const existing = await $('[aria-label^="Test PG"]');
-  let exists = false;
-  try {
-    await existing.waitForExist({ timeout: 5000 });
-    exists = true;
-  } catch {
-    exists = false;
-  }
-
-  if (!exists) {
-    const newBtn = await $('[aria-label="New Connection"]');
-    await newBtn.waitForDisplayed({ timeout: 10000 });
-    await newBtn.click();
-
-    const dialog = await $('[role="dialog"]');
-    await dialog.waitForDisplayed({ timeout: 5000 });
-
-    await (await $("#conn-name")).setValue("Test PG");
-
-    const hostInput = await $("#conn-host");
-    await hostInput.clearValue();
-    await hostInput.setValue("localhost");
-
-    const portInput = await $("#conn-port");
-    await portInput.clearValue();
-    await portInput.setValue("5432");
-
-    const userInput = await $("#conn-user");
-    await userInput.clearValue();
-    await userInput.setValue("testuser");
-
-    await (await $("#conn-password")).setValue("testpass");
-
-    const dbInput = await $("#conn-database");
-    await dbInput.clearValue();
-    await dbInput.setValue("table_view_test");
-
-    await (await $("button=Save")).click();
-    await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
-  }
-
-  // Connect by double-clicking if not already connected.
-  const publicSchema = await $('[aria-label="public schema"]');
-  let connected = false;
-  try {
-    await publicSchema.waitForDisplayed({ timeout: 3000 });
-    connected = true;
-  } catch {
-    connected = false;
-  }
-  if (!connected) {
-    const conn = await $('[aria-label^="Test PG"]');
-    await conn.waitForDisplayed({ timeout: 5000 });
-    await conn.doubleClick();
-    await publicSchema.waitForDisplayed({ timeout: 15000 });
-  }
-}
 
 async function openNewQueryTab() {
   const newQueryBtn = await $('[aria-label="New Query Tab"]');
@@ -111,7 +42,7 @@ async function typeQueryAndRun(sql: string) {
 
 describe("Raw query result editing (Sprint 61)", () => {
   beforeEach(async () => {
-    await ensureConnected();
+    await openTestPgWorkspace();
   });
 
   it("shows Read-only banner for a SELECT without FROM", async () => {

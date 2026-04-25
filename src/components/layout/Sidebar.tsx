@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  ArrowDownUp,
-  Sun,
-  Moon,
-  Monitor,
-  Plus,
-  FolderPlus,
-} from "lucide-react";
+import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
@@ -20,13 +13,9 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import ConnectionDialog from "@components/connection/ConnectionDialog";
-import ConnectionList from "@components/connection/ConnectionList";
-import GroupDialog from "@components/connection/GroupDialog";
-import ImportExportDialog from "@components/connection/ImportExportDialog";
 import SchemaPanel from "@components/schema/SchemaPanel";
 import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
-import SidebarModeToggle, { type SidebarMode } from "./SidebarModeToggle";
 
 const WIDTH_KEY = "table-view.sidebar.width";
 const MIN_WIDTH = 220;
@@ -46,11 +35,22 @@ function readWidth(): number {
   }
 }
 
+/**
+ * Workspace Sidebar (sprint 125+).
+ *
+ * Sprint 125 removed the legacy connections-mode branch (and the
+ * `SidebarModeToggle` mount it depended on); connection management now lives
+ * on the dedicated `HomePage`. This component is now exclusively the
+ * schema/work surface column shown on `WorkspacePage`.
+ *
+ * The `connection-added` window event still flips focus to the newly-saved
+ * connection so a user who creates a new connection while inside the
+ * workspace (via Cmd+N) sees that connection's schema tree on the next
+ * Open. The mode-toggling fallback that the legacy Sidebar performed is
+ * unnecessary now that there is no second mode.
+ */
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
-  const [showImportExport, setShowImportExport] = useState(false);
-  const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
-  const [mode, setMode] = useState<SidebarMode>("connections");
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
@@ -75,7 +75,6 @@ export default function Sidebar() {
   useEffect(() => {
     if (activeTabConnId && activeTabConnId !== focusedConnId) {
       setFocusedConn(activeTabConnId);
-      setMode("schemas");
     }
   }, [activeTabConnId, focusedConnId, setFocusedConn]);
 
@@ -94,21 +93,6 @@ export default function Sidebar() {
       setFocusedConn(firstConnected?.id ?? null);
     }
   }, [connections, activeStatuses, focusedConnId, setFocusedConn]);
-
-  // Single-click: focus only, and flip to schemas only when the connection is
-  // already connected. For disconnected items we stay in the list so the
-  // user's double-click (to connect) can't race against an immediate unmount.
-  const handleConnectionSelect = (id: string) => {
-    setFocusedConn(id);
-    if (activeStatuses[id]?.type === "connected") {
-      setMode("schemas");
-    }
-  };
-
-  const handleConnectionActivate = (id: string) => {
-    setFocusedConn(id);
-    setMode("schemas");
-  };
 
   const {
     size: sidebarWidth,
@@ -142,78 +126,13 @@ export default function Sidebar() {
     return () => window.removeEventListener("new-connection", handler);
   }, []);
 
-  // When a new connection is saved, surface it to the user by flipping to
-  // connections mode so the new item is visible immediately.
-  useEffect(() => {
-    const handler = () => setMode("connections");
-    window.addEventListener("connection-added", handler);
-    return () => window.removeEventListener("connection-added", handler);
-  }, []);
+  // The legacy `connection-added` flip-to-connections-mode behaviour was
+  // removed in sprint 125; new-connection creation is now done from
+  // HomePage. The `connections` effect above takes care of focus healing
+  // when the new connection lands in the store.
 
   const selectedConnected =
     !!focusedConnId && activeStatuses[focusedConnId]?.type === "connected";
-
-  // Right-side action buttons — each visible only in the mode where it makes sense:
-  //   - schemas mode: "+ Query" against the selected connection
-  //   - connections mode: Import / Export of connection definitions, New Connection
-  const renderActionButtons = () => (
-    <div className="flex items-center gap-1">
-      {mode === "schemas" && (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-          aria-label="New Query Tab"
-          title="New Query Tab"
-          disabled={!selectedConnected}
-          onClick={() => {
-            if (selectedConnected && focusedConnId) {
-              addQueryTab(focusedConnId);
-            }
-          }}
-        >
-          <Plus />
-          Query
-        </Button>
-      )}
-      {mode === "connections" && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-          aria-label="Import / Export"
-          title="Import / Export"
-          onClick={() => setShowImportExport(true)}
-        >
-          <ArrowDownUp />
-        </Button>
-      )}
-      {mode === "connections" && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-          aria-label="New Group"
-          title="New Group"
-          onClick={() => setShowNewGroupDialog(true)}
-        >
-          <FolderPlus />
-        </Button>
-      )}
-      {mode === "connections" && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-          aria-label="New Connection"
-          title="New Connection"
-          onClick={() => setShowNewDialog(true)}
-        >
-          <Plus />
-        </Button>
-      )}
-    </div>
-  );
 
   return (
     <>
@@ -227,40 +146,42 @@ export default function Sidebar() {
           <LogoWordmark className="h-7 w-auto" />
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex items-center border-b border-border px-2 py-2">
-          <SidebarModeToggle mode={mode} onChange={setMode} />
-        </div>
-
-        {/* Header strip — shows the connection name (schemas) or mode label
-            (connections), with contextual action buttons on the right.
-            data-testid is always rendered so e2e tests have a stable sentinel. */}
+        {/* Header strip — connection name + "+ Query" action. data-testid is
+            kept stable for e2e tests (`sidebar-connection-header`). */}
         <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
           <span
             data-testid="sidebar-connection-header"
             className="block truncate text-xs font-semibold text-foreground"
           >
-            {mode === "schemas"
-              ? focusedConnId
-                ? (connections.find((c) => c.id === focusedConnId)?.name ??
-                  "Schemas")
-                : "Schemas"
-              : "Connections"}
+            {focusedConnId
+              ? (connections.find((c) => c.id === focusedConnId)?.name ??
+                "Schemas")
+              : "Schemas"}
           </span>
-          {renderActionButtons()}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+              aria-label="New Query Tab"
+              title="New Query Tab"
+              disabled={!selectedConnected}
+              onClick={() => {
+                if (selectedConnected && focusedConnId) {
+                  addQueryTab(focusedConnId);
+                }
+              }}
+            >
+              <Plus />
+              Query
+            </Button>
+          </div>
         </div>
 
-        {/* Body — exclusive view */}
+        {/* Body — schemas only. The connections-mode branch was removed in
+            sprint 125 (now lives on HomePage). */}
         <div className="flex flex-1 flex-col overflow-auto">
-          {mode === "connections" ? (
-            <ConnectionList
-              selectedId={focusedConnId}
-              onSelect={handleConnectionSelect}
-              onActivate={handleConnectionActivate}
-            />
-          ) : (
-            <SchemaPanel selectedId={focusedConnId} />
-          )}
+          <SchemaPanel selectedId={focusedConnId} />
         </div>
 
         {/* Theme picker footer */}
@@ -303,14 +224,6 @@ export default function Sidebar() {
 
       {showNewDialog && (
         <ConnectionDialog onClose={() => setShowNewDialog(false)} />
-      )}
-
-      {showImportExport && (
-        <ImportExportDialog onClose={() => setShowImportExport(false)} />
-      )}
-
-      {showNewGroupDialog && (
-        <GroupDialog onClose={() => setShowNewGroupDialog(false)} />
       )}
     </>
   );

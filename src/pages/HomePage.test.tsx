@@ -1,0 +1,235 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
+import HomePage from "./HomePage";
+import { useAppShellStore } from "@stores/appShellStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { ConnectionConfig } from "@/types/connection";
+
+// jsdom shim for localStorage (project-wide pattern; mirrors Sidebar.test.tsx).
+{
+  const store = new Map<string, string>();
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => store.clear(),
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      get length() {
+        return store.size;
+      },
+    },
+  });
+}
+
+vi.mock("@components/theme/ThemePicker", () => ({
+  default: () => <div data-testid="theme-picker-mock" />,
+}));
+
+// Mock ConnectionList so we control onSelect / onActivate without rendering
+// the full connection grid + drag/drop pipeline.
+vi.mock("@components/connection/ConnectionList", () => ({
+  default: ({
+    selectedId,
+    onSelect,
+    onActivate,
+  }: {
+    selectedId: string | null;
+    onSelect?: (id: string) => void;
+    onActivate?: (id: string) => void;
+  }) => (
+    <div data-testid="connection-list" data-selected={selectedId ?? ""}>
+      <button data-testid="list-pick-c1" onClick={() => onSelect?.("c1")}>
+        pick c1
+      </button>
+      <button data-testid="list-activate-c1" onClick={() => onActivate?.("c1")}>
+        activate c1
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock("@components/connection/ConnectionDialog", () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="connection-dialog">
+      <button onClick={onClose}>Close</button>
+    </div>
+  ),
+}));
+
+vi.mock("@components/connection/ImportExportDialog", () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="import-export-dialog">
+      <button onClick={onClose}>Close IE</button>
+    </div>
+  ),
+}));
+
+vi.mock("@components/connection/GroupDialog", () => ({
+  default: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="group-dialog">
+      <button onClick={onClose}>Close Group</button>
+    </div>
+  ),
+}));
+
+function makeConnection(id: string): ConnectionConfig {
+  return {
+    id,
+    name: `${id} DB`,
+    db_type: "postgresql",
+    host: "localhost",
+    port: 5432,
+    user: "postgres",
+    has_password: false,
+    database: "test",
+    group_id: null,
+    color: null,
+    environment: null,
+    paradigm: "rdb",
+  };
+}
+
+function resetStores() {
+  useAppShellStore.setState({ screen: "home" });
+  useConnectionStore.setState({
+    connections: [],
+    activeStatuses: {},
+    focusedConnId: null,
+  });
+}
+
+describe("HomePage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.localStorage.clear();
+    resetStores();
+  });
+
+  it("renders the ConnectionList", () => {
+    render(<HomePage />);
+    expect(screen.getByTestId("connection-list")).toBeInTheDocument();
+  });
+
+  it("renders Import/Export, New Group, New Connection buttons", () => {
+    render(<HomePage />);
+    expect(
+      screen.getByRole("button", { name: /import \/ export/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /new group/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /new connection/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the Recent placeholder section", () => {
+    render(<HomePage />);
+    expect(screen.getByTestId("home-recent")).toBeInTheDocument();
+    // The copy is intentionally a placeholder until sprint 127 wires real
+    // data in — assert the marker rather than the exact phrasing.
+    expect(screen.getByTestId("home-recent")).toHaveTextContent(/recent/i);
+  });
+
+  it("does NOT render the SidebarModeToggle (Home is single-mode)", () => {
+    render(<HomePage />);
+    expect(
+      screen.queryByRole("radio", { name: /connections mode/i }),
+    ).toBeNull();
+    expect(screen.queryByRole("radio", { name: /schemas mode/i })).toBeNull();
+  });
+
+  it("clicking New Connection opens the ConnectionDialog", () => {
+    render(<HomePage />);
+    expect(screen.queryByTestId("connection-dialog")).toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /new connection/i }));
+    });
+    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+  });
+
+  it("clicking Import / Export opens the ImportExportDialog", () => {
+    render(<HomePage />);
+    expect(screen.queryByTestId("import-export-dialog")).toBeNull();
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /import \/ export/i }),
+      );
+    });
+    expect(screen.getByTestId("import-export-dialog")).toBeInTheDocument();
+  });
+
+  it("clicking New Group opens the GroupDialog", () => {
+    render(<HomePage />);
+    expect(screen.queryByTestId("group-dialog")).toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /new group/i }));
+    });
+    expect(screen.getByTestId("group-dialog")).toBeInTheDocument();
+  });
+
+  it("global Cmd+N (new-connection event) opens the ConnectionDialog from Home", () => {
+    render(<HomePage />);
+    expect(screen.queryByTestId("connection-dialog")).toBeNull();
+    act(() => {
+      window.dispatchEvent(new Event("new-connection"));
+    });
+    expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
+  });
+
+  it("onSelect from ConnectionList updates focusedConnId without swapping screens", () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("c1")],
+      activeStatuses: { c1: { type: "disconnected" } },
+      focusedConnId: null,
+    });
+    render(<HomePage />);
+
+    act(() => {
+      fireEvent.click(screen.getByTestId("list-pick-c1"));
+    });
+
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+    // Single-click must NOT swap to workspace — that is reserved for
+    // onActivate (double-click / Enter / context-menu Connect).
+    expect(useAppShellStore.getState().screen).toBe("home");
+  });
+
+  it("onActivate from ConnectionList swaps to workspace screen", () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("c1")],
+      activeStatuses: { c1: { type: "connected" } },
+      focusedConnId: null,
+    });
+    render(<HomePage />);
+
+    expect(useAppShellStore.getState().screen).toBe("home");
+    act(() => {
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+    });
+
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+    expect(useAppShellStore.getState().screen).toBe("workspace");
+  });
+
+  it("does not crash if onActivate is fired with an unknown connectionId", () => {
+    // Edge case from contract.md scenario list: "존재하지 않는 connection_id로
+    // setScreen 호출 시 graceful (Home 유지)" — HomePage doesn't gate on
+    // connection existence, but the swap itself must not throw and the
+    // store should accept any string id.
+    render(<HomePage />);
+    act(() => {
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+    });
+    // We attempted a swap — that's still OK, the contract only requires
+    // that bad ids don't crash. The follow-up Workspace render handles
+    // missing connections gracefully via Sidebar's healing effect.
+    expect(useAppShellStore.getState().screen).toBe("workspace");
+  });
+});

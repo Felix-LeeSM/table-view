@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
-import Sidebar from "./components/layout/Sidebar";
-import MainArea from "./components/layout/MainArea";
+import HomePage from "./pages/HomePage";
+import WorkspacePage from "./pages/WorkspacePage";
 import QuickOpen from "./components/shared/QuickOpen";
 import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
+import { useAppShellStore } from "./stores/appShellStore";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
@@ -273,11 +274,16 @@ export default function App() {
     return () => window.removeEventListener("quickopen-function", handler);
   }, []);
 
+  // Sprint 125 — appShell routing. Home and Workspace are full-screen siblings;
+  // the user toggles between them via Open (Home -> Workspace) and the
+  // [← Connections] button (Workspace -> Home). Tab state lives in tabStore
+  // and is preserved across swaps.
+  const screen = useAppShellStore((s) => s.screen);
+
   return (
     <ErrorBoundary>
       <div className="flex h-screen w-screen overflow-hidden bg-background">
-        <Sidebar />
-        <MainArea />
+        {screen === "home" ? <HomePage /> : <WorkspacePage />}
         <QuickOpen />
         <ShortcutCheatsheet />
         <QueryLog />

@@ -1,4 +1,5 @@
 import { expect } from "@wdio/globals";
+import { openTestPgWorkspace } from "./_helpers";
 
 /**
  * Sprint-124 — three regression guards in one spec:
@@ -18,78 +19,10 @@ import { expect } from "@wdio/globals";
  *      a single execution produces a Radix `TabsList` with
  *      `aria-label="Statement results"` and one trigger per statement.
  *
- * The spec assumes the `Test PG` connection from earlier specs is already
- * configured (or rebuilds it locally). Each test is self-contained.
+ * Sprint 125 — entry flow now goes through the Home → Open swap. The
+ * `Test PG` connection is created on Home (or reused if already present)
+ * and we land in Workspace before any tab/sidebar interaction.
  */
-
-async function ensureConnectionsMode() {
-  const tab = await $('[aria-label="Connections mode"]');
-  await tab.waitForDisplayed({ timeout: 10000 });
-  const selected = await tab.getAttribute("aria-selected");
-  if (selected !== "true") {
-    await tab.click();
-  }
-}
-
-async function ensureConnected() {
-  await ensureConnectionsMode();
-
-  const existing = await $('[aria-label^="Test PG"]');
-  let exists = false;
-  try {
-    await existing.waitForExist({ timeout: 5000 });
-    exists = true;
-  } catch {
-    exists = false;
-  }
-
-  if (!exists) {
-    const newBtn = await $('[aria-label="New Connection"]');
-    await newBtn.waitForDisplayed({ timeout: 10000 });
-    await newBtn.click();
-
-    const dialog = await $('[role="dialog"]');
-    await dialog.waitForDisplayed({ timeout: 5000 });
-
-    await (await $("#conn-name")).setValue("Test PG");
-
-    const hostInput = await $("#conn-host");
-    await hostInput.clearValue();
-    await hostInput.setValue("localhost");
-
-    const portInput = await $("#conn-port");
-    await portInput.clearValue();
-    await portInput.setValue("5432");
-
-    const userInput = await $("#conn-user");
-    await userInput.clearValue();
-    await userInput.setValue("testuser");
-
-    await (await $("#conn-password")).setValue("testpass");
-
-    const dbInput = await $("#conn-database");
-    await dbInput.clearValue();
-    await dbInput.setValue("table_view_test");
-
-    await (await $("button=Save")).click();
-    await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
-  }
-
-  const publicSchema = await $('[aria-label="public schema"]');
-  let connected = false;
-  try {
-    await publicSchema.waitForDisplayed({ timeout: 3000 });
-    connected = true;
-  } catch {
-    connected = false;
-  }
-  if (!connected) {
-    const conn = await $('[aria-label^="Test PG"]');
-    await conn.waitForDisplayed({ timeout: 5000 });
-    await conn.doubleClick();
-    await publicSchema.waitForDisplayed({ timeout: 15000 });
-  }
-}
 
 /**
  * Dispatch a Ctrl-modified key from the document level. Mirrors the helper
@@ -128,7 +61,7 @@ async function ensureCategoryExpanded(selector: string) {
 
 describe("Paradigm cues + global shortcuts (sprint 100/103/123)", () => {
   beforeEach(async () => {
-    await ensureConnected();
+    await openTestPgWorkspace();
   });
 
   it("does not render the MongoDB paradigm marker on RDB tabs (sprint 123)", async () => {
@@ -203,8 +136,8 @@ describe("Paradigm cues + global shortcuts (sprint 100/103/123)", () => {
 
   it("multi-statement SELECT renders a Statement results tablist (sprint 100)", async () => {
     // Open a fresh query tab. The Sidebar header button's accessible name
-    // is "New Query Tab" (Sidebar.tsx:166) — keep this in sync to avoid
-    // the missing-element flake we hit in sprint-124's first CI run.
+    // is "New Query Tab" (Sidebar.tsx) — keep this in sync to avoid the
+    // missing-element flake we hit in sprint-124's first CI run.
     const newQueryBtn = await $('[aria-label="New Query Tab"]');
     await newQueryBtn.waitForDisplayed({ timeout: 5000 });
     await newQueryBtn.click();
@@ -232,7 +165,7 @@ describe("Paradigm cues + global shortcuts (sprint 100/103/123)", () => {
     await runBtn.click();
 
     // The multi-statement view mounts a Radix `TabsList` whose accessible
-    // name is "Statement results" (see QueryResultGrid.tsx:345).
+    // name is "Statement results" (see QueryResultGrid.tsx).
     const statementList = await $(
       '[role="tablist"][aria-label="Statement results"]',
     );
