@@ -1,15 +1,8 @@
 import { useState } from "react";
-import { Check, Copy, Download, Upload, X } from "lucide-react";
+import { Check, Copy, Download, Upload } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@components/ui/dialog";
+import TabsDialog from "@components/ui/dialog/TabsDialog";
 import {
   exportConnections,
   importConnections,
@@ -22,6 +15,10 @@ interface ImportExportDialogProps {
   initialTab?: "export" | "import";
 }
 
+/**
+ * Sprint 96: migrated to the `TabsDialog` preset. The Export/Import panes
+ * keep their bodies; the preset owns the title + tab list + dialog shell.
+ */
 export default function ImportExportDialog({
   onClose,
   initialTab = "export",
@@ -29,63 +26,36 @@ export default function ImportExportDialog({
   const [tab, setTab] = useState<"export" | "import">(initialTab);
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        className="w-dialog-lg bg-secondary p-0"
-        showCloseButton={false}
-      >
-        <div className="w-dialog-lg rounded-lg bg-secondary shadow-xl">
-          {/* Header — DialogHeader is row-based by default (sprint-91). */}
-          <DialogHeader className="border-b border-border px-4 py-3">
-            <DialogTitle className="text-sm font-semibold text-foreground">
-              Import / Export Connections
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              Move connections between machines as JSON. Passwords are never
-              included.
-            </DialogDescription>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onClose}
-              aria-label="Close dialog"
-            >
-              <X />
-            </Button>
-          </DialogHeader>
-
-          <div className="border-b border-border px-2 py-1.5">
-            <ToggleGroup
-              type="single"
-              value={tab}
-              onValueChange={(v) => v && setTab(v as "export" | "import")}
-              className="w-full bg-transparent border-0 p-0 gap-1"
-            >
-              <ToggleGroupItem
-                value="export"
-                className="flex-1 gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm"
-              >
-                <Download size={12} /> Export
-              </ToggleGroupItem>
-              <ToggleGroupItem
-                value="import"
-                className="flex-1 gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm"
-              >
-                <Upload size={12} /> Import
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-
-          <div className="px-4 py-4">
-            {tab === "export" ? (
-              <ExportPanel />
-            ) : (
-              <ImportPanel onImported={onClose} />
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <TabsDialog
+      title="Import / Export Connections"
+      description="Move connections between machines as JSON. Passwords are never included."
+      className="w-dialog-lg bg-secondary"
+      onClose={onClose}
+      value={tab}
+      onTabChange={(v) => setTab(v as "export" | "import")}
+      tabs={[
+        {
+          value: "export",
+          label: "Export",
+          triggerNode: (
+            <span className="inline-flex items-center gap-1.5">
+              <Download size={12} /> Export
+            </span>
+          ),
+          content: <ExportPanel />,
+        },
+        {
+          value: "import",
+          label: "Import",
+          triggerNode: (
+            <span className="inline-flex items-center gap-1.5">
+              <Upload size={12} /> Import
+            </span>
+          ),
+          content: <ImportPanel onImported={onClose} />,
+        },
+      ]}
+    />
   );
 }
 

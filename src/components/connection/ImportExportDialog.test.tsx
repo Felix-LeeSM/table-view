@@ -316,7 +316,9 @@ describe("ImportExportDialog", () => {
       expect(screen.queryByLabelText("Import JSON input")).toBeNull();
 
       await act(async () => {
-        fireEvent.click(screen.getByRole("radio", { name: /import/i }));
+        // Sprint-96: TabsDialog renders Radix Tabs (role="tab") — Radix
+        // Tabs activates on mouseDown rather than synthetic click.
+        fireEvent.mouseDown(screen.getByRole("tab", { name: /import/i }));
       });
       expect(screen.getByLabelText("Import JSON input")).toBeInTheDocument();
     });

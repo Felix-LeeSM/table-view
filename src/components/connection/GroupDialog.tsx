@@ -1,14 +1,6 @@
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@components/ui/dialog";
+import FormDialog from "@components/ui/dialog/FormDialog";
 import { Input } from "@components/ui/input";
-import { Button } from "@components/ui/button";
 import { CONNECTION_COLOR_PALETTE } from "@lib/connectionColor";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionGroup } from "@/types/connection";
@@ -24,9 +16,9 @@ interface GroupDialogProps {
  * - Name is required.
  * - Color is optional: picked from the shared connection palette (Sprint 78
  *   keeps the palette stable — no new hex values).
- * - Reuses the `Dialog` primitive that the rest of the app already uses
- *   (delete-connection confirmation, connection dialog) so the dialog shell
- *   behaves consistently across the surface.
+ * - Sprint 96: migrated to the `FormDialog` preset (Layer 2). The preset
+ *   owns the title + body + submit/cancel footer boilerplate; this file
+ *   keeps the form-specific bits (palette radio group, name validation).
  */
 export default function GroupDialog({ group, onClose }: GroupDialogProps) {
   const isEditing = !!group;
@@ -65,112 +57,89 @@ export default function GroupDialog({ group, onClose }: GroupDialogProps) {
   };
 
   return (
-    <Dialog
-      open
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
+    <FormDialog
+      title={isEditing ? "Edit Group" : "New Group"}
+      description={
+        isEditing
+          ? "Rename this group or change its color accent."
+          : "Create a group to organize your connections. Pick a color to make it easy to spot."
+      }
+      className="w-96 bg-secondary p-4"
+      onSubmit={handleSave}
+      onCancel={onClose}
+      submitLabel={isEditing ? "Save" : "Create Group"}
+      isSubmitting={saving}
+      submitDisabled={!name.trim()}
     >
-      <DialogContent className="w-96 bg-secondary p-4" showCloseButton={false}>
-        {/* Stacked title + description — override the row-based default
-            (sprint-91) since this header has no inline close button. */}
-        <DialogHeader className="flex-col items-start justify-start">
-          <DialogTitle className="text-sm font-semibold text-foreground">
-            {isEditing ? "Edit Group" : "New Group"}
-          </DialogTitle>
-          <DialogDescription className="mt-1 text-xs text-muted-foreground">
-            {isEditing
-              ? "Rename this group or change its color accent."
-              : "Create a group to organize your connections. Pick a color to make it easy to spot."}
-          </DialogDescription>
-        </DialogHeader>
+      <label
+        className="flex flex-col gap-1 text-xs font-medium text-secondary-foreground"
+        htmlFor="group-dialog-name"
+      >
+        Name
+        <Input
+          id="group-dialog-name"
+          value={name}
+          placeholder="e.g. Production"
+          autoFocus
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleSave();
+            }
+          }}
+        />
+      </label>
 
-        <div className="mt-3 flex flex-col gap-3">
-          <label
-            className="flex flex-col gap-1 text-xs font-medium text-secondary-foreground"
-            htmlFor="group-dialog-name"
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-secondary-foreground">
+          Color (optional)
+        </span>
+        <div
+          role="radiogroup"
+          aria-label="Group color"
+          className="flex flex-wrap items-center gap-2"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={color === null}
+            aria-label="No color"
+            title="No color"
+            onClick={() => setColor(null)}
+            className={`flex h-6 w-6 items-center justify-center rounded-full border border-border bg-muted text-3xs text-muted-foreground transition-shadow ${
+              color === null
+                ? "ring-2 ring-primary ring-offset-1 ring-offset-secondary"
+                : ""
+            }`}
           >
-            Name
-            <Input
-              id="group-dialog-name"
-              value={name}
-              placeholder="e.g. Production"
-              autoFocus
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSave();
-                }
-              }}
+            —
+          </button>
+          {CONNECTION_COLOR_PALETTE.map((swatch) => (
+            <button
+              key={swatch}
+              type="button"
+              role="radio"
+              aria-checked={color === swatch}
+              aria-label={`Color ${swatch}`}
+              title={swatch}
+              onClick={() => setColor(swatch)}
+              className={`h-6 w-6 rounded-full border border-border transition-shadow ${
+                color === swatch
+                  ? "ring-2 ring-primary ring-offset-1 ring-offset-secondary"
+                  : ""
+              }`}
+              style={{ backgroundColor: swatch }}
             />
-          </label>
-
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-secondary-foreground">
-              Color (optional)
-            </span>
-            <div
-              role="radiogroup"
-              aria-label="Group color"
-              className="flex flex-wrap items-center gap-2"
-            >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={color === null}
-                aria-label="No color"
-                title="No color"
-                onClick={() => setColor(null)}
-                className={`flex h-6 w-6 items-center justify-center rounded-full border border-border bg-muted text-3xs text-muted-foreground transition-shadow ${
-                  color === null
-                    ? "ring-2 ring-primary ring-offset-1 ring-offset-secondary"
-                    : ""
-                }`}
-              >
-                —
-              </button>
-              {CONNECTION_COLOR_PALETTE.map((swatch) => (
-                <button
-                  key={swatch}
-                  type="button"
-                  role="radio"
-                  aria-checked={color === swatch}
-                  aria-label={`Color ${swatch}`}
-                  title={swatch}
-                  onClick={() => setColor(swatch)}
-                  className={`h-6 w-6 rounded-full border border-border transition-shadow ${
-                    color === swatch
-                      ? "ring-2 ring-primary ring-offset-1 ring-offset-secondary"
-                      : ""
-                  }`}
-                  style={{ backgroundColor: swatch }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-xs text-destructive" role="alert">
-              {error}
-            </p>
-          )}
+          ))}
         </div>
+      </div>
 
-        <DialogFooter className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-          >
-            {isEditing ? "Save" : "Create Group"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {error && (
+        <p className="text-xs text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+    </FormDialog>
   );
 }

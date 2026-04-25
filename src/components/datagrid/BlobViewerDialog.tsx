@@ -1,11 +1,5 @@
 import { useMemo } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@components/ui/tabs";
+import TabsDialog from "@components/ui/dialog/TabsDialog";
 
 export interface BlobViewerDialogProps {
   open: boolean;
@@ -78,6 +72,10 @@ function tryDecodeText(bytes: Uint8Array): string | null {
   }
 }
 
+/**
+ * Sprint 96: migrated to the `TabsDialog` preset. The hex/text panes own
+ * their bodies; the preset owns the title + tab list + dialog shell.
+ */
 export default function BlobViewerDialog({
   open,
   onOpenChange,
@@ -95,46 +93,54 @@ export default function BlobViewerDialog({
     );
   }, [bytes]);
 
+  if (!open) return null;
+
+  const byteFooter = (
+    <div className="text-xs text-muted-foreground">
+      {bytes.length} byte{bytes.length !== 1 ? "s" : ""}
+    </div>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>
-            BLOB Viewer — <span className="font-mono">{columnName}</span>
-          </DialogTitle>
-        </DialogHeader>
-
-        <Tabs defaultValue="hex">
-          <TabsList className="border-b border-border w-full justify-start rounded-none gap-0">
-            <TabsTrigger value="hex" className="rounded-none">
-              Hex
-            </TabsTrigger>
-            <TabsTrigger value="text" className="rounded-none">
-              Text
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="hex">
-            <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
-              <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre">
-                {bytes.length === 0 ? "(empty)" : hexDump}
-              </pre>
-            </div>
-          </TabsContent>
-          <TabsContent value="text">
-            <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
-              <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre-wrap break-all">
-                {textContent}
-              </pre>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* Footer info */}
-        <div className="text-xs text-muted-foreground">
-          {bytes.length} byte{bytes.length !== 1 ? "s" : ""}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <TabsDialog
+      title={
+        <span>
+          BLOB Viewer — <span className="font-mono">{columnName}</span>
+        </span>
+      }
+      className="sm:max-w-3xl"
+      onClose={() => onOpenChange(false)}
+      defaultTab="hex"
+      tabs={[
+        {
+          value: "hex",
+          label: "Hex",
+          content: (
+            <>
+              <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
+                <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre">
+                  {bytes.length === 0 ? "(empty)" : hexDump}
+                </pre>
+              </div>
+              {byteFooter}
+            </>
+          ),
+        },
+        {
+          value: "text",
+          label: "Text",
+          content: (
+            <>
+              <div className="max-h-[80vh] overflow-auto rounded border border-border bg-muted/30">
+                <pre className="p-3 text-xs leading-5 text-foreground font-mono whitespace-pre-wrap break-all">
+                  {textContent}
+                </pre>
+              </div>
+              {byteFooter}
+            </>
+          ),
+        },
+      ]}
+    />
   );
 }

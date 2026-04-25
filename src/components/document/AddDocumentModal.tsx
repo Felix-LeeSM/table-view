@@ -1,14 +1,6 @@
 import { useState } from "react";
-import { Loader2, Plus, X } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@components/ui/dialog";
-import { Button } from "@components/ui/button";
+import { Loader2, Plus } from "lucide-react";
+import FormDialog from "@components/ui/dialog/FormDialog";
 
 /**
  * Sprint 87 — Add Document modal for the document paradigm.
@@ -25,6 +17,8 @@ import { Button } from "@components/ui/button";
  * - `error` prop lets the parent surface errors from the async insert call
  *   (e.g. a Mongo server rejection) without re-rendering the whole tree.
  * - Esc / Cancel closes via `onCancel`; Radix handles the Esc key.
+ *
+ * Sprint 96: migrated to the `FormDialog` preset.
  */
 export interface AddDocumentModalProps {
   onSubmit: (record: Record<string, unknown>) => void | Promise<void>;
@@ -79,93 +73,62 @@ export default function AddDocumentModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent
-        className="w-dialog-lg bg-background p-0"
-        showCloseButton={false}
+    <FormDialog
+      title="Add Document"
+      description="Insert a new MongoDB document"
+      className="w-dialog-lg bg-background"
+      onSubmit={handleSubmit}
+      onCancel={onCancel}
+      isSubmitting={loading}
+      submitAriaLabel="Submit add document"
+      submitLabel={
+        <>
+          {loading ? <Loader2 className="animate-spin" /> : <Plus />}
+          {loading ? "Inserting..." : "Add"}
+        </>
+      }
+    >
+      <label
+        htmlFor="add-document-textarea"
+        className="text-xs font-medium text-secondary-foreground"
       >
-        <DialogHeader className="sr-only">
-          <DialogTitle>Add Document</DialogTitle>
-          <DialogDescription>Insert a new MongoDB document</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col rounded-lg border border-border bg-background shadow-xl">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h3 className="text-sm font-semibold text-foreground">
-              Add Document
-            </h3>
-            <button
-              type="button"
-              className="rounded p-1 hover:bg-muted"
-              onClick={onCancel}
-              aria-label="Close add document"
-            >
-              <X size={14} />
-            </button>
-          </div>
-          <div className="flex flex-col gap-2 p-4">
-            <label
-              htmlFor="add-document-textarea"
-              className="text-xs font-medium text-secondary-foreground"
-            >
-              Document (JSON)
-            </label>
-            <textarea
-              id="add-document-textarea"
-              aria-label="Document JSON"
-              autoFocus
-              rows={10}
-              className="min-h-48 w-full rounded border border-border bg-secondary p-2 font-mono text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-              value={text}
-              disabled={loading}
-              onChange={(e) => {
-                setText(e.target.value);
-                if (parseError) setParseError(null);
-              }}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-            />
-            <p className="text-2xs text-muted-foreground">
-              Omit the <code className="font-mono">_id</code> field to let
-              MongoDB generate one. Press{" "}
-              <kbd className="rounded bg-secondary px-1 py-0.5">Cmd+Enter</kbd>{" "}
-              to submit.
-            </p>
-            {parseError && (
-              <p role="alert" className="text-xs text-destructive">
-                {parseError}
-              </p>
-            )}
-            {error && !parseError && (
-              <p role="alert" className="text-xs text-destructive">
-                {error}
-              </p>
-            )}
-          </div>
-          <DialogFooter className="border-t border-border px-4 py-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCancel}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSubmit}
-              disabled={loading}
-              aria-label="Submit add document"
-            >
-              {loading ? <Loader2 className="animate-spin" /> : <Plus />}
-              {loading ? "Inserting..." : "Add"}
-            </Button>
-          </DialogFooter>
-        </div>
-      </DialogContent>
-    </Dialog>
+        Document (JSON)
+      </label>
+      <textarea
+        id="add-document-textarea"
+        aria-label="Document JSON"
+        autoFocus
+        rows={10}
+        className="min-h-48 w-full rounded border border-border bg-secondary p-2 font-mono text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+        value={text}
+        disabled={loading}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (parseError) setParseError(null);
+        }}
+        onKeyDown={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+      />
+      <p className="text-2xs text-muted-foreground">
+        Omit the <code className="font-mono">_id</code> field to let MongoDB
+        generate one. Press{" "}
+        <kbd className="rounded bg-secondary px-1 py-0.5">Cmd+Enter</kbd> to
+        submit.
+      </p>
+      {parseError && (
+        <p role="alert" className="text-xs text-destructive">
+          {parseError}
+        </p>
+      )}
+      {error && !parseError && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </FormDialog>
   );
 }

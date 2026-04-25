@@ -1,3 +1,25 @@
+// ---------------------------------------------------------------------------
+// Sprint-96 escape hatch — Layer-1 primitives only (no Layer-2 preset).
+//
+// The other 7 dialogs (`GroupDialog`, `ImportExportDialog`, `BlobViewerDialog`,
+// `CellDetailDialog`, `SqlPreviewDialog`, `MqlPreviewModal`,
+// `AddDocumentModal`) are wrapped by the new `ConfirmDialog` / `FormDialog` /
+// `PreviewDialog` / `TabsDialog` presets. ConnectionDialog stays on the raw
+// Layer-1 primitives (`<Dialog*>` + `<DialogFeedback>` from
+// `@components/ui/dialog`) because it has bespoke needs that no preset
+// captures cleanly:
+//   1. Custom footer split (Test Connection on the left, Cancel + Save on the
+//      right) with `justify-between`.
+//   2. The sprint-92 `expectNodeStable` contract on the
+//      `data-slot="test-feedback"` slot — driven by `DialogFeedback`'s
+//      `slotName` override that callers other than this file don't need.
+//   3. URL-mode toggle + scrollable inner column with `max-h-[60vh]`.
+//   4. Save error rendered alongside (not inside) the test-feedback slot.
+//
+// Per `docs/dialog-conventions.md`, this file is the sole sanctioned escape
+// hatch — new dialogs should pick a preset.
+// ---------------------------------------------------------------------------
+
 import { useState } from "react";
 import type {
   ConnectionConfig,

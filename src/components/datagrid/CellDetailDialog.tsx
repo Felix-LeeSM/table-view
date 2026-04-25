@@ -1,12 +1,7 @@
 import { useState, useMemo } from "react";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@components/ui/dialog";
+import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 
 export interface CellDetailDialogProps {
   open: boolean;
@@ -38,6 +33,10 @@ function renderCellText(data: unknown): string {
  * Detail viewer for a single cell. Useful when the truncated grid value
  * makes long text or nested JSON impossible to read in place. Read-only;
  * users can copy the value to the clipboard with one click.
+ *
+ * Sprint 96: migrated to the `PreviewDialog` preset (read-only viewer
+ * pattern — no confirm footer; the absolute X is the only dismiss
+ * affordance).
  */
 export default function CellDetailDialog({
   open,
@@ -64,52 +63,57 @@ export default function CellDetailDialog({
       });
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>Cell Detail —</span>
-            <span className="font-mono text-primary">{columnName}</span>
-            {dataType && (
-              <span className="text-xs font-normal text-muted-foreground">
-                ({dataType})
-              </span>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="flex items-center justify-between border-b border-border pb-2">
-          <div className="text-xs text-muted-foreground">
-            {charCount.toLocaleString()} char{charCount !== 1 ? "s" : ""} ·{" "}
-            {lineCount.toLocaleString()} line{lineCount !== 1 ? "s" : ""}
+    <PreviewDialog
+      title={
+        <span className="flex items-center gap-2">
+          <span>Cell Detail —</span>
+          <span className="font-mono text-primary">{columnName}</span>
+          {dataType && (
+            <span className="text-xs font-normal text-muted-foreground">
+              ({dataType})
+            </span>
+          )}
+        </span>
+      }
+      className="sm:max-w-3xl"
+      onCancel={() => onOpenChange(false)}
+      preview={
+        <>
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <div className="text-xs text-muted-foreground">
+              {charCount.toLocaleString()} char{charCount !== 1 ? "s" : ""} ·{" "}
+              {lineCount.toLocaleString()} line{lineCount !== 1 ? "s" : ""}
+            </div>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleCopy}
+              aria-label="Copy cell value"
+            >
+              {copied ? (
+                <>
+                  <Check className="text-success" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy />
+                  <span>Copy</span>
+                </>
+              )}
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={handleCopy}
-            aria-label="Copy cell value"
-          >
-            {copied ? (
-              <>
-                <Check className="text-success" />
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy />
-                <span>Copy</span>
-              </>
-            )}
-          </Button>
-        </div>
 
-        <div className="max-h-[70vh] overflow-auto rounded border border-border bg-muted/30">
-          <pre className="whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5 text-foreground">
-            {text === "" ? "(empty string)" : text}
-          </pre>
-        </div>
-      </DialogContent>
-    </Dialog>
+          <div className="max-h-[70vh] overflow-auto rounded border border-border bg-muted/30">
+            <pre className="whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5 text-foreground">
+              {text === "" ? "(empty string)" : text}
+            </pre>
+          </div>
+        </>
+      }
+    />
   );
 }
