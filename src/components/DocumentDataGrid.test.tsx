@@ -84,18 +84,39 @@ const findMock =
     ) => Promise<DocumentQueryResult>
   >();
 
+const insertDocumentMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(() =>
+  Promise.resolve({ ObjectId: "65abcdef0123456789abcdef" }),
+);
+const updateDocumentMock = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
+  Promise.resolve(),
+);
+const deleteDocumentMock = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
+  Promise.resolve(),
+);
+
 vi.mock("@lib/tauri", () => ({
   listMongoDatabases: vi.fn(() => Promise.resolve([])),
   listMongoCollections: vi.fn(() => Promise.resolve([])),
   inferCollectionFields: vi.fn(() => Promise.resolve([])),
   findDocuments: (...args: [string, string, string, unknown?]) =>
     findMock(...args),
+  insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
+  updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
+  deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
 }));
 
 beforeEach(() => {
   __resetDocumentStoreForTests();
   findMock.mockReset();
   findMock.mockResolvedValue(buildResult());
+  insertDocumentMock.mockReset();
+  insertDocumentMock.mockResolvedValue({
+    ObjectId: "65abcdef0123456789abcdef",
+  });
+  updateDocumentMock.mockReset();
+  updateDocumentMock.mockResolvedValue(undefined);
+  deleteDocumentMock.mockReset();
+  deleteDocumentMock.mockResolvedValue(undefined);
 });
 
 function renderGrid() {
@@ -114,8 +135,10 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    expect(screen.getByText(/table_view_test\.users/)).toBeInTheDocument();
-    expect(screen.getByText(/2 docs/)).toBeInTheDocument();
+    // Sprint 87: the DataGridToolbar now drives the header row. It surfaces
+    // the row count (e.g. "2 rows") once data is loaded; before data loads,
+    // it falls back to "{schema}.{table}". Bob still renders in the body.
+    expect(screen.getByText(/2 rows/)).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
@@ -138,7 +161,7 @@ describe("DocumentDataGrid", () => {
     expect(screen.getByText("[0 items]")).toHaveClass("text-muted-foreground");
   });
 
-  it("toggles row selection with aria-selected when the row is clicked", async () => {
+  it("selects a row with aria-selected when the row is clicked", async () => {
     renderGrid();
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
@@ -150,8 +173,9 @@ describe("DocumentDataGrid", () => {
     fireEvent.click(rowAlice as HTMLElement);
     expect(rowAlice).toHaveAttribute("aria-selected", "true");
 
-    // Re-clicking clears the selection (single-select toggle).
-    fireEvent.click(rowAlice as HTMLElement);
+    // Cmd+Click on the same row toggles the selection off (the shared edit
+    // hook's multi-select semantics; plain click keeps the row selected).
+    fireEvent.click(rowAlice as HTMLElement, { metaKey: true });
     expect(rowAlice).toHaveAttribute("aria-selected", "false");
   });
 
@@ -256,5 +280,143 @@ describe("DocumentDataGrid", () => {
       const key = "conn-mongo:table_view_test:users";
       expect(useDocumentStore.getState().queryResults[key]).toBeDefined();
     });
+  });
+
+  // ── Sprint 87 — inline edit + MQL preview + Add Document ──────────────────
+
+  it("double-click on a scalar cell opens the inline editor and records a pending edit", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    const aliceCell = screen.getByText("Alice");
+    fireEvent.doubleClick(aliceCell);
+
+    const editor = await screen.findByLabelText("Editing name");
+    expect(editor).toHaveValue("Alice");
+
+    fireEvent.change(editor, { target: { value: "Ada" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    // The toolbar's pending-edit counter surfaces the accumulated diff.
+    await waitFor(() => {
+      expect(screen.getByText(/1 edit/)).toBeInTheDocument();
+    });
+  });
+
+  it("double-click on a sentinel cell is a no-op — no editor appears", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    const sentinels = screen.getAllByText("{...}");
+    expect(sentinels.length).toBeGreaterThan(0);
+    fireEvent.doubleClick(sentinels[0]!);
+
+    // No input renders for the sentinel cell.
+    expect(screen.queryByLabelText(/Editing /)).not.toBeInTheDocument();
+  });
+
+  it("Commit button opens the MQL preview modal with the generated command lines", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    // Stage an edit: Alice → Ada on the `name` column.
+    fireEvent.doubleClick(screen.getByText("Alice"));
+    const editor = await screen.findByLabelText("Editing name");
+    fireEvent.change(editor, { target: { value: "Ada" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Commit changes" }),
+    );
+
+    const preview = await screen.findByLabelText("MQL commands");
+    expect(preview.textContent).toMatch(/db\.users\.updateOne/);
+    expect(preview.textContent).toMatch(/\$set.*name.*Ada/);
+  });
+
+  it("Execute inside the MQL preview dispatches updateDocument and refetches", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText("Alice"));
+    const editor = await screen.findByLabelText("Editing name");
+    fireEvent.change(editor, { target: { value: "Ada" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Commit changes" }),
+    );
+
+    const execute = await screen.findByRole("button", {
+      name: "Execute MQL commands",
+    });
+    // Clear the initial fetch mock baseline; the refresh after Execute is
+    // what we want to observe.
+    const initialFindCalls = findMock.mock.calls.length;
+    fireEvent.click(execute);
+
+    await waitFor(() => {
+      expect(updateDocumentMock).toHaveBeenCalledTimes(1);
+    });
+    expect(updateDocumentMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      { ObjectId: "65abcdef0123456789abcdef" },
+      { name: "Ada" },
+    );
+    await waitFor(() => {
+      expect(findMock.mock.calls.length).toBeGreaterThan(initialFindCalls);
+    });
+  });
+
+  it("toolbar Add opens the AddDocumentModal and submits via insertDocument", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Add row" }));
+
+    const textarea = await screen.findByLabelText("Document JSON");
+    fireEvent.change(textarea, { target: { value: '{"name":"Carol"}' } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit add document" }),
+    );
+
+    await waitFor(() => {
+      expect(insertDocumentMock).toHaveBeenCalledTimes(1);
+    });
+    expect(insertDocumentMock).toHaveBeenCalledWith(
+      "conn-mongo",
+      "table_view_test",
+      "users",
+      { name: "Carol" },
+    );
+
+    // Modal closes after a successful insert.
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Document JSON")).not.toBeInTheDocument();
+    });
+  });
+
+  it("pending-edit visual cue — edited cell receives the highlight background", async () => {
+    renderGrid();
+
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText("Alice"));
+    const editor = await screen.findByLabelText("Editing name");
+    fireEvent.change(editor, { target: { value: "Ada" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    // The pending cell text becomes "Ada"; its td carries bg-highlight.
+    const pendingText = await screen.findByText("Ada");
+    const td = pendingText.closest("td") as HTMLElement | null;
+    expect(td).not.toBeNull();
+    expect(td!.className).toMatch(/bg-highlight/);
   });
 });
