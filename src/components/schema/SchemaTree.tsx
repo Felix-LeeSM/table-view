@@ -736,6 +736,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                         onKeyDown={(e) => {
                                           if (e.key === "Enter") {
                                             handleClick();
+                                          } else if (
+                                            e.key === "F2" &&
+                                            isTableView &&
+                                            !isView &&
+                                            !isFunc
+                                          ) {
+                                            e.preventDefault();
+                                            handleStartRename(
+                                              item.name,
+                                              schema.name,
+                                            );
                                           }
                                         }}
                                       >
@@ -949,6 +960,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                 }
               }}
               autoFocus
+              onFocus={(e) => e.currentTarget.select()}
               aria-label="New table name"
             />
             {renameError && (

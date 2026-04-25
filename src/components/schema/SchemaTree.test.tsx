@@ -2677,4 +2677,192 @@ describe("SchemaTree", () => {
       expect(tab.objectKind).toBe("view");
     }
   });
+
+  // =========================================================================
+  // Sprint 107 (#TREE-1): F2 keyboard rename on focused table button
+  // =========================================================================
+
+  // AC-01: F2 on focused table button opens Rename Dialog
+  it("opens rename dialog when F2 is pressed on a focused table button", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const tableButton = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.keyDown(tableButton, { key: "F2" });
+    });
+
+    expect(screen.getByText("Rename Table")).toBeInTheDocument();
+    expect(screen.getByText("public.users")).toBeInTheDocument();
+    expect(screen.getByLabelText("New table name")).toBeInTheDocument();
+  });
+
+  // AC-04: F2 on focused view button does NOT open Rename Dialog
+  it("does not open rename dialog when F2 is pressed on a focused view button", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {
+        "conn1:public": [
+          {
+            name: "active_users",
+            schema: "public",
+            definition: "SELECT * FROM users WHERE active = true",
+          },
+        ],
+      },
+      functions: {},
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const viewsCat = screen.getByLabelText("Views in public");
+    await act(async () => {
+      fireEvent.click(viewsCat);
+    });
+
+    const viewButton = screen.getByLabelText("active_users view");
+    await act(async () => {
+      fireEvent.keyDown(viewButton, { key: "F2" });
+    });
+
+    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+  });
+
+  // AC-04: F2 on focused function button does NOT open Rename Dialog
+  it("does not open rename dialog when F2 is pressed on a focused function button", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+      views: {},
+      functions: {
+        "conn1:public": [
+          {
+            name: "calculate_total",
+            schema: "public",
+            arguments: "user_id integer",
+            returnType: "numeric",
+            language: "plpgsql",
+            source: "BEGIN RETURN 0; END",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const functionsCat = screen.getByLabelText("Functions in public");
+    await act(async () => {
+      fireEvent.click(functionsCat);
+    });
+
+    const funcButton = screen.getByLabelText("calculate_total function");
+    await act(async () => {
+      fireEvent.keyDown(funcButton, { key: "F2" });
+    });
+
+    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+  });
+
+  // AC-02: After dialog opens (via F2), input is focused and selection covers full name
+  it("focuses rename input and selects full existing name when opened via F2", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const tableButton = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.keyDown(tableButton, { key: "F2" });
+    });
+
+    const input = screen.getByLabelText("New table name") as HTMLInputElement;
+    // autoFocus + onFocus={select()} should focus the input and select its full
+    // contents so the user can type to overwrite the existing name immediately.
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("users");
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe("users".length);
+  });
+
+  // AC-03: Enter inside the F2-opened dialog input commits the rename
+  it("commits rename on Enter when dialog was opened via F2", async () => {
+    const mockRename = vi.fn().mockResolvedValue(undefined);
+
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+    useSchemaStore.setState({ renameTable: mockRename });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
+    const tableButton = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.keyDown(tableButton, { key: "F2" });
+    });
+
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "people" } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(mockRename).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "people",
+    );
+  });
 });
