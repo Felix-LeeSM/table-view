@@ -283,7 +283,12 @@ describe("ConnectionItem", () => {
 
     render(<ConnectionItem connection={makeConnection()} />);
 
-    expect(screen.getByText("Connection refused")).toBeInTheDocument();
+    const errorSpan = screen.getByText("Connection refused");
+    expect(errorSpan).toBeInTheDocument();
+    // Sprint 110 — error font promoted from text-3xs to text-xs.
+    expect(errorSpan.className).toContain("text-xs");
+    expect(errorSpan.className).toContain("text-destructive");
+    expect(errorSpan).toHaveAttribute("title", "Connection refused");
   });
 
   it("shows full error message on click and hides on close", () => {
@@ -299,7 +304,11 @@ describe("ConnectionItem", () => {
     const expandBtn = screen.getByLabelText("Show error details");
     fireEvent.click(expandBtn);
 
-    expect(screen.getByText("Detailed error message here")).toBeInTheDocument();
+    const expandedSpan = screen.getByText("Detailed error message here");
+    expect(expandedSpan).toBeInTheDocument();
+    // Sprint 110 — expanded variant also promoted to text-xs.
+    expect(expandedSpan.className).toContain("text-xs");
+    expect(expandedSpan.className).toContain("text-destructive");
     expect(screen.getByLabelText("Hide error details")).toBeInTheDocument();
 
     // Click close

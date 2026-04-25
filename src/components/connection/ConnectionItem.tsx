@@ -284,7 +284,10 @@ export default function ConnectionItem({
           aria-label="Show error details"
         >
           <span className="shrink-0 w-2" />
-          <span className="truncate text-3xs text-destructive">
+          <span
+            className="truncate text-xs text-destructive"
+            title={errorMessage}
+          >
             {errorMessage}
           </span>
         </Button>
@@ -292,7 +295,7 @@ export default function ConnectionItem({
       {errorMessage && showErrorDetail && (
         <div className="flex w-full items-start gap-2 px-3 py-0">
           <span className="shrink-0 w-2" />
-          <span className="break-all text-3xs text-destructive">
+          <span className="break-all text-xs text-destructive">
             {errorMessage}
           </span>
           <Button
