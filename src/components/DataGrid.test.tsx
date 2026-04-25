@@ -117,12 +117,14 @@ function resetMockTabStore() {
   mockUpdateTabSorts.mockClear();
   subscribers.clear();
 }
+const mockSetTabDirty = vi.fn();
 function mockTabStoreView() {
   return {
     tabs: mockTabStoreState.tabs,
     activeTabId: mockTabStoreState.activeTabId,
     promoteTab: mockPromoteTab,
     updateTabSorts: mockUpdateTabSorts,
+    setTabDirty: mockSetTabDirty,
   };
 }
 vi.mock("@stores/tabStore", async () => {

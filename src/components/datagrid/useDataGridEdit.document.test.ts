@@ -34,7 +34,11 @@ vi.mock("@stores/schemaStore", () => ({
 
 vi.mock("@stores/tabStore", () => ({
   useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ activeTabId: "tab-1", promoteTab: vi.fn() }),
+    selector({
+      activeTabId: "tab-1",
+      promoteTab: vi.fn(),
+      setTabDirty: vi.fn(),
+    }),
 }));
 
 const HEX_A = "507f1f77bcf86cd799439011";

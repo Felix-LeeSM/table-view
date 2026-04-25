@@ -342,6 +342,9 @@ export function useDataGridEdit({
   const executeQuery = useSchemaStore((s) => s.executeQuery);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
+  // Sprint 97 — surface dirty state to the store so TabBar can render a
+  // dirty dot + gate close-on-dirty without coupling to grid internals.
+  const setTabDirty = useTabStore((s) => s.setTabDirty);
 
   // Cell editing state
   const [editingCell, setEditingCell] = useState<{
@@ -860,6 +863,31 @@ export function useDataGridEdit({
     // open preview with pending commands as "changes still pending" so
     // the commit button / Cmd+S shortcut stay enabled.
     (mqlPreview !== null && mqlPreview.commands.length > 0);
+
+  // Sprint 97 — publish the active tab's dirty state to the tabStore. We
+  // narrow the dirty signal to the three pending diff fields the contract
+  // calls out (`pendingEdits`, `pendingNewRows`, `pendingDeletedRowKeys`)
+  // so an open MQL preview alone does NOT mark the tab dirty — the modal
+  // itself acts as the user's commit affordance for that branch. On unmount
+  // (tab switch) we clear the marker so a stale entry can't survive the
+  // grid teardown.
+  useEffect(() => {
+    if (!activeTabId) return;
+    const isDirty =
+      pendingEdits.size > 0 ||
+      pendingNewRows.length > 0 ||
+      pendingDeletedRowKeys.size > 0;
+    setTabDirty(activeTabId, isDirty);
+    return () => {
+      setTabDirty(activeTabId, false);
+    };
+  }, [
+    activeTabId,
+    pendingEdits,
+    pendingNewRows,
+    pendingDeletedRowKeys,
+    setTabDirty,
+  ]);
 
   // Listen for global Cmd+S commit shortcut. Only the active tab's grid
   // should react — gate on activeTabId being present and pending changes

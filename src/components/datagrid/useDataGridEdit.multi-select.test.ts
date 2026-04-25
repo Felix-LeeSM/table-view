@@ -27,6 +27,7 @@ vi.mock("@stores/tabStore", () => ({
     selector({
       activeTabId: "tab-1",
       promoteTab: vi.fn(),
+      setTabDirty: vi.fn(),
     }),
 }));
 

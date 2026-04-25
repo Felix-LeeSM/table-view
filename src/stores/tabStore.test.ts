@@ -37,7 +37,11 @@ function getQueryTab(state: { tabs: Tab[] }, index: number): QueryTab {
 
 describe("tabStore", () => {
   beforeEach(() => {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useTabStore.setState({
+      tabs: [],
+      activeTabId: null,
+      dirtyTabIds: new Set<string>(),
+    });
   });
 
   it("adds a tab", () => {
@@ -1329,6 +1333,81 @@ describe("tabStore", () => {
           { column: "created_at", direction: "DESC" },
         ]);
       }
+    });
+  });
+
+  // -- Sprint 97: dirty tab tracking ----------------------------------------
+
+  describe("setTabDirty / dirtyTabIds", () => {
+    beforeEach(() => {
+      useTabStore.setState({
+        tabs: [],
+        activeTabId: null,
+        closedTabHistory: [],
+        dirtyTabIds: new Set<string>(),
+      });
+    });
+
+    it("starts empty", () => {
+      expect(useTabStore.getState().dirtyTabIds.size).toBe(0);
+    });
+
+    it("adds the id when setTabDirty(id, true)", () => {
+      useTabStore.getState().setTabDirty("tab-1", true);
+
+      const dirty = useTabStore.getState().dirtyTabIds;
+      expect(dirty.has("tab-1")).toBe(true);
+      expect(dirty.size).toBe(1);
+    });
+
+    it("removes the id when setTabDirty(id, false)", () => {
+      useTabStore.getState().setTabDirty("tab-1", true);
+      expect(useTabStore.getState().dirtyTabIds.has("tab-1")).toBe(true);
+
+      useTabStore.getState().setTabDirty("tab-1", false);
+
+      expect(useTabStore.getState().dirtyTabIds.has("tab-1")).toBe(false);
+    });
+
+    it("is a no-op when membership already matches the requested value", () => {
+      // Idempotent dirty=true → keeps Set referential equality so subscriber
+      // selectors don't re-render on every keystroke during editing.
+      useTabStore.getState().setTabDirty("tab-1", true);
+      const before = useTabStore.getState().dirtyTabIds;
+      useTabStore.getState().setTabDirty("tab-1", true);
+      const after = useTabStore.getState().dirtyTabIds;
+      expect(after).toBe(before);
+
+      // Idempotent dirty=false on a non-member tab also preserves identity.
+      const cleanBefore = useTabStore.getState().dirtyTabIds;
+      useTabStore.getState().setTabDirty("never-dirty", false);
+      const cleanAfter = useTabStore.getState().dirtyTabIds;
+      expect(cleanAfter).toBe(cleanBefore);
+    });
+
+    it("tracks multiple dirty tabs independently", () => {
+      useTabStore.getState().setTabDirty("tab-1", true);
+      useTabStore.getState().setTabDirty("tab-2", true);
+
+      const dirty = useTabStore.getState().dirtyTabIds;
+      expect(dirty.has("tab-1")).toBe(true);
+      expect(dirty.has("tab-2")).toBe(true);
+
+      useTabStore.getState().setTabDirty("tab-1", false);
+      const after = useTabStore.getState().dirtyTabIds;
+      expect(after.has("tab-1")).toBe(false);
+      expect(after.has("tab-2")).toBe(true);
+    });
+
+    it("removeTab also drops the dirty marker", () => {
+      useTabStore.getState().addTab(makeTableTab({ id: "t1", table: "users" }));
+      const tabId = useTabStore.getState().tabs[0]!.id;
+      useTabStore.getState().setTabDirty(tabId, true);
+      expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(true);
+
+      useTabStore.getState().removeTab(tabId);
+
+      expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(false);
     });
   });
 });

@@ -27,7 +27,11 @@ function fireAuxClick(element: Element, button: number) {
 
 describe("TabBar", () => {
   beforeEach(() => {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useTabStore.setState({
+      tabs: [],
+      activeTabId: null,
+      dirtyTabIds: new Set<string>(),
+    });
     useConnectionStore.setState({
       connections: [],
       groups: [],
@@ -465,5 +469,166 @@ describe("TabBar", () => {
     });
 
     expect(useTabStore.getState().activeTabId).toBe(activeTabId);
+  });
+
+  // ── Sprint 97: dirty indicator + close gate ──
+
+  // AC-01 — a tab in `dirtyTabIds` renders a visible dirty marker
+  // (data-dirty="true" + aria-label hint) so the user can spot unsaved
+  // edits at a glance.
+  it("renders a dirty mark for tabs in dirtyTabIds (AC-01)", () => {
+    addTableTab({ title: "Users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, true);
+    });
+
+    render(<TabBar />);
+
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    const dot = tab.querySelector('[data-dirty="true"]');
+    expect(dot).not.toBeNull();
+    expect(dot).toHaveAttribute("aria-label", "Unsaved changes");
+  });
+
+  // AC-03 — when dirty drops to 0 the mark disappears immediately on the
+  // next render, without needing a tab switch / remount.
+  it("removes the dirty mark when dirtyTabIds clears (AC-03)", () => {
+    addTableTab({ title: "Users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, true);
+    });
+
+    const { rerender } = render(<TabBar />);
+    let tab = screen.getByText("users").closest("[role='tab']")!;
+    expect(tab.querySelector('[data-dirty="true"]')).not.toBeNull();
+
+    // Clean → mark must vanish.
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, false);
+    });
+    rerender(<TabBar />);
+    tab = screen.getByText("users").closest("[role='tab']")!;
+    expect(tab.querySelector('[data-dirty="true"]')).toBeNull();
+  });
+
+  // AC-04 — a clean tab never sprouts a dirty mark, even after another
+  // sibling tab toggles dirty (regression guard).
+  it("does not render a dirty mark for clean tabs", () => {
+    addTableTab({
+      title: "users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
+    const dirtyId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().setTabDirty(dirtyId, true);
+    });
+
+    render(<TabBar />);
+    const cleanTab = screen.getByText("orders").closest("[role='tab']")!;
+    expect(cleanTab.querySelector('[data-dirty="true"]')).toBeNull();
+  });
+
+  // AC-02 — clean tab close button still removes the tab synchronously
+  // (no ConfirmDialog), so the gate is strictly opt-in on dirty state.
+  it("close button on a clean tab removes it without confirmation", () => {
+    addTableTab({ title: "Users", table: "users" });
+
+    render(<TabBar />);
+    const closeBtn = screen.getByLabelText("Close Users");
+    act(() => {
+      fireEvent.click(closeBtn);
+    });
+
+    expect(useTabStore.getState().tabs).toHaveLength(0);
+    // Dialog must NOT appear for a clean close.
+    expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
+  });
+
+  // AC-02 — confirm branch: dirty close → ConfirmDialog → click "Discard
+  // and close" → tab is actually removed.
+  it("dirty close opens ConfirmDialog and removes tab on confirm (AC-02)", () => {
+    addTableTab({ title: "Users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, true);
+    });
+
+    render(<TabBar />);
+    expect(useTabStore.getState().tabs).toHaveLength(1);
+
+    const closeBtn = screen.getByLabelText("Close Users");
+    act(() => {
+      fireEvent.click(closeBtn);
+    });
+
+    // Tab still present — gate held the close.
+    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
+
+    // Confirm → close completes.
+    const confirmBtn = screen.getByRole("button", {
+      name: "Discard and close",
+    });
+    act(() => {
+      fireEvent.click(confirmBtn);
+    });
+
+    expect(useTabStore.getState().tabs).toHaveLength(0);
+    // dirtyTabIds is cleaned up by removeTab.
+    expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(false);
+  });
+
+  // AC-02 — cancel branch: dirty close → ConfirmDialog → click "Cancel" →
+  // tab stays open, dirty state preserved.
+  it("dirty close cancel keeps the tab open (AC-02)", () => {
+    addTableTab({ title: "Users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, true);
+    });
+
+    render(<TabBar />);
+    const closeBtn = screen.getByLabelText("Close Users");
+    act(() => {
+      fireEvent.click(closeBtn);
+    });
+
+    expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
+
+    const cancelBtn = screen.getByRole("button", { name: "Cancel" });
+    act(() => {
+      fireEvent.click(cancelBtn);
+    });
+
+    // Tab survives, still dirty.
+    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(true);
+    // Dialog torn down.
+    expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
+  });
+
+  // Middle-click on a dirty tab also routes through the gate so the user
+  // can never lose unsaved work via a stray scroll-wheel button press.
+  it("middle-click on dirty tab triggers the confirm gate", () => {
+    addTableTab({ title: "Users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, true);
+    });
+
+    render(<TabBar />);
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    fireAuxClick(tab, 1);
+
+    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
   });
 });

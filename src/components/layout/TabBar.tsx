@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Table2, Code2 } from "lucide-react";
-import { useTabStore, type TableTab } from "@stores/tabStore";
+import { useTabStore, type Tab, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
 import { getConnectionColor } from "@lib/connectionColor";
+import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 
 export default function TabBar() {
   const tabs = useTabStore((s) => s.tabs);
@@ -12,7 +13,23 @@ export default function TabBar() {
   const removeTab = useTabStore((s) => s.removeTab);
   const promoteTab = useTabStore((s) => s.promoteTab);
   const moveTab = useTabStore((s) => s.moveTab);
+  const dirtyTabIds = useTabStore((s) => s.dirtyTabIds);
   const connections = useConnectionStore((s) => s.connections);
+
+  // Sprint 97 — pending close confirmation. When the user attempts to
+  // close a dirty tab via the close button or middle-click we stash the
+  // tab here and surface ConfirmDialog; the actual `removeTab` only runs
+  // on `onConfirm`. `onCancel` simply clears the pending state (the close
+  // is rejected).
+  const [pendingClose, setPendingClose] = useState<Tab | null>(null);
+
+  const requestCloseTab = (tab: Tab) => {
+    if (dirtyTabIds.has(tab.id)) {
+      setPendingClose(tab);
+      return;
+    }
+    removeTab(tab.id);
+  };
 
   // Visual feedback states
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -95,7 +112,7 @@ export default function TabBar() {
             onAuxClick={(e) => {
               if (e.button === 1) {
                 e.preventDefault();
-                removeTab(tab.id);
+                requestCloseTab(tab);
               }
             }}
             onKeyDown={(e) => {
@@ -205,6 +222,14 @@ export default function TabBar() {
                 ? tab.table
                 : tab.title}
             </span>
+            {dirtyTabIds.has(tab.id) && (
+              <span
+                aria-label="Unsaved changes"
+                data-dirty="true"
+                title="Unsaved changes"
+                className="size-1.5 shrink-0 rounded-full bg-primary"
+              />
+            )}
             {tab.closable && (
               <Button
                 variant="ghost"
@@ -213,7 +238,7 @@ export default function TabBar() {
                 className="opacity-0 group-hover:opacity-100 focus:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
-                  removeTab(tab.id);
+                  requestCloseTab(tab);
                 }}
               >
                 <X size={12} />
@@ -222,6 +247,25 @@ export default function TabBar() {
           </div>
         ))}
       </div>
+
+      {/* Sprint 97 — dirty close gate. Mounted only while a close attempt
+          on a dirty tab is pending; `onConfirm` discards the unsaved diff
+          by removing the tab (the grid's pending state is local to the
+          tab and disappears with it), `onCancel` aborts the close. */}
+      {pendingClose && (
+        <ConfirmDialog
+          title="Discard unsaved changes?"
+          message={`"${pendingClose.title}" has unsaved changes. Closing the tab will discard them.`}
+          confirmLabel="Discard and close"
+          danger
+          onConfirm={() => {
+            const id = pendingClose.id;
+            setPendingClose(null);
+            removeTab(id);
+          }}
+          onCancel={() => setPendingClose(null)}
+        />
+      )}
 
       {/* Drag ghost — follows cursor during tab drag */}
       {ghostStyle && (

@@ -127,6 +127,19 @@ interface TabState {
   tabs: Tab[];
   activeTabId: string | null;
   closedTabHistory: Tab[];
+  /**
+   * Sprint 97 — set of tab ids whose underlying grid has unsaved edits
+   * (`pendingEdits.size > 0 || pendingNewRows.length > 0 ||
+   * pendingDeletedRowKeys.size > 0`). Owned by the store so consumers
+   * (`TabBar` for the dirty dot + close gate, debug tooling, etc.) can read
+   * dirty state without taking a hard dependency on the grid hook. The hook
+   * publishes the value via `setTabDirty` from a `useEffect`.
+   *
+   * Membership semantics are idempotent — `setTabDirty(id, true)` on an
+   * already-dirty tab is a no-op (referential equality preserved) so React
+   * subscribers don't re-render on every keystroke.
+   */
+  dirtyTabIds: Set<string>;
 
   // Table-tab actions
   addTab: (tab: Omit<TableTab, "id">) => void;
@@ -135,6 +148,14 @@ interface TabState {
   setSubView: (tabId: string, subView: TabSubView) => void;
   promoteTab: (tabId: string) => void;
   updateTabSorts: (tabId: string, sorts: SortInfo[]) => void;
+  /**
+   * Sprint 97 — publish dirty state for a single tab. `dirty=true` adds the
+   * tab id to {@link dirtyTabIds}; `dirty=false` removes it. Callers
+   * typically run this in an effect that mirrors a grid-local pending diff
+   * to the store, so reads must stay cheap (no full Set replacement when
+   * the value is already the requested one).
+   */
+  setTabDirty: (tabId: string, dirty: boolean) => void;
 
   // Query-tab actions
   addQueryTab: (
@@ -187,6 +208,7 @@ export const useTabStore = create<TabState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   closedTabHistory: [],
+  dirtyTabIds: new Set<string>(),
 
   // -- Table tab actions ----------------------------------------------------
 
@@ -244,10 +266,21 @@ export const useTabStore = create<TabState>((set, get) => ({
       const newHistory = tabToRemove
         ? [tabToRemove, ...state.closedTabHistory].slice(0, 20)
         : state.closedTabHistory;
+      // Sprint 97 — drop the dirty marker when a tab is closed so a stale
+      // entry can never linger after the tab disappears. Only allocate a
+      // new Set when the entry was actually present.
+      const dirtyTabIds = state.dirtyTabIds.has(id)
+        ? (() => {
+            const next = new Set(state.dirtyTabIds);
+            next.delete(id);
+            return next;
+          })()
+        : state.dirtyTabIds;
       return {
         tabs: filtered,
         activeTabId: newActive,
         closedTabHistory: newHistory,
+        dirtyTabIds,
       };
     }),
 
@@ -293,6 +326,22 @@ export const useTabStore = create<TabState>((set, get) => ({
         t.id === tabId && t.type === "table" ? { ...t, sorts } : t,
       ),
     })),
+
+  setTabDirty: (tabId, dirty) =>
+    set((state) => {
+      const has = state.dirtyTabIds.has(tabId);
+      // No-op when the membership already matches the requested value so
+      // the Set identity (and therefore subscriber renders) stay stable
+      // when the publisher effect re-runs without a real transition.
+      if (dirty === has) return state;
+      const next = new Set(state.dirtyTabIds);
+      if (dirty) {
+        next.add(tabId);
+      } else {
+        next.delete(tabId);
+      }
+      return { dirtyTabIds: next };
+    }),
 
   // -- Query tab actions ----------------------------------------------------
 

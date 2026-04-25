@@ -32,7 +32,11 @@ vi.mock("@stores/schemaStore", () => ({
 
 vi.mock("@stores/tabStore", () => ({
   useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ activeTabId: "tab-1", promoteTab: mockPromoteTab }),
+    selector({
+      activeTabId: "tab-1",
+      promoteTab: mockPromoteTab,
+      setTabDirty: vi.fn(),
+    }),
 }));
 
 const MOCK_DATA: TableData = {
