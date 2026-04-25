@@ -5,7 +5,9 @@ import {
   fireEvent,
   waitFor,
   within,
+  act,
 } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
 import DocumentDataGrid from "./DocumentDataGrid";
 import {
   useDocumentStore,
@@ -384,8 +386,19 @@ describe("DocumentDataGrid", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add document" }));
 
-    const textarea = await screen.findByLabelText("Document JSON");
-    fireEvent.change(textarea, { target: { value: '{"name":"Carol"}' } });
+    const editorContainer = await screen.findByLabelText("Document JSON");
+    const cmEditor = editorContainer.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(cmEditor);
+    if (!view) throw new Error("CodeMirror EditorView not found");
+    act(() => {
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: '{"name":"Carol"}',
+        },
+      });
+    });
     fireEvent.click(
       screen.getByRole("button", { name: "Submit add document" }),
     );

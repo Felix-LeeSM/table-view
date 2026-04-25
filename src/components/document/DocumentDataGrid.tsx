@@ -465,6 +465,9 @@ export default function DocumentDataGrid({
         <AddDocumentModal
           loading={addLoading}
           error={addError}
+          connectionId={connectionId}
+          database={database}
+          collection={collection}
           onSubmit={handleAddSubmit}
           onCancel={() => {
             if (addLoading) return;
