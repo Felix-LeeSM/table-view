@@ -7,6 +7,7 @@ import type {
   ConnectionStatus,
 } from "@/types/connection";
 import * as tauri from "@lib/tauri";
+import { toast } from "@lib/toast";
 
 interface ConnectionState {
   connections: ConnectionConfig[];
@@ -88,6 +89,10 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set((state) => ({
       connections: [...state.connections, saved],
     }));
+    // Sprint 94 — surface CRUD success so the user has confirmation that the
+    // dialog "Save" actually persisted. AC-04. The toast lives outside the
+    // dialog portal so it survives `onClose()`.
+    toast.success(`Connection "${saved.name}" added.`);
     return saved;
   },
 
@@ -98,9 +103,15 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         c.id === saved.id ? saved : c,
       ),
     }));
+    // Sprint 94 — AC-04: connection-update success toast.
+    toast.success(`Connection "${saved.name}" updated.`);
   },
 
   removeConnection: async (id) => {
+    // Resolve the display name before mutating state so the toast can name
+    // the connection the user just removed (UX nicety — referring to "that
+    // connection" is unhelpful when the sidebar entry is already gone).
+    const removed = get().connections.find((c) => c.id === id);
     const statuses = get().activeStatuses;
     const status = statuses[id];
     if (status?.type === "connected") {
@@ -121,6 +132,10 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         focusedConnId: newFocused,
       };
     });
+    // Sprint 94 — AC-04: connection-remove success toast.
+    toast.success(
+      removed ? `Connection "${removed.name}" removed.` : "Connection removed.",
+    );
   },
 
   testConnection: async (draft, existingId = null) => {

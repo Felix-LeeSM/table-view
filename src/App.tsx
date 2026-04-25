@@ -4,6 +4,7 @@ import Sidebar from "./components/layout/Sidebar";
 import MainArea from "./components/layout/MainArea";
 import QuickOpen from "./components/shared/QuickOpen";
 import QueryLog from "./components/query/QueryLog";
+import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
@@ -268,6 +269,11 @@ export default function App() {
         <MainArea />
         <QuickOpen />
         <QueryLog />
+        {/* Sprint 94 — global toaster. Mounted at the App root (NOT inside any
+            Radix dialog portal) so a toast surfaced from inside a modal
+            survives the modal being closed. See AC-03 in
+            docs/sprints/sprint-94/contract.md. */}
+        <Toaster />
       </div>
     </ErrorBoundary>
   );

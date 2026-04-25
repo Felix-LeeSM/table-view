@@ -13,6 +13,7 @@ import {
   type MqlPreview,
 } from "@/lib/mongo/mqlGenerator";
 import { insertDocument, updateDocument, deleteDocument } from "@/lib/tauri";
+import { toast } from "@/lib/toast";
 
 /**
  * Edit key helper: maps row/col indices to a unique string key.
@@ -643,6 +644,7 @@ export function useDataGridEdit({
   const handleExecuteCommit = useCallback(async () => {
     if (paradigm === "document") {
       if (!mqlPreview || mqlPreview.commands.length === 0) return;
+      const docCount = mqlPreview.commands.length;
       try {
         for (const cmd of mqlPreview.commands) {
           await dispatchMqlCommand(cmd);
@@ -657,8 +659,25 @@ export function useDataGridEdit({
         setEditingCell(null);
         setEditValue("");
         fetchData();
-      } catch {
-        // Mirror the RDB branch: surface via fetchData's error path.
+        // Sprint 94 — surface the success so document-paradigm commits don't
+        // disappear silently into the schema tree refresh.
+        toast.success(
+          `${docCount} document ${docCount === 1 ? "change" : "changes"} committed.`,
+        );
+      } catch (err) {
+        // Sprint 94 — MQL branch was previously a silent swallow. We still
+        // don't have the rich `commitError` plumbing the SQL branch enjoys
+        // (Sprint 93 only wired SQL), but at least surface the failure as a
+        // toast so the user is never left wondering why their commit didn't
+        // take. The catch-audit (sprint-88) requires a comment + a recovery
+        // action — the toast is that action.
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+              ? err
+              : "Failed to commit document changes.";
+        toast.error(`Commit failed: ${message}`);
       }
       return;
     }
@@ -704,6 +723,14 @@ export function useDataGridEdit({
               return next;
             });
           }
+          // Sprint 94 — surface the failure as a toast so the user still sees
+          // the failure context if they dismiss the SQL Preview modal. The
+          // toast lives outside the modal portal, so it survives the close
+          // (AC-03). The message intentionally embeds the partial-failure
+          // counts ("executed: N, failed at: K") to satisfy AC-02.
+          toast.error(
+            `Commit failed (executed: ${executedCount}, failed at: ${i + 1} of ${statementCount}): ${message}`,
+          );
           // Stop on first failure — `executeQuery` runs statements serially
           // outside a transaction, so already-applied statements stay applied.
           // The user can re-open the preview after fixing the failed row.
@@ -726,6 +753,12 @@ export function useDataGridEdit({
       setEditValue("");
       // Refresh data
       fetchData();
+      // Sprint 94 — success toast. AC-02 calls for "commit success" coverage;
+      // we report the statement count so a multi-row commit is visibly
+      // summarised.
+      toast.success(
+        `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
+      );
     } catch (err) {
       // Defensive outer catch — the inner try/catch already handles
       // `executeQuery` rejections. This branch only runs if a synchronous
@@ -745,6 +778,11 @@ export function useDataGridEdit({
         sql: statements[executedCount]?.sql ?? "",
         message: `executed: ${executedCount}, failed at: ${executedCount + 1} of ${statementCount} — ${message}`,
       });
+      // Sprint 94 — also surface defensive-catch failures as a toast so the
+      // user is not left guessing if the modal is dismissed.
+      toast.error(
+        `Commit failed (executed: ${executedCount}, failed at: ${executedCount + 1} of ${statementCount}): ${message}`,
+      );
     }
   }, [
     sqlPreview,
