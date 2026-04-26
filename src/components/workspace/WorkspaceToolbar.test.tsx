@@ -198,8 +198,11 @@ describe("WorkspaceToolbar", () => {
     useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
 
     render(<WorkspaceToolbar />);
+    // Sprint 128 — the document paradigm + connected status now activates
+    // the DB switcher. The label assertion is unchanged; the role/label
+    // surface flipped from read-only to interactive.
     const db = screen.getByRole("button", {
-      name: /active database \(read-only\)/i,
+      name: /active database switcher/i,
     });
     const schema = screen.getByRole("button", {
       name: /active schema \(read-only\)/i,

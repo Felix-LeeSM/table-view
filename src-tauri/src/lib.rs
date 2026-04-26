@@ -45,6 +45,7 @@ pub fn run() {
             commands::rdb::schema::get_function_source,
             commands::rdb::query::execute_query,
             commands::rdb::query::cancel_query,
+            commands::meta::list_databases,
             commands::document::browse::list_mongo_databases,
             commands::document::browse::list_mongo_collections,
             commands::document::browse::infer_collection_fields,

@@ -1686,6 +1686,82 @@ impl PostgresAdapter {
             ))),
         }
     }
+
+    /// List every non-template database visible to the connected role.
+    ///
+    /// Sprint 128 — counterpart to `DocumentAdapter::list_databases`. The
+    /// canonical query is `SELECT datname FROM pg_database WHERE
+    /// datistemplate = false ORDER BY datname`. Hosted PG (RDS, Cloud SQL,
+    /// Supabase, Neon free tier) frequently revokes `SELECT` on
+    /// `pg_database` for application roles — when that happens the driver
+    /// reports `SQLSTATE 42501` ("insufficient_privilege"). We surface a
+    /// graceful single-DB fallback in that case (`current_database()`) so
+    /// the workspace toolbar can still render *something* useful instead of
+    /// a hard error. Any other failure (network, server gone) still
+    /// propagates as `AppError::Database`.
+    ///
+    /// Matching strategy:
+    ///   1. SQLSTATE `42501` — exact match against `sqlx::Error::Database`.
+    ///   2. Message substring `permission denied for table pg_database` —
+    ///      case-insensitive fallback for drivers/locales that fail to expose
+    ///      a SQLSTATE (rare, but observed in older sqlx releases).
+    pub async fn list_databases(&self) -> Result<Vec<SchemaInfo>, AppError> {
+        let guard = self.pool.lock().await;
+        let pool = guard
+            .as_ref()
+            .ok_or_else(|| AppError::Connection("Not connected".into()))?;
+
+        let primary: Result<Vec<(String,)>, sqlx::Error> = sqlx::query_as::<_, (String,)>(
+            "SELECT datname FROM pg_database \
+             WHERE datistemplate = false \
+             ORDER BY datname",
+        )
+        .fetch_all(pool)
+        .await;
+
+        match primary {
+            Ok(rows) => Ok(rows
+                .into_iter()
+                .map(|(name,)| SchemaInfo { name })
+                .collect()),
+            Err(err) if is_pg_database_permission_denied(&err) => {
+                // Permission-denied fallback — surface the user's current DB
+                // as a single entry so the switcher always has at least one
+                // option to render.
+                let current: (String,) = sqlx::query_as("SELECT current_database()")
+                    .fetch_one(pool)
+                    .await
+                    .map_err(|e| AppError::Database(e.to_string()))?;
+                Ok(vec![SchemaInfo { name: current.0 }])
+            }
+            Err(err) => Err(AppError::Database(err.to_string())),
+        }
+    }
+}
+
+/// Detect "user has no SELECT on `pg_database`" the way Postgres reports it.
+///
+/// Sprint 128 — `pg_database` permission revocation is common in managed PG
+/// (RDS, Cloud SQL, Supabase, Neon) so we keep the matcher targeted: SQLSTATE
+/// `42501` (insufficient_privilege) is the authoritative signal, and a
+/// case-insensitive substring of the canonical Postgres message
+/// (`permission denied for table pg_database`) is the secondary fallback.
+/// Both arms are unit-tested below.
+fn is_pg_database_permission_denied(err: &sqlx::Error) -> bool {
+    if let sqlx::Error::Database(db_err) = err {
+        if let Some(code) = db_err.code() {
+            if code.as_ref() == "42501" {
+                return true;
+            }
+        }
+        let msg = db_err.message().to_ascii_lowercase();
+        if msg.contains("permission denied for table pg_database")
+            || msg.contains("permission denied for relation pg_database")
+        {
+            return true;
+        }
+    }
+    false
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1735,6 +1811,15 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move {
             let schemas = self.list_schemas().await?;
             Ok(schemas.into_iter().map(NamespaceInfo::from).collect())
+        })
+    }
+
+    fn list_databases<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<NamespaceInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            let dbs = PostgresAdapter::list_databases(self).await?;
+            Ok(dbs.into_iter().map(NamespaceInfo::from).collect())
         })
     }
 
@@ -2956,6 +3041,124 @@ mod tests {
             format_fk_reference("audit-log", "events", "event id"),
             "audit-log.events(event id)"
         );
+    }
+
+    #[tokio::test]
+    async fn list_databases_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = PostgresAdapter::list_databases(&adapter).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    /// Stub `DatabaseError` so the SQLSTATE / message matchers can be
+    /// exercised without a live Postgres server. Sprint 128 tests for
+    /// the permission-denied fallback only need `code()` and `message()`.
+    #[derive(Debug)]
+    struct StubDbError {
+        code: Option<String>,
+        message: String,
+    }
+
+    impl std::fmt::Display for StubDbError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.message)
+        }
+    }
+
+    impl std::error::Error for StubDbError {}
+
+    impl sqlx::error::DatabaseError for StubDbError {
+        fn message(&self) -> &str {
+            &self.message
+        }
+        fn code(&self) -> Option<std::borrow::Cow<'_, str>> {
+            self.code.as_deref().map(std::borrow::Cow::Borrowed)
+        }
+        fn as_error(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+        fn as_error_mut(&mut self) -> &mut (dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+        fn into_error(self: Box<Self>) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+            self
+        }
+        fn kind(&self) -> sqlx::error::ErrorKind {
+            sqlx::error::ErrorKind::Other
+        }
+    }
+
+    fn make_db_error(code: Option<&str>, message: &str) -> sqlx::Error {
+        sqlx::Error::Database(Box::new(StubDbError {
+            code: code.map(|c| c.to_string()),
+            message: message.to_string(),
+        }))
+    }
+
+    #[test]
+    fn permission_denied_matches_sqlstate_42501() {
+        let err = make_db_error(Some("42501"), "permission denied for table pg_database");
+        assert!(is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_matches_sqlstate_only() {
+        // Even when the message text is missing the hint, SQLSTATE wins.
+        let err = make_db_error(Some("42501"), "");
+        assert!(is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_matches_message_substring() {
+        // No SQLSTATE on the wire (rare but observed) — fall back to the
+        // canonical message text.
+        let err = make_db_error(None, "ERROR: permission denied for table pg_database");
+        assert!(is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_matches_message_relation_substring() {
+        // Newer Postgres versions phrase the same error as "relation".
+        let err = make_db_error(None, "permission denied for relation pg_database");
+        assert!(is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_message_match_is_case_insensitive() {
+        let err = make_db_error(None, "PERMISSION DENIED FOR TABLE pg_database");
+        assert!(is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_does_not_match_unrelated_42501() {
+        // Different table — wrong target. Still SQLSTATE 42501 means the
+        // role is missing privileges, but our matcher is intentionally
+        // strict on the *table* (otherwise we would fall back for any
+        // permission error). SQLSTATE 42501 alone is sufficient because
+        // we only call `is_pg_database_permission_denied` from the
+        // `pg_database` query path, where any 42501 *is* about
+        // `pg_database`. The message-based arm checks the table name
+        // explicitly so the negative case below covers other 42501s
+        // surfaced through the message-only path.
+        let err = make_db_error(None, "permission denied for table pg_class");
+        assert!(!is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_does_not_match_unrelated_error() {
+        let err = make_db_error(Some("42P01"), "relation \"nope\" does not exist");
+        assert!(!is_pg_database_permission_denied(&err));
+    }
+
+    #[test]
+    fn permission_denied_does_not_match_non_database_error() {
+        let err = sqlx::Error::PoolClosed;
+        assert!(!is_pg_database_permission_denied(&err));
     }
 
     #[test]

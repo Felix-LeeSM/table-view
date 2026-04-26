@@ -127,6 +127,18 @@ pub trait RdbAdapter: DbAdapter {
 
     fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
+    /// List databases visible to the connected user (Sprint 128).
+    ///
+    /// For paradigm symmetry with `DocumentAdapter::list_databases`. PG
+    /// surfaces every non-template database in the cluster; future SQLite /
+    /// MySQL adapters fall back to the default `Vec::new()` impl below until
+    /// Phase 9 wires their concrete implementations. Empty Vec is the
+    /// graceful "no databases to show" signal — frontend renders the
+    /// existing read-only label.
+    fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
     fn list_tables<'a>(
         &'a self,
         namespace: &'a str,
