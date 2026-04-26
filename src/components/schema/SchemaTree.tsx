@@ -21,6 +21,7 @@ import {
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -393,6 +394,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
+  // Sprint 135 — DBMS-shape-aware tree depth. Driven off `db_type` because
+  // `paradigm` is always `"rdb"` for the three relational DBMSes we
+  // currently ship (PG / MySQL / SQLite); the shape difference is *within*
+  // the rdb paradigm. Defaults to `"with-schema"` (PG) when the connection
+  // hasn't loaded yet so the initial paint matches the most explicit shape.
+  const dbType = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.db_type,
+  );
+  const treeShape: RdbTreeShape = dbType
+    ? resolveRdbTreeShape(dbType)
+    : "with-schema";
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
@@ -463,6 +475,29 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       });
     }
   }, [activeSchema]);
+
+  // Sprint 135 — for `no-schema` (MySQL) and `flat` (SQLite) shapes the
+  // schema row is hidden, but every backend-returned schema must still
+  // be expanded behind the scenes so `loadTables` fires and the table
+  // list appears under the sidebar root. We keep the existing
+  // expandedSchemas state so the visible-rows / virtualized paths stay
+  // unaware of the shape difference; the render branch below just skips
+  // the schema button for these shapes.
+  useEffect(() => {
+    if (treeShape === "with-schema") return;
+    if (schemas.length === 0) return;
+    setExpandedSchemas((prev) => {
+      let mutated = false;
+      const next = new Set(prev);
+      for (const s of schemas) {
+        if (!next.has(s.name)) {
+          next.add(s.name);
+          mutated = true;
+        }
+      }
+      return mutated ? next : prev;
+    });
+  }, [treeShape, schemas]);
 
   const handleExpandSchema = async (schemaName: string) => {
     const newExpanded = new Set(expandedSchemas);
@@ -726,7 +761,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     tableSearch,
   });
 
-  const shouldVirtualize = visibleRows.length > VIRTUALIZE_THRESHOLD;
+  // Sprint 135 — only the `with-schema` shape can fan out far enough to
+  // need virtualization (PG: schemas × categories × items). MySQL/SQLite
+  // shapes cap at table count which is bounded by the user's database
+  // contents and rarely crosses the threshold; gating the virtualizer
+  // keeps the simpler shapes on the eager path so the new render
+  // branches above stay the only render branches.
+  const shouldVirtualize =
+    treeShape === "with-schema" && visibleRows.length > VIRTUALIZE_THRESHOLD;
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -1093,7 +1135,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             );
           })()
         : schemas.map((schema, schemaIndex) => {
-            const isExpanded = expandedSchemas.has(schema.name);
+            const isExpanded =
+              treeShape === "with-schema"
+                ? expandedSchemas.has(schema.name)
+                : true; // Sprint 135 — MySQL/SQLite shapes always expose
+            // categories/tables; the schema row is hidden but
+            // the expansion state is implicit "open".
             const tableKey = `${connectionId}:${schema.name}`;
             const schemaTables: TableInfo[] = tables[tableKey] ?? [];
             const isLoadingTables = loadingTables.has(schema.name);
@@ -1105,69 +1152,180 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
             return (
               <div key={schema.name}>
-                {/* Section separator between schemas */}
-                {schemaIndex > 0 && (
+                {/* Section separator between schemas — only meaningful for
+                    PG-style shape where the schema row demarcates groups. */}
+                {treeShape === "with-schema" && schemaIndex > 0 && (
                   <div className="mx-3 my-0.5 border-t border-border" />
                 )}
 
-                {/* Schema row */}
-                <ContextMenu>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
-                        isSchemaSelected
-                          ? "bg-muted text-foreground"
-                          : "text-secondary-foreground"
-                      }`}
-                      aria-expanded={isExpanded}
-                      aria-label={`${schema.name} schema`}
-                      onClick={() => {
-                        handleExpandSchema(schema.name);
-                        setSelectedNodeId(schemaId);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
+                {/* Schema row — Sprint 135: rendered only for `with-schema`
+                    shape (PG / future MSSQL). MySQL/SQLite suppress this row
+                    so the tree starts at the next level (categories or
+                    tables respectively). */}
+                {treeShape === "with-schema" && (
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className={`flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted ${
+                          isSchemaSelected
+                            ? "bg-muted text-foreground"
+                            : "text-secondary-foreground"
+                        }`}
+                        aria-expanded={isExpanded}
+                        aria-label={`${schema.name} schema`}
+                        onClick={() => {
                           handleExpandSchema(schema.name);
                           setSelectedNodeId(schemaId);
-                        }
-                      }}
-                    >
-                      {isExpanded ? (
-                        <ChevronDown size={12} className="shrink-0" />
-                      ) : (
-                        <ChevronRight size={12} className="shrink-0" />
-                      )}
-                      {isExpanded ? (
-                        <FolderOpen
-                          size={13}
-                          className="shrink-0 text-muted-foreground"
-                        />
-                      ) : (
-                        <Folder
-                          size={13}
-                          className="shrink-0 text-muted-foreground"
-                        />
-                      )}
-                      <span className="truncate">{schema.name}</span>
-                      {isLoadingTables && (
-                        <Loader2 size={10} className="ml-auto animate-spin" />
-                      )}
-                    </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent>
-                    <ContextMenuItem
-                      onClick={() => handleRefreshSchema(schema.name)}
-                    >
-                      <RefreshCw size={14} />
-                      Refresh
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleExpandSchema(schema.name);
+                            setSelectedNodeId(schemaId);
+                          }
+                        }}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown size={12} className="shrink-0" />
+                        ) : (
+                          <ChevronRight size={12} className="shrink-0" />
+                        )}
+                        {isExpanded ? (
+                          <FolderOpen
+                            size={13}
+                            className="shrink-0 text-muted-foreground"
+                          />
+                        ) : (
+                          <Folder
+                            size={13}
+                            className="shrink-0 text-muted-foreground"
+                          />
+                        )}
+                        <span className="truncate">{schema.name}</span>
+                        {isLoadingTables && (
+                          <Loader2 size={10} className="ml-auto animate-spin" />
+                        )}
+                      </button>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        onClick={() => handleRefreshSchema(schema.name)}
+                      >
+                        <RefreshCw size={14} />
+                        Refresh
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                )}
 
-                {/* Category sections under expanded schema */}
-                {isExpanded && (
+                {/* Category sections under expanded schema. For SQLite
+                    (`flat` shape) we skip the category headers entirely
+                    and render the table list directly so the user sees a
+                    1-level tree (root → table). MySQL (`no-schema`) keeps
+                    the categories so views/functions still surface. */}
+                {isExpanded && treeShape === "flat" && (
+                  <div>
+                    {isLoadingTables && schemaTables.length === 0 ? (
+                      <div className="px-3 py-1 text-xs text-muted-foreground">
+                        Loading...
+                      </div>
+                    ) : schemaTables.length === 0 ? (
+                      <div className="px-3 py-1 text-2xs italic text-muted-foreground">
+                        No tables
+                      </div>
+                    ) : (
+                      schemaTables.map((item) => {
+                        const itemId = nodeIdToString({
+                          type: "table",
+                          schema: schema.name,
+                          table: item.name,
+                        });
+                        const isSelected = selectedNodeId === itemId;
+                        const isActive =
+                          activeSchema === schema.name &&
+                          activeTable === item.name;
+                        const handleClick = () =>
+                          handleTableClick(item.name, schema.name);
+                        return (
+                          <ContextMenu key={`flat-${item.name}`}>
+                            <ContextMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-3 hover:bg-muted",
+                                  isSelected || isActive
+                                    ? "bg-primary/10 text-primary font-semibold"
+                                    : "text-foreground",
+                                )}
+                                aria-label={`${item.name} table`}
+                                onClick={handleClick}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleClick();
+                                  } else if (e.key === "F2") {
+                                    e.preventDefault();
+                                    handleStartRename(item.name, schema.name);
+                                  }
+                                }}
+                              >
+                                <Table2
+                                  size={12}
+                                  className="shrink-0 text-muted-foreground"
+                                />
+                                <span className="truncate text-xs">
+                                  {item.name}
+                                </span>
+                                {item.row_count != null && (
+                                  <span className="ml-auto text-3xs text-muted-foreground">
+                                    {item.row_count.toLocaleString()}
+                                  </span>
+                                )}
+                              </button>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent>
+                              <ContextMenuItem
+                                onClick={() =>
+                                  handleOpenStructure(item.name, schema.name)
+                                }
+                              >
+                                <Columns3 size={14} /> Structure
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() =>
+                                  handleTableClick(item.name, schema.name)
+                                }
+                              >
+                                <Table2 size={14} /> Data
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                onClick={() =>
+                                  handleStartRename(item.name, schema.name)
+                                }
+                              >
+                                <Pencil size={14} /> Rename
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                danger
+                                onClick={() =>
+                                  handleDropTable(item.name, schema.name)
+                                }
+                              >
+                                <Trash2 size={14} /> Drop
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* PG-style and MySQL-style: render the standard category
+                    cascade. For MySQL (`no-schema`) the schema row above
+                    is suppressed but the categories collapse/expand the
+                    same way as PG. */}
+                {isExpanded && treeShape !== "flat" && (
                   <div>
                     {isLoadingTables && schemaTables.length === 0 ? (
                       <div className="px-8 py-1 text-xs text-muted-foreground">

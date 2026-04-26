@@ -28,8 +28,8 @@ import { toast } from "@lib/toast";
  *     the aria-label flips to "Disconnecting…" so screen readers
  *     announce the in-flight state.
  *
- * Visual: ghost variant + icon-xs to match the SchemaSwitcher /
- * DbSwitcher sibling controls in `WorkspaceToolbar`.
+ * Visual: ghost variant + icon-xs to match the DbSwitcher sibling
+ * control in `WorkspaceToolbar` (Sprint 135 removed `SchemaSwitcher`).
  */
 export interface DisconnectButtonProps {
   /** Override for tests — defaults to "Disconnect". */

@@ -87,7 +87,7 @@ describe("WorkspaceToolbar", () => {
     __resetLastActiveTabsForTests();
   });
 
-  it("renders DB / Schema slots and the Disconnect button inside a labelled toolbar region", () => {
+  it("renders the DB slot and the Disconnect button inside a labelled toolbar region", () => {
     render(<WorkspaceToolbar />);
 
     const toolbar = screen.getByRole("toolbar", { name: /workspace toolbar/i });
@@ -95,9 +95,6 @@ describe("WorkspaceToolbar", () => {
 
     expect(
       screen.getByRole("button", { name: /active database \(read-only\)/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /active schema \(read-only\)/i }),
     ).toBeInTheDocument();
     // Sprint 134 — DisconnectButton mounts adjacent to the (keyboard-only)
     // refresh control. It exists regardless of connection state; disabled
@@ -117,21 +114,27 @@ describe("WorkspaceToolbar", () => {
     ).toBeNull();
   });
 
+  // Sprint 135 — SchemaSwitcher was removed. Schema selection lives in the
+  // sidebar tree only. Guard the toolbar against a regression that would
+  // re-mount the (now deleted) read-only schema chip.
+  it("does NOT render the legacy SchemaSwitcher chip (AC-S135-01)", () => {
+    render(<WorkspaceToolbar />);
+    expect(
+      screen.queryByRole("button", { name: /active schema \(read-only\)/i }),
+    ).toBeNull();
+  });
+
   it("falls back to the empty-workspace placeholder when no tab is active", () => {
     render(<WorkspaceToolbar />);
 
-    // DB / Schema both show the em-dash sentinel for "no value".
+    // DB shows the em-dash sentinel for "no value".
     const db = screen.getByRole("button", {
       name: /active database \(read-only\)/i,
     });
-    const schema = screen.getByRole("button", {
-      name: /active schema \(read-only\)/i,
-    });
     expect(db.textContent).toMatch(/—/);
-    expect(schema.textContent).toMatch(/—/);
   });
 
-  it("reflects the active tab's connection / schema / database", () => {
+  it("reflects the active tab's connection / database", () => {
     const conn = makeConnection("c1");
     setConnections({ connections: [conn], active: ["c1"] });
 
@@ -145,45 +148,16 @@ describe("WorkspaceToolbar", () => {
 
     render(<WorkspaceToolbar />);
 
-    const schema = screen.getByRole("button", {
-      name: /active schema \(read-only\)/i,
+    // Sprint 130+ — the DB switcher label tracks `activeDb` (or schema as a
+    // legacy fallback). With no `activeDb` set, the schema name doubles as
+    // the DB hint until the tab is reopened.
+    const db = screen.getByRole("button", {
+      name: /active database switcher/i,
     });
-    expect(schema.textContent).toMatch(/analytics/);
+    expect(db).toBeInTheDocument();
   });
 
-  it("updates labels when the active tab changes", () => {
-    const c1 = makeConnection("c1", { name: "Alpha" });
-    const c2 = makeConnection("c2", { name: "Beta" });
-    setConnections({ connections: [c1, c2], active: ["c1", "c2"] });
-
-    const tab1 = makeTableTab({
-      id: "t1",
-      connectionId: "c1",
-      schema: "public",
-    });
-    const tab2 = makeTableTab({
-      id: "t2",
-      connectionId: "c2",
-      schema: "warehouse",
-    });
-    useTabStore.setState({ tabs: [tab1, tab2], activeTabId: tab1.id });
-
-    const { rerender } = render(<WorkspaceToolbar />);
-    expect(
-      screen.getByRole("button", { name: /active schema \(read-only\)/i })
-        .textContent,
-    ).toMatch(/public/);
-
-    useTabStore.setState({ activeTabId: tab2.id });
-    rerender(<WorkspaceToolbar />);
-
-    expect(
-      screen.getByRole("button", { name: /active schema \(read-only\)/i })
-        .textContent,
-    ).toMatch(/warehouse/);
-  });
-
-  it("shows mongo database/collection labels for document query tabs", () => {
+  it("shows mongo database labels for document query tabs", () => {
     const mongo = makeConnection("m1", {
       db_type: "mongodb",
       paradigm: "document",
@@ -207,11 +181,7 @@ describe("WorkspaceToolbar", () => {
     const db = screen.getByRole("button", {
       name: /active database switcher/i,
     });
-    const schema = screen.getByRole("button", {
-      name: /active schema \(read-only\)/i,
-    });
 
     expect(db.textContent).toMatch(/analytics/);
-    expect(schema.textContent).toMatch(/events/);
   });
 });

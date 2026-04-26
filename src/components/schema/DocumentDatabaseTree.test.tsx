@@ -241,6 +241,37 @@ describe("DocumentDatabaseTree", () => {
     expect(dbIcons.length).toBeGreaterThanOrEqual(2);
   });
 
+  // ─────────────────────────────────────────────────────────────────
+  // Sprint 135 — AC-S135-05 regression guard.
+  // The Mongo sidebar must stay at exactly 2 levels (database →
+  // collection). If a future sprint accidentally introduces a "schema"
+  // layer between database and collection (or flattens the tree), this
+  // test fails before the user sees a regression.
+  // ─────────────────────────────────────────────────────────────────
+  it("renders database → collection (2-level tree, no schema layer) — AC-S135-05", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    // Level 1 — the database row is visible after the initial load.
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+
+    // Expand the database to reveal level 2.
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+
+    // Level 2 — the collection row appears directly under the database.
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+
+    // No "schema" row may exist between the two levels — the document
+    // paradigm has no schema concept and a stray `*-schema` aria-label
+    // would indicate a regression to the relational tree shape.
+    expect(screen.queryByLabelText(/schema$/i)).toBeNull();
+  });
+
   it("Escape clears the search query", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 
