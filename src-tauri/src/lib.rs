@@ -24,6 +24,8 @@ pub fn run() {
             commands::connection::move_connection_to_group,
             commands::connection::export_connections,
             commands::connection::import_connections,
+            commands::connection::export_connections_encrypted,
+            commands::connection::import_connections_encrypted,
             commands::rdb::schema::list_schemas,
             commands::rdb::schema::list_tables,
             commands::rdb::schema::get_table_columns,

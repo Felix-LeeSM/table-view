@@ -4,10 +4,13 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
 import {
-  exportConnections,
+  exportConnectionsEncrypted,
   importConnections,
+  importConnectionsEncrypted,
   type ImportResult,
 } from "@lib/tauri";
+import MasterPasswordField from "./import-export/MasterPasswordField";
+import SelectionTree from "./import-export/SelectionTree";
 
 interface ImportExportDialogProps {
   onClose: () => void;
@@ -15,9 +18,25 @@ interface ImportExportDialogProps {
   initialTab?: "export" | "import";
 }
 
+const MASTER_PASSWORD_MIN_LEN = 8;
+/**
+ * Sprint 140 — canonical message rendered inline when the user enters the
+ * wrong master password. The backend emits the same string from
+ * `AppError::Encryption("Incorrect master password — the file could not be
+ * decrypted")`. Tests assert that this exact string makes it to the UI
+ * surface.
+ */
+const INCORRECT_MASTER_PASSWORD_MESSAGE =
+  "Incorrect master password — the file could not be decrypted";
+
 /**
  * Sprint 96: migrated to the `TabsDialog` preset. The Export/Import panes
  * keep their bodies; the preset owns the title + tab list + dialog shell.
+ *
+ * Sprint 140: the Export pane now wraps the selection in a master-password
+ * envelope (Argon2id + AES-256-GCM) instead of emitting plain JSON; the
+ * Import pane auto-detects envelope vs plain payload and surfaces the
+ * shared "Incorrect master password" message on a wrong-password failure.
  */
 export default function ImportExportDialog({
   onClose,
@@ -28,7 +47,7 @@ export default function ImportExportDialog({
   return (
     <TabsDialog
       title="Import / Export Connections"
-      description="Move connections between machines as JSON. Passwords are never included."
+      description="Move connections between machines as an encrypted JSON envelope. Passwords are never embedded — the master password is required only to wrap and unwrap the file."
       className="w-dialog-lg bg-secondary"
       onClose={onClose}
       value={tab}
@@ -65,32 +84,37 @@ export default function ImportExportDialog({
 
 function ExportPanel() {
   const connections = useConnectionStore((s) => s.connections);
+  const groups = useConnectionStore((s) => s.groups);
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(connections.map((c) => c.id)),
   );
+  const [masterPassword, setMasterPassword] = useState("");
   const [json, setJson] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [running, setRunning] = useState(false);
 
-  const allChecked = selected.size === connections.length;
-
-  const toggle = (id: string) => {
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const passwordTooShort =
+    masterPassword.length > 0 &&
+    masterPassword.length < MASTER_PASSWORD_MIN_LEN;
+  const generateDisabled =
+    selected.size === 0 ||
+    masterPassword.length < MASTER_PASSWORD_MIN_LEN ||
+    running;
 
   const handleGenerate = async () => {
     setError(null);
+    setRunning(true);
     try {
-      const out = await exportConnections(Array.from(selected));
+      const out = await exportConnectionsEncrypted(
+        Array.from(selected),
+        masterPassword,
+      );
       setJson(out);
     } catch (e) {
-      setError(String(e));
+      setError(extractErrorMessage(e));
     }
+    setRunning(false);
   };
 
   const handleCopy = () => {
@@ -101,72 +125,42 @@ function ExportPanel() {
         window.setTimeout(() => setCopied(false), 1500);
       })
       .catch(() => {
-        // Clipboard may be unavailable in some contexts
+        // Clipboard may be unavailable in some contexts (e.g. test env);
+        // failure here is benign and intentionally swallowed.
       });
   };
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Select connections to include. Passwords are <strong>never</strong>{" "}
-        exported — re-enter them after importing.
+        Select connections to include and pick a master password. The export
+        file is encrypted with <strong>AES-256-GCM</strong> via an Argon2id key
+        derived from the password — passwords for individual connections are
+        never embedded, only the data needed to recreate them.
       </p>
 
-      {connections.length === 0 ? (
-        <div
-          role="status"
-          className="rounded border border-border bg-background px-3 py-4 text-center text-xs text-muted-foreground"
-        >
-          No connections to export.
-        </div>
-      ) : (
-        <div className="max-h-40 overflow-auto rounded border border-border bg-background">
-          <label className="flex cursor-pointer items-center gap-2 border-b border-border px-3 py-1.5 text-xs font-medium text-secondary-foreground hover:bg-muted">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              onChange={(e) =>
-                setSelected(
-                  e.target.checked
-                    ? new Set(connections.map((c) => c.id))
-                    : new Set(),
-                )
-              }
-            />
-            Select all ({connections.length})
-          </label>
-          {connections.map((c) => (
-            <label
-              key={c.id}
-              className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-secondary-foreground hover:bg-muted"
-            >
-              <input
-                type="checkbox"
-                checked={selected.has(c.id)}
-                onChange={() => toggle(c.id)}
-              />
-              <span className="font-medium text-foreground">{c.name}</span>
-              <span className="text-muted-foreground">
-                ({c.db_type} @ {c.host}:{c.port})
-              </span>
-              {c.has_password && (
-                <span className="ml-auto rounded bg-success/10 px-1.5 text-3xs font-medium text-success">
-                  pw set
-                </span>
-              )}
-            </label>
-          ))}
-        </div>
-      )}
+      <SelectionTree
+        connections={connections}
+        groups={groups}
+        selected={selected}
+        onChange={setSelected}
+      />
+
+      <MasterPasswordField
+        value={masterPassword}
+        onChange={setMasterPassword}
+        autoFocus
+        helpText="At least 8 characters. You will need it again to import the file on another machine."
+      />
 
       <div className="flex items-center gap-2">
         <Button
           variant="default"
           size="sm"
           onClick={handleGenerate}
-          disabled={selected.size === 0}
+          disabled={generateDisabled}
         >
-          Generate JSON
+          {running ? "Generating…" : "Generate encrypted JSON"}
         </Button>
         {json.length > 0 && (
           <Button
@@ -185,6 +179,16 @@ function ExportPanel() {
               </>
             )}
           </Button>
+        )}
+        {selected.size === 0 && (
+          <span role="status" className="text-3xs text-muted-foreground">
+            Select at least one connection.
+          </span>
+        )}
+        {selected.size > 0 && passwordTooShort && (
+          <span role="status" className="text-3xs text-muted-foreground">
+            Password must be at least {MASTER_PASSWORD_MIN_LEN} characters.
+          </span>
         )}
       </div>
 
@@ -217,26 +221,52 @@ interface ImportPanelProps {
   onImported: () => void;
 }
 
+/** Heuristic envelope detection — keeps the UI in sync with the backend
+ * `import_connections_encrypted` envelope check (presence of `kdf` +
+ * `ciphertext` keys). */
+function looksLikeEnvelope(raw: string): boolean {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      return typeof obj.kdf === "string" && typeof obj.ciphertext === "string";
+    }
+  } catch {
+    // Not valid JSON yet — assume plain text path.
+  }
+  return false;
+}
+
 function ImportPanel({ onImported }: ImportPanelProps) {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
   const loadGroups = useConnectionStore((s) => s.loadGroups);
   const [text, setText] = useState("");
+  const [masterPassword, setMasterPassword] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
+  const isEnvelope = looksLikeEnvelope(text);
+  const requiresPassword = isEnvelope && masterPassword.length === 0;
+
   const handleImport = async () => {
     setError(null);
     setResult(null);
+    if (requiresPassword) {
+      setError("Master password required to decrypt this envelope");
+      return;
+    }
     setRunning(true);
     try {
-      const r = await importConnections(text);
+      const r = isEnvelope
+        ? await importConnectionsEncrypted(text, masterPassword)
+        : await importConnections(text);
       setResult(r);
       // Refresh stores so the sidebar shows the new entries
       await loadConnections();
       await loadGroups();
     } catch (e) {
-      setError(String(e));
+      setError(extractErrorMessage(e));
     }
     setRunning(false);
   };
@@ -244,14 +274,26 @@ function ImportPanel({ onImported }: ImportPanelProps) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Paste a previously-exported JSON below. All imported connections start{" "}
+        Paste a previously-exported JSON below. Encrypted envelopes need the
+        original master password; plain JSON exports are accepted unchanged for
+        backward compatibility. Imported connections start{" "}
         <strong>without a password</strong>; you must edit each one before
         connecting.
       </p>
 
+      <MasterPasswordField
+        value={masterPassword}
+        onChange={setMasterPassword}
+        helpText={
+          isEnvelope
+            ? "Required to decrypt this envelope."
+            : "Only needed when the payload below is an encrypted envelope."
+        }
+      />
+
       <textarea
         className="h-40 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary"
-        placeholder='{"schema_version":1,"connections":[...],"groups":[...]}'
+        placeholder='{"v":1,"kdf":"argon2id","alg":"aes-256-gcm",...} or {"schema_version":1,"connections":[...],"groups":[...]}'
         value={text}
         onChange={(e) => setText(e.target.value)}
         aria-label="Import JSON input"
@@ -270,6 +312,11 @@ function ImportPanel({ onImported }: ImportPanelProps) {
           <Button variant="outline" size="sm" onClick={onImported}>
             Done
           </Button>
+        )}
+        {isEnvelope && (
+          <span className="text-3xs text-muted-foreground">
+            Encrypted envelope detected.
+          </span>
         )}
       </div>
 
@@ -342,4 +389,21 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
       </p>
     </div>
   );
+}
+
+/** Extract a user-facing message from a Tauri invoke rejection. The
+ * backend emits `AppError` as a serialised string (see `AppError::serialize`),
+ * so the value Tauri rejects with is typically already the message; for
+ * unexpected shapes we fall back to `String(e)`. We special-case the canonical
+ * incorrect-password message so the inline text matches across the test
+ * suite and the live app. */
+function extractErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  // Backend includes the variant prefix `Encryption error: <msg>` — strip
+  // it for the canonical wrong-password path so the user sees the clean
+  // sentence and tests can assert a stable substring.
+  if (raw.includes(INCORRECT_MASTER_PASSWORD_MESSAGE)) {
+    return INCORRECT_MASTER_PASSWORD_MESSAGE;
+  }
+  return raw;
 }

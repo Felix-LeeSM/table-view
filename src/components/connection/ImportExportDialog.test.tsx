@@ -17,6 +17,8 @@ vi.mock("@lib/tauri", async () => {
     ...actual,
     exportConnections: vi.fn(),
     importConnections: vi.fn(),
+    exportConnectionsEncrypted: vi.fn(),
+    importConnectionsEncrypted: vi.fn(),
   };
 });
 
@@ -54,6 +56,14 @@ function makeConn(id: string, hasPw = false): ConnectionConfig {
   };
 }
 
+/** Helper: type a value into a labelled input via fireEvent.change. */
+function typeInto(label: RegExp | string, value: string) {
+  const input = screen.getByLabelText(label) as HTMLInputElement;
+  fireEvent.change(input, { target: { value } });
+}
+
+const VALID_PW = "open-sesame!";
+
 describe("ImportExportDialog", () => {
   describe("Export", () => {
     it("renders 'No connections to export' when store is empty", () => {
@@ -73,11 +83,13 @@ describe("ImportExportDialog", () => {
       expect(screen.getByText(/pw set/i)).toBeInTheDocument();
     });
 
-    it("calls exportConnections with selected ids and shows JSON", async () => {
-      const { exportConnections } = await import("@lib/tauri");
-      (exportConnections as ReturnType<typeof vi.fn>).mockResolvedValue(
-        '{"schema_version":1,"connections":[],"groups":[]}',
-      );
+    it("calls exportConnectionsEncrypted with selected ids and master password and shows JSON", async () => {
+      const { exportConnectionsEncrypted } = await import("@lib/tauri");
+      const envelopeJson =
+        '{"v":1,"kdf":"argon2id","salt":"AAAA","nonce":"AAAA","alg":"aes-256-gcm","ciphertext":"AAAA","tag_attached":true}';
+      (
+        exportConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(envelopeJson);
 
       useConnectionStore.setState({
         connections: [makeConn("c1"), makeConn("c2")],
@@ -85,56 +97,96 @@ describe("ImportExportDialog", () => {
       render(<ImportExportDialog onClose={vi.fn()} />);
 
       await act(async () => {
-        fireEvent.click(screen.getByRole("button", { name: /generate json/i }));
+        typeInto(/^master password$/i, VALID_PW);
       });
 
-      expect(exportConnections).toHaveBeenCalledWith(["c1", "c2"]);
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: /generate encrypted json/i }),
+        );
+      });
+
+      expect(exportConnectionsEncrypted).toHaveBeenCalledWith(
+        ["c1", "c2"],
+        VALID_PW,
+      );
       expect(
         screen.getByLabelText("Generated export JSON"),
       ).toBeInTheDocument();
       expect(
         (screen.getByLabelText("Generated export JSON") as HTMLTextAreaElement)
           .value,
-      ).toContain("schema_version");
+      ).toContain("kdf");
     });
 
-    it("excludes unchecked connections", async () => {
-      const { exportConnections } = await import("@lib/tauri");
-      (exportConnections as ReturnType<typeof vi.fn>).mockResolvedValue("{}");
-
-      useConnectionStore.setState({
-        connections: [makeConn("c1"), makeConn("c2")],
-      });
+    it("Generate button is disabled when 0 connections are selected", async () => {
+      useConnectionStore.setState({ connections: [makeConn("c1")] });
       render(<ImportExportDialog onClose={vi.fn()} />);
 
-      // Uncheck c2
-      const checkboxes = screen
-        .getByText("c2 DB")
-        .closest("label")!
-        .querySelectorAll("input[type='checkbox']");
+      // Provide a valid password first so password length is not the blocker.
       await act(async () => {
-        fireEvent.click(checkboxes[0]!);
+        typeInto(/^master password$/i, VALID_PW);
       });
-
+      // Uncheck the only connection via select-all
       await act(async () => {
-        fireEvent.click(screen.getByRole("button", { name: /generate json/i }));
+        fireEvent.click(screen.getByRole("checkbox", { name: /select all/i }));
       });
-
-      expect(exportConnections).toHaveBeenCalledWith(["c1"]);
+      expect(
+        screen.getByRole("button", { name: /generate encrypted json/i }),
+      ).toBeDisabled();
     });
 
-    it("Copy button writes the generated JSON to the clipboard", async () => {
-      const { exportConnections } = await import("@lib/tauri");
-      const expectedJson = '{"schema_version":1,"connections":[]}';
-      (exportConnections as ReturnType<typeof vi.fn>).mockResolvedValue(
-        expectedJson,
-      );
+    it("Generate button is disabled when password is shorter than 8 characters", async () => {
+      useConnectionStore.setState({ connections: [makeConn("c1")] });
+      render(<ImportExportDialog onClose={vi.fn()} />);
+
+      await act(async () => {
+        typeInto(/^master password$/i, "short");
+      });
+      expect(
+        screen.getByRole("button", { name: /generate encrypted json/i }),
+      ).toBeDisabled();
+    });
+
+    it("renders error alert when exportConnectionsEncrypted rejects", async () => {
+      const { exportConnectionsEncrypted } = await import("@lib/tauri");
+      (
+        exportConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(new Error("backend exploded"));
 
       useConnectionStore.setState({ connections: [makeConn("c1")] });
       render(<ImportExportDialog onClose={vi.fn()} />);
 
       await act(async () => {
-        fireEvent.click(screen.getByRole("button", { name: /generate json/i }));
+        typeInto(/^master password$/i, VALID_PW);
+      });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: /generate encrypted json/i }),
+        );
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/backend exploded/i);
+    });
+
+    it("Copy button writes the generated JSON to the clipboard", async () => {
+      const { exportConnectionsEncrypted } = await import("@lib/tauri");
+      const expectedJson =
+        '{"v":1,"kdf":"argon2id","ciphertext":"abc","alg":"aes-256-gcm","salt":"a","nonce":"a","tag_attached":true}';
+      (
+        exportConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(expectedJson);
+
+      useConnectionStore.setState({ connections: [makeConn("c1")] });
+      render(<ImportExportDialog onClose={vi.fn()} />);
+
+      await act(async () => {
+        typeInto(/^master password$/i, VALID_PW);
+      });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: /generate encrypted json/i }),
+        );
       });
       await act(async () => {
         fireEvent.click(
@@ -147,39 +199,6 @@ describe("ImportExportDialog", () => {
         expect(screen.getByText(/copied/i)).toBeInTheDocument();
       });
     });
-
-    it("Generate button is disabled when no rows are selected", async () => {
-      useConnectionStore.setState({ connections: [makeConn("c1")] });
-      render(<ImportExportDialog onClose={vi.fn()} />);
-
-      // Uncheck the only connection via select-all
-      const selectAll = screen
-        .getByText(/select all/i)
-        .closest("label")!
-        .querySelector("input[type='checkbox']") as HTMLInputElement;
-      await act(async () => {
-        fireEvent.click(selectAll);
-      });
-      expect(
-        screen.getByRole("button", { name: /generate json/i }),
-      ).toBeDisabled();
-    });
-
-    it("renders error alert when exportConnections rejects", async () => {
-      const { exportConnections } = await import("@lib/tauri");
-      (exportConnections as ReturnType<typeof vi.fn>).mockRejectedValue(
-        new Error("backend exploded"),
-      );
-
-      useConnectionStore.setState({ connections: [makeConn("c1")] });
-      render(<ImportExportDialog onClose={vi.fn()} />);
-
-      await act(async () => {
-        fireEvent.click(screen.getByRole("button", { name: /generate json/i }));
-      });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(/backend exploded/i);
-    });
   });
 
   describe("Import", () => {
@@ -189,9 +208,11 @@ describe("ImportExportDialog", () => {
       expect(btn).toBeDisabled();
     });
 
-    it("calls importConnections with the textarea content and refreshes the store", async () => {
-      const { importConnections } = await import("@lib/tauri");
-      (importConnections as ReturnType<typeof vi.fn>).mockResolvedValue({
+    it("envelope round-trip: encrypted payload + password → importConnectionsEncrypted", async () => {
+      const { importConnectionsEncrypted } = await import("@lib/tauri");
+      (
+        importConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
         imported: ["new-1", "new-2"],
         renamed: [],
         created_groups: [],
@@ -204,21 +225,123 @@ describe("ImportExportDialog", () => {
 
       render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
 
+      const envelopeJson =
+        '{"v":1,"kdf":"argon2id","alg":"aes-256-gcm","ciphertext":"AAAA","salt":"AA","nonce":"AA","tag_attached":true}';
       const ta = screen.getByLabelText(
         "Import JSON input",
       ) as HTMLTextAreaElement;
       await act(async () => {
-        fireEvent.change(ta, { target: { value: '{"schema_version":1}' } });
+        fireEvent.change(ta, { target: { value: envelopeJson } });
+      });
+      // The dialog should hint that an envelope was detected.
+      expect(
+        screen.getByText(/encrypted envelope detected/i),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        typeInto(/^master password$/i, VALID_PW);
       });
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
       });
 
-      expect(importConnections).toHaveBeenCalledWith('{"schema_version":1}');
+      expect(importConnectionsEncrypted).toHaveBeenCalledWith(
+        envelopeJson,
+        VALID_PW,
+      );
       expect(loadConnections).toHaveBeenCalled();
       expect(loadGroups).toHaveBeenCalled();
       await waitFor(() => {
         expect(screen.getByText(/imported 2 connections/i)).toBeInTheDocument();
+      });
+    });
+
+    it("plain JSON path (regression): non-envelope payload routes to importConnections without password", async () => {
+      const { importConnections, importConnectionsEncrypted } =
+        await import("@lib/tauri");
+      (importConnections as ReturnType<typeof vi.fn>).mockResolvedValue({
+        imported: ["new-1"],
+        renamed: [],
+        created_groups: [],
+        skipped_groups: [],
+      });
+
+      render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
+
+      const plainJson = '{"schema_version":1,"connections":[],"groups":[]}';
+      const ta = screen.getByLabelText(
+        "Import JSON input",
+      ) as HTMLTextAreaElement;
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: plainJson } });
+      });
+      // No envelope hint should appear for plain JSON.
+      expect(screen.queryByText(/encrypted envelope detected/i)).toBeNull();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+      });
+
+      expect(importConnections).toHaveBeenCalledWith(plainJson);
+      expect(importConnectionsEncrypted).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect(screen.getByText(/imported 1 connection/i)).toBeInTheDocument();
+      });
+    });
+
+    it("envelope without password shows inline 'master password required' error", async () => {
+      const { importConnectionsEncrypted } = await import("@lib/tauri");
+      render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
+
+      const envelopeJson =
+        '{"v":1,"kdf":"argon2id","alg":"aes-256-gcm","ciphertext":"AAAA","salt":"AA","nonce":"AA","tag_attached":true}';
+      const ta = screen.getByLabelText(
+        "Import JSON input",
+      ) as HTMLTextAreaElement;
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: envelopeJson } });
+      });
+      // Leave master password empty
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+      });
+
+      expect(importConnectionsEncrypted).not.toHaveBeenCalled();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /master password required/i,
+      );
+    });
+
+    it("wrong password surfaces the canonical 'Incorrect master password' inline error", async () => {
+      const { importConnectionsEncrypted } = await import("@lib/tauri");
+      // Backend returns the variant-prefixed error string.
+      (
+        importConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockRejectedValue(
+        "Encryption error: Incorrect master password — the file could not be decrypted",
+      );
+
+      render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
+
+      const envelopeJson =
+        '{"v":1,"kdf":"argon2id","alg":"aes-256-gcm","ciphertext":"AAAA","salt":"AA","nonce":"AA","tag_attached":true}';
+      const ta = screen.getByLabelText(
+        "Import JSON input",
+      ) as HTMLTextAreaElement;
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: envelopeJson } });
+      });
+      await act(async () => {
+        typeInto(/^master password$/i, "wrong-pw-1");
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          /incorrect master password — the file could not be decrypted/i,
+        );
       });
     });
 

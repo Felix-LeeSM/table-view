@@ -26,6 +26,7 @@ futures-util = "0.3"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 aes-gcm = "0.10"
+argon2 = "0.5"
 base64 = "0.22"
 thiserror = "2"
 anyhow = "1"

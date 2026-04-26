@@ -131,6 +131,40 @@ export async function importConnections(json: string): Promise<ImportResult> {
   return invoke<ImportResult>("import_connections", { json });
 }
 
+/**
+ * Sprint 140 — encrypted export. The backend wraps the plain `ExportPayload`
+ * JSON in an `EncryptedEnvelope` (Argon2id KDF + AES-256-GCM AEAD) using
+ * the supplied master password. Returns the envelope serialised as
+ * pretty JSON. The backend rejects passwords shorter than 8 characters.
+ */
+export async function exportConnectionsEncrypted(
+  ids: string[],
+  masterPassword: string,
+): Promise<string> {
+  return invoke<string>("export_connections_encrypted", {
+    ids,
+    masterPassword,
+  });
+}
+
+/**
+ * Sprint 140 — encrypted import. Accepts either an `EncryptedEnvelope` JSON
+ * (auto-detected via `kdf` + `ciphertext` fields) or a plain `ExportPayload`
+ * JSON. When the payload is an envelope, `masterPassword` is required and
+ * a wrong password surfaces the canonical message
+ * `Incorrect master password — the file could not be decrypted`. For
+ * plain JSON the password is ignored.
+ */
+export async function importConnectionsEncrypted(
+  payload: string,
+  masterPassword: string,
+): Promise<ImportResult> {
+  return invoke<ImportResult>("import_connections_encrypted", {
+    payload,
+    masterPassword,
+  });
+}
+
 // Schema exploration
 export async function listSchemas(connectionId: string): Promise<SchemaInfo[]> {
   return invoke<SchemaInfo[]>("list_schemas", { connectionId });

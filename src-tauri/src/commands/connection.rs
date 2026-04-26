@@ -490,6 +490,67 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
     serde_json::to_string_pretty(&payload).map_err(AppError::from)
 }
 
+// ---------------------------------------------------------------------------
+// Sprint 140 — encrypted export / import (master-password envelope)
+// ---------------------------------------------------------------------------
+
+/// Minimum length the master password must satisfy to be accepted by the
+/// encrypted export path. Empty / shorter passwords are rejected at the
+/// command boundary so the KDF is never invoked with trivially-weak input.
+const MASTER_PASSWORD_MIN_LEN: usize = 8;
+
+/// Export the requested connections wrapped in a password-derived
+/// `EncryptedEnvelope`. The plaintext body is identical to the value
+/// `export_connections` would produce — `aead_encrypt_with_password` simply
+/// wraps it. Returns the envelope serialised as pretty JSON.
+#[tauri::command]
+pub fn export_connections_encrypted(
+    ids: Vec<String>,
+    master_password: String,
+) -> Result<String, AppError> {
+    if master_password.len() < MASTER_PASSWORD_MIN_LEN {
+        return Err(AppError::Validation(format!(
+            "Master password must be at least {} characters",
+            MASTER_PASSWORD_MIN_LEN
+        )));
+    }
+
+    let plain_json = export_connections(ids)?;
+    let envelope = storage::crypto::aead_encrypt_with_password(&plain_json, &master_password)?;
+    serde_json::to_string_pretty(&envelope).map_err(AppError::from)
+}
+
+/// Import connections from either an encrypted envelope or a plain
+/// `ExportPayload` JSON. Envelope detection is purely structural: when
+/// `payload` parses as an `EncryptedEnvelope`, the master password is
+/// required and the ciphertext is decrypted; otherwise the call falls
+/// through to the existing plain-JSON `import_connections` path so older
+/// (or unencrypted) backups remain importable. Wrong password collapses to
+/// the canonical `INCORRECT_MASTER_PASSWORD_MESSAGE`.
+#[tauri::command]
+pub fn import_connections_encrypted(
+    payload: String,
+    master_password: String,
+) -> Result<ImportResult, AppError> {
+    // Heuristic: an envelope JSON has a `kdf` field. Anything else routes
+    // to the plain-JSON path. We try a strict envelope parse and only
+    // accept it when the `kdf` field is present so a payload that
+    // happens to deserialize loosely (e.g. via #[serde(default)]) does
+    // not accidentally short-circuit the plain-JSON branch.
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload) {
+        if value.get("kdf").is_some() && value.get("ciphertext").is_some() {
+            let envelope: storage::crypto::EncryptedEnvelope = serde_json::from_str(&payload)
+                .map_err(|e| AppError::Validation(format!("Invalid envelope JSON: {}", e)))?;
+            let plain_json =
+                storage::crypto::aead_decrypt_with_password(&envelope, &master_password)?;
+            return import_connections(plain_json);
+        }
+    }
+
+    // Plain-JSON fallback — backward compatibility with existing exports.
+    import_connections(payload)
+}
+
 /// Import connections from a JSON payload produced by `export_connections`.
 /// All imported connections start with no password — the user must re-enter
 /// each one before connecting.
@@ -1377,5 +1438,188 @@ mod tests {
             make_adapter(&DatabaseType::Redis),
             Err(AppError::Unsupported(_))
         ));
+    }
+
+    // -------------------------------------------------------------------
+    // Sprint 140 — encrypted export / import command tests
+    // -------------------------------------------------------------------
+
+    #[test]
+    #[serial]
+    fn test_export_connections_encrypted_round_trip() {
+        let _dir = setup_test_env();
+
+        storage::save_group(sample_group("g1", "G1")).unwrap();
+        let mut c1 = sample_connection("c1", "DB1");
+        c1.password = "p@ss1".into();
+        c1.group_id = Some("g1".into());
+        storage_save_conn(c1).unwrap();
+
+        let mut c2 = sample_connection("c2", "DB2");
+        c2.password = String::new();
+        storage_save_conn(c2).unwrap();
+
+        let envelope_json = export_connections_encrypted(vec![], "open-sesame!".into()).unwrap();
+        // Envelope shape sanity (locked schema)
+        assert!(envelope_json.contains("\"v\": 1"));
+        assert!(envelope_json.contains("\"kdf\": \"argon2id\""));
+        assert!(envelope_json.contains("\"alg\": \"aes-256-gcm\""));
+        assert!(envelope_json.contains("\"tag_attached\": true"));
+        // Plaintext payload must not leak through ciphertext
+        assert!(!envelope_json.contains("DB1"));
+        assert!(!envelope_json.contains("DB2"));
+
+        // Reset storage and import via the encrypted path
+        storage::delete_connection("c1").unwrap();
+        storage::delete_connection("c2").unwrap();
+        storage::delete_group("g1").unwrap();
+
+        let r = import_connections_encrypted(envelope_json, "open-sesame!".into()).unwrap();
+        assert_eq!(r.imported.len(), 2);
+
+        let stored = storage::load_storage_redacted().unwrap();
+        assert_eq!(stored.connections.len(), 2);
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_export_connections_encrypted_rejects_short_password() {
+        let _dir = setup_test_env();
+
+        let err = export_connections_encrypted(vec![], "abc".into()).unwrap_err();
+        match err {
+            AppError::Validation(msg) => assert!(msg.contains("at least 8 characters")),
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_export_connections_encrypted_rejects_empty_password() {
+        let _dir = setup_test_env();
+
+        let err = export_connections_encrypted(vec![], String::new()).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_encrypted_wrong_password_rejected() {
+        let _dir = setup_test_env();
+
+        storage_save_conn(sample_connection("c1", "DB1")).unwrap();
+        let envelope_json = export_connections_encrypted(vec![], "real-pass-1".into()).unwrap();
+
+        let err = import_connections_encrypted(envelope_json, "wrong-pass-2".into()).unwrap_err();
+        match err {
+            AppError::Encryption(msg) => {
+                assert_eq!(msg, storage::crypto::INCORRECT_MASTER_PASSWORD_MESSAGE);
+            }
+            other => panic!("Expected Encryption error, got: {:?}", other),
+        }
+
+        cleanup_test_env();
+    }
+
+    /// Plain JSON pass-through: when the payload is not an envelope, the
+    /// command falls back to the existing `import_connections` flow and
+    /// the master password is ignored. This guards backward compatibility
+    /// with older exports.
+    #[test]
+    #[serial]
+    fn test_import_connections_encrypted_plain_json_pass_through() {
+        let _dir = setup_test_env();
+
+        let payload = ExportPayload {
+            schema_version: EXPORT_SCHEMA_VERSION,
+            exported_at_unix_secs: 0,
+            app: "table-view".into(),
+            connections: vec![ConnectionConfigPublic {
+                id: "x".into(),
+                name: "PlainImport".into(),
+                db_type: DatabaseType::Postgresql,
+                host: "h".into(),
+                port: 5432,
+                user: "u".into(),
+                database: "d".into(),
+                group_id: None,
+                color: None,
+                connection_timeout: None,
+                keep_alive_interval: None,
+                environment: None,
+                has_password: false,
+                paradigm: crate::models::Paradigm::Rdb,
+                auth_source: None,
+                replica_set: None,
+                tls_enabled: None,
+            }],
+            groups: vec![],
+        };
+        let plain_json = serde_json::to_string(&payload).unwrap();
+
+        // Empty password is fine for plain-JSON fallback path.
+        let r = import_connections_encrypted(plain_json, String::new()).unwrap();
+        assert_eq!(r.imported.len(), 1);
+
+        let stored = storage::load_storage_redacted().unwrap();
+        assert_eq!(stored.connections.len(), 1);
+        assert_eq!(stored.connections[0].name, "PlainImport");
+
+        cleanup_test_env();
+    }
+
+    /// Schema version round-trip — a v1 payload encrypted to an envelope
+    /// then decrypted must yield the same `schema_version`.
+    #[test]
+    #[serial]
+    fn test_import_connections_encrypted_preserves_schema_version() {
+        let _dir = setup_test_env();
+
+        storage_save_conn(sample_connection("c1", "DB1")).unwrap();
+        let envelope_json = export_connections_encrypted(vec![], "another-pass".into()).unwrap();
+
+        // Re-clear storage and import — the decrypted body must still
+        // carry schema_version=1 to be accepted by import_connections.
+        storage::delete_connection("c1").unwrap();
+        let r = import_connections_encrypted(envelope_json, "another-pass".into()).unwrap();
+        assert_eq!(r.imported.len(), 1);
+
+        cleanup_test_env();
+    }
+
+    #[test]
+    #[serial]
+    fn test_import_connections_encrypted_invalid_envelope_json() {
+        let _dir = setup_test_env();
+
+        // Looks like an envelope (has kdf/ciphertext) but base64 garbage.
+        let bad = serde_json::json!({
+            "v": 1,
+            "kdf": "argon2id",
+            "m_cost": 19456,
+            "t_cost": 2,
+            "p_cost": 1,
+            "salt": "AAAA",
+            "nonce": "AAAA",
+            "alg": "aes-256-gcm",
+            "ciphertext": "AAAA",
+            "tag_attached": true
+        })
+        .to_string();
+        let err = import_connections_encrypted(bad, "any-pass-12".into()).unwrap_err();
+        match err {
+            AppError::Encryption(msg) => {
+                assert_eq!(msg, storage::crypto::INCORRECT_MASTER_PASSWORD_MESSAGE);
+            }
+            other => panic!("Expected Encryption error, got: {:?}", other),
+        }
+
+        cleanup_test_env();
     }
 }
