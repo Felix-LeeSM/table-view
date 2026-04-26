@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
 import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
+import { useAppShellStore } from "./stores/appShellStore";
 
 // Mock page components to isolate shortcut testing — App.tsx now renders one
 // of HomePage / WorkspacePage based on the appShell screen, but the global
@@ -83,6 +84,10 @@ function fireShortcut(key: string, metaKey = true) {
 describe("App global shortcuts", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
+    // Sprint 133 — App-level shortcuts now branch on `appShellStore.screen`.
+    // Default each test to "workspace" so the existing Cmd+W/T/. assertions
+    // (which run against tab state) still see the workspace context.
+    useAppShellStore.setState({ screen: "workspace" });
   });
 
   it("Cmd+W closes the active tab", () => {
@@ -190,13 +195,54 @@ describe("App global shortcuts", () => {
     window.removeEventListener("quick-open", handler);
   });
 
-  it("Cmd+, dispatches open-settings event", () => {
+  // ── Sprint 133: Cmd+, repurposed from open-settings to Home/Workspace toggle ──
+
+  it("Cmd+, in workspace toggles the screen to home", () => {
+    useAppShellStore.setState({ screen: "workspace" });
+    render(<App />);
+
+    fireShortcut(",");
+    expect(useAppShellStore.getState().screen).toBe("home");
+  });
+
+  it("Cmd+, in home toggles the screen to workspace", () => {
+    useAppShellStore.setState({ screen: "home" });
+    render(<App />);
+
+    fireShortcut(",");
+    expect(useAppShellStore.getState().screen).toBe("workspace");
+  });
+
+  it("Cmd+, with focus inside an editable target is a no-op", () => {
+    useAppShellStore.setState({ screen: "workspace" });
+    render(<App />);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    act(() => {
+      fireEvent(
+        input,
+        new KeyboardEvent("keydown", {
+          key: ",",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(useAppShellStore.getState().screen).toBe("workspace");
+    document.body.removeChild(input);
+  });
+
+  it("Cmd+, no longer dispatches the legacy open-settings event", () => {
+    useAppShellStore.setState({ screen: "workspace" });
     const handler = vi.fn();
     window.addEventListener("open-settings", handler);
     render(<App />);
 
     fireShortcut(",");
-    expect(handler).toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
 
     window.removeEventListener("open-settings", handler);
   });
@@ -305,5 +351,130 @@ describe("App global shortcuts", () => {
     expect(tab).toBeDefined();
     expect(tab!.sql).toBe("BEGIN RETURN 1; END");
     useTabStore.setState({ tabs: [], activeTabId: null });
+  });
+
+  // ── Sprint 133: Cmd+1..9 → workspace tab switch ──
+
+  it("Cmd+1 activates the first tab in the workspace", () => {
+    const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
+    const t2 = makeTableTab({ id: "tab-2", table: "beta" });
+    const t3 = makeTableTab({ id: "tab-3", table: "gamma" });
+    useAppShellStore.setState({ screen: "workspace" });
+    useTabStore.setState({ tabs: [t1, t2, t3], activeTabId: "tab-3" });
+    render(<App />);
+
+    fireShortcut("1");
+    expect(useTabStore.getState().activeTabId).toBe("tab-1");
+  });
+
+  it("Cmd+2 activates the second tab in the workspace", () => {
+    const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
+    const t2 = makeTableTab({ id: "tab-2", table: "beta" });
+    useAppShellStore.setState({ screen: "workspace" });
+    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-1" });
+    render(<App />);
+
+    fireShortcut("2");
+    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+  });
+
+  it("Cmd+5 with only 3 tabs is a no-op", () => {
+    const t1 = makeTableTab({ id: "tab-1" });
+    const t2 = makeTableTab({ id: "tab-2", table: "two" });
+    const t3 = makeTableTab({ id: "tab-3", table: "three" });
+    useAppShellStore.setState({ screen: "workspace" });
+    useTabStore.setState({ tabs: [t1, t2, t3], activeTabId: "tab-1" });
+    render(<App />);
+
+    fireShortcut("5");
+    expect(useTabStore.getState().activeTabId).toBe("tab-1");
+  });
+
+  it("Cmd+1 in home is a no-op", () => {
+    const t1 = makeTableTab({ id: "tab-1" });
+    const t2 = makeTableTab({ id: "tab-2", table: "two" });
+    useAppShellStore.setState({ screen: "home" });
+    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
+    render(<App />);
+
+    fireShortcut("1");
+    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+  });
+
+  it("Cmd+1 with focus inside an editable target is a no-op", () => {
+    const t1 = makeTableTab({ id: "tab-1" });
+    const t2 = makeTableTab({ id: "tab-2", table: "two" });
+    useAppShellStore.setState({ screen: "workspace" });
+    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
+    render(<App />);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    act(() => {
+      fireEvent(
+        input,
+        new KeyboardEvent("keydown", {
+          key: "1",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+    document.body.removeChild(input);
+  });
+
+  // ── Sprint 133: Cmd+K → connection switcher open event ──
+
+  it("Cmd+K in workspace dispatches open-connection-switcher", () => {
+    useAppShellStore.setState({ screen: "workspace" });
+    const handler = vi.fn();
+    window.addEventListener("open-connection-switcher", handler);
+    render(<App />);
+
+    fireShortcut("k");
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0]?.[0]).toBeInstanceOf(CustomEvent);
+
+    window.removeEventListener("open-connection-switcher", handler);
+  });
+
+  it("Cmd+K in home does not dispatch open-connection-switcher", () => {
+    useAppShellStore.setState({ screen: "home" });
+    const handler = vi.fn();
+    window.addEventListener("open-connection-switcher", handler);
+    render(<App />);
+
+    fireShortcut("k");
+    expect(handler).not.toHaveBeenCalled();
+
+    window.removeEventListener("open-connection-switcher", handler);
+  });
+
+  it("Cmd+K with focus inside an editable target is a no-op", () => {
+    useAppShellStore.setState({ screen: "workspace" });
+    const handler = vi.fn();
+    window.addEventListener("open-connection-switcher", handler);
+    render(<App />);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    act(() => {
+      fireEvent(
+        input,
+        new KeyboardEvent("keydown", {
+          key: "k",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(handler).not.toHaveBeenCalled();
+    document.body.removeChild(input);
+    window.removeEventListener("open-connection-switcher", handler);
   });
 });

@@ -49,6 +49,8 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { label: "Close tab", keys: ["Cmd+W"] },
       { label: "New query tab", keys: ["Cmd+T"] },
       { label: "Reopen last closed tab", keys: ["Cmd+Shift+T"] },
+      // Sprint 133 — Cmd+1..9 jumps to the N-th workspace tab.
+      { label: "Switch to tab 1–9", keys: ["Cmd+1", "…", "Cmd+9"] },
     ],
   },
   {
@@ -65,12 +67,16 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { label: "Quick open", keys: ["Cmd+P"] },
       { label: "Refresh", keys: ["Cmd+R", "F5"] },
       { label: "Cancel running query", keys: ["Cmd+."] },
+      // Sprint 133 — Cmd+K opens the workspace ConnectionSwitcher.
+      { label: "Open connection switcher", keys: ["Cmd+K"] },
     ],
   },
   {
     label: "Panels",
     items: [
-      { label: "Settings", keys: ["Cmd+,"] },
+      // Sprint 133 — Cmd+, toggles the Home / Workspace screens (replaces
+      // the dead `open-settings` event from sprint 33).
+      { label: "Toggle Home/Workspace", keys: ["Cmd+,"] },
       { label: "Toggle favorites", keys: ["Cmd+Shift+F"] },
       { label: "Toggle global query log", keys: ["Cmd+Shift+C"] },
     ],

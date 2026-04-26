@@ -321,4 +321,33 @@ describe("ConnectionSwitcher", () => {
       document.querySelector('[aria-label="Connection: Beta"]'),
     ).not.toBeNull();
   });
+
+  // Sprint 133 — Cmd+K opens the switcher via a global event. The event
+  // listener is mounted in `useEffect` and toggles the controlled `open`
+  // state. We render the switcher with at least one connected connection
+  // so the trigger is enabled, dispatch the event, and assert that the
+  // popover content surfaces the connection rows.
+  it("dispatching open-connection-switcher opens the popover", () => {
+    const c1 = makeConnection("c1", { name: "Alpha" });
+    const c2 = makeConnection("c2", { name: "Beta" });
+    setConnections({ connections: [c1, c2], connected: ["c1", "c2"] });
+
+    render(<ConnectionSwitcher />);
+
+    // Sanity — the popover starts closed (no option rows in the DOM).
+    expect(
+      document.querySelector('[aria-label="Connection: Alpha"]'),
+    ).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("open-connection-switcher"));
+    });
+
+    expect(
+      document.querySelector('[aria-label="Connection: Alpha"]'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector('[aria-label="Connection: Beta"]'),
+    ).not.toBeNull();
+  });
 });

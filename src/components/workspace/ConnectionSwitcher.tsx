@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { FileText, KeyRound, Search, Table2 } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
@@ -65,6 +66,26 @@ export default function ConnectionSwitcher() {
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
 
+  // Sprint 133 — promote Radix `Select`'s open state to controlled so the
+  // global Cmd+K shortcut can flip it open via a window event without
+  // requiring the user to click the trigger first. The state is otherwise
+  // a transparent passthrough — `onOpenChange` mirrors the previous
+  // uncontrolled behaviour exactly.
+  const [open, setOpen] = useState(false);
+
+  // Sprint 133 — listen for the global `open-connection-switcher` event
+  // dispatched from `App.tsx` when the user presses Cmd+K / Ctrl+K. The
+  // switcher only mounts on the Workspace screen, so the listener is
+  // implicitly scoped — no need for an extra `screen === "workspace"`
+  // guard here. Cleanup on unmount keeps the listener count stable across
+  // Workspace remounts.
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener("open-connection-switcher", handler);
+    return () =>
+      window.removeEventListener("open-connection-switcher", handler);
+  }, []);
+
   const activeConn: ConnectionConfig | null =
     activeTab !== null
       ? (connections.find((c) => c.id === activeTab.connectionId) ?? null)
@@ -106,6 +127,8 @@ export default function ConnectionSwitcher() {
     <Select
       value={activeConn?.id ?? ""}
       onValueChange={handleChange}
+      open={open}
+      onOpenChange={setOpen}
       disabled={noConnected}
     >
       <SelectTrigger

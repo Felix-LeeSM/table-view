@@ -119,4 +119,26 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.getByText("Refresh")).toBeInTheDocument();
     expect(screen.queryByText("Close tab")).toBeNull();
   });
+
+  // ── Sprint 133: new shortcut labels surfaced in the cheatsheet ──
+
+  it("renders the Toggle Home/Workspace label (Cmd+,)", () => {
+    fireGlobalKey("?");
+
+    expect(screen.getByText("Toggle Home/Workspace")).toBeInTheDocument();
+    // Sanity — the legacy "Settings" label must no longer appear.
+    expect(screen.queryByText("Settings")).toBeNull();
+  });
+
+  it("renders the Switch to tab 1–9 label (Cmd+1..9)", () => {
+    fireGlobalKey("?");
+
+    expect(screen.getByText("Switch to tab 1–9")).toBeInTheDocument();
+  });
+
+  it("renders the Open connection switcher label (Cmd+K)", () => {
+    fireGlobalKey("?");
+
+    expect(screen.getByText("Open connection switcher")).toBeInTheDocument();
+  });
 });

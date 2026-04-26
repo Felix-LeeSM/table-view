@@ -103,17 +103,30 @@ export default function App() {
   // Cmd+N / Ctrl+N — new connection
   // Cmd+S / Ctrl+S — commit changes
   // Cmd+P / Ctrl+P — quick open
-  // Cmd+, / Ctrl+, — settings
+  // Cmd+, / Ctrl+, — toggle Home/Workspace (sprint 133 — repurposed from the
+  //                  old `open-settings` event which had zero consumers).
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
 
       const key = e.key;
+
+      // Sprint 133 — Cmd+, toggles between Home and Workspace screens.
+      // Repurposed from the dead `open-settings` event dispatch. The Shift /
+      // Alt guard prevents accidentally toggling on Cmd+Shift+, etc.
+      if (key === ",") {
+        if (e.shiftKey || e.altKey) return;
+        if (isEditableTarget(e.target)) return;
+        e.preventDefault();
+        const { screen: current, setScreen } = useAppShellStore.getState();
+        setScreen(current === "workspace" ? "home" : "workspace");
+        return;
+      }
+
       let eventName: string | null = null;
       if (key === "n") eventName = "new-connection";
       else if (key === "s") eventName = "commit-changes";
       else if (key === "p") eventName = "quick-open";
-      else if (key === ",") eventName = "open-settings";
 
       if (!eventName) return;
 
@@ -122,6 +135,49 @@ export default function App() {
 
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(eventName));
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Sprint 133 — Cmd+1..9 / Ctrl+1..9: switch the active workspace tab to
+  // the N-th tab (1-indexed). No-op outside the workspace screen, when
+  // focus is inside an editable element, or when the requested index is
+  // out of range. Numpad digit keys (`Numpad1`..) are intentionally NOT
+  // matched — only the top-row digit keys, per the sprint design bar.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.shiftKey || e.altKey) return;
+      const digit = e.key;
+      if (digit < "1" || digit > "9") return;
+      if (isEditableTarget(e.target)) return;
+      const { screen: current } = useAppShellStore.getState();
+      if (current !== "workspace") return;
+      const index = Number(digit) - 1;
+      const { tabs, setActiveTab } = useTabStore.getState();
+      const tab = tabs[index];
+      if (!tab) return;
+      e.preventDefault();
+      setActiveTab(tab.id);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Sprint 133 — Cmd+K / Ctrl+K: open the workspace `<ConnectionSwitcher>`
+  // popover via a dispatched `open-connection-switcher` event. Restricted
+  // to the workspace screen because Home does not mount the switcher.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.shiftKey || e.altKey) return;
+      if (e.key !== "k" && e.key !== "K") return;
+      if (isEditableTarget(e.target)) return;
+      const { screen: current } = useAppShellStore.getState();
+      if (current !== "workspace") return;
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("open-connection-switcher"));
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
