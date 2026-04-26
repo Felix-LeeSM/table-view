@@ -636,9 +636,12 @@ export function useActiveTab(): Tab | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Sprint 127 — per-connection "last active tab" tracker for the
- * `<ConnectionSwitcher>` graceful-fallback chain (last active tab → first
- * tab → new query tab).
+ * Sprint 127 — per-connection "last active tab" tracker, originally
+ * introduced for the (now-removed in S134) `<ConnectionSwitcher>`
+ * graceful-fallback chain (last active tab → first tab → new query tab).
+ * The tracker is kept because the same fallback chain is still useful for
+ * future connection-swap surfaces (Quick Open scoped jumps, etc.) and
+ * removing it now would force a re-introduction.
  *
  * Implementation note: this is deliberately a module-scoped `Map`, **not**
  * a zustand-persisted slice. The contract for sprint 127 explicitly
@@ -671,8 +674,8 @@ export function getLastActiveTabIdForConnection(
   const tracked = lastActiveTabIdByConnection.get(connectionId);
   if (!tracked) return undefined;
   // Defensive prune — if the tracked tab has since been closed we treat
-  // the connection as having no last-active tab so the
-  // `<ConnectionSwitcher>` fallback chain advances to the next step.
+  // the connection as having no last-active tab so any caller using this
+  // tracker as a graceful-fallback chain advances to the next step.
   const tabs = useTabStore.getState().tabs;
   if (!tabs.some((t) => t.id === tracked)) {
     lastActiveTabIdByConnection.delete(connectionId);

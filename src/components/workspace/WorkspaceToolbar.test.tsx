@@ -63,6 +63,7 @@ function makeQueryTab(overrides: Partial<QueryTab> = {}): QueryTab {
 function setConnections(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
+  focusedConnId?: string | null;
 }) {
   const conns = opts.connections ?? [];
   const active = new Set(opts.active ?? []);
@@ -75,6 +76,7 @@ function setConnections(opts: {
   useConnectionStore.setState({
     connections: conns,
     activeStatuses: statuses,
+    focusedConnId: opts.focusedConnId ?? null,
   });
 }
 
@@ -85,28 +87,38 @@ describe("WorkspaceToolbar", () => {
     __resetLastActiveTabsForTests();
   });
 
-  it("renders the three toolbar slots inside a labelled toolbar region", () => {
+  it("renders DB / Schema slots and the Disconnect button inside a labelled toolbar region", () => {
     render(<WorkspaceToolbar />);
 
     const toolbar = screen.getByRole("toolbar", { name: /workspace toolbar/i });
     expect(toolbar).toBeInTheDocument();
 
     expect(
-      screen.getByRole("combobox", { name: /active connection switcher/i }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: /active database \(read-only\)/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /active schema \(read-only\)/i }),
     ).toBeInTheDocument();
+    // Sprint 134 — DisconnectButton mounts adjacent to the (keyboard-only)
+    // refresh control. It exists regardless of connection state; disabled
+    // when no focused connection is currently connected.
+    expect(
+      screen.getByRole("button", { name: /disconnect/i }),
+    ).toBeInTheDocument();
+  });
+
+  // Sprint 134 — ConnectionSwitcher was removed. Guard against a
+  // regression accidentally re-mounting it by asserting the combobox
+  // role/name is gone.
+  it("does NOT render the legacy ConnectionSwitcher combobox", () => {
+    render(<WorkspaceToolbar />);
+    expect(
+      screen.queryByRole("combobox", { name: /active connection switcher/i }),
+    ).toBeNull();
   });
 
   it("falls back to the empty-workspace placeholder when no tab is active", () => {
     render(<WorkspaceToolbar />);
-
-    // Conn label = "No connection" placeholder.
-    expect(screen.getByText(/no connection/i)).toBeInTheDocument();
 
     // DB / Schema both show the em-dash sentinel for "no value".
     const db = screen.getByRole("button", {
@@ -133,11 +145,6 @@ describe("WorkspaceToolbar", () => {
 
     render(<WorkspaceToolbar />);
 
-    const trigger = screen.getByRole("combobox", {
-      name: /active connection switcher/i,
-    });
-    expect(trigger.textContent).toMatch(/c1 DB/);
-
     const schema = screen.getByRole("button", {
       name: /active schema \(read-only\)/i,
     });
@@ -163,17 +170,13 @@ describe("WorkspaceToolbar", () => {
 
     const { rerender } = render(<WorkspaceToolbar />);
     expect(
-      screen.getByRole("combobox", { name: /active connection switcher/i })
+      screen.getByRole("button", { name: /active schema \(read-only\)/i })
         .textContent,
-    ).toMatch(/Alpha/);
+    ).toMatch(/public/);
 
     useTabStore.setState({ activeTabId: tab2.id });
     rerender(<WorkspaceToolbar />);
 
-    expect(
-      screen.getByRole("combobox", { name: /active connection switcher/i })
-        .textContent,
-    ).toMatch(/Beta/);
     expect(
       screen.getByRole("button", { name: /active schema \(read-only\)/i })
         .textContent,

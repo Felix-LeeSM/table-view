@@ -536,6 +536,87 @@ describe("TabBar", () => {
     expect(cleanTab.querySelector('[data-dirty="true"]')).toBeNull();
   });
 
+  // ── Sprint 134 (AC-S134-06): dirty marker is independent of activeTabId ──
+  //
+  // Lesson 2026-04-27-workspace-toolbar-ux-gaps (#9) reported that the
+  // dirty dot was perceived to render only on the active tab. The
+  // production code at `TabBar.tsx` keys the marker on
+  // `dirtyTabIds.has(tab.id)` (NOT `tab.id === activeTabId`), so these
+  // tests guard against any future refactor accidentally re-coupling
+  // the two.
+
+  it("renders the dirty mark on a tab that is NOT the active tab (AC-S134-06)", () => {
+    addTableTab({
+      title: "users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
+    const tabs = useTabStore.getState().tabs;
+    const dirtyId = tabs[0]!.id; // "users" — will be DIRTY
+    const activeId = tabs[1]!.id; // "orders" — will be ACTIVE
+    act(() => {
+      useTabStore.setState({ activeTabId: activeId });
+      useTabStore.getState().setTabDirty(dirtyId, true);
+    });
+
+    render(<TabBar />);
+
+    const dirtyTabEl = screen.getByText("users").closest("[role='tab']")!;
+    const activeTabEl = screen.getByText("orders").closest("[role='tab']")!;
+
+    // The dirty (inactive) tab carries the marker.
+    expect(dirtyTabEl.querySelector('[data-dirty="true"]')).not.toBeNull();
+    // The active (clean) tab does NOT carry the marker.
+    expect(activeTabEl.querySelector('[data-dirty="true"]')).toBeNull();
+    // Sanity — confirm aria-selected matches the active tab so the
+    // assertion above isn't testing a layout/role coincidence.
+    expect(activeTabEl).toHaveAttribute("aria-selected", "true");
+    expect(dirtyTabEl).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("does NOT render a dirty mark on the active tab when only an inactive sibling is dirty (AC-S134-06)", () => {
+    addTableTab({
+      title: "users",
+      table: "users",
+      connectionId: "conn1",
+    });
+    addTableTab({
+      title: "orders",
+      table: "orders",
+      connectionId: "conn2",
+    });
+    addTableTab({
+      title: "events",
+      table: "events",
+      connectionId: "conn3",
+    });
+    const tabs = useTabStore.getState().tabs;
+    const activeId = tabs[2]!.id; // "events" — active + clean
+    const dirtyId = tabs[0]!.id; // "users" — dirty + NOT active
+    act(() => {
+      useTabStore.setState({ activeTabId: activeId });
+      useTabStore.getState().setTabDirty(dirtyId, true);
+    });
+
+    render(<TabBar />);
+
+    const activeTabEl = screen.getByText("events").closest("[role='tab']")!;
+    const dirtyTabEl = screen.getByText("users").closest("[role='tab']")!;
+
+    // The active tab is clean — no dot. (Regression guard against the
+    // observed bug where activeTabId was used as the dirty selector.)
+    expect(activeTabEl.querySelector('[data-dirty="true"]')).toBeNull();
+    expect(activeTabEl).toHaveAttribute("aria-selected", "true");
+
+    // The dirty (inactive) sibling DOES render the dot.
+    expect(dirtyTabEl.querySelector('[data-dirty="true"]')).not.toBeNull();
+  });
+
   // AC-02 — clean tab close button still removes the tab synchronously
   // (no ConfirmDialog), so the gate is strictly opt-in on dirty state.
   it("close button on a clean tab removes it without confirmation", () => {

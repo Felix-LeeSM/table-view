@@ -1,7 +1,7 @@
 ---
 title: Lessons 인덱스
 type: index
-updated: 2026-04-25
+updated: 2026-04-27
 ---
 
 # Lessons 인덱스
@@ -16,6 +16,7 @@ updated: 2026-04-25
 - [2026-04-25 · FK 참조 점프 — 뼈대 완성돼 있으나 프론트/백엔드 문자열 포맷 불일치로 한 번도 작동 안 함](2026-04-25-fk-reference-string-contract-drift/memory.md)
 - [2026-04-25 · 다중-sprint chain — 이전 sprint 산출물은 contract 의 git diff empty check 로 강제한다](2026-04-25-multi-sprint-protected-scope-diff/memory.md)
 - [2026-04-25 · UI 재설계는 e2e 셀렉터·동작 가정을 함께 갈아야 한다](2026-04-25-e2e-stale-after-ui-redesign/memory.md)
+- [2026-04-27 · workspace toolbar UX 갭 3건 (popover 크기 / connection SoT 분리 / paradigm-aware completion)](2026-04-27-workspace-toolbar-ux-gaps/memory.md)
 
 ## 형식
 

@@ -136,9 +136,14 @@ describe("ShortcutCheatsheet", () => {
     expect(screen.getByText("Switch to tab 1–9")).toBeInTheDocument();
   });
 
-  it("renders the Open connection switcher label (Cmd+K)", () => {
+  // Sprint 134 — `Open connection switcher` (Cmd+K) was removed from the
+  // cheatsheet alongside the deletion of `<ConnectionSwitcher>`. Guard
+  // against a regression by asserting the label is gone.
+  it("does NOT render the deprecated Open connection switcher label", () => {
     fireGlobalKey("?");
 
-    expect(screen.getByText("Open connection switcher")).toBeInTheDocument();
+    expect(screen.queryByText("Open connection switcher")).toBeNull();
+    // The Cmd+K key text alone shouldn't appear either.
+    expect(screen.queryByText("Cmd+K")).toBeNull();
   });
 });

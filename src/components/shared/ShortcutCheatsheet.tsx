@@ -67,8 +67,9 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { label: "Quick open", keys: ["Cmd+P"] },
       { label: "Refresh", keys: ["Cmd+R", "F5"] },
       { label: "Cancel running query", keys: ["Cmd+."] },
-      // Sprint 133 — Cmd+K opens the workspace ConnectionSwitcher.
-      { label: "Open connection switcher", keys: ["Cmd+K"] },
+      // Sprint 134 — the Sprint 133 `Open connection switcher` (Cmd+K)
+      // entry was removed alongside the `<ConnectionSwitcher>` component
+      // itself. Connection swap is now Home → double-click only.
     ],
   },
   {

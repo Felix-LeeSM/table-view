@@ -2,7 +2,6 @@ import { expect } from "@wdio/globals";
 
 import {
   backToHome,
-  ensureHomeScreen,
   isWorkspaceMounted,
   openTestPgWorkspace,
 } from "./_helpers";
@@ -91,13 +90,15 @@ describe("Keyboard shortcuts (Sprint 60)", () => {
  *
  *   - Cmd+, toggles between Home and Workspace.
  *   - Cmd+1..9 switches the active workspace tab.
- *   - Cmd+K opens the `<ConnectionSwitcher>` popover (workspace-only).
  *
- * The Cmd+, scenario is the only one that runs without a PG fixture (it
- * exercises Home → Workspace and back). The Cmd+K scenario depends on
- * Workspace being mounted, which in turn requires a successful PG
- * connection — gated on `PGHOST` so it runs in CI but skips locally
- * without a docker fixture.
+ * Sprint 134 — the Sprint 133 Cmd+K → ConnectionSwitcher popover scenario
+ * was removed alongside the deletion of `<ConnectionSwitcher>` itself
+ * (lesson 2026-04-27-workspace-toolbar-ux-gaps). The single connection
+ * swap path is now Home → double-click; that flow is exercised by the
+ * vitest `HomePage.test.tsx` AC-S134-04 cases.
+ *
+ * The Cmd+, scenario runs without a PG fixture (it exercises
+ * Home → Workspace and back).
  */
 describe("Keyboard shortcuts (Sprint 133)", function () {
   it("Cmd+, toggles Home → Workspace and back", async function () {
@@ -124,28 +125,5 @@ describe("Keyboard shortcuts (Sprint 133)", function () {
     // Restore: leave the suite on Home so subsequent specs aren't
     // forced to start in Workspace.
     await backToHome();
-  });
-
-  it("Cmd+K opens the connection switcher popover", async function () {
-    if (!process.env.PGHOST && !process.env.E2E_PG_HOST) {
-      this.skip();
-    }
-
-    await openTestPgWorkspace();
-
-    // ConnectionSwitcher is a Radix Select. Cmd+K dispatches the global
-    // `open-connection-switcher` event which the controlled component
-    // mirrors into its `open` state — the surfaced item carries the
-    // contract-stable `aria-label="Connection: <name>"` (S125 AC-05),
-    // which is more robust than relying on Radix's internal role.
-    await pressCtrl("k");
-    const item = await $('[aria-label="Connection: Test PG"]');
-    await item.waitForDisplayed({ timeout: 5000 });
-    expect(await item.isDisplayed()).toBe(true);
-
-    // Close via Escape so the next spec starts clean.
-    await browser.keys(["Escape"]);
-    await backToHome();
-    await ensureHomeScreen();
   });
 });

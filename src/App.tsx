@@ -165,23 +165,11 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Sprint 133 — Cmd+K / Ctrl+K: open the workspace `<ConnectionSwitcher>`
-  // popover via a dispatched `open-connection-switcher` event. Restricted
-  // to the workspace screen because Home does not mount the switcher.
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.shiftKey || e.altKey) return;
-      if (e.key !== "k" && e.key !== "K") return;
-      if (isEditableTarget(e.target)) return;
-      const { screen: current } = useAppShellStore.getState();
-      if (current !== "workspace") return;
-      e.preventDefault();
-      window.dispatchEvent(new CustomEvent("open-connection-switcher"));
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  // Sprint 134 — the Sprint 133 Cmd+K handler that dispatched
+  // `open-connection-switcher` was removed alongside the
+  // `<ConnectionSwitcher>` component itself. Connection swap is now a
+  // single path: Home → double-click. Cmd+K is intentionally a no-op
+  // until a future sprint reclaims the chord.
 
   // Cmd+R / Ctrl+R / F5 — context-aware refresh
   useEffect(() => {

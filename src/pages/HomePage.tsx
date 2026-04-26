@@ -81,6 +81,16 @@ export default function HomePage() {
   // the appShell so the user lands inside Workspace immediately. The actual
   // schema-tree mount happens because Workspace's Sidebar reads the same
   // focusedConnId we set on select.
+  //
+  // Sprint 134 — when the user double-clicks a *different* connection from
+  // Home while another is currently focused, the swap must update
+  // `focusedConnId` even when the new connection was already connected via
+  // a previous session/context-menu Connect. ConnectionItem's
+  // `handleDoubleClick` calls `connectToDatabase` for the not-yet-connected
+  // path, so we don't have to duplicate that here — but `setFocusedConn`
+  // must run unconditionally so the Workspace Sidebar/Toolbar re-render
+  // around the new connection. (This was the root cause of the toolbar
+  // ConnectionSwitcher's "swap doesn't happen" bug per the lesson.)
   const handleActivate = (id: string) => {
     setFocusedConn(id);
     setScreen("workspace");

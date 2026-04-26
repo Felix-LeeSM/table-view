@@ -426,22 +426,25 @@ describe("App global shortcuts", () => {
     document.body.removeChild(input);
   });
 
-  // ── Sprint 133: Cmd+K → connection switcher open event ──
+  // ── Sprint 134: Cmd+K is now a no-op ──
+  // The Sprint 133 `open-connection-switcher` event + handler were removed
+  // alongside the `<ConnectionSwitcher>` component. Connection swap is a
+  // single-path flow: Home → double-click. These tests guard against the
+  // event being accidentally re-dispatched.
 
-  it("Cmd+K in workspace dispatches open-connection-switcher", () => {
+  it("Cmd+K in workspace does NOT dispatch open-connection-switcher (deprecated)", () => {
     useAppShellStore.setState({ screen: "workspace" });
     const handler = vi.fn();
     window.addEventListener("open-connection-switcher", handler);
     render(<App />);
 
     fireShortcut("k");
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0]?.[0]).toBeInstanceOf(CustomEvent);
+    expect(handler).not.toHaveBeenCalled();
 
     window.removeEventListener("open-connection-switcher", handler);
   });
 
-  it("Cmd+K in home does not dispatch open-connection-switcher", () => {
+  it("Cmd+K in home does NOT dispatch open-connection-switcher (deprecated)", () => {
     useAppShellStore.setState({ screen: "home" });
     const handler = vi.fn();
     window.addEventListener("open-connection-switcher", handler);
@@ -453,7 +456,7 @@ describe("App global shortcuts", () => {
     window.removeEventListener("open-connection-switcher", handler);
   });
 
-  it("Cmd+K with focus inside an editable target is a no-op", () => {
+  it("Cmd+K with focus inside an editable target is a no-op (deprecated)", () => {
     useAppShellStore.setState({ screen: "workspace" });
     const handler = vi.fn();
     window.addEventListener("open-connection-switcher", handler);
