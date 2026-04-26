@@ -66,17 +66,18 @@ pub async fn list_databases(
         .collect())
 }
 
-/// Switch the active database for the given connection (Sprint 130).
+/// Switch the active database for the given connection (Sprint 130, 131).
 ///
 /// Dispatch table:
 ///   - `Rdb`      → `RdbAdapter::switch_database`. PostgresAdapter overrides
 ///                  the trait default to swap the active sub-pool to
 ///                  `db_name`; SQLite/MySQL fall back to `Unsupported`
 ///                  until Phase 9. The frontend toast surfaces the message.
-///   - `Document` → `Err(Unsupported)` deliberately, reserved for Sprint 131
-///                  when `use_db` is wired up. Surfacing the error keeps
-///                  the dispatcher honest — once S131 lands the arm flips
-///                  to a real call.
+///   - `Document` → `DocumentAdapter::switch_database` (Sprint 131). The
+///                  MongoAdapter override mutates its `active_db` field
+///                  after a cheap `list_database_names` probe. Other
+///                  document adapters keep the default `Unsupported` until
+///                  they ship `use_db` semantics.
 ///   - `Search`/`Kv` → `Err(Unsupported)` — no per-connection database
 ///                  concept (Phase 7/8 paradigms).
 ///
@@ -95,9 +96,7 @@ pub async fn switch_active_db(
 
     match active {
         ActiveAdapter::Rdb(adapter) => adapter.switch_database(&db_name).await,
-        ActiveAdapter::Document(_) => Err(AppError::Unsupported(
-            "Document paradigm DB switch lands in Sprint 131".into(),
-        )),
+        ActiveAdapter::Document(adapter) => adapter.switch_database(&db_name).await,
         ActiveAdapter::Search(_) => Err(AppError::Unsupported(
             "Search paradigm has no per-connection database concept".into(),
         )),
@@ -157,6 +156,14 @@ mod tests {
     }
 
     impl DocumentAdapter for StubDocumentAdapter {
+        // Sprint 131 — override the trait default so the dispatch test can
+        // assert the Document arm propagates `Ok(())` from the adapter.
+        // The default `switch_database` returns `Unsupported`, which would
+        // mask the dispatcher contract under test.
+        fn switch_database<'a>(&'a self, _db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+
         fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
             let dbs = self.databases.clone();
             Box::pin(async move { Ok(dbs) })
@@ -368,9 +375,7 @@ mod tests {
     async fn switch_dispatch(active: &ActiveAdapter, db_name: &str) -> Result<(), AppError> {
         match active {
             ActiveAdapter::Rdb(adapter) => adapter.switch_database(db_name).await,
-            ActiveAdapter::Document(_) => Err(AppError::Unsupported(
-                "Document paradigm DB switch lands in Sprint 131".into(),
-            )),
+            ActiveAdapter::Document(adapter) => adapter.switch_database(db_name).await,
             ActiveAdapter::Search(_) => Err(AppError::Unsupported(
                 "Search paradigm has no per-connection database concept".into(),
             )),
@@ -380,20 +385,154 @@ mod tests {
         }
     }
 
+    /// Sprint 131 — Document arm now dispatches through
+    /// `DocumentAdapter::switch_database`. The stub adapter overrides the
+    /// trait default to return `Ok(())` so the dispatcher must propagate
+    /// the OK verbatim. The previous "Unsupported placeholder" assertion
+    /// (S130) has been retired alongside the meta.rs string.
     #[tokio::test]
-    async fn switch_dispatch_document_paradigm_returns_unsupported_for_s131() {
+    async fn switch_dispatch_document_paradigm_propagates_ok_from_adapter() {
         let adapter = ActiveAdapter::Document(Box::new(StubDocumentAdapter {
-            databases: Vec::new(),
+            databases: vec![NamespaceInfo {
+                name: "admin".into(),
+            }],
         }));
-        let result = switch_dispatch(&adapter, "anything").await;
+        let result = switch_dispatch(&adapter, "admin").await;
+        assert!(
+            result.is_ok(),
+            "S131 dispatcher must propagate Ok(()) from the Document adapter, got: {:?}",
+            result
+        );
+    }
+
+    /// Sprint 131 — when the Document adapter override surfaces an error
+    /// (e.g. a Mongo `list_database_names` permission failure that the
+    /// real implementation would best-effort recover from, but that a
+    /// custom adapter might choose to bubble up), the dispatcher must
+    /// propagate that error verbatim rather than masking it as an
+    /// `Unsupported` placeholder.
+    #[tokio::test]
+    async fn switch_dispatch_document_paradigm_propagates_err_from_adapter() {
+        struct ErroringDocumentAdapter;
+        impl DbAdapter for ErroringDocumentAdapter {
+            fn kind(&self) -> DatabaseType {
+                DatabaseType::Mongodb
+            }
+            fn connect<'a>(
+                &'a self,
+                _config: &'a ConnectionConfig,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+        impl DocumentAdapter for ErroringDocumentAdapter {
+            // Override `switch_database` to surface a Database error so the
+            // dispatcher's propagation path is exercised without standing
+            // up a live Mongo client.
+            fn switch_database<'a>(
+                &'a self,
+                db_name: &'a str,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                let owned = db_name.to_string();
+                Box::pin(async move {
+                    Err(AppError::Database(format!(
+                        "Database '{}' not found on this connection",
+                        owned
+                    )))
+                })
+            }
+            fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn list_collections<'a>(
+                &'a self,
+                _db: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn infer_collection_fields<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _sample_size: usize,
+            ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn find<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _body: FindBody,
+            ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+                Box::pin(async {
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                })
+            }
+            fn aggregate<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _pipeline: Vec<bson::Document>,
+            ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+                Box::pin(async {
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                })
+            }
+            fn insert_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _doc: bson::Document,
+            ) -> BoxFuture<'a, Result<DocumentId, AppError>> {
+                Box::pin(async { Ok(DocumentId::Number(0)) })
+            }
+            fn update_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _id: DocumentId,
+                _patch: bson::Document,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn delete_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _id: DocumentId,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+
+        let adapter = ActiveAdapter::Document(Box::new(ErroringDocumentAdapter));
+        let result = switch_dispatch(&adapter, "missing").await;
         match result {
-            Err(AppError::Unsupported(msg)) => {
+            Err(AppError::Database(msg)) => {
                 assert!(
-                    msg.contains("Sprint 131") || msg.contains("Document"),
-                    "Document arm must surface a clear deferral message, got: {msg}"
+                    msg.contains("missing"),
+                    "Document arm must propagate the underlying Database error, got: {msg}"
                 );
             }
-            other => panic!("Expected Unsupported, got: {:?}", other),
+            other => panic!("Expected Database error, got: {:?}", other),
         }
     }
 

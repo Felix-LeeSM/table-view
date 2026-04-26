@@ -571,6 +571,72 @@ describe("connectionStore", () => {
     });
   });
 
+  // -- Sprint 131 — Mongo paradigm activeDb seeding --
+
+  it("seeds activeDb from connection.database for a Mongo paradigm connection", async () => {
+    // Sprint 131 contract: connectToDatabase must be paradigm-agnostic
+    // for activeDb seeding. Previously the seed was scoped to RDB-only
+    // (S130), which left the Mongo DbSwitcher trigger label stuck on
+    // "(default)" until the user manually switched DBs. With the seed
+    // applied, the trigger reflects the connection's configured DB on
+    // first connect.
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "m1",
+          name: "MongoCluster",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "mongo",
+          database: "analytics",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "document",
+        },
+      ],
+      activeStatuses: {},
+    });
+    await useConnectionStore.getState().connectToDatabase("m1");
+    const status = useConnectionStore.getState().activeStatuses["m1"];
+    expect(status?.type).toBe("connected");
+    if (status?.type === "connected") {
+      expect(status.activeDb).toBe("analytics");
+    }
+  });
+
+  it("connectToDatabase omits activeDb when a Mongo connection has no default database", async () => {
+    // Mongo deployments often connect without specifying a database
+    // (the user picks one from the switcher post-connect). In that
+    // case `activeDb` must be `undefined`, NOT an empty string — the
+    // DbSwitcher distinguishes the two when picking its label.
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "m1",
+          name: "MongoCluster",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "mongo",
+          database: "",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "document",
+        },
+      ],
+      activeStatuses: {},
+    });
+    await useConnectionStore.getState().connectToDatabase("m1");
+    const status = useConnectionStore.getState().activeStatuses["m1"];
+    expect(status?.type).toBe("connected");
+    if (status?.type === "connected") {
+      expect(status.activeDb).toBeUndefined();
+    }
+  });
+
   it("setActiveDb mutates activeDb when the connection is connected", () => {
     useConnectionStore.setState({
       activeStatuses: { c1: { type: "connected", activeDb: "postgres" } },

@@ -85,6 +85,7 @@ use ::mongodb::Client;
 use bson::{doc, Bson, Document};
 use futures_util::stream::StreamExt;
 use tokio::sync::Mutex;
+use tracing::{info, warn};
 
 use crate::error::AppError;
 use crate::models::{ColumnInfo, ConnectionConfig, DatabaseType, QueryColumn, TableInfo};
@@ -97,6 +98,16 @@ use super::{
 pub struct MongoAdapter {
     client: Arc<Mutex<Option<Client>>>,
     default_db: Arc<Mutex<Option<String>>>,
+    /// Sprint 131 — the database the user has currently "use_db"'d into.
+    ///
+    /// Mirrors `default_db`'s lifecycle (seeded on `connect()`, cleared on
+    /// `disconnect()`) but is mutated by `switch_active_db` so that future
+    /// read/write call sites can pick up the user's active DB without
+    /// changing the existing `DocumentAdapter` trait signatures (which
+    /// take an explicit `db: &str`). The frontend dispatches Mongo
+    /// queries through the active tab's `database`, which is kept in
+    /// sync with this field via `connectionStore.activeStatuses[id].activeDb`.
+    active_db: Arc<Mutex<Option<String>>>,
 }
 
 impl Default for MongoAdapter {
@@ -110,6 +121,7 @@ impl MongoAdapter {
         Self {
             client: Arc::new(Mutex::new(None)),
             default_db: Arc::new(Mutex::new(None)),
+            active_db: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -175,6 +187,76 @@ impl MongoAdapter {
             .cloned()
             .ok_or_else(|| AppError::Connection("MongoDB connection is not established".into()))
     }
+
+    /// Switch the user-active database for this connection (Sprint 131).
+    ///
+    /// Mirrors `PostgresAdapter::switch_active_db`'s contract from S130 with
+    /// MongoDB-specific quirks:
+    ///   * MongoDB has no per-database connection pool — `Client` already
+    ///     multiplexes across DBs — so there is no sub-pool to evict, and
+    ///     the swap is a single mutex-guarded mutation of `active_db`.
+    ///   * Cheap probe via `client.list_database_names()` so a misspelled
+    ///     `db_name` surfaces as `AppError::Database` rather than silently
+    ///     creating an empty DB on first write (MongoDB auto-creates DBs).
+    ///   * If `list_database_names` itself fails (the most common reason
+    ///     being a restricted user without `listDatabases` privilege —
+    ///     analogous to the PG `42501` permission case), the validation is
+    ///     **silently skipped** and the rename proceeds with a `warn` log.
+    ///     This best-effort fallback matches the design bar: power users on
+    ///     locked-down accounts must still be able to flip between DBs they
+    ///     can read.
+    pub async fn switch_active_db(&self, db_name: &str) -> Result<(), AppError> {
+        if db_name.trim().is_empty() {
+            return Err(AppError::Validation(
+                "Database name must not be empty".into(),
+            ));
+        }
+
+        // Acquire `client` first — `active_db` always lock-orders after it
+        // so any future code that needs both can rely on a stable order
+        // and avoid deadlocks. Mirrors the PG sub-pool lock discipline.
+        let client = self.current_client().await?;
+
+        match client.list_database_names().await {
+            Ok(names) => {
+                if !names.iter().any(|n| n == db_name) {
+                    return Err(AppError::Database(format!(
+                        "Database '{}' not found on this connection",
+                        db_name
+                    )));
+                }
+            }
+            Err(e) => {
+                // Permission-restricted users (no listDatabases privilege)
+                // hit this branch. We log the upstream message at warn
+                // rather than surfacing it — the user explicitly asked for
+                // a DB they presumably know exists, and the alternative is
+                // a permanent block on the switcher for that account.
+                warn!(
+                    "Mongo list_database_names probe failed; proceeding with \
+                     best-effort switch to '{}': {}",
+                    db_name, e
+                );
+            }
+        }
+
+        {
+            let mut guard = self.active_db.lock().await;
+            *guard = Some(db_name.to_string());
+        }
+        info!("Switched active Mongo db to {}", db_name);
+        Ok(())
+    }
+
+    /// Sprint 131 — accessor for the current user-active database.
+    ///
+    /// Returns `None` when the adapter is disconnected or the connection
+    /// was opened without a default `database`. Mirrors
+    /// `PostgresAdapter::current_database`'s shape so a future
+    /// paradigm-neutral helper can read either adapter through one API.
+    pub async fn current_active_db(&self) -> Option<String> {
+        self.active_db.lock().await.clone()
+    }
 }
 
 impl DbAdapter for MongoAdapter {
@@ -201,13 +283,24 @@ impl DbAdapter for MongoAdapter {
                 let mut guard = self.client.lock().await;
                 *guard = Some(client);
             }
+            // Seed both `default_db` and `active_db` from the connection's
+            // configured database. Sprint 131 — `active_db` mirrors
+            // `default_db` on the initial connect; subsequent
+            // `switch_active_db` calls move only `active_db`, so the
+            // adapter retains the user's original landing DB even after
+            // they navigate away.
+            let initial = if config.database.trim().is_empty() {
+                None
+            } else {
+                Some(config.database.clone())
+            };
             {
                 let mut guard = self.default_db.lock().await;
-                *guard = if config.database.trim().is_empty() {
-                    None
-                } else {
-                    Some(config.database.clone())
-                };
+                *guard = initial.clone();
+            }
+            {
+                let mut guard = self.active_db.lock().await;
+                *guard = initial;
             }
             Ok(())
         })
@@ -220,6 +313,11 @@ impl DbAdapter for MongoAdapter {
             *guard = None;
             let mut db_guard = self.default_db.lock().await;
             *db_guard = None;
+            // Sprint 131 — clear the user-selected DB on disconnect so a
+            // subsequent connect() does not silently reuse a stale
+            // selection from the previous session.
+            let mut active_guard = self.active_db.lock().await;
+            *active_guard = None;
             Ok(())
         })
     }
@@ -238,6 +336,14 @@ impl DbAdapter for MongoAdapter {
 }
 
 impl DocumentAdapter for MongoAdapter {
+    /// Sprint 131 — delegates to the inherent `switch_active_db` so the
+    /// trait dispatcher can drive Mongo DB swaps from the unified
+    /// `switch_active_db` Tauri command. Mirrors
+    /// `PostgresAdapter::switch_database` (S130).
+    fn switch_database<'a>(&'a self, db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.switch_active_db(db_name).await })
+    }
+
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
         Box::pin(async move {
             let client = self.current_client().await?;
@@ -1395,5 +1501,78 @@ mod tests {
         assert!(body.projection.is_none());
         assert_eq!(body.skip, 0);
         assert_eq!(body.limit, 0);
+    }
+
+    // -- Sprint 131 — switch_active_db ---------------------------------------
+
+    #[tokio::test]
+    async fn test_switch_active_db_rejects_empty_db_name() {
+        // Pure validation — no live MongoDB needed because the empty-name
+        // guard runs before `current_client()`. Mirrors the PG sibling
+        // test in postgres.rs (S130).
+        let adapter = MongoAdapter::new();
+        match adapter.switch_active_db("").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+        // Whitespace-only is also rejected — same guard, different input.
+        match adapter.switch_active_db("   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_switch_active_db_returns_err_when_not_connected() {
+        // Without a `connect()` the inner client mutex stays `None`, so
+        // `current_client()` short-circuits with a Connection error. The
+        // dispatcher (`commands/meta.rs`) propagates that verbatim so the
+        // frontend toast can show the underlying reason.
+        let adapter = MongoAdapter::new();
+        match adapter.switch_active_db("admin").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+        // active_db should remain untouched after a failed switch.
+        assert!(adapter.current_active_db().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_current_active_db_starts_none() {
+        // Adapter constructed but never connected — the active_db slot
+        // begins life as None. This pins the lifecycle invariant the
+        // S131 contract relies on (no stale selection leaks across
+        // connect → disconnect → connect cycles).
+        let adapter = MongoAdapter::new();
+        assert!(adapter.current_active_db().await.is_none());
+    }
+
+    // The happy-path probe (`list_database_names` succeeds, `db_name`
+    // present in the result, mutate `active_db`) requires a live MongoDB
+    // instance because the driver insists on a real server handshake. We
+    // gate the test behind `#[ignore]` so `cargo test --lib` passes in CI
+    // and developers can run it locally with `cargo test -- --ignored`
+    // against the docker-compose fixtures.
+    #[tokio::test]
+    #[ignore = "requires live MongoDB — exercises list_database_names probe and mutate path"]
+    async fn test_switch_active_db_happy_path_with_live_mongo() {
+        let adapter = MongoAdapter::new();
+        let cfg = sample_config();
+        adapter.connect(&cfg).await.expect("connect should succeed");
+        adapter
+            .switch_active_db("admin")
+            .await
+            .expect("admin must exist on a stock Mongo install");
+        assert_eq!(
+            adapter.current_active_db().await.as_deref(),
+            Some("admin"),
+            "active_db must reflect the most recent switch"
+        );
     }
 }

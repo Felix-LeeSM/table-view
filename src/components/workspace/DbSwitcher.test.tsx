@@ -24,6 +24,7 @@ import DbSwitcher from "./DbSwitcher";
 import { useTabStore, type TableTab, type QueryTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useDocumentStore } from "@stores/documentStore";
 import type {
   ConnectionConfig,
   ConnectionStatus,
@@ -129,6 +130,14 @@ describe("DbSwitcher", () => {
       views: {},
       functions: {},
       tableColumnsCache: {},
+    });
+    useDocumentStore.setState({
+      databases: {},
+      collections: {},
+      fieldsCache: {},
+      queryResults: {},
+      loading: false,
+      error: null,
     });
     useToastStore.setState({ toasts: [] });
   });
@@ -385,6 +394,125 @@ describe("DbSwitcher", () => {
     const schemaState = useSchemaStore.getState();
     expect(schemaState.schemas["c1"]).toBeUndefined();
     expect(schemaState.tables["c1:public"]).toBeUndefined();
+  });
+
+  // -- Sprint 131 — Document paradigm switch --
+
+  it("clears the document store for the connection after a successful Mongo switch", async () => {
+    setStores({ paradigm: "document", connected: true, activeDb: "analytics" });
+    // Seed a couple of document-store entries so we can verify they're
+    // cleared. Mirrors the RDB schema-cache test above.
+    useDocumentStore.setState({
+      databases: {
+        c1: [{ name: "analytics" }, { name: "warehouse" }],
+      },
+      collections: {
+        "c1:analytics": [
+          { name: "events", database: "analytics", document_count: null },
+        ],
+      },
+      fieldsCache: {},
+      queryResults: {},
+      loading: false,
+      error: null,
+    });
+    listDatabasesMock.mockResolvedValueOnce([
+      { name: "analytics" },
+      { name: "warehouse" },
+    ]);
+    switchActiveDbMock.mockResolvedValueOnce(undefined);
+    render(<DbSwitcher />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /active database switcher/i }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    const warehouse = within(listbox)
+      .getAllByRole("option")
+      .find((o) => o.textContent?.includes("warehouse"))!;
+    await act(async () => {
+      fireEvent.click(warehouse);
+    });
+    // Backend dispatch must have fired with the new DB name.
+    expect(switchActiveDbMock).toHaveBeenCalledWith("c1", "warehouse");
+    // The document-store cache for the connection must have been wiped
+    // so the sidebar re-fetches against the new active DB.
+    const docState = useDocumentStore.getState();
+    expect(docState.databases["c1"]).toBeUndefined();
+    expect(docState.collections["c1:analytics"]).toBeUndefined();
+  });
+
+  it("does NOT clear the schema store on a Mongo paradigm switch", async () => {
+    // Cross-paradigm regression guard — clearing schemaStore on a Mongo
+    // switch would wipe an unrelated RDB connection's tree state if the
+    // sidebar happens to be showing both connections at once.
+    setStores({ paradigm: "document", connected: true, activeDb: "analytics" });
+    useSchemaStore.setState({
+      schemas: { other: [{ name: "public" }] },
+      tables: {
+        "other:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+      views: {},
+      functions: {},
+      tableColumnsCache: {},
+    });
+    listDatabasesMock.mockResolvedValueOnce([
+      { name: "analytics" },
+      { name: "warehouse" },
+    ]);
+    switchActiveDbMock.mockResolvedValueOnce(undefined);
+    render(<DbSwitcher />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /active database switcher/i }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    const warehouse = within(listbox)
+      .getAllByRole("option")
+      .find((o) => o.textContent?.includes("warehouse"))!;
+    await act(async () => {
+      fireEvent.click(warehouse);
+    });
+    // schemaStore must remain untouched.
+    const schemaState = useSchemaStore.getState();
+    expect(schemaState.schemas["other"]).toEqual([{ name: "public" }]);
+  });
+
+  it("does NOT clear the document store on an RDB paradigm switch", async () => {
+    // Symmetric guard — clearing documentStore from a PG switch would
+    // erase an unrelated Mongo connection's collection cache.
+    setStores({ paradigm: "rdb", connected: true, activeDb: "postgres" });
+    useDocumentStore.setState({
+      databases: { mongo: [{ name: "analytics" }] },
+      collections: {},
+      fieldsCache: {},
+      queryResults: {},
+      loading: false,
+      error: null,
+    });
+    listDatabasesMock.mockResolvedValueOnce([
+      { name: "postgres" },
+      { name: "warehouse" },
+    ]);
+    switchActiveDbMock.mockResolvedValueOnce(undefined);
+    render(<DbSwitcher />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /active database switcher/i }),
+    );
+    const listbox = await screen.findByRole("listbox", {
+      name: /available databases/i,
+    });
+    const warehouse = within(listbox)
+      .getAllByRole("option")
+      .find((o) => o.textContent?.includes("warehouse"))!;
+    await act(async () => {
+      fireEvent.click(warehouse);
+    });
+    expect(useDocumentStore.getState().databases["mongo"]).toEqual([
+      { name: "analytics" },
+    ]);
   });
 
   it("closes the popover after a successful switch", async () => {

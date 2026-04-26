@@ -3,6 +3,7 @@ import { ChevronDown, Database, Loader2 } from "lucide-react";
 import { useActiveTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useDocumentStore } from "@stores/documentStore";
 import {
   Tooltip,
   TooltipContent,
@@ -172,7 +173,20 @@ export default function DbSwitcher() {
       try {
         await switchActiveDb(activeConn.id, dbName);
         setActiveDb(activeConn.id, dbName);
-        useSchemaStore.getState().clearForConnection(activeConn.id);
+        // Sprint 131 — paradigm-aware cache clear. RDB sidebar reads
+        // through `schemaStore`; document sidebar reads through
+        // `documentStore`. Calling the wrong store would either no-op
+        // (rdb path on a Mongo connection leaves the collections cache
+        // intact, masking the DB swap) or wipe unrelated state, so we
+        // branch on the active connection's paradigm rather than try to
+        // clear both unconditionally. Search/Kv don't reach this branch
+        // because the trigger is `aria-disabled` for those paradigms
+        // (see `enabled` check at the top of the component).
+        if (paradigm === "rdb") {
+          useSchemaStore.getState().clearForConnection(activeConn.id);
+        } else if (paradigm === "document") {
+          useDocumentStore.getState().clearConnection(activeConn.id);
+        }
         setOpen(false);
         toast.success(`Switched to "${dbName}".`);
       } catch (err) {
@@ -180,7 +194,7 @@ export default function DbSwitcher() {
         toast.error(`Failed to switch DB: ${message}`);
       }
     },
-    [activeConn, activeDb, setActiveDb],
+    [activeConn, activeDb, paradigm, setActiveDb],
   );
 
   // Read-only fallback — Search/Kv paradigms, no connection, or

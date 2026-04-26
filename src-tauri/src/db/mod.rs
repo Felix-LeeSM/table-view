@@ -275,6 +275,22 @@ pub trait RdbAdapter: DbAdapter {
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
 
 pub trait DocumentAdapter: DbAdapter {
+    /// Switch the adapter's "active database" (Sprint 131).
+    ///
+    /// Mirrors `RdbAdapter::switch_database` (Sprint 130): adapters that
+    /// maintain a per-connection notion of "current DB" override this to
+    /// flip the user's selection. Adapters that do not yet support DB
+    /// switching fall back to the default `Unsupported` so the unified
+    /// `switch_active_db` Tauri command can dispatch through the trait
+    /// without a paradigm-aware match per-adapter.
+    fn switch_database<'a>(&'a self, _db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This document adapter does not support database switching".into(),
+            ))
+        })
+    }
+
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
     fn list_collections<'a>(
