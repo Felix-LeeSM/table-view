@@ -154,6 +154,29 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
+    /// Resolve the adapter's currently-active database (Sprint 132).
+    ///
+    /// Used by the `verify_active_db` Tauri command to compare the
+    /// optimistic `setActiveDb` value the frontend wrote after a raw
+    /// `\c <db>` against the backend's truth. Default implementation runs
+    /// `SELECT current_database()` through `execute_sql` so any RDB
+    /// adapter that follows ANSI semantics inherits a working verify path
+    /// without a custom override. Adapters that cannot answer (no pool
+    /// open) propagate the underlying error.
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+        Box::pin(async move {
+            let result = self.execute_sql("SELECT current_database()", None).await?;
+            let row = result
+                .rows
+                .first()
+                .ok_or_else(|| AppError::Database("current_database() returned no rows".into()))?;
+            let val = row.first().ok_or_else(|| {
+                AppError::Database("current_database() returned no columns".into())
+            })?;
+            Ok(val.as_str().map(|s| s.to_string()))
+        })
+    }
+
     fn list_tables<'a>(
         &'a self,
         namespace: &'a str,
@@ -289,6 +312,17 @@ pub trait DocumentAdapter: DbAdapter {
                 "This document adapter does not support database switching".into(),
             ))
         })
+    }
+
+    /// Resolve the adapter's currently-active database (Sprint 132).
+    ///
+    /// Mirrors `RdbAdapter::current_database` so the `verify_active_db`
+    /// Tauri command can dispatch through a single trait method per
+    /// paradigm. Default returns `Ok(None)` — adapters that retain a
+    /// `current_active_db` accessor (Mongo) override to surface their
+    /// in-memory selection without a backend round-trip.
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+        Box::pin(async { Ok(None) })
     }
 
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;

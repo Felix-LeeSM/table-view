@@ -344,6 +344,15 @@ impl DocumentAdapter for MongoAdapter {
         Box::pin(async move { self.switch_active_db(db_name).await })
     }
 
+    /// Sprint 132 — surface the in-memory `active_db` selection without a
+    /// driver round-trip. The `verify_active_db` Tauri command compares
+    /// this against the optimistic `setActiveDb` value the frontend wrote
+    /// after a raw-query DB switch, so the answer must mirror exactly
+    /// what `current_active_db()` would return — same accessor.
+    fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+        Box::pin(async move { Ok(self.current_active_db().await) })
+    }
+
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
         Box::pin(async move {
             let client = self.current_client().await?;

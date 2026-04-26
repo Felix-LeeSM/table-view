@@ -106,6 +106,48 @@ pub async fn switch_active_db(
     }
 }
 
+/// Resolve the active database the backend currently sees (Sprint 132).
+///
+/// Used by the QueryTab raw-query hook: after the user runs `\c <db>` the
+/// frontend optimistically calls `setActiveDb(db)`, then this command to
+/// verify the backend pool actually flipped. A mismatch surfaces a
+/// `toast.warn` and reverts the optimistic value.
+///
+/// Dispatch table:
+///   - `Rdb`      → `RdbAdapter::current_database` (default impl runs
+///                  `SELECT current_database()` via `execute_sql`).
+///   - `Document` → `DocumentAdapter::current_database` (Mongo override
+///                  surfaces the in-memory `active_db` accessor — no
+///                  driver round-trip required).
+///   - `Search`/`Kv` → `Err(Unsupported)` — no per-connection database
+///                  concept (Phase 7/8 paradigms).
+///
+/// Returns `AppError::NotFound` when the connection id has no live adapter,
+/// matching `list_databases` / `switch_active_db` semantics.
+#[tauri::command]
+pub async fn verify_active_db(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<String, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&connection_id)
+        .ok_or_else(|| not_connected(&connection_id))?;
+
+    match active {
+        ActiveAdapter::Rdb(adapter) => Ok(adapter.current_database().await?.unwrap_or_default()),
+        ActiveAdapter::Document(adapter) => {
+            Ok(adapter.current_database().await?.unwrap_or_default())
+        }
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "verify_active_db not supported for Search paradigm".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "verify_active_db not supported for key-value paradigm".into(),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -575,5 +617,356 @@ mod tests {
         let adapter = ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()));
         let result = switch_dispatch(&adapter, "").await;
         assert!(matches!(result, Err(AppError::Validation(_))));
+    }
+
+    // ── Sprint 132 — verify_active_db dispatch tests ─────────────────────
+    //
+    // The production `verify_active_db` body matches on `ActiveAdapter` and
+    // delegates to `current_database` per paradigm. We mirror it here so the
+    // dispatch table can be exercised without a `tauri::State` wrapper.
+    async fn verify_dispatch(active: &ActiveAdapter) -> Result<String, AppError> {
+        match active {
+            ActiveAdapter::Rdb(adapter) => {
+                Ok(adapter.current_database().await?.unwrap_or_default())
+            }
+            ActiveAdapter::Document(adapter) => {
+                Ok(adapter.current_database().await?.unwrap_or_default())
+            }
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "verify_active_db not supported for Search paradigm".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "verify_active_db not supported for key-value paradigm".into(),
+            )),
+        }
+    }
+
+    /// Sprint 132 — Rdb arm dispatches through `RdbAdapter::current_database`.
+    /// We override the stub's default impl so the test can fix a known
+    /// return value without standing up a SELECT-capable pool.
+    #[tokio::test]
+    async fn verify_dispatch_rdb_returns_current_database() {
+        use crate::db::{NamespaceLabel, RdbAdapter};
+        use crate::models::{
+            AlterTableRequest, ConstraintInfo, CreateIndexRequest, DropConstraintRequest,
+            DropIndexRequest, FilterCondition, IndexInfo, SchemaChangeResult, TableData,
+        };
+
+        struct StubRdbAdapter;
+        impl DbAdapter for StubRdbAdapter {
+            fn kind(&self) -> DatabaseType {
+                DatabaseType::Postgresql
+            }
+            fn connect<'a>(
+                &'a self,
+                _config: &'a ConnectionConfig,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+        impl RdbAdapter for StubRdbAdapter {
+            // Override `current_database` so the verify dispatcher returns
+            // a known value without round-tripping `execute_sql`.
+            fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+                Box::pin(async { Ok(Some("admin".to_string())) })
+            }
+
+            fn namespace_label(&self) -> NamespaceLabel {
+                NamespaceLabel::Schema
+            }
+            fn list_namespaces<'a>(
+                &'a self,
+            ) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn list_tables<'a>(
+                &'a self,
+                _namespace: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn get_columns<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _table: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn execute_sql<'a>(
+                &'a self,
+                _sql: &'a str,
+                _cancel: Option<&'a tokio_util::sync::CancellationToken>,
+            ) -> BoxFuture<'a, Result<crate::db::RdbQueryResult, AppError>> {
+                Box::pin(async {
+                    Err(AppError::Unsupported(
+                        "execute_sql not used on this stub".into(),
+                    ))
+                })
+            }
+            #[allow(clippy::too_many_arguments)]
+            fn query_table_data<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _table: &'a str,
+                _page: i32,
+                _page_size: i32,
+                _order_by: Option<&'a str>,
+                _filters: Option<&'a [FilterCondition]>,
+                _raw_where: Option<&'a str>,
+            ) -> BoxFuture<'a, Result<TableData, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn drop_table<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _table: &'a str,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn rename_table<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _table: &'a str,
+                _new_name: &'a str,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn alter_table<'a>(
+                &'a self,
+                _req: &'a AlterTableRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn create_index<'a>(
+                &'a self,
+                _req: &'a CreateIndexRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn drop_index<'a>(
+                &'a self,
+                _req: &'a DropIndexRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn add_constraint<'a>(
+                &'a self,
+                _req: &'a crate::models::AddConstraintRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn drop_constraint<'a>(
+                &'a self,
+                _req: &'a DropConstraintRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn get_table_indexes<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _table: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn get_table_constraints<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _table: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn get_view_definition<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _view: &'a str,
+            ) -> BoxFuture<'a, Result<String, AppError>> {
+                Box::pin(async { Ok(String::new()) })
+            }
+            fn get_view_columns<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _view: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn list_schema_columns<'a>(
+                &'a self,
+                _namespace: &'a str,
+            ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>>
+            {
+                Box::pin(async { Ok(std::collections::HashMap::new()) })
+            }
+            fn get_function_source<'a>(
+                &'a self,
+                _namespace: &'a str,
+                _function: &'a str,
+            ) -> BoxFuture<'a, Result<String, AppError>> {
+                Box::pin(async { Ok(String::new()) })
+            }
+        }
+
+        let adapter = ActiveAdapter::Rdb(Box::new(StubRdbAdapter));
+        let result = verify_dispatch(&adapter).await;
+        assert_eq!(result.unwrap(), "admin");
+    }
+
+    /// Sprint 132 — Document arm dispatches through
+    /// `DocumentAdapter::current_database`. Stub override returns a known
+    /// value so the test can assert the propagated string.
+    #[tokio::test]
+    async fn verify_dispatch_document_returns_current_active_db() {
+        struct StubDocVerify;
+        impl DbAdapter for StubDocVerify {
+            fn kind(&self) -> DatabaseType {
+                DatabaseType::Mongodb
+            }
+            fn connect<'a>(
+                &'a self,
+                _config: &'a ConnectionConfig,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+        impl DocumentAdapter for StubDocVerify {
+            fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {
+                Box::pin(async { Ok(Some("table_view_test".to_string())) })
+            }
+            fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn list_collections<'a>(
+                &'a self,
+                _db: &'a str,
+            ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn infer_collection_fields<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _sample_size: usize,
+            ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+                Box::pin(async { Ok(Vec::new()) })
+            }
+            fn find<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _body: FindBody,
+            ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+                Box::pin(async {
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                })
+            }
+            fn aggregate<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _pipeline: Vec<bson::Document>,
+            ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+                Box::pin(async {
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                })
+            }
+            fn insert_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _doc: bson::Document,
+            ) -> BoxFuture<'a, Result<DocumentId, AppError>> {
+                Box::pin(async { Ok(DocumentId::Number(0)) })
+            }
+            fn update_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _id: DocumentId,
+                _patch: bson::Document,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn delete_document<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _id: DocumentId,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+
+        let adapter = ActiveAdapter::Document(Box::new(StubDocVerify));
+        let result = verify_dispatch(&adapter).await;
+        assert_eq!(result.unwrap(), "table_view_test");
+    }
+
+    /// Sprint 132 — Document arm with `Ok(None)` (unset active DB) collapses
+    /// to an empty string so the frontend can detect "could not verify"
+    /// without cracking the `Option`.
+    #[tokio::test]
+    async fn verify_dispatch_document_unset_collapses_to_empty_string() {
+        let adapter = ActiveAdapter::Document(Box::new(StubDocumentAdapter {
+            // Reuses the trait default `current_database` (Ok(None)).
+            databases: Vec::new(),
+        }));
+        let result = verify_dispatch(&adapter).await.unwrap();
+        assert_eq!(result, "");
+    }
+
+    /// Sprint 132 — Search/Kv paradigms surface `Unsupported`.
+    #[tokio::test]
+    async fn verify_dispatch_search_returns_unsupported() {
+        let adapter = ActiveAdapter::Search(Box::new(StubSearchAdapter));
+        let result = verify_dispatch(&adapter).await;
+        assert!(matches!(result, Err(AppError::Unsupported(_))));
+    }
+
+    #[tokio::test]
+    async fn verify_dispatch_kv_returns_unsupported() {
+        let adapter = ActiveAdapter::Kv(Box::new(StubKvAdapter));
+        let result = verify_dispatch(&adapter).await;
+        assert!(matches!(result, Err(AppError::Unsupported(_))));
+    }
+
+    /// Sprint 132 — `not_connected_helper_uses_appropriate_variant` already
+    /// covers the NotFound branch for unknown ids. This test exercises the
+    /// PostgresAdapter unconnected path: the default `current_database`
+    /// runs `execute_sql`, which surfaces `Connection("Not connected")` —
+    /// the dispatcher must propagate that verbatim instead of masking it.
+    #[tokio::test]
+    async fn verify_dispatch_rdb_unconnected_propagates_connection_error() {
+        use crate::db::PostgresAdapter;
+        let adapter = ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()));
+        let result = verify_dispatch(&adapter).await;
+        match result {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"));
+            }
+            other => panic!("Expected Connection error, got: {:?}", other),
+        }
     }
 }

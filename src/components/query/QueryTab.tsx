@@ -15,6 +15,14 @@ import {
 } from "@lib/tauri";
 import { splitSqlStatements, formatSql, uglifySql } from "@lib/sqlUtils";
 import { databaseTypeToSqlDialect } from "@lib/sqlDialect";
+import {
+  extractDbMutation,
+  type SqlMutationDialect,
+} from "@lib/sqlDialectMutations";
+import { verifyActiveDb } from "@lib/api/verifyActiveDb";
+import { useSchemaStore } from "@stores/schemaStore";
+import { toast } from "@lib/toast";
+import type { Paradigm } from "@/types/connection";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 import { useDocumentStore } from "@stores/documentStore";
@@ -61,6 +69,78 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isRecordArray(value: unknown): value is Record<string, unknown>[] {
   return Array.isArray(value) && value.every(isRecord);
+}
+
+// ─── Sprint 132 — raw-query DB-change detection hook ──────────────────────
+// After `await executeQuery(...)` we re-scan the SQL the user just ran for
+// dialect-specific DB / schema / Redis-index switch patterns. A match
+// triggers an *optimistic* `setActiveDb(targetDb)` so the toolbar / sidebar
+// reflect the new context without a manual click, followed by a backend
+// `verify_active_db` round-trip. A verify-mismatch surfaces a `toast.warn`
+// and reverts the optimistic value to whatever the backend actually sees.
+//
+// `applyDbMutationHint` is intentionally fire-and-forget from the caller's
+// perspective: it never throws — verify failures are swallowed with a
+// console-free best-effort recovery so the query result panel stays
+// rendered even when the network bounced.
+//
+// Document-paradigm tabs short-circuit immediately — Mongo doesn't use the
+// SQL-style `\c` / `USE` syntax. Search/Kv paradigms aren't routed through
+// `executeQuery` so they never reach this helper.
+async function applyDbMutationHint(
+  connectionId: string,
+  paradigm: Paradigm,
+  sql: string,
+  setActiveDb: (id: string, dbName: string) => void,
+  clearForConnection: (id: string) => void,
+): Promise<void> {
+  if (paradigm !== "rdb") return;
+  // Sprint 132 only ships Postgres. MySQL/Redis dialects fall through here
+  // (the lexer accepts them) but the QueryTab UI today only routes PG raw
+  // SQL, so the dialect map is hard-coded. A future MySQL adapter sprint
+  // will resolve dialect from `tab.connectionMeta.databaseType`.
+  const dialect: SqlMutationDialect = "postgres";
+  const hint = extractDbMutation(sql, dialect);
+  if (!hint) return;
+
+  try {
+    if (hint.kind === "switch_database") {
+      // Optimistic local update — toolbar trigger label and any reader of
+      // `activeStatuses[id].activeDb` flips immediately.
+      setActiveDb(connectionId, hint.targetDb);
+      // Schema cache must be evicted before any sidebar refresh request
+      // can race in with the old DB's tables.
+      clearForConnection(connectionId);
+      try {
+        const actual = await verifyActiveDb(connectionId);
+        // Empty string === "could not verify" (Mongo-side semantic borrowed
+        // for symmetry); skip the mismatch toast.
+        if (actual && actual !== hint.targetDb) {
+          toast.warning(
+            `Active DB mismatch: expected '${hint.targetDb}', got '${actual}'. Reverting.`,
+          );
+          setActiveDb(connectionId, actual);
+        }
+      } catch {
+        // Verify-best-effort. The query result must remain visible even
+        // when verify fails (network blip, backend restart) — sprint 132
+        // contract: "verify 실패 ≠ query 실패".
+      }
+    } else if (hint.kind === "switch_schema") {
+      // Schema-level change — there's no cheap PG accessor to verify, so
+      // we just evict the schema cache and surface an info toast.
+      clearForConnection(connectionId);
+      toast.info(`Active schema set to '${hint.targetSchema}'.`);
+    } else if (hint.kind === "redis_select") {
+      // Phase 9 Redis adapter will wire DB-index switching. For sprint 132
+      // we only acknowledge the user's intent.
+      toast.info(`Redis SELECT ${hint.databaseIndex} acknowledged.`);
+    }
+  } catch {
+    // Outer guard — the hook must never propagate to the user. Any
+    // exception thrown by the store mutators or the extractor is treated
+    // as a no-op.
+  }
 }
 
 interface QueryTabProps {
@@ -404,6 +484,19 @@ export default function QueryTab({ tab }: QueryTabProps) {
           collection: tab.collection,
         });
       }
+      // Sprint 132 — DB-change detection runs after the awaited execute
+      // resolves, regardless of success/error. We call it from outside the
+      // try/catch so a thrown query error doesn't bypass the lex pass —
+      // `\c another_db` may surface as a PG syntax error but still flips
+      // the active pool on the backend, so the optimistic update + verify
+      // round-trip is still meaningful. The helper itself never throws.
+      void applyDbMutationHint(
+        tab.connectionId,
+        tab.paradigm,
+        sql,
+        useConnectionStore.getState().setActiveDb,
+        useSchemaStore.getState().clearForConnection,
+      );
       return;
     }
 
@@ -513,6 +606,17 @@ export default function QueryTab({ tab }: QueryTabProps) {
       database: tab.database,
       collection: tab.collection,
     });
+    // Sprint 132 — same hook as the single-statement path. Multi-statement
+    // input feeds the full SQL through the lexer, which already takes the
+    // last match (sprint contract — "마지막만"). So a script ending in
+    // `... ; \c admin` flips active_db to "admin" and verifies once.
+    void applyDbMutationHint(
+      tab.connectionId,
+      tab.paradigm,
+      sql,
+      useConnectionStore.getState().setActiveDb,
+      useSchemaStore.getState().clearForConnection,
+    );
     // The original Sprint 25 callback intentionally excluded
     // addHistoryEntry/updateQueryState from the dependency list so stale
     // closure issues don't fire on every store subscription. Sprint 73
