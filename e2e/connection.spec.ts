@@ -45,8 +45,21 @@ describe("Database Connection Flow", () => {
     const saveBtn = await $("button=Save");
     await saveBtn.click();
 
-    // 5. Verify dialog closed
-    await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
+    // 5. Verify dialog closed. If the dialog stays open, surface any
+    // backend error message so CI failures point at the actual cause
+    // instead of "still displayed after 5000ms".
+    try {
+      await dialog.waitForDisplayed({ timeout: 5000, reverse: true });
+    } catch (timeoutErr) {
+      const alert = await $('[role="alert"]');
+      if (await alert.isExisting()) {
+        const msg = await alert.getText();
+        throw new Error(
+          `Save failed — dialog stayed open with alert: "${msg}". Original: ${(timeoutErr as Error).message}`,
+        );
+      }
+      throw timeoutErr;
+    }
 
     // 6. Verify connection appears in the Home screen's ConnectionList
     const connItem = await $('[aria-label^="Test PG"]');
