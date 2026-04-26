@@ -272,6 +272,91 @@ describe("DocumentDatabaseTree", () => {
     expect(screen.queryByLabelText(/schema$/i)).toBeNull();
   });
 
+  // ─────────────────────────────────────────────────────────────────
+  // Sprint 136 — preview / persist click semantics for the document
+  // tree. Mirrors the relational tree's AC-S136-01..04 so click
+  // semantics are paradigm-agnostic.
+  // ─────────────────────────────────────────────────────────────────
+
+  it("AC-S136-03: single-click on a collection opens a preview tab (isPreview=true)", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByLabelText("users collection"));
+
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const first = tabs[0]!;
+    expect(first.type).toBe("table");
+    if (first.type === "table") {
+      expect(first.isPreview).toBe(true);
+      expect(first.paradigm).toBe("document");
+      expect(first.collection).toBe("users");
+    }
+  });
+
+  it("AC-S136-03: double-click on a collection promotes the tab (isPreview=false)", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+
+    fireEvent.doubleClick(screen.getByLabelText("users collection"));
+
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const first = tabs[0]!;
+    expect(first.type).toBe("table");
+    if (first.type === "table") {
+      // Promote stuck — the tab is no longer a preview.
+      expect(first.isPreview).toBe(false);
+      expect(first.paradigm).toBe("document");
+      expect(first.collection).toBe("users");
+    }
+  });
+
+  it("AC-S136-04: same-collection single-click twice is idempotent (no extra tab, no promote)", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByLabelText("users collection"));
+    const previewId = useTabStore.getState().tabs[0]!.id;
+    fireEvent.click(screen.getByLabelText("users collection"));
+
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]!.id).toBe(previewId);
+    const first = tabs[0]!;
+    if (first.type === "table") {
+      expect(first.isPreview).toBe(true);
+    }
+  });
+
   it("Escape clears the search query", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 

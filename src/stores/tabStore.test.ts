@@ -711,6 +711,129 @@ describe("tabStore", () => {
       const state = useTabStore.getState();
       expect(state.tabs).toHaveLength(1);
     });
+
+    // -- Sprint 136: paradigm-agnostic single/double click semantics --
+    // These four tests pin AC-S136-01..04 to explicit behaviors of the
+    // tabStore preview-tab API used by both the PG (`SchemaTree`) and
+    // Mongo (`DocumentDatabaseTree`) sidebar trees. The semantics are
+    // unified: single-click swaps the preview slot, double-click promotes
+    // the active tab, same-row click is idempotent.
+
+    // AC-S136-01 — first single-click on a row creates a preview tab
+    // (`isPreview === true`). The contract uses the field name `preview`
+    // in prose; we keep the existing `isPreview` field per "통합" rule.
+    it("AC-S136-01: single-click creates a preview tab (isPreview === true)", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+      // Active tab is the new preview tab.
+      expect(state.activeTabId).toBe(state.tabs[0]!.id);
+    });
+
+    // AC-S136-01 — single-click on a different row swaps the preview slot
+    // onto the new target instead of accumulating tabs. Tab count stays at
+    // 1 across an arbitrary number of single-click moves.
+    it("AC-S136-01: clicking a different row swaps the preview slot (no tab accumulation)", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "orders",
+        }),
+      );
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "products",
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(getTableTab(state, 0).table).toBe("products");
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+    });
+
+    // AC-S136-02 — double-click on the active tab promotes it to a
+    // persistent tab (`isPreview === false`). A subsequent single-click
+    // on a different row must NOT replace the now-persistent tab.
+    it("AC-S136-02: promoteTab flips isPreview to false; further row clicks open a separate preview tab", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+      const persistedId = useTabStore.getState().tabs[0]!.id;
+      useTabStore.getState().promoteTab(persistedId);
+
+      const afterPromote = useTabStore.getState();
+      expect(getTableTab(afterPromote, 0).isPreview).toBe(false);
+
+      // Click on a different row → new preview tab spawned alongside
+      // the persistent tab; no swap onto the persistent slot.
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "orders",
+        }),
+      );
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+      // First tab survives unchanged.
+      expect(getTableTab(state, 0).table).toBe("users");
+      expect(getTableTab(state, 0).isPreview).toBe(false);
+      // Second tab is the new preview.
+      expect(getTableTab(state, 1).table).toBe("orders");
+      expect(getTableTab(state, 1).isPreview).toBe(true);
+    });
+
+    // AC-S136-04 — clicking the same row twice is idempotent: the preview
+    // tab stays put, no new tab is created, and the tab is NOT promoted
+    // (only an explicit double-click promotes — see AC-S136-02).
+    it("AC-S136-04: clicking the same row twice is idempotent (no second tab, no promote)", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+      const previewId = useTabStore.getState().tabs[0]!.id;
+
+      // Same connection + same table → addTab early-returns and only
+      // updates activeTabId. The tab stays preview.
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0]!.id).toBe(previewId);
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+    });
   });
 
   // -- Sprint 38: Tab State Persistence --

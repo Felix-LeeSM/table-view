@@ -114,6 +114,25 @@ export default function DocumentDatabaseTree({
     [addTab, connectionId],
   );
 
+  /**
+   * Sprint 136 (AC-S136-03) — double-click promotes the preview tab to a
+   * persistent tab. We open / swap onto the target collection first via the
+   * same `handleCollectionOpen` path, then read back the active tab id and
+   * call `promoteTab` so the user can keep the tab around even when they
+   * later click another collection.
+   */
+  const promoteTab = useTabStore((s) => s.promoteTab);
+  const handleCollectionDoubleClick = useCallback(
+    (dbName: string, collectionName: string) => {
+      handleCollectionOpen(dbName, collectionName);
+      const activeTabId = useTabStore.getState().activeTabId;
+      if (activeTabId) {
+        promoteTab(activeTabId);
+      }
+    },
+    [handleCollectionOpen, promoteTab],
+  );
+
   const databaseList = useMemo(() => databases ?? [], [databases]);
 
   // Sprint 129 — client-side filter. Empty query → show everything. A
@@ -334,9 +353,18 @@ export default function DocumentDatabaseTree({
                             : "text-foreground",
                         )}
                         aria-label={`${coll.name} collection`}
-                        onClick={() => setSelectedNodeId(collNodeId)}
+                        // Sprint 136 (AC-S136-03) — single-click opens a
+                        // preview tab on the collection (`addTab` defaults
+                        // new tabs to `isPreview: true`); double-click
+                        // promotes the preview tab to a persistent tab.
+                        // Same model as the relational tree (AC-S136-01/02)
+                        // so paradigm doesn't change the click semantics.
+                        onClick={() => {
+                          setSelectedNodeId(collNodeId);
+                          handleCollectionOpen(db.name, coll.name);
+                        }}
                         onDoubleClick={() =>
-                          handleCollectionOpen(db.name, coll.name)
+                          handleCollectionDoubleClick(db.name, coll.name)
                         }
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {

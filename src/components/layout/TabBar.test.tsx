@@ -749,6 +749,48 @@ describe("TabBar", () => {
     expect(screen.queryByLabelText("MongoDB collection tab")).toBeNull();
   });
 
+  // ── Sprint 136 (AC-S136-06): preview cue coexists with dirty marker ──
+  //
+  // The preview visual cue (`italic` + `opacity-70` on the title span)
+  // and the dirty marker (`data-dirty="true"` dot to the right of the
+  // title) must render together on the same tab without overlap or
+  // mutual exclusion. These two tests pin both cues independently and
+  // jointly so a future refactor cannot accidentally re-couple them.
+
+  it("preview tab carries the preview visual cue (italic + opacity-70) without a dirty marker (AC-S136-06)", () => {
+    addTableTab({ title: "public.users", table: "users" });
+    // New tab is preview by default; not dirty.
+
+    render(<TabBar />);
+    const titleEl = screen.getByText("users");
+    // Preview cue — italic + faded.
+    expect(titleEl.className).toContain("italic");
+    expect(titleEl.className).toContain("opacity-70");
+    // No dirty marker on a clean preview tab.
+    const tab = titleEl.closest("[role='tab']")!;
+    expect(tab.querySelector('[data-dirty="true"]')).toBeNull();
+  });
+
+  it("preview cue and dirty marker coexist on the same tab (AC-S136-06)", () => {
+    addTableTab({ title: "public.users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    // Mark dirty while leaving the preview flag untouched.
+    act(() => {
+      useTabStore.getState().setTabDirty(tabId, true);
+    });
+
+    render(<TabBar />);
+    const titleEl = screen.getByText("users");
+    // Preview cue still applied to the title span.
+    expect(titleEl.className).toContain("italic");
+    expect(titleEl.className).toContain("opacity-70");
+    // Dirty dot still rendered alongside the title.
+    const tab = titleEl.closest("[role='tab']")!;
+    const dot = tab.querySelector('[data-dirty="true"]');
+    expect(dot).not.toBeNull();
+    expect(dot).toHaveAttribute("aria-label", "Unsaved changes");
+  });
+
   // Middle-click on a dirty tab also routes through the gate so the user
   // can never lose unsaved work via a stray scroll-wheel button press.
   it("middle-click on dirty tab triggers the confirm gate", () => {

@@ -567,6 +567,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     [connectionId, loadTables, loadViews, loadFunctions],
   );
 
+  /**
+   * Sprint 136 (AC-S136-01) — single-click on a table row opens the table in
+   * a *preview* tab. `addTab` already creates the new tab with
+   * `isPreview: true` and swaps an existing same-connection preview slot
+   * onto the new target, so opening another row reuses the same tab slot
+   * (no tab accumulation). Clicking the same row again is idempotent
+   * (AC-S136-04) because `addTab` early-returns when an exact-match tab
+   * already exists.
+   */
   const handleTableClick = (tableName: string, schemaName: string) => {
     setSelectedNodeId(
       nodeIdToString({ type: "table", schema: schemaName, table: tableName }),
@@ -580,6 +589,21 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       table: tableName,
       subView: "records",
     });
+  };
+
+  /**
+   * Sprint 136 (AC-S136-02) — double-click on a table row promotes the tab
+   * to a persistent (`isPreview: false`) tab. We open / swap onto the target
+   * row first via the same `handleTableClick` path, then read back the active
+   * tab id and call `promoteTab` so the user can keep the tab around even if
+   * they click another row afterwards.
+   */
+  const handleTableDoubleClick = (tableName: string, schemaName: string) => {
+    handleTableClick(tableName, schemaName);
+    const activeTabId = useTabStore.getState().activeTabId;
+    if (activeTabId) {
+      useTabStore.getState().promoteTab(activeTabId);
+    }
   };
 
   const handleOpenStructure = (tableName: string, schemaName: string) => {
@@ -942,6 +966,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       }
     };
 
+    // Sprint 136 — double-click promotes the preview tab to a persistent
+    // tab (AC-S136-02). Only meaningful for table rows; views/functions
+    // either spawn dedicated tabs (views) or query tabs (functions) which
+    // do not participate in the table-preview slot.
+    const handleDoubleClick = () => {
+      if (isTableItem) {
+        handleTableDoubleClick(item.name, row.schemaName);
+      }
+    };
+
     return (
       <ContextMenu>
         <ContextMenuTrigger asChild>
@@ -957,6 +991,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               isView ? "view" : isFunc ? "function" : "table"
             }`}
             onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 handleClick();
@@ -1260,6 +1295,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 )}
                                 aria-label={`${item.name} table`}
                                 onClick={handleClick}
+                                onDoubleClick={() =>
+                                  handleTableDoubleClick(item.name, schema.name)
+                                }
                                 onKeyDown={(e) => {
                                   if (e.key === "Enter") {
                                     handleClick();
@@ -1429,9 +1467,28 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                               )}
                             </button>
 
-                            {/* Category content */}
+                            {/* Category content. Sprint 136 (AC-S136-05) —
+                                the function/procedure categories cap their
+                                items list height with `max-h-[50vh] +
+                                overflow-y-auto` so an expanded function
+                                category cannot push schema rows or other
+                                categories out of the viewport. Tables/Views
+                                already paginate via the search input + table
+                                count, so the cap targets only the two
+                                categories with unbounded length. */}
                             {catExpanded && (
-                              <div>
+                              <div
+                                className={
+                                  isFunctionCat || isProcedureCat
+                                    ? "max-h-[50vh] overflow-y-auto"
+                                    : undefined
+                                }
+                                data-category-overflow={
+                                  isFunctionCat || isProcedureCat
+                                    ? "capped"
+                                    : undefined
+                                }
+                              >
                                 {/* Search input for Tables category */}
                                 {cat.key === "tables" &&
                                   unfilteredItems.length > 0 && (
@@ -1540,6 +1597,20 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                             )}
                                             aria-label={`${item.name} ${isView ? "view" : isFunc ? "function" : "table"}`}
                                             onClick={handleClick}
+                                            onDoubleClick={() => {
+                                              // Sprint 136 (AC-S136-02) —
+                                              // double-click promotes the
+                                              // preview tab to persistent.
+                                              // Only meaningful for table
+                                              // rows; views/functions don't
+                                              // share the preview slot.
+                                              if (isTableView) {
+                                                handleTableDoubleClick(
+                                                  item.name,
+                                                  schema.name,
+                                                );
+                                              }
+                                            }}
                                             onKeyDown={(e) => {
                                               if (e.key === "Enter") {
                                                 handleClick();
