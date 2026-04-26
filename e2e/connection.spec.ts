@@ -62,7 +62,18 @@ describe("Database Connection Flow", () => {
 
     const connItem = await $('[aria-label^="Test PG"]');
     await connItem.waitForDisplayed({ timeout: 5000 });
-    await connItem.doubleClick();
+    // The connection row is `draggable="true"` and wrapped in a Radix
+    // ContextMenuTrigger; webdriverio's native doubleClick() is unreliable
+    // against this combination on the Linux tauri-driver runner ("element
+    // did not become interactable"). Scroll into view, then dispatch a real
+    // dblclick MouseEvent — React's synthetic event system listens via
+    // bubbling delegation, so onDoubleClick still fires.
+    await connItem.scrollIntoView();
+    await browser.execute((el: HTMLElement) => {
+      el.dispatchEvent(
+        new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+      );
+    }, connItem);
 
     // Workspace has mounted — the back button is the Workspace sentinel.
     const back = await $('[aria-label="Back to connections"]');
