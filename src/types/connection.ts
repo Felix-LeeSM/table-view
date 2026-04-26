@@ -99,6 +99,40 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
   redis: 6379,
 };
 
+/**
+ * Sprint 138 (#4 — DBMS-aware connection form): Per-DBMS defaults that the
+ * form sub-components use when the user newly picks that DBMS or switches
+ * `db_type`. Older callers still read the port-only `DATABASE_DEFAULTS`
+ * map; this richer map adds default `user` and `database` so the dialog no
+ * longer hard-codes `user="postgres"` for every DBMS.
+ *
+ * - `postgresql`: classic super-user/db pair.
+ * - `mysql`: standard root user, empty default DB (user usually picks
+ *   their app DB).
+ * - `sqlite`: file-based — no user, no default DB; the form replaces
+ *   host/port/user/password with a file path field.
+ * - `mongodb`: optional auth — empty user/db; defaults are filled later
+ *   by the user.
+ * - `redis`: ACL is optional, default DB index `"0"` (Redis numeric DB
+ *   indices live in `database` as a string for ConnectionConfig parity).
+ */
+export interface ConnectionDefaultFields {
+  port: number;
+  user: string;
+  database: string;
+}
+
+export const DATABASE_DEFAULT_FIELDS: Record<
+  DatabaseType,
+  ConnectionDefaultFields
+> = {
+  postgresql: { port: 5432, user: "postgres", database: "postgres" },
+  mysql: { port: 3306, user: "root", database: "" },
+  sqlite: { port: 0, user: "", database: "" },
+  mongodb: { port: 27017, user: "", database: "" },
+  redis: { port: 6379, user: "", database: "0" },
+};
+
 /** Map a DatabaseType to its paradigm tag. Mirrors
  *  `DatabaseType::paradigm` on the backend. */
 export function paradigmOf(dbType: DatabaseType): Paradigm {
@@ -160,6 +194,21 @@ export function parseConnectionUrl(
 ): Partial<ConnectionDraft> | null {
   try {
     const parsed = new URL(url);
+    // Sprint 138 — SQLite uses a file path, not a URL. We accept either
+    // `sqlite:/absolute/path.db` (URL.parse succeeds) or fall through to
+    // the catch branch where `parseSqliteFilePath` handles plain paths.
+    if (parsed.protocol === "sqlite:") {
+      const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      return {
+        db_type: "sqlite",
+        host: "",
+        port: DATABASE_DEFAULT_FIELDS.sqlite.port,
+        user: "",
+        password: "",
+        database: path,
+        paradigm: paradigmOf("sqlite"),
+      };
+    }
     const dbTypeMap: Record<string, DatabaseType> = {
       postgresql: "postgresql",
       postgres: "postgresql",
@@ -181,6 +230,28 @@ export function parseConnectionUrl(
   } catch {
     return null;
   }
+}
+
+/**
+ * Sprint 138 — SQLite "URL parsing" fallback. SQLite has no URL form;
+ * treat the raw input as a file path. Accepts non-empty strings; trims
+ * whitespace. Returns `null` for empty/whitespace-only input so the
+ * caller can surface a validation error.
+ */
+export function parseSqliteFilePath(
+  raw: string,
+): Partial<ConnectionDraft> | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  return {
+    db_type: "sqlite",
+    host: "",
+    port: DATABASE_DEFAULT_FIELDS.sqlite.port,
+    user: "",
+    password: "",
+    database: trimmed,
+    paradigm: paradigmOf("sqlite"),
+  };
 }
 
 /** Supported environment tags for connections. */

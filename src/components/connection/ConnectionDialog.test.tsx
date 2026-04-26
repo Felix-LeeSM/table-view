@@ -1088,12 +1088,18 @@ describe("ConnectionDialog", () => {
       renderDialog();
 
       const trigger = screen.getByLabelText("Database Type");
-      // Switch to sqlite first → port becomes 0.
+      // Sprint 138: SQLite renders no Port field at all (the form drops
+      // host/port/user/password). The internal `port` is still 0 so a
+      // subsequent switch to MySQL must take the silent-default path
+      // (no ConfirmDialog) and the new MySQL form must show port=3306.
       await user.click(trigger);
       await user.click(screen.getByRole("option", { name: "SQLite" }));
-      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
-        "0",
-      );
+      // SQLite form: Port field is absent.
+      expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
+      // Database file picker is present in its place.
+      expect(
+        screen.getByLabelText("SQLite database file path"),
+      ).toBeInTheDocument();
 
       // Now switch sqlite → mysql; port must auto-update without modal.
       await user.click(trigger);
@@ -1170,6 +1176,37 @@ describe("ConnectionDialog", () => {
       ).not.toBeInTheDocument();
     });
 
+    it("Sprint 138: switching from PG to MySQL preserves host but resets user from postgres to root", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+
+      // User changes host to a custom value before switching DBMS.
+      const hostInput = screen.getByLabelText("Host") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(hostInput, { target: { value: "db.internal" } });
+      });
+      // Sanity: PG defaults — user "postgres", port 5432.
+      expect((screen.getByLabelText("User") as HTMLInputElement).value).toBe(
+        "postgres",
+      );
+
+      // Swap PG → MySQL via the DB-type select.
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
+
+      // Host preserved, user reset to MySQL default "root".
+      expect((screen.getByLabelText("Host") as HTMLInputElement).value).toBe(
+        "db.internal",
+      );
+      expect((screen.getByLabelText("User") as HTMLInputElement).value).toBe(
+        "root",
+      );
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "3306",
+      );
+    });
+
     it("Cancel keeps dbType=postgres + port=15432 and closes the modal", async () => {
       const user = userEvent.setup();
       renderDialog();
@@ -1202,6 +1239,128 @@ describe("ConnectionDialog", () => {
       expect(
         screen.queryByText("Replace custom port?"),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 138 (#4 — DBMS-aware connection form): one scenario per DBMS
+  // covering AC-S138-01 / 03 / 04 / 07. The "switching preserves host but
+  // resets user" case lives in the Sprint 108 describe above (the swap
+  // path is shared).
+  // -----------------------------------------------------------------------
+  describe("Sprint 138: DBMS-aware form shape", () => {
+    it("AC-S138-01 PG: defaults port=5432, user=postgres, database=postgres", () => {
+      renderDialog();
+      // Initial draft is PG (createEmptyDraft).
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "5432",
+      );
+      expect((screen.getByLabelText("User") as HTMLInputElement).value).toBe(
+        "postgres",
+      );
+      // Database default for PG is "postgres" — the form starts with the
+      // empty createEmptyDraft default but switches to "postgres" once the
+      // user re-selects PostgreSQL through the select (or comes from a
+      // type-swap). For new connections starting at PG we accept the
+      // legacy empty draft and assert the rendered placeholder.
+      const dbInput = screen.getByLabelText("Database") as HTMLInputElement;
+      expect(dbInput).toBeInTheDocument();
+      expect(dbInput.placeholder).toBe("postgres");
+    });
+
+    it("AC-S138-01 / 03 MySQL: defaults port=3306, user=root (NOT postgres)", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MySQL" }));
+
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "3306",
+      );
+      const userInput = screen.getByLabelText("User") as HTMLInputElement;
+      expect(userInput.value).toBe("root");
+      expect(userInput.value).not.toBe("postgres");
+    });
+
+    it("AC-S138-04 SQLite: file path field present, host/port/user/password absent", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "SQLite" }));
+
+      // File path field is the sole DBMS-specific input.
+      expect(
+        screen.getByLabelText("SQLite database file path"),
+      ).toBeInTheDocument();
+
+      // Network/auth fields are not rendered.
+      expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("User")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+    });
+
+    it("AC-S138-01 Mongo: auth_source / replica_set / tls_enabled present + user defaults to empty", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MongoDB" }));
+
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "27017",
+      );
+      // User defaults to empty (NOT "postgres").
+      expect(
+        (screen.getByLabelText("User (optional)") as HTMLInputElement).value,
+      ).toBe("");
+      // Mongo-specific fields.
+      expect(screen.getByLabelText("Auth Source")).toBeInTheDocument();
+      expect(screen.getByLabelText("Replica Set")).toBeInTheDocument();
+      expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
+    });
+
+    it("AC-S138-01 Redis: database index defaults to 0 and clamps to 0..15", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "Redis" }));
+
+      const dbIndex = screen.getByLabelText(
+        "Redis database index (0-15)",
+      ) as HTMLInputElement;
+      expect(dbIndex).toBeInTheDocument();
+      expect(dbIndex.value).toBe("0");
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        "6379",
+      );
+
+      // Clamp 16 → 15 (above max).
+      await act(async () => {
+        fireEvent.change(dbIndex, { target: { value: "16" } });
+      });
+      expect(
+        (
+          screen.getByLabelText(
+            "Redis database index (0-15)",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe("15");
+
+      // Clamp negative → 0 (below min).
+      await act(async () => {
+        fireEvent.change(dbIndex, { target: { value: "-3" } });
+      });
+      expect(
+        (
+          screen.getByLabelText(
+            "Redis database index (0-15)",
+          ) as HTMLInputElement
+        ).value,
+      ).toBe("0");
     });
   });
 });

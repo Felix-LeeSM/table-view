@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   parseConnectionUrl,
+  parseSqliteFilePath,
   createEmptyDraft,
   DATABASE_DEFAULTS,
+  DATABASE_DEFAULT_FIELDS,
 } from "./connection";
 
 describe("parseConnectionUrl", () => {
@@ -100,5 +102,87 @@ describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
     expect(result).not.toBeNull();
     expect(result!.db_type).toBe("redis");
     expect(result!.paradigm).toBe("kv");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sprint 138 — DBMS-aware defaults + SQLite path fallback
+// ---------------------------------------------------------------------------
+describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
+  it("PG defaults: port=5432, user=postgres, database=postgres", () => {
+    expect(DATABASE_DEFAULT_FIELDS.postgresql).toEqual({
+      port: 5432,
+      user: "postgres",
+      database: "postgres",
+    });
+  });
+
+  it("MySQL defaults: port=3306, user=root, database=''", () => {
+    expect(DATABASE_DEFAULT_FIELDS.mysql).toEqual({
+      port: 3306,
+      user: "root",
+      database: "",
+    });
+  });
+
+  it("SQLite defaults: port=0, user='', database=''", () => {
+    expect(DATABASE_DEFAULT_FIELDS.sqlite).toEqual({
+      port: 0,
+      user: "",
+      database: "",
+    });
+  });
+
+  it("Mongo defaults: port=27017, user='', database=''", () => {
+    expect(DATABASE_DEFAULT_FIELDS.mongodb).toEqual({
+      port: 27017,
+      user: "",
+      database: "",
+    });
+  });
+
+  it("Redis defaults: port=6379, user='', database='0'", () => {
+    expect(DATABASE_DEFAULT_FIELDS.redis).toEqual({
+      port: 6379,
+      user: "",
+      database: "0",
+    });
+  });
+
+  it("only PG defaults user to 'postgres' (regression guard for #4)", () => {
+    expect(DATABASE_DEFAULT_FIELDS.postgresql.user).toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.mysql.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.sqlite.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.mongodb.user).not.toBe("postgres");
+    expect(DATABASE_DEFAULT_FIELDS.redis.user).not.toBe("postgres");
+  });
+});
+
+describe("parseSqliteFilePath / sqlite URL fallback (Sprint 138)", () => {
+  it("treats absolute paths as SQLite drafts", () => {
+    const result = parseSqliteFilePath("/data/app.sqlite");
+    expect(result).not.toBeNull();
+    expect(result!.db_type).toBe("sqlite");
+    expect(result!.database).toBe("/data/app.sqlite");
+    expect(result!.host).toBe("");
+    expect(result!.port).toBe(0);
+    expect(result!.paradigm).toBe("rdb");
+  });
+
+  it("trims surrounding whitespace", () => {
+    const result = parseSqliteFilePath("  /tmp/local.db   ");
+    expect(result!.database).toBe("/tmp/local.db");
+  });
+
+  it("rejects empty / whitespace-only input", () => {
+    expect(parseSqliteFilePath("")).toBeNull();
+    expect(parseSqliteFilePath("   ")).toBeNull();
+  });
+
+  it("parseConnectionUrl accepts sqlite:/path URLs", () => {
+    const result = parseConnectionUrl("sqlite:/data/app.sqlite");
+    expect(result).not.toBeNull();
+    expect(result!.db_type).toBe("sqlite");
+    expect(result!.database).toBe("/data/app.sqlite");
   });
 });

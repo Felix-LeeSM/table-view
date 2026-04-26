@@ -18,6 +18,13 @@
 //
 // Per `docs/dialog-conventions.md`, this file is the sole sanctioned escape
 // hatch — new dialogs should pick a preset.
+//
+// Sprint 138 (#4 — DBMS-aware connection form): the inner network/auth/db
+// row(s) are no longer rendered inline. `db_type` switches into one of five
+// sub-components (Pg/Mysql/Sqlite/Mongo/Redis) so the form shape and
+// defaults match each DBMS. The `assertNever` exhaustive check in the
+// switch statement guarantees a new `DatabaseType` variant breaks the
+// build instead of silently falling through to the PG layout.
 // ---------------------------------------------------------------------------
 
 import { useState } from "react";
@@ -32,7 +39,9 @@ import {
   createEmptyDraft,
   draftFromConnection,
   DATABASE_DEFAULTS,
+  DATABASE_DEFAULT_FIELDS,
   parseConnectionUrl,
+  parseSqliteFilePath,
   paradigmOf,
   ENVIRONMENT_META,
   ENVIRONMENT_OPTIONS,
@@ -56,6 +65,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import { assertNever } from "@/lib/paradigm";
+import PgFormFields from "./forms/PgFormFields";
+import MysqlFormFields from "./forms/MysqlFormFields";
+import SqliteFormFields from "./forms/SqliteFormFields";
+import MongoFormFields from "./forms/MongoFormFields";
+import RedisFormFields from "./forms/RedisFormFields";
 
 // Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
 // sentinel string `__none__` to represent the "None" environment option.
@@ -126,13 +141,26 @@ export default function ConnectionDialog({
   const updateConnection = useConnectionStore((s) => s.updateConnection);
   const testConnection = useConnectionStore((s) => s.testConnection);
 
+  /**
+   * Sprint 138 — when the user changes `db_type`, reset the DBMS-specific
+   * defaults (`port`, `user`, `database`) but **preserve** entries the user
+   * has likely typed deliberately (`host`, `name`, `group_id`, `color`,
+   * `environment`). The `host` preservation matters because users often
+   * point all their dev DBMSes at the same host (`localhost`) and it would
+   * be hostile to wipe it on every type swap.
+   */
   const applyDbTypeChange = (dbType: DatabaseType) => {
-    setForm((f) => ({
-      ...f,
-      db_type: dbType,
-      port: DATABASE_DEFAULTS[dbType],
-      paradigm: paradigmOf(dbType),
-    }));
+    setForm((f) => {
+      const defaults = DATABASE_DEFAULT_FIELDS[dbType];
+      return {
+        ...f,
+        db_type: dbType,
+        port: defaults.port,
+        user: defaults.user,
+        database: defaults.database,
+        paradigm: paradigmOf(dbType),
+      };
+    });
   };
 
   const handleDbTypeChange = (newDbType: DatabaseType) => {
@@ -160,7 +188,7 @@ export default function ConnectionDialog({
     setPendingDbTypeChange(null);
   };
 
-  const isMongo = form.db_type === "mongodb";
+  const isSqlite = form.db_type === "sqlite";
 
   /** Resolve the password value to send to the backend. */
   const resolvePassword = (): string | null => {
@@ -193,8 +221,14 @@ export default function ConnectionDialog({
       setError("Name is required");
       return;
     }
-    if (!form.host.trim()) {
+    // SQLite uses `database` as the file path; host is irrelevant. The
+    // host check applies only to network DBMSes.
+    if (!isSqlite && !form.host.trim()) {
       setError("Host is required");
+      return;
+    }
+    if (isSqlite && !form.database.trim()) {
+      setError("Database file is required");
       return;
     }
 
@@ -220,6 +254,56 @@ export default function ConnectionDialog({
   const inputClass =
     "w-full rounded border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary";
   const labelClass = "mb-1 block text-xs font-medium text-secondary-foreground";
+
+  /**
+   * Sprint 138 — exhaustive switch on `db_type`. Adding a new
+   * `DatabaseType` variant without updating this switch fails the
+   * `assertNever` compile-time check.
+   */
+  const renderDbmsFields = () => {
+    const sharedAuth = {
+      passwordInput,
+      setPasswordInput,
+      isEditing,
+      hadPassword,
+      clearPassword,
+      setClearPassword,
+      inputClass,
+      labelClass,
+    };
+    const onChange = (patch: Partial<ConnectionDraft>) =>
+      setForm((f) => ({ ...f, ...patch }));
+
+    switch (form.db_type) {
+      case "postgresql":
+        return (
+          <PgFormFields draft={form} onChange={onChange} {...sharedAuth} />
+        );
+      case "mysql":
+        return (
+          <MysqlFormFields draft={form} onChange={onChange} {...sharedAuth} />
+        );
+      case "sqlite":
+        return (
+          <SqliteFormFields
+            draft={form}
+            onChange={onChange}
+            inputClass={inputClass}
+            labelClass={labelClass}
+          />
+        );
+      case "mongodb":
+        return (
+          <MongoFormFields draft={form} onChange={onChange} {...sharedAuth} />
+        );
+      case "redis":
+        return (
+          <RedisFormFields draft={form} onChange={onChange} {...sharedAuth} />
+        );
+      default:
+        return assertNever(form.db_type);
+    }
+  };
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -292,6 +376,10 @@ export default function ConnectionDialog({
                   placeholder="postgresql://user:password@host:5432/database"
                   autoFocus
                 />
+                <p className="mt-1 text-2xs text-muted-foreground">
+                  For SQLite, paste an absolute file path (e.g.{" "}
+                  <code>/data/app.sqlite</code>).
+                </p>
               </div>
               {urlError && (
                 <div
@@ -305,10 +393,18 @@ export default function ConnectionDialog({
                 className="w-full"
                 size="sm"
                 onClick={() => {
-                  const parsed = parseConnectionUrl(urlValue);
+                  // Sprint 138 — try URL parse first; if SQLite is the
+                  // currently-selected DBMS or the URL doesn't look like
+                  // a recognised scheme, fall back to treating the input
+                  // as a SQLite file path.
+                  const parsed =
+                    parseConnectionUrl(urlValue) ??
+                    (form.db_type === "sqlite"
+                      ? parseSqliteFilePath(urlValue)
+                      : null);
                   if (!parsed) {
                     setUrlError(
-                      "Invalid URL. Use format: postgresql://user:password@host:port/database",
+                      "Invalid URL. Use format: postgresql://user:password@host:port/database (or paste a SQLite file path while SQLite is selected).",
                     );
                     return;
                   }
@@ -407,180 +503,8 @@ export default function ConnectionDialog({
                 </Select>
               </div>
 
-              {/* Host & Port */}
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label htmlFor="conn-host" className={labelClass}>
-                    Host
-                  </label>
-                  <input
-                    id="conn-host"
-                    className={inputClass}
-                    value={form.host}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, host: e.target.value }))
-                    }
-                    placeholder="localhost"
-                  />
-                </div>
-                <div className="w-24">
-                  <label htmlFor="conn-port" className={labelClass}>
-                    Port
-                  </label>
-                  <input
-                    id="conn-port"
-                    className={inputClass}
-                    type="number"
-                    value={form.port}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        port: parseInt(e.target.value, 10) || 0,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* User */}
-              <div>
-                <label htmlFor="conn-user" className={labelClass}>
-                  User
-                </label>
-                <input
-                  id="conn-user"
-                  className={inputClass}
-                  value={form.user}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, user: e.target.value }))
-                  }
-                  placeholder="postgres"
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <div className="flex items-center justify-between">
-                  <label htmlFor="conn-password" className={labelClass}>
-                    Password
-                  </label>
-                  {isEditing && (
-                    <span
-                      className={`mb-1 rounded px-1.5 py-0.5 text-3xs font-medium ${
-                        hadPassword
-                          ? "bg-success/10 text-success"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                      data-testid="password-status-badge"
-                    >
-                      {hadPassword ? "Password set" : "No password"}
-                    </span>
-                  )}
-                </div>
-                <input
-                  id="conn-password"
-                  className={inputClass}
-                  type="password"
-                  value={passwordInput}
-                  disabled={isEditing && clearPassword}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder={
-                    isEditing && hadPassword
-                      ? "Leave blank to keep current password"
-                      : "••••••••"
-                  }
-                />
-                {isEditing && hadPassword && (
-                  <label className="mt-1 flex items-center gap-1.5 text-2xs text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      className="cursor-pointer"
-                      checked={clearPassword}
-                      onChange={(e) => {
-                        setClearPassword(e.target.checked);
-                        if (e.target.checked) setPasswordInput("");
-                      }}
-                    />
-                    Clear stored password on save
-                  </label>
-                )}
-              </div>
-
-              {/* Database */}
-              <div>
-                <label htmlFor="conn-database" className={labelClass}>
-                  Database{isMongo ? " (optional)" : ""}
-                </label>
-                <input
-                  id="conn-database"
-                  className={inputClass}
-                  value={form.database}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, database: e.target.value }))
-                  }
-                  placeholder={isMongo ? "Leave blank to default" : "mydb"}
-                />
-              </div>
-
-              {/* MongoDB-specific fields (Sprint 65). Only rendered when
-                    the selected db_type is mongodb. Auth source + replica
-                    set are optional strings; TLS is a boolean toggle. */}
-              {isMongo && (
-                <div className="space-y-3 rounded border border-border bg-background/40 p-3">
-                  <div className="text-xs font-semibold text-secondary-foreground">
-                    MongoDB Options
-                  </div>
-                  <div>
-                    <label htmlFor="conn-auth-source" className={labelClass}>
-                      Auth Source
-                    </label>
-                    <input
-                      id="conn-auth-source"
-                      className={inputClass}
-                      value={form.auth_source ?? ""}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          auth_source: e.target.value || null,
-                        }))
-                      }
-                      placeholder="admin"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="conn-replica-set" className={labelClass}>
-                      Replica Set
-                    </label>
-                    <input
-                      id="conn-replica-set"
-                      className={inputClass}
-                      value={form.replica_set ?? ""}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          replica_set: e.target.value || null,
-                        }))
-                      }
-                      placeholder="rs0"
-                    />
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-secondary-foreground">
-                    <input
-                      id="conn-tls-enabled"
-                      type="checkbox"
-                      className="cursor-pointer"
-                      checked={!!form.tls_enabled}
-                      onChange={(e) =>
-                        setForm((f) => ({
-                          ...f,
-                          tls_enabled: e.target.checked,
-                        }))
-                      }
-                    />
-                    Enable TLS
-                  </label>
-                </div>
-              )}
+              {/* DBMS-aware fields (Sprint 138) */}
+              {renderDbmsFields()}
 
               {/* Advanced Settings */}
               <div className="border-t border-border pt-3">
