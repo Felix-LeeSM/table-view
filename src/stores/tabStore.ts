@@ -30,6 +30,19 @@ export interface TableTab {
   closable: boolean;
   schema?: string;
   table?: string;
+  /**
+   * Sprint 129 — document-paradigm-specific MongoDB database name. Optional
+   * because RDB tabs never set this field; legacy persisted document tabs
+   * (sprint <129) recorded the database as `schema` and are migrated in
+   * `loadPersistedTabs` so this field is always populated on load.
+   */
+  database?: string;
+  /**
+   * Sprint 129 — document-paradigm-specific MongoDB collection name. Optional
+   * for the same reason as {@link database}: RDB tabs never set this, and
+   * legacy persisted document tabs are backfilled from `table` on load.
+   */
+  collection?: string;
   subView: TabSubView;
   /** Whether this tab points at a base table or a view. */
   objectKind?: TabObjectKind;
@@ -516,11 +529,26 @@ export const useTabStore = create<TabState>((set, get) => ({
         // default to `[]` here rather than threading an `undefined` guard
         // through every consumer (`DataGrid`, `DataGridTable`, `fetchData`).
         if (t.type === "table") {
+          // Sprint 129 — document tabs persisted before this sprint stored
+          // the MongoDB database/collection in `schema`/`table` (RDB
+          // aliasing). Backfill the new dedicated `database`/`collection`
+          // fields when missing so downstream consumers can drop the
+          // alias. RDB tabs (paradigm !== "document") leave the new
+          // fields untouched. The migration is idempotent: if either
+          // field is already populated, we keep the persisted value.
+          const paradigm = t.paradigm ?? ("rdb" as const);
+          const isDocument = paradigm === "document";
+          const database = isDocument ? (t.database ?? t.schema) : t.database;
+          const collection = isDocument
+            ? (t.collection ?? t.table)
+            : t.collection;
           return {
             ...t,
             isPreview: false,
-            paradigm: t.paradigm ?? ("rdb" as const),
+            paradigm,
             sorts: t.sorts ?? [],
+            database,
+            collection,
           };
         }
         return t;

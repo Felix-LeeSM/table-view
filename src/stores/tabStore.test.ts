@@ -881,6 +881,108 @@ describe("tabStore", () => {
         expect(tt.paradigm).toBe("document");
       }
     });
+
+    // Sprint 129 — backfill database/collection from schema/table on load
+    // for legacy persisted document tabs. The migration is idempotent and
+    // RDB tabs must be left alone.
+    it("backfills database/collection on legacy document tabs (sprint 129)", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "table_view_test.users",
+            connectionId: "conn-mongo",
+            closable: true,
+            schema: "table_view_test",
+            table: "users",
+            subView: "records",
+            paradigm: "document",
+            // database / collection are intentionally absent — pre-S129.
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      const tt = state.tabs[0];
+      expect(tt?.type).toBe("table");
+      if (tt && tt.type === "table") {
+        expect(tt.database).toBe("table_view_test");
+        expect(tt.collection).toBe("users");
+        // Legacy schema/table are preserved for backwards-compat.
+        expect(tt.schema).toBe("table_view_test");
+        expect(tt.table).toBe("users");
+      }
+    });
+
+    it("does not backfill database/collection on RDB tabs (sprint 129)", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            paradigm: "rdb",
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      const tt = state.tabs[0];
+      if (tt && tt.type === "table") {
+        // RDB tabs must keep document fields undefined — these fields are
+        // document-paradigm-only and the migration must not touch them.
+        expect(tt.database).toBeUndefined();
+        expect(tt.collection).toBeUndefined();
+        expect(tt.schema).toBe("public");
+        expect(tt.table).toBe("users");
+      }
+    });
+
+    it("is idempotent when database/collection already populated (sprint 129)", () => {
+      const persistedState = {
+        tabs: [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "table_view_test.users",
+            connectionId: "conn-mongo",
+            closable: true,
+            schema: "stale_schema",
+            table: "stale_table",
+            subView: "records",
+            paradigm: "document",
+            // Already migrated — must not be overwritten by schema/table.
+            database: "table_view_test",
+            collection: "users",
+          },
+        ],
+        activeTabId: "tab-1",
+      };
+      storage["table-view-tabs"] = JSON.stringify(persistedState);
+
+      useTabStore.getState().loadPersistedTabs();
+
+      const state = useTabStore.getState();
+      const tt = state.tabs[0];
+      if (tt && tt.type === "table") {
+        expect(tt.database).toBe("table_view_test");
+        expect(tt.collection).toBe("users");
+      }
+    });
   });
 
   // -- Tab drag reorder --

@@ -30,12 +30,15 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
 
   switch (paradigm) {
     case "document":
+      // Sprint 129 — prefer the dedicated `database` / `collection` fields,
+      // fall back to the legacy `schema` / `table` aliasing for safety in
+      // case a persisted tab predates the migration in `loadPersistedTabs`.
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
           <DocumentDataGrid
             connectionId={tab.connectionId}
-            database={tab.schema!}
-            collection={tab.table!}
+            database={tab.database ?? tab.schema!}
+            collection={tab.collection ?? tab.table!}
           />
         </div>
       );
@@ -196,7 +199,9 @@ export default function MainArea() {
       <WorkspaceToolbar />
       <TabBar />
       <div className="flex flex-1 overflow-hidden bg-background">
-        {activeTab?.type === "table" && activeTab.table && activeTab.schema ? (
+        {activeTab?.type === "table" &&
+        (activeTab.table ?? activeTab.collection) &&
+        (activeTab.schema ?? activeTab.database) ? (
           <TableTabView
             tab={activeTab}
             onSubViewChange={(subView) => setSubView(activeTab.id, subView)}

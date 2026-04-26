@@ -94,6 +94,11 @@ describe("DocumentDatabaseTree", () => {
     expect(first.type).toBe("table");
     if (first.type === "table") {
       expect(first.paradigm).toBe("document");
+      // Sprint 129 — addTab must populate the new dedicated fields…
+      expect(first.database).toBe("table_view_test");
+      expect(first.collection).toBe("users");
+      // …and keep the legacy schema/table for backwards-compat with any
+      // reader that hasn't migrated yet.
       expect(first.schema).toBe("table_view_test");
       expect(first.table).toBe("users");
       expect(first.title).toBe("table_view_test.users");
@@ -129,5 +134,131 @@ describe("DocumentDatabaseTree", () => {
       const key = "conn-mongo:table_view_test";
       expect(useDocumentStore.getState().collections[key]).toBeDefined();
     });
+  });
+
+  // -- Sprint 129 --
+
+  it("renders the search input with the documented aria-label", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    const input = screen.getByLabelText("Filter databases and collections");
+    expect(input).toBeInTheDocument();
+    // Initial value is empty so all databases pass through unchanged.
+    expect((input as HTMLInputElement).value).toBe("");
+  });
+
+  it("filters databases by case-insensitive substring match", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("admin database")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument();
+    });
+
+    const input = screen.getByLabelText("Filter databases and collections");
+    fireEvent.change(input, { target: { value: "AD" } });
+
+    expect(screen.getByLabelText("admin database")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("table_view_test database"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders 'No databases match' when the filter yields zero results", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("admin database")).toBeInTheDocument(),
+    );
+
+    const input = screen.getByLabelText("Filter databases and collections");
+    fireEvent.change(input, { target: { value: "zzzz-no-match" } });
+
+    expect(
+      screen.getByText(/No databases match "zzzz-no-match"/),
+    ).toBeInTheDocument();
+    // Sanity — the original empty-state message must NOT render here.
+    expect(
+      screen.queryByText("No databases visible to this connection"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("auto-expands a database whose collections match the query", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+
+    // Pre-load the collection cache so the search has data to match against.
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+    // Collapse it again so we can verify the search expands automatically.
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("users collection"),
+      ).not.toBeInTheDocument(),
+    );
+
+    const input = screen.getByLabelText("Filter databases and collections");
+    fireEvent.change(input, { target: { value: "user" } });
+
+    // The collection match auto-expands the parent database, so the
+    // collection node is visible without any extra click.
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+    // The non-matching `admin` database is hidden (no collection match
+    // either, since we never expanded it).
+    expect(screen.queryByLabelText("admin database")).not.toBeInTheDocument();
+  });
+
+  it("does not render the Folder/FolderOpen icon (sprint 129)", async () => {
+    const { container } = render(
+      <DocumentDatabaseTree connectionId="conn-mongo" />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("admin database")).toBeInTheDocument(),
+    );
+
+    // lucide-react renders icons as <svg class="lucide lucide-folder ...">.
+    // Verify the RDB-folder metaphor is gone — both the closed and the
+    // open variant must be absent.
+    expect(container.querySelector("svg.lucide-folder")).toBeNull();
+    expect(container.querySelector("svg.lucide-folder-open")).toBeNull();
+
+    // The Database icon, on the other hand, must still render once per
+    // database row.
+    const dbIcons = container.querySelectorAll("svg.lucide-database");
+    expect(dbIcons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("Escape clears the search query", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("admin database")).toBeInTheDocument(),
+    );
+
+    const input = screen.getByLabelText(
+      "Filter databases and collections",
+    ) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "admin" } });
+    expect(input.value).toBe("admin");
+
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(input.value).toBe("");
+    // After clearing, the previously-hidden database is visible again.
+    expect(
+      screen.getByLabelText("table_view_test database"),
+    ).toBeInTheDocument();
   });
 });
