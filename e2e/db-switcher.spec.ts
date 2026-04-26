@@ -6,11 +6,11 @@ import { expect } from "@wdio/globals";
  *
  * The full-body coverage targets the workspace toolbar's DB-switcher
  * dropdown introduced in S130 / S131:
- *   1. Press Cmd+K to open the `<ConnectionSwitcher>` popover.
- *   2. Pick a connected PG connection.
- *   3. In the workspace, click the DB switcher trigger and verify the
+ *   1. From Home, double-click a connected PG connection (S134 removed
+ *      the ConnectionSwitcher / Cmd+K popover; entry is now via Home).
+ *   2. In the workspace, click the DB switcher trigger and verify the
  *      popover lists at least one database row.
- *   4. Select a different DB and verify the trigger label updates.
+ *   3. Select a different DB and verify the trigger label updates.
  *
  * Both the PG and Mongo descriptors are gated behind the
  * `E2E_PG_HOST` / `E2E_MONGO_HOST` env vars so this spec stays compile-

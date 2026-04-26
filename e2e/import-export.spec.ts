@@ -5,14 +5,21 @@ import { ensureHomeScreen, ensureTestPgConnection } from "./_helpers";
  * Phase C-2 — ImportExportDialog smoke tests.
  *
  * Covers the user-reported scenario where opening the dialog and clicking
- * "Generate JSON" must NOT freeze the app, and verifies the export payload
- * is well-formed and password-free.
+ * "Generate encrypted JSON" must NOT freeze the app, and verifies the export
+ * payload is the Argon2id+AES-GCM envelope shape with no plaintext password
+ * leakage.
  *
- * Sprint 125 — the Import/Export entry point now lives on the Home screen
+ * Sprint 125 — the Import/Export entry point lives on the Home screen
  * (paradigm-agnostic connection management). These tests start from Home;
  * a previous spec that left the user inside the Workspace will be returned
  * to Home by `ensureHomeScreen` before the dialog is opened.
+ *
+ * Sprint 140 — Generate JSON renamed to "Generate encrypted JSON" and gated
+ * behind a master password (min 8). Plain-JSON import still works as a
+ * regression-safe fallback, so the import case feeds plain JSON in.
  */
+
+const E2E_MASTER_PASSWORD = "table-view-e2e";
 
 async function openImportExportDialog() {
   const btn = await $('[aria-label="Import / Export"]');
@@ -60,54 +67,84 @@ describe("Connection Import/Export", () => {
     // Pure smoke: just open and make sure UI is still responsive afterwards.
     await openImportExportDialog();
 
-    // The Generate JSON button must be reachable — a stuck UI would never
-    // surface this element.
-    const generateBtn = await $("button=Generate JSON");
+    // The Generate encrypted JSON button must be reachable — a stuck UI
+    // would never surface this element. It is disabled until the master
+    // password reaches min length (S140), which we are not asserting here.
+    const generateBtn = await $("button=Generate encrypted JSON");
     await generateBtn.waitForDisplayed({ timeout: 5000 });
-    expect(await generateBtn.isEnabled()).toBe(true);
 
     // Closing should also work — proves the modal trap isn't wedged.
     await browser.keys(["Escape"]);
     await generateBtn.waitForDisplayed({ timeout: 5000, reverse: true });
   });
 
-  it("Generate JSON produces a payload without any password fields", async () => {
+  it("Generate encrypted JSON produces an Argon2id+AES-GCM envelope without leaking plaintext", async () => {
     await openImportExportDialog();
 
-    const generateBtn = await $("button=Generate JSON");
+    // Sprint 140: must fill the master password before the button enables.
+    // The MasterPasswordField uses React's useId so the id is dynamic
+    // (e.g. ":r1:" with colons that break CSS selectors). Reach the input
+    // via the label's sibling structure instead.
+    const pwInput = await $(
+      '//label[normalize-space()="Master password"]/following-sibling::div[1]//input',
+    );
+    await pwInput.waitForDisplayed({ timeout: 5000 });
+    await pwInput.click();
+    await pwInput.setValue(E2E_MASTER_PASSWORD);
+
+    const generateBtn = await $("button=Generate encrypted JSON");
     await generateBtn.waitForDisplayed({ timeout: 5000 });
+    await browser.waitUntil(async () => await generateBtn.isEnabled(), {
+      timeout: 3000,
+      timeoutMsg: "Generate encrypted JSON never enabled after password input",
+    });
     await generateBtn.click();
 
     const textarea = await $('[aria-label="Generated export JSON"]');
     await textarea.waitForDisplayed({ timeout: 5000 });
 
     const value = ((await textarea.getProperty("value")) as string) ?? "";
-    expect(value).toContain('"schema_version"');
-    expect(value).toContain("Test PG");
 
-    // Critical security checks — neither the plaintext password the test set
-    // ("testpass") nor any "password" field may appear in the export.
-    expect(value).not.toContain("testpass");
-    expect(value).not.toContain('"password"');
-
-    // Schema version should match what the backend currently emits (v1).
+    // Locked envelope shape from docs/sprints/sprint-134/spec.md (Phase 10
+    // decision lock).
     const parsed = JSON.parse(value);
-    expect(parsed.schema_version).toBe(1);
-    expect(Array.isArray(parsed.connections)).toBe(true);
+    expect(parsed.v).toBe(1);
+    expect(parsed.kdf).toBe("argon2id");
+    expect(parsed.alg).toBe("aes-256-gcm");
+    expect(parsed.tag_attached).toBe(true);
+    expect(typeof parsed.salt).toBe("string");
+    expect(typeof parsed.nonce).toBe("string");
+    expect(typeof parsed.ciphertext).toBe("string");
+
+    // Critical security checks — neither the per-connection plaintext
+    // password ("testpass") nor the master password may appear in the
+    // ciphertext envelope. The fixture connection name "Test PG" is now
+    // inside the encrypted ciphertext too, so it must NOT appear plain.
+    expect(value).not.toContain("testpass");
+    expect(value).not.toContain(E2E_MASTER_PASSWORD);
+    expect(value).not.toContain("Test PG");
 
     await browser.keys(["Escape"]);
   });
 
-  it("unchecking a connection excludes it from the generated payload", async () => {
+  it("clearing the master password disables the Generate button", async () => {
     await openImportExportDialog();
 
-    // Uncheck the "Test PG" row by toggling its checkbox
-    const connRow = await $('//label[.//*[text()="Test PG"]]');
-    await connRow.waitForDisplayed({ timeout: 5000 });
-    const checkbox = await connRow.$("input[type='checkbox']");
-    await checkbox.click();
+    const generateBtn = await $("button=Generate encrypted JSON");
+    await generateBtn.waitForDisplayed({ timeout: 5000 });
 
-    const generateBtn = await $("button=Generate JSON");
+    // No password yet → disabled.
+    expect(await generateBtn.isEnabled()).toBe(false);
+
+    // The MasterPasswordField uses React's useId so the id is dynamic
+    // (e.g. ":r1:" with colons that break CSS selectors). Reach the input
+    // via the label's sibling structure instead.
+    const pwInput = await $(
+      '//label[normalize-space()="Master password"]/following-sibling::div[1]//input',
+    );
+    await pwInput.waitForDisplayed({ timeout: 5000 });
+    await pwInput.click();
+    await pwInput.setValue("short"); // < 8 chars → still disabled.
     expect(await generateBtn.isEnabled()).toBe(false);
 
     await browser.keys(["Escape"]);
