@@ -18,7 +18,9 @@ import { expect } from "@wdio/globals";
 
 describe("Raw-query DB-change detection (Sprint 133)", function () {
   before(function () {
-    if (!process.env.E2E_PG_HOST) {
+    // Honour `PGHOST` as a fallback so this spec runs in CI without an
+    // extra workflow env tweak — matches `db-switcher.spec.ts`.
+    if (!process.env.E2E_PG_HOST && !process.env.PGHOST) {
       this.skip();
     }
   });

@@ -25,10 +25,12 @@ import { expect } from "@wdio/globals";
 
 describe("DB switcher (Sprint 133)", function () {
   before(function () {
-    if (!process.env.E2E_PG_HOST) {
-      // No PG fixture reachable — skip the entire describe so we don't
-      // throw against a non-existent webdriver session. The describe
-      // and its bodies still parse / type-check cleanly.
+    // Honour both `E2E_PG_HOST` (e2e-specific) and `PGHOST` (the
+    // canonical libpq variable that the CI workflow already exports for
+    // the postgres service). Falling back to `PGHOST` keeps this spec in
+    // sync with `.github/workflows/ci.yml` so the suite executes in CI
+    // without an extra workflow env tweak.
+    if (!process.env.E2E_PG_HOST && !process.env.PGHOST) {
       this.skip();
     }
   });
