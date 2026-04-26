@@ -27,7 +27,9 @@ import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 import { useDocumentStore } from "@stores/documentStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
-import QueryEditor from "./QueryEditor";
+import { assertNever } from "@/lib/paradigm";
+import SqlQueryEditor from "./SqlQueryEditor";
+import MongoQueryEditor from "./MongoQueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import FavoritesPanel from "./FavoritesPanel";
 import QuerySyntax from "@components/shared/QuerySyntax";
@@ -161,12 +163,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
   // via `databaseTypeToSqlDialect(undefined)`; document paradigm tabs keep
   // receiving the resolved dialect but ignore it inside `QueryEditor`.
   const connections = useConnectionStore((s) => s.connections);
-  const sqlDialect = useMemo(() => {
-    const conn = connections.find((c) => c.id === tab.connectionId);
-    return databaseTypeToSqlDialect(conn?.db_type);
-  }, [connections, tab.connectionId]);
+  const connection = useMemo(
+    () => connections.find((c) => c.id === tab.connectionId),
+    [connections, tab.connectionId],
+  );
+  const sqlDialect = useMemo(
+    () => databaseTypeToSqlDialect(connection?.db_type),
+    [connection?.db_type],
+  );
+  // Sprint 139 — pipe `dbType` so the autocomplete namespace surfaces
+  // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
+  // SQLite: PRAGMA / WITHOUT ROWID).
   const schemaNamespace = useSqlAutocomplete(tab.connectionId, {
     dialect: sqlDialect,
+    dbType: connection?.db_type,
   });
   // Sprint 83 — surface cached Mongo field names for autocomplete. The
   // document store stores columns under `${connectionId}:${db}:${collection}`;
@@ -883,22 +893,70 @@ export default function QueryTab({ tab }: QueryTabProps) {
         </div>
       </div>
 
-      {/* Editor area */}
+      {/* Editor area — Sprint 139: route to the paradigm-specific editor.
+          The router lives here (not in a wrapper component) so the
+          paradigm → editor mapping is colocated with the dialect /
+          autocomplete wiring, and so structural separation between
+          paradigms is visible in the call site. `assertNever` guards
+          against future paradigm additions falling through silently. */}
       <div
         className="min-h-0 overflow-hidden"
         style={{ flex: `0 0 ${editorPct}%` }}
       >
-        <QueryEditor
-          ref={editorRef}
-          sql={tab.sql}
-          onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
-          onExecute={handleExecute}
-          schemaNamespace={schemaNamespace}
-          paradigm={tab.paradigm}
-          queryMode={tab.queryMode}
-          sqlDialect={sqlDialect}
-          mongoExtensions={mongoExtensions}
-        />
+        {(() => {
+          switch (tab.paradigm) {
+            case "rdb":
+              return (
+                <SqlQueryEditor
+                  ref={editorRef}
+                  sql={tab.sql}
+                  onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
+                  onExecute={handleExecute}
+                  schemaNamespace={schemaNamespace}
+                  sqlDialect={sqlDialect}
+                />
+              );
+            case "document":
+              return (
+                <MongoQueryEditor
+                  ref={editorRef}
+                  sql={tab.sql}
+                  onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
+                  onExecute={handleExecute}
+                  queryMode={tab.queryMode}
+                  mongoExtensions={mongoExtensions}
+                />
+              );
+            case "kv":
+              return (
+                <div
+                  className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
+                  role="textbox"
+                  aria-label="Key-Value Query Editor"
+                  aria-multiline="true"
+                  data-paradigm="kv"
+                  data-query-mode={tab.queryMode}
+                >
+                  Redis editor coming in Phase 9.
+                </div>
+              );
+            case "search":
+              return (
+                <div
+                  className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
+                  role="textbox"
+                  aria-label="Search Query Editor"
+                  aria-multiline="true"
+                  data-paradigm="search"
+                  data-query-mode={tab.queryMode}
+                >
+                  Search editor coming in Phase 9.
+                </div>
+              );
+            default:
+              return assertNever(tab.paradigm);
+          }
+        })()}
       </div>
 
       {/* Resize handle */}

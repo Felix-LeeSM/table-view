@@ -79,38 +79,70 @@ const mockEditorProps: {
   lastQueryMode: undefined,
 };
 
-vi.mock("./QueryEditor", async () => {
+// Sprint 139 — QueryTab now routes directly to SqlQueryEditor /
+// MongoQueryEditor based on `tab.paradigm`. Both editors are mocked to a
+// shared DOM testbed (`data-testid="mock-editor"`) so the existing
+// fixtures keep working — the mock records `paradigm` from a synthesised
+// prop so the dialect / mongo / paradigm assertions stay meaningful.
+vi.mock("./SqlQueryEditor", async () => {
   const React = await import("react");
-  // Tests target the editor through the DOM (data-testid), so the forwarded
-  // ref is intentionally ignored — the real QueryEditor uses useImperativeHandle
-  // to expose the CodeMirror view, which we don't need here.
-  const MockQueryEditor = React.forwardRef<
+  const MockSqlQueryEditor = React.forwardRef<
     unknown,
     {
       onExecute: () => void;
       sql: string;
       sqlDialect?: SQLDialect;
-      mongoExtensions?: readonly Extension[];
-      paradigm?: string;
-      queryMode?: string;
     }
-  >(function MockQueryEditor(props) {
+  >(function MockSqlQueryEditor(props) {
     mockEditorProps.lastDialect = props.sqlDialect;
     mockEditorProps.dialectHistory.push(props.sqlDialect);
-    mockEditorProps.lastMongoExtensions = props.mongoExtensions;
-    mockEditorProps.mongoExtensionsHistory.push(props.mongoExtensions);
-    mockEditorProps.lastParadigm = props.paradigm;
-    mockEditorProps.lastQueryMode = props.queryMode;
+    mockEditorProps.lastMongoExtensions = undefined;
+    mockEditorProps.mongoExtensionsHistory.push(undefined);
+    mockEditorProps.lastParadigm = "rdb";
+    mockEditorProps.lastQueryMode = "sql";
     return (
-      <div data-testid="mock-editor" data-sql={props.sql}>
+      <div data-testid="mock-editor" data-paradigm="rdb" data-sql={props.sql}>
         <button data-testid="execute-btn" onClick={props.onExecute}>
           Execute
         </button>
       </div>
     );
   });
-  MockQueryEditor.displayName = "MockQueryEditor";
-  return { default: MockQueryEditor };
+  MockSqlQueryEditor.displayName = "MockSqlQueryEditor";
+  return { default: MockSqlQueryEditor };
+});
+
+vi.mock("./MongoQueryEditor", async () => {
+  const React = await import("react");
+  const MockMongoQueryEditor = React.forwardRef<
+    unknown,
+    {
+      onExecute: () => void;
+      sql: string;
+      mongoExtensions?: readonly Extension[];
+      queryMode?: string;
+    }
+  >(function MockMongoQueryEditor(props) {
+    mockEditorProps.lastDialect = undefined;
+    mockEditorProps.dialectHistory.push(undefined);
+    mockEditorProps.lastMongoExtensions = props.mongoExtensions;
+    mockEditorProps.mongoExtensionsHistory.push(props.mongoExtensions);
+    mockEditorProps.lastParadigm = "document";
+    mockEditorProps.lastQueryMode = props.queryMode;
+    return (
+      <div
+        data-testid="mock-editor"
+        data-paradigm="document"
+        data-sql={props.sql}
+      >
+        <button data-testid="execute-btn" onClick={props.onExecute}>
+          Execute
+        </button>
+      </div>
+    );
+  });
+  MockMongoQueryEditor.displayName = "MockMongoQueryEditor";
+  return { default: MockMongoQueryEditor };
 });
 
 vi.mock("./QueryResultGrid", () => ({
@@ -1353,14 +1385,24 @@ describe("QueryTab", () => {
 
   // ── Sprint 83: Mongo autocomplete + operator highlight wiring ─────────────
 
-  // AC-09: QueryTab passes `mongoExtensions` (autocomplete override + operator
-  // highlight, length 2) to QueryEditor on every render, including RDB tabs.
-  // QueryEditor itself gates the extensions behind `paradigm === "document"`
-  // so RDB callers see no behavioural change — that invariant is covered by
-  // QueryEditor.test.tsx.
-  it("always passes a 2-entry mongoExtensions array to QueryEditor", () => {
+  // AC-S139-04: Sprint 139 split the editor by paradigm. RDB tabs route
+  // to SqlQueryEditor which does NOT accept mongoExtensions; the mock
+  // therefore records `lastMongoExtensions === undefined`. Document tabs
+  // route to MongoQueryEditor and forward the hook's 2-entry extension
+  // array. The earlier "always passes" assertion no longer applies after
+  // the structural split.
+  it("does NOT pass mongoExtensions to the SQL editor on RDB tabs", () => {
     const rdbTab = makeQueryTab();
     render(<QueryTab tab={rdbTab} />);
+    expect(mockEditorProps.lastParadigm).toBe("rdb");
+    expect(mockEditorProps.lastMongoExtensions).toBeUndefined();
+  });
+
+  it("passes a 2-entry mongoExtensions array to MongoQueryEditor on document tabs", () => {
+    const docTab = makeDocTab();
+    useTabStore.setState({ tabs: [docTab], activeTabId: "query-1" });
+    render(<QueryTab tab={docTab} />);
+    expect(mockEditorProps.lastParadigm).toBe("document");
     expect(mockEditorProps.lastMongoExtensions).toBeDefined();
     expect(Array.isArray(mockEditorProps.lastMongoExtensions)).toBe(true);
     expect(mockEditorProps.lastMongoExtensions?.length).toBe(2);
@@ -1438,18 +1480,17 @@ describe("QueryTab", () => {
     expect(mockEditorProps.lastMongoExtensions?.length).toBe(2);
   });
 
-  // AC-07 regression: RDB paradigm tabs compute `mongoFieldNames =
-  // undefined` regardless of any fieldsCache content, so populating the
-  // cache under an unrelated key MUST NOT influence the extension memo.
-  // The hook still fires once (because fieldsCache identity flips) but
-  // the extension set remains a 2-entry MQL-aware array with `undefined`
-  // fieldNames — QueryEditor discards it entirely when paradigm="rdb".
-  it("does not pull fieldsCache into mongoExtensions for RDB tabs", async () => {
+  // AC-S139-04 regression: RDB tabs route to SqlQueryEditor which never
+  // receives mongoExtensions in the first place — fieldsCache mutations
+  // can never bleed into the SQL editor. After the Sprint 139 split this
+  // is structurally enforced (the editor doesn't even accept the prop)
+  // rather than gated behind a `paradigm` check inside the editor.
+  it("does not pull fieldsCache into the SQL editor for RDB tabs", async () => {
     const rdbTab = makeQueryTab();
     useTabStore.setState({ tabs: [rdbTab], activeTabId: "query-1" });
     const { rerender } = render(<QueryTab tab={rdbTab} />);
-    const before = mockEditorProps.lastMongoExtensions;
-    expect(before).toBeDefined();
+    expect(mockEditorProps.lastParadigm).toBe("rdb");
+    expect(mockEditorProps.lastMongoExtensions).toBeUndefined();
 
     await act(async () => {
       useDocumentStore.setState({
@@ -1471,12 +1512,7 @@ describe("QueryTab", () => {
       rerender(<QueryTab tab={rdbTab} />);
     });
 
-    // The hook memo deps include `fieldsCache` identity + `tab.paradigm`,
-    // but since paradigm === "rdb" the memo still computes `undefined`
-    // fieldNames. The useMongoAutocomplete hook itself keys on the
-    // stable `undefined` value, so its memo stays referentially stable
-    // across this render.
-    expect(mockEditorProps.lastMongoExtensions).toBe(before);
+    expect(mockEditorProps.lastMongoExtensions).toBeUndefined();
     expect(mockEditorProps.lastParadigm).toBe("rdb");
   });
 

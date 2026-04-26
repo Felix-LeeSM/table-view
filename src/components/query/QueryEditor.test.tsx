@@ -379,7 +379,14 @@ describe("QueryEditor", () => {
     expect(container).toHaveAttribute("data-query-mode", "aggregate");
   });
 
-  it("reconfigures the language in-place when paradigm flips (editor survives)", async () => {
+  // Sprint 139 — paradigm-aware split. Flipping the paradigm now swaps
+  // the underlying editor component (SqlQueryEditor ↔ MongoQueryEditor),
+  // so the previous "same EditorView instance" contract no longer holds.
+  // We assert the new contract: the language identity reflects the new
+  // paradigm, the aria-label flips, and the swap completes without
+  // throwing. Identity preservation across non-paradigm changes (schema,
+  // dialect, mongoExtensions) is exercised by the per-editor tests.
+  it("swaps the language extension when paradigm flips rdb → document", async () => {
     const { rerender } = render(
       <QueryEditor
         sql=""
@@ -389,8 +396,7 @@ describe("QueryEditor", () => {
       />,
     );
 
-    const viewBefore = getEditorView();
-    expect(activeLanguageName(viewBefore)).toBe("sql");
+    expect(activeLanguageName(getEditorView())).toBe("sql");
 
     rerender(
       <QueryEditor
@@ -402,14 +408,11 @@ describe("QueryEditor", () => {
       />,
     );
 
-    // Same EditorView instance — the Compartment swap must reuse the editor
-    // so cursor/selection/history survive the paradigm flip.
     await waitFor(() => {
       const container = screen.getByLabelText("MongoDB Find Query Editor");
       const viewAfter = EditorView.findFromDOM(
         container.querySelector(".cm-editor") as HTMLElement,
       )!;
-      expect(viewAfter).toBe(viewBefore);
       expect(activeLanguageName(viewAfter)).toBe("json");
     });
   });
@@ -680,9 +683,13 @@ describe("QueryEditor", () => {
     });
   });
 
-  // AC-08: paradigm swap rdb → document keeps the same EditorView identity,
-  // even when mongoExtensions are threaded through the Compartment.
-  it("reuses the EditorView when paradigm flips with mongoExtensions present", async () => {
+  // Sprint 139 — paradigm-aware split. Flipping rdb → document with
+  // mongoExtensions threaded through the prop now mounts a fresh
+  // MongoQueryEditor (the previous SqlQueryEditor unmounts). The new
+  // contract: the JSON language is active in the new editor and the
+  // mongoExtensions reach the document editor without leaking back into
+  // any SQL editor.
+  it("mounts the document editor with mongoExtensions when paradigm flips rdb → document", async () => {
     const mongoExts = [createMongoOperatorHighlight()];
     const { rerender } = render(
       <QueryEditor
@@ -693,8 +700,7 @@ describe("QueryEditor", () => {
         mongoExtensions={mongoExts}
       />,
     );
-    const viewBefore = getEditorView();
-    expect(activeLanguageName(viewBefore)).toBe("sql");
+    expect(activeLanguageName(getEditorView())).toBe("sql");
 
     rerender(
       <QueryEditor
@@ -712,7 +718,6 @@ describe("QueryEditor", () => {
       const viewAfter = EditorView.findFromDOM(
         container.querySelector(".cm-editor") as HTMLElement,
       )!;
-      expect(viewAfter).toBe(viewBefore);
       expect(activeLanguageName(viewAfter)).toBe("json");
     });
   });

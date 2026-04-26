@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
 import { useSchemaStore } from "@stores/schemaStore";
+import type { DatabaseType } from "@/types/connection";
+import { getKeywordsForDialect } from "@/lib/sqlDialectKeywords";
 
 /** Common SQL functions exposed as autocomplete candidates. */
 const SQL_FUNCTIONS = [
@@ -37,6 +39,14 @@ export interface UseSqlAutocompleteOptions {
    * identically to pre-Sprint-82 callers.
    */
   dialect?: SQLDialect;
+  /**
+   * Sprint 139 — the connection's `db_type`. When supplied the hook surfaces
+   * dialect-specific SQL keywords (e.g. `RETURNING` / `ILIKE` for PG,
+   * `AUTO_INCREMENT` / `REPLACE INTO` for MySQL, `PRAGMA` / `WITHOUT ROWID`
+   * for SQLite). When omitted the namespace skips the keyword list entirely
+   * so pre-Sprint-139 callers see no behavioural change.
+   */
+  dbType?: DatabaseType;
 }
 
 /**
@@ -115,7 +125,7 @@ export function useSqlAutocomplete(
   const views = useSchemaStore((s) => s.views);
   const columnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const opts = normalizeOptions(arg);
-  const { tableColumns, dialect } = opts;
+  const { tableColumns, dialect, dbType } = opts;
 
   return useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,6 +134,18 @@ export function useSqlAutocomplete(
     // SQL functions — grouped under a virtual "functions" namespace entry
     for (const fn of SQL_FUNCTIONS) {
       ns[fn] = {};
+    }
+
+    // Sprint 139 — surface dialect-specific SQL keywords as top-level
+    // namespace entries so the autocomplete popup offers them alongside
+    // tables / views / functions. Pre-Sprint-139 callers (no dbType)
+    // skip this branch and see no behavioural change.
+    if (dbType !== undefined) {
+      for (const kw of getKeywordsForDialect(dbType)) {
+        // Avoid clobbering an existing entry (e.g. `SELECT` would never
+        // collide with a table name, but stay defensive).
+        if (!(kw in ns)) ns[kw] = {};
+      }
     }
 
     // Build a lookup of cached columns for *this* connection, indexed by
@@ -218,5 +240,13 @@ export function useSqlAutocomplete(
     }
 
     return ns as SQLNamespace;
-  }, [tables, views, columnsCache, connectionId, tableColumns, dialect]);
+  }, [
+    tables,
+    views,
+    columnsCache,
+    connectionId,
+    tableColumns,
+    dialect,
+    dbType,
+  ]);
 }
