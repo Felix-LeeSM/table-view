@@ -24,7 +24,33 @@ import { describe, it, expect } from "vitest";
  * synchronous map so the test body stays readable.
  */
 
+// Sprint 135 — narrow legacy guard (kept for backward-compat).
 const STALE_REGEX = /Coming in Sprint 1[2-3][0-9]/;
+
+// Sprint 141 (AC-141-2) — broader prose guards. Each pattern targets a
+// "feature is gated on a future sprint/phase" phrasing. They are ordered
+// from most-specific to least-specific so the failure message names the
+// strongest match. Each pattern is tested only outside JS comment lines
+// (heuristic below) so genuine `// Sprint 130 — note` annotations and
+// changelog comments continue to type-check.
+const PROSE_REGEXES: Array<{ name: string; re: RegExp }> = [
+  {
+    name: "coming in (sprint|phase) N",
+    re: /coming\s+in\s+(sprint|phase)\s*\d+/i,
+  },
+  {
+    name: "lands in (sprint|phase) N",
+    re: /lands?\s+in\s+(sprint|phase)\s*\d+/i,
+  },
+  {
+    name: "arrives in (sprint|phase) N",
+    re: /arrives?\s+in\s+(sprint|phase)\s*\d+/i,
+  },
+  {
+    name: "available in (sprint|phase) N",
+    re: /available\s+in\s+(sprint|phase)\s*\d+/i,
+  },
+];
 
 // Load every TS / TSX source under `src/` as raw text. Excluding this
 // guard file itself avoids matching the regex literal that lives below.
@@ -33,6 +59,21 @@ const sources = import.meta.glob("/src/**/*.{ts,tsx}", {
   query: "?raw",
   import: "default",
 }) as Record<string, string>;
+
+/** Heuristic: a line is "comment-only" if its first non-space character
+ *  starts a JS comment. We skip these lines for the broader prose
+ *  patterns so changelog comments like `// Sprint 130 — note` don't
+ *  spuriously fail. The legacy `STALE_REGEX` keeps its strict whole-file
+ *  scan because its phrasing was specifically the user-facing tooltip
+ *  literal. */
+function isCommentLine(line: string): boolean {
+  const trimmed = line.trimStart();
+  return (
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("*") ||
+    trimmed.startsWith("/*")
+  );
+}
 
 describe("Sprint 135 — stale 'Coming in Sprint 1XX' tooltip guard (AC-S135-06)", () => {
   it("contains zero matches of /Coming in Sprint 1[2-3][0-9]/ in src/", () => {
@@ -55,6 +96,45 @@ describe("Sprint 135 — stale 'Coming in Sprint 1XX' tooltip guard (AC-S135-06)
       `Found stale "Coming in Sprint 1XX" copy. Replace with realistic\nuser-facing text (the toolbar is SoT-clean as of S135):\n${offenders
         .map((o) => `  ${o.path}:${o.line}: ${o.match}`)
         .join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Sprint 141 — broader sprint/phase prose guard (AC-141-2)", () => {
+  it("has zero non-comment matches of any 'in (sprint|phase) N' prose pattern", () => {
+    const offenders: {
+      path: string;
+      line: number;
+      match: string;
+      pattern: string;
+    }[] = [];
+    for (const [path, contents] of Object.entries(sources)) {
+      if (path.endsWith("no-stale-sprint-tooltip.test.ts")) continue;
+      const lines = contents.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i] ?? "";
+        if (isCommentLine(line)) continue;
+        for (const { name, re } of PROSE_REGEXES) {
+          const m = line.match(re);
+          if (m) {
+            offenders.push({
+              path,
+              line: i + 1,
+              match: m[0],
+              pattern: name,
+            });
+            break; // one report per line is plenty
+          }
+        }
+      }
+    }
+    expect(
+      offenders,
+      `Found user-facing copy referencing an internal sprint/phase number.\n` +
+        `Replace with version-agnostic prose (e.g. "Database switching is\n` +
+        `not yet supported for this connection type"):\n${offenders
+          .map((o) => `  ${o.path}:${o.line} [${o.pattern}]: ${o.match}`)
+          .join("\n")}`,
     ).toEqual([]);
   });
 });

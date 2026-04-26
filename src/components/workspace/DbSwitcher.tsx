@@ -19,6 +19,7 @@ import { listDatabases } from "@/lib/api/listDatabases";
 import { switchActiveDb } from "@/lib/api/switchActiveDb";
 import { toast } from "@/lib/toast";
 import type { DatabaseInfo } from "@/types/document";
+import type { Paradigm } from "@/types/connection";
 
 /**
  * Sprint 127 — read-only DB display in the workspace toolbar.
@@ -49,7 +50,29 @@ import type { DatabaseInfo } from "@/types/document";
  *   - No active tab               → "—"
  *   - Active tab but no value     → "(default)"
  */
-const READ_ONLY_TOOLTIP = "Switching DBs lands in sprint 130";
+/**
+ * Sprint 141 (AC-141-4) — paradigm- and state-aware tooltip copy for the
+ * read-only fallback. The previous static literal "Switching DBs lands in
+ * sprint 130" leaked an internal milestone name into the user surface and
+ * was the exact text the 2026-04-27 user feedback flagged. Each branch
+ * here surfaces the *user-visible* reason the switcher is non-interactive.
+ */
+function readOnlyTooltipCopy(args: {
+  hasActiveTab: boolean;
+  paradigm: Paradigm | null;
+  isConnected: boolean;
+}): string {
+  if (!args.hasActiveTab) {
+    return "Open a connection to switch databases.";
+  }
+  if (args.paradigm === "kv" || args.paradigm === "search") {
+    return "Database switching isn't supported for this connection type.";
+  }
+  if (!args.isConnected) {
+    return "Connect to switch databases.";
+  }
+  return "Database switching isn't available right now.";
+}
 
 export default function DbSwitcher() {
   const activeTab = useActiveTab();
@@ -201,6 +224,15 @@ export default function DbSwitcher() {
   // disconnected tab. Preserves the S127 chrome verbatim so the toolbar
   // does not shift footprint between sprints.
   if (!enabled) {
+    // Sprint 141 (AC-141-3, AC-141-4) — paradigm/state-aware copy via
+    // Radix Tooltip only. The native HTML `title` attribute is removed to
+    // fix the "stuck tooltip" bug — Radix dismisses on hover-out, the
+    // browser's native bubble does not.
+    const tooltipCopy = readOnlyTooltipCopy({
+      hasActiveTab: !!activeTab,
+      paradigm,
+      isConnected,
+    });
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -211,7 +243,6 @@ export default function DbSwitcher() {
               aria-disabled="true"
               data-disabled="true"
               tabIndex={-1}
-              title={READ_ONLY_TOOLTIP}
               className="inline-flex h-7 min-w-[8rem] cursor-not-allowed items-center justify-between gap-2 rounded-md border border-border bg-background px-2 text-xs text-muted-foreground opacity-70 select-none"
             >
               <span className="flex items-center gap-2 truncate">
@@ -229,7 +260,7 @@ export default function DbSwitcher() {
               />
             </span>
           </TooltipTrigger>
-          <TooltipContent>{READ_ONLY_TOOLTIP}</TooltipContent>
+          <TooltipContent>{tooltipCopy}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );

@@ -47,9 +47,11 @@ export default function UnsupportedShellNotice({
       className="flex flex-1 flex-col items-center justify-center px-4 py-8 text-center select-none"
     >
       <Icon size={36} className="mb-3 text-muted-foreground" />
-      <p className="text-sm font-medium text-secondary-foreground">Phase 9</p>
+      <p className="text-sm font-medium text-secondary-foreground">
+        Not available yet
+      </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {label} database support is coming in Phase 9.
+        {label} database support is planned but not yet implemented.
       </p>
     </div>
   );

@@ -161,15 +161,37 @@ describe("DbSwitcher", () => {
     expect(trigger).toHaveAttribute("tabindex", "-1");
   });
 
-  it("exposes the read-only S130 tooltip text via title", () => {
+  // Sprint 141 (AC-141-3) — the read-only trigger must NOT carry an HTML
+  // `title=` attribute. The combination of native `title` + Radix
+  // <Tooltip> caused the "stuck tooltip" bug the user reported on
+  // 2026-04-27 (the native browser tooltip lingered past hover-out
+  // because Radix's dismiss timing didn't apply to it).
+  it("does not expose a native HTML title attribute on the read-only trigger (AC-141-3)", () => {
     render(<DbSwitcher />);
     const trigger = screen.getByRole("button", {
       name: /active database \(read-only\)/i,
     });
-    expect(trigger).toHaveAttribute(
-      "title",
-      "Switching DBs lands in sprint 130",
+    expect(trigger).not.toHaveAttribute("title");
+  });
+
+  // Sprint 141 (AC-141-4) — the read-only Radix tooltip copy must not
+  // mention internal "sprint" / "phase" nomenclature. A user looking at
+  // a kv / search / disconnected trigger should see why the action is
+  // unavailable in plain language, not a roadmap reference.
+  it("renders a Radix tooltip with sprint-free copy on the read-only trigger (AC-141-4)", () => {
+    render(<DbSwitcher />);
+    // Radix portals tooltip content; we assert the in-tree TooltipContent
+    // text node directly. There may be `aria-hidden` duplicates in
+    // Radix's portal — at least one node should match and none should
+    // contain the offending substring.
+    const candidates = screen.queryAllByText(/database/i);
+    const offender = candidates.find((node) =>
+      /\b(sprint|phase)\s*\d+/i.test(node.textContent ?? ""),
     );
+    expect(
+      offender,
+      "no read-only tooltip text may name a sprint/phase number",
+    ).toBeUndefined();
   });
 
   it("stays read-only when the active connection is disconnected (rdb)", () => {

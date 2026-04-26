@@ -31,19 +31,23 @@ export**.
   hover 시 백엔드 `count_rows_exact` 호출로 정확값 fetch & 캐시 → tilde
   제거. SQLite 는 추정 메타가 없어 즉시 `?` → 동일 lazy fetch.
 
-## Sprint Breakdown
+## Sprint Breakdown (실행 순서)
 
-| # | 스프린트 | 주제 | 항목 |
+> 사용자 합의에 따라 **isolated fix 들을 먼저** 끝내고 큰 architectural
+> 변경(launcher/workspace 분리)은 마지막에 실행. 디렉토리 번호 =
+> 실행 순서. AC 라벨은 topic id (변경 시 churn 없게 유지).
+
+| 실행 # 디렉토리 | 주제 | 원래 topic | 항목 |
 |---|---|---|---|
-| 141 | Launcher/Workspace 분리 창 | Tauri 다중 윈도우 + 전환 흐름 + 백엔드 단일 풀 공유 | #1 |
-| 142 | Connection SoT 정리 + Disconnect | workspace switcher 제거 + Disconnect 버튼 | #2 #6 |
-| 143 | DBMS-aware ConnectionDialog | 기본 user/port, SQLite 파일 picker, Mongo URI 모드 | #4 |
-| 144 | Completion engine split | 4-DBMS 분리 + 공통 helpers 재활용 | #3 |
-| 145 | Sidebar 단일 schema view | 모든 schema 펼침 + non-schema DBMS flat | #7-schema #11 |
-| 146 | Disabled tooltip 카피 정리 | sprint-N 표현 제거, 의미있는 안내문 일괄 교체 | #7-tooltips |
-| 147 | Tab UX 정리 | PG 단일 클릭 preview + dirty marker 위치 fix | #8 #9 |
-| 148 | Row count UX + Mongo switch DB persistence | tilde 추정치 + lazy 정확값 + DB 전환 영속화 | #10 #12 |
-| 149 | Selective encrypted export | 단일/group/group 일부 export, 평문 옵션 제거 | #5 |
+| sprint-141 | Disabled tooltip 카피 정리 | AC-146-* | #7-tooltips |
+| sprint-142 | Tab UX (PG 단일 클릭 preview + dirty marker) | AC-147-* | #8 #9 |
+| sprint-143 | Row count UX + Mongo DB persistence | AC-148-* | #10 #12 |
+| sprint-144 | Sidebar 단일 schema view + Functions filter | AC-145-* | #7-schema #11 |
+| sprint-145 | Completion engine split (4 DBMS) | AC-144-* | #3 |
+| sprint-146 | DBMS-aware ConnectionDialog | AC-143-* | #4 |
+| sprint-147 | Selective encrypted export | AC-149-* | #5 |
+| sprint-148 | Connection SoT 정리 + Disconnect | AC-142-* | #2 #6 |
+| sprint-149 | Launcher/Workspace 분리 창 | AC-141-* | #1 |
 
 ## Per-Sprint Acceptance Criteria
 

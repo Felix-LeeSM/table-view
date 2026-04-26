@@ -122,8 +122,8 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
             data-query-mode={queryMode ?? paradigm}
           >
             {paradigm === "kv"
-              ? "Redis editor coming in Phase 9."
-              : "Search editor coming in Phase 9."}
+              ? "Redis query editor is planned but not yet available."
+              : "Search query editor is planned but not yet available."}
           </div>
         );
       default:

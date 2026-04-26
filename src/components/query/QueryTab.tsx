@@ -937,7 +937,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   data-paradigm="kv"
                   data-query-mode={tab.queryMode}
                 >
-                  Redis editor coming in Phase 9.
+                  Redis query editor is planned but not yet available.
                 </div>
               );
             case "search":
@@ -950,7 +950,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   data-paradigm="search"
                   data-query-mode={tab.queryMode}
                 >
-                  Search editor coming in Phase 9.
+                  Search query editor is planned but not yet available.
                 </div>
               );
             default:

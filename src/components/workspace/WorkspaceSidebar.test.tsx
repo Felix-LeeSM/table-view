@@ -194,7 +194,9 @@ describe("WorkspaceSidebar", () => {
     });
     expect(placeholder).toBeInTheDocument();
     expect(
-      screen.getByText(/key-value database support is coming in phase 9/i),
+      screen.getByText(
+        /key-value database support is planned but not yet implemented/i,
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByTestId("schema-tree")).toBeNull();
     expect(screen.queryByTestId("document-database-tree")).toBeNull();
@@ -212,7 +214,9 @@ describe("WorkspaceSidebar", () => {
     });
     expect(placeholder).toBeInTheDocument();
     expect(
-      screen.getByText(/search database support is coming in phase 9/i),
+      screen.getByText(
+        /search database support is planned but not yet implemented/i,
+      ),
     ).toBeInTheDocument();
   });
 

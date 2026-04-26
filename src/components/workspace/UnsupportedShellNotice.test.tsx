@@ -9,9 +9,11 @@ describe("UnsupportedShellNotice", () => {
       name: /key-value workspace placeholder/i,
     });
     expect(status).toBeInTheDocument();
-    expect(screen.getByText("Phase 9")).toBeInTheDocument();
+    expect(screen.getByText("Not available yet")).toBeInTheDocument();
     expect(
-      screen.getByText(/key-value database support is coming in phase 9/i),
+      screen.getByText(
+        /key-value database support is planned but not yet implemented/i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -21,9 +23,11 @@ describe("UnsupportedShellNotice", () => {
       name: /search workspace placeholder/i,
     });
     expect(status).toBeInTheDocument();
-    expect(screen.getByText("Phase 9")).toBeInTheDocument();
+    expect(screen.getByText("Not available yet")).toBeInTheDocument();
     expect(
-      screen.getByText(/search database support is coming in phase 9/i),
+      screen.getByText(
+        /search database support is planned but not yet implemented/i,
+      ),
     ).toBeInTheDocument();
   });
 });
