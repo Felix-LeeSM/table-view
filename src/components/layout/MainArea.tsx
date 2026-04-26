@@ -202,12 +202,20 @@ export default function MainArea() {
         {activeTab?.type === "table" &&
         (activeTab.table ?? activeTab.collection) &&
         (activeTab.schema ?? activeTab.database) ? (
+          // Sprint 142 (AC-147-4) — keying by `activeTab.id` forces React
+          // to unmount the previous tab's grid and mount a fresh instance
+          // when the user swaps active tabs. Without this, the same
+          // `useDataGridEdit` hook instance survives the prop change and
+          // its locally-held `pendingEdits` Map leaks across tabs, which
+          // is what made the dirty marker flip onto the newly focused
+          // tab in the original bug report.
           <TableTabView
+            key={activeTab.id}
             tab={activeTab}
             onSubViewChange={(subView) => setSubView(activeTab.id, subView)}
           />
         ) : activeTab?.type === "query" ? (
-          <QueryTab tab={activeTab} />
+          <QueryTab key={activeTab.id} tab={activeTab} />
         ) : (
           <EmptyState />
         )}

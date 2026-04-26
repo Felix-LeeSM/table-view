@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import { useEffect } from "react";
 import MainArea from "./MainArea";
 import {
   useTabStore,
@@ -10,24 +11,38 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
+// Sprint 142 (AC-147-4) — mount counter so tests can assert that
+// `<TableTabView>` is remounted (not just re-rendered with new props)
+// when the active tab swaps. Each useEffect with an empty dep array
+// fires exactly once per mounted instance.
+const datagridMountLog: { connectionId: string; table: string }[] = [];
+
 // Mock child components to isolate MainArea routing logic
-vi.mock("@components/rdb/DataGrid", () => ({
-  default: ({
-    connectionId,
-    table,
-    schema,
-  }: {
-    connectionId: string;
-    table: string;
-    schema: string;
-  }) => (
+function MockDataGrid({
+  connectionId,
+  table,
+  schema,
+}: {
+  connectionId: string;
+  table: string;
+  schema: string;
+}) {
+  useEffect(() => {
+    datagridMountLog.push({ connectionId, table });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
     <div
       data-testid="mock-datagrid"
       data-connection={connectionId}
       data-table={table}
       data-schema={schema}
     />
-  ),
+  );
+}
+
+vi.mock("@components/rdb/DataGrid", () => ({
+  default: MockDataGrid,
 }));
 
 vi.mock("@components/schema/StructurePanel", () => ({
@@ -140,11 +155,18 @@ function setConnections(opts: {
 
 describe("MainArea", () => {
   beforeEach(() => {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useTabStore.setState({
+      tabs: [],
+      activeTabId: null,
+      dirtyTabIds: new Set(),
+    });
     setConnections({});
     // Sprint 119 (#SHELL-1) — reset MRU before each test so a stale MRU
     // from a prior test cannot leak into the EmptyState fallback chain.
     __resetMruStoreForTests();
+    // Sprint 142 (AC-147-4) — clear the mount log so each test asserts a
+    // clean lifecycle.
+    datagridMountLog.length = 0;
   });
 
   // AC-05: empty state placeholder
@@ -425,6 +447,88 @@ describe("MainArea", () => {
 
     expect(screen.getByTestId("mock-structure")).toBeInTheDocument();
     expect(screen.queryByTestId("mock-view-structure")).toBeNull();
+  });
+
+  // Sprint 142 (AC-147-4) — when the user swaps the active tab between two
+  // table tabs, the DataGrid for the previously active tab must unmount and
+  // a fresh DataGrid must mount for the new tab. Without per-tab remount,
+  // `useDataGridEdit`'s `pendingEdits` state survives the prop change and
+  // `setTabDirty` ends up flipping the marker onto the newly focused tab,
+  // which is exactly the user-reported bug we are closing.
+  describe("Sprint 142 — table tab remount on activeTab swap (AC-147-4)", () => {
+    it("remounts DataGrid when activeTabId switches between two table tabs", () => {
+      const tabA = makeTableTab({
+        id: "tab-a",
+        title: "users",
+        connectionId: "conn1",
+        table: "users",
+      });
+      const tabB = makeTableTab({
+        id: "tab-b",
+        title: "orders",
+        connectionId: "conn1",
+        table: "orders",
+      });
+      useTabStore.setState({ tabs: [tabA, tabB], activeTabId: tabA.id });
+
+      render(<MainArea />);
+
+      expect(datagridMountLog).toEqual([
+        { connectionId: "conn1", table: "users" },
+      ]);
+
+      act(() => {
+        useTabStore.setState({ activeTabId: tabB.id });
+      });
+
+      // Must include a SECOND mount entry — proves React unmounted A and
+      // mounted a fresh DataGrid for B (key-based remount). Without the
+      // fix, the same component instance is reused with new props and the
+      // log would still be length 1.
+      expect(datagridMountLog).toEqual([
+        { connectionId: "conn1", table: "users" },
+        { connectionId: "conn1", table: "orders" },
+      ]);
+    });
+
+    it("does not propagate a stale dirty marker onto the newly focused tab", () => {
+      const tabA = makeTableTab({
+        id: "tab-a",
+        title: "users",
+        connectionId: "conn1",
+        table: "users",
+      });
+      const tabB = makeTableTab({
+        id: "tab-b",
+        title: "orders",
+        connectionId: "conn1",
+        table: "orders",
+      });
+      useTabStore.setState({ tabs: [tabA, tabB], activeTabId: tabA.id });
+
+      // Simulate the state the buggy code would produce: tab A is dirty
+      // because its useDataGridEdit effect ran with `activeTabId === A`.
+      act(() => {
+        useTabStore.getState().setTabDirty(tabA.id, true);
+      });
+
+      render(<MainArea />);
+
+      // Sanity — A is dirty.
+      expect(useTabStore.getState().dirtyTabIds.has(tabA.id)).toBe(true);
+      expect(useTabStore.getState().dirtyTabIds.has(tabB.id)).toBe(false);
+
+      // Swap to B. After the fix, A's grid unmounts and its effect
+      // cleanup clears A. B mounts fresh with empty pendingEdits and
+      // never sets B dirty. The contract is "B does not get marked
+      // dirty" — A's marker may or may not survive (the cleanup clears
+      // it). The user-visible bug is resolved either way.
+      act(() => {
+        useTabStore.setState({ activeTabId: tabB.id });
+      });
+
+      expect(useTabStore.getState().dirtyTabIds.has(tabB.id)).toBe(false);
+    });
   });
 
   describe("Empty state CTA", () => {

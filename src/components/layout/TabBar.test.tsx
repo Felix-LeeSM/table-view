@@ -791,6 +791,45 @@ describe("TabBar", () => {
     expect(dot).toHaveAttribute("aria-label", "Unsaved changes");
   });
 
+  // ── Sprint 142 (AC-147-1, AC-147-3): data-preview attribute on the
+  //    tab element so e2e + integration tests + future styling can hook
+  //    onto preview-vs-permanent state at the DOM level (italic class
+  //    alone is a styling concern; data-preview is the contractual
+  //    signal). ──
+
+  it('preview table tab exposes data-preview="true" on the tab element (AC-147-1)', () => {
+    addTableTab({ title: "public.users", table: "users" });
+    // addTab seeds isPreview: true, so the freshly created tab must
+    // surface the contract attribute.
+
+    render(<TabBar />);
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    expect(tab).toHaveAttribute("data-preview", "true");
+  });
+
+  it("permanent table tab does NOT carry data-preview (AC-147-3)", () => {
+    addTableTab({ title: "public.users", table: "users" });
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().promoteTab(tabId);
+    });
+
+    render(<TabBar />);
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    expect(tab).not.toHaveAttribute("data-preview");
+  });
+
+  it("query tab never carries data-preview (only table tabs are previewable)", () => {
+    useTabStore.getState().addQueryTab("conn1");
+
+    render(<TabBar />);
+    const queryTab = useTabStore
+      .getState()
+      .tabs.find((t) => t.type === "query")!;
+    const tab = screen.getByText(queryTab.title).closest("[role='tab']")!;
+    expect(tab).not.toHaveAttribute("data-preview");
+  });
+
   // Middle-click on a dirty tab also routes through the gate so the user
   // can never lose unsaved work via a stray scroll-wheel button press.
   it("middle-click on dirty tab triggers the confirm gate", () => {

@@ -90,6 +90,11 @@ export default function TabBar() {
             key={tab.id}
             role="tab"
             data-tab-id={tab.id}
+            data-preview={
+              tab.type === "table" && (tab as TableTab).isPreview
+                ? "true"
+                : undefined
+            }
             aria-selected={tab.id === activeTabId}
             tabIndex={tab.id === activeTabId ? 0 : -1}
             // Sprint 77 — Compact tab metrics. `py-1 text-sm` keeps the
