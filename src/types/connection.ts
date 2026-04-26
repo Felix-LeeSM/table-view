@@ -78,11 +78,15 @@ export interface ConnectionGroup {
 }
 
 /// Adjacently-tagged discriminated union matching Rust's serde serialization:
-/// - { type: "connected" }
+/// - { type: "connected", activeDb?: string }
 /// - { type: "disconnected" }
 /// - { type: "error", message: "..." }
+///
+/// Sprint 130 — `connected` carries an optional `activeDb` tracking the
+/// currently active database (PG sub-pool key). The DbSwitcher trigger label
+/// reads this field and falls back to `connection.database` when absent.
 export type ConnectionStatus =
-  | { type: "connected" }
+  | { type: "connected"; activeDb?: string }
   | { type: "connecting" }
   | { type: "disconnected" }
   | { type: "error"; message: string };

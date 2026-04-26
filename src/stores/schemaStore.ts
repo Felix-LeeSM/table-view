@@ -84,10 +84,64 @@ interface SchemaState {
     newName: string,
   ) => Promise<void>;
   clearSchema: (connectionId: string) => void;
+  /**
+   * Sprint 130 — drop every cached schema/table/view/function/column
+   * entry for `connectionId` so the sidebar re-fetches against whatever
+   * database the active sub-pool is now pointed at. Called after a
+   * successful `switchActiveDb` dispatch from `<DbSwitcher>`. Same
+   * semantics as `clearSchema` but kept as a separate name so the call
+   * site reads "we're switching DBs" instead of "we're disconnecting"
+   * — the two callers can diverge in Phase 9 (e.g. partial cache
+   * eviction) without touching disconnect-side code.
+   */
+  clearForConnection: (connectionId: string) => void;
   prefetchSchemaColumns: (
     connectionId: string,
     schema: string,
   ) => Promise<void>;
+}
+
+/**
+ * Internal helper — drops every cache entry keyed by `connectionId` from
+ * the schema store state. Used by both `clearSchema` (legacy callers,
+ * disconnect path) and `clearForConnection` (Sprint 130 — DB switch path)
+ * so the cache eviction stays single-sourced.
+ */
+function clearConnectionEntries(
+  state: Pick<
+    SchemaState,
+    "schemas" | "tables" | "views" | "functions" | "tableColumnsCache"
+  >,
+  connectionId: string,
+): Pick<
+  SchemaState,
+  "schemas" | "tables" | "views" | "functions" | "tableColumnsCache"
+> {
+  const newSchemas = { ...state.schemas };
+  delete newSchemas[connectionId];
+  const newTables = { ...state.tables };
+  const newViews = { ...state.views };
+  const newFunctions = { ...state.functions };
+  const newColumnsCache = { ...state.tableColumnsCache };
+  for (const key of Object.keys(newTables)) {
+    if (key.startsWith(`${connectionId}:`)) delete newTables[key];
+  }
+  for (const key of Object.keys(newViews)) {
+    if (key.startsWith(`${connectionId}:`)) delete newViews[key];
+  }
+  for (const key of Object.keys(newFunctions)) {
+    if (key.startsWith(`${connectionId}:`)) delete newFunctions[key];
+  }
+  for (const key of Object.keys(newColumnsCache)) {
+    if (key.startsWith(`${connectionId}:`)) delete newColumnsCache[key];
+  }
+  return {
+    schemas: newSchemas,
+    tables: newTables,
+    views: newViews,
+    functions: newFunctions,
+    tableColumnsCache: newColumnsCache,
+  };
 }
 
 export const useSchemaStore = create<SchemaState>((set) => ({
@@ -254,42 +308,15 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   },
 
   clearSchema: (connectionId) => {
-    set((state) => {
-      const newSchemas = { ...state.schemas };
-      delete newSchemas[connectionId];
-      const newTables = { ...state.tables };
-      const newViews = { ...state.views };
-      const newFunctions = { ...state.functions };
-      const newColumnsCache = { ...state.tableColumnsCache };
-      // Remove all entries for this connection
-      for (const key of Object.keys(newTables)) {
-        if (key.startsWith(`${connectionId}:`)) {
-          delete newTables[key];
-        }
-      }
-      for (const key of Object.keys(newViews)) {
-        if (key.startsWith(`${connectionId}:`)) {
-          delete newViews[key];
-        }
-      }
-      for (const key of Object.keys(newFunctions)) {
-        if (key.startsWith(`${connectionId}:`)) {
-          delete newFunctions[key];
-        }
-      }
-      for (const key of Object.keys(newColumnsCache)) {
-        if (key.startsWith(`${connectionId}:`)) {
-          delete newColumnsCache[key];
-        }
-      }
-      return {
-        schemas: newSchemas,
-        tables: newTables,
-        views: newViews,
-        functions: newFunctions,
-        tableColumnsCache: newColumnsCache,
-      };
-    });
+    set((state) => clearConnectionEntries(state, connectionId));
+  },
+
+  clearForConnection: (connectionId) => {
+    // Sprint 130 — alias kept separate from `clearSchema` so callers
+    // and tests can communicate intent ("DB switched"). The mutation
+    // body is identical today; we keep both wired through the same
+    // helper to avoid behavioural drift.
+    set((state) => clearConnectionEntries(state, connectionId));
   },
 
   prefetchSchemaColumns: async (connectionId, schema) => {

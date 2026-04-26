@@ -516,4 +516,97 @@ describe("connectionStore", () => {
       type: "connected",
     });
   });
+
+  // -- Sprint 130 — activeDb tracking + setActiveDb action --
+
+  it("seeds activeDb from connection.database on a successful connect", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "c1",
+          name: "TestDB",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          database: "analytics",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "rdb",
+        },
+      ],
+      activeStatuses: {},
+    });
+    await useConnectionStore.getState().connectToDatabase("c1");
+    const status = useConnectionStore.getState().activeStatuses["c1"];
+    expect(status?.type).toBe("connected");
+    if (status?.type === "connected") {
+      expect(status.activeDb).toBe("analytics");
+    }
+  });
+
+  it("connectToDatabase omits activeDb when the connection has no default database", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "c1",
+          name: "TestDB",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "postgres",
+          database: "",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "rdb",
+        },
+      ],
+      activeStatuses: {},
+    });
+    await useConnectionStore.getState().connectToDatabase("c1");
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "connected",
+    });
+  });
+
+  it("setActiveDb mutates activeDb when the connection is connected", () => {
+    useConnectionStore.setState({
+      activeStatuses: { c1: { type: "connected", activeDb: "postgres" } },
+    });
+    useConnectionStore.getState().setActiveDb("c1", "warehouse");
+    const status = useConnectionStore.getState().activeStatuses["c1"];
+    expect(status?.type).toBe("connected");
+    if (status?.type === "connected") {
+      expect(status.activeDb).toBe("warehouse");
+    }
+  });
+
+  it("setActiveDb is a no-op when the connection is disconnected", () => {
+    useConnectionStore.setState({
+      activeStatuses: { c1: { type: "disconnected" } },
+    });
+    useConnectionStore.getState().setActiveDb("c1", "warehouse");
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "disconnected",
+    });
+  });
+
+  it("setActiveDb is a no-op when the connection is in error state", () => {
+    useConnectionStore.setState({
+      activeStatuses: { c1: { type: "error", message: "boom" } },
+    });
+    useConnectionStore.getState().setActiveDb("c1", "warehouse");
+    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
+      type: "error",
+      message: "boom",
+    });
+  });
+
+  it("setActiveDb is a no-op when the connection is not in the store", () => {
+    useConnectionStore.setState({ activeStatuses: {} });
+    useConnectionStore.getState().setActiveDb("missing", "warehouse");
+    expect(useConnectionStore.getState().activeStatuses).toEqual({});
+  });
 });

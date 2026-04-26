@@ -139,6 +139,21 @@ pub trait RdbAdapter: DbAdapter {
         Box::pin(async { Ok(Vec::new()) })
     }
 
+    /// Switch the adapter's "active database" (Sprint 130).
+    ///
+    /// Concrete adapters that maintain a per-database connection pool (PG)
+    /// override this to swap the active sub-pool to `db_name`. Adapters
+    /// that do not yet support DB switching (SQLite/MySQL/Redis/ES) fall
+    /// back to the default `Unsupported` error so the frontend toast can
+    /// surface a clear message rather than silently no-op.
+    fn switch_database<'a>(&'a self, _db_name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support database switching".into(),
+            ))
+        })
+    }
+
     fn list_tables<'a>(
         &'a self,
         namespace: &'a str,

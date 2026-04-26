@@ -3,6 +3,28 @@ import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
 import { useMruStore } from "@stores/mruStore";
+import { useConnectionStore } from "@stores/connectionStore";
+
+/**
+ * Sprint 130 — resolve the active database for `connectionId`.
+ *
+ * Reads `connectionStore.activeStatuses[id].activeDb` first (set by
+ * `setActiveDb` after a successful `switchActiveDb` dispatch), falling back
+ * to the connection's stored default `database` when there is no live
+ * `activeDb` yet (e.g. tab opened before the user switched DBs at all).
+ *
+ * Returns `undefined` when the connection isn't in the store — opening a
+ * tab against an unknown id is a programmer error, but we don't want to
+ * crash the tab creation path.
+ */
+function resolveActiveDb(connectionId: string): string | undefined {
+  const conn = useConnectionStore.getState();
+  const status = conn.activeStatuses[connectionId];
+  if (status?.type === "connected" && status.activeDb) {
+    return status.activeDb;
+  }
+  return conn.connections.find((c) => c.id === connectionId)?.database;
+}
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -233,12 +255,22 @@ export const useTabStore = create<TabState>((set, get) => ({
     // mark it as MRU. MainArea's EmptyState reads this to decide which
     // connection the New Query CTA should default to.
     useMruStore.getState().markConnectionUsed(tab.connectionId);
+    // Sprint 130 — autofill `database` for new RDB tabs from the active
+    // sub-pool selection. Document tabs already carry their own
+    // `database` (set by callers that know the Mongo db name); we leave
+    // those untouched. We do NOT migrate legacy persisted RDB tabs —
+    // only fresh tabs created via this code path get the autofill.
+    const isRdbTab = (tab.paradigm ?? "rdb") === "rdb";
+    const tabWithDb: Omit<TableTab, "id"> =
+      isRdbTab && tab.database === undefined
+        ? { ...tab, database: resolveActiveDb(tab.connectionId) }
+        : tab;
     set((state) => {
       const exists = state.tabs.find(
         (t): t is TableTab =>
           t.type === "table" &&
-          t.connectionId === tab.connectionId &&
-          t.table === tab.table &&
+          t.connectionId === tabWithDb.connectionId &&
+          t.table === tabWithDb.table &&
           t.table !== undefined,
       );
       if (exists) {
@@ -249,7 +281,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       const previewIdx = state.tabs.findIndex(
         (t): t is TableTab =>
           t.type === "table" &&
-          t.connectionId === tab.connectionId &&
+          t.connectionId === tabWithDb.connectionId &&
           t.isPreview === true,
       );
 
@@ -257,7 +289,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         const newId = `tab-${tabCounter}`;
         const newTabs = [...state.tabs];
         newTabs[previewIdx] = {
-          ...tab,
+          ...tabWithDb,
           id: newId,
           isPreview: true,
         } as TableTab;
@@ -267,7 +299,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       return {
         tabs: [
           ...state.tabs,
-          { ...tab, id: `tab-${tabCounter}`, isPreview: true },
+          { ...tabWithDb, id: `tab-${tabCounter}`, isPreview: true },
         ],
         activeTabId: `tab-${tabCounter}`,
       };
@@ -377,6 +409,16 @@ export const useTabStore = create<TabState>((set, get) => ({
     // users land on the simpler of the two Mongo modes by default.
     const queryMode: QueryMode =
       paradigm === "rdb" ? "sql" : (opts.queryMode ?? "find");
+    // Sprint 130 — autofill `database` for new RDB query tabs. Caller may
+    // explicitly pass `opts.database` (notably for paradigm-aware history
+    // restore that carries the original db); we only synthesise from
+    // activeStatuses when the caller didn't supply one. Document
+    // paradigm tabs keep their existing `opts.database` semantics (the
+    // Mongo db the user picked in the switcher).
+    const database =
+      paradigm === "rdb" && opts.database === undefined
+        ? resolveActiveDb(connectionId)
+        : opts.database;
     set((state) => ({
       tabs: [
         ...state.tabs,
@@ -390,7 +432,7 @@ export const useTabStore = create<TabState>((set, get) => ({
           queryState: { status: "idle" } as QueryState,
           paradigm,
           queryMode,
-          database: opts.database,
+          database,
           collection: opts.collection,
         },
       ],

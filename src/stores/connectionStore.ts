@@ -35,6 +35,15 @@ interface ConnectionState {
   connectToDatabase: (id: string) => Promise<void>;
   disconnectFromDatabase: (id: string) => Promise<void>;
   setFocusedConn: (id: string | null) => void;
+  /**
+   * Sprint 130 — record the active database for the connection. The action
+   * is a no-op when the connection isn't currently in the `connected`
+   * variant: an `activeDb` only makes sense alongside a live adapter pool.
+   * UI callers (DbSwitcher) call this on a successful `switchActiveDb`
+   * dispatch so the trigger label updates immediately and any tab that
+   * reads `activeDb` next reflects the new context.
+   */
+  setActiveDb: (id: string, dbName: string) => void;
   addGroup: (group: ConnectionGroup) => Promise<ConnectionGroup>;
   updateGroup: (group: ConnectionGroup) => Promise<void>;
   removeGroup: (id: string) => Promise<void>;
@@ -151,12 +160,24 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     }));
     try {
       await tauri.connectToDatabase(id);
-      set((state) => ({
-        activeStatuses: {
-          ...state.activeStatuses,
-          [id]: { type: "connected" as const },
-        },
-      }));
+      set((state) => {
+        // Sprint 130 — seed the new `connected.activeDb` field with the
+        // connection's default database so the DbSwitcher trigger label
+        // and any newly-opened RDB tab pick it up immediately. If the
+        // connection has no `database` (unusual — frontend draft
+        // validation prevents it), we omit the field rather than write
+        // an empty string.
+        const conn = state.connections.find((c) => c.id === id);
+        const activeDb = conn?.database ? conn.database : undefined;
+        return {
+          activeStatuses: {
+            ...state.activeStatuses,
+            [id]: activeDb
+              ? { type: "connected" as const, activeDb }
+              : { type: "connected" as const },
+          },
+        };
+      });
     } catch (e) {
       set((state) => ({
         activeStatuses: {
@@ -178,6 +199,24 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   setFocusedConn: (id) => set({ focusedConnId: id }),
+
+  setActiveDb: (id, dbName) =>
+    set((state) => {
+      const current = state.activeStatuses[id];
+      // Only mutate when the connection is in the `connected` variant —
+      // setting `activeDb` while disconnected/erroring would leak a stale
+      // database name once the user reconnects, and setting it on
+      // `connecting` would race the connectToDatabase seed above.
+      if (current?.type !== "connected") {
+        return {};
+      }
+      return {
+        activeStatuses: {
+          ...state.activeStatuses,
+          [id]: { type: "connected" as const, activeDb: dbName },
+        },
+      };
+    }),
 
   addGroup: async (group) => {
     const saved = await tauri.saveGroup(group, true);

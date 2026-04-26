@@ -1512,4 +1512,117 @@ describe("tabStore", () => {
       expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(false);
     });
   });
+
+  // -- Sprint 130 — RDB tab database autofill ---------------------------
+
+  describe("RDB database autofill (Sprint 130)", () => {
+    beforeEach(async () => {
+      // Reset connectionStore so the autofill helper has known input.
+      const { useConnectionStore } = await import("./connectionStore");
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: {},
+      });
+    });
+
+    it("autofills database from activeStatuses[id].activeDb when adding an RDB table tab", async () => {
+      const { useConnectionStore } = await import("./connectionStore");
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: {
+          conn1: { type: "connected", activeDb: "warehouse" },
+        },
+      });
+      useTabStore.getState().addTab(makeTableTab({ id: "ignored" }));
+      const tab = getTableTab(useTabStore.getState(), 0);
+      expect(tab.database).toBe("warehouse");
+    });
+
+    it("falls back to connection.database when activeDb is not yet set", async () => {
+      const { useConnectionStore } = await import("./connectionStore");
+      useConnectionStore.setState({
+        connections: [
+          {
+            id: "conn1",
+            name: "TestDB",
+            db_type: "postgresql",
+            host: "localhost",
+            port: 5432,
+            user: "postgres",
+            database: "postgres",
+            group_id: null,
+            color: null,
+            has_password: false,
+            paradigm: "rdb",
+          },
+        ],
+        activeStatuses: { conn1: { type: "connected" } },
+      });
+      useTabStore.getState().addTab(makeTableTab({ id: "ignored" }));
+      const tab = getTableTab(useTabStore.getState(), 0);
+      expect(tab.database).toBe("postgres");
+    });
+
+    it("autofills database for a new RDB query tab from activeDb", async () => {
+      const { useConnectionStore } = await import("./connectionStore");
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: {
+          conn1: { type: "connected", activeDb: "reporting" },
+        },
+      });
+      useTabStore.getState().addQueryTab("conn1");
+      const qt = getQueryTab(useTabStore.getState(), 0);
+      expect(qt.paradigm).toBe("rdb");
+      expect(qt.database).toBe("reporting");
+    });
+
+    it("does not overwrite an explicitly-passed database on addQueryTab", async () => {
+      const { useConnectionStore } = await import("./connectionStore");
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: {
+          conn1: { type: "connected", activeDb: "warehouse" },
+        },
+      });
+      useTabStore.getState().addQueryTab("conn1", { database: "explicit_db" });
+      const qt = getQueryTab(useTabStore.getState(), 0);
+      expect(qt.database).toBe("explicit_db");
+    });
+
+    it("does not migrate already-persisted RDB tabs (autofill is creation-only)", () => {
+      // Simulate an RDB tab already in the store with no `database` —
+      // the contract forbids touching legacy persisted tabs. Adding a
+      // brand-new tab should populate `database`, but the existing tab
+      // must stay untouched.
+      const persistedTab: TableTab = {
+        type: "table",
+        id: "existing",
+        title: "legacy",
+        connectionId: "conn1",
+        closable: true,
+        schema: "public",
+        table: "legacy_table",
+        subView: "records",
+      };
+      useTabStore.setState({ tabs: [persistedTab], activeTabId: "existing" });
+      const tab = useTabStore.getState().tabs[0] as TableTab;
+      expect(tab.database).toBeUndefined();
+    });
+
+    it("does not autofill database for document paradigm query tabs (S131 handles use_db)", async () => {
+      const { useConnectionStore } = await import("./connectionStore");
+      useConnectionStore.setState({
+        connections: [],
+        activeStatuses: {
+          conn1: { type: "connected", activeDb: "warehouse" },
+        },
+      });
+      useTabStore.getState().addQueryTab("conn1", { paradigm: "document" });
+      const qt = getQueryTab(useTabStore.getState(), 0);
+      expect(qt.paradigm).toBe("document");
+      // Document tabs only inherit a database when the caller passes one.
+      expect(qt.database).toBeUndefined();
+    });
+  });
 });

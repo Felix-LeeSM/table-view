@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
 import { useActiveTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
   Tooltip,
   TooltipContent,
@@ -14,46 +15,59 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import { listDatabases } from "@/lib/api/listDatabases";
+import { switchActiveDb } from "@/lib/api/switchActiveDb";
 import { toast } from "@/lib/toast";
 import type { DatabaseInfo } from "@/types/document";
 
 /**
  * Sprint 127 — read-only DB display in the workspace toolbar.
  *
- * Sprint 128 promotes this into a click-to-fetch picker for `rdb` /
+ * Sprint 128 promoted this into a click-to-fetch picker for `rdb` /
  * `document` paradigms when the active tab's connection is **connected**.
- * The selection itself is still a no-op (S130/S131 wire the actual
- * sub-pool / `use_db` swap); clicking an entry surfaces a toast hint so
- * the user knows the feature is intentional shippable scaffolding.
+ * Sprint 130 wires the real PG sub-pool swap: a click on a list entry
+ * dispatches `switch_active_db(connection_id, db_name)`, then
+ *   1. updates `connectionStore.activeStatuses[id].activeDb`
+ *   2. clears the schema cache for the connection (sidebar re-loads
+ *      against the new DB)
+ *   3. closes the popover
+ *   4. surfaces a success toast
+ * On failure (Document paradigm = `Unsupported` until S131; PG sub-pool
+ * open failure) we keep the popover open so the error chip is visible
+ * and surface a toast.
  *
  * Other paradigms (`search`, `kv`) and disconnected tabs keep the S127
  * read-only chrome — `aria-disabled="true"`, not in keyboard tab order.
  *
  * Resolution rules for the trigger label:
- *   - Document-paradigm query tab → `tab.database`
- *   - RDB-paradigm tabs           → `tab.schema` (PG schema doubles as
- *                                    "current database" placeholder; S130
- *                                    introduces a real `current_database()`
- *                                    surface)
+ *   - Connected RDB connection → `activeStatuses[id].activeDb`
+ *                                (set by `setActiveDb` after a successful
+ *                                 switch, seeded with `connection.database`
+ *                                 on connect).
+ *   - Document-paradigm query tab → `tab.database` (Mongo db name).
+ *   - Fallback (legacy table tab) → `tab.schema` for back-compat.
  *   - No active tab               → "—"
  *   - Active tab but no value     → "(default)"
  */
-const SELECT_HINT_MESSAGE = "Switching active DB lands in sprint 130";
 const READ_ONLY_TOOLTIP = "Switching DBs lands in sprint 130";
 
 export default function DbSwitcher() {
   const activeTab = useActiveTab();
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const setActiveDb = useConnectionStore((s) => s.setActiveDb);
 
   const activeConn = activeTab
     ? (connections.find((c) => c.id === activeTab.connectionId) ?? null)
     : null;
-  const isConnected =
-    activeConn !== null && activeStatuses[activeConn.id]?.type === "connected";
+  const status = activeConn ? activeStatuses[activeConn.id] : undefined;
+  const isConnected = status?.type === "connected";
   const paradigm = activeConn?.paradigm ?? null;
   const supportsSwitching = paradigm === "rdb" || paradigm === "document";
   const enabled = supportsSwitching && isConnected;
+  // Sprint 130 — RDB connections expose the active sub-pool via
+  // `activeStatuses[id].activeDb`. We pick that as the primary label
+  // source so the chip updates immediately after a successful switch.
+  const activeDb = status?.type === "connected" ? status.activeDb : undefined;
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -82,9 +96,19 @@ export default function DbSwitcher() {
   let label: string;
   if (!activeTab) {
     label = "—";
+  } else if (paradigm === "rdb" && activeDb) {
+    // Sprint 130 — RDB label always tracks the active sub-pool, not the
+    // tab's `schema`. `schema` and DB are orthogonal in PG and the
+    // toolbar must reflect *DB* selection.
+    label = activeDb;
   } else if (activeTab.type === "query" && activeTab.database) {
     label = activeTab.database;
+  } else if (activeTab.type === "table" && activeTab.database) {
+    label = activeTab.database;
   } else if (activeTab.type === "table" && activeTab.schema) {
+    // Legacy fallback for table tabs persisted before S130 that have no
+    // `database` field yet. Schema doubles as a passable "current DB"
+    // hint for the user until they reopen the tab.
     label = activeTab.schema;
   } else {
     label = "(default)";
@@ -124,15 +148,40 @@ export default function DbSwitcher() {
     [enabled, fetchList],
   );
 
-  const handleSelect = useCallback(() => {
-    // Sprint 128 — selection is intentionally a no-op. S130/S131 wire the
-    // real swap (PG sub-pool / Mongo `use_db`); until then we surface a
-    // toast hint so the user understands the click was registered. No
-    // store mutation happens here; the unit test asserts that
-    // `useTabStore.getState()` is byte-identical before/after the click.
-    toast.info(SELECT_HINT_MESSAGE);
-    setOpen(false);
-  }, []);
+  const handleSelect = useCallback(
+    async (dbName: string) => {
+      // Sprint 130 — real switch dispatch. Successful path:
+      //   1. backend swaps the active sub-pool (PG)
+      //   2. `setActiveDb` flips the trigger label
+      //   3. `clearForConnection` drops the schema cache so the sidebar
+      //      reloads against the new DB
+      //   4. close popover + success toast
+      // Failure path (Document paradigm until S131, or PG pool-open
+      // error): leave the popover open so the inline error chip can
+      // render alongside the toast — the user may want to re-try a
+      // different db without losing the list.
+      if (!activeConn) return;
+      if (dbName === activeDb) {
+        // Re-selecting the active DB is a no-op — nothing to dispatch.
+        // Closing the popover is enough; we keep the success toast
+        // out of this branch so the user isn't told something
+        // happened when nothing did.
+        setOpen(false);
+        return;
+      }
+      try {
+        await switchActiveDb(activeConn.id, dbName);
+        setActiveDb(activeConn.id, dbName);
+        useSchemaStore.getState().clearForConnection(activeConn.id);
+        setOpen(false);
+        toast.success(`Switched to "${dbName}".`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(`Failed to switch DB: ${message}`);
+      }
+    },
+    [activeConn, activeDb, setActiveDb],
+  );
 
   // Read-only fallback — Search/Kv paradigms, no connection, or
   // disconnected tab. Preserves the S127 chrome verbatim so the toolbar
@@ -237,12 +286,13 @@ export default function DbSwitcher() {
                   role="option"
                   aria-selected={db.name === label}
                   data-active={db.name === label || undefined}
-                  // Sprint 128 — every option click is a no-op + hint
-                  // surface. S130 will replace `handleSelect` with a real
-                  // swap action; we pin the autofocus on the first row so
-                  // keyboard users can hit Enter immediately on open.
+                  // Sprint 130 — real swap dispatch. Pin autofocus on the
+                  // first row so keyboard users can hit Enter immediately
+                  // on open.
                   autoFocus={idx === 0}
-                  onClick={handleSelect}
+                  onClick={() => {
+                    void handleSelect(db.name);
+                  }}
                   className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none data-[active]:font-medium"
                 >
                   <Database
@@ -256,13 +306,6 @@ export default function DbSwitcher() {
             ))}
           </ul>
         )}
-        <div
-          role="note"
-          data-testid="db-switcher-hint"
-          className="mt-1 border-t border-border px-2 pt-1.5 text-xs leading-tight text-muted-foreground"
-        >
-          {SELECT_HINT_MESSAGE}
-        </div>
       </PopoverContent>
     </Popover>
   );

@@ -740,4 +740,74 @@ describe("schemaStore", () => {
     expect(state.functions["conn1:public"]).toBeUndefined();
     expect(state.functions["conn2:public"]).toHaveLength(1);
   });
+
+  // -- Sprint 130 — clearForConnection (DB switch path) --
+
+  it("clearForConnection drops every cached entry for the connection", () => {
+    useSchemaStore.setState({
+      schemas: {
+        conn1: [{ name: "public" }],
+        conn2: [{ name: "public" }],
+      },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+        "conn1:reporting": [
+          { name: "orders", schema: "reporting", row_count: null },
+        ],
+        "conn2:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+      views: {
+        "conn1:public": [
+          {
+            name: "v1",
+            schema: "public",
+            definition: null,
+          },
+        ],
+      },
+      functions: {
+        "conn1:public": [
+          {
+            name: "fn1",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: "sql",
+            source: null,
+            kind: "function",
+          },
+        ],
+      },
+      tableColumnsCache: {
+        "conn1:public:users": [],
+        "conn2:public:users": [],
+      },
+    });
+
+    useSchemaStore.getState().clearForConnection("conn1");
+
+    const state = useSchemaStore.getState();
+    expect(state.schemas["conn1"]).toBeUndefined();
+    expect(state.schemas["conn2"]).toHaveLength(1);
+    expect(state.tables["conn1:public"]).toBeUndefined();
+    expect(state.tables["conn1:reporting"]).toBeUndefined();
+    expect(state.tables["conn2:public"]).toHaveLength(1);
+    expect(state.views["conn1:public"]).toBeUndefined();
+    expect(state.functions["conn1:public"]).toBeUndefined();
+    expect(state.tableColumnsCache["conn1:public:users"]).toBeUndefined();
+    expect(state.tableColumnsCache["conn2:public:users"]).toEqual([]);
+  });
+
+  it("clearForConnection is a no-op when the connection has no cached entries", () => {
+    useSchemaStore.setState({
+      schemas: { conn2: [{ name: "public" }] },
+      tables: {},
+      views: {},
+      functions: {},
+      tableColumnsCache: {},
+    });
+    useSchemaStore.getState().clearForConnection("conn1");
+    const state = useSchemaStore.getState();
+    expect(state.schemas["conn2"]).toHaveLength(1);
+  });
 });

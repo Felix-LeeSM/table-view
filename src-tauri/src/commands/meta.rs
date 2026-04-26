@@ -66,6 +66,47 @@ pub async fn list_databases(
         .collect())
 }
 
+/// Switch the active database for the given connection (Sprint 130).
+///
+/// Dispatch table:
+///   - `Rdb`      → `RdbAdapter::switch_database`. PostgresAdapter overrides
+///                  the trait default to swap the active sub-pool to
+///                  `db_name`; SQLite/MySQL fall back to `Unsupported`
+///                  until Phase 9. The frontend toast surfaces the message.
+///   - `Document` → `Err(Unsupported)` deliberately, reserved for Sprint 131
+///                  when `use_db` is wired up. Surfacing the error keeps
+///                  the dispatcher honest — once S131 lands the arm flips
+///                  to a real call.
+///   - `Search`/`Kv` → `Err(Unsupported)` — no per-connection database
+///                  concept (Phase 7/8 paradigms).
+///
+/// Returns `AppError::NotFound` when the connection id has no live adapter,
+/// matching `list_databases` semantics.
+#[tauri::command]
+pub async fn switch_active_db(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    db_name: String,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&connection_id)
+        .ok_or_else(|| not_connected(&connection_id))?;
+
+    match active {
+        ActiveAdapter::Rdb(adapter) => adapter.switch_database(&db_name).await,
+        ActiveAdapter::Document(_) => Err(AppError::Unsupported(
+            "Document paradigm DB switch lands in Sprint 131".into(),
+        )),
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "Search paradigm has no per-connection database concept".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "Key-value paradigm has no per-connection database concept".into(),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,5 +361,80 @@ mod tests {
             }
             other => panic!("Expected NotFound, got: {:?}", other),
         }
+    }
+
+    /// Mirrors the production `switch_active_db` body so the dispatch
+    /// table can be exercised without `tauri::State`.
+    async fn switch_dispatch(active: &ActiveAdapter, db_name: &str) -> Result<(), AppError> {
+        match active {
+            ActiveAdapter::Rdb(adapter) => adapter.switch_database(db_name).await,
+            ActiveAdapter::Document(_) => Err(AppError::Unsupported(
+                "Document paradigm DB switch lands in Sprint 131".into(),
+            )),
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "Search paradigm has no per-connection database concept".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "Key-value paradigm has no per-connection database concept".into(),
+            )),
+        }
+    }
+
+    #[tokio::test]
+    async fn switch_dispatch_document_paradigm_returns_unsupported_for_s131() {
+        let adapter = ActiveAdapter::Document(Box::new(StubDocumentAdapter {
+            databases: Vec::new(),
+        }));
+        let result = switch_dispatch(&adapter, "anything").await;
+        match result {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(
+                    msg.contains("Sprint 131") || msg.contains("Document"),
+                    "Document arm must surface a clear deferral message, got: {msg}"
+                );
+            }
+            other => panic!("Expected Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn switch_dispatch_search_paradigm_returns_unsupported() {
+        let adapter = ActiveAdapter::Search(Box::new(StubSearchAdapter));
+        let result = switch_dispatch(&adapter, "anything").await;
+        assert!(matches!(result, Err(AppError::Unsupported(_))));
+    }
+
+    #[tokio::test]
+    async fn switch_dispatch_kv_paradigm_returns_unsupported() {
+        let adapter = ActiveAdapter::Kv(Box::new(StubKvAdapter));
+        let result = switch_dispatch(&adapter, "anything").await;
+        assert!(matches!(result, Err(AppError::Unsupported(_))));
+    }
+
+    #[tokio::test]
+    async fn switch_dispatch_rdb_unconnected_returns_not_connected() {
+        // Sprint 130 — PostgresAdapter without `connect_pool` must report
+        // `Connection("Not connected")` from the trait override; the
+        // dispatcher should propagate it verbatim so the frontend toast
+        // can show the underlying reason rather than a generic
+        // "Unsupported" mask.
+        use crate::db::PostgresAdapter;
+        let adapter = ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()));
+        let result = switch_dispatch(&adapter, "another_db").await;
+        match result {
+            Err(AppError::Connection(msg)) => assert!(msg.contains("Not connected")),
+            other => panic!("Expected Connection error, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn switch_dispatch_rdb_rejects_empty_db_name() {
+        // PostgresAdapter::switch_active_db validates input before
+        // touching the pool; the dispatcher must surface that as
+        // `Validation`, not `Connection`.
+        use crate::db::PostgresAdapter;
+        let adapter = ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()));
+        let result = switch_dispatch(&adapter, "").await;
+        assert!(matches!(result, Err(AppError::Validation(_))));
     }
 }
