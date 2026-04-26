@@ -1,11 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import DocumentDatabaseTree from "./DocumentDatabaseTree";
 import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "@stores/documentStore";
 import { useTabStore } from "@stores/tabStore";
+import { useConnectionStore } from "@stores/connectionStore";
 
 // Mock the tauri bridge so the store actions resolve against canned data
 // instead of invoking the backend.
@@ -23,7 +30,23 @@ vi.mock("@lib/tauri", () => ({
               document_count: 3,
             },
           ]
-        : [],
+        : db === "dbX"
+          ? [
+              {
+                name: "x_collection",
+                database: "dbX",
+                document_count: 7,
+              },
+            ]
+          : db === "dbY"
+            ? [
+                {
+                  name: "y_collection",
+                  database: "dbY",
+                  document_count: 11,
+                },
+              ]
+            : [],
     ),
   ),
   inferCollectionFields: vi.fn(() => Promise.resolve([])),
@@ -42,6 +65,9 @@ describe("DocumentDatabaseTree", () => {
   beforeEach(() => {
     __resetDocumentStoreForTests();
     useTabStore.setState({ tabs: [], activeTabId: null });
+    // Sprint 137 — reset the connection store so previous tests' active DB
+    // selections cannot leak into the auto-load guard.
+    useConnectionStore.setState({ activeStatuses: {}, connections: [] });
   });
 
   it("loads and renders the database list on mount", async () => {
@@ -376,5 +402,105 @@ describe("DocumentDatabaseTree", () => {
     expect(
       screen.getByLabelText("table_view_test database"),
     ).toBeInTheDocument();
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // Sprint 137 — AC-S137-02: Mongo DB swap (DbSwitcher) must invalidate
+  // the document store cache and trigger an immediate re-fetch so the
+  // sidebar reflects the new DB. The 2026-04-27 user check found that
+  // the previous code path stayed pinned to the connection's default
+  // DB after a `switch_active_db` because the auto-load guard short-
+  // circuited on identical `connectionId`.
+  // ─────────────────────────────────────────────────────────────────
+
+  it("AC-S137-02: re-fetches the database list when the user-active DB changes (DB swap invalidates cache)", async () => {
+    const tauriMock = await import("@lib/tauri");
+    const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
+    listDatabasesSpy.mockClear();
+
+    // Seed the connection as connected with `dbX` so the initial render
+    // matches what the DbSwitcher would have written immediately after
+    // a successful `switch_active_db("dbX")` dispatch.
+    useConnectionStore.setState({
+      activeStatuses: {
+        "conn-mongo": { type: "connected", activeDb: "dbX" },
+      },
+    });
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    // First fetch — driven by the initial mount, keyed off `(conn-mongo, dbX)`.
+    await waitFor(() => {
+      expect(listDatabasesSpy).toHaveBeenCalledWith("conn-mongo");
+      expect(listDatabasesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    // Simulate the DbSwitcher swap pipeline:
+    //   1. `clearConnection(id)` wipes the document store cache.
+    //   2. `setActiveDb(id, "dbY")` flips the connection's active DB slot.
+    // The tree's auto-load effect must re-fire because its guard now
+    // depends on the active DB, not just the connection id.
+    await act(async () => {
+      useDocumentStore.getState().clearConnection("conn-mongo");
+      useConnectionStore.setState({
+        activeStatuses: {
+          "conn-mongo": { type: "connected", activeDb: "dbY" },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(listDatabasesSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("AC-S137-02: clearing the document store cache on DB swap drops stale collections (no leak across DBs)", async () => {
+    const tauriMock = await import("@lib/tauri");
+    const listCollectionsSpy = vi.mocked(tauriMock.listMongoCollections);
+    listCollectionsSpy.mockClear();
+
+    // Start on activeDb="dbX". The user expanding a DB row (table_view_test
+    // here, since it's the one with non-empty collections in the mock)
+    // populates the document store's collection cache.
+    useConnectionStore.setState({
+      activeStatuses: {
+        "conn-mongo": { type: "connected", activeDb: "dbX" },
+      },
+    });
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+    // Cache populated under the (conn, table_view_test) key.
+    const beforeKey = "conn-mongo:table_view_test";
+    expect(useDocumentStore.getState().collections[beforeKey]).toBeDefined();
+
+    // DbSwitcher swap pipeline — clear cache then flip activeDb.
+    await act(async () => {
+      useDocumentStore.getState().clearConnection("conn-mongo");
+      useConnectionStore.setState({
+        activeStatuses: {
+          "conn-mongo": { type: "connected", activeDb: "dbY" },
+        },
+      });
+    });
+
+    // Stale collections for the prior DB are gone — the cache no longer
+    // carries the (conn, table_view_test) key, so a render that doesn't
+    // re-fetch can never paint stale `users` rows.
+    expect(useDocumentStore.getState().collections[beforeKey]).toBeUndefined();
+    // The collection row from the previous DB is no longer in the DOM —
+    // the tree collapsed when the database list re-fetched.
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("users collection"),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

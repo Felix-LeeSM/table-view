@@ -257,6 +257,51 @@ impl MongoAdapter {
     pub async fn current_active_db(&self) -> Option<String> {
         self.active_db.lock().await.clone()
     }
+
+    /// Sprint 137 (AC-S137-01) — resolve which Mongo database name a
+    /// metadata fetch should run against.
+    ///
+    /// Routing precedence (in order):
+    ///   1. `requested` — when the caller explicitly provided a non-empty
+    ///      database name, honor it verbatim. The frontend's existing
+    ///      `list_mongo_collections(connection_id, database)` command path
+    ///      passes the user-clicked database row this way, so this branch
+    ///      preserves the original Sprint 65 contract.
+    ///   2. `active_db` — when the caller did not provide a name (or
+    ///      passed an empty/whitespace-only string), fall back to whatever
+    ///      database the user most recently `use_db`'d into via
+    ///      `switch_active_db`. **This is the key Sprint 137 fix**: prior to
+    ///      S137 the only fallback was `default_db`, so a Mongo workspace
+    ///      that opened against db `X` and then swapped to db `Y` via the
+    ///      DbSwitcher kept resolving collection-list calls against `X`
+    ///      because `default_db` never moves.
+    ///   3. `default_db` — last-resort fallback for the very first
+    ///      metadata fetch on a connection that was opened without an
+    ///      intervening `switch_active_db`. Same value the adapter
+    ///      seeded on `connect()` from `ConnectionConfig::database`.
+    ///
+    /// Returns `None` only when none of the three sources have a value
+    /// (e.g. the adapter was constructed but never connected). Callers
+    /// should surface that as an `AppError::Validation` so the frontend
+    /// gets an actionable error instead of a silent empty list.
+    ///
+    /// Pure helper — no driver round-trip — so it is unit-testable
+    /// without a live MongoDB instance.
+    pub async fn resolved_db_name(&self, requested: Option<&str>) -> Option<String> {
+        if let Some(name) = requested {
+            let trimmed = name.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+        if let Some(active) = self.active_db.lock().await.clone() {
+            if !active.trim().is_empty() {
+                return Some(active);
+            }
+        }
+        let default = self.default_db.lock().await.clone();
+        default.filter(|d| !d.trim().is_empty())
+    }
 }
 
 impl DbAdapter for MongoAdapter {
@@ -372,23 +417,32 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
     ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
         Box::pin(async move {
-            if db.trim().is_empty() {
-                return Err(AppError::Validation(
-                    "Database name must not be empty".into(),
-                ));
-            }
+            // Sprint 137 (AC-S137-01) — route through `resolved_db_name`
+            // so a `use_db("alpha")` swap takes effect even when an upstream
+            // caller still passes an empty / whitespace-only `db` string.
+            // When the caller passes a non-empty name, that name still wins
+            // (preserves the original Sprint 65 per-row expand contract).
+            // When the caller passes empty AND the user has switched the
+            // active db, we follow the swap; this is the line that fixes
+            // the "stale collection list" bug from the 2026-04-27 user
+            // check. Falls back to the connection's `default_db` only when
+            // no `switch_active_db` has ever been called.
+            let requested = if db.trim().is_empty() { None } else { Some(db) };
+            let resolved = self
+                .resolved_db_name(requested)
+                .await
+                .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
             let client = self.current_client().await?;
             let names = client
-                .database(db)
+                .database(&resolved)
                 .list_collection_names()
                 .await
                 .map_err(|e| AppError::Database(format!("list_collection_names failed: {e}")))?;
-            let schema = db.to_string();
             Ok(names
                 .into_iter()
                 .map(|name| TableInfo {
                     name,
-                    schema: schema.clone(),
+                    schema: resolved.clone(),
                     row_count: None,
                 })
                 .collect())
@@ -1560,6 +1614,97 @@ mod tests {
         // connect → disconnect → connect cycles).
         let adapter = MongoAdapter::new();
         assert!(adapter.current_active_db().await.is_none());
+    }
+
+    // -- Sprint 137 — list_collections honors active_db (AC-S137-01) -------
+
+    /// `resolved_db_name(Some("alpha"))` honors the explicit override even
+    /// when a different `active_db` is already set. This pins the original
+    /// Sprint 65 contract — frontend rows that pass an explicit DB name
+    /// keep working as before — while leaving the empty-name path open
+    /// for the active-db fallback (next test).
+    #[tokio::test]
+    async fn test_resolved_db_name_explicit_override_wins() {
+        let adapter = MongoAdapter::new();
+        // Seed `active_db` directly (no live Mongo needed).
+        {
+            let mut guard = adapter.active_db.lock().await;
+            *guard = Some("alpha".into());
+        }
+        assert_eq!(
+            adapter.resolved_db_name(Some("beta")).await.as_deref(),
+            Some("beta"),
+            "explicit non-empty override must win over active_db"
+        );
+    }
+
+    /// `resolved_db_name(None)` (or empty/whitespace) falls back to the
+    /// `active_db` slot. This is the line that fixes AC-S137-01 — the
+    /// list_collections path now follows `use_db("alpha")` instead of
+    /// staying pinned to the connection's stored default DB.
+    #[tokio::test]
+    async fn list_collections_uses_active_db_after_use_db() {
+        let adapter = MongoAdapter::new();
+        // Seed both `default_db` (the connection's original landing DB)
+        // and `active_db` (where the user swapped to via use_db("alpha"))
+        // so we can prove the resolver prefers `active_db`.
+        {
+            let mut guard = adapter.default_db.lock().await;
+            *guard = Some("default_db".into());
+        }
+        {
+            let mut guard = adapter.active_db.lock().await;
+            *guard = Some("alpha".into());
+        }
+
+        // No explicit override → must follow the most recent use_db.
+        assert_eq!(
+            adapter.resolved_db_name(None).await.as_deref(),
+            Some("alpha"),
+            "list_collections (no explicit db) must route to active_db, not default_db"
+        );
+
+        // Empty string is treated as "no override" — same fallback path.
+        assert_eq!(
+            adapter.resolved_db_name(Some("")).await.as_deref(),
+            Some("alpha"),
+        );
+        assert_eq!(
+            adapter.resolved_db_name(Some("   ")).await.as_deref(),
+            Some("alpha"),
+            "whitespace-only input must trigger the active_db fallback"
+        );
+    }
+
+    /// When `active_db` was never set (no use_db ever fired), the resolver
+    /// falls back to `default_db` so the very first metadata fetch on a
+    /// fresh connection still has somewhere to land. Mirrors the Sprint 65
+    /// behavior for unswapped connections.
+    #[tokio::test]
+    async fn test_resolved_db_name_falls_back_to_default_when_no_active() {
+        let adapter = MongoAdapter::new();
+        {
+            let mut guard = adapter.default_db.lock().await;
+            *guard = Some("default_db".into());
+        }
+        // active_db remains None.
+        assert_eq!(
+            adapter.resolved_db_name(None).await.as_deref(),
+            Some("default_db"),
+            "without an active_db, must fall through to default_db"
+        );
+    }
+
+    /// All three sources empty → resolver returns None and the
+    /// `list_collections` caller surfaces a Validation error. This guards
+    /// the empty-input path the existing
+    /// `list_collections_rejects_empty_db_name` test asserts.
+    #[tokio::test]
+    async fn test_resolved_db_name_returns_none_when_no_source_available() {
+        let adapter = MongoAdapter::new();
+        assert!(adapter.resolved_db_name(None).await.is_none());
+        assert!(adapter.resolved_db_name(Some("")).await.is_none());
+        assert!(adapter.resolved_db_name(Some("   ")).await.is_none());
     }
 
     // The happy-path probe (`list_database_names` succeeds, `db_name`

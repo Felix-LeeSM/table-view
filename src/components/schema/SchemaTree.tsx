@@ -42,6 +42,36 @@ import { cn } from "@lib/utils";
 
 const EMPTY_SCHEMAS: never[] = [];
 
+/**
+ * Sprint 137 (AC-S137-03) — DBMS-aware label for the row-count cell in the
+ * sidebar. The number rendered next to a table name is an *estimate* on
+ * every DBMS we currently support — pulling from `pg_class.reltuples` for
+ * PostgreSQL and `information_schema.tables.TABLE_ROWS` for MySQL. SQLite
+ * is the lone DBMS where the schema fetch reports an exact COUNT(*),
+ * because SQLite has no estimate-only catalog and the file-local COUNT(*)
+ * is fast enough at our scale. The same number was rendered without
+ * a label prior to S137, which the 2026-04-27 user check found
+ * misleading — users assumed it was an exact COUNT(*).
+ *
+ * Returns the user-facing description text. Both `aria-label` (screen
+ * readers) and `title` (native hover tooltip) read from this string so
+ * keyboard / mouse / a11y users get the same answer.
+ */
+function rowCountLabel(dbType: string | undefined): string {
+  if (dbType === "postgresql") {
+    return "Estimated row count from pg_class.reltuples";
+  }
+  if (dbType === "mysql") {
+    return "Estimated row count from information_schema.tables";
+  }
+  if (dbType === "sqlite") {
+    return "Exact row count via COUNT(*)";
+  }
+  // Unknown / unconfigured DBMS — keep the label honest by stating the
+  // generic estimate semantics rather than silently dropping the cue.
+  return "Estimated row count";
+}
+
 /** Category definitions for schema objects. */
 const CATEGORIES = [
   { key: "tables", label: "Tables", Icon: LayoutGrid, emptyLabel: "No tables" },
@@ -1012,7 +1042,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             {isTableItem &&
               "row_count" in item &&
               (item as TableInfo).row_count != null && (
-                <span className="ml-auto text-3xs text-muted-foreground">
+                // Sprint 137 (AC-S137-03) — DBMS-aware tooltip + aria-label
+                // so the user can tell whether the number is an estimate
+                // (PG/MySQL) or an exact count (SQLite). `data-row-count`
+                // is a stable hook for tests independent of icon/label
+                // wrapping changes.
+                <span
+                  className="ml-auto text-3xs text-muted-foreground"
+                  data-row-count="true"
+                  aria-label={rowCountLabel(dbType)}
+                  title={rowCountLabel(dbType)}
+                >
                   {(item as TableInfo).row_count!.toLocaleString()}
                 </span>
               )}
@@ -1315,7 +1355,18 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                   {item.name}
                                 </span>
                                 {item.row_count != null && (
-                                  <span className="ml-auto text-3xs text-muted-foreground">
+                                  // Sprint 137 (AC-S137-03) — see
+                                  // `rowCountLabel` for the DBMS-aware
+                                  // semantics. Rendered identically in the
+                                  // virtualized + nested + flat paths so
+                                  // a regression in any one path is caught
+                                  // by the same test.
+                                  <span
+                                    className="ml-auto text-3xs text-muted-foreground"
+                                    data-row-count="true"
+                                    aria-label={rowCountLabel(dbType)}
+                                    title={rowCountLabel(dbType)}
+                                  >
                                     {item.row_count.toLocaleString()}
                                   </span>
                                 )}
@@ -1651,7 +1702,19 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                               "row_count" in item &&
                                               (item as TableInfo).row_count !=
                                                 null && (
-                                                <span className="ml-auto text-3xs text-muted-foreground">
+                                                // Sprint 137 (AC-S137-03) —
+                                                // PG row count is an estimate
+                                                // (`pg_class.reltuples`); see
+                                                // `rowCountLabel` for the
+                                                // DBMS-aware text.
+                                                <span
+                                                  className="ml-auto text-3xs text-muted-foreground"
+                                                  data-row-count="true"
+                                                  aria-label={rowCountLabel(
+                                                    dbType,
+                                                  )}
+                                                  title={rowCountLabel(dbType)}
+                                                >
                                                   {(
                                                     item as TableInfo
                                                   ).row_count!.toLocaleString()}

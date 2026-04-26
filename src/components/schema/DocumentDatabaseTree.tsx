@@ -8,6 +8,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentStore } from "@stores/documentStore";
 import { useTabStore } from "@stores/tabStore";
 import { cn } from "@lib/utils";
@@ -41,20 +42,44 @@ export default function DocumentDatabaseTree({
   const loadCollections = useDocumentStore((s) => s.loadCollections);
   const addTab = useTabStore((s) => s.addTab);
 
+  // Sprint 137 (AC-S137-02) — track the connection's user-active Mongo
+  // database. The DbSwitcher writes this slot via `setActiveDb` after a
+  // successful `switch_active_db` dispatch, then calls
+  // `clearConnection(id)` on the document store. Without this dependency
+  // in the auto-load effect below, the tree's `autoLoadedRef` short-circuits
+  // the re-fetch and the user keeps seeing the previous DB's collections.
+  // Reading this directly from the store (rather than threading it through
+  // props) keeps the component's public API unchanged.
+  const activeDb = useConnectionStore((s) => {
+    const status = s.activeStatuses[connectionId];
+    return status?.type === "connected" ? (status.activeDb ?? null) : null;
+  });
+
   const [expandedDbs, setExpandedDbs] = useState<Set<string>>(new Set());
   const [loadingRoot, setLoadingRoot] = useState(false);
   const [loadingDbs, setLoadingDbs] = useState<Set<string>>(new Set());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Sprint 137 — keys the auto-load guard on `(connectionId, activeDb)` so a
+  // DB swap (toolbar DbSwitcher) re-runs the database list fetch. Prior to
+  // S137 the guard only watched `connectionId`, which caused the
+  // 2026-04-27 stale-collection bug: the DbSwitcher cleared the document
+  // store cache but the tree's effect saw "same connection" and bailed,
+  // leaving the sidebar visually empty (or reverting to the previous DB
+  // depending on render order).
   const autoLoadedRef = useRef<string | null>(null);
 
-  // Auto-load databases when the connection changes.
+  // Auto-load databases when the connection changes OR when the user-active
+  // DB swap (DbSwitcher) changes — the latter clears the document store
+  // cache, so the tree must re-fetch to repopulate the sidebar with the
+  // new DB's collections.
   useEffect(() => {
-    if (autoLoadedRef.current === connectionId) return;
-    autoLoadedRef.current = connectionId;
+    const guardKey = `${connectionId}::${activeDb ?? ""}`;
+    if (autoLoadedRef.current === guardKey) return;
+    autoLoadedRef.current = guardKey;
     setLoadingRoot(true);
     loadDatabases(connectionId).finally(() => setLoadingRoot(false));
-  }, [connectionId, loadDatabases]);
+  }, [connectionId, activeDb, loadDatabases]);
 
   const handleRefresh = useCallback(() => {
     setLoadingRoot(true);
