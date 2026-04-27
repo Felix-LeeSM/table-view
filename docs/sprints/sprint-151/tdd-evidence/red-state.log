@@ -1,0 +1,33 @@
+
+ RUN  v4.1.3 /Users/felix/Desktop/study/view-table
+
+ ❯ src/lib/zustand-ipc-bridge.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/lib/zustand-ipc-bridge.test.ts [ src/lib/zustand-ipc-bridge.test.ts ]
+Error: Failed to resolve import "@lib/zustand-ipc-bridge" from "src/lib/zustand-ipc-bridge.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/felix/Desktop/study/view-table/src/lib/zustand-ipc-bridge.test.ts:93:0
+  8  |  }));
+  9  |  const __vi_import_0__ = await import("zustand/vanilla");
+  10 |  const __vi_import_1__ = await import("@lib/zustand-ipc-bridge");
+     |                                       ^
+  11 |  const __vi_import_2__ = await import("@tauri-apps/api/event");
+  12 |  import {
+ ❯ TransformPluginContext._formatLog node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42553:41
+ ❯ TransformPluginContext.error node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42550:16
+ ❯ normalizeUrl node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40529:23
+ ❯ node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40648:37
+ ❯ TransformPluginContext.transform node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:40575:7
+ ❯ EnvironmentPluginContainer.transform node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:42348:18
+ ❯ loadAndTransform node_modules/.pnpm/vite@6.4.2_@types+node@25.6.0_jiti@2.6.1_lightningcss@1.32.0_tsx@4.21.0/node_modules/vite/dist/node/chunks/dep-Dq2t6Dq0.js:35740:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  11:53:59
+   Duration  500ms (transform 11ms, setup 38ms, import 0ms, tests 0ms, environment 352ms)
+
