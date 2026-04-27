@@ -4,7 +4,7 @@
  * **TDD-FIRST**: this file was authored before the production page wirings
  * (`LauncherPage` activation, `WorkspacePage` Back / close, launcher close
  * → app_exit). Against pre-Sprint-154 code, every assertion fails because
- * the pages still call `useAppShellStore.setScreen(...)` instead of the
+ * the pages still mutated the legacy app-shell store field instead of the
  * `@lib/window-controls` seam. After the wiring lands, the same file goes
  * green.
  *

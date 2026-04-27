@@ -1,10 +1,10 @@
 ---
 id: 0011
 title: Sprint 149 — single-window stub으로 launcher/workspace lifecycle invariants 잠금, 실제 윈도우 분리는 phase 12 이월
-status: Accepted
+status: Superseded
 date: 2026-04-27
 supersedes: null
-superseded_by: null
+superseded_by: 0012
 ---
 
 **결정**: AC-141-* (launcher 720×560 fixed / workspace 1280×800 resizable 분리 윈도우)을 Sprint 149에서 single-window screen toggle stub으로 잠그고, 실제 두 Tauri 윈도우 분리는 phase 12로 이월한다. 이월은 ADR + RISK-025 + `it.todo()` 5개 + findings의 4중 강제 메커니즘으로 잠근다.

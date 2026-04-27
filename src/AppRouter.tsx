@@ -22,13 +22,12 @@ import App from "./App";
  *   - anything else (including `null` when the Tauri seam isn't available)
  *     → defensive fallback to `LauncherPage` with a single `console.warn`.
  *
- * Cross-window state sync (Sprint 151+), real lifecycle wiring
- * (Sprint 154), and `appShellStore.screen` deprecation (Sprint 154) are
- * deliberately out of scope here. `App` is still mounted under the
- * workspace branch so all keyboard-shortcut wiring keeps working untouched
- * — the only thing this sprint takes away from `App` is its top-level
- * `screen`-driven page selection (which the launcher window has no need
- * for).
+ * Cross-window state sync (Sprint 151+) and real lifecycle wiring
+ * (Sprint 154) are deliberately out of scope here. `App` is still mounted
+ * under the workspace branch so all keyboard-shortcut wiring keeps working
+ * untouched — the only thing this sprint takes away from `App` is its
+ * top-level page selection (which the launcher window has no need for).
+ * Sprint 155 retired the legacy `appShell` store entirely.
  */
 export default function AppRouter() {
   const label = getCurrentWindowLabel();

@@ -2,16 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
 import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
-import { useAppShellStore } from "./stores/appShellStore";
 
-// Mock page components to isolate shortcut testing — App.tsx now renders one
-// of HomePage / WorkspacePage based on the appShell screen, but the global
-// shortcuts under test are wired at the App level and don't depend on which
-// page is mounted.
-vi.mock("./pages/HomePage", () => ({
-  default: () => <div data-testid="home-page" />,
-}));
-
+// Mock page components to isolate shortcut testing — App.tsx now mounts only
+// `WorkspacePage` (Sprint 154 — `AppRouter` picks the per-window shell at
+// boot), but the global shortcuts under test are wired at the App level and
+// don't depend on which page is mounted.
 vi.mock("./pages/WorkspacePage", () => ({
   default: () => <div data-testid="workspace-page" />,
 }));
@@ -92,10 +87,10 @@ function fireShortcut(key: string, metaKey = true) {
 describe("App global shortcuts", () => {
   beforeEach(() => {
     useTabStore.setState({ tabs: [], activeTabId: null });
-    // Sprint 133 — App-level shortcuts now branch on `appShellStore.screen`.
-    // Default each test to "workspace" so the existing Cmd+W/T/. assertions
-    // (which run against tab state) still see the workspace context.
-    useAppShellStore.setState({ screen: "workspace" });
+    // Sprint 155 — `App` is only mounted under the workspace `WebviewWindow`
+    // (per `AppRouter.tsx`), so the workspace context is implied by the
+    // file-under-test rendering `<App />`. The legacy app-shell screen seed
+    // is no longer needed.
   });
 
   it("Cmd+W closes the active tab", () => {
@@ -210,16 +205,20 @@ describe("App global shortcuts", () => {
   // dispatch (regression guard).
 
   it("Cmd+, is a no-op (Sprint 154 — Home/Workspace are separate Tauri windows)", () => {
-    // The beforeEach seeds `screen = "workspace"` for the legacy tab
-    // shortcuts. Since Cmd+, no longer mutates this field in production,
-    // the value remains as seeded.
+    // Cmd+, used to dispatch `open-settings` and toggle the legacy app-shell
+    // field. Phase 12 retired both behaviours — assert no event fires.
+    const handler = vi.fn();
+    window.addEventListener("open-settings", handler);
     render(<App />);
 
     fireShortcut(",");
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    expect(handler).not.toHaveBeenCalled();
+    window.removeEventListener("open-settings", handler);
   });
 
   it("Cmd+, with focus inside an editable target is a no-op", () => {
+    const handler = vi.fn();
+    window.addEventListener("open-settings", handler);
     render(<App />);
 
     const input = document.createElement("input");
@@ -236,9 +235,9 @@ describe("App global shortcuts", () => {
       );
     });
 
-    // Vestigial store field stays at the beforeEach seed value.
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    expect(handler).not.toHaveBeenCalled();
     document.body.removeChild(input);
+    window.removeEventListener("open-settings", handler);
   });
 
   it("Cmd+, no longer dispatches the legacy open-settings event", () => {
@@ -364,7 +363,6 @@ describe("App global shortcuts", () => {
     const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
     const t2 = makeTableTab({ id: "tab-2", table: "beta" });
     const t3 = makeTableTab({ id: "tab-3", table: "gamma" });
-    useAppShellStore.setState({ screen: "workspace" });
     useTabStore.setState({ tabs: [t1, t2, t3], activeTabId: "tab-3" });
     render(<App />);
 
@@ -375,7 +373,6 @@ describe("App global shortcuts", () => {
   it("Cmd+2 activates the second tab in the workspace", () => {
     const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
     const t2 = makeTableTab({ id: "tab-2", table: "beta" });
-    useAppShellStore.setState({ screen: "workspace" });
     useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-1" });
     render(<App />);
 
@@ -387,7 +384,6 @@ describe("App global shortcuts", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
     const t3 = makeTableTab({ id: "tab-3", table: "three" });
-    useAppShellStore.setState({ screen: "workspace" });
     useTabStore.setState({ tabs: [t1, t2, t3], activeTabId: "tab-1" });
     render(<App />);
 
@@ -397,19 +393,18 @@ describe("App global shortcuts", () => {
 
   it("Cmd+1 in home is a no-op (Sprint 154 — App only mounts in workspace window; legacy regression guard)", () => {
     // Sprint 154 — `App` is only rendered inside the workspace Tauri
-    // window per `AppRouter.tsx`. The legacy `screen === "home"` gate is
-    // gone, but the user-observable invariant ("Cmd+1 in home doesn't
-    // touch tabs") remains true because home is a different window —
-    // the JS context running this test never mounts <App /> in the home
-    // window. We preserve the test as a regression guard against a
-    // future sprint accidentally re-mounting App in the launcher.
+    // window per `AppRouter.tsx`. The legacy launcher/home gate is gone,
+    // but the user-observable invariant ("Cmd+1 in home doesn't touch
+    // tabs") remains true because home is a different window — the JS
+    // context running this test never mounts <App /> in the home window.
+    // We preserve the test as a regression guard against a future sprint
+    // accidentally re-mounting App in the launcher.
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
-    // The vestigial store field is left at its baseline. With App
-    // mounted, Cmd+1 WILL switch tabs because we're in the workspace
-    // window context (the only place App.tsx now runs). To assert the
-    // legacy "home is no-op" semantic we'd need to NOT mount App — so
-    // the test now covers the workspace path only.
+    // With App mounted, Cmd+1 WILL switch tabs because we're in the
+    // workspace window context (the only place App.tsx now runs). To
+    // assert the legacy "home is no-op" semantic we'd need to NOT mount
+    // App — so the test now covers the workspace path only.
     useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
     render(<App />);
 
@@ -421,7 +416,6 @@ describe("App global shortcuts", () => {
   it("Cmd+1 with focus inside an editable target is a no-op", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
-    useAppShellStore.setState({ screen: "workspace" });
     useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
     render(<App />);
 
@@ -450,7 +444,6 @@ describe("App global shortcuts", () => {
   // event being accidentally re-dispatched.
 
   it("Cmd+K in workspace does NOT dispatch open-connection-switcher (deprecated)", () => {
-    useAppShellStore.setState({ screen: "workspace" });
     const handler = vi.fn();
     window.addEventListener("open-connection-switcher", handler);
     render(<App />);
@@ -462,7 +455,6 @@ describe("App global shortcuts", () => {
   });
 
   it("Cmd+K in home does NOT dispatch open-connection-switcher (deprecated)", () => {
-    useAppShellStore.setState({ screen: "home" });
     const handler = vi.fn();
     window.addEventListener("open-connection-switcher", handler);
     render(<App />);
@@ -474,7 +466,6 @@ describe("App global shortcuts", () => {
   });
 
   it("Cmd+K with focus inside an editable target is a no-op (deprecated)", () => {
-    useAppShellStore.setState({ screen: "workspace" });
     const handler = vi.fn();
     window.addEventListener("open-connection-switcher", handler);
     render(<App />);

@@ -309,7 +309,7 @@ export default function App() {
   // page routing lives in `AppRouter.tsx`, which picks Launcher vs Workspace
   // based on the current Tauri `WebviewWindow.label`. `App` is mounted ONLY
   // under the workspace branch, so `WorkspacePage` is the unconditional
-  // mount here. The previous `appShellStore.screen` field has been removed
+  // mount here. The previous app-shell screen field has been removed
   // — "which screen am I on" is implied by the Tauri window label, and
   // window lifecycle is wired through `@lib/window-controls` (Activate /
   // Back / Disconnect / Close — see `window-transitions.test.tsx`).

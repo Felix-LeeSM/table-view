@@ -1,7 +1,7 @@
 /**
  * Sprint 153 — TDD-FIRST cross-window sync tests for the remaining shared
- * stores (`tabStore`, `mruStore`, `themeStore`, `favoritesStore`,
- * `appShellStore`).
+ * stores (`tabStore`, `mruStore`, `themeStore`, `favoritesStore`) plus the
+ * app-shell window context (window-scoped, deliberately unbridged).
  *
  * Authored BEFORE the per-store `attachZustandIpcBridge` wirings ship.
  * Against pre-Sprint-153 code these cases fail because none of the four
@@ -26,8 +26,8 @@
  *    `dirtyTabIds` / `closedTabHistory`, both of which are window-local).
  *  - AC-153-07 — error path: malformed inbound payloads are silently
  *    ignored on every channel.
- *  - `appShellStore.screen` is window-scoped (no bridge attached, so the
- *    field is never sent on any channel).
+ *  - app-shell window context is window-scoped (no bridge attached, so the
+ *    context is never sent on any channel).
  */
 import {
   describe,
@@ -119,7 +119,6 @@ import { useTabStore } from "@stores/tabStore";
 import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
-import { useAppShellStore } from "@stores/appShellStore";
 
 const mockedEmit = emit as unknown as Mock;
 
@@ -156,10 +155,6 @@ function resetFavoritesStore(): void {
   useFavoritesStore.setState({ favorites: [] });
 }
 
-function resetAppShellStore(): void {
-  useAppShellStore.setState({ screen: "home" });
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -169,7 +164,6 @@ describe("cross-window store sync (Sprint 153)", () => {
     resetTabStore();
     resetMruStore();
     resetFavoritesStore();
-    resetAppShellStore();
     // Drain microtasks so any module-load `void attach...` listener
     // registration has settled before each test fires events.
     await Promise.resolve();
@@ -181,7 +175,6 @@ describe("cross-window store sync (Sprint 153)", () => {
     resetTabStore();
     resetMruStore();
     resetFavoritesStore();
-    resetAppShellStore();
   });
 
   // -------------------------------------------------------------------------
@@ -562,21 +555,49 @@ describe("cross-window store sync (Sprint 153)", () => {
   });
 
   // -------------------------------------------------------------------------
-  // appShellStore — window-scoped (AC-153-05)
+  // app-shell window context — window-scoped (AC-153-05)
   // -------------------------------------------------------------------------
 
-  describe("appShellStore (window-scoped, no bridge)", () => {
-    it("AC-153-05: setScreen does NOT broadcast on any sync channel", async () => {
+  describe("app-shell context (window-scoped, no bridge)", () => {
+    it("AC-153-05: app-shell window context does NOT broadcast on any sync channel", async () => {
+      // Sprint 153 originally locked this against the legacy app-shell
+      // setter flipping a window-context field. Sprint 155 removed the
+      // store entirely (multi-window split made the screen context
+      // implied by `getCurrentWindowLabel()`). The user-observable
+      // invariant the case pinned — "no app-shell channel exists, no
+      // emit carries a window-context field" — survives untouched and is
+      // still load-bearing: any future "appshell-sync" / "screen-sync" /
+      // "window-context-sync" channel addition must trip this check.
       mockedEmit.mockClear();
-      useAppShellStore.getState().setScreen("workspace");
+
+      // Drive any signal that COULD plausibly trigger app-shell broadcast
+      // in a regressed bridge (a tab mutation is the closest neighbour
+      // since `tabStore` is workspace-scoped). The point is to give the
+      // bus traffic so the assertion below is a real filter, not vacuous.
+      useTabStore.setState({
+        tabs: [
+          {
+            type: "table",
+            id: "tab-driver",
+            title: "drv",
+            connectionId: "c1",
+            closable: true,
+            schema: "public",
+            table: "drv",
+            subView: "records",
+          },
+        ],
+        activeTabId: "tab-driver",
+      });
       await Promise.resolve();
 
       const sentChannels = mockedEmit.mock.calls.map((call) => call[0]);
-      // The store decision (Sprint 153) is to keep `screen` window-local —
-      // no `appshell-sync` / `screen-sync` / etc.
       expect(sentChannels).not.toContain("appshell-sync");
       expect(sentChannels).not.toContain("screen-sync");
-      // And no other emit should carry a `screen` field, ever.
+      expect(sentChannels).not.toContain("window-context-sync");
+      // And no emit should carry a `screen` / `windowContext` field on
+      // any channel — neither the surviving 5 sync stores nor any future
+      // shim may leak window-local context onto the wire.
       for (const call of mockedEmit.mock.calls) {
         const env = call[1] as
           | { state?: Record<string, unknown> }
@@ -584,6 +605,7 @@ describe("cross-window store sync (Sprint 153)", () => {
           | undefined;
         if (env && typeof env === "object" && env.state) {
           expect(env.state).not.toHaveProperty("screen");
+          expect(env.state).not.toHaveProperty("windowContext");
         }
       }
     });

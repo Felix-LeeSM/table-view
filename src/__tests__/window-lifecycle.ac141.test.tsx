@@ -1,25 +1,49 @@
 /**
- * Sprint 149 — AC-141-* (Launcher/Workspace lifecycle) regression tests.
+ * Sprint 149/155 — AC-141-* (Launcher/Workspace lifecycle) regression tests.
  *
- * **Single-window stub**: the spec calls for separate Tauri windows
- * (launcher 720×560 fixed / workspace 1280×800 resizable) but per ADR 0011
- * Sprint 149 ships a single-window stub and defers real-window split to
- * phase 12. This file locks the user-observable lifecycle invariants
- * (boot → activate → back → reactivate → disconnect) on top of
- * `appShellStore.screen` toggle so phase-12 implementers can replay the
- * same expectations against the new window pair.
+ * History: this file was authored in Sprint 149 as a single-window stub
+ * locking lifecycle invariants on top of a now-retired vestigial store
+ * field. Sprint 154 replaced the screen-toggle with the
+ * `@lib/window-controls` seam + cross-window IPC sync. Sprint 155 (Phase 12
+ * closure) flips the 5 historically-deferred placeholders into live
+ * regression tests against the seam + `tauri.conf.json`, retires the legacy
+ * field for good, and supersedes ADR 0011 with ADR 0012.
  *
- * The phase-12 real-window invariants are pinned as `it.todo(...)` at the
- * bottom of this file so vitest's report carries a permanent reminder
- * count until they're fleshed out.
+ * The 5 historically-deferred AC-141-* invariants now run as real `it(...)`
+ * checks:
+ *
+ *   AC-141-1 (real)  launcher/workspace window dimensions + chrome match the
+ *                    spec (720×560 fixed launcher / 1280×800 resizable
+ *                    workspace) — read from `tauri.conf.json` directly so
+ *                    the test fails if anyone widens the launcher chrome.
+ *   AC-141-2 (real)  Activate emits workspace.show() → focus() → launcher.hide()
+ *                    in strict order (locked via `mock.invocationCallOrder`).
+ *   AC-141-3 (real)  Back emits workspace.hide() → launcher.show(); pool intact
+ *                    (no `disconnectFromDatabase` call).
+ *   AC-141-4 (real)  launcher close → `app_exit`; workspace close = Back
+ *                    semantics (`preventDefault` + hide+show, no disconnect).
+ *   AC-141-5 (real)  4-stage visibility integration (boot → activate → back →
+ *                    disconnect) asserted on the seam mocks.
  *
  * Each `it(...)` name embeds the AC label (AC-141-N) for grep-ability.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
+// Sprint 155 — `tauri.conf.json` is the source of truth for AC-141-1's
+// fixed launcher / resizable workspace dimensions. Vite's JSON import gives
+// us a synchronous, type-friendly read without dragging `@types/node` into
+// the strict tsconfig just for this assertion.
+import tauriConf from "../../src-tauri/tauri.conf.json";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "@/pages/HomePage";
 import WorkspacePage from "@/pages/WorkspacePage";
-import { useAppShellStore } from "@stores/appShellStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import * as windowControls from "@lib/window-controls";
@@ -41,11 +65,9 @@ vi.mock("@lib/tauri", async () => {
 
 // Sprint 154 — `@lib/window-controls` is the lifecycle seam. WorkspacePage
 // registers a `tauri://close-requested` listener at mount that must be
-// stubbed under jsdom. Activation/Back assertions are expressed against
-// the seam mocks. (The original AC-141-* assertions used
-// `appShellStore.screen`; Sprint 154 retired the field as a routing
-// primitive — see Sprint 154 contract AC-154-06. Sprint 155's `it.todo`
-// blocks at the bottom of this file are unaffected.)
+// stubbed under jsdom. Activation/Back/close assertions are expressed
+// against the seam mocks — that is the single source of truth for the
+// post-Sprint-154 architecture (ADR 0012 supersedes ADR 0011).
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -66,6 +88,12 @@ vi.mock("@components/layout/MainArea", () => ({
   default: () => <div data-testid="main-area-stub" />,
 }));
 
+const showWindowMock = windowControls.showWindow as Mock;
+const hideWindowMock = windowControls.hideWindow as Mock;
+const focusWindowMock = windowControls.focusWindow as Mock;
+const exitAppMock = windowControls.exitApp as Mock;
+const onCloseRequestedMock = windowControls.onCloseRequested as Mock;
+
 function makeConn(id: string): ConnectionConfig {
   return {
     id,
@@ -85,7 +113,11 @@ function makeConn(id: string): ConnectionConfig {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useAppShellStore.setState({ screen: "home" });
+  showWindowMock.mockResolvedValue(undefined);
+  hideWindowMock.mockResolvedValue(undefined);
+  focusWindowMock.mockResolvedValue(undefined);
+  exitAppMock.mockResolvedValue(undefined);
+  onCloseRequestedMock.mockResolvedValue(() => {});
   useConnectionStore.setState({
     connections: [],
     groups: [],
@@ -100,15 +132,56 @@ beforeEach(() => {
   });
 });
 
-describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
-  it("AC-141-1: app boot lands on the launcher equivalent (appShellStore.screen === 'home')", () => {
-    // The store's create() default is "home". A fresh subscription must
-    // observe that — pre-S149 callers depend on this initial state to
-    // mount HomePage before any user action.
-    expect(useAppShellStore.getState().screen).toBe("home");
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", () => {
+  // ---------------------------------------------------------------------------
+  // AC-141-1 (real): launcher window 720×560 fixed; workspace 1280×800
+  // resizable. Read from `tauri.conf.json` so the assertion fails the moment
+  // anyone widens the launcher or removes the resizable: false guard.
+  // ---------------------------------------------------------------------------
+  it("AC-141-1 (real): launcher is 720×560 fixed (no resize/maximize, centered) and workspace is 1280×800 resizable", () => {
+    type WindowConf = {
+      label: string;
+      width: number;
+      height: number;
+      resizable?: boolean;
+      maximizable?: boolean;
+      center?: boolean;
+      visible?: boolean;
+      minWidth?: number;
+      minHeight?: number;
+    };
+    const windows = (tauriConf as { app: { windows: WindowConf[] } }).app
+      .windows;
+    const launcher = windows.find((w) => w.label === "launcher");
+    const workspace = windows.find((w) => w.label === "workspace");
+
+    expect(launcher).toBeDefined();
+    expect(launcher!.width).toBe(720);
+    expect(launcher!.height).toBe(560);
+    expect(launcher!.resizable).toBe(false);
+    expect(launcher!.maximizable).toBe(false);
+    expect(launcher!.center).toBe(true);
+    // The launcher is the boot-visible chrome — Tauri opens it on app start.
+    expect(launcher!.visible).toBe(true);
+
+    expect(workspace).toBeDefined();
+    expect(workspace!.width).toBe(1280);
+    expect(workspace!.height).toBe(800);
+    expect(workspace!.resizable).toBe(true);
+    // The workspace is born hidden and only shows on Activate (AC-141-2).
+    expect(workspace!.visible).toBe(false);
   });
 
-  it("AC-141-2: double-clicking a connection from the launcher activates the workspace screen", async () => {
+  // ---------------------------------------------------------------------------
+  // AC-141-2 (real): Activate → workspace.show() then focus then launcher.hide()
+  // in strict order. The user must see the workspace take input focus before
+  // the launcher disappears so the visible-window count never hits zero.
+  // ---------------------------------------------------------------------------
+  it("AC-141-2 (real): activating from the launcher emits workspace.show() → focusWindow('workspace') → hideWindow('launcher') in order", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -120,25 +193,35 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
 
-    // Sprint 154 — workspace activation now expressed via the
-    // `@lib/window-controls` seam. The original `screen === "workspace"`
-    // assertion is preserved as the legacy semantic intent ("the user
-    // is now on the workspace surface") via the seam call.
-    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
+    expect(showWindowMock).toHaveBeenCalledWith("workspace");
+    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
+    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
+
+    // Strict ordering — show before focus, focus before hide. This is the
+    // user-visible invariant ("workspace becomes the active window before
+    // the launcher disappears").
+    const showOrder = showWindowMock.mock.invocationCallOrder[0]!;
+    const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
+    const hideOrder = hideWindowMock.mock.invocationCallOrder[0]!;
+    expect(showOrder).toBeLessThan(focusOrder);
+    expect(focusOrder).toBeLessThan(hideOrder);
+
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  it("AC-141-3: 'Back to connections' returns to launcher AND preserves the backend connection pool", async () => {
+  // ---------------------------------------------------------------------------
+  // AC-141-3 (real): Back → workspace.hide() then launcher.show(); the
+  // connection pool stays alive so re-entry is instant.
+  // ---------------------------------------------------------------------------
+  it("AC-141-3 (real): 'Back to connections' emits workspace.hide() → launcher.show() and does NOT call disconnectFromDatabase", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
-    const disconnectMock = disconnectFromDatabase as ReturnType<typeof vi.fn>;
+    const disconnectMock = disconnectFromDatabase as Mock;
 
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
       focusedConnId: "c1",
     });
-    useAppShellStore.setState({ screen: "workspace" });
-
     render(<WorkspacePage />);
 
     await act(async () => {
@@ -147,23 +230,42 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
       );
     });
 
-    // Sprint 154 — surface revert is now expressed via the seam:
-    // workspace.hide() then launcher.show() (asserted in
-    // window-transitions.test.tsx with strict ordering).
-    expect(windowControls.hideWindow).toHaveBeenCalledWith("workspace");
-    expect(windowControls.showWindow).toHaveBeenCalledWith("launcher");
-    // ...but the pool was NOT torn down. This is the key spec invariant:
-    // re-entering the workspace must be instantaneous (no reconnect).
+    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
+    expect(showWindowMock).toHaveBeenCalledWith("launcher");
+
+    // Strict ordering: workspace hides BEFORE launcher shows so the user
+    // never sees both windows at once during the swap.
+    const hideOrder = hideWindowMock.mock.invocationCallOrder[0]!;
+    const showOrder = showWindowMock.mock.invocationCallOrder[0]!;
+    expect(hideOrder).toBeLessThan(showOrder);
+
+    // Pool MUST be preserved — Back is not Disconnect.
+    expect(disconnectMock).not.toHaveBeenCalled();
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
     });
-    expect(disconnectMock).not.toHaveBeenCalled();
   });
 
-  it("AC-141-4: Disconnect (unlike Back) DOES evict the pool — the two paths must reach distinct final states", async () => {
+  // ---------------------------------------------------------------------------
+  // AC-141-4 (real): launcher close → `app_exit`; workspace close behaves
+  // like Back (preventDefault + hide+show, no disconnect).
+  // ---------------------------------------------------------------------------
+  it("AC-141-4 (real): launcher.close → exitApp(); workspace.close = Back semantics (no disconnect)", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
-    const disconnectMock = disconnectFromDatabase as ReturnType<typeof vi.fn>;
-    disconnectMock.mockResolvedValue(undefined);
+    const disconnectMock = disconnectFromDatabase as Mock;
+
+    // Capture the close handlers for both windows. The boot helper registers
+    // the launcher one; WorkspacePage's mount effect registers the workspace
+    // one. The `onCloseRequested` seam is what implements `preventDefault` —
+    // we don't need to assert the prevent itself, only that the registered
+    // handler reaches it (the seam contract guarantees prevent on register).
+    const handlers: Record<string, () => void | Promise<void>> = {};
+    onCloseRequestedMock.mockImplementation(
+      async (label: string, handler: () => void | Promise<void>) => {
+        handlers[label] = handler;
+        return () => {};
+      },
+    );
 
     useConnectionStore.setState({
       connections: [makeConn("c1")],
@@ -171,35 +273,72 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
       focusedConnId: "c1",
     });
 
-    // Drive the store action directly — DisconnectButton click coverage
-    // already lives in connection-sot.ac142.test.tsx (AC-142-3); this
-    // test is about the lifecycle distinction Back vs Disconnect.
+    // 1. Launcher close path — `bootWindowLifecycle` is workspace-aware:
+    //    it only registers when `getCurrentWindowLabel() === "launcher"`.
+    //    Inside the test we exercise the registration helper directly.
+    const { registerLauncherCloseHandler } =
+      await import("@lib/window-lifecycle-boot");
+    await registerLauncherCloseHandler();
+
+    expect(onCloseRequestedMock).toHaveBeenCalledWith(
+      "launcher",
+      expect.any(Function),
+    );
+    expect(handlers["launcher"]).toBeTruthy();
+
     await act(async () => {
-      await useConnectionStore.getState().disconnectFromDatabase("c1");
+      await handlers["launcher"]!();
     });
 
-    expect(disconnectMock).toHaveBeenCalledWith("c1");
-    expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
-      type: "disconnected",
+    expect(exitAppMock).toHaveBeenCalledTimes(1);
+    // Launcher-close path must NOT try to show the workspace mid-exit.
+    expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
+
+    // 2. Workspace close path — registered by WorkspacePage's mount effect.
+    showWindowMock.mockClear();
+    hideWindowMock.mockClear();
+    render(<WorkspacePage />);
+    await act(async () => {
+      await Promise.resolve();
     });
+
+    expect(onCloseRequestedMock).toHaveBeenCalledWith(
+      "workspace",
+      expect.any(Function),
+    );
+    expect(handlers["workspace"]).toBeTruthy();
+
+    await act(async () => {
+      await handlers["workspace"]!();
+    });
+
+    // Same final state as the explicit Back button: workspace hides then
+    // launcher shows; pool is preserved.
+    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
+    expect(showWindowMock).toHaveBeenCalledWith("launcher");
+    expect(disconnectMock).not.toHaveBeenCalled();
   });
 
-  it("AC-141-5: full lifecycle — boot → activate → back (pool kept) → reactivate (no reconnect cost) → disconnect (pool gone)", async () => {
+  // ---------------------------------------------------------------------------
+  // AC-141-5 (real): 4-stage visibility integration test. Drives the full
+  // boot → activate → back → disconnect arc and asserts the cumulative seam
+  // call shape via `mock.invocationCallOrder`. This is the single most
+  // important regression lock in the file because it composes every stage's
+  // invariants.
+  // ---------------------------------------------------------------------------
+  it("AC-141-5 (real): boot → activate → back → disconnect emits the expected seam-call sequence end-to-end", async () => {
     const { connectToDatabase, disconnectFromDatabase } =
       await import("@lib/tauri");
-    const connectMock = connectToDatabase as ReturnType<typeof vi.fn>;
-    const disconnectMock = disconnectFromDatabase as ReturnType<typeof vi.fn>;
+    const connectMock = connectToDatabase as Mock;
+    const disconnectMock = disconnectFromDatabase as Mock;
     connectMock.mockResolvedValue(undefined);
     disconnectMock.mockResolvedValue(undefined);
 
-    // Stage 1: boot — launcher equivalent. Sprint 154 reads window context
-    // from `getCurrentWindowLabel()`, so this assertion is preserved as the
-    // legacy default ("nothing has activated the workspace yet"); the seam
-    // mocks below are pristine because no transition has fired.
-    expect(useAppShellStore.getState().screen).toBe("home");
+    // Stage 1: boot — pristine seam mocks. No transition has fired yet.
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(hideWindowMock).not.toHaveBeenCalled();
+    expect(focusWindowMock).not.toHaveBeenCalled();
 
-    // Seed a connected connection (this is what the launcher would show
-    // after the user has connected once via context menu / double-click).
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -211,32 +350,46 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
     await act(async () => {
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
-    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
+
+    expect(showWindowMock).toHaveBeenCalledWith("workspace");
+    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
+    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
+    const activateShow = showWindowMock.mock.invocationCallOrder[0]!;
+    const activateFocus = focusWindowMock.mock.invocationCallOrder[0]!;
+    const activateHide = hideWindowMock.mock.invocationCallOrder[0]!;
+    expect(activateShow).toBeLessThan(activateFocus);
+    expect(activateFocus).toBeLessThan(activateHide);
     unmount();
 
-    // Stage 3: back — pool kept.
-    vi.mocked(windowControls.showWindow).mockClear();
-    vi.mocked(windowControls.hideWindow).mockClear();
+    // Stage 3: back — pool kept; workspace hides then launcher shows.
+    showWindowMock.mockClear();
+    hideWindowMock.mockClear();
     render(<WorkspacePage />);
     await act(async () => {
       fireEvent.click(
         screen.getByRole("button", { name: /^back to connections$/i }),
       );
     });
-    expect(windowControls.hideWindow).toHaveBeenCalledWith("workspace");
-    expect(windowControls.showWindow).toHaveBeenCalledWith("launcher");
+    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
+    expect(showWindowMock).toHaveBeenCalledWith("launcher");
+    const backHide = hideWindowMock.mock.invocationCallOrder[0]!;
+    const backShow = showWindowMock.mock.invocationCallOrder[0]!;
+    expect(backHide).toBeLessThan(backShow);
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
     });
     expect(disconnectMock).not.toHaveBeenCalled();
 
-    // Stage 4: reactivate — should NOT trigger another connectToDatabase
-    // (already-connected reactivation goes through ConnectionItem's
-    // double-click which short-circuits when status === "connected"). The
-    // store call count must stay at zero.
+    // Stage 4: re-activate would NOT trigger another connectToDatabase
+    // (already-connected reactivation short-circuits in the connection
+    // store). The store call count must stay at zero throughout.
     expect(connectMock).not.toHaveBeenCalled();
 
-    // Stage 5: disconnect — this is the only path that tears down the pool.
+    // Stage 5: disconnect — the only path that tears down the pool. Crucially,
+    // it does NOT touch the window seam (that distinction is the entire
+    // reason Back and Disconnect are separate buttons).
+    showWindowMock.mockClear();
+    hideWindowMock.mockClear();
     await act(async () => {
       await useConnectionStore.getState().disconnectFromDatabase("c1");
     });
@@ -244,31 +397,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "disconnected",
     });
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(hideWindowMock).not.toHaveBeenCalled();
   });
-});
-
-// ---------------------------------------------------------------------------
-// Phase 12 forcing block — `it.todo()` keeps these visible in vitest output
-// every run so the deferred work cannot silently rot. When phase 12 starts,
-// flip each `it.todo` to `it()` and supply the body; the test will then run
-// against the real two-window architecture (WebviewWindow mocks).
-//
-// See ADR 0011 + RISK-025 for the deferral context.
-// ---------------------------------------------------------------------------
-describe.skip("AC-141-* real-window invariants (DEFERRED to phase 12 — see ADR 0011)", () => {
-  it.todo(
-    "AC-141-1 (real): launcher window mounted at 720×560, fixed (no resize/maximize), centered",
-  );
-  it.todo(
-    "AC-141-2 (real): launcher.connect success emits 'workspace:open'; workspace.show()+focus(), launcher.hide()",
-  );
-  it.todo(
-    "AC-141-3 (real): workspace 'Back' emits 'launcher:show'; workspace.hide(), launcher.show(); pool intact",
-  );
-  it.todo(
-    "AC-141-4 (real): launcher.close → app exit; workspace.close → launcher recovery (same as Back)",
-  );
-  it.todo(
-    "AC-141-5 (real): WebviewWindow mock-based 4-stage visibility integration test",
-  );
 });

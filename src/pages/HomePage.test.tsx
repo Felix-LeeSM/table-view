@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "./HomePage";
-import { useAppShellStore } from "@stores/appShellStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
 // Sprint 154 — HomePage's activation handler routes through
-// `@lib/window-controls` (workspace.show / focus / launcher.hide) instead
-// of the legacy `appShellStore.setScreen` toggle. Stub the seam so the
-// assertions can observe call shape directly.
+// `@lib/window-controls` (workspace.show / focus / launcher.hide). Stub the
+// seam so the assertions can observe call shape directly.
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -111,9 +109,6 @@ function makeConnection(id: string): ConnectionConfig {
 }
 
 function resetStores() {
-  // Sprint 154 — `appShellStore.screen` is vestigial. Reset so legacy
-  // assertions still see a deterministic baseline.
-  useAppShellStore.setState({ screen: "home" });
   useConnectionStore.setState({
     connections: [],
     activeStatuses: {},

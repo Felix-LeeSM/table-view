@@ -15,7 +15,6 @@ import HomePage from "@/pages/HomePage";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
-import { useAppShellStore } from "@stores/appShellStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
@@ -32,11 +31,11 @@ vi.mock("@lib/tauri", async () => {
 });
 
 // Sprint 154 — `@lib/window-controls` is the new lifecycle seam. HomePage's
-// activation handler routes through it instead of the legacy
-// `appShellStore.setScreen` toggle. These tests previously asserted on
-// `appShellStore.screen` after activation; they now assert on the seam call
-// shape, which is the same user-observable invariant (workspace becomes the
-// active surface) but expressed in the post-Sprint-154 architecture.
+// activation handler routes through it. These tests previously asserted on
+// the legacy app-shell field after activation; they now assert on the seam
+// call shape, which is the same user-observable invariant (workspace
+// becomes the active surface) but expressed in the post-Sprint-154
+// architecture.
 vi.mock("@lib/window-controls", () => ({
   showWindow: vi.fn(() => Promise.resolve()),
   hideWindow: vi.fn(() => Promise.resolve()),
@@ -79,10 +78,6 @@ beforeEach(() => {
     closedTabHistory: [],
     dirtyTabIds: new Set<string>(),
   });
-  // Sprint 154 — `appShellStore.screen` is vestigial post-multi-window
-  // split. Keep the reset so existing protected tests that read it still
-  // observe a deterministic baseline.
-  useAppShellStore.setState({ screen: "home" });
   vi.mocked(windowControls.showWindow).mockClear();
   vi.mocked(windowControls.hideWindow).mockClear();
   vi.mocked(windowControls.focusWindow).mockClear();
@@ -191,10 +186,10 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     expect(tabs).toHaveLength(0);
     expect(useTabStore.getState().activeTabId).toBeNull();
     // Workspace becomes the active surface (focused on c2). Sprint 154
-    // moved the surface activation from `appShellStore.setScreen` to the
-    // `@lib/window-controls` seam — the user-observable invariant ("the
-    // workspace shows up after activation") is now expressed as the
-    // `showWindow("workspace")` seam call.
+    // moved the surface activation to the `@lib/window-controls` seam —
+    // the user-observable invariant ("the workspace shows up after
+    // activation") is now expressed as the `showWindow("workspace")` seam
+    // call.
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
     expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
   });

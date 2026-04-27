@@ -2,7 +2,7 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-27 (Sprint 149 — RISK-025 deferred 추가, multi-window split phase 12 이월)
+Last updated: 2026-04-27 (Sprint 155 — RISK-025 resolved by Phase 12 closure: launcher/workspace 분리 + cross-window sync 완성, ADR 0011 → 0012 supersede)
 
 ## 참고 문서
 
@@ -13,8 +13,8 @@ Last updated: 2026-04-27 (Sprint 149 — RISK-025 deferred 추가, multi-window 
 | Status    | Count |
 |-----------|-------|
 | Active    | 15    |
-| Resolved  | 8     |
-| Deferred  | 2     |
+| Resolved  | 9     |
+| Deferred  | 1     |
 | **Total** | **25** |
 
 ---
@@ -47,7 +47,7 @@ Last updated: 2026-04-27 (Sprint 149 — RISK-025 deferred 추가, multi-window 
 | RISK-022 | E2E 우클릭 미지원 (tauri-driver W3C Actions API 미구현) — 3개 context menu 테스트 skip  | active    | e2e               | E2E 안정화    | tauri-driver 한계; skip 처리                               |
 | RISK-023 | E2E 테스트 상태 격리 부족 (maxInstances: 1, 같은 앱 인스턴스 재사용)                      | active    | e2e               | E2E 안정화    | beforeEach에서 상태 복구 필요                              |
 | RISK-024 | fireEvent 호출 act() 미래핑 — React state update 경고 가능                              | resolved  | frontend/testing  | 24–40         | act() 래핑 적용 완료                                      |
-| RISK-025 | Multi-window split (launcher 720×560 fixed / workspace 1280×800 resizable) phase 12 이월 — single-window stub으로 lifecycle invariants만 잠금 | deferred  | frontend/architecture | 149       | ADR 0011 + `it.todo()` 5개 + findings Deferred Work 4중 잠금 |
+| RISK-025 | Multi-window split (launcher 720×560 fixed / workspace 1280×800 resizable) phase 12 이월 — single-window stub으로 lifecycle invariants만 잠금 | resolved  | frontend/architecture | 149       | Sprint 150–155 — Phase 12 종결, launcher/workspace 분리 + cross-window IPC sync 완성, ADR 0012가 0011을 supersede |
 
 ---
 
@@ -102,3 +102,15 @@ Details for every resolved risk.
 - **Origin**: Sprint 24–40 (테스트 코드 전반)
 - **Resolved in**: 2026-04-12
 - **Fix**: 5개 테스트 파일(ContextMenu, ConnectionGroup, ConnectionItem, Sidebar, ConnectionList)의 모든 fireEvent 호출을 `act(() => { ... })`로 래핑. React state update 경고 방지.
+
+### RISK-025 — Multi-window split (launcher/workspace) phase 12 이월
+
+- **Origin**: Sprint 149
+- **Resolved in**: Sprint 155 (2026-04-27) — Phase 12 closure
+- **Fix**: Phase 12 sprints 150–155가 다음을 차례로 wired:
+  - **Sprint 150** — `tauri.conf.json`에 `launcher`(720×560 fixed) + `workspace`(1280×800 resizable) WebviewWindow 정의, `src-tauri/src/launcher.rs`에 label-addressable show/hide/focus/`app_exit` Tauri command surface 추가, `lib.rs` invoke handler 등록.
+  - **Sprint 151** — `attachZustandIpcBridge` 공통 모듈 (origin echo + allowlist + diff 기반 broadcast).
+  - **Sprint 152** — `connectionStore`에 bridge 부착, plaintext password가 wire payload에 흐르지 않도록 allowlist 차단 회귀 잠금.
+  - **Sprint 153** — `tabStore`(workspace-only attach guard) / `mruStore` / `themeStore` / `favoritesStore` 4개 store에 symmetric IPC sync 부착, 5개 sync 채널 + malformed payload 무시 회귀 잠금.
+  - **Sprint 154** — `@lib/window-controls` seam(show/hide/focus/exitApp/onCloseRequested) + `LauncherShell`/`WorkspaceShell` 라우터 분기 + 5개 user-facing 전환(Activate/Back/Disconnect/LauncherClose/WorkspaceClose) 와이어, `appShellStore.screen` deprecate.
+  - **Sprint 155** — `window-lifecycle.ac141.test.tsx`의 5개 `it.todo()` 실제 회귀 변환, `appShellStore.screen` 좀비 필드 완전 제거, ADR 0011 → 0012 supersede.
