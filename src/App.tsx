@@ -5,7 +5,6 @@ import QuickOpen from "./components/shared/QuickOpen";
 import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
-import { useAppShellStore } from "./stores/appShellStore";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
@@ -102,25 +101,14 @@ export default function App() {
   // Cmd+N / Ctrl+N — new connection
   // Cmd+S / Ctrl+S — commit changes
   // Cmd+P / Ctrl+P — quick open
-  // Cmd+, / Ctrl+, — toggle Home/Workspace (sprint 133 — repurposed from the
-  //                  old `open-settings` event which had zero consumers).
+  // Sprint 154: Cmd+, no longer toggles Home/Workspace — Phase 12's real
+  // window split moved that distinction into Tauri windows. The chord is
+  // intentionally a no-op until a future sprint reclaims it.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
 
       const key = e.key;
-
-      // Sprint 133 — Cmd+, toggles between Home and Workspace screens.
-      // Repurposed from the dead `open-settings` event dispatch. The Shift /
-      // Alt guard prevents accidentally toggling on Cmd+Shift+, etc.
-      if (key === ",") {
-        if (e.shiftKey || e.altKey) return;
-        if (isEditableTarget(e.target)) return;
-        e.preventDefault();
-        const { screen: current, setScreen } = useAppShellStore.getState();
-        setScreen(current === "workspace" ? "home" : "workspace");
-        return;
-      }
 
       let eventName: string | null = null;
       if (key === "n") eventName = "new-connection";
@@ -140,10 +128,12 @@ export default function App() {
   }, []);
 
   // Sprint 133 — Cmd+1..9 / Ctrl+1..9: switch the active workspace tab to
-  // the N-th tab (1-indexed). No-op outside the workspace screen, when
-  // focus is inside an editable element, or when the requested index is
-  // out of range. Numpad digit keys (`Numpad1`..) are intentionally NOT
-  // matched — only the top-row digit keys, per the sprint design bar.
+  // the N-th tab (1-indexed). Sprint 154 — `App` is now mounted ONLY under
+  // the workspace window (per `AppRouter.tsx`), so the previous `screen`
+  // gate is redundant; the chord is naturally a no-op in the launcher
+  // window because `App` doesn't run there. Out-of-range indices and
+  // editable-target focus still short-circuit. Numpad digit keys
+  // (`Numpad1`..) are intentionally NOT matched — only top-row digits.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -151,8 +141,6 @@ export default function App() {
       const digit = e.key;
       if (digit < "1" || digit > "9") return;
       if (isEditableTarget(e.target)) return;
-      const { screen: current } = useAppShellStore.getState();
-      if (current !== "workspace") return;
       const index = Number(digit) - 1;
       const { tabs, setActiveTab } = useTabStore.getState();
       const tab = tabs[index];
@@ -317,14 +305,14 @@ export default function App() {
     return () => window.removeEventListener("quickopen-function", handler);
   }, []);
 
-  // Sprint 150 — Phase 12 multi-window split. Top-level page routing now
-  // lives in `AppRouter.tsx`, which picks Launcher vs Workspace based on the
-  // current Tauri `WebviewWindow.label`. `App` is mounted ONLY under the
-  // workspace branch, so the legacy `appShellStore.screen` toggle no longer
-  // drives which page renders here — `WorkspacePage` is the unconditional
-  // mount. The store's `setScreen` API is intentionally retained for
-  // backward compat in the Cmd+, handler and existing tests; Sprint 154
-  // will fully deprecate it.
+  // Sprint 154 — Phase 12 multi-window split is now fully wired. Top-level
+  // page routing lives in `AppRouter.tsx`, which picks Launcher vs Workspace
+  // based on the current Tauri `WebviewWindow.label`. `App` is mounted ONLY
+  // under the workspace branch, so `WorkspacePage` is the unconditional
+  // mount here. The previous `appShellStore.screen` field has been removed
+  // — "which screen am I on" is implied by the Tauri window label, and
+  // window lifecycle is wired through `@lib/window-controls` (Activate /
+  // Back / Disconnect / Close — see `window-transitions.test.tsx`).
 
   return (
     <ErrorBoundary>

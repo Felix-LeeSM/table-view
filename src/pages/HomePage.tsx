@@ -8,12 +8,13 @@ import {
   Plus,
   Sun,
 } from "lucide-react";
-import { useAppShellStore } from "@stores/appShellStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
+import { showWindow, hideWindow, focusWindow } from "@lib/window-controls";
+import { toast } from "@lib/toast";
 import { Button } from "@components/ui/button";
 import {
   Popover,
@@ -53,7 +54,6 @@ export default function HomePage() {
 
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
-  const setScreen = useAppShellStore((s) => s.setScreen);
 
   const themeId = useThemeStore((s) => s.themeId);
   const themeMode = useThemeStore((s) => s.mode);
@@ -107,7 +107,35 @@ export default function HomePage() {
       tabState.clearTabsForConnection(cid);
     }
     setFocusedConn(id);
-    setScreen("workspace");
+    // Sprint 154 — wire activation to real `WebviewWindow` lifecycle.
+    // Order: workspace.show() → workspace.setFocus() → launcher.hide().
+    // The order matters: `show` then `setFocus` ensures the workspace
+    // takes input focus the moment it becomes visible; `launcher.hide()`
+    // happens last so a `workspace.show()` rejection leaves the launcher
+    // on screen for retry (locked by AC-154-01 error path).
+    void (async () => {
+      try {
+        await showWindow("workspace");
+      } catch (e) {
+        toast.error(
+          `Failed to open workspace: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        return;
+      }
+      try {
+        await focusWindow("workspace");
+        await hideWindow("launcher");
+      } catch (e) {
+        // Best-effort post-show cleanup. The user already sees the
+        // workspace at this point, so a focus/hide failure is logged
+        // but does not surface a toast (would be misleading — the
+        // primary action succeeded).
+        console.warn(
+          "[home-activate] post-show cleanup failed:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    })();
   };
 
   const activeEntry =

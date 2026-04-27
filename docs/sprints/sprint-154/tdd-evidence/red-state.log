@@ -1,0 +1,77 @@
+
+ RUN  v4.1.3 /Users/felix/Desktop/study/view-table
+
+ ❯ src/__tests__/window-transitions.test.tsx (6 tests | 4 failed) 77ms
+     × AC-154-01: activating a connection from the launcher calls workspace.show() → setFocus() → launcher.hide() in order 28ms
+     × AC-154-02: 'Back to connections' calls workspace.hide() then launcher.show() and does NOT call disconnectFromDatabase 39ms
+     × AC-154-05: closing the workspace window (tauri://close-requested) is treated as Back — workspace.hide() then launcher.show(), NO disconnect 1ms
+     × AC-154-01 error path: when workspace.show() rejects on activation, launcher.hide() is NOT called (launcher remains visible for retry) 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/window-transitions.test.tsx > AC-154-*: Window lifecycle wiring > AC-154-01: activating a connection from the launcher calls workspace.show() → setFocus() → launcher.hide() in order
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'workspace' ]
+
+Number of calls: 0
+
+ ❯ src/__tests__/window-transitions.test.tsx:205:28
+    203|
+    204|     // All three seam calls must fire on the activation path.
+    205|     expect(showWindowMock).toHaveBeenCalledWith("workspace");
+       |                            ^
+    206|     expect(focusWindowMock).toHaveBeenCalledWith("workspace");
+    207|     expect(hideWindowMock).toHaveBeenCalledWith("launcher");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/__tests__/window-transitions.test.tsx > AC-154-*: Window lifecycle wiring > AC-154-02: 'Back to connections' calls workspace.hide() then launcher.show() and does NOT call disconnectFromDatabase
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'workspace' ]
+
+Number of calls: 0
+
+ ❯ src/__tests__/window-transitions.test.tsx:240:28
+    238|     });
+    239|
+    240|     expect(hideWindowMock).toHaveBeenCalledWith("workspace");
+       |                            ^
+    241|     expect(showWindowMock).toHaveBeenCalledWith("launcher");
+    242|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/__tests__/window-transitions.test.tsx > AC-154-*: Window lifecycle wiring > AC-154-05: closing the workspace window (tauri://close-requested) is treated as Back — workspace.hide() then launcher.show(), NO disconnect
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'workspace', Any<Function> ]
+
+Number of calls: 0
+
+ ❯ src/__tests__/window-transitions.test.tsx:362:34
+    360|     });
+    361|
+    362|     expect(onCloseRequestedMock).toHaveBeenCalledWith(
+       |                                  ^
+    363|       "workspace",
+    364|       expect.any(Function),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/__tests__/window-transitions.test.tsx > AC-154-*: Window lifecycle wiring > AC-154-01 error path: when workspace.show() rejects on activation, launcher.hide() is NOT called (launcher remains visible for retry)
+AssertionError: expected "vi.fn()" to be called with arguments: [ 'workspace' ]
+
+Number of calls: 0
+
+ ❯ src/__tests__/window-transitions.test.tsx:409:28
+    407|     });
+    408|
+    409|     expect(showWindowMock).toHaveBeenCalledWith("workspace");
+       |                            ^
+    410|     // The recovery: launcher MUST stay visible. Sprint 154 contract p…
+    411|     // this exact branch.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  12:50:39
+   Duration  805ms (transform 91ms, setup 40ms, import 251ms, tests 77ms, environment 363ms)
+

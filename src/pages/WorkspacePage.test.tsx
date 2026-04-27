@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspacePage from "./WorkspacePage";
-import { useAppShellStore } from "@stores/appShellStore";
 import { useTabStore } from "@stores/tabStore";
+import * as windowControls from "@lib/window-controls";
 
 vi.mock("@components/layout/Sidebar", () => ({
   default: () => <div data-testid="sidebar-mock" />,
@@ -12,8 +12,21 @@ vi.mock("@components/layout/MainArea", () => ({
   default: () => <div data-testid="main-area-mock" />,
 }));
 
+// Sprint 154 — `WorkspacePage` registers a `tauri://close-requested`
+// listener at mount and routes Back through the `@lib/window-controls`
+// seam. Stub the seam so the assertions can observe call shape directly
+// (no real Tauri runtime under jsdom).
+vi.mock("@lib/window-controls", () => ({
+  showWindow: vi.fn(() => Promise.resolve()),
+  hideWindow: vi.fn(() => Promise.resolve()),
+  focusWindow: vi.fn(() => Promise.resolve()),
+  closeWindow: vi.fn(() => Promise.resolve()),
+  exitApp: vi.fn(() => Promise.resolve()),
+  onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+  onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+}));
+
 function resetStores() {
-  useAppShellStore.setState({ screen: "workspace" });
   useTabStore.setState({ tabs: [], activeTabId: null });
 }
 
@@ -21,6 +34,9 @@ describe("WorkspacePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetStores();
+    vi.mocked(windowControls.showWindow).mockResolvedValue(undefined);
+    vi.mocked(windowControls.hideWindow).mockResolvedValue(undefined);
+    vi.mocked(windowControls.onCloseRequested).mockResolvedValue(() => {});
   });
 
   it("renders Sidebar and MainArea", () => {
@@ -44,17 +60,17 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("radio", { name: /schemas mode/i })).toBeNull();
   });
 
-  it("clicking [← Connections] flips the appShell screen to 'home'", () => {
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+  it("clicking [← Connections] hides the workspace window and shows the launcher (Sprint 154)", async () => {
     render(<WorkspacePage />);
 
-    act(() => {
+    await act(async () => {
       fireEvent.click(
         screen.getByRole("button", { name: /back to connections/i }),
       );
     });
 
-    expect(useAppShellStore.getState().screen).toBe("home");
+    expect(windowControls.hideWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("launcher");
   });
 
   it("clicking [← Connections] does NOT clear tabStore (tabs persist across screen swaps)", () => {

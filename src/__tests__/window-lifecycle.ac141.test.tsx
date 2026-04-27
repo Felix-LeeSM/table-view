@@ -22,6 +22,7 @@ import WorkspacePage from "@/pages/WorkspacePage";
 import { useAppShellStore } from "@stores/appShellStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
 vi.mock("@lib/tauri", async () => {
@@ -37,6 +38,23 @@ vi.mock("@lib/tauri", async () => {
     listTables: vi.fn().mockResolvedValue([]),
   };
 });
+
+// Sprint 154 — `@lib/window-controls` is the lifecycle seam. WorkspacePage
+// registers a `tauri://close-requested` listener at mount that must be
+// stubbed under jsdom. Activation/Back assertions are expressed against
+// the seam mocks. (The original AC-141-* assertions used
+// `appShellStore.screen`; Sprint 154 retired the field as a routing
+// primitive — see Sprint 154 contract AC-154-06. Sprint 155's `it.todo`
+// blocks at the bottom of this file are unaffected.)
+vi.mock("@lib/window-controls", () => ({
+  showWindow: vi.fn(() => Promise.resolve()),
+  hideWindow: vi.fn(() => Promise.resolve()),
+  focusWindow: vi.fn(() => Promise.resolve()),
+  closeWindow: vi.fn(() => Promise.resolve()),
+  exitApp: vi.fn(() => Promise.resolve()),
+  onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+  onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+}));
 
 // WorkspacePage transitively renders Sidebar + MainArea, both of which
 // pull schema/tab state we don't care about here. Stub them so the only
@@ -102,7 +120,11 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
 
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    // Sprint 154 — workspace activation now expressed via the
+    // `@lib/window-controls` seam. The original `screen === "workspace"`
+    // assertion is preserved as the legacy semantic intent ("the user
+    // is now on the workspace surface") via the seam call.
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
@@ -125,8 +147,11 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
       );
     });
 
-    // Screen reverted...
-    expect(useAppShellStore.getState().screen).toBe("home");
+    // Sprint 154 — surface revert is now expressed via the seam:
+    // workspace.hide() then launcher.show() (asserted in
+    // window-transitions.test.tsx with strict ordering).
+    expect(windowControls.hideWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("launcher");
     // ...but the pool was NOT torn down. This is the key spec invariant:
     // re-entering the workspace must be instantaneous (no reconnect).
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
@@ -167,7 +192,10 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
     connectMock.mockResolvedValue(undefined);
     disconnectMock.mockResolvedValue(undefined);
 
-    // Stage 1: boot — launcher equivalent.
+    // Stage 1: boot — launcher equivalent. Sprint 154 reads window context
+    // from `getCurrentWindowLabel()`, so this assertion is preserved as the
+    // legacy default ("nothing has activated the workspace yet"); the seam
+    // mocks below are pristine because no transition has fired.
     expect(useAppShellStore.getState().screen).toBe("home");
 
     // Seed a connected connection (this is what the launcher would show
@@ -183,17 +211,20 @@ describe("AC-141-*: Launcher/Workspace lifecycle (single-window stub)", () => {
     await act(async () => {
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
     unmount();
 
     // Stage 3: back — pool kept.
+    vi.mocked(windowControls.showWindow).mockClear();
+    vi.mocked(windowControls.hideWindow).mockClear();
     render(<WorkspacePage />);
     await act(async () => {
       fireEvent.click(
         screen.getByRole("button", { name: /^back to connections$/i }),
       );
     });
-    expect(useAppShellStore.getState().screen).toBe("home");
+    expect(windowControls.hideWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("launcher");
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
     });

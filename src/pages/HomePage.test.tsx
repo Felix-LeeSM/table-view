@@ -3,7 +3,22 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "./HomePage";
 import { useAppShellStore } from "@stores/appShellStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
+
+// Sprint 154 — HomePage's activation handler routes through
+// `@lib/window-controls` (workspace.show / focus / launcher.hide) instead
+// of the legacy `appShellStore.setScreen` toggle. Stub the seam so the
+// assertions can observe call shape directly.
+vi.mock("@lib/window-controls", () => ({
+  showWindow: vi.fn(() => Promise.resolve()),
+  hideWindow: vi.fn(() => Promise.resolve()),
+  focusWindow: vi.fn(() => Promise.resolve()),
+  closeWindow: vi.fn(() => Promise.resolve()),
+  exitApp: vi.fn(() => Promise.resolve()),
+  onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+  onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
+}));
 
 // jsdom shim for localStorage (project-wide pattern; mirrors Sidebar.test.tsx).
 {
@@ -96,6 +111,8 @@ function makeConnection(id: string): ConnectionConfig {
 }
 
 function resetStores() {
+  // Sprint 154 — `appShellStore.screen` is vestigial. Reset so legacy
+  // assertions still see a deterministic baseline.
   useAppShellStore.setState({ screen: "home" });
   useConnectionStore.setState({
     connections: [],
@@ -109,6 +126,9 @@ describe("HomePage", () => {
     vi.clearAllMocks();
     window.localStorage.clear();
     resetStores();
+    vi.mocked(windowControls.showWindow).mockResolvedValue(undefined);
+    vi.mocked(windowControls.hideWindow).mockResolvedValue(undefined);
+    vi.mocked(windowControls.focusWindow).mockResolvedValue(undefined);
   });
 
   it("renders the ConnectionList", () => {
@@ -197,11 +217,12 @@ describe("HomePage", () => {
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
     // Single-click must NOT swap to workspace — that is reserved for
-    // onActivate (double-click / Enter / context-menu Connect).
-    expect(useAppShellStore.getState().screen).toBe("home");
+    // onActivate (double-click / Enter / context-menu Connect). Sprint
+    // 154: assertion expressed against the seam (no `showWindow` call).
+    expect(windowControls.showWindow).not.toHaveBeenCalled();
   });
 
-  it("onActivate from ConnectionList swaps to workspace screen", () => {
+  it("onActivate from ConnectionList swaps to workspace screen", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -209,28 +230,24 @@ describe("HomePage", () => {
     });
     render(<HomePage />);
 
-    expect(useAppShellStore.getState().screen).toBe("home");
-    act(() => {
+    await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    // Sprint 154 — workspace activation now expressed via the seam.
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
   });
 
-  it("does not crash if onActivate is fired with an unknown connectionId", () => {
-    // Edge case from contract.md scenario list: "존재하지 않는 connection_id로
-    // setScreen 호출 시 graceful (Home 유지)" — HomePage doesn't gate on
-    // connection existence, but the swap itself must not throw and the
-    // store should accept any string id.
+  it("does not crash if onActivate is fired with an unknown connectionId", async () => {
+    // Edge case: HomePage doesn't gate on connection existence, but the
+    // swap itself must not throw and the store should accept any string
+    // id. Post-Sprint-154 the swap goes through the window-controls seam.
     render(<HomePage />);
-    act(() => {
+    await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
-    // We attempted a swap — that's still OK, the contract only requires
-    // that bad ids don't crash. The follow-up Workspace render handles
-    // missing connections gracefully via Sidebar's healing effect.
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
   });
 
   // ── Sprint 134: Home double-click swap (AC-S134-04) ──
@@ -242,7 +259,7 @@ describe("HomePage", () => {
   // explicitly: both `focusedConnId` AND `screen` must update in one go,
   // and a previously-focused connection must be replaced by the new one.
 
-  it("double-click swap from connectionA to connectionB updates focusedConnId AND screen (AC-S134-04)", () => {
+  it("double-click swap from connectionA to connectionB updates focusedConnId AND screen (AC-S134-04)", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("c1"), makeConnection("c2")],
       activeStatuses: {
@@ -251,43 +268,40 @@ describe("HomePage", () => {
       },
       focusedConnId: "c1",
     });
-    useAppShellStore.setState({ screen: "home" });
     render(<HomePage />);
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    expect(useAppShellStore.getState().screen).toBe("home");
 
     // The mocked ConnectionList exposes a button that fires onActivate("c1").
     // For this test we simulate the mock issuing onActivate("c1") for an
     // already-focused connection — the ConnectionItem-level swap-to-c2 path
     // is wired through HomePage in production, but here we hard-code the
     // expectation: any `onActivate(id)` call must (a) overwrite focusedConnId
-    // and (b) flip the screen, regardless of the previous focus.
-    act(() => {
+    // and (b) flip the surface (Sprint 154 — expressed via seam call).
+    await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
   });
 
-  it("swap is idempotent when activating the already-focused connection (AC-S134-04 boundary)", () => {
+  it("swap is idempotent when activating the already-focused connection (AC-S134-04 boundary)", async () => {
     useConnectionStore.setState({
       connections: [makeConnection("c1")],
       activeStatuses: { c1: { type: "connected" } },
       focusedConnId: "c1",
     });
-    useAppShellStore.setState({ screen: "home" });
     render(<HomePage />);
 
-    act(() => {
+    await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
     // The activation should swap to workspace even when the connection
-    // was already focused (boundary case from the contract: "active
-    // connection 자기 자신 double-click → no-op (또는 swap to workspace)").
+    // was already focused (boundary case: "active connection 자기 자신
+    // double-click → swap to workspace"). Sprint 154 — expressed via seam.
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
-    expect(useAppShellStore.getState().screen).toBe("workspace");
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
   });
 });

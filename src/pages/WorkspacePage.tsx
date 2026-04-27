@@ -1,27 +1,70 @@
+import { useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
 import { Button } from "@components/ui/button";
-import { useAppShellStore } from "@stores/appShellStore";
+import { hideWindow, showWindow, onCloseRequested } from "@lib/window-controls";
 
 /**
- * WorkspacePage — multi-paradigm tab + sidebar work surface (sprint 125).
+ * WorkspacePage — multi-paradigm tab + sidebar work surface.
  *
- * Renders the existing `Sidebar` (now schemas-only — the
- * connections-mode/SidebarModeToggle branch has been removed for sprint 125)
- * alongside `MainArea`, with a `[← Connections]` button stacked above the
- * sidebar so the user can swap back to Home without losing tab state.
+ * Renders the existing `Sidebar` alongside `MainArea`, with a
+ * `[← Connections]` button stacked above the sidebar so the user can swap
+ * back to the launcher without losing tab state.
  *
- * Tab persistence happens entirely inside `tabStore` — this component does
- * not touch tabs when swapping screens, so re-entry restores whichever tab
- * was active before the user clicked `[← Connections]`.
+ * Sprint 154 wires the lifecycle to real Tauri windows:
  *
- * Sprint 126+ will introduce a `WorkspaceToolbar` and a paradigm-aware
- * sidebar slot. Sprint 125 deliberately keeps the existing Sidebar shell so
- * tab-store / schema-store invariants stay flat.
+ *   - `handleBackToConnections` (toolbar back button) hides the workspace
+ *     window then shows the launcher window. The connection pool is
+ *     deliberately NOT torn down — Back ≠ Disconnect. Re-entry from the
+ *     launcher must be instant.
+ *
+ *   - The `tauri://close-requested` listener treats the OS-level close
+ *     as identical to Back (AC-154-05): hide workspace + show launcher,
+ *     no disconnect. The default close behaviour (which would actually
+ *     close the window) is prevented by the `onCloseRequested` seam.
+ *
+ * Disconnect (which DOES tear down the pool) is owned by the
+ * `DisconnectButton` in `WorkspaceToolbar` and is intentionally NOT a
+ * window-level affordance — pool eviction must not cascade into a window
+ * hide.
  */
 export default function WorkspacePage() {
-  const setScreen = useAppShellStore((s) => s.setScreen);
+  // Back-to-connections — separate handler from disconnect. Calling order
+  // is asserted in window-transitions.test.tsx (AC-154-02).
+  const handleBackToConnections = async () => {
+    try {
+      await hideWindow("workspace");
+      await showWindow("launcher");
+    } catch (e) {
+      console.warn(
+        "[workspace-back] window transition failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  };
+
+  // Register the `tauri://close-requested` listener with Back semantics.
+  // Sprint 154 contract pins this — closing the workspace window must NOT
+  // tear down the connection pool; it must mirror the explicit Back path.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    void (async () => {
+      const fn = await onCloseRequested("workspace", () =>
+        handleBackToConnections(),
+      );
+      if (cancelled) {
+        fn();
+        return;
+      }
+      unlisten = fn;
+    })();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, []);
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
@@ -37,7 +80,7 @@ export default function WorkspacePage() {
             className="text-muted-foreground hover:text-secondary-foreground"
             aria-label="Back to connections"
             title="Back to connections"
-            onClick={() => setScreen("home")}
+            onClick={handleBackToConnections}
           >
             <ArrowLeft />
             <span className="text-xs">Connections</span>
