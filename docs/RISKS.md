@@ -2,7 +2,7 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-25 (Sprint 116 — UI evaluation follow-up 링크 추가)
+Last updated: 2026-04-27 (Sprint 149 — RISK-025 deferred 추가, multi-window split phase 12 이월)
 
 ## 참고 문서
 
@@ -12,10 +12,10 @@ Last updated: 2026-04-25 (Sprint 116 — UI evaluation follow-up 링크 추가)
 
 | Status    | Count |
 |-----------|-------|
-| Active    | 14    |
+| Active    | 15    |
 | Resolved  | 8     |
-| Deferred  | 1     |
-| **Total** | **23** |
+| Deferred  | 2     |
+| **Total** | **25** |
 
 ---
 
@@ -47,6 +47,7 @@ Last updated: 2026-04-25 (Sprint 116 — UI evaluation follow-up 링크 추가)
 | RISK-022 | E2E 우클릭 미지원 (tauri-driver W3C Actions API 미구현) — 3개 context menu 테스트 skip  | active    | e2e               | E2E 안정화    | tauri-driver 한계; skip 처리                               |
 | RISK-023 | E2E 테스트 상태 격리 부족 (maxInstances: 1, 같은 앱 인스턴스 재사용)                      | active    | e2e               | E2E 안정화    | beforeEach에서 상태 복구 필요                              |
 | RISK-024 | fireEvent 호출 act() 미래핑 — React state update 경고 가능                              | resolved  | frontend/testing  | 24–40         | act() 래핑 적용 완료                                      |
+| RISK-025 | Multi-window split (launcher 720×560 fixed / workspace 1280×800 resizable) phase 12 이월 — single-window stub으로 lifecycle invariants만 잠금 | deferred  | frontend/architecture | 149       | ADR 0011 + `it.todo()` 5개 + findings Deferred Work 4중 잠금 |
 
 ---
 

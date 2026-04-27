@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-04-25
+updated: 2026-04-27
 ---
 
 # ADR 인덱스
@@ -20,6 +20,7 @@ updated: 2026-04-25
 | [0008](./0008-styling-tokens-over-arbitrary-px/memory.md) | Tailwind 크기·간격: @theme 토큰 + 기본 스케일, arbitrary px는 로컬 ESLint 룰로 차단 | Accepted | 2026-04-24 | — |
 | [0009](./0009-null-vs-empty-string-tri-state/memory.md) | DataGrid 편집: SQL NULL vs 빈 문자열을 `string \| null` tri-state로 구분 | Accepted | 2026-04-24 | — |
 | [0010](./0010-paradigm-ui-staged-evolution/memory.md) | paradigm-aware UI는 폴더 재조직 먼저, capability adapter는 ES/redis 도입 시 진화 | Accepted | 2026-04-25 | — |
+| [0011](./0011-single-window-stub-for-launcher-workspace/memory.md) | Sprint 149 — launcher/workspace lifecycle은 single-window stub으로 우선 잠그고 실제 윈도우 분리는 phase 12 이월 | Accepted | 2026-04-27 | — |
 
 ## 역사 (Superseded / Deprecated)
 
