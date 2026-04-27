@@ -34,8 +34,16 @@ vi.mock("./lib/tauri", () => ({
   moveConnectionToGroup: vi.fn(() => Promise.resolve()),
 }));
 
+// Sprint 153: stores now opt into the cross-window bridge at module load
+// (mruStore, themeStore, favoritesStore unconditionally; tabStore when
+// `getCurrentWindowLabel() === "workspace"`). The bridge subscribes to each
+// store and calls `emit(channel, envelope)` on every state change. Without
+// an `emit` stub here, the first synchronous setState during AppRouter boot
+// throws TypeError("emit is not a function"). Sprint 152 set the precedent
+// with the same one-line addition in connectionStore.test.ts.
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
+  emit: vi.fn(() => Promise.resolve()),
 }));
 
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {

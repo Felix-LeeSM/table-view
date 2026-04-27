@@ -39,8 +39,14 @@ vi.mock("@lib/window-label", () => ({
 // AppRouter's launcher branch boots the connection store via tauri IPC. The
 // router test does NOT exercise that surface — it only asserts the boot
 // dispatcher picks the correct page — so stub the IPC-touching imports.
+// Sprint 153: mruStore/themeStore/favoritesStore now wire the cross-window
+// bridge at module load and subscribe to setState, calling `emit(...)` on
+// every change. AppRouter's launcher branch transitively imports those
+// stores, so a synchronous setState during boot would throw without an
+// `emit` stub. Sprint 152 set the precedent in connectionStore.test.ts.
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
+  emit: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@lib/tauri", () => ({
   listConnections: vi.fn(() => Promise.resolve([])),

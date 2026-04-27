@@ -4,6 +4,7 @@ import {
   type TableTab,
   type QueryTab,
   type Tab,
+  SYNCED_KEYS,
 } from "./tabStore";
 import type { QueryState } from "@/types/query";
 import type { SortInfo } from "@/types/schema";
@@ -1746,6 +1747,30 @@ describe("tabStore", () => {
       expect(qt.paradigm).toBe("document");
       // Document tabs only inherit a database when the caller passes one.
       expect(qt.database).toBeUndefined();
+    });
+  });
+
+  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  //
+  // `SYNCED_KEYS` pins which top-level state keys ride the `tab-sync`
+  // channel. Critical exclusions:
+  //  - `dirtyTabIds` is a `Set<string>` and is NOT JSON-serializable, so
+  //    broadcasting it would corrupt the receiver's state.
+  //  - `closedTabHistory` is per-window undo scope — a Cmd-Shift-T in one
+  //    window must not resurrect a tab the OTHER window closed.
+  // The bridge itself only attaches in the workspace window (guarded by
+  // `getCurrentWindowLabel()`); this regression pins the allowlist shape.
+  describe("SYNCED_KEYS allowlist (AC-153-06)", () => {
+    it("exposes exactly the cross-window-synced tab keys", () => {
+      expect([...SYNCED_KEYS]).toEqual(["tabs", "activeTabId"]);
+    });
+
+    it("does NOT include dirtyTabIds (Set, non-serializable)", () => {
+      expect(SYNCED_KEYS).not.toContain("dirtyTabIds");
+    });
+
+    it("does NOT include closedTabHistory (window-local undo scope)", () => {
+      expect(SYNCED_KEYS).not.toContain("closedTabHistory");
     });
   });
 });

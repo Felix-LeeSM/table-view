@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
+import { getCurrentWindowLabel } from "@lib/window-label";
 
 /**
  * Sprint 119 (#SHELL-1) — MRU (most-recently-used) connection store.
@@ -45,6 +47,25 @@ interface MruState {
   loadPersistedMru: () => void;
 }
 
+/**
+ * Sprint 153 — cross-window broadcast allowlist.
+ *
+ * Why `lastUsedConnectionId` is synced:
+ *  - The launcher's "Recent" rail and the workspace's EmptyState CTA both
+ *    read this value to highlight / default-target the connection the user
+ *    most recently engaged with. Without sync, opening a tab in the
+ *    workspace would leave the launcher's rail stale (and vice versa).
+ *  - The value is a plain `string | null` — JSON-stable and free of
+ *    secrets (it's just a connection id, not a credential).
+ *
+ * No keys are excluded — `MruState` only carries this single piece of
+ * shared state, plus the actions (which are not state and therefore not
+ * subject to the bridge).
+ */
+export const SYNCED_KEYS: ReadonlyArray<keyof MruState> = [
+  "lastUsedConnectionId",
+] as const;
+
 export const useMruStore = create<MruState>((set) => ({
   lastUsedConnectionId: null,
 
@@ -57,6 +78,27 @@ export const useMruStore = create<MruState>((set) => ({
     set({ lastUsedConnectionId: loadPersistedMru() });
   },
 }));
+
+/**
+ * Sprint 153 — opt the MRU store into the Sprint 151 bridge so launcher
+ * and workspace observe the same `lastUsedConnectionId`. Attached ONCE
+ * at module load (mirrors `connectionStore`'s pattern). Symmetric: both
+ * windows attach unconditionally — either side may mark a connection
+ * used and the other should see the result.
+ *
+ * `originId` falls back to `"unknown"` when the Tauri window label is
+ * unavailable (vitest jsdom). Sprint 152 evaluator advisory #1 — using
+ * `"unknown"` instead of `"test"` keeps the loop guard distinct between
+ * any future stores that share a fallback in the same process.
+ */
+void attachZustandIpcBridge<MruState>(useMruStore, {
+  channel: "mru-sync",
+  syncKeys: SYNCED_KEYS,
+  originId: getCurrentWindowLabel() ?? "unknown",
+}).catch(() => {
+  // best-effort: if the listen registration fails (e.g. Tauri runtime not
+  // available outside vitest mocks), the store still works window-local.
+});
 
 /**
  * Reset hook for tests. Wipes both the in-memory state and the

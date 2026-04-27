@@ -4,6 +4,8 @@ import type { QueryState } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
 import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
+import { getCurrentWindowLabel } from "@lib/window-label";
 
 /**
  * Sprint 130 — resolve the active database for `connectionId`.
@@ -661,6 +663,62 @@ export const useTabStore = create<TabState>((set, get) => ({
 useTabStore.subscribe((state) => {
   debouncePersist(state.tabs, state.activeTabId);
 });
+
+/**
+ * Sprint 153 — cross-window broadcast allowlist for the tab store.
+ *
+ * Why these keys:
+ *  - `tabs` — the workspace tab list. Must be identical across workspace
+ *    instances so reopening the workspace window doesn't clobber state.
+ *    Plain JSON-serializable (TableTab / QueryTab unions of primitives,
+ *    arrays, optional records).
+ *  - `activeTabId` — the focused tab's id (`string | null`). Required so
+ *    the workspace surfaces the same active tab on either side.
+ *
+ * Why other keys are EXCLUDED:
+ *  - `closedTabHistory` — window-local "reopen-last-closed" stack. A user
+ *    closing a tab in one window should not surface that tab in another
+ *    window's reopen history; that would conflate two timelines.
+ *  - `dirtyTabIds` — Set instance, not JSON-serializable. The grid
+ *    publisher effect re-marks dirty tabs locally as the user types, so
+ *    the value always reflects the local edit buffer; broadcasting it
+ *    would be both technically lossy (Set → empty object on the wire)
+ *    and semantically wrong (other window's edits aren't this window's).
+ */
+export const SYNCED_KEYS: ReadonlyArray<keyof TabState> = [
+  "tabs",
+  "activeTabId",
+] as const;
+
+/**
+ * Sprint 153 — opt the tab store into the Sprint 151 bridge with
+ * **workspace-only** semantics. Two reasons we use an attach guard
+ * (`getCurrentWindowLabel() === "workspace"`) rather than relying solely
+ * on the bridge's loop guard:
+ *
+ *  1. **No leak into the launcher.** The launcher renders connection
+ *     management UI, never the tab bar. If the launcher attached the
+ *     bridge, every workspace tab mutation would write into the
+ *     launcher's `tabs` field. That has no UI consequence today but is
+ *     wasted memory and would surface the moment someone reads
+ *     `useTabStore` from a launcher component.
+ *
+ *  2. **Explicit semantics.** Sprint 154's real-window lifecycle hands
+ *     ownership of "tabs" to the workspace exclusively. Encoding that
+ *     in the attach point makes the contract reviewable in this file
+ *     instead of requiring grep-coverage of every `useTabStore` caller.
+ *
+ * Sprint 151 bridge primitive: `src/lib/zustand-ipc-bridge.ts`.
+ */
+if (getCurrentWindowLabel() === "workspace") {
+  void attachZustandIpcBridge<TabState>(useTabStore, {
+    channel: "tab-sync",
+    syncKeys: SYNCED_KEYS,
+    originId: getCurrentWindowLabel() ?? "unknown",
+  }).catch(() => {
+    // best-effort: see mruStore.ts for the trade-off rationale.
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Selector helpers (sprint 127)

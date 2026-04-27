@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useMruStore, __resetMruStoreForTests } from "./mruStore";
+import { useMruStore, __resetMruStoreForTests, SYNCED_KEYS } from "./mruStore";
 
 // Sprint 119 (#SHELL-1) — MRU connection store unit tests. Covers initial
 // state, action side-effect (state + localStorage), and boot-time restore.
@@ -63,5 +63,17 @@ describe("mruStore", () => {
 
     expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  //
+  // `SYNCED_KEYS` pins which top-level state keys are broadcast on the
+  // `mru-sync` channel. Adding a new key to `MruState` MUST be a deliberate
+  // opt-in/opt-out decision — silently leaking a sensitive new field across
+  // windows is the failure mode this regression guards against.
+  describe("SYNCED_KEYS allowlist (AC-153-06)", () => {
+    it("exposes exactly the cross-window-synced key", () => {
+      expect([...SYNCED_KEYS]).toEqual(["lastUsedConnectionId"]);
+    });
   });
 });

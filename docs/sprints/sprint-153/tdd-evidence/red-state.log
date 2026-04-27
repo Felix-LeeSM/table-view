@@ -1,0 +1,182 @@
+# Sprint 153 — TDD red-state evidence
+#
+# Captured BEFORE the per-store wirings shipped. Date: 2026-04-27.
+#
+# Command: `pnpm vitest run src/__tests__/cross-window-store-sync.test.tsx`
+#
+# Result: 9 failed / 6 passed of 15 cases.
+#
+# The 9 failures map directly to the wirings Sprint 153 introduces:
+#  - tabStore: AC-153-01a (workspace emit), AC-153-01b (inbound apply),
+#    AC-153-06 (allowlist), AC-153-01c (launcher attach guard) all need the
+#    bridge attach + allowlist constants in tabStore.ts.
+#  - mruStore: AC-153-02a (emit) + AC-153-02b (inbound apply).
+#  - themeStore: AC-153-03a (emit) + AC-153-03b (inbound apply).
+#  - favoritesStore: AC-153-04a (emit) + AC-153-04b (inbound apply).
+#
+# The 6 passing cases are tests of "no-op" behaviour:
+#  - error-path tests (malformed payloads ignored) trivially pass when no
+#    listener is attached.
+#  - the appShellStore "no broadcast" test trivially passes when no bridge
+#    exists.
+# These are sanity guards rather than wiring proofs.
+#
+# After the implementation in Sprint 153 lands, the same command turns
+# 15/15 green — see handoff for re-execution evidence.
+#
+# ----------------------------------------------------------------------
+
+ RUN  v4.1.3 /Users/felix/Desktop/study/view-table
+
+ ❯ src/__tests__/cross-window-store-sync.test.tsx (15 tests | 9 failed) 10ms
+       × AC-153-01a: workspace mutation of `tabs` emits on `tab-sync` 3ms
+       × AC-153-01b: a remote workspace emit applies to the local workspace store 1ms
+       × AC-153-06 (tabStore): allowlist excludes window-local fields 0ms
+       × AC-153-02a: workspace markConnectionUsed emits on `mru-sync` 0ms
+       × AC-153-02b: an inbound `mru-sync` payload is applied locally 0ms
+       × AC-153-03a: setMode emits on `theme-sync` carrying themeId + mode 1ms
+       × AC-153-03b: an inbound `theme-sync` payload converges the local store 1ms
+       × AC-153-04a: addFavorite emits on `favorites-sync` 0ms
+       × AC-153-04b: an inbound `favorites-sync` payload converges the local store 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > tabStore (workspace-only) > AC-153-01a: workspace mutation of `tabs` emits on `tab-sync`
+AssertionError: expected undefined to be defined
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:217:24
+    215|         (call) => call[0] === "tab-sync",
+    216|       );
+    217|       expect(syncCall).toBeDefined();
+       |                        ^
+    218|       const payload = syncCall![1] as {
+    219|         origin: string;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > tabStore (workspace-only) > AC-153-01b: a remote workspace emit applies to the local workspace store
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:249:26
+    247|
+    248|       const state = useTabStore.getState();
+    249|       expect(state.tabs).toHaveLength(1);
+       |                          ^
+    250|       expect(state.tabs[0]!.id).toBe("tab-remote");
+    251|       expect(state.activeTabId).toBe("tab-remote");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > tabStore (workspace-only) > AC-153-06 (tabStore): allowlist excludes window-local fields
+AssertionError: expected undefined to be defined
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:281:24
+    279|         (call) => call[0] === "tab-sync",
+    280|       );
+    281|       expect(syncCall).toBeDefined();
+       |                        ^
+    282|       const payload = syncCall![1] as {
+    283|         origin: string;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > mruStore (symmetric) > AC-153-02a: workspace markConnectionUsed emits on `mru-sync`
+AssertionError: expected undefined to be defined
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:412:24
+    410|         (call) => call[0] === "mru-sync",
+    411|       );
+    412|       expect(syncCall).toBeDefined();
+       |                        ^
+    413|       const payload = syncCall![1] as {
+    414|         origin: string;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > mruStore (symmetric) > AC-153-02b: an inbound `mru-sync` payload is applied locally
+AssertionError: expected null to be 'c-from-launcher' // Object.is equality
+
+- Expected:
+"c-from-launcher"
+
++ Received:
+null
+
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:428:59
+    426|       await Promise.resolve();
+    427|
+    428|       expect(useMruStore.getState().lastUsedConnectionId).toBe(
+       |                                                           ^
+    429|         "c-from-launcher",
+    430|       );
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > themeStore (symmetric) > AC-153-03a: setMode emits on `theme-sync` carrying themeId + mode
+AssertionError: expected undefined to be defined
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:461:24
+    459|         (call) => call[0] === "theme-sync",
+    460|       );
+    461|       expect(syncCall).toBeDefined();
+       |                        ^
+    462|       const payload = syncCall![1] as {
+    463|         origin: string;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > themeStore (symmetric) > AC-153-03b: an inbound `theme-sync` payload converges the local store
+AssertionError: expected 'slate' to be 'github' // Object.is equality
+
+Expected: "github"
+Received: "slate"
+
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:481:29
+    479|
+    480|       const state = useThemeStore.getState();
+    481|       expect(state.themeId).toBe("github");
+       |                             ^
+    482|       expect(state.mode).toBe("light");
+    483|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > favoritesStore (symmetric) > AC-153-04a: addFavorite emits on `favorites-sync`
+AssertionError: expected undefined to be defined
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:516:24
+    514|         (call) => call[0] === "favorites-sync",
+    515|       );
+    516|       expect(syncCall).toBeDefined();
+       |                        ^
+    517|       const payload = syncCall![1] as {
+    518|         origin: string;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  src/__tests__/cross-window-store-sync.test.tsx > cross-window store sync (Sprint 153) > favoritesStore (symmetric) > AC-153-04b: an inbound `favorites-sync` payload converges the local store
+AssertionError: expected [] to have a length of 1 but got +0
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/__tests__/cross-window-store-sync.test.tsx:543:31
+    541|
+    542|       const state = useFavoritesStore.getState();
+    543|       expect(state.favorites).toHaveLength(1);
+       |                               ^
+    544|       expect(state.favorites[0]!.name).toBe("Remote");
+    545|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 6 passed (15)
+   Start at  12:24:25
+   Duration  543ms (transform 64ms, setup 38ms, import 67ms, tests 10ms, environment 361ms)
+

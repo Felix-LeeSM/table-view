@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { useThemeStore } from "./themeStore";
+import { useThemeStore, SYNCED_KEYS } from "./themeStore";
 import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
 
 const localStorageMock = (() => {
@@ -133,5 +133,21 @@ describe("themeStore", () => {
     expect(useThemeStore.getState().mode).toBe("dark");
     expect(document.documentElement.getAttribute("data-mode")).toBe("dark");
     restore();
+  });
+
+  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  //
+  // `SYNCED_KEYS` pins which top-level state keys ride the `theme-sync`
+  // channel. `resolvedMode` is intentionally EXCLUDED — it is derived per
+  // window from `prefers-color-scheme`, so broadcasting it would let one
+  // window's system-theme interpretation overwrite the other's.
+  describe("SYNCED_KEYS allowlist (AC-153-06)", () => {
+    it("exposes exactly the user-selected theme keys", () => {
+      expect([...SYNCED_KEYS]).toEqual(["themeId", "mode"]);
+    });
+
+    it("does NOT include resolvedMode (per-window derived)", () => {
+      expect(SYNCED_KEYS).not.toContain("resolvedMode");
+    });
   });
 });

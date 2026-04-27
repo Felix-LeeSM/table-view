@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { useFavoritesStore } from "./favoritesStore";
+import { useFavoritesStore, SYNCED_KEYS } from "./favoritesStore";
 
 describe("favoritesStore", () => {
   let storage: Record<string, string>;
@@ -270,6 +270,17 @@ describe("favoritesStore", () => {
       // This test should start with empty favorites due to beforeEach reset
       const state = useFavoritesStore.getState();
       expect(state.favorites).toHaveLength(0);
+    });
+  });
+
+  // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
+  //
+  // `SYNCED_KEYS` pins which top-level state keys ride the `favorites-sync`
+  // channel. The `favorites` array is the only piece of shared state in the
+  // store — actions are not subject to the bridge.
+  describe("SYNCED_KEYS allowlist (AC-153-06)", () => {
+    it("exposes exactly the favorites array as the synced key", () => {
+      expect([...SYNCED_KEYS]).toEqual(["favorites"]);
     });
   });
 });
