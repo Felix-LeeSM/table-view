@@ -1097,9 +1097,7 @@ describe("ConnectionDialog", () => {
       // SQLite form: Port field is absent.
       expect(screen.queryByLabelText("Port")).not.toBeInTheDocument();
       // Database file picker is present in its place.
-      expect(
-        screen.getByLabelText("SQLite database file path"),
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
 
       // Now switch sqlite → mysql; port must auto-update without modal.
       await user.click(trigger);
@@ -1291,9 +1289,7 @@ describe("ConnectionDialog", () => {
       await user.click(screen.getByRole("option", { name: "SQLite" }));
 
       // File path field is the sole DBMS-specific input.
-      expect(
-        screen.getByLabelText("SQLite database file path"),
-      ).toBeInTheDocument();
+      expect(screen.getByLabelText("Database file")).toBeInTheDocument();
 
       // Network/auth fields are not rendered.
       expect(screen.queryByLabelText("Host")).not.toBeInTheDocument();
