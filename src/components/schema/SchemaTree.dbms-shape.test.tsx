@@ -96,8 +96,90 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     });
 
     // The schema row IS rendered for PG (the schema button is the
-    // "level 2" of the 3-level tree).
+    // "level 2" of the 3-level tree). Sprint 144 (AC-145-1) — every PG
+    // schema now auto-expands on first paint, so the existing schema is
+    // already aria-expanded="true" without a user click.
     expect(screen.getByLabelText("public schema")).toBeInTheDocument();
+    expect(screen.getByLabelText("public schema")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Sprint 144 (AC-145-1) — PG: every schema auto-expands on first paint
+  // ─────────────────────────────────────────────────────────────────────
+  it("PG auto-expands every schema returned by the catalog on first paint (AC-145-1)", async () => {
+    // The 2026-04-27 user feedback complained that connecting to a PG
+    // database with multiple custom schemas required clicking every
+    // chevron individually before any tables appeared. The unified-view
+    // contract (Q4=B) wants every schema visible at once.
+    useConnectionStore.setState({
+      connections: [makeConnection("pg-multi", "postgresql")],
+    });
+    setSchemaStoreState({
+      schemas: {
+        "pg-multi": [
+          { name: "public" },
+          { name: "analytics" },
+          { name: "audit" },
+        ],
+      },
+      tables: {
+        "pg-multi:public": [
+          { name: "users", schema: "public", row_count: null },
+        ],
+        "pg-multi:analytics": [
+          { name: "events", schema: "analytics", row_count: null },
+        ],
+        "pg-multi:audit": [{ name: "trail", schema: "audit", row_count: null }],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="pg-multi" />);
+    });
+
+    for (const name of ["public", "analytics", "audit"]) {
+      expect(screen.getByLabelText(`${name} schema`)).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
+    }
+    // Every table row is reachable without a single click.
+    expect(screen.getByLabelText("users table")).toBeInTheDocument();
+    expect(screen.getByLabelText("events table")).toBeInTheDocument();
+    expect(screen.getByLabelText("trail table")).toBeInTheDocument();
+  });
+
+  it("PG schema auto-expand remains togglable via click (collapse → expand) (AC-145-1)", async () => {
+    // Auto-expansion is the *initial* state, not a forced one — the user
+    // still needs to be able to collapse a schema row to focus on
+    // another. This pins the toggle behavior alongside the auto-expand
+    // contract so a future regression that hard-pins all schemas open
+    // surfaces here.
+    useConnectionStore.setState({
+      connections: [makeConnection("pg-toggle", "postgresql")],
+    });
+    setSchemaStoreState({
+      schemas: { "pg-toggle": [{ name: "public" }] },
+      tables: {
+        "pg-toggle:public": [
+          { name: "users", schema: "public", row_count: null },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="pg-toggle" />);
+    });
+
+    const schemaBtn = screen.getByLabelText("public schema");
+    expect(schemaBtn).toHaveAttribute("aria-expanded", "true");
+
+    await act(async () => {
+      schemaBtn.click();
+    });
     expect(screen.getByLabelText("public schema")).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -219,5 +301,88 @@ describe("SchemaTree — DBMS-shape-aware tree depth (Sprint 135)", () => {
     // throwing if SchemaTree is somehow mounted against them.
     expect(resolveRdbTreeShape("mongodb")).toBe("with-schema");
     expect(resolveRdbTreeShape("redis")).toBe("with-schema");
+  });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Sprint 144 (AC-145-3) — Functions category does not push the sidebar
+  // wider when expanded.
+  //
+  // jsdom doesn't run real layout, so a literal getBoundingClientRect()
+  // delta-check would assert nothing meaningful. Instead, this test pins
+  // the structural invariants that prevent horizontal overflow:
+  //
+  //   1. The Functions category content wrapper is `data-category-overflow=
+  //      "capped"` so the items list scrolls *vertically* — never pushes
+  //      out horizontally.
+  //   2. Every function row button carries `w-full` (button width = parent
+  //      width, not content-driven).
+  //   3. The function-arguments cell (the only span with potentially
+  //      unbounded text) carries `truncate` so a long signature gets
+  //      ellipsized rather than overflowing.
+  //
+  // Together these three invariants guarantee the ≤1px width delta the
+  // spec requires; the e2e suite can layer a real-browser width check
+  // on top in a later sprint.
+  // ─────────────────────────────────────────────────────────────────────
+  it("expanding the Functions category keeps the row layout overflow-safe (AC-145-3)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("pg-fn", "postgresql")],
+    });
+    setSchemaStoreState({
+      schemas: { "pg-fn": [{ name: "public" }] },
+      tables: {
+        "pg-fn:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+      functions: {
+        "pg-fn:public": [
+          {
+            name: "compute_quarterly_revenue_with_currency_normalization",
+            schema: "public",
+            arguments:
+              "(start_date date, end_date date, target_currency text DEFAULT 'USD'::text)",
+            return_type: "numeric",
+            kind: "function",
+          },
+          {
+            name: "log_user_event",
+            schema: "public",
+            arguments: "(user_id uuid, event_name text, payload jsonb)",
+            return_type: "void",
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="pg-fn" />);
+    });
+
+    // Schema is auto-expanded (sprint 144 contract); click Functions to
+    // expand the category and surface the function rows.
+    const fnCategoryBtn = screen.getByLabelText("Functions in public");
+    await act(async () => {
+      fnCategoryBtn.click();
+    });
+
+    // (1) The Functions category wrapper carries the "capped" attribute
+    //     which maps to `max-h-[50vh] + overflow-y-auto` (no horizontal
+    //     scroll). This keeps long lists vertical-only.
+    const cappedWrappers = document.querySelectorAll(
+      '[data-category-overflow="capped"]',
+    );
+    expect(cappedWrappers.length).toBeGreaterThan(0);
+
+    // (2) Every function row button uses `w-full`.
+    const longFnBtn = screen.getByLabelText(
+      "compute_quarterly_revenue_with_currency_normalization function",
+    );
+    expect(longFnBtn.className).toContain("w-full");
+
+    // (3) The arguments span (the only potentially unbounded text) is
+    //     truncated.
+    const argsSpan = longFnBtn.querySelector("span.truncate");
+    expect(argsSpan).not.toBeNull();
+    expect(argsSpan?.className).toContain("truncate");
   });
 });

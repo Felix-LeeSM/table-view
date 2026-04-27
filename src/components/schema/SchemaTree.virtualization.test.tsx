@@ -177,11 +177,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Expand the schema so all 1000 table rows enter the visible-rows list.
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
+    // Sprint 144 (AC-145-1): schemas auto-expand on mount, so all 1000 table
+    // rows are already in the visible-rows list — no explicit click needed.
 
     // After expansion the visible-rows list is roughly:
     //   schema (1) + 4 categories + search input (1) + 1000 table items
@@ -212,14 +209,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Re-query the schema button after every state change because the eager
-    // ↔ virtualized branches render distinct React trees, so an element ref
-    // captured in one branch is detached after the threshold flips.
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
-    });
-
-    // Some virtualized table rows must be in the DOM after expand.
+    // Sprint 144 (AC-145-1): schema auto-expands on mount, so virtualized
+    // table rows must already be in the DOM without an explicit click.
     expect(
       screen.getAllByLabelText(/^table_\d+ table$/).length,
     ).toBeGreaterThan(0);
@@ -227,6 +218,9 @@ describe("SchemaTree virtualization (sprint-115)", () => {
     // Collapse — the expanded categories and items vanish from the visible
     // list, the flat list drops below the threshold, and we fall back to
     // the eager nested render (which renders just the schema row).
+    // Re-query the schema button after every state change because the eager
+    // ↔ virtualized branches render distinct React trees, so an element ref
+    // captured in one branch is detached after the threshold flips.
     await act(async () => {
       fireEvent.click(screen.getByLabelText("public schema"));
     });
@@ -248,11 +242,9 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
-    });
-
-    // Tables is auto-expanded, so item rows should be present.
+    // Sprint 144 (AC-145-1): schema auto-expands on mount; the Tables
+    // category is auto-expanded too, so item rows should already be
+    // present without any clicks.
     expect(
       screen.getAllByLabelText(/^table_\d+ table$/).length,
     ).toBeGreaterThan(0);
@@ -284,10 +276,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
+    // Sprint 144 (AC-145-1): schema auto-expands on mount, so virtualized
+    // table rows are already in the DOM.
 
     // Pick the first virtualized table row that's actually in the DOM —
     // we don't care which one, only that F2 on a virtualized item still
@@ -328,11 +318,8 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
+    // Sprint 144 (AC-145-1): schema auto-expands on mount; virtualized
+    // table rows are immediately available.
     const firstButton = screen.getAllByLabelText(/^table_\d+ table$/)[0]!;
     const expectedName = firstButton
       .getAttribute("aria-label")!
@@ -366,10 +353,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
+    // Sprint 144 (AC-145-1): schema auto-expands on mount.
 
     const tableButtons = screen.getAllByLabelText(/^table_\d+ table$/);
     expect(tableButtons).toHaveLength(50);
@@ -388,11 +372,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
+    // Sprint 144 (AC-145-1): schema auto-expands on mount.
     const searchInput = screen.getByLabelText("Filter tables in public");
     await act(async () => {
       fireEvent.change(searchInput, { target: { value: "table_0001" } });

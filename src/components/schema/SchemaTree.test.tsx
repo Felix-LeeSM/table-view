@@ -127,7 +127,10 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // AC-03: Schema expand/collapse toggle
   // -----------------------------------------------------------------------
-  it("expands schema on click and shows ChevronDown", async () => {
+  it("toggles schema expanded state on click (sprint 144 — auto-expanded on mount)", async () => {
+    // Sprint 144 (AC-145-1): all schemas paint expanded on first mount, so
+    // the first click now COLLAPSES rather than expands. The toggle still
+    // works — second click re-expands — which we cover in the next test.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -138,16 +141,19 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
-    expect(schemaButton).toHaveAttribute("aria-expanded", "false");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
 
     await act(async () => {
       fireEvent.click(schemaButton);
     });
 
-    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("collapses expanded schema on second click", async () => {
+  it("collapses then re-expands schema across two clicks (sprint 144 — auto-expanded on mount)", async () => {
+    // Sprint 144 (AC-145-1): initial state is expanded, so first click
+    // collapses, second click re-expands. Test still covers both edges
+    // of the toggle, just from the new starting state.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -158,11 +164,6 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
-
-    // Expand
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
     expect(schemaButton).toHaveAttribute("aria-expanded", "true");
 
     // Collapse
@@ -170,6 +171,12 @@ describe("SchemaTree", () => {
       fireEvent.click(schemaButton);
     });
     expect(schemaButton).toHaveAttribute("aria-expanded", "false");
+
+    // Re-expand
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
   });
 
   // -----------------------------------------------------------------------
@@ -228,11 +235,8 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
+    // Sprint 144 (AC-145-1): schema is auto-expanded on mount; tables are
+    // visible without an explicit click.
     expect(screen.getByText("users")).toBeInTheDocument();
     expect(screen.getByText("orders")).toBeInTheDocument();
   });
@@ -253,11 +257,6 @@ describe("SchemaTree", () => {
     });
 
     // Expand the schema first
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const tableButton = screen.getByLabelText("users table");
     await act(async () => {
       fireEvent.click(tableButton);
@@ -313,11 +312,7 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("empty_schema schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
+    // Sprint 144: schema is auto-expanded on mount.
     expect(screen.getByText("No tables")).toBeInTheDocument();
   });
 
@@ -340,11 +335,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     expect(screen.getByText("~12,345")).toBeInTheDocument();
   });
 
@@ -361,11 +351,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const tableItem = screen.getByLabelText("users table");
@@ -413,7 +398,8 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // Keyboard interactions
   // -----------------------------------------------------------------------
-  it("expands schema on Enter key", async () => {
+  it("toggles schema (collapse) on Enter key (sprint 144 — auto-expanded on mount)", async () => {
+    // Sprint 144 (AC-145-1): schemas paint expanded; Enter now collapses.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -424,14 +410,17 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+
     await act(async () => {
       fireEvent.keyDown(schemaButton, { key: "Enter" });
     });
 
-    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("expands schema on Space key", async () => {
+  it("toggles schema (collapse) on Space key (sprint 144 — auto-expanded on mount)", async () => {
+    // Sprint 144 (AC-145-1): schemas paint expanded; Space now collapses.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -442,11 +431,13 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+
     await act(async () => {
       fireEvent.keyDown(schemaButton, { key: " " });
     });
 
-    expect(schemaButton).toHaveAttribute("aria-expanded", "true");
+    expect(schemaButton).toHaveAttribute("aria-expanded", "false");
   });
 
   it("calls addTab when Enter is pressed on a table item", async () => {
@@ -462,11 +453,6 @@ describe("SchemaTree", () => {
     });
 
     // Expand first
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const tableItem = screen.getByLabelText("users table");
     await act(async () => {
       fireEvent.keyDown(tableItem, { key: "Enter" });
@@ -504,9 +490,11 @@ describe("SchemaTree", () => {
   });
 
   it("shows loading spinner next to schema name while tables are loading", async () => {
-    // Use mockImplementation so every loadTables call (including the auto-load
-    // on mount) gets the same pending promise — ensures handleExpandSchema also
-    // sees a pending call and sets loadingTables.
+    // Sprint 144 (AC-145-1): mount-time auto-expand prefetches loadTables
+    // as fire-and-forget — the per-schema spinner is set only inside
+    // `handleExpandSchema`. To exercise the spinner path we collapse the
+    // auto-expanded schema and re-expand it; the second click goes
+    // through `handleExpandSchema` and toggles `loadingTables`.
     let resolveTables!: () => void;
     const pendingPromise = new Promise<void>((resolve) => {
       resolveTables = resolve;
@@ -523,6 +511,11 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
+    // Collapse, then re-expand — the re-expand goes through
+    // handleExpandSchema which sets the per-schema loadingTables flag.
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
     await act(async () => {
       fireEvent.click(schemaButton);
     });
@@ -564,11 +557,7 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("my_schema schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
+    // Sprint 144: schema is auto-expanded on mount; tables visible immediately.
     // Tables should appear since they are pre-cached under the correct key
     expect(screen.getByText("t1")).toBeInTheDocument();
     // loadTables should NOT be called since tables are already cached
@@ -620,11 +609,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     expect(screen.getByText("~0")).toBeInTheDocument();
   });
 
@@ -643,12 +627,9 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
+    // Sprint 144: auto-expand on mount fires loadTables which rejects.
+    // Wait for the rejected promise to settle and loading state to clear.
     const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
-    // Wait for the rejected promise to settle and loading state to clear
     await waitFor(() => {
       const schemaRow = schemaButton.closest("div")!;
       const spinners = schemaRow.querySelectorAll(".animate-spin");
@@ -694,11 +675,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     expect(screen.getByLabelText("Tables in public")).toBeInTheDocument();
     expect(screen.getByLabelText("Views in public")).toBeInTheDocument();
     expect(screen.getByLabelText("Functions in public")).toBeInTheDocument();
@@ -716,11 +692,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     expect(screen.getByLabelText("Tables in public")).toHaveAttribute(
       "aria-expanded",
       "true",
@@ -736,11 +707,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     expect(screen.getByLabelText("Views in public")).toHaveAttribute(
@@ -768,11 +734,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     // Tables is expanded by default — collapse it
@@ -805,11 +766,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const viewsCategory = screen.getByLabelText("Views in public");
     await act(async () => {
       fireEvent.click(viewsCategory);
@@ -828,11 +784,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const functionsCategory = screen.getByLabelText("Functions in public");
     await act(async () => {
       fireEvent.click(functionsCategory);
@@ -849,11 +800,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const proceduresCategory = screen.getByLabelText("Procedures in public");
@@ -881,11 +827,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
@@ -897,11 +838,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     // The "No tables" empty label should be shown since Tables is auto-expanded
@@ -923,6 +859,8 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
+    // Sprint 144: schema is auto-expanded on mount, but clicking still
+    // selects it (and toggles the expand state — that's a separate axis).
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
       fireEvent.click(schemaButton);
@@ -940,11 +878,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const viewsCategory = screen.getByLabelText("Views in public");
@@ -968,11 +901,18 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Expand schema — schema becomes selected
+    // Sprint 144: auto-expanded on mount. Click schema once to put it in
+    // the selected state — but that also collapses the tree. Click again
+    // to re-expand so the table row remains in the DOM. Schema is still
+    // the selected node after the second click.
     const schemaButton = screen.getByLabelText("public schema");
     await act(async () => {
       fireEvent.click(schemaButton);
     });
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+    expect(schemaButton).toHaveClass("bg-muted");
 
     // Click table — table becomes selected
     const tableItem = screen.getByLabelText("users table");
@@ -1035,7 +975,13 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
+    // Sprint 144: schema is auto-expanded on mount, so click once to
+    // collapse and exercise the collapsed Folder-icon rendering.
     const schemaButton = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
+
     // The Folder SVG should be inside the schema row when collapsed
     const svgElements = schemaButton.querySelectorAll("svg.lucide-folder");
     expect(svgElements.length).toBe(1);
@@ -1054,11 +1000,8 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
+    // Sprint 144: schema auto-expanded; category + table rows are visible.
     const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     // Schema has px-3
     expect(schemaButton).toHaveClass("px-3");
 
@@ -1129,11 +1072,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const viewsCategory = screen.getByLabelText("Views in public");
     expect(viewsCategory).toHaveAttribute("aria-expanded", "false");
 
@@ -1152,11 +1090,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const viewsCategory = screen.getByLabelText("Views in public");
@@ -1196,11 +1129,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
   }
 
@@ -1719,11 +1647,6 @@ describe("SchemaTree", () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
     });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
   }
 
   // AC-SEARCH-01: Search input renders in expanded Tables category
@@ -1744,11 +1667,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     expect(
@@ -1853,11 +1771,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     expect(screen.getByText("No tables")).toBeInTheDocument();
     expect(screen.queryByText("No matching tables")).not.toBeInTheDocument();
   });
@@ -1902,22 +1815,11 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Expand public
-    const publicSchema = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(publicSchema);
-    });
-
+    // Sprint 144: both schemas auto-expanded on mount.
     // Filter in public
     const publicSearch = screen.getByLabelText("Filter tables in public");
     await act(async () => {
       fireEvent.change(publicSearch, { target: { value: "user" } });
-    });
-
-    // Expand analytics
-    const analyticsSchema = screen.getByLabelText("analytics schema");
-    await act(async () => {
-      fireEvent.click(analyticsSchema);
     });
 
     // Analytics search should be empty (all tables visible)
@@ -2033,11 +1935,6 @@ describe("SchemaTree", () => {
     });
 
     // Expand schema manually
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     // No table should have active highlight from tab state
     const usersItem = screen.getByLabelText("users table");
     // It won't have bg-primary/10 from active tab since it's a query tab
@@ -2159,8 +2056,11 @@ describe("SchemaTree", () => {
     expect(schemaButton).toHaveAttribute("aria-expanded", "true");
   });
 
-  // AC-EXPAND-02: Only the matching schema auto-expands (not others)
-  it("auto-expands only the schema matching active tab, not other schemas", async () => {
+  // AC-EXPAND-02 (sprint 144 update): pre-S144 only the schema matching the
+  // active tab was auto-expanded; S144 (AC-145-1) extended auto-expand to
+  // ALL schemas on first paint, so this test now verifies the new
+  // contract — every schema is expanded regardless of active tab.
+  it("auto-expands ALL schemas on mount regardless of active tab (sprint 144)", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
       tables: {
@@ -2171,7 +2071,9 @@ describe("SchemaTree", () => {
       },
     });
 
-    // Set active tab to public.users
+    // Set active tab to public.users — pre-S144 this would have been the
+    // only signal expanding `public`. Post-S144, both schemas expand
+    // unconditionally.
     useTabStore.setState({
       tabs: [
         {
@@ -2192,15 +2094,14 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // public should be expanded
+    // BOTH schemas must be expanded on first paint.
     expect(screen.getByLabelText("public schema")).toHaveAttribute(
       "aria-expanded",
       "true",
     );
-    // analytics should NOT be expanded
     expect(screen.getByLabelText("analytics schema")).toHaveAttribute(
       "aria-expanded",
-      "false",
+      "true",
     );
   });
 
@@ -2221,28 +2122,31 @@ describe("SchemaTree", () => {
 
     const schemaButton = screen.getByLabelText("public schema");
 
-    // Collapsed: should have Folder icon
-    const folderIcons = schemaButton.querySelectorAll("svg.lucide-folder");
-    const folderOpenIcons = schemaButton.querySelectorAll(
+    // Sprint 144: schema is auto-expanded on mount, so the initial icon is
+    // FolderOpen. Verify expanded state first, then click to collapse and
+    // verify the Folder icon is rendered for the collapsed state.
+
+    // Expanded (initial): should have FolderOpen icon
+    const folderOpenInitial = schemaButton.querySelectorAll(
       "svg.lucide-folder-open",
     );
-    // When collapsed, should have lucide-folder (not lucide-folder-open)
-    expect(folderIcons.length).toBe(1);
-    expect(folderOpenIcons.length).toBe(0);
+    const folderInitial = schemaButton.querySelectorAll("svg.lucide-folder");
+    expect(folderOpenInitial.length).toBe(1);
+    expect(folderInitial.length).toBe(0);
 
-    // Expand
+    // Collapse
     await act(async () => {
       fireEvent.click(schemaButton);
     });
 
-    // Expanded: should have FolderOpen icon
-    const folderOpenAfterExpand = schemaButton.querySelectorAll(
+    // Collapsed: should have Folder icon
+    const folderAfterCollapse =
+      schemaButton.querySelectorAll("svg.lucide-folder");
+    const folderOpenAfterCollapse = schemaButton.querySelectorAll(
       "svg.lucide-folder-open",
     );
-    const folderAfterExpand =
-      schemaButton.querySelectorAll("svg.lucide-folder");
-    expect(folderOpenAfterExpand.length).toBe(1);
-    expect(folderAfterExpand.length).toBe(0);
+    expect(folderAfterCollapse.length).toBe(1);
+    expect(folderOpenAfterCollapse.length).toBe(0);
   });
 
   // AC-ICON-03: Procedures category uses Terminal icon (distinct from Functions' Code2)
@@ -2254,11 +2158,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     // Procedures category should have a Terminal icon
@@ -2278,11 +2177,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const tablesCat = screen.getByLabelText("Tables in public");
@@ -2326,11 +2220,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     // Expand Views category
     const viewsCat = screen.getByLabelText("Views in public");
     await act(async () => {
@@ -2362,11 +2251,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     // Expand Functions category
@@ -2409,11 +2293,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     // Expand Procedures category
@@ -2467,11 +2346,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     // Check count badges
     const tablesCat = screen.getByLabelText("Tables in public");
     const viewsCat = screen.getByLabelText("Views in public");
@@ -2484,7 +2358,14 @@ describe("SchemaTree", () => {
     expect(proceduresCat.textContent).toContain("1");
   });
 
-  it("loads views and functions when schema is expanded", async () => {
+  it("loads views and functions when schema is expanded via click", async () => {
+    // Sprint 144: schemas paint expanded on mount, but `handleExpandSchema`
+    // (the click handler) is the entry point that triggers loadViews /
+    // loadFunctions. Mount-time auto-expand only seeds the expanded *state*
+    // and fires loadTables; views/functions are still lazy-loaded on the
+    // first user expand action. We exercise that by clicking once to
+    // collapse, then clicking again to re-expand — the re-expand call
+    // now triggers loadViews + loadFunctions.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {},
@@ -2497,6 +2378,11 @@ describe("SchemaTree", () => {
     });
 
     const schemaButton = screen.getByLabelText("public schema");
+    // Collapse, then re-expand — second click is the handleExpandSchema
+    // path that loads views/functions.
+    await act(async () => {
+      fireEvent.click(schemaButton);
+    });
     await act(async () => {
       fireEvent.click(schemaButton);
     });
@@ -2519,11 +2405,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const viewsCat = screen.getByLabelText("Views in public");
@@ -2569,11 +2450,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const functionsCat = screen.getByLabelText("Functions in public");
     await act(async () => {
       fireEvent.click(functionsCat);
@@ -2614,11 +2490,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const viewsCat = screen.getByLabelText("Views in public");
@@ -2702,11 +2573,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const tableButton = screen.getByLabelText("users table");
     await act(async () => {
       fireEvent.keyDown(tableButton, { key: "F2" });
@@ -2736,11 +2602,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const viewsCat = screen.getByLabelText("Views in public");
@@ -2781,11 +2642,6 @@ describe("SchemaTree", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
-    });
-
     const functionsCat = screen.getByLabelText("Functions in public");
     await act(async () => {
       fireEvent.click(functionsCat);
@@ -2810,11 +2666,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const tableButton = screen.getByLabelText("users table");
@@ -2845,11 +2696,6 @@ describe("SchemaTree", () => {
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const schemaButton = screen.getByLabelText("public schema");
-    await act(async () => {
-      fireEvent.click(schemaButton);
     });
 
     const tableButton = screen.getByLabelText("users table");

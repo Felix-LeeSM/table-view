@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -88,11 +88,6 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
     });
 
     // Expand the schema so the table row (and its row-count cell) is
-    // rendered into the DOM.
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
-    });
-
     // Sprint 143 (AC-148-1) — the cell now prefixes the locale-separated
     // number with `~` so users read it as an estimate at a glance. The
     // long-form aria-label/title still names the estimate source.
@@ -186,10 +181,6 @@ describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
     await act(async () => {
       render(<SchemaTree connectionId="pg1" />);
     });
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
-    });
-
     expect(screen.getByLabelText("users table")).toBeInTheDocument();
     const cell = document.querySelector('[data-row-count="true"]');
     expect(cell).not.toBeNull();

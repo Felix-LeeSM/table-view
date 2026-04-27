@@ -533,12 +533,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   // Sprint 135 — for `no-schema` (MySQL) and `flat` (SQLite) shapes the
   // schema row is hidden, but every backend-returned schema must still
   // be expanded behind the scenes so `loadTables` fires and the table
-  // list appears under the sidebar root. We keep the existing
-  // expandedSchemas state so the visible-rows / virtualized paths stay
-  // unaware of the shape difference; the render branch below just skips
-  // the schema button for these shapes.
+  // list appears under the sidebar root.
+  //
+  // Sprint 144 (AC-145-1) — extend the same auto-expand to `with-schema`
+  // (PostgreSQL) so users with multiple custom schemas don't have to
+  // click every chevron individually. The user-facing effect: every PG
+  // schema paints expanded on first load. Per the AC-145-1 toggle
+  // contract, `handleExpandSchema` still collapses on click; the auto-
+  // expand only seeds the *initial* state.
   useEffect(() => {
-    if (treeShape === "with-schema") return;
     if (schemas.length === 0) return;
     setExpandedSchemas((prev) => {
       let mutated = false;

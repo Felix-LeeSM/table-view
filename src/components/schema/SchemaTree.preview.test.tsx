@@ -89,11 +89,6 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Expand the schema so the table rows are clickable.
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
-    });
-
     // Single-click `users` table.
     await act(async () => {
       fireEvent.click(screen.getByLabelText("users table"));
@@ -107,10 +102,6 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
   it("AC-S136-01: clicking a different row swaps the preview slot (no tab accumulation)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
     });
 
     // Click `users` then `orders`. The preview slot must follow the
@@ -131,10 +122,6 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
   it("AC-S136-02: double-click on a table row promotes the preview tab (isPreview=false)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
     });
 
     // Double-click `users` table — a single click first opens the preview,
@@ -169,10 +156,6 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
   it("AC-S136-04: same-row single-click twice is idempotent (no extra tab, no promote)", async () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
     });
 
     await act(async () => {
@@ -230,10 +213,6 @@ describe("SchemaTree — Sprint 136 function category overflow (AC-S136-05)", ()
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("public schema"));
     });
 
     // Expand the function category (it is collapsed by default; tables is
