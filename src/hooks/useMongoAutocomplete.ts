@@ -4,8 +4,8 @@ import type { Extension } from "@codemirror/state";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
-  type MongoQueryMode,
-} from "@lib/mongoAutocomplete";
+} from "@/lib/completion/mongo";
+import type { MongoQueryMode } from "@lib/mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {
   queryMode: MongoQueryMode;

@@ -2,7 +2,33 @@ import { useMemo } from "react";
 import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { DatabaseType } from "@/types/connection";
-import { getKeywordsForDialect } from "@/lib/sqlDialectKeywords";
+import { keywords as PG_KEYWORDS } from "@/lib/completion/pg";
+import { keywords as MYSQL_KEYWORDS } from "@/lib/completion/mysql";
+import { keywords as SQLITE_KEYWORDS } from "@/lib/completion/sqlite";
+
+/**
+ * Sprint 145 — resolve the dialect-specific keyword list via the new
+ * per-DBMS completion modules. Behaves identically to the previous
+ * `getKeywordsForDialect` helper for RDB types and returns an empty list
+ * for non-RDB types (the SQL editor never mounts for them).
+ */
+function keywordsForDbType(dbType: DatabaseType): readonly string[] {
+  switch (dbType) {
+    case "postgresql":
+      return PG_KEYWORDS;
+    case "mysql":
+      return MYSQL_KEYWORDS;
+    case "sqlite":
+      return SQLITE_KEYWORDS;
+    case "mongodb":
+    case "redis":
+      return [];
+    default: {
+      const _exhaust: never = dbType;
+      return _exhaust;
+    }
+  }
+}
 
 /** Common SQL functions exposed as autocomplete candidates. */
 const SQL_FUNCTIONS = [
@@ -141,7 +167,7 @@ export function useSqlAutocomplete(
     // tables / views / functions. Pre-Sprint-139 callers (no dbType)
     // skip this branch and see no behavioural change.
     if (dbType !== undefined) {
-      for (const kw of getKeywordsForDialect(dbType)) {
+      for (const kw of keywordsForDbType(dbType)) {
         // Avoid clobbering an existing entry (e.g. `SELECT` would never
         // collide with a table name, but stay defensive).
         if (!(kw in ns)) ns[kw] = {};
