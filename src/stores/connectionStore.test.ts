@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { useConnectionStore } from "./connectionStore";
+import { useConnectionStore, SYNCED_KEYS } from "./connectionStore";
 
-// Mock @tauri-apps/api/event
+// Mock @tauri-apps/api/event. The Sprint 152 bridge attach inside
+// `connectionStore.ts` calls both `emit` (outbound) and `listen` (inbound)
+// at module-load time, so both must be exported here. Both are no-ops for
+// these tests — the cross-window contract is exercised in
+// `src/__tests__/cross-window-connection-sync.test.tsx` with a real bus.
 vi.mock("@tauri-apps/api/event", () => ({
+  emit: vi.fn(() => Promise.resolve()),
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
@@ -777,5 +782,37 @@ describe("connectionStore", () => {
     });
     await useConnectionStore.getState().disconnectFromDatabase("m1");
     expect(window.localStorage.getItem("tableview:activeDb:m1")).toBeNull();
+  });
+
+  // -- Sprint 152 (AC-152-04) — cross-window broadcast allowlist regression --
+  //
+  // The `SYNCED_KEYS` constant is the load-bearing audit point for the
+  // cross-window bridge: every key listed here is broadcast on the
+  // `connection-sync` channel; every key NOT listed stays window-local.
+  // Pinning the exact membership here forces a future contributor who adds
+  // a new top-level key to `ConnectionState` to make a deliberate decision
+  // (opt in by widening the array, opt out by leaving it alone) — they
+  // cannot silently broadcast a sensitive new field.
+  //
+  // If you are adding a key intentionally:
+  //   1. Update `SYNCED_KEYS` in `connectionStore.ts`.
+  //   2. Update this expectation.
+  //   3. Document the rationale in the JSDoc above `SYNCED_KEYS`.
+  //   4. Add a cross-window-sync test case that exercises the new key.
+
+  describe("SYNCED_KEYS allowlist (AC-152-04)", () => {
+    it("exposes exactly the four cross-window-synced keys", () => {
+      expect([...SYNCED_KEYS]).toEqual([
+        "connections",
+        "groups",
+        "activeStatuses",
+        "focusedConnId",
+      ]);
+    });
+
+    it("does NOT include any sensitive or transient keys (loading/error)", () => {
+      expect(SYNCED_KEYS).not.toContain("loading");
+      expect(SYNCED_KEYS).not.toContain("error");
+    });
   });
 });

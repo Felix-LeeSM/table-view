@@ -1,0 +1,90 @@
+# Sprint 152 — TDD Red-State Log (durable proof)
+#
+# Captured BEFORE `connectionStore.ts` was opted into `attachZustandIpcBridge`.
+# The cross-window sync test asserts the wiring contract; against pre-Sprint-152
+# code (no bridge attach, no `SYNCED_KEYS` constant, no module-load `listen` on
+# `connection-sync`), the three contract-checking tests below fail:
+#
+#   - AC-152-02a — inbound `activeStatuses` apply does not happen (no listener
+#     registered on the `connection-sync` channel).
+#   - AC-152-02b — local `setFocusedConn` does not emit (no outbound subscriber
+#     attached to the store).
+#   - AC-152-02c-mix — no outbound emit at all means no allowlist-filtered
+#     slice is observable.
+#
+# After the wiring landed (`connectionStore.ts` calls
+# `attachZustandIpcBridge(useConnectionStore, { channel: "connection-sync",
+# syncKeys: SYNCED_KEYS, originId: getCurrentWindowLabel() ?? "test" })`), the
+# same 9-case suite goes 9/9 green (see `pnpm vitest run
+# src/__tests__/cross-window-connection-sync.test.tsx` post-implementation).
+#
+# Note: the post-fix test file uses `vi.hoisted()` to ensure the in-process
+# event-bus map exists BEFORE the connection-store module's load-time bridge
+# attach calls `listen()`. The pre-implementation log was captured with the
+# earlier (non-hoisted) version of the test, but the failure signature
+# attributable to "missing wiring" (a, b, c-mix) is unchanged either way —
+# those three failures genuinely require the bridge attach to ship before
+# they can pass.
+#
+
+
+ RUN  v4.1.3 /Users/felix/Desktop/study/view-table
+
+ ❯ src/__tests__/cross-window-connection-sync.test.tsx (9 tests | 3 failed) 6ms
+     × AC-152-02a: a workspace-side mutation of activeStatuses['c1'] propagates to the launcher store 3ms
+     × AC-152-02b: a launcher-side write to focusedConnId emits on the connection-sync channel 0ms
+     × AC-152-02c-mix: a mixed write only broadcasts the allowlisted slice (loading/error stay local) 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/cross-window-connection-sync.test.tsx > cross-window connection-store sync (Sprint 152) > AC-152-02a: a workspace-side mutation of activeStatuses['c1'] propagates to the launcher store
+AssertionError: expected { type: 'disconnected' } to deeply equal { type: 'connected' }
+
+- Expected
++ Received
+
+  {
+-   "type": "connected",
++   "type": "disconnected",
+  }
+
+ ❯ src/__tests__/cross-window-connection-sync.test.tsx:207:64
+    205|     await Promise.resolve();
+    206|
+    207|     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual…
+       |                                                                ^
+    208|       type: "connected",
+    209|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/__tests__/cross-window-connection-sync.test.tsx > cross-window connection-store sync (Sprint 152) > AC-152-02b: a launcher-side write to focusedConnId emits on the connection-sync channel
+AssertionError: expected "vi.fn()" to be called at least once
+ ❯ src/__tests__/cross-window-connection-sync.test.tsx:222:24
+    220|
+    221|     // The bridge must have emitted a payload that includes focusedCon…
+    222|     expect(mockedEmit).toHaveBeenCalled();
+       |                        ^
+    223|     const channels = mockedEmit.mock.calls.map((call) => call[0]);
+    224|     expect(channels).toContain("connection-sync");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/__tests__/cross-window-connection-sync.test.tsx > cross-window connection-store sync (Sprint 152) > AC-152-02c-mix: a mixed write only broadcasts the allowlisted slice (loading/error stay local)
+AssertionError: expected undefined to be defined
+ ❯ src/__tests__/cross-window-connection-sync.test.tsx:271:22
+    269|       (call) => call[0] === "connection-sync",
+    270|     );
+    271|     expect(syncCall).toBeDefined();
+       |                      ^
+    272|     const payload = syncCall![1] as {
+    273|       origin: string;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 6 passed (9)
+   Start at  12:05:49
+   Duration  530ms (transform 33ms, setup 40ms, import 31ms, tests 6ms, environment 386ms)
+
