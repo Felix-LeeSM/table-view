@@ -226,6 +226,20 @@ interface TabState {
   // Reopen last closed tab
   reopenLastClosedTab: () => void;
 
+  /**
+   * Sprint 148 (AC-142-2) — close every tab belonging to `connectionId`.
+   * Used by the activation flow when the user swaps to a different
+   * connection from the launcher: spec calls for "close or graceful
+   * migrate" of the previous connection's tabs and we adopt clean-close
+   * (cross-DBMS migration is deferred). Same-id reactivation is a no-op
+   * because the caller filters by id before invoking.
+   *
+   * Closed tabs are NOT pushed onto `closedTabHistory`: reopen-last-closed
+   * is meant to recover from accidental close *within* a workspace, not to
+   * resurrect tabs from a connection the user actively swapped away from.
+   */
+  clearTabsForConnection: (connectionId: string) => void;
+
   // Reorder tabs by drag-and-drop
   moveTab: (
     fromId: string,
@@ -361,6 +375,46 @@ export const useTabStore = create<TabState>((set, get) => ({
         tabs: [...state.tabs, reopened],
         activeTabId: newId,
         closedTabHistory: rest,
+      };
+    }),
+
+  clearTabsForConnection: (connectionId) =>
+    set((state) => {
+      const remaining = state.tabs.filter(
+        (t) => t.connectionId !== connectionId,
+      );
+      if (remaining.length === state.tabs.length) {
+        // No tab from this connection — short-circuit to keep Set/array
+        // identities stable so subscribers don't re-render.
+        return state;
+      }
+      const removedIds = new Set(
+        state.tabs
+          .filter((t) => t.connectionId === connectionId)
+          .map((t) => t.id),
+      );
+      const activeStillPresent =
+        state.activeTabId !== null &&
+        remaining.some((t) => t.id === state.activeTabId);
+      const newActive = activeStillPresent
+        ? state.activeTabId
+        : (remaining[remaining.length - 1]?.id ?? null);
+      // Drop dirty markers for the removed tabs only — leave others alone.
+      let dirtyTabIds = state.dirtyTabIds;
+      let dirtyMutated = false;
+      for (const id of removedIds) {
+        if (dirtyTabIds.has(id)) {
+          if (!dirtyMutated) {
+            dirtyTabIds = new Set(dirtyTabIds);
+            dirtyMutated = true;
+          }
+          dirtyTabIds.delete(id);
+        }
+      }
+      return {
+        tabs: remaining,
+        activeTabId: newActive,
+        dirtyTabIds,
       };
     }),
 

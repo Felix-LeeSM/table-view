@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useAppShellStore } from "@stores/appShellStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
@@ -92,6 +93,19 @@ export default function HomePage() {
   // around the new connection. (This was the root cause of the toolbar
   // ConnectionSwitcher's "swap doesn't happen" bug per the lesson.)
   const handleActivate = (id: string) => {
+    // Sprint 148 (AC-142-2) — when the user activates a connection that
+    // differs from any open workspace tab's owner, close those stale
+    // tabs so the new workspace doesn't inherit cross-connection state.
+    // Same-connection reactivation keeps existing tabs untouched.
+    const tabState = useTabStore.getState();
+    const staleConnIds = new Set(
+      tabState.tabs
+        .filter((t) => t.connectionId !== id)
+        .map((t) => t.connectionId),
+    );
+    for (const cid of staleConnIds) {
+      tabState.clearTabsForConnection(cid);
+    }
     setFocusedConn(id);
     setScreen("workspace");
   };
