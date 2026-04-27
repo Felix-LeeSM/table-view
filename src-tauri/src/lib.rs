@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod launcher;
 pub mod models;
 pub mod storage;
 
@@ -59,6 +60,13 @@ pub fn run() {
             commands::document::mutate::insert_document,
             commands::document::mutate::update_document,
             commands::document::mutate::delete_document,
+            launcher::launcher_show,
+            launcher::launcher_hide,
+            launcher::launcher_focus,
+            launcher::workspace_show,
+            launcher::workspace_hide,
+            launcher::workspace_focus,
+            launcher::app_exit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

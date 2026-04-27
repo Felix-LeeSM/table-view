@@ -12,11 +12,26 @@
   "app": {
     "windows": [
       {
+        "label": "launcher",
         "title": "Table View",
-        "width": 1200,
+        "width": 720,
+        "height": 560,
+        "resizable": false,
+        "maximizable": false,
+        "center": true,
+        "visible": true
+      },
+      {
+        "label": "workspace",
+        "title": "Table View — Workspace",
+        "width": 1280,
         "height": 800,
-        "minWidth": 800,
-        "minHeight": 600
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "maximizable": true,
+        "center": true,
+        "visible": false
       }
     ],
     "security": {

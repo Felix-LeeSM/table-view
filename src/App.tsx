@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
-import HomePage from "./pages/HomePage";
 import WorkspacePage from "./pages/WorkspacePage";
 import QuickOpen from "./components/shared/QuickOpen";
 import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
@@ -318,16 +317,19 @@ export default function App() {
     return () => window.removeEventListener("quickopen-function", handler);
   }, []);
 
-  // Sprint 125 — appShell routing. Home and Workspace are full-screen siblings;
-  // the user toggles between them via Open (Home -> Workspace) and the
-  // [← Connections] button (Workspace -> Home). Tab state lives in tabStore
-  // and is preserved across swaps.
-  const screen = useAppShellStore((s) => s.screen);
+  // Sprint 150 — Phase 12 multi-window split. Top-level page routing now
+  // lives in `AppRouter.tsx`, which picks Launcher vs Workspace based on the
+  // current Tauri `WebviewWindow.label`. `App` is mounted ONLY under the
+  // workspace branch, so the legacy `appShellStore.screen` toggle no longer
+  // drives which page renders here — `WorkspacePage` is the unconditional
+  // mount. The store's `setScreen` API is intentionally retained for
+  // backward compat in the Cmd+, handler and existing tests; Sprint 154
+  // will fully deprecate it.
 
   return (
     <ErrorBoundary>
       <div className="flex h-screen w-screen overflow-hidden bg-background">
-        {screen === "home" ? <HomePage /> : <WorkspacePage />}
+        <WorkspacePage />
         <QuickOpen />
         <ShortcutCheatsheet />
         <QueryLog />

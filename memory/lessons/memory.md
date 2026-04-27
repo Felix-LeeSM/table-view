@@ -18,6 +18,7 @@ updated: 2026-04-27
 - [2026-04-25 · UI 재설계는 e2e 셀렉터·동작 가정을 함께 갈아야 한다](2026-04-25-e2e-stale-after-ui-redesign/memory.md)
 - [2026-04-27 · workspace toolbar UX 갭 3건 (popover 크기 / connection SoT 분리 / paradigm-aware completion)](2026-04-27-workspace-toolbar-ux-gaps/memory.md)
 - [2026-04-27 · 피드백은 스펙 합의 → TDD 순서로 처리한다](2026-04-27-feedback-spec-first-tdd/memory.md)
+- [2026-04-27 · Phase 종료 시 skip된 테스트는 0건 / 메모리 등록 / skip 메시지 컨텍스트 셋 중 하나여야 한다](2026-04-27-phase-end-skip-accountability-gate/memory.md)
 
 ## 형식
 

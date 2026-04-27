@@ -13,6 +13,7 @@ tauri-build = { version = "2", features = [] }
 [dev-dependencies]
 tempfile = "3"
 serial_test = "3"
+tauri = { version = "2", features = ["test"] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
