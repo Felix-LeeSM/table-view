@@ -324,7 +324,9 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // AC-09: row_count display
   // -----------------------------------------------------------------------
-  it("displays formatted row_count for tables that have it", async () => {
+  it("displays row_count with the sprint-143 tilde estimate prefix", async () => {
+    // Sprint 143 (AC-148-1) — visible cell now reads `~12,345` so the
+    // user reads the number as an estimate rather than an exact count.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -343,10 +345,13 @@ describe("SchemaTree", () => {
       fireEvent.click(schemaButton);
     });
 
-    expect(screen.getByText("12,345")).toBeInTheDocument();
+    expect(screen.getByText("~12,345")).toBeInTheDocument();
   });
 
-  it("does not display row_count when it is null", async () => {
+  it("renders `?` for the row_count cell when the value is null (sprint 143)", async () => {
+    // Sprint 143 (AC-148-2 edge case) — `null` row_count renders the
+    // literal `?` instead of being suppressed, so the user reads
+    // "value unknown" rather than mistaking a missing cell for `0`.
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -364,9 +369,9 @@ describe("SchemaTree", () => {
     });
 
     const tableItem = screen.getByLabelText("users table");
-    // The row_count span should not exist
-    const countSpan = tableItem.querySelector(".ml-auto");
-    expect(countSpan).toBeNull();
+    const countSpan = tableItem.querySelector('[data-row-count="true"]');
+    expect(countSpan).not.toBeNull();
+    expect(countSpan?.textContent).toBe("?");
   });
 
   // -----------------------------------------------------------------------
@@ -598,7 +603,10 @@ describe("SchemaTree", () => {
   // -----------------------------------------------------------------------
   // AC-04: row_count edge case — zero
   // -----------------------------------------------------------------------
-  it("displays '0' for row_count of 0", async () => {
+  it("displays '~0' for row_count of 0 (sprint 143 — still an estimate)", async () => {
+    // Sprint 143 (AC-148-1) — `0` is a valid estimate (empty table that
+    // *was* analyzed) and gets the same `~` prefix as any non-null
+    // estimate. Pre-S143 the cell read a bare "0".
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -617,8 +625,7 @@ describe("SchemaTree", () => {
       fireEvent.click(schemaButton);
     });
 
-    // row_count: 0 passes the `!= null` check (0 != null is true)
-    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText("~0")).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------

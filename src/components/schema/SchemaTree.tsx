@@ -57,19 +57,43 @@ const EMPTY_SCHEMAS: never[] = [];
  * readers) and `title` (native hover tooltip) read from this string so
  * keyboard / mouse / a11y users get the same answer.
  */
-function rowCountLabel(dbType: string | undefined): string {
+function rowCountLabel(
+  dbType: string | undefined,
+  rowCount: number | null | undefined,
+): string {
+  // Sprint 143 (AC-148-2) — SQLite has no estimate catalog and PG/MySQL
+  // can return null when ANALYZE hasn't run yet. In both cases we render
+  // `?` and the long-form copy must reflect that the value isn't known
+  // yet (rather than falsely promising an exact count or estimate).
+  if (dbType === "sqlite" || rowCount == null) {
+    return "Exact row count not yet fetched";
+  }
   if (dbType === "postgresql") {
     return "Estimated row count from pg_class.reltuples";
   }
   if (dbType === "mysql") {
     return "Estimated row count from information_schema.tables";
   }
-  if (dbType === "sqlite") {
-    return "Exact row count via COUNT(*)";
-  }
-  // Unknown / unconfigured DBMS — keep the label honest by stating the
-  // generic estimate semantics rather than silently dropping the cue.
   return "Estimated row count";
+}
+
+/**
+ * Sprint 143 (AC-148-1, AC-148-2) — visible row-count text:
+ * - `?` when the value is unknown (SQLite always; PG/MySQL when null)
+ * - `~12,345` for PG/MySQL non-null estimates (tilde flags it as an
+ *   estimate at a glance)
+ *
+ * The lazy exact-count fetch (AC-148-3, deferred) will eventually
+ * replace `~N` / `?` with a bare `N` once the cache hit lands.
+ */
+function rowCountText(
+  dbType: string | undefined,
+  rowCount: number | null | undefined,
+): string {
+  if (dbType === "sqlite" || rowCount == null) {
+    return "?";
+  }
+  return `~${rowCount.toLocaleString()}`;
 }
 
 /** Category definitions for schema objects. */
@@ -1039,23 +1063,19 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
               <Table2 size={12} className="shrink-0 text-muted-foreground" />
             )}
             <span className="truncate text-xs">{item.name}</span>
-            {isTableItem &&
-              "row_count" in item &&
-              (item as TableInfo).row_count != null && (
-                // Sprint 137 (AC-S137-03) — DBMS-aware tooltip + aria-label
-                // so the user can tell whether the number is an estimate
-                // (PG/MySQL) or an exact count (SQLite). `data-row-count`
-                // is a stable hook for tests independent of icon/label
-                // wrapping changes.
-                <span
-                  className="ml-auto text-3xs text-muted-foreground"
-                  data-row-count="true"
-                  aria-label={rowCountLabel(dbType)}
-                  title={rowCountLabel(dbType)}
-                >
-                  {(item as TableInfo).row_count!.toLocaleString()}
-                </span>
-              )}
+            {isTableItem && "row_count" in item && (
+              <span
+                className="ml-auto text-3xs text-muted-foreground"
+                data-row-count="true"
+                aria-label={rowCountLabel(
+                  dbType,
+                  (item as TableInfo).row_count,
+                )}
+                title={rowCountLabel(dbType, (item as TableInfo).row_count)}
+              >
+                {rowCountText(dbType, (item as TableInfo).row_count)}
+              </span>
+            )}
             {isFunc &&
               "arguments" in item &&
               (item as FunctionInfo).arguments && (
@@ -1354,22 +1374,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                 <span className="truncate text-xs">
                                   {item.name}
                                 </span>
-                                {item.row_count != null && (
-                                  // Sprint 137 (AC-S137-03) — see
-                                  // `rowCountLabel` for the DBMS-aware
-                                  // semantics. Rendered identically in the
-                                  // virtualized + nested + flat paths so
-                                  // a regression in any one path is caught
-                                  // by the same test.
-                                  <span
-                                    className="ml-auto text-3xs text-muted-foreground"
-                                    data-row-count="true"
-                                    aria-label={rowCountLabel(dbType)}
-                                    title={rowCountLabel(dbType)}
-                                  >
-                                    {item.row_count.toLocaleString()}
-                                  </span>
-                                )}
+                                <span
+                                  className="ml-auto text-3xs text-muted-foreground"
+                                  data-row-count="true"
+                                  aria-label={rowCountLabel(
+                                    dbType,
+                                    item.row_count,
+                                  )}
+                                  title={rowCountLabel(dbType, item.row_count)}
+                                >
+                                  {rowCountText(dbType, item.row_count)}
+                                </span>
                               </button>
                             </ContextMenuTrigger>
                             <ContextMenuContent>
@@ -1699,25 +1714,26 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                                               {item.name}
                                             </span>
                                             {isTableView &&
-                                              "row_count" in item &&
-                                              (item as TableInfo).row_count !=
-                                                null && (
-                                                // Sprint 137 (AC-S137-03) —
-                                                // PG row count is an estimate
-                                                // (`pg_class.reltuples`); see
-                                                // `rowCountLabel` for the
-                                                // DBMS-aware text.
+                                              "row_count" in item && (
                                                 <span
                                                   className="ml-auto text-3xs text-muted-foreground"
                                                   data-row-count="true"
                                                   aria-label={rowCountLabel(
                                                     dbType,
+                                                    (item as TableInfo)
+                                                      .row_count,
                                                   )}
-                                                  title={rowCountLabel(dbType)}
+                                                  title={rowCountLabel(
+                                                    dbType,
+                                                    (item as TableInfo)
+                                                      .row_count,
+                                                  )}
                                                 >
-                                                  {(
-                                                    item as TableInfo
-                                                  ).row_count!.toLocaleString()}
+                                                  {rowCountText(
+                                                    dbType,
+                                                    (item as TableInfo)
+                                                      .row_count,
+                                                  )}
                                                 </span>
                                               )}
                                             {isFunc &&

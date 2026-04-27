@@ -56,6 +56,18 @@ describe("connectionStore", () => {
       loading: false,
       error: null,
     });
+    // Sprint 143 (AC-148-4) — wipe persisted activeDb keys so a single
+    // test never leaks `tableview:activeDb:*` into the next case.
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith("tableview:activeDb:")) keys.push(k);
+      }
+      for (const k of keys) window.localStorage.removeItem(k);
+    } catch {
+      // ignore
+    }
     vi.clearAllMocks();
   });
 
@@ -674,5 +686,96 @@ describe("connectionStore", () => {
     useConnectionStore.setState({ activeStatuses: {} });
     useConnectionStore.getState().setActiveDb("missing", "warehouse");
     expect(useConnectionStore.getState().activeStatuses).toEqual({});
+  });
+
+  // -- Sprint 143 (AC-148-4) — Mongo activeDb persistence --
+  //
+  // The user picks a DB in the workspace's DbSwitcher and expects that
+  // choice to survive close/reopen — see feedback #12 (2026-04-27). Pre-
+  // sprint-143 the selection lived only in the connected variant of the
+  // in-memory `activeStatuses` and reverted to `connection.database` on
+  // reconnect. Now `setActiveDb` writes a `tableview:activeDb:{id}` key
+  // and `connectToDatabase` prefers that persisted value when present.
+
+  it("setActiveDb persists the selection to localStorage under tableview:activeDb:{id} (AC-148-4)", () => {
+    useConnectionStore.setState({
+      activeStatuses: { m1: { type: "connected", activeDb: "test" } },
+    });
+    useConnectionStore.getState().setActiveDb("m1", "admin");
+    expect(window.localStorage.getItem("tableview:activeDb:m1")).toBe("admin");
+  });
+
+  it("setActiveDb does NOT persist when the connection is not in connected state (AC-148-4)", () => {
+    useConnectionStore.setState({
+      activeStatuses: { m1: { type: "disconnected" } },
+    });
+    useConnectionStore.getState().setActiveDb("m1", "admin");
+    expect(window.localStorage.getItem("tableview:activeDb:m1")).toBeNull();
+  });
+
+  it("connectToDatabase restores activeDb from localStorage when a persisted value exists (AC-148-4)", async () => {
+    // Simulate a prior session having persisted `admin` for connection m1.
+    window.localStorage.setItem("tableview:activeDb:m1", "admin");
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "m1",
+          name: "MongoCluster",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "mongo",
+          database: "test",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "document",
+        },
+      ],
+      activeStatuses: {},
+    });
+    await useConnectionStore.getState().connectToDatabase("m1");
+    const status = useConnectionStore.getState().activeStatuses["m1"];
+    expect(status?.type).toBe("connected");
+    if (status?.type === "connected") {
+      // The persisted value wins over `connection.database` ("test").
+      expect(status.activeDb).toBe("admin");
+    }
+  });
+
+  it("connectToDatabase falls back to connection.database when no persisted value exists (AC-148-4)", async () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "m1",
+          name: "MongoCluster",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "mongo",
+          database: "test",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "document",
+        },
+      ],
+      activeStatuses: {},
+    });
+    await useConnectionStore.getState().connectToDatabase("m1");
+    const status = useConnectionStore.getState().activeStatuses["m1"];
+    expect(status?.type).toBe("connected");
+    if (status?.type === "connected") {
+      expect(status.activeDb).toBe("test");
+    }
+  });
+
+  it("disconnectFromDatabase clears the persisted activeDb entry (AC-148-4)", async () => {
+    window.localStorage.setItem("tableview:activeDb:m1", "admin");
+    useConnectionStore.setState({
+      activeStatuses: { m1: { type: "connected", activeDb: "admin" } },
+    });
+    await useConnectionStore.getState().disconnectFromDatabase("m1");
+    expect(window.localStorage.getItem("tableview:activeDb:m1")).toBeNull();
   });
 });

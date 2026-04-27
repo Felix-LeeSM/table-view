@@ -64,7 +64,7 @@ function resetStores() {
   useConnectionStore.setState({ connections: [] });
 }
 
-describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
+describe("SchemaTree — Sprint 137 / 143 row count rendering", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLoadSchemas.mockResolvedValue(undefined);
@@ -93,9 +93,9 @@ describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
       fireEvent.click(screen.getByLabelText("public schema"));
     });
 
-    // The bare number rendered next to `users` carries both an aria-label
-    // (screen reader cue) and a title (native hover tooltip) explaining
-    // that the number is an estimate sourced from pg_class.reltuples.
+    // Sprint 143 (AC-148-1) — the cell now prefixes the locale-separated
+    // number with `~` so users read it as an estimate at a glance. The
+    // long-form aria-label/title still names the estimate source.
     const cell = document.querySelector('[data-row-count="true"]');
     expect(cell).not.toBeNull();
     expect(cell?.getAttribute("aria-label")).toBe(
@@ -104,9 +104,7 @@ describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
     expect(cell?.getAttribute("title")).toBe(
       "Estimated row count from pg_class.reltuples",
     );
-    // Sanity — the visible number is still rendered (formatted with
-    // locale-aware separators, matching the pre-S137 layout).
-    expect(cell?.textContent).toBe((12345).toLocaleString());
+    expect(cell?.textContent).toBe(`~${(12345).toLocaleString()}`);
   });
 
   it("AC-S137-03: MySQL row-count cell labels the source as information_schema", async () => {
@@ -125,10 +123,7 @@ describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
     });
 
     // MySQL is a 2-level (no schema row) tree — the table category is
-    // present from the initial paint, not behind a schema expand. The
-    // tables category is in DEFAULT_EXPANDED, so the row should be
-    // visible immediately. Click anyway to be defensive against future
-    // changes in default expansion state.
+    // present from the initial paint, not behind a schema expand.
     const cell = document.querySelector('[data-row-count="true"]');
     expect(cell).not.toBeNull();
     expect(cell?.getAttribute("aria-label")).toBe(
@@ -137,9 +132,16 @@ describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
     expect(cell?.getAttribute("title")).toBe(
       "Estimated row count from information_schema.tables",
     );
+    // Sprint 143 (AC-148-1) — MySQL is also an estimate source, so the
+    // tilde prefix is required just like PG.
+    expect(cell?.textContent).toBe(`~${(9876).toLocaleString()}`);
   });
 
-  it("AC-S137-03: SQLite row-count cell labels the source as exact COUNT(*)", async () => {
+  it("AC-148-2: SQLite row-count cell renders `?` (no estimate metadata)", async () => {
+    // Sprint 143 (AC-148-2) — SQLite has no estimate catalog, so the
+    // sidebar shows `?` until the lazy exact-count fetch (deferred to a
+    // later sprint) replaces it. The cell is always present so the
+    // user never sees a blank slot where a number used to be.
     useConnectionStore.setState({
       connections: [makeConnection("lite1", "sqlite")],
     });
@@ -156,17 +158,21 @@ describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
 
     const cell = document.querySelector('[data-row-count="true"]');
     expect(cell).not.toBeNull();
+    // Visible cue: literal `?` rather than the locale-separated number.
+    expect(cell?.textContent).toBe("?");
+    // Long-form a11y copy explains the `?` to screen-reader users.
     expect(cell?.getAttribute("aria-label")).toBe(
-      "Exact row count via COUNT(*)",
+      "Exact row count not yet fetched",
     );
-    expect(cell?.getAttribute("title")).toBe("Exact row count via COUNT(*)");
+    expect(cell?.getAttribute("title")).toBe("Exact row count not yet fetched");
   });
 
-  it("AC-S137-03: row count stays hidden when the schema fetch returned no estimate", async () => {
-    // `row_count: null` happens when the catalog query failed or the table
-    // is brand-new; in that case the cell must not render at all so the
-    // missing tooltip can't mislead the user about a number that isn't
-    // there. This pins the pre-existing pre-S137 invariant.
+  it("AC-148-2: PG row-count cell renders `?` when the schema fetch returned no estimate", async () => {
+    // Sprint 143 (AC-148-2) — `row_count: null` happens when the catalog
+    // query failed or the table is brand-new (no ANALYZE yet). Pre-S143
+    // the cell was suppressed entirely; per spec edge case the user
+    // should now see `?` so they know the value is *unknown*, not
+    // *zero*. The catch-all `?` rendering is shared with SQLite.
     useConnectionStore.setState({
       connections: [makeConnection("pg1", "postgresql")],
     });
@@ -184,8 +190,12 @@ describe("SchemaTree — Sprint 137 row count tooltip / aria-label", () => {
       fireEvent.click(screen.getByLabelText("public schema"));
     });
 
-    // The table row still renders — only the count cell is suppressed.
     expect(screen.getByLabelText("users table")).toBeInTheDocument();
-    expect(document.querySelector('[data-row-count="true"]')).toBeNull();
+    const cell = document.querySelector('[data-row-count="true"]');
+    expect(cell).not.toBeNull();
+    expect(cell?.textContent).toBe("?");
+    expect(cell?.getAttribute("aria-label")).toBe(
+      "Exact row count not yet fetched",
+    );
   });
 });
