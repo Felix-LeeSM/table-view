@@ -78,6 +78,38 @@ pub async fn workspace_focus<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErr
         .map_err(|e| AppError::Connection(format!("workspace.focus failed: {e}")))
 }
 
+/// Ensure the workspace window exists. If it was closed/destroyed (e.g. OS
+/// closed it before the `onCloseRequested` listener was registered), recreate
+/// it from the `workspace` entry in `tauri.conf.json` `app.windows[]` using
+/// `WebviewWindowBuilder::from_config`.
+///
+/// This is the recovery path: the frontend's `showWindow("workspace")` calls
+/// `getByLabel` first; when that returns `null` it invokes `workspace_ensure`
+/// to recreate the window, then retries the show.
+#[tauri::command]
+pub async fn workspace_ensure<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
+    if app.get_webview_window("workspace").is_some() {
+        return Ok(());
+    }
+
+    let config = app.config();
+    let window_config = config
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "workspace")
+        .ok_or_else(|| {
+            AppError::NotFound("workspace window config not found in tauri.conf.json".into())
+        })?;
+
+    tauri::WebviewWindowBuilder::from_config(&app, window_config)
+        .map_err(|e| AppError::Connection(format!("workspace from_config failed: {e}")))?
+        .build()
+        .map_err(|e| AppError::Connection(format!("workspace build failed: {e}")))?;
+
+    Ok(())
+}
+
 /// Exit the app cleanly. Used by Sprint 154's launcher-close handler so
 /// closing the launcher tears down the whole process (workspace included).
 #[tauri::command]
@@ -164,5 +196,45 @@ mod tests {
             "workspace_focus should succeed on a registered window, got {:?}",
             result.err()
         );
+    }
+
+    /// Reason: workspace_ensure must be a noop when the window already exists
+    /// (the common case — window was hidden, not destroyed). (2026-04-28)
+    #[tokio::test]
+    async fn workspace_ensure_is_noop_when_workspace_exists() {
+        let app = make_app_with_windows();
+        let result = workspace_ensure(app.handle().clone()).await;
+        assert!(
+            result.is_ok(),
+            "workspace_ensure should succeed when workspace already exists, got {:?}",
+            result.err()
+        );
+        // Workspace should still be accessible after ensure.
+        assert!(
+            app.get_webview_window("workspace").is_some(),
+            "workspace window should still exist after ensure"
+        );
+    }
+
+    /// Reason: workspace_ensure must return NotFound when the workspace config
+    /// is absent from tauri.conf.json (mock context has empty app.windows).
+    /// Verifies the error path when recreation is impossible. (2026-04-28)
+    #[tokio::test]
+    async fn workspace_ensure_returns_not_found_when_config_missing() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+
+        // No workspace window created, and mock config has no app.windows entry.
+        let result = workspace_ensure(app.handle().clone()).await;
+        match result {
+            Err(AppError::NotFound(msg)) => {
+                assert!(
+                    msg.contains("workspace"),
+                    "NotFound message should mention workspace, got {msg:?}"
+                );
+            }
+            other => panic!("Expected AppError::NotFound, got {other:?}"),
+        }
     }
 }

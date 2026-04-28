@@ -66,6 +66,7 @@ pub fn run() {
             launcher::workspace_show,
             launcher::workspace_hide,
             launcher::workspace_focus,
+            launcher::workspace_ensure,
             launcher::app_exit,
         ])
         .run(tauri::generate_context!())

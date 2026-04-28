@@ -70,14 +70,23 @@ async function resolveWindow(
  * Show `label`'s window. Idempotent — calling on an already-visible window
  * is a no-op from the user's perspective.
  *
- * Rejects if the underlying Tauri call rejects. Sprint 154 contract requires
- * a user-facing recovery (toast OR launcher remains visible) when
- * `workspace.show()` rejects on activation; that recovery lives in the
- * caller (`LauncherPage`) — this seam stays narrow.
+ * When `resolveWindow` returns null for the workspace label, the command
+ * invokes the Rust-side `workspace_ensure` command which recreates the
+ * window from `tauri.conf.json` config using `WebviewWindowBuilder::from_config`,
+ * then retries the resolve + show. This handles the case where the workspace
+ * window was destroyed before the `onCloseRequested` listener was registered.
  */
 export async function showWindow(label: WindowLabel): Promise<void> {
-  const win = await resolveWindow(label);
-  if (!win) return;
+  let win = await resolveWindow(label);
+  if (!win && label === "workspace") {
+    await invoke("workspace_ensure");
+    win = await resolveWindow(label);
+  }
+  if (!win) {
+    throw new Error(
+      `[window-controls] showWindow(${label}): window not found — is it declared in tauri.conf.json?`,
+    );
+  }
   await win.show();
 }
 
