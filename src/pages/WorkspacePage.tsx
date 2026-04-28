@@ -1,8 +1,16 @@
 import { useEffect } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Sun, Moon, Monitor } from "lucide-react";
 import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
 import { Button } from "@components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@components/ui/popover";
+import ThemePicker from "@components/theme/ThemePicker";
+import { useThemeStore } from "@stores/themeStore";
+import { THEME_CATALOG } from "@lib/themeCatalog";
 import { hideWindow, showWindow, onCloseRequested } from "@lib/window-controls";
 
 /**
@@ -30,6 +38,18 @@ import { hideWindow, showWindow, onCloseRequested } from "@lib/window-controls";
  * hide.
  */
 export default function WorkspacePage() {
+  // Theme store — used to render the theme toggle trigger button alongside
+  // the Back button in the workspace header strip. The ThemePicker popover
+  // itself reads the store directly, so we only need themeId/mode for the
+  // trigger's visual state.
+  const themeId = useThemeStore((s) => s.themeId);
+  const themeMode = useThemeStore((s) => s.mode);
+
+  const activeEntry =
+    THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
+  const ThemeIcon =
+    themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
+
   // Back-to-connections — separate handler from disconnect. Calling order
   // is asserted in window-transitions.test.tsx (AC-154-02).
   const handleBackToConnections = async () => {
@@ -68,12 +88,12 @@ export default function WorkspacePage() {
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
-      {/* Sidebar column — back button stacked above the existing Sidebar
-          so its layout (header / mode toggle / body / theme picker) stays
-          unchanged from the user's perspective. The button gets its own
-          aria-label per the sprint contract for unambiguous e2e selection. */}
+      {/* Sidebar column — back button + theme picker stacked above the
+          existing Sidebar so its layout (header / mode toggle / body) stays
+          unchanged from the user's perspective. The buttons get their own
+          aria-labels per the sprint contract for unambiguous e2e selection. */}
       <div className="flex h-full flex-col">
-        <div className="flex items-center border-b border-border bg-secondary px-2 py-1.5">
+        <div className="flex items-center justify-between border-b border-border bg-secondary px-2 py-1.5">
           <Button
             variant="ghost"
             size="xs"
@@ -85,6 +105,38 @@ export default function WorkspacePage() {
             <ArrowLeft />
             <span className="text-xs">Connections</span>
           </Button>
+
+          {/* Sprint 161 — Workspace-level theme toggle. Mirrors the
+              Popover+ThemePicker pattern from Sidebar.tsx so users can
+              change theme from the header without scrolling to the sidebar
+              footer. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground hover:text-secondary-foreground"
+                aria-label={`Workspace theme: ${activeEntry.name} (${themeMode})`}
+                title="Change theme"
+              >
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 shrink-0 rounded-full border border-border"
+                  style={{ backgroundColor: activeEntry.swatch }}
+                />
+                <ThemeIcon size={12} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              side="bottom"
+              sideOffset={4}
+              collisionPadding={8}
+              className="w-72 p-2"
+            >
+              <ThemePicker />
+            </PopoverContent>
+          </Popover>
         </div>
         <Sidebar />
       </div>
