@@ -832,6 +832,53 @@ describe("TabBar", () => {
 
   // Middle-click on a dirty tab also routes through the gate so the user
   // can never lose unsaved work via a stray scroll-wheel button press.
+  // Reason: Phase 13 AC-13-07 — preview tab의 접근성 속성 검증.
+  //         role="tab", aria-selected, data-preview="true", italic+opacity-70
+  //         클래스가 모두 올바르게 적용되는지 확인 (2026-04-28)
+  it("preview tab has correct aria attributes for accessibility (AC-13-07)", () => {
+    addTableTab({ title: "public.users", table: "users" });
+    // New tabs are preview by default.
+
+    render(<TabBar />);
+
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    // role="tab" is present (verified by the query selector itself).
+    expect(tab).toHaveAttribute("role", "tab");
+    // aria-selected is present — the tab is active because it's the only tab.
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    // data-preview signals the preview state for e2e tests and styling hooks.
+    expect(tab).toHaveAttribute("data-preview", "true");
+    // The title span carries the preview visual cue (italic + opacity-70).
+    const titleEl = screen.getByText("users");
+    expect(titleEl.className).toContain("italic");
+    expect(titleEl.className).toContain("opacity-70");
+  });
+
+  // Reason: Phase 13 AC-13-07 — permanent tab과 preview tab의 aria 속성 차이 검증.
+  //         permanent tab은 data-preview가 없어야 하고, italic 스타일도 없어야 함 (2026-04-28)
+  it("permanent tab does not have preview-specific attributes (AC-13-07)", () => {
+    addTableTab({ title: "public.users", table: "users" });
+    // Promote to permanent.
+    const tabId = useTabStore.getState().tabs[0]!.id;
+    act(() => {
+      useTabStore.getState().promoteTab(tabId);
+    });
+
+    render(<TabBar />);
+
+    const tab = screen.getByText("users").closest("[role='tab']")!;
+    // role="tab" and aria-selected still present — core tab semantics unchanged.
+    expect(tab).toHaveAttribute("role", "tab");
+    expect(tab).toHaveAttribute("aria-selected", "true");
+    // data-preview is absent on permanent tabs (or not "true").
+    expect(tab).not.toHaveAttribute("data-preview", "true");
+    expect(tab).not.toHaveAttribute("data-preview");
+    // Title is NOT italic (no preview visual cue).
+    const titleEl = screen.getByText("users");
+    expect(titleEl.className).not.toContain("italic");
+    expect(titleEl.className).not.toContain("opacity-70");
+  });
+
   it("middle-click on dirty tab triggers the confirm gate", () => {
     addTableTab({ title: "Users", table: "users" });
     const tabId = useTabStore.getState().tabs[0]!.id;

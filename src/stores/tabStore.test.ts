@@ -835,6 +835,164 @@ describe("tabStore", () => {
       expect(state.tabs[0]!.id).toBe(previewId);
       expect(getTableTab(state, 0).isPreview).toBe(true);
     });
+
+    // Reason: Phase 13 AC-13-06 — RDB와 Document 탭이 다른 connection이면 독립적으로 관리됨을 보장 (2026-04-28)
+    it("RDB preview and Document preview tabs are independent for different connections", () => {
+      // Add RDB table tab (connection "pg-1")
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "pg-1",
+          table: "users",
+          schema: "public",
+          paradigm: "rdb",
+        }),
+      );
+
+      // Add Document collection tab (connection "mongo-1")
+      useTabStore.getState().addTab({
+        ...makeTableTab({
+          id: "ignored",
+          connectionId: "mongo-1",
+          table: "products",
+          schema: "shop",
+        }),
+        paradigm: "document",
+        database: "shop",
+        collection: "products",
+      });
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+      expect(getTableTab(state, 1).isPreview).toBe(true);
+      expect(getTableTab(state, 0).paradigm).toBe("rdb");
+      expect(getTableTab(state, 1).paradigm).toBe("document");
+    });
+
+    // -- Sprint 158: subView-aware exact match & preview swap --
+
+    // Reason: Same table + different subView should create a new tab, not
+    //         activate the existing one. Data and Structure are distinct views
+    //         of the same table and must coexist as separate tabs (2026-04-28)
+    it("AC-158-01: same table + different subView → creates new tab", () => {
+      // Open a Data (records) tab for "users"
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          subView: "records",
+        }),
+      );
+
+      const state1 = useTabStore.getState();
+      expect(state1.tabs).toHaveLength(1);
+      const dataTabId = state1.tabs[0]!.id;
+
+      // Open a Structure tab for the same "users" table
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          subView: "structure",
+        }),
+      );
+
+      const state2 = useTabStore.getState();
+      // Two separate tabs: one Data, one Structure
+      expect(state2.tabs).toHaveLength(2);
+      expect(state2.tabs.find((t) => t.id === dataTabId)).toBeDefined();
+      const structTab = state2.tabs.find(
+        (t): t is TableTab =>
+          t.type === "table" && (t as TableTab).subView === "structure",
+      );
+      expect(structTab).toBeDefined();
+      // Active tab should be the newly created Structure tab
+      expect(state2.activeTabId).toBe(structTab!.id);
+    });
+
+    // Reason: Same table + same subView should still activate the existing tab.
+    //         This is a regression guard — the subView fix must not break the
+    //         original exact-match behavior (2026-04-28)
+    it("AC-158-02: same table + same subView → activates existing tab (regression)", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          subView: "records",
+        }),
+      );
+
+      const state1 = useTabStore.getState();
+      expect(state1.tabs).toHaveLength(1);
+      const originalId = state1.tabs[0]!.id;
+
+      // Try to open the same table + subView again
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          subView: "records",
+        }),
+      );
+
+      const state2 = useTabStore.getState();
+      // Still 1 tab, same ID — just activated
+      expect(state2.tabs).toHaveLength(1);
+      expect(state2.tabs[0]!.id).toBe(originalId);
+      expect(state2.activeTabId).toBe(originalId);
+    });
+
+    // Reason: A Data preview tab should only be swapped by another Data tab,
+    //         not by a Structure tab. When user has a Data preview and clicks
+    //         "View Structure", a new Structure tab should be created alongside
+    //         the Data preview (2026-04-28)
+    it("AC-158-03: Data preview + Structure click → creates new Structure preview (no swap)", () => {
+      // Open a Data preview tab
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          subView: "records",
+        }),
+      );
+
+      const state1 = useTabStore.getState();
+      expect(state1.tabs).toHaveLength(1);
+      expect(getTableTab(state1, 0).isPreview).toBe(true);
+      expect(getTableTab(state1, 0).subView).toBe("records");
+      const dataPreviewId = state1.tabs[0]!.id;
+
+      // Open a Structure tab for the same table (like "View Structure" context menu)
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          subView: "structure",
+        }),
+      );
+
+      const state2 = useTabStore.getState();
+      // Two tabs: the original Data preview + a new Structure preview
+      expect(state2.tabs).toHaveLength(2);
+      // Data preview survives
+      expect(state2.tabs.find((t) => t.id === dataPreviewId)).toBeDefined();
+      // Structure tab was created
+      const structTab = state2.tabs.find(
+        (t): t is TableTab =>
+          t.type === "table" && (t as TableTab).subView === "structure",
+      );
+      expect(structTab).toBeDefined();
+      expect(structTab!.isPreview).toBe(true);
+      // Active tab is the new Structure tab
+      expect(state2.activeTabId).toBe(structTab!.id);
+    });
   });
 
   // -- Sprint 38: Tab State Persistence --

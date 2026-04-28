@@ -11,7 +11,7 @@ import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "@stores/documentStore";
-import { useTabStore } from "@stores/tabStore";
+import { useTabStore, type TableTab } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 
 // Mock the tauri bridge so the store actions resolve against canned data
@@ -502,5 +502,208 @@ describe("DocumentDatabaseTree", () => {
         screen.queryByLabelText("users collection"),
       ).not.toBeInTheDocument(),
     );
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // Sprint 156 — Phase 13 diagnostic edge cases for document preview.
+  // These tests diagnose user-reported Bug 2 (preview tabs accumulate
+  // instead of swapping) in the document paradigm context.
+  // ─────────────────────────────────────────────────────────────────
+
+  // Reason: 다른 database의 collection 클릭 시 preview swap이 정상 동작하는지 진단.
+  //         addTab의 exact match는 (connectionId, table)만 비교하므로, 다른 DB의
+  //         같은 이름 collection은 exact match로 처리될 수 있음 (2026-04-28)
+  it("AC-156-doc-01: clicking collections in different databases swaps the preview slot", async () => {
+    // Override the database list mock to include dbX and dbY.
+    const tauriMock = await import("@lib/tauri");
+    const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
+    listDatabasesSpy.mockResolvedValueOnce([{ name: "dbX" }, { name: "dbY" }]);
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    // Expand both databases.
+    await waitFor(() =>
+      expect(screen.getByLabelText("dbX database")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("dbX database"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("x_collection collection"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("dbY database"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("y_collection collection"),
+      ).toBeInTheDocument(),
+    );
+
+    // Click collection in dbX.
+    fireEvent.click(screen.getByLabelText("x_collection collection"));
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const first = tabs[0]!;
+    if (first.type === "table") {
+      expect(first.isPreview).toBe(true);
+      expect(first.collection).toBe("x_collection");
+    }
+
+    // Click collection in dbY — must swap preview, not accumulate.
+    fireEvent.click(screen.getByLabelText("y_collection collection"));
+    const tabs2 = useTabStore.getState().tabs;
+    expect(tabs2).toHaveLength(1);
+    const second = tabs2[0]!;
+    if (second.type === "table") {
+      expect(second.isPreview).toBe(true);
+      expect(second.collection).toBe("y_collection");
+    }
+  });
+
+  // Reason: double-click promote 후 다른 collection 클릭 시 permanent + preview
+  //         2개 탭이 생성되어야 함. relational 트리와 동일한 semantics (2026-04-28)
+  it("AC-156-doc-02: double-click promotion then clicking a different collection creates permanent + preview", async () => {
+    // Override mock to include both table_view_test and dbX.
+    const tauriMock = await import("@lib/tauri");
+    const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
+    listDatabasesSpy.mockResolvedValueOnce([
+      { name: "table_view_test" },
+      { name: "dbX" },
+    ]);
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+
+    // Double-click to promote.
+    fireEvent.doubleClick(screen.getByLabelText("users collection"));
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const promoted = tabs[0]!;
+    if (promoted.type === "table") {
+      expect(promoted.isPreview).toBe(false);
+      expect(promoted.collection).toBe("users");
+    }
+
+    // Now expand dbX and click a different collection.
+    await waitFor(() =>
+      expect(screen.getByLabelText("dbX database")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("dbX database"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("x_collection collection"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("x_collection collection"));
+
+    const tabs2 = useTabStore.getState().tabs;
+    expect(tabs2).toHaveLength(2);
+    // Find the permanent and preview tabs.
+    const permanent = tabs2.find(
+      (t): t is TableTab => t.type === "table" && t.isPreview !== true,
+    );
+    const preview = tabs2.find(
+      (t): t is TableTab => t.type === "table" && t.isPreview === true,
+    );
+    if (permanent && permanent.type === "table") {
+      expect(permanent.isPreview).toBe(false);
+      expect(permanent.collection).toBe("users");
+    }
+    if (preview && preview.type === "table") {
+      expect(preview.isPreview).toBe(true);
+      expect(preview.collection).toBe("x_collection");
+    }
+  });
+
+  // Reason: promote 후 같은 collection 다시 클릭해도 새 탭이 생기지 않아야 함.
+  //         exact match가 동작하는지 확인 (2026-04-28)
+  it("AC-156-doc-03: after promoting, clicking the same collection again is idempotent", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("table_view_test database"));
+    await waitFor(() =>
+      expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
+    );
+
+    // Double-click to promote.
+    fireEvent.doubleClick(screen.getByLabelText("users collection"));
+
+    // Click the same collection again — must not create a second tab.
+    fireEvent.click(screen.getByLabelText("users collection"));
+
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const tab = tabs[0]!;
+    if (tab.type === "table") {
+      expect(tab.isPreview).toBe(false);
+      expect(tab.collection).toBe("users");
+    }
+  });
+
+  // Reason: Phase 13 AC-13-06 — 같은 connection 내 다른 database의 collection 간
+  //         preview swap 검증. dbA.colA 클릭 → preview 생성, dbB.colB 클릭 →
+  //         preview swap (탭 개수 1 유지). AC-156-doc-01과 유사하지만 독립적인
+  //         mock 설정으로 Phase 13 수용 기준 충족을 명시적으로 보장 (2026-04-28)
+  it("AC-13-06: swaps preview when clicking collection from different database (same connection)", async () => {
+    const tauriMock = await import("@lib/tauri");
+    const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
+    // Use dbX and dbY — these are already handled by the default listMongoCollections mock.
+    listDatabasesSpy.mockResolvedValueOnce([{ name: "dbX" }, { name: "dbY" }]);
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    // Expand both databases to reveal their collections.
+    await waitFor(() =>
+      expect(screen.getByLabelText("dbX database")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("dbX database"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("x_collection collection"),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("dbY database"));
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("y_collection collection"),
+      ).toBeInTheDocument(),
+    );
+
+    // Click collection in dbX → preview tab created.
+    fireEvent.click(screen.getByLabelText("x_collection collection"));
+    let tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const first = tabs[0]!;
+    expect(first.type).toBe("table");
+    if (first.type === "table") {
+      expect(first.isPreview).toBe(true);
+      expect(first.collection).toBe("x_collection");
+      expect(first.database).toBe("dbX");
+    }
+
+    // Click collection in dbY → preview swapped (still 1 tab).
+    fireEvent.click(screen.getByLabelText("y_collection collection"));
+    tabs = useTabStore.getState().tabs;
+    expect(tabs).toHaveLength(1);
+    const second = tabs[0]!;
+    expect(second.type).toBe("table");
+    if (second.type === "table") {
+      expect(second.isPreview).toBe(true);
+      expect(second.collection).toBe("y_collection");
+      expect(second.database).toBe("dbY");
+    }
   });
 });

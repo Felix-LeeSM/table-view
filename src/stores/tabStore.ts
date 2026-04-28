@@ -287,18 +287,20 @@ export const useTabStore = create<TabState>((set, get) => ({
           t.type === "table" &&
           t.connectionId === tabWithDb.connectionId &&
           t.table === tabWithDb.table &&
-          t.table !== undefined,
+          t.table !== undefined &&
+          (t.subView ?? "records") === (tabWithDb.subView ?? "records"),
       );
       if (exists) {
         return { activeTabId: exists.id };
       }
 
-      // Check if there is a preview tab for the same connection to replace
+      // Check if there is a preview tab for the same connection + subView to replace
       const previewIdx = state.tabs.findIndex(
         (t): t is TableTab =>
           t.type === "table" &&
           t.connectionId === tabWithDb.connectionId &&
-          t.isPreview === true,
+          t.isPreview === true &&
+          (t.subView ?? "records") === (tabWithDb.subView ?? "records"),
       );
 
       if (previewIdx !== -1) {

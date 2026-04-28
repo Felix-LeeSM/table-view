@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownUp,
   Clock,
@@ -92,51 +92,63 @@ export default function HomePage() {
   // must run unconditionally so the Workspace Sidebar/Toolbar re-render
   // around the new connection. (This was the root cause of the toolbar
   // ConnectionSwitcher's "swap doesn't happen" bug per the lesson.)
-  const handleActivate = (id: string) => {
-    // Sprint 148 (AC-142-2) — when the user activates a connection that
-    // differs from any open workspace tab's owner, close those stale
-    // tabs so the new workspace doesn't inherit cross-connection state.
-    // Same-connection reactivation keeps existing tabs untouched.
-    const tabState = useTabStore.getState();
-    const staleConnIds = new Set(
-      tabState.tabs
-        .filter((t) => t.connectionId !== id)
-        .map((t) => t.connectionId),
-    );
-    for (const cid of staleConnIds) {
-      tabState.clearTabsForConnection(cid);
-    }
-    setFocusedConn(id);
-    // Sprint 154 — wire activation to real `WebviewWindow` lifecycle.
-    // Order: workspace.show() → workspace.setFocus() → launcher.hide().
-    // The order matters: `show` then `setFocus` ensures the workspace
-    // takes input focus the moment it becomes visible; `launcher.hide()`
-    // happens last so a `workspace.show()` rejection leaves the launcher
-    // on screen for retry (locked by AC-154-01 error path).
-    void (async () => {
-      try {
-        await showWindow("workspace");
-      } catch (e) {
-        toast.error(
-          `Failed to open workspace: ${e instanceof Error ? e.message : String(e)}`,
-        );
-        return;
+  // Sprint 157 — guard against rapid re-entry so that double-clicks
+  // don't trigger multiple showWindow calls in parallel.
+  const activatingRef = useRef(false);
+
+  const handleActivate = useCallback(
+    (id: string) => {
+      if (activatingRef.current) return; // guard against rapid re-entry
+
+      // Sprint 148 (AC-142-2) — when the user activates a connection that
+      // differs from any open workspace tab's owner, close those stale
+      // tabs so the new workspace doesn't inherit cross-connection state.
+      // Same-connection reactivation keeps existing tabs untouched.
+      const tabState = useTabStore.getState();
+      const staleConnIds = new Set(
+        tabState.tabs
+          .filter((t) => t.connectionId !== id)
+          .map((t) => t.connectionId),
+      );
+      for (const cid of staleConnIds) {
+        tabState.clearTabsForConnection(cid);
       }
-      try {
-        await focusWindow("workspace");
-        await hideWindow("launcher");
-      } catch (e) {
-        // Best-effort post-show cleanup. The user already sees the
-        // workspace at this point, so a focus/hide failure is logged
-        // but does not surface a toast (would be misleading — the
-        // primary action succeeded).
-        console.warn(
-          "[home-activate] post-show cleanup failed:",
-          e instanceof Error ? e.message : e,
-        );
-      }
-    })();
-  };
+      setFocusedConn(id);
+      activatingRef.current = true;
+      // Sprint 154 — wire activation to real `WebviewWindow` lifecycle.
+      // Order: workspace.show() → workspace.setFocus() → launcher.hide().
+      // The order matters: `show` then `setFocus` ensures the workspace
+      // takes input focus the moment it becomes visible; `launcher.hide()`
+      // happens last so a `workspace.show()` rejection leaves the launcher
+      // on screen for retry (locked by AC-154-01 error path).
+      void (async () => {
+        try {
+          await showWindow("workspace");
+        } catch (e) {
+          toast.error(
+            `Failed to open workspace: ${e instanceof Error ? e.message : String(e)}`,
+          );
+          return;
+        } finally {
+          activatingRef.current = false;
+        }
+        try {
+          await focusWindow("workspace");
+          await hideWindow("launcher");
+        } catch (e) {
+          // Best-effort post-show cleanup. The user already sees the
+          // workspace at this point, so a focus/hide failure is logged
+          // but does not surface a toast (would be misleading — the
+          // primary action succeeded).
+          console.warn(
+            "[home-activate] post-show cleanup failed:",
+            e instanceof Error ? e.message : e,
+          );
+        }
+      })();
+    },
+    [setFocusedConn],
+  );
 
   const activeEntry =
     THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];

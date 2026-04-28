@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "./HomePage";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useTabStore } from "@stores/tabStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
@@ -113,6 +114,12 @@ function resetStores() {
     connections: [],
     activeStatuses: {},
     focusedConnId: null,
+  });
+  useTabStore.setState({
+    tabs: [],
+    activeTabId: null,
+    closedTabHistory: [],
+    dirtyTabIds: new Set<string>(),
   });
 }
 
@@ -298,5 +305,82 @@ describe("HomePage", () => {
     // double-click → swap to workspace"). Sprint 154 — expressed via seam.
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
     expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
+  });
+
+  // ── Sprint 157: activation debounce guard ──
+
+  // Reason: Sprint 157 — handleActivate 가드로 빠른 연속 더블클릭 시 중복 showWindow 방지 (2026-04-28)
+  it("AC-157-01: rapid double activation calls showWindow exactly once", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("c1")],
+      activeStatuses: { c1: { type: "connected" } },
+      focusedConnId: null,
+    });
+    render(<HomePage />);
+
+    // Fire two activations in the same event loop tick without awaiting.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+    });
+
+    const workspaceCalls = vi
+      .mocked(windowControls.showWindow)
+      .mock.calls.filter((c) => c[0] === "workspace");
+    expect(workspaceCalls).toHaveLength(1);
+    // focusedConnId still updated from the first call.
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+  });
+
+  // Reason: Sprint 157 — 단일 활성화는 가드 추가 후에도 동일하게 동작해야 함 (회귀 방지) (2026-04-28)
+  it("AC-157-02: single activation still works correctly (regression guard)", async () => {
+    useConnectionStore.setState({
+      connections: [makeConnection("c1")],
+      activeStatuses: { c1: { type: "connected" } },
+      focusedConnId: null,
+    });
+    render(<HomePage />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+    });
+
+    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.focusWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.hideWindow).toHaveBeenCalledWith("launcher");
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
+  });
+
+  // Reason: Sprint 157 — showWindow 실패 후에도 가드 해제되어 재시도 가능 (2026-04-28)
+  it("AC-157-03: guard resets after showWindow rejection allowing retry", async () => {
+    vi.mocked(windowControls.showWindow)
+      .mockRejectedValueOnce(new Error("workspace.show failed"))
+      .mockResolvedValue(undefined);
+
+    useConnectionStore.setState({
+      connections: [makeConnection("c1")],
+      activeStatuses: { c1: { type: "connected" } },
+      focusedConnId: null,
+    });
+    render(<HomePage />);
+
+    // First activation — showWindow rejects.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+    });
+
+    expect(windowControls.showWindow).toHaveBeenCalledTimes(1);
+    // hideWindow must NOT be called after rejection — launcher stays visible.
+    expect(windowControls.hideWindow).not.toHaveBeenCalledWith("launcher");
+
+    // Second activation — showWindow resolves. Guard must have been reset.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("list-activate-c1"));
+    });
+
+    expect(windowControls.showWindow).toHaveBeenCalledTimes(2);
+    expect(windowControls.focusWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.hideWindow).toHaveBeenCalledWith("launcher");
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 });
