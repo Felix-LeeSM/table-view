@@ -1,98 +1,119 @@
 /**
- * window-controls.ts — showWindow workspace_ensure fallback tests.
+ * window-controls.ts — Rust command routing tests.
  *
- * Reason: the workspace window can be destroyed at runtime (e.g. OS closed it
- * before the `onCloseRequested` listener was registered). When `getByLabel`
- * returns null, `showWindow("workspace")` must invoke the Rust-side
- * `workspace_ensure` command to recreate it from config, then retry the show.
- * These tests lock that recovery path. (2026-04-28)
+ * Reason: showWindow/hideWindow/focusWindow now route through Rust-side
+ * commands (`workspace_show`, `launcher_hide`, etc.) instead of the JS
+ * `getByLabel` API which proved unreliable. These tests lock the Rust
+ * command invocation + workspace_ensure fallback behavior. (2026-04-28)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock Tauri APIs before importing the module under test.
-const mockGetByLabel = vi.fn();
 const mockInvoke = vi.fn();
-const mockShow = vi.fn();
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
 vi.mock("@tauri-apps/api/webviewWindow", () => ({
-  WebviewWindow: {
-    getByLabel: (...args: unknown[]) => mockGetByLabel(...args),
-  },
+  WebviewWindow: {},
   getCurrentWebviewWindow: vi.fn(),
 }));
 
-vi.mock("@tauri-apps/api/event", () => ({
-  // UnlistenFn type stub
-}));
+vi.mock("@tauri-apps/api/event", () => ({}));
 
-describe("showWindow workspace_ensure fallback", () => {
+describe("showWindow — Rust command routing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockInvoke.mockResolvedValue(undefined);
   });
 
-  // Reason: the normal case — workspace window exists, showWindow just shows
-  // it without invoking workspace_ensure. (2026-04-28)
-  it("does NOT invoke workspace_ensure when workspace window exists", async () => {
-    mockGetByLabel.mockResolvedValue({ show: mockShow });
-    mockShow.mockResolvedValue(undefined);
+  // Reason: the normal case — workspace window exists, workspace_show
+  // succeeds on the first try without needing workspace_ensure. (2026-04-28)
+  it("invokes workspace_show directly when window exists", async () => {
+    const { showWindow } = await import("@lib/window-controls");
+    await showWindow("workspace");
+
+    expect(mockInvoke).toHaveBeenCalledWith("workspace_show");
+    expect(mockInvoke).not.toHaveBeenCalledWith("workspace_ensure");
+  });
+
+  // Reason: the critical recovery path — workspace_show fails (window
+  // destroyed), then workspace_ensure recreates it, then workspace_show
+  // retries. This is the fix for the "창이 안 열려" bug. (2026-04-28)
+  it("invokes workspace_ensure then retries workspace_show when workspace_show fails", async () => {
+    mockInvoke
+      .mockRejectedValueOnce(new Error("window 'workspace' not found"))
+      .mockResolvedValueOnce(undefined) // workspace_ensure succeeds
+      .mockResolvedValueOnce(undefined); // workspace_show retry succeeds
 
     const { showWindow } = await import("@lib/window-controls");
     await showWindow("workspace");
 
-    expect(mockShow).toHaveBeenCalledTimes(1);
+    // First workspace_show → fails, then ensure, then retry.
+    expect(mockInvoke).toHaveBeenCalledTimes(3);
+    expect(mockInvoke).toHaveBeenNthCalledWith(1, "workspace_show");
+    expect(mockInvoke).toHaveBeenNthCalledWith(2, "workspace_ensure");
+    expect(mockInvoke).toHaveBeenNthCalledWith(3, "workspace_show");
+  });
+
+  // Reason: workspace_ensure is workspace-specific. The launcher must never
+  // trigger the recreate fallback — its error propagates directly. (2026-04-28)
+  it("propagates error for launcher without trying workspace_ensure", async () => {
+    mockInvoke.mockRejectedValue(new Error("window 'launcher' not found"));
+
+    const { showWindow } = await import("@lib/window-controls");
+    await expect(showWindow("launcher")).rejects.toThrow(/launcher/);
+
+    expect(mockInvoke).toHaveBeenCalledWith("launcher_show");
     expect(mockInvoke).not.toHaveBeenCalledWith("workspace_ensure");
   });
 
-  // Reason: the critical recovery path — workspace was destroyed, getByLabel
-  // returns null. showWindow must invoke workspace_ensure to recreate it,
-  // then resolve the window again and call show(). (2026-04-28)
-  it("invokes workspace_ensure then retries when workspace getByLabel returns null", async () => {
-    // First getByLabel returns null (window missing), second returns the
-    // recreated window.
-    const recreatedWin = { show: mockShow };
-    mockShow.mockResolvedValue(undefined);
-    mockGetByLabel
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(recreatedWin);
+  // Reason: if workspace_ensure also fails, the error from the retry
+  // workspace_show propagates to the caller. (2026-04-28)
+  it("propagates error when workspace_ensure + retry both fail", async () => {
+    mockInvoke
+      .mockRejectedValueOnce(new Error("window 'workspace' not found"))
+      .mockRejectedValueOnce(new Error("config not found"))
+      .mockRejectedValueOnce(new Error("window 'workspace' not found"));
 
     const { showWindow } = await import("@lib/window-controls");
-    await showWindow("workspace");
+    await expect(showWindow("workspace")).rejects.toThrow();
+  });
+});
 
-    // workspace_ensure must have been invoked to recreate the window.
-    expect(mockInvoke).toHaveBeenCalledWith("workspace_ensure");
-    // After recreation, getByLabel was called again and show was called.
-    expect(mockGetByLabel).toHaveBeenCalledTimes(2);
-    expect(mockShow).toHaveBeenCalledTimes(1);
+describe("hideWindow / focusWindow — Rust command routing", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInvoke.mockResolvedValue(undefined);
   });
 
-  // Reason: workspace_ensure is workspace-specific. The launcher window must
-  // never trigger the recreate fallback — it should throw immediately. (2026-04-28)
-  it("does NOT invoke workspace_ensure for launcher window when getByLabel returns null", async () => {
-    mockGetByLabel.mockResolvedValue(null);
-
-    const { showWindow } = await import("@lib/window-controls");
-    await expect(showWindow("launcher")).rejects.toThrow(/window not found/);
-
-    expect(mockInvoke).not.toHaveBeenCalledWith("workspace_ensure");
-  });
-
-  // Reason: if workspace_ensure runs but the window STILL can't be resolved
-  // (e.g. the Rust command failed silently or returned before the window was
-  // fully created), showWindow must throw rather than silently returning.
+  // Reason: hideWindow must call the Rust command, not getByLabel.
   // (2026-04-28)
-  it("throws when workspace_ensure runs but window still not found on retry", async () => {
-    mockGetByLabel.mockResolvedValue(null);
+  it("hideWindow invokes launcher_hide via Rust command", async () => {
+    const { hideWindow } = await import("@lib/window-controls");
+    await hideWindow("launcher");
+    expect(mockInvoke).toHaveBeenCalledWith("launcher_hide");
+  });
 
-    const { showWindow } = await import("@lib/window-controls");
-    await expect(showWindow("workspace")).rejects.toThrow(/window not found/);
+  // Reason: hideWindow swallows errors (best-effort). (2026-04-28)
+  it("hideWindow swallows errors silently", async () => {
+    mockInvoke.mockRejectedValue(new Error("window gone"));
+    const { hideWindow } = await import("@lib/window-controls");
+    // Should not throw
+    await hideWindow("workspace");
+  });
 
-    // workspace_ensure was attempted but didn't help.
-    expect(mockInvoke).toHaveBeenCalledWith("workspace_ensure");
-    expect(mockGetByLabel).toHaveBeenCalledTimes(2);
+  // Reason: focusWindow must call the Rust command. (2026-04-28)
+  it("focusWindow invokes workspace_focus via Rust command", async () => {
+    const { focusWindow } = await import("@lib/window-controls");
+    await focusWindow("workspace");
+    expect(mockInvoke).toHaveBeenCalledWith("workspace_focus");
+  });
+
+  // Reason: focusWindow swallows errors (best-effort). (2026-04-28)
+  it("focusWindow swallows errors silently", async () => {
+    mockInvoke.mockRejectedValue(new Error("window gone"));
+    const { focusWindow } = await import("@lib/window-controls");
+    await focusWindow("workspace");
   });
 });

@@ -1,26 +1,23 @@
 /**
- * Sprint 154 — thin testable seam over Tauri's `WebviewWindow` API.
+ * Sprint 154 — thin testable seam over Tauri's window lifecycle commands.
  *
- * Phase 12 finally wires the user-facing transitions (Activate / Back /
- * Disconnect / Window close) to real `WebviewWindow.show/hide/setFocus()`
- * calls + the `app_exit` Tauri command. The Pages MUST go through this seam
- * rather than calling `WebviewWindow.getByLabel(...)` directly so that:
+ * All show / hide / focus / exit operations route through Rust-side Tauri
+ * commands (`workspace_show`, `launcher_hide`, etc.) instead of the JS
+ * `getByLabel` + `win.show()` pattern. The JS `getByLabel` API proved
+ * unreliable — it could return `null` for windows that the Rust side knew
+ * about, causing the workspace to never appear. Using Rust commands directly
+ * eliminates that disconnect because `app.get_webview_window()` on the Rust
+ * side is the canonical window registry.
  *
- *   1. unit tests can `vi.mock('@lib/window-controls')` and assert call
- *      ordering for the 5 transitions without touching real Tauri internals;
- *   2. error handling is centralized — a failed `show()` from any caller
- *      surfaces a single, consistent toast instead of N ad-hoc try/catches;
- *   3. the launcher / workspace label union is enforced at the type level so
- *      a typo can't compile.
+ * The workspace show path has a special fallback: if `workspace_show` fails
+ * (window was destroyed), it invokes `workspace_ensure` which recreates the
+ * window from `tauri.conf.json` config via `WebviewWindowBuilder::from_config`,
+ * then retries the show.
  *
- * Sprint 154 keeps the surface intentionally small — show, hide, focus,
- * close, exit, plus a `tauri://close-requested` listener helper. Anything
- * else (`setSize`, `setPosition`, `minimize`, etc.) is out of scope and
- * lives in later sprints if it ever lands.
- *
- * Inside vitest there is no Tauri runtime, so each helper swallows the
- * call-time failure with a single `console.warn`. Tests `vi.mock(...)` the
- * whole module and never exercise this defensive branch.
+ * `onCloseRequested`, `closeWindow`, and `onCurrentWindowCloseRequested`
+ * still use `resolveWindow` (which calls `getByLabel`) because they need a
+ * window handle for event registration — but these are called from within the
+ * window itself where `getByLabel` is reliable.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -28,33 +25,19 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 
 /**
  * The two known window labels declared in `tauri.conf.json` `app.windows[]`.
- * Mirrors the union in `src/lib/window-label.ts` but kept independent so the
- * boot-time resolver and the runtime controls stay decoupled at the import
- * level (one is a passive read; the other is an action surface).
  */
 export type WindowLabel = "launcher" | "workspace";
 
 /**
- * Resolve the `WebviewWindow` for `label`. Tauri's `WebviewWindow.getByLabel`
- * is an async-by-runtime API — it returns the handle synchronously when the
- * window already exists, but throws if Tauri isn't initialized. We keep the
- * resolver `async` so callers can `await` uniformly.
- *
- * Returns `null` when the Tauri runtime is unavailable (vitest jsdom) or the
- * label is unknown to the runtime; callers map that to a no-op + warn.
+ * Resolve the `WebviewWindow` for `label`. Used only by operations that need
+ * a window handle (event registration, close). Returns `null` when the Tauri
+ * runtime is unavailable (vitest jsdom) or the label is unknown.
  */
 async function resolveWindow(
   label: WindowLabel,
 ): Promise<import("@tauri-apps/api/webviewWindow").WebviewWindow | null> {
   try {
-    // `getByLabel` was renamed across Tauri 1→2; in Tauri 2 it lives on the
-    // namespace import. We grab it dynamically so a missing runtime collapses
-    // to the catch path instead of a static import error.
     const mod = await import("@tauri-apps/api/webviewWindow");
-    // Tauri 2's `getByLabel` is async — it round-trips through `invoke`
-    // under the hood. Awaiting here lets us catch the jsdom-no-runtime
-    // rejection in the surrounding try/catch instead of letting it bubble
-    // up as an unhandled rejection.
     const win = await mod.WebviewWindow.getByLabel(label);
     return win ?? null;
   } catch (e) {
@@ -67,49 +50,50 @@ async function resolveWindow(
 }
 
 /**
- * Show `label`'s window. Idempotent — calling on an already-visible window
- * is a no-op from the user's perspective.
+ * Show `label`'s window via the Rust-side command. The Rust command uses
+ * `app.get_webview_window()` which is the canonical window registry — this
+ * bypasses the unreliable JS `getByLabel` API.
  *
- * When `resolveWindow` returns null for the workspace label, the command
- * invokes the Rust-side `workspace_ensure` command which recreates the
- * window from `tauri.conf.json` config using `WebviewWindowBuilder::from_config`,
- * then retries the resolve + show. This handles the case where the workspace
- * window was destroyed before the `onCloseRequested` listener was registered.
+ * For the workspace label, if `workspace_show` fails the command retries
+ * after invoking `workspace_ensure` to recreate the window from config.
  */
 export async function showWindow(label: WindowLabel): Promise<void> {
-  let win = await resolveWindow(label);
-  if (!win && label === "workspace") {
-    await invoke("workspace_ensure");
-    win = await resolveWindow(label);
+  try {
+    await invoke(`${label}_show`);
+  } catch (e) {
+    if (label === "workspace") {
+      await invoke("workspace_ensure");
+      await invoke("workspace_show");
+    } else {
+      throw e;
+    }
   }
-  if (!win) {
-    throw new Error(
-      `[window-controls] showWindow(${label}): window not found — is it declared in tauri.conf.json?`,
-    );
-  }
-  await win.show();
 }
 
 /**
  * Hide `label`'s window without closing it — re-showing must be instant.
- * Used by the Back flow (workspace → launcher) and by the activation flow
- * (launcher hides after workspace becomes visible).
+ * Best-effort: swallows errors since the window might already be gone.
  */
 export async function hideWindow(label: WindowLabel): Promise<void> {
-  const win = await resolveWindow(label);
-  if (!win) return;
-  await win.hide();
+  try {
+    await invoke(`${label}_hide`);
+  } catch {
+    // Best-effort — window might already be gone.
+  }
 }
 
 /**
  * Bring `label`'s window to the front and give it input focus. Called
  * immediately after `showWindow(label)` on the activation path so the
  * workspace receives keystrokes the moment it becomes visible.
+ * Best-effort: swallows errors since a focus failure isn't user-visible.
  */
 export async function focusWindow(label: WindowLabel): Promise<void> {
-  const win = await resolveWindow(label);
-  if (!win) return;
-  await win.setFocus();
+  try {
+    await invoke(`${label}_focus`);
+  } catch {
+    // Best-effort — focus failure isn't user-visible.
+  }
 }
 
 /**
