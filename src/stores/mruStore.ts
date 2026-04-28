@@ -3,12 +3,28 @@ import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
 /**
+ * Sprint 166 — MRU entry representing a single recently-used connection.
+ *
+ * `lastUsed` is a `Date.now()` epoch ms timestamp so the launcher's "Recent"
+ * rail can render relative-time labels ("2 min ago") without querying the
+ * connection store.
+ */
+export interface MruEntry {
+  connectionId: string;
+  lastUsed: number; // Date.now() timestamp
+}
+
+/**
  * Sprint 119 (#SHELL-1) — MRU (most-recently-used) connection store.
  *
- * Tracks the connection the user most recently engaged with (signal:
+ * Tracks the connections the user most recently engaged with (signal:
  * `addTab` / `addQueryTab` from `tabStore`). Consumed by `MainArea`'s
  * EmptyState so the New Query CTA defaults to the connection the user
  * actually cares about, not just the first one in the list.
+ *
+ * Sprint 166 — expanded from a single `lastUsedConnectionId` to an ordered
+ * list of up to 5 entries (`recentConnections`). The legacy field is kept as
+ * a derived read for backward compatibility.
  *
  * Persistence follows the same hand-rolled localStorage pattern as
  * `favoritesStore` — no zustand persist middleware, so the codebase has a
@@ -16,39 +32,67 @@ import { getCurrentWindowLabel } from "@lib/window-label";
  */
 
 const STORAGE_KEY = "table-view-mru";
+const MAX_ENTRIES = 5;
 
-function persistMru(id: string | null): void {
+function persistMruList(entries: MruEntry[]): void {
   if (typeof window === "undefined") return;
   try {
-    if (id === null) {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } else {
-      window.localStorage.setItem(STORAGE_KEY, id);
-    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   } catch {
     // localStorage may be unavailable (SSR, quota exceeded, private mode).
   }
 }
 
-function loadPersistedMru(): string | null {
-  if (typeof window === "undefined") return null;
+/**
+ * Load persisted MRU entries from localStorage.
+ *
+ * Sprint 166 — handles two formats:
+ *  1. New format: JSON array of `MruEntry` objects.
+ *  2. Legacy format (Sprint 119): a plain connection-id string.
+ *
+ * Migration is transparent — if the stored value is a plain string, it is
+ * converted to a single-element list with `lastUsed: Date.now()`. The next
+ * write persists the new format, completing the migration.
+ */
+function loadPersistedMruList(): MruEntry[] {
+  if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw && raw.length > 0 ? raw : null;
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.slice(0, MAX_ENTRIES);
+      }
+      // Legacy format (Sprint 119): JSON-quoted string (e.g. `"c1"`).
+      if (typeof parsed === "string" && parsed.length > 0) {
+        return [{ connectionId: parsed, lastUsed: Date.now() }];
+      }
+      return [];
+    } catch {
+      // Legacy format (Sprint 119): unquoted plain string (e.g. `c1`).
+      // `JSON.parse("c1")` throws because bare identifiers are not valid
+      // JSON — the old store wrote the id verbatim via `setItem(key, id)`.
+      if (raw.length > 0) {
+        return [{ connectionId: raw, lastUsed: Date.now() }];
+      }
+      return [];
+    }
   } catch {
-    return null;
+    return [];
   }
 }
 
 interface MruState {
-  lastUsedConnectionId: string | null;
+  lastUsedConnectionId: string | null; // derived: recentConnections[0]?.connectionId ?? null (backward compat)
+  recentConnections: MruEntry[]; // ordered list, most recent first
 
   markConnectionUsed: (id: string) => void;
   loadPersistedMru: () => void;
 }
 
 /**
- * Sprint 153 — cross-window broadcast allowlist.
+ * Sprint 166 — cross-window broadcast allowlist.
  *
  * Why `lastUsedConnectionId` is synced:
  *  - The launcher's "Recent" rail and the workspace's EmptyState CTA both
@@ -58,24 +102,48 @@ interface MruState {
  *  - The value is a plain `string | null` — JSON-stable and free of
  *    secrets (it's just a connection id, not a credential).
  *
- * No keys are excluded — `MruState` only carries this single piece of
- * shared state, plus the actions (which are not state and therefore not
- * subject to the bridge).
+ * Why `recentConnections` is synced (Sprint 166):
+ *  - The launcher's recent-connections list should reflect actions taken in
+ *    any window. Without sync, opening a tab in the workspace would not
+ *    surface that connection in the launcher's "Recent" section.
+ *  - The value is a JSON array of `{ connectionId, lastUsed }` —
+ *    JSON-serializable and free of secrets.
  */
 export const SYNCED_KEYS: ReadonlyArray<keyof MruState> = [
   "lastUsedConnectionId",
+  "recentConnections",
 ] as const;
 
 export const useMruStore = create<MruState>((set) => ({
   lastUsedConnectionId: null,
+  recentConnections: [],
 
   markConnectionUsed: (id) => {
-    persistMru(id);
-    set({ lastUsedConnectionId: id });
+    const now = Date.now();
+    set((state) => {
+      // Remove existing entry for this id (if any), then prepend.
+      const filtered = state.recentConnections.filter(
+        (e) => e.connectionId !== id,
+      );
+      const updated: MruEntry[] = [
+        { connectionId: id, lastUsed: now },
+        ...filtered,
+      ].slice(0, MAX_ENTRIES);
+      // Persist
+      persistMruList(updated);
+      return {
+        recentConnections: updated,
+        lastUsedConnectionId: id, // backward compat
+      };
+    });
   },
 
   loadPersistedMru: () => {
-    set({ lastUsedConnectionId: loadPersistedMru() });
+    const entries = loadPersistedMruList();
+    set({
+      recentConnections: entries,
+      lastUsedConnectionId: entries[0]?.connectionId ?? null,
+    });
   },
 }));
 
@@ -110,5 +178,5 @@ export function __resetMruStoreForTests(): void {
   } catch {
     // ignore
   }
-  useMruStore.setState({ lastUsedConnectionId: null });
+  useMruStore.setState({ lastUsedConnectionId: null, recentConnections: [] });
 }

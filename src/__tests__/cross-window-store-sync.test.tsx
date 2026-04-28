@@ -148,7 +148,7 @@ function resetTabStore(): void {
 }
 
 function resetMruStore(): void {
-  useMruStore.setState({ lastUsedConnectionId: null });
+  useMruStore.setState({ lastUsedConnectionId: null, recentConnections: [] });
 }
 
 function resetFavoritesStore(): void {
