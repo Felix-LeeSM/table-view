@@ -10,6 +10,7 @@ import { useTabStore } from "./stores/tabStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
+import { useThemeStore } from "./stores/themeStore";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -250,6 +251,23 @@ export default function App() {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("toggle-global-query-log"));
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Sprint 162 — Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode
+  // (dark → light → system → dark). Registered at the App level so the
+  // shortcut works in both launcher and workspace windows.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key === "L") {
+        e.preventDefault();
+        const { mode, setMode } = useThemeStore.getState();
+        const nextMode =
+          mode === "dark" ? "light" : mode === "light" ? "system" : "dark";
+        setMode(nextMode);
       }
     };
     document.addEventListener("keydown", handleKeyDown);

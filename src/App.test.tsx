@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
 import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
+import { useThemeStore } from "./stores/themeStore";
 
 // Mock page components to isolate shortcut testing — App.tsx now mounts only
 // `WorkspacePage` (Sprint 154 — `AppRouter` picks the per-window shell at
@@ -487,5 +488,95 @@ describe("App global shortcuts", () => {
     expect(handler).not.toHaveBeenCalled();
     document.body.removeChild(input);
     window.removeEventListener("open-connection-switcher", handler);
+  });
+
+  // ── Sprint 162: Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode ──
+
+  // Reason: Phase 14 AC-14-03 — Cmd+Shift+L 키보드 단축키로 theme mode 순환 (2026-04-28)
+  it("Cmd+Shift+L cycles theme mode dark → light → system → dark", () => {
+    useThemeStore.getState().setMode("dark");
+    render(<App />);
+
+    // dark → light
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "L",
+          shiftKey: true,
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useThemeStore.getState().mode).toBe("light");
+
+    // light → system
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "L",
+          shiftKey: true,
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useThemeStore.getState().mode).toBe("system");
+
+    // system → dark
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "L",
+          shiftKey: true,
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useThemeStore.getState().mode).toBe("dark");
+  });
+
+  // Reason: Phase 14 AC-14-03 — Ctrl+Shift+L 단축키 호환성 (Windows/Linux) (2026-04-28)
+  it("Ctrl+Shift+L cycles theme mode", () => {
+    useThemeStore.getState().setMode("dark");
+    render(<App />);
+
+    act(() => {
+      fireEvent(
+        document,
+        new KeyboardEvent("keydown", {
+          key: "L",
+          shiftKey: true,
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(useThemeStore.getState().mode).toBe("light");
+  });
+
+  // Reason: Phase 14 AC-14-03 — theme toggle 단축키가 기존 단축키를 방해하지 않는지 회귀 테스트 (2026-04-28)
+  it("Cmd+Shift+L does not interfere with existing Cmd+S shortcut", () => {
+    useThemeStore.getState().setMode("dark");
+    const handler = vi.fn();
+    window.addEventListener("commit-changes", handler);
+    render(<App />);
+
+    // Cmd+S should still work
+    fireShortcut("s");
+    expect(handler).toHaveBeenCalled();
+
+    // Theme mode should NOT have changed from Cmd+S
+    expect(useThemeStore.getState().mode).toBe("dark");
+
+    window.removeEventListener("commit-changes", handler);
   });
 });
