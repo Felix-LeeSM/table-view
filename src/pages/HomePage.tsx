@@ -25,6 +25,7 @@ import ConnectionDialog from "@components/connection/ConnectionDialog";
 import ConnectionList from "@components/connection/ConnectionList";
 import GroupDialog from "@components/connection/GroupDialog";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
+import RecentConnections from "@components/connection/RecentConnections";
 import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
 
@@ -221,9 +222,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Recent — placeholder slot reserved for sprint 127's MRU wiring.
-          The empty card stays visible so the layout doesn't shift when the
-          real list lands. */}
+      {/* Recent — MRU connection list (Sprint 167). */}
       <div
         className="border-t border-border px-3 py-2"
         data-testid="home-recent"
@@ -232,9 +231,7 @@ export default function HomePage() {
           <Clock size={10} />
           <span>Recent</span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Recently opened connections will appear here.
-        </p>
+        <RecentConnections onActivate={handleActivate} />
       </div>
 
       {/* Theme picker footer — same control as the legacy Sidebar so the
