@@ -1207,4 +1207,53 @@ describe("ConnectionGroup", () => {
     stored = JSON.parse(localStorage.getItem("table-view-group-collapsed")!);
     expect(stored["g1"]).toBe(false);
   });
+
+  // -----------------------------------------------------------------------
+  // Phase 15 Sprint 164 — Drop hint text during drag-over
+  // -----------------------------------------------------------------------
+  // Reason: Phase 15 AC-15-05 — drop 시 group 이름 포함 hint 텍스트 표시 (2026-04-28)
+  it("shows move-to-group hint text during drag over", () => {
+    _draggedConnectionId = "conn-1";
+
+    render(
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.dragOver(header, {
+        dataTransfer: { dropEffect: "" },
+      });
+    });
+
+    expect(screen.getByText("Move to Production")).toBeInTheDocument();
+  });
+
+  // Reason: Phase 15 AC-15-05 — drop 끝나면 hint 텍스트 사라짐 (2026-04-28)
+  it("hides move-to-group hint text after drag leave", () => {
+    _draggedConnectionId = "conn-1";
+
+    render(
+      <ConnectionGroup
+        group={makeGroup({ name: "Production" })}
+        connections={[]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    act(() => {
+      fireEvent.dragOver(header, {
+        dataTransfer: { dropEffect: "" },
+      });
+    });
+    expect(screen.getByText("Move to Production")).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.dragLeave(header);
+    });
+    expect(screen.queryByText("Move to Production")).not.toBeInTheDocument();
+  });
 });

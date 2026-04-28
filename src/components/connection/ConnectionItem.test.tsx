@@ -1155,4 +1155,35 @@ describe("ConnectionItem", () => {
     expect(item.className).toContain("px-3");
     expect(item.className).not.toContain("pl-6");
   });
+
+  // -----------------------------------------------------------------------
+  // Phase 15 Sprint 164 — Drag handle icon and focus-visible ring
+  // -----------------------------------------------------------------------
+  // Reason: Phase 15 AC-15-01 — drag handle icon (GripVertical)이 렌더링됨 (2026-04-28)
+  it("renders a drag handle icon with aria-hidden", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem connection={makeConnection({ name: "Handle DB" })} />,
+    );
+
+    // GripVertical is rendered as an SVG with aria-hidden="true"
+    const row = screen.getByRole("button", { name: /Handle DB/ });
+    const handle = row.querySelector("[aria-hidden='true'].cursor-grab");
+    expect(handle).toBeInTheDocument();
+    expect(handle?.tagName.toLowerCase()).toBe("svg");
+  });
+
+  // Reason: Phase 15 AC-15-01 — keyboard focus 시 focus-visible ring 클래스 적용 (2026-04-28)
+  it("has focus-visible ring classes on the row element", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem connection={makeConnection({ name: "Focus DB" })} />,
+    );
+
+    const row = screen.getByRole("button", { name: /Focus DB/ });
+    expect(row.className).toContain("focus-visible:ring-2");
+    expect(row.className).toContain("focus-visible:ring-ring");
+    expect(row.className).toContain("focus-visible:ring-offset-1");
+    expect(row.className).toContain("focus-visible:outline-none");
+  });
 });

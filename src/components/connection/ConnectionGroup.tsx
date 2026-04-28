@@ -178,6 +178,11 @@ export default function ConnectionGroup({
               <span className="truncate">{group.name}</span>
             )}
             <span className="ml-1 text-3xs">({connections.length})</span>
+            {dropActive && (
+              <span className="ml-4 text-3xs text-primary font-medium">
+                Move to {group.name}
+              </span>
+            )}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent>

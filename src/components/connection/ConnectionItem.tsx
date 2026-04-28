@@ -29,6 +29,7 @@ import {
 } from "@components/ui/dialog";
 import {
   Database,
+  GripVertical,
   Plug,
   Unplug,
   Pencil,
@@ -143,7 +144,7 @@ export default function ConnectionItem({
         <ContextMenuTrigger asChild>
           <div
             ref={dragRef}
-            className={`flex cursor-pointer items-center gap-2 ${inGroup ? "pl-6 pr-3" : "px-3"} py-1.5 hover:bg-muted select-none ${
+            className={`flex cursor-pointer items-center gap-2 ${inGroup ? "pl-6 pr-3" : "px-3"} py-1.5 hover:bg-muted select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
               dragging ? "opacity-40" : ""
             } ${selected ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""}`}
             role="button"
@@ -167,6 +168,11 @@ export default function ConnectionItem({
               setDragging(false);
             }}
           >
+            <GripVertical
+              size={12}
+              className="shrink-0 cursor-grab text-muted-foreground/50"
+              aria-hidden="true"
+            />
             <StatusIndicator status={status} />
             <Database size={14} className="shrink-0 text-muted-foreground" />
             <span className="truncate text-sm text-foreground">
