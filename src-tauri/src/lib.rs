@@ -6,6 +6,7 @@ pub mod models;
 pub mod storage;
 
 use commands::connection::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -69,6 +70,16 @@ pub fn run() {
             launcher::workspace_ensure,
             launcher::app_exit,
         ])
+        // Safety net: if the workspace window is destroyed (OS closed it
+        // before the JS close-requested handler could prevent it), ensure
+        // the launcher is visible so the user isn't left with no window.
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "workspace" {
+                if let Some(launcher) = window.app_handle().get_webview_window("launcher") {
+                    let _ = launcher.show();
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

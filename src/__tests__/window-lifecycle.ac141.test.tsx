@@ -93,6 +93,8 @@ const hideWindowMock = windowControls.hideWindow as Mock;
 const focusWindowMock = windowControls.focusWindow as Mock;
 const exitAppMock = windowControls.exitApp as Mock;
 const onCloseRequestedMock = windowControls.onCloseRequested as Mock;
+const onCurrentWindowCloseRequestedMock =
+  windowControls.onCurrentWindowCloseRequested as Mock;
 
 function makeConn(id: string): ConnectionConfig {
   return {
@@ -294,7 +296,17 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     // Launcher-close path must NOT try to show the workspace mid-exit.
     expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
 
-    // 2. Workspace close path — registered by WorkspacePage's mount effect.
+    // 2. Workspace close path — registered by WorkspacePage's mount effect
+    //    via `onCurrentWindowCloseRequested` (not `onCloseRequested(label)`)
+    //    to avoid the unreliable `getByLabel` JS API.
+    let workspaceHandler: (() => void | Promise<void>) | null = null;
+    onCurrentWindowCloseRequestedMock.mockImplementation(
+      async (handler: () => void | Promise<void>) => {
+        workspaceHandler = handler;
+        return () => {};
+      },
+    );
+
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
     render(<WorkspacePage />);
@@ -302,14 +314,13 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await Promise.resolve();
     });
 
-    expect(onCloseRequestedMock).toHaveBeenCalledWith(
-      "workspace",
+    expect(onCurrentWindowCloseRequestedMock).toHaveBeenCalledWith(
       expect.any(Function),
     );
-    expect(handlers["workspace"]).toBeTruthy();
+    expect(workspaceHandler).toBeTruthy();
 
     await act(async () => {
-      await handlers["workspace"]!();
+      await workspaceHandler!();
     });
 
     // Same final state as the explicit Back button: workspace hides then
@@ -399,5 +410,44 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     });
     expect(showWindowMock).not.toHaveBeenCalled();
     expect(hideWindowMock).not.toHaveBeenCalled();
+  });
+
+  // Reason: workspace close must always show the launcher, even if the close
+  // handler registration fails. This is the user's explicit request — when
+  // the table window closes, the connection list must appear. (2026-04-28)
+  it("AC-141-6 (real): workspace close via onCurrentWindowCloseRequested always shows the launcher", async () => {
+    let workspaceHandler: (() => void | Promise<void>) | null = null;
+    onCurrentWindowCloseRequestedMock.mockImplementation(
+      async (handler: () => void | Promise<void>) => {
+        workspaceHandler = handler;
+        return () => {};
+      },
+    );
+
+    useConnectionStore.setState({
+      connections: [makeConn("c1")],
+      activeStatuses: { c1: { type: "connected" } },
+      focusedConnId: "c1",
+    });
+
+    render(<WorkspacePage />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // The workspace handler must be registered via onCurrentWindowCloseRequested.
+    expect(onCurrentWindowCloseRequestedMock).toHaveBeenCalledWith(
+      expect.any(Function),
+    );
+    expect(workspaceHandler).toBeTruthy();
+
+    // Firing the handler (simulating OS close) must hide workspace and
+    // show launcher — identical to the Back button path.
+    await act(async () => {
+      await workspaceHandler!();
+    });
+
+    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
+    expect(showWindowMock).toHaveBeenCalledWith("launcher");
   });
 });

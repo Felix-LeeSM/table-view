@@ -342,11 +342,9 @@ describe("AC-154-*: Window lifecycle wiring", () => {
     });
 
     let capturedHandler: (() => void | Promise<void>) | null = null;
-    onCloseRequestedMock.mockImplementation(
-      async (label: string, handler: () => void | Promise<void>) => {
-        if (label === "workspace") {
-          capturedHandler = handler;
-        }
+    onCurrentWindowCloseRequestedMock.mockImplementation(
+      async (handler: () => void | Promise<void>) => {
+        capturedHandler = handler;
         return () => {};
       },
     );
@@ -358,8 +356,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       await Promise.resolve();
     });
 
-    expect(onCloseRequestedMock).toHaveBeenCalledWith(
-      "workspace",
+    expect(onCurrentWindowCloseRequestedMock).toHaveBeenCalledWith(
       expect.any(Function),
     );
     expect(capturedHandler).toBeTruthy();

@@ -11,7 +11,11 @@ import {
 import ThemePicker from "@components/theme/ThemePicker";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
-import { hideWindow, showWindow, onCloseRequested } from "@lib/window-controls";
+import {
+  hideWindow,
+  showWindow,
+  onCurrentWindowCloseRequested,
+} from "@lib/window-controls";
 
 /**
  * WorkspacePage — multi-paradigm tab + sidebar work surface.
@@ -65,13 +69,16 @@ export default function WorkspacePage() {
   };
 
   // Register the `tauri://close-requested` listener with Back semantics.
-  // Sprint 154 contract pins this — closing the workspace window must NOT
-  // tear down the connection pool; it must mirror the explicit Back path.
+  // Uses `onCurrentWindowCloseRequested` instead of `onCloseRequested(label)`
+  // because the latter depends on `getByLabel` which proved unreliable — it
+  // could return null and skip registering the handler, leaving the OS free
+  // to actually destroy the workspace with no launcher visible.
+  // `getCurrentWebviewWindow()` is reliable from within the window itself.
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     let cancelled = false;
     void (async () => {
-      const fn = await onCloseRequested("workspace", () =>
+      const fn = await onCurrentWindowCloseRequested(() =>
         handleBackToConnections(),
       );
       if (cancelled) {
