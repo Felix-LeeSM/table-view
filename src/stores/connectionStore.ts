@@ -10,6 +10,11 @@ import * as tauri from "@lib/tauri";
 import { toast } from "@lib/toast";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import {
+  persistFocusedConnId,
+  persistActiveStatuses,
+  readConnectionSession,
+} from "@lib/session-storage";
 
 /**
  * Sprint 143 (AC-148-4) — persist the user's `activeDb` pick across a
@@ -77,6 +82,8 @@ interface ConnectionState {
   connectToDatabase: (id: string) => Promise<void>;
   disconnectFromDatabase: (id: string) => Promise<void>;
   setFocusedConn: (id: string | null) => void;
+  /** Hydrate focusedConnId + activeStatuses from session-scoped localStorage. */
+  hydrateFromSession: () => void;
   /**
    * Sprint 130 — record the active database for the connection. The action
    * is a no-op when the connection isn't currently in the `connected`
@@ -274,6 +281,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
           },
         };
       });
+      // Persist the updated activeStatuses to session localStorage so
+      // the workspace can hydrate on boot.
+      persistActiveStatuses(get().activeStatuses);
     } catch (e) {
       set((state) => ({
         activeStatuses: {
@@ -295,9 +305,27 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         [id]: { type: "disconnected" as const },
       },
     }));
+    persistActiveStatuses(get().activeStatuses);
   },
 
-  setFocusedConn: (id) => set({ focusedConnId: id }),
+  setFocusedConn: (id) => {
+    set({ focusedConnId: id });
+    persistFocusedConnId(id);
+  },
+
+  hydrateFromSession: () => {
+    const session = readConnectionSession();
+    const patch: Partial<
+      Pick<ConnectionState, "focusedConnId" | "activeStatuses">
+    > = {};
+    if (session.focusedConnId) patch.focusedConnId = session.focusedConnId;
+    if (session.activeStatuses)
+      patch.activeStatuses = session.activeStatuses as Record<
+        string,
+        ConnectionStatus
+      >;
+    if (Object.keys(patch).length > 0) set(patch);
+  },
 
   setActiveDb: (id, dbName) =>
     set((state) => {

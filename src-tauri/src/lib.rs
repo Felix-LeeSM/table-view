@@ -16,6 +16,7 @@ pub fn run() {
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::connection::list_connections,
+            commands::connection::get_session_id,
             commands::connection::save_connection,
             commands::connection::delete_connection,
             commands::connection::test_connection,

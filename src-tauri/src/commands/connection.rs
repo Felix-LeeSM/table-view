@@ -77,6 +77,10 @@ pub struct AppState {
     pub connection_status: Mutex<HashMap<String, ConnectionStatus>>,
     pub keep_alive_handles: Mutex<HashMap<String, JoinHandle<()>>>,
     pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
+    /// Session-scoped UUID generated once per app process. Shared by all
+    /// windows so they can agree on which localStorage entries are "current
+    /// session" vs stale from a previous run.
+    pub session_id: String,
 }
 
 impl AppState {
@@ -86,6 +90,7 @@ impl AppState {
             connection_status: Mutex::new(HashMap::new()),
             keep_alive_handles: Mutex::new(HashMap::new()),
             query_tokens: Mutex::new(HashMap::new()),
+            session_id: uuid::Uuid::new_v4().to_string(),
         }
     }
 }
@@ -94,6 +99,14 @@ impl Default for AppState {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Return the process-scoped session UUID. Both launcher and workspace windows
+/// receive the same value, which the frontend uses to tag localStorage entries
+/// so stale data from a previous app run is automatically ignored.
+#[tauri::command]
+pub async fn get_session_id(state: tauri::State<'_, AppState>) -> Result<String, AppError> {
+    Ok(state.session_id.clone())
 }
 
 /// Background task: periodically ping the connection and auto-reconnect on failure.
