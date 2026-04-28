@@ -50,6 +50,8 @@ interface ConnectionItemProps {
   onSelect?: (id: string) => void;
   /** Fired after a successful double-click connect, so the parent can switch panes. */
   onActivate?: (id: string) => void;
+  /** When true, connection is rendered inside a group — adds left indent. */
+  inGroup?: boolean;
 }
 
 function StatusIndicator({ status }: { status: ConnectionStatus }) {
@@ -92,6 +94,7 @@ export default function ConnectionItem({
   selected = false,
   onSelect,
   onActivate,
+  inGroup = false,
 }: ConnectionItemProps) {
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<HTMLDivElement>(null);
@@ -140,7 +143,7 @@ export default function ConnectionItem({
         <ContextMenuTrigger asChild>
           <div
             ref={dragRef}
-            className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted select-none ${
+            className={`flex cursor-pointer items-center gap-2 ${inGroup ? "pl-6 pr-3" : "px-3"} py-1.5 hover:bg-muted select-none ${
               dragging ? "opacity-40" : ""
             } ${selected ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : ""}`}
             role="button"

@@ -24,8 +24,19 @@ let _draggedConnectionId: string | null = null;
 // ---------------------------------------------------------------------------
 
 vi.mock("./ConnectionItem", () => ({
-  default: ({ connection }: { connection: ConnectionConfig }) => (
-    <div data-testid="connection-item">{connection.name}</div>
+  default: ({
+    connection,
+    inGroup,
+  }: {
+    connection: ConnectionConfig;
+    inGroup?: boolean;
+  }) => (
+    <div
+      data-testid="connection-item"
+      data-in-group={inGroup ? "true" : undefined}
+    >
+      {connection.name}
+    </div>
   ),
   get draggedConnectionId() {
     return _draggedConnectionId;
@@ -188,6 +199,7 @@ describe("ConnectionGroup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _draggedConnectionId = null;
+    localStorage.clear();
     setStoreState();
   });
 
@@ -1091,5 +1103,108 @@ describe("ConnectionGroup", () => {
 
     const dialog = screen.getByRole("alertdialog");
     expect(dialog.textContent).toMatch(/3 connections/i);
+  });
+
+  // -----------------------------------------------------------------------
+  // Phase 15 AC-15-03 — inGroup prop passed to ConnectionItem
+  // -----------------------------------------------------------------------
+  // Reason: Phase 15 AC-15-03 — group 내 connection이 inGroup prop을 받음 (2026-04-28)
+  it("passes inGroup to ConnectionItem when rendering connections inside a group", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup({ collapsed: false })}
+        connections={[makeConnection({ id: "c1", name: "DB Alpha" })]}
+      />,
+    );
+
+    const item = screen.getByTestId("connection-item");
+    expect(item).toHaveAttribute("data-in-group", "true");
+  });
+
+  // -----------------------------------------------------------------------
+  // Phase 15 AC-15-04 — Collapse state persistence to localStorage
+  // -----------------------------------------------------------------------
+  // Reason: Phase 15 AC-15-04 — collapse 상태가 localStorage에 저장됨 (2026-04-28)
+  it("persists collapse state to localStorage on toggle", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup({ collapsed: false })}
+        connections={[]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    expect(header).toHaveAttribute("aria-expanded", "true");
+
+    act(() => {
+      fireEvent.click(header);
+    });
+    expect(header).toHaveAttribute("aria-expanded", "false");
+
+    const stored = JSON.parse(
+      localStorage.getItem("table-view-group-collapsed")!,
+    );
+    expect(stored["g1"]).toBe(true);
+  });
+
+  // Reason: Phase 15 AC-15-04 — app 재시작 시 collapse 상태 복원 (2026-04-28)
+  it("restores collapse state from localStorage on mount", () => {
+    localStorage.setItem(
+      "table-view-group-collapsed",
+      JSON.stringify({ g1: true }),
+    );
+
+    render(
+      <ConnectionGroup
+        group={makeGroup({ collapsed: false })}
+        connections={[makeConnection()]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("connection-item")).not.toBeInTheDocument();
+  });
+
+  // Reason: Phase 15 AC-15-04 — localStorage 없을 시 group.collapsed 기본값 사용 (2026-04-28)
+  it("falls back to group.collapsed when localStorage has no entry", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup({ collapsed: true })}
+        connections={[makeConnection()]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("connection-item")).not.toBeInTheDocument();
+  });
+
+  // Reason: Phase 15 AC-15-04 — toggle collapse multiple times updates localStorage correctly (2026-04-28)
+  it("updates localStorage correctly on multiple toggles", () => {
+    render(
+      <ConnectionGroup
+        group={makeGroup({ collapsed: false })}
+        connections={[]}
+      />,
+    );
+
+    const header = screen.getByRole("button");
+
+    // Toggle to collapsed
+    act(() => {
+      fireEvent.click(header);
+    });
+    let stored = JSON.parse(
+      localStorage.getItem("table-view-group-collapsed")!,
+    );
+    expect(stored["g1"]).toBe(true);
+
+    // Toggle back to expanded
+    act(() => {
+      fireEvent.click(header);
+    });
+    stored = JSON.parse(localStorage.getItem("table-view-group-collapsed")!);
+    expect(stored["g1"]).toBe(false);
   });
 });

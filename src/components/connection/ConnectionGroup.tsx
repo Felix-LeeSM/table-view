@@ -32,6 +32,27 @@ import {
 } from "@components/ui/alert-dialog";
 import GroupDialog from "./GroupDialog";
 
+// ---------------------------------------------------------------------------
+// Collapse-state persistence (localStorage)
+// ---------------------------------------------------------------------------
+
+const COLLAPSE_KEY = "table-view-group-collapsed";
+
+function loadCollapsedState(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCollapsedState(groupId: string, collapsed: boolean) {
+  const state = loadCollapsedState();
+  state[groupId] = collapsed;
+  localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state));
+}
+
 interface ConnectionGroupProps {
   group: ConnectionGroupType;
   connections: ConnectionConfig[];
@@ -47,7 +68,10 @@ export default function ConnectionGroup({
   onSelect,
   onActivate,
 }: ConnectionGroupProps) {
-  const [collapsed, setCollapsed] = useState(group.collapsed);
+  const [collapsed, setCollapsed] = useState(() => {
+    const stored = loadCollapsedState();
+    return stored[group.id] ?? group.collapsed;
+  });
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(group.name);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -74,6 +98,13 @@ export default function ConnectionGroup({
     setRenaming(false);
   };
 
+  const toggleCollapsed = () => {
+    if (renaming) return;
+    const next = !collapsed;
+    setCollapsed(next);
+    saveCollapsedState(group.id, next);
+  };
+
   return (
     <>
       <ContextMenu>
@@ -88,14 +119,11 @@ export default function ConnectionGroup({
             tabIndex={0}
             aria-expanded={!collapsed}
             aria-label={`${group.name} group (${connections.length} connections)`}
-            onClick={() => {
-              if (!renaming) setCollapsed(!collapsed);
-            }}
+            onClick={toggleCollapsed}
             onKeyDown={(e) => {
-              if (renaming) return;
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
-                setCollapsed(!collapsed);
+                toggleCollapsed();
               }
             }}
             onDragOver={(e) => {
@@ -178,6 +206,7 @@ export default function ConnectionGroup({
             selected={selectedId === conn.id}
             onSelect={onSelect}
             onActivate={onActivate}
+            inGroup
           />
         ))}
 

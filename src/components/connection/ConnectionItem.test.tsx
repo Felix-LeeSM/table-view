@@ -1111,4 +1111,48 @@ describe("ConnectionItem", () => {
       expect(subContent.textContent).toMatch(/no group/i);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Phase 15 AC-15-03 — inGroup indent styling
+  // -----------------------------------------------------------------------
+  // Reason: Phase 15 AC-15-03 — inGroup prop 시 들여쓰기 스타일 적용 (2026-04-28)
+  it("applies pl-6 indent style when inGroup is true", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem
+        connection={makeConnection({ name: "Grouped DB" })}
+        inGroup
+      />,
+    );
+
+    const item = screen.getByRole("button", { name: /Grouped DB/ });
+    expect(item.className).toContain("pl-6");
+    expect(item.className).toContain("pr-3");
+    expect(item.className).not.toContain("px-3");
+  });
+
+  // Reason: Phase 15 AC-15-03 — 기본(inGroup=false) 시 기존 패딩 유지 (2026-04-28)
+  it("uses default px-3 padding when not in group", () => {
+    setStoreState({});
+    render(<ConnectionItem connection={makeConnection({ name: "Root DB" })} />);
+
+    const item = screen.getByRole("button", { name: /Root DB/ });
+    expect(item.className).toContain("px-3");
+    expect(item.className).not.toContain("pl-6");
+  });
+
+  // Reason: Phase 15 AC-15-03 — inGroup={false} 명시 시에도 기본 패딩 유지 (2026-04-28)
+  it("uses default px-3 padding when inGroup is explicitly false", () => {
+    setStoreState({});
+    render(
+      <ConnectionItem
+        connection={makeConnection({ name: "Explicit DB" })}
+        inGroup={false}
+      />,
+    );
+
+    const item = screen.getByRole("button", { name: /Explicit DB/ });
+    expect(item.className).toContain("px-3");
+    expect(item.className).not.toContain("pl-6");
+  });
 });
