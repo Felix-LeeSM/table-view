@@ -19,6 +19,8 @@ updated: 2026-04-27
 - [2026-04-27 · workspace toolbar UX 갭 3건 (popover 크기 / connection SoT 분리 / paradigm-aware completion)](2026-04-27-workspace-toolbar-ux-gaps/memory.md)
 - [2026-04-27 · 피드백은 스펙 합의 → TDD 순서로 처리한다](2026-04-27-feedback-spec-first-tdd/memory.md)
 - [2026-04-27 · Phase 종료 시 skip된 테스트는 0건 / 메모리 등록 / skip 메시지 컨텍스트 셋 중 하나여야 한다](2026-04-27-phase-end-skip-accountability-gate/memory.md)
+- [2026-04-29 · Tauri hidden workspace의 boot-time hydration은 빈 데이터를 읽는다 — window focus에서 re-hydrate 해야 한다](2026-04-29-cross-window-boot-hydration-race/memory.md)
+- [2026-04-29 · DbSwitcher는 active tab이 없을 때 focusedConnId 기반으로 activeDb를 표시해야 한다](2026-04-29-dbswitcher-no-tab-fallback/memory.md)
 
 ## 형식
 

@@ -21,6 +21,7 @@ updated: 2026-04-27
 | [0009](./0009-null-vs-empty-string-tri-state/memory.md) | DataGrid 편집: SQL NULL vs 빈 문자열을 `string \| null` tri-state로 구분 | Accepted | 2026-04-24 | — |
 | [0010](./0010-paradigm-ui-staged-evolution/memory.md) | paradigm-aware UI는 폴더 재조직 먼저, capability adapter는 ES/redis 도입 시 진화 | Accepted | 2026-04-25 | — |
 | [0012](./0012-multi-window-launcher-workspace/memory.md) | Phase 12 — launcher/workspace 별도 WebviewWindow + cross-window IPC sync 완성 | Accepted | 2026-04-27 | 0011 |
+| [0013](./0013-cross-window-focus-hydration-hook/memory.md) | 크로스 윈도우 상태 동기화: IPC bridge + session localStorage + useWindowFocusHydration 훅 | Accepted | 2026-04-29 | — |
 
 ## 역사 (Superseded / Deprecated)
 

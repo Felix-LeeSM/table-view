@@ -49,6 +49,8 @@ describe("useWindowFocusHydration", () => {
 
   // -- Core behavior --
 
+  // Reason: hydration on mount ensures the store has the latest session data
+  // even if the IPC bridge event was missed while this window was hidden.
   it("calls hydrateFromSession on mount", () => {
     const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
     const { unmount } = renderHook(() => useWindowFocusHydration());
@@ -57,6 +59,8 @@ describe("useWindowFocusHydration", () => {
     unmount();
   });
 
+  // Reason: every focus event is a potential state-change signal from another
+  // window; the hook must call hydrateFromSession each time without skipping.
   it("calls hydrateFromSession on each window focus event", () => {
     const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
     const { unmount } = renderHook(() => useWindowFocusHydration());
@@ -77,6 +81,8 @@ describe("useWindowFocusHydration", () => {
     unmount();
   });
 
+  // Reason: listener cleanup prevents stale hydration calls after the
+  // component unmounts, avoiding memory leaks and phantom dispatches.
   it("removes the focus listener on unmount", () => {
     const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
     const { unmount } = renderHook(() => useWindowFocusHydration());
