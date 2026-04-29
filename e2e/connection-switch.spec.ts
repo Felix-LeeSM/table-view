@@ -3,7 +3,6 @@ import {
   backToHome,
   ensureHomeScreen,
   openTestPgWorkspace,
-  switchToLauncherWindow,
   switchToWorkspaceWindow,
 } from "./_helpers";
 
@@ -67,19 +66,20 @@ async function ensureTestMongoConnection() {
 /**
  * Open the Test Mongo connection: ensure it exists, double-click, switch
  * to workspace, wait for the document database tree to load.
+ *
+ * Sprint 169 — same probe-launcher-first pattern as openTestPgWorkspace,
+ * to avoid attaching to a hidden workspace webview when the connection
+ * has not yet been activated.
  */
 async function openTestMongoWorkspace() {
   await ensureTestMongoConnection();
 
-  try {
+  const launcherMain = await $('[data-testid="launcher-page"]');
+  const launcherActive = await launcherMain.isDisplayed().catch(() => false);
+
+  if (!launcherActive) {
     await switchToWorkspaceWindow();
-    const filterInput = await $(
-      '[aria-label="Filter databases and collections"]',
-    );
-    await filterInput.waitForExist({ timeout: 1000 });
-    // Already on workspace with Mongo
-  } catch {
-    await switchToLauncherWindow();
+  } else {
     const conn = await $(`[aria-label^="${TEST_MONGO_NAME}"]`);
     await conn.waitForDisplayed({ timeout: 5000 });
     await conn.doubleClick();
