@@ -124,7 +124,7 @@ jobs:
   e2e:
     name: E2E Tests (tauri-driver)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -143,6 +143,12 @@ jobs:
           MONGO_USER: testuser
           MONGO_PASSWORD: testpass
         run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          docker compose --profile test ps -a || true
+          docker compose --profile test logs --no-color --timestamps e2e || true
 
       - name: Upload E2E logs on failure
         if: failure()

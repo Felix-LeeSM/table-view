@@ -12,9 +12,10 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-table_view_test}"]
-      interval: 2s
+      interval: 5s
       timeout: 3s
-      retries: 15
+      retries: 10
+      start_period: 5s
 
   mongo:
     image: mongo:7
@@ -25,10 +26,11 @@ services:
     ports:
       - "${MONGO_PORT:-27017}:27017"
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 2s
-      timeout: 3s
-      retries: 15
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
 
   e2e:
     build:
