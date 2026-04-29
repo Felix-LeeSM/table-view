@@ -11,13 +11,14 @@ set -euxo pipefail
 #   1. Seed Postgres from the canonical fixture (e2e/fixtures/seed.sql).
 #   2. Build the Tauri debug binary (cached by the `tauri-target` named volume
 #      on subsequent runs — see Sprint 4). NOTE: wdio.conf.ts also calls
-#      `pnpm tauri build --debug --no-bundle` in `onPrepare`, but with the
-#      target volume warm that's effectively a cache hit (~5 s).
-#   3. Hand off to `xvfb-run pnpm test:e2e` via `exec` so WebdriverIO's exit
-#      code becomes the container's exit code (Sprint 3 AC #4).
+#      `pnpm tauri build --debug --no-bundle` in `onPrepare`; with the target
+#      volume warm that's effectively a cache hit (~5 s).
+#   3. Start Xvfb explicitly (`xvfb-run` was hanging silently in CI even with
+#      `--auto-servernum` — bypassing it gives us a known-good display +
+#      observable Xvfb stderr) and hand off to `pnpm test:e2e` via `exec`.
 #
-# `set -x` is intentional — when this hangs in CI, the trace is the only
-# evidence we have of how far we got.
+# `set -x` is intentional — the trace is the only evidence we have of how
+# far we got when something hangs in CI.
 
 echo "[e2e] Seeding database..."
 PGPASSWORD="$PGPASSWORD" psql \
@@ -30,19 +31,28 @@ PGPASSWORD="$PGPASSWORD" psql \
 echo "[e2e] Building Tauri debug binary..."
 pnpm tauri build --debug --no-bundle
 
-# Verify the binary exists before handing off to xvfb-run — if the build
-# silently produced nothing, xvfb-run will spin forever waiting for a Tauri
-# app that never launches.
+# Verify the binary exists before handing off to wdio.
 ls -la /app/src-tauri/target/debug/table-view
 
+echo "[e2e] Starting Xvfb on :99..."
+Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset \
+  >/tmp/xvfb.log 2>&1 &
+XVFB_PID=$!
+export DISPLAY=:99
+
+# Give Xvfb a moment to come up, then verify the X socket exists.
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if [ -S /tmp/.X11-unix/X99 ]; then
+    echo "[e2e] Xvfb ready after ${i}s (pid=${XVFB_PID})"
+    break
+  fi
+  if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+    echo "[e2e] Xvfb died — log follows:"
+    cat /tmp/xvfb.log
+    exit 1
+  fi
+  sleep 1
+done
+
 echo "[e2e] Running E2E tests..."
-# `--auto-servernum` picks an unused display; explicit screen args force
-# 24-bit colour, since xvfb-run's default `-screen 0 1280x1024x8` makes
-# WebKitGTK refuse to render and silently hangs.
-# stdbuf forces line-buffered stdout/stderr so wdio progress shows up in
-# real time inside `docker compose up` instead of arriving as one block at
-# the end (or never, on timeout).
-exec stdbuf -oL -eL xvfb-run \
-  --auto-servernum \
-  --server-args="-screen 0 1280x720x24 -ac +extension GLX +render -noreset" \
-  pnpm test:e2e
+exec pnpm test:e2e
