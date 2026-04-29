@@ -55,29 +55,43 @@ export async function isWorkspaceMounted(): Promise<boolean> {
  * to look up / create a connection before opening it. No-op when already on
  * the launcher.
  *
- * Sprint 169 — order matters. Both Tauri windows are created at startup, but
- * the workspace begins as `visible: false` (see `tauri.conf.json`). Attaching
- * tauri-driver to the hidden workspace webview *before* falling back to the
- * launcher leaves the launcher webview in a state where every element query
- * times out. The fix is to bind to launcher first; only when launcher's own
- * sentinel (`data-testid="launcher-page"`) is not displayed do we know the
- * workspace is currently active and we have to navigate back.
+ * Sprint 169 — Tauri 2.0 on Linux/Xvfb does NOT create a webview for windows
+ * declared `visible: false` in `tauri.conf.json` until they are first shown.
+ * That makes `switchWindow("Table View — Workspace")` throw on a fresh boot.
+ * We therefore (1) attach to the launcher first, (2) wait long enough for
+ * its React tree to mount before probing visibility, and (3) only attempt
+ * the workspace-back-button recovery when the launcher really is hidden,
+ * inside a try/catch so a missing workspace handle is not fatal.
  */
 export async function ensureHomeScreen() {
   await switchToLauncherWindow();
 
   const launcherMain = await $('[data-testid="launcher-page"]');
-  const launcherVisible = await launcherMain.isDisplayed().catch(() => false);
 
-  if (!launcherVisible) {
-    // Launcher webview is hidden — that means workspace is currently
-    // foregrounded. Switch over, click Back, and the Tauri runtime will
-    // re-show the launcher. Only then is it safe to query launcher chrome.
-    await switchToWorkspaceWindow();
-    const back = await $('[aria-label="Back to connections"]');
-    await back.waitForDisplayed({ timeout: 5000 });
-    await back.click();
-    await switchToLauncherWindow();
+  let launcherReady = false;
+  try {
+    await launcherMain.waitForDisplayed({ timeout: 10000 });
+    launcherReady = true;
+  } catch {
+    launcherReady = false;
+  }
+
+  if (!launcherReady) {
+    // Launcher webview is hidden — workspace must be foregrounded. The
+    // workspace handle only exists after the user has activated a
+    // connection in the current session, so wrap the whole recovery in
+    // a try/catch.
+    try {
+      await switchToWorkspaceWindow();
+      const back = await $('[aria-label="Back to connections"]');
+      await back.waitForDisplayed({ timeout: 5000 });
+      await back.click();
+      await switchToLauncherWindow();
+      await launcherMain.waitForDisplayed({ timeout: 10000 });
+    } catch {
+      // Fall through — the New Connection wait below will surface a
+      // more actionable failure than a stale switchWindow rejection.
+    }
   }
 
   const newBtn = await $('[aria-label="New Connection"]');
@@ -137,19 +151,18 @@ export async function ensureTestPgConnection() {
 export async function openTestPgWorkspace() {
   await ensureTestPgConnection();
 
-  // Probe which window is currently foregrounded by checking launcher's own
-  // sentinel. Sprint 169 — preemptively attaching to a hidden workspace
-  // webview leaves the launcher webview in a state where subsequent element
-  // queries time out, so we decide direction based on launcher visibility
-  // before we ever switch windows.
+  // ensureTestPgConnection guarantees we are on launcher with the React
+  // tree mounted. We must double-click to *create* the workspace webview
+  // — on Linux the workspace handle does not exist until then. Detect
+  // "already on workspace" via launcher visibility: if launcher is no
+  // longer displayed, a previous spec activated the connection and the
+  // workspace handle exists.
   const launcherMain = await $('[data-testid="launcher-page"]');
   const launcherActive = await launcherMain.isDisplayed().catch(() => false);
 
   if (!launcherActive) {
-    // Workspace is currently foregrounded — just attach.
     await switchToWorkspaceWindow();
   } else {
-    // Workspace is hidden; open the connection from launcher.
     const conn = await $(`[aria-label^="${TEST_PG_NAME}"]`);
     await conn.waitForDisplayed({ timeout: 5000 });
     await conn.doubleClick();
