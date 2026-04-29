@@ -3,6 +3,7 @@ import {
   ensureHomeScreen,
   ensureTestPgConnection,
   openTestPgWorkspace,
+  switchToLauncherWindow,
 } from "./_helpers";
 
 describe("Table View — Smoke Tests", () => {
@@ -106,6 +107,7 @@ describe("Table View — Smoke Tests", () => {
 
     // Return to Home so subsequent specs start from the documented baseline.
     await back.click();
+    await switchToLauncherWindow();
     const newBtn = await $('[aria-label="New Connection"]');
     await newBtn.waitForDisplayed({ timeout: 5000 });
   });

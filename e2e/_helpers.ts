@@ -1,7 +1,7 @@
 import { expect } from "@wdio/globals";
 
 /**
- * Shared e2e helpers (sprint 125+).
+ * Shared e2e helpers (sprint 125+, multi-window fix sprint 170).
  *
  * Sprint 125 split the app into two top-level screens — Home (paradigm-
  * agnostic connection management) and Workspace (multi-paradigm tabs +
@@ -9,42 +9,63 @@ import { expect } from "@wdio/globals";
  * interacts with a connection has to navigate Home → Open → Workspace
  * before it can touch the schema tree, the tab bar, or any query UI.
  *
+ * Phase 12 (sprint 150) made these two separate Tauri windows. tauri-driver
+ * only connects to one window at a time, so helpers must explicitly call
+ * `browser.switchWindow()` to move the WebDriver context between windows.
+ *
  * These helpers centralise that flow. They are intentionally idempotent —
  * each helper detects "already in the right state" and short-circuits, so
  * specs can call them in `beforeEach` without worrying about leftover
  * state from previous tests.
- *
- * Naming follows the `ensure*` pattern already established in
- * `import-export.spec.ts` (`ensureConnectionsMode`,
- * `ensureTestPgConnection`).
  */
 
 const TEST_PG_NAME = "Test PG";
+const WORKSPACE_TITLE = "Table View — Workspace";
 
-/** True if the Workspace screen is currently mounted. We use the back
- * button as the sentinel because it is the unambiguous Workspace-only
- * marker (Home does not render any element with this aria-label). */
+/** Switch WebDriver context to the workspace window. */
+export async function switchToWorkspaceWindow() {
+  await browser.switchWindow(WORKSPACE_TITLE);
+}
+
+/** Switch WebDriver context to the launcher window.
+ * "Table View" alone matches both windows (workspace title contains it),
+ * so we iterate handles and match by exact title. */
+export async function switchToLauncherWindow() {
+  const handles = await browser.getWindowHandles();
+  for (const handle of handles) {
+    await browser.switchToWindow(handle);
+    const title = await browser.getTitle();
+    if (!title.includes("Workspace")) return;
+  }
+  throw new Error("Launcher window not found");
+}
+
+/** True if the WebDriver is currently on the workspace window. */
 export async function isWorkspaceMounted(): Promise<boolean> {
-  const back = await $('[aria-label="Back to connections"]');
   try {
-    await back.waitForExist({ timeout: 1000 });
-    return true;
+    const title = await browser.getTitle();
+    return title.includes("Workspace");
   } catch {
     return false;
   }
 }
 
 /**
- * Make sure the Home screen is showing. Used by specs that need to look
- * up / create a connection before opening it. No-op when already on Home.
+ * Make sure the Home (launcher) screen is showing. Used by specs that need
+ * to look up / create a connection before opening it. No-op when already on
+ * the launcher.
  */
 export async function ensureHomeScreen() {
-  if (!(await isWorkspaceMounted())) return;
-  const back = await $('[aria-label="Back to connections"]');
-  await back.waitForDisplayed({ timeout: 5000 });
-  await back.click();
-  // Home is the absence of the back button + presence of the New Connection
-  // button (Home renders one in the header strip).
+  // Try switching to workspace — if it exists, click Back first.
+  try {
+    await switchToWorkspaceWindow();
+    const back = await $('[aria-label="Back to connections"]');
+    await back.waitForDisplayed({ timeout: 5000 });
+    await back.click();
+  } catch {
+    // Workspace window not reachable — already on launcher or no workspace.
+  }
+  await switchToLauncherWindow();
   const newBtn = await $('[aria-label="New Connection"]');
   await newBtn.waitForDisplayed({ timeout: 5000 });
 }
@@ -95,17 +116,26 @@ export async function ensureTestPgConnection() {
 
 /**
  * Open the Test PG connection: ensure it exists, double-click it from
- * Home, wait for Workspace to mount, and wait for the public schema to
- * appear. After this returns the test can interact with the schema tree
- * / tab bar exactly as before sprint 125.
+ * the launcher, switch to the workspace window, and wait for the public
+ * schema to appear. After this returns the test can interact with the
+ * schema tree / tab bar exactly as before sprint 125.
  */
 export async function openTestPgWorkspace() {
   await ensureTestPgConnection();
 
-  if (!(await isWorkspaceMounted())) {
+  // Short-circuit: if already on the workspace, just verify it's responsive.
+  try {
+    await switchToWorkspaceWindow();
+    const back = await $('[aria-label="Back to connections"]');
+    await back.waitForExist({ timeout: 1000 });
+    // Already on workspace — skip navigation.
+  } catch {
+    // Not on workspace — open from launcher.
+    await switchToLauncherWindow();
     const conn = await $(`[aria-label^="${TEST_PG_NAME}"]`);
     await conn.waitForDisplayed({ timeout: 5000 });
     await conn.doubleClick();
+    await switchToWorkspaceWindow();
   }
 
   // The Workspace's [← Connections] back button is the unambiguous
@@ -120,13 +150,19 @@ export async function openTestPgWorkspace() {
 }
 
 /**
- * Send the user back to the Home screen. No-op when already there.
+ * Send the user back to the Home (launcher) screen. No-op when already
+ * there.
  */
 export async function backToHome() {
-  if (!(await isWorkspaceMounted())) return;
-  const back = await $('[aria-label="Back to connections"]');
-  await back.waitForDisplayed({ timeout: 5000 });
-  await back.click();
+  try {
+    await switchToWorkspaceWindow();
+    const back = await $('[aria-label="Back to connections"]');
+    await back.waitForDisplayed({ timeout: 5000 });
+    await back.click();
+  } catch {
+    // Not on workspace — already on launcher.
+  }
+  await switchToLauncherWindow();
   const newBtn = await $('[aria-label="New Connection"]');
   await newBtn.waitForDisplayed({ timeout: 5000 });
 }

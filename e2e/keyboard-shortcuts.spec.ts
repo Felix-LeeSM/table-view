@@ -4,6 +4,8 @@ import {
   backToHome,
   isWorkspaceMounted,
   openTestPgWorkspace,
+  switchToLauncherWindow,
+  switchToWorkspaceWindow,
 } from "./_helpers";
 
 /**
@@ -112,12 +114,14 @@ describe("Keyboard shortcuts (Sprint 133)", function () {
 
     // Cmd+, in Workspace → Home.
     await pressCtrl(",");
+    await switchToLauncherWindow();
     const newBtn = await $('[aria-label="New Connection"]');
     await newBtn.waitForDisplayed({ timeout: 5000 });
     expect(await isWorkspaceMounted()).toBe(false);
 
     // Cmd+, on Home → Workspace.
     await pressCtrl(",");
+    await switchToWorkspaceWindow();
     const back = await $('[aria-label="Back to connections"]');
     await back.waitForDisplayed({ timeout: 5000 });
     expect(await isWorkspaceMounted()).toBe(true);

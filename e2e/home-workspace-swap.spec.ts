@@ -4,6 +4,7 @@ import {
   ensureHomeScreen,
   ensureTestPgConnection,
   openTestPgWorkspace,
+  switchToLauncherWindow,
 } from "./_helpers";
 
 /**
@@ -73,6 +74,7 @@ describe("Home ↔ Workspace screen swap (sprint 125)", () => {
     const back = await $('[aria-label="Back to connections"]');
     await back.waitForDisplayed({ timeout: 5000 });
     await back.click();
+    await switchToLauncherWindow();
 
     // Home sentinel — the New Connection button on the Home header strip.
     const newBtn = await $('[aria-label="New Connection"]');
