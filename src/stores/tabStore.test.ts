@@ -10,8 +10,11 @@ import type { QueryState } from "@/types/query";
 import type { SortInfo } from "@/types/schema";
 
 function makeTableTab(
-  overrides: Partial<Omit<TableTab, "id">> & { id: string },
-): Omit<TableTab, "id"> {
+  overrides: Partial<Omit<TableTab, "id" | "isPreview">> & {
+    id?: string;
+    permanent?: boolean;
+  },
+): Omit<TableTab, "id" | "isPreview"> & { permanent?: boolean } {
   return {
     title: "Test Tab",
     connectionId: "conn1",
@@ -992,6 +995,135 @@ describe("tabStore", () => {
       expect(structTab!.isPreview).toBe(true);
       // Active tab is the new Structure tab
       expect(state2.activeTabId).toBe(structTab!.id);
+    });
+  });
+
+  // -- permanent option (addTab lifecycle redesign) -------------------------
+
+  describe("addTab permanent option", () => {
+    // Reason: permanent: true creates a persistent tab directly, skipping the
+    // preview stage. This is used by double-click handlers so the tab lifecycle
+    // is managed entirely within the store. (2026-04-29)
+    it("permanent: true creates a tab with isPreview === false", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          permanent: true,
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(getTableTab(state, 0).isPreview).toBe(false);
+    });
+
+    // Reason: permanent: false (default) creates a preview tab that will be
+    // swapped by subsequent single-clicks on the same connection.
+    it("permanent: false (default) creates a preview tab", () => {
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+    });
+
+    // Reason: when permanent: true is passed and an exact-match preview tab
+    // already exists, addTab should promote it in-place rather than creating a
+    // duplicate.
+    it("permanent: true promotes an existing preview tab with the same table", () => {
+      // Single-click → preview
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+      const previewId = useTabStore.getState().tabs[0]!.id;
+      expect(getTableTab(useTabStore.getState(), 0).isPreview).toBe(true);
+
+      // Double-click same table → promote in-place
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          permanent: true,
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0]!.id).toBe(previewId);
+      expect(getTableTab(state, 0).isPreview).toBe(false);
+    });
+
+    // Reason: permanent: true should NOT replace an existing preview slot —
+    // it always creates a new persistent tab alongside any existing preview.
+    it("permanent: true does not replace an existing preview slot for a different table", () => {
+      // Preview for "users"
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+        }),
+      );
+
+      // Permanent for "orders" → should create alongside, not replace
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "orders",
+          permanent: true,
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(2);
+      expect(getTableTab(state, 0).table).toBe("users");
+      expect(getTableTab(state, 0).isPreview).toBe(true);
+      expect(getTableTab(state, 1).table).toBe("orders");
+      expect(getTableTab(state, 1).isPreview).toBe(false);
+    });
+
+    // Reason: permanent: true with an existing persistent tab should just
+    // activate it without creating a duplicate.
+    it("permanent: true activates an existing persistent tab without duplication", () => {
+      // Create persistent tab
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          permanent: true,
+        }),
+      );
+      const persistentId = useTabStore.getState().tabs[0]!.id;
+
+      // Try to open same table again with permanent: true
+      useTabStore.getState().addTab(
+        makeTableTab({
+          id: "ignored",
+          connectionId: "conn1",
+          table: "users",
+          permanent: true,
+        }),
+      );
+
+      const state = useTabStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0]!.id).toBe(persistentId);
+      expect(state.activeTabId).toBe(persistentId);
     });
   });
 

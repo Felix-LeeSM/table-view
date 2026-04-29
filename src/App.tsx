@@ -295,6 +295,7 @@ export default function App() {
         closable: true,
         subView: "records",
         objectKind: objectKind ?? "table",
+        permanent: true,
       });
     };
     window.addEventListener("navigate-table", handler);

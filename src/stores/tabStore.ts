@@ -180,7 +180,9 @@ interface TabState {
   dirtyTabIds: Set<string>;
 
   // Table-tab actions
-  addTab: (tab: Omit<TableTab, "id">) => void;
+  addTab: (
+    tab: Omit<TableTab, "id" | "isPreview"> & { permanent?: boolean },
+  ) => void;
   removeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   setSubView: (tabId: string, subView: TabSubView) => void;
@@ -271,16 +273,20 @@ export const useTabStore = create<TabState>((set, get) => ({
     // mark it as MRU. MainArea's EmptyState reads this to decide which
     // connection the New Query CTA should default to.
     useMruStore.getState().markConnectionUsed(tab.connectionId);
+    // Extract `permanent` before constructing the stored tab shape.
+    // `permanent` is an instruction to addTab (should this tab be
+    // persistent from birth?), not a field stored on the tab itself.
+    const { permanent, ...tabFields } = tab;
     // Sprint 130 — autofill `database` for new RDB tabs from the active
     // sub-pool selection. Document tabs already carry their own
     // `database` (set by callers that know the Mongo db name); we leave
     // those untouched. We do NOT migrate legacy persisted RDB tabs —
     // only fresh tabs created via this code path get the autofill.
-    const isRdbTab = (tab.paradigm ?? "rdb") === "rdb";
-    const tabWithDb: Omit<TableTab, "id"> =
-      isRdbTab && tab.database === undefined
-        ? { ...tab, database: resolveActiveDb(tab.connectionId) }
-        : tab;
+    const isRdbTab = (tabFields.paradigm ?? "rdb") === "rdb";
+    const tabWithDb: Omit<TableTab, "id" | "isPreview"> =
+      isRdbTab && tabFields.database === undefined
+        ? { ...tabFields, database: resolveActiveDb(tabFields.connectionId) }
+        : tabFields;
     set((state) => {
       const exists = state.tabs.find(
         (t): t is TableTab =>
@@ -291,33 +297,45 @@ export const useTabStore = create<TabState>((set, get) => ({
           (t.subView ?? "records") === (tabWithDb.subView ?? "records"),
       );
       if (exists) {
+        // If the caller wants a permanent tab and the existing one is a
+        // preview, promote it in-place rather than just activating.
+        if (permanent && (exists as TableTab).isPreview) {
+          const newTabs = state.tabs.map((t) =>
+            t.id === exists.id ? { ...t, isPreview: false } : t,
+          );
+          return { tabs: newTabs, activeTabId: exists.id };
+        }
         return { activeTabId: exists.id };
       }
 
-      // Check if there is a preview tab for the same connection + subView to replace
-      const previewIdx = state.tabs.findIndex(
-        (t): t is TableTab =>
-          t.type === "table" &&
-          t.connectionId === tabWithDb.connectionId &&
-          t.isPreview === true &&
-          (t.subView ?? "records") === (tabWithDb.subView ?? "records"),
-      );
+      // Preview slot replacement — only for non-permanent (preview) tabs.
+      // A permanent tab never replaces an existing preview slot; it always
+      // appends as a new persistent tab.
+      if (!permanent) {
+        const previewIdx = state.tabs.findIndex(
+          (t): t is TableTab =>
+            t.type === "table" &&
+            t.connectionId === tabWithDb.connectionId &&
+            t.isPreview === true &&
+            (t.subView ?? "records") === (tabWithDb.subView ?? "records"),
+        );
 
-      if (previewIdx !== -1) {
-        const newId = `tab-${tabCounter}`;
-        const newTabs = [...state.tabs];
-        newTabs[previewIdx] = {
-          ...tabWithDb,
-          id: newId,
-          isPreview: true,
-        } as TableTab;
-        return { tabs: newTabs, activeTabId: newId };
+        if (previewIdx !== -1) {
+          const newId = `tab-${tabCounter}`;
+          const newTabs = [...state.tabs];
+          newTabs[previewIdx] = {
+            ...tabWithDb,
+            id: newId,
+            isPreview: true,
+          } as TableTab;
+          return { tabs: newTabs, activeTabId: newId };
+        }
       }
 
       return {
         tabs: [
           ...state.tabs,
-          { ...tabWithDb, id: `tab-${tabCounter}`, isPreview: true },
+          { ...tabWithDb, id: `tab-${tabCounter}`, isPreview: !permanent },
         ],
         activeTabId: `tab-${tabCounter}`,
       };

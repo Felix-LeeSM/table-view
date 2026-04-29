@@ -38,8 +38,6 @@ export default function DataGrid({
   initialFilters,
 }: DataGridProps) {
   const queryTableData = useSchemaStore((s) => s.queryTableData);
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const promoteTab = useTabStore((s) => s.promoteTab);
   const addTab = useTabStore((s) => s.addTab);
   const updateTabSorts = useTabStore((s) => s.updateTabSorts);
   // Sprint 76: sort state lives on the active tab so it survives tab
@@ -107,13 +105,6 @@ export default function DataGrid({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.columns]);
-
-  // Promote preview tab to permanent when user interacts (page change, filter, sort)
-  useEffect(() => {
-    if (activeTabId) {
-      promoteTab(activeTabId);
-    }
-  }, [page, appliedFilters, appliedRawSql, sorts, activeTabId, promoteTab]);
 
   // Cmd+F (Mac) / Ctrl+F (other) toggles the filter bar
   useEffect(() => {
@@ -280,6 +271,7 @@ export default function DataGrid({
         title: `${refSchema}.${refTable}`,
         closable: true,
         subView: "records",
+        permanent: true,
         initialFilters: [
           {
             id: crypto.randomUUID(),

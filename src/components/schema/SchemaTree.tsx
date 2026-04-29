@@ -649,18 +649,25 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   };
 
   /**
-   * Sprint 136 (AC-S136-02) — double-click on a table row promotes the tab
-   * to a persistent (`isPreview: false`) tab. We open / swap onto the target
-   * row first via the same `handleTableClick` path, then read back the active
-   * tab id and call `promoteTab` so the user can keep the tab around even if
-   * they click another row afterwards.
+   * Double-click on a table row opens the table as a persistent tab
+   * directly via `addTab({ permanent: true })`. This replaces the old
+   * two-step addTab+promoteTab pattern so the lifecycle is managed
+   * entirely within the store.
    */
   const handleTableDoubleClick = (tableName: string, schemaName: string) => {
-    handleTableClick(tableName, schemaName);
-    const activeTabId = useTabStore.getState().activeTabId;
-    if (activeTabId) {
-      useTabStore.getState().promoteTab(activeTabId);
-    }
+    setSelectedNodeId(
+      nodeIdToString({ type: "table", schema: schemaName, table: tableName }),
+    );
+    addTab({
+      title: `${schemaName}.${tableName}`,
+      connectionId,
+      type: "table",
+      closable: true,
+      schema: schemaName,
+      table: tableName,
+      subView: "records",
+      permanent: true,
+    });
   };
 
   const handleOpenStructure = (tableName: string, schemaName: string) => {

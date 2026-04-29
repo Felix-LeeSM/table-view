@@ -1309,8 +1309,11 @@ describe("DataGrid", () => {
 
   // ── Sprint 43: promoteTab triggers ──
 
-  // 50. Sorting triggers promoteTab
-  it("calls promoteTab when sorting changes", async () => {
+  // Reason: sorting no longer promotes preview tabs — the promoteTab
+  // useEffect was removed from DataGrid so that preview tabs stay as
+  // previews until an explicit user action (double-click, edit, TabBar
+  // click) promotes them. (2026-04-29)
+  it("does NOT call promoteTab when sorting changes", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
     mockPromoteTab.mockClear();
@@ -1320,7 +1323,7 @@ describe("DataGrid", () => {
     });
     await screen.findByText("▲");
 
-    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+    expect(mockPromoteTab).not.toHaveBeenCalled();
   });
 
   // 51. Inline edit (double-click) triggers promoteTab

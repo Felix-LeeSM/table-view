@@ -140,22 +140,28 @@ export default function DocumentDatabaseTree({
   );
 
   /**
-   * Sprint 136 (AC-S136-03) — double-click promotes the preview tab to a
-   * persistent tab. We open / swap onto the target collection first via the
-   * same `handleCollectionOpen` path, then read back the active tab id and
-   * call `promoteTab` so the user can keep the tab around even when they
-   * later click another collection.
+   * Double-click on a collection opens it as a persistent tab directly via
+   * `addTab({ permanent: true })`. This replaces the old two-step
+   * addTab+promoteTab pattern so the lifecycle is managed entirely within
+   * the store.
    */
-  const promoteTab = useTabStore((s) => s.promoteTab);
   const handleCollectionDoubleClick = useCallback(
     (dbName: string, collectionName: string) => {
-      handleCollectionOpen(dbName, collectionName);
-      const activeTabId = useTabStore.getState().activeTabId;
-      if (activeTabId) {
-        promoteTab(activeTabId);
-      }
+      addTab({
+        type: "table",
+        title: `${dbName}.${collectionName}`,
+        connectionId,
+        closable: true,
+        database: dbName,
+        collection: collectionName,
+        schema: dbName,
+        table: collectionName,
+        subView: "records",
+        paradigm: "document",
+        permanent: true,
+      });
     },
-    [handleCollectionOpen, promoteTab],
+    [addTab, connectionId],
   );
 
   const databaseList = useMemo(() => databases ?? [], [databases]);
