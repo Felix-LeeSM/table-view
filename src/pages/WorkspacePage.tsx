@@ -10,8 +10,8 @@ import {
 } from "@components/ui/popover";
 import ThemePicker from "@components/theme/ThemePicker";
 import { useThemeStore } from "@stores/themeStore";
-import { useConnectionStore } from "@stores/connectionStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
+import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import {
   hideWindow,
   showWindow,
@@ -94,19 +94,9 @@ export default function WorkspacePage() {
     };
   }, []);
 
-  // Re-hydrate connection state from session storage when the workspace
-  // gains focus. The workspace window is born hidden at app startup; its
-  // boot-time hydration (main.tsx) reads empty session data. When the user
-  // later connects in the launcher and focuses the workspace, this effect
-  // ensures the store picks up the latest focusedConnId + activeStatuses.
-  useEffect(() => {
-    const hydrate = () => {
-      useConnectionStore.getState().hydrateFromSession();
-    };
-    hydrate();
-    window.addEventListener("focus", hydrate);
-    return () => window.removeEventListener("focus", hydrate);
-  }, []);
+  // Re-hydrate from session storage on mount and window focus so the
+  // workspace picks up the latest connection state from the launcher.
+  useWindowFocusHydration();
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">

@@ -12,6 +12,7 @@ import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
+import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { showWindow, hideWindow, focusWindow } from "@lib/window-controls";
 import { toast } from "@lib/toast";
@@ -49,6 +50,10 @@ import ThemePicker from "@components/theme/ThemePicker";
  * top header strip alongside the brand wordmark.
  */
 export default function HomePage() {
+  // Re-hydrate from session storage on mount and window focus so the
+  // launcher picks up disconnects/state changes made in the workspace.
+  useWindowFocusHydration();
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
