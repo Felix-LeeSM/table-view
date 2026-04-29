@@ -10,6 +10,53 @@ services:
       - "${PGPORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-table_view_test}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  mongo:
+    image: mongo:7
+    container_name: table_view_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-testuser}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-testpass}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    working_dir: /app
+    command: ["bash", "/app/e2e/run-e2e-docker.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:-postgres}
+      PGDATABASE: ${PGDATABASE:-table_view_test}
+      E2E_MONGO_HOST: mongo
+      E2E_PG_HOST: postgres
+      MONGO_USER: ${MONGO_USER:-testuser}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-testpass}
+    volumes:
+      - ./e2e/wdio-report:/app/e2e/wdio-report
+      - tauri-target:/app/src-tauri/target
+    profiles:
+      - test
 
 volumes:
   pgdata:
+  tauri-target:

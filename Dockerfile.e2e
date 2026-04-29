@@ -1,0 +1,139 @@
+# syntax=docker/dockerfile:1.7
+#
+# Sprint 1 (sprint-169): image baseline + reproducible build context.
+#
+# Pinned base image: ubuntu:24.04 (LTS noble). Toolchain versions are kept in
+# lock-step with .github/workflows/ci.yml — drift is treated as a defect.
+#   - Node.js 22.14.0   (pnpm/action-setup → actions/setup-node)
+#   - pnpm 10.20.0      (packageManager field in package.json)
+#   - Rust 1.91.0       (dtolnay/rust-toolchain@stable + toolchain pin)
+#
+# Layer order favours dependency-layer cache hits:
+#   base apt → Rust toolchain → tauri-driver → JS deps → source COPY
+#
+# Sprint 1 does NOT bake the Tauri debug binary (`pnpm tauri build`) into the
+# image. Sprint 4 owns the binary build/cache strategy; Sprint 3 owns the run
+# entrypoint. The image only needs to be CAPABLE of building/running the suite,
+# which is verified via the AC-02 tool smokes.
+FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# ---------------------------------------------------------------------------
+# 1. System dependencies
+#    - Tauri 2.0 webkit2gtk 4.1 build/runtime stack
+#    - libxdo (input synthesis used by webdriver)
+#    - webkit2gtk-driver (provides /usr/bin/WebKitWebDriver)
+#    - xvfb (virtual display for headless E2E)
+#    - postgresql-client (Sprint 3 seed step + ad-hoc connectivity smoke)
+#    - curl/gnupg/ca-certificates (NodeSource + mongosh repos)
+# ---------------------------------------------------------------------------
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg \
+        file \
+        build-essential \
+        pkg-config \
+        libssl-dev \
+        libssl3 \
+        libwebkit2gtk-4.1-dev \
+        libgtk-3-dev \
+        libayatana-appindicator3-dev \
+        librsvg2-dev \
+        libxdo-dev \
+        webkit2gtk-driver \
+        xvfb \
+        postgresql-client \
+ && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# 2. Node.js 22.14.0 + pnpm 10.20.0
+#    Pinned to match .github/workflows/ci.yml (Node 22.14.0). NodeSource's
+#    setup_22.x repo only carries the latest 22.x patch, so we install Node
+#    from the official tarball to avoid silent patch drift, then layer pnpm
+#    10.20.0 on top via the bundled npm.
+# ---------------------------------------------------------------------------
+ENV NODE_VERSION=22.14.0
+RUN ARCH="$(dpkg --print-architecture)" \
+ && case "${ARCH}" in \
+        amd64) NODE_ARCH=x64 ;; \
+        arm64) NODE_ARCH=arm64 ;; \
+        *) echo "Unsupported architecture: ${ARCH}" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSLo /tmp/node.tar.xz "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" \
+ && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 --no-same-owner \
+        --exclude='*.md' --exclude='LICENSE' --exclude='share/doc' --exclude='share/man' \
+ && rm /tmp/node.tar.xz \
+ && npm install -g pnpm@10.20.0 \
+ && node --version \
+ && pnpm --version
+
+# ---------------------------------------------------------------------------
+# 3. mongosh — required by Sprint 2's compose healthcheck and by ad-hoc
+#    connectivity smokes. Installed from MongoDB's official apt repo so the
+#    binary version is reproducible.
+# ---------------------------------------------------------------------------
+RUN curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
+        | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg \
+ && echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" \
+        > /etc/apt/sources.list.d/mongodb-org-7.0.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends mongodb-mongosh \
+ && rm -rf /var/lib/apt/lists/* \
+ && mongosh --version
+
+# ---------------------------------------------------------------------------
+# 4. Rust 1.91.0 — pinned to match CI (.github/workflows/ci.yml).
+# ---------------------------------------------------------------------------
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:${PATH}
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.91.0 \
+ && rustc --version \
+ && cargo --version
+
+# ---------------------------------------------------------------------------
+# 5. tauri-driver — pinned via Cargo.lock semantics (`--locked`).
+#    Sprint 1 invariant: install path stays `cargo install tauri-driver --locked`.
+#
+#    sprint-169 Sprint 3 amendment: wdio.conf.ts resolves the tauri-driver
+#    binary at `~/.asdf/shims/tauri-driver` and falls back to
+#    `~/.cargo/bin/tauri-driver`. Inside this image `$HOME=/root` and
+#    `CARGO_HOME=/usr/local/cargo`, so the cargo install lands at
+#    `/usr/local/cargo/bin/tauri-driver` and neither wdio fallback resolves.
+#    Symlinking `/root/.cargo/bin/tauri-driver` → the actual binary keeps
+#    wdio.conf.ts unchanged while making the runtime lookup succeed.
+# ---------------------------------------------------------------------------
+RUN cargo install tauri-driver --locked \
+ && mkdir -p /root/.cargo/bin \
+ && ln -s /usr/local/cargo/bin/tauri-driver /root/.cargo/bin/tauri-driver
+
+# ---------------------------------------------------------------------------
+# 6. JS dependencies — copied before source so a TS/Rust source change does
+#    NOT invalidate this layer (per AC-01 warm-rebuild expectation).
+# ---------------------------------------------------------------------------
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+# `--ignore-scripts` skips the `prepare` lifecycle that runs `lefthook install`,
+# which (a) only matters for host-side git hooks and (b) would fail here because
+# we deliberately do not install `git` (build context excludes `.git`, so there
+# is no repo to attach hooks to and no value to gain from the binary either).
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# ---------------------------------------------------------------------------
+# 7. Source — last layer; changes most frequently.
+#    Sprint 4 may relocate the Tauri binary build out of image-build time; for
+#    Sprint 1 we leave the source resident in /app so Sprint 3's entrypoint
+#    can drive `pnpm tauri build --debug --no-bundle` + `xvfb-run pnpm test:e2e`.
+# ---------------------------------------------------------------------------
+COPY . .
+
+# Sprint 1 has no runtime contract beyond "image is buildable and tools resolve".
+# The default command keeps a pid-1 that won't crash if the image is run bare,
+# while leaving Sprint 3 free to override CMD via the compose service spec.
+CMD ["bash"]
