@@ -42,6 +42,13 @@ services:
       mongo:
         condition: service_healthy
     working_dir: /app
+    # `tty: true` allocates a pseudo-TTY for stdout/stderr inside the
+    # container. Without it, Node.js (and pnpm) detect the docker-multiplexed
+    # stdout as a non-TTY pipe and switch to block-buffered output, which
+    # makes wdio's progress invisible until the run finishes — and on a hang,
+    # invisible forever. With a TTY, console.log flushes line-by-line and
+    # `docker compose up` can stream progress in real time.
+    tty: true
     command: ["bash", "/app/e2e/run-e2e-docker.sh"]
     environment:
       PGHOST: postgres
