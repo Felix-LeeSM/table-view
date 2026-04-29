@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspacePage from "./WorkspacePage";
 import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import * as windowControls from "@lib/window-controls";
 
 vi.mock("@components/layout/Sidebar", () => ({
@@ -166,5 +167,31 @@ describe("WorkspacePage", () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId("sidebar-mock")).toBeInTheDocument();
     expect(screen.getByTestId("main-area-mock")).toBeInTheDocument();
+  });
+
+  // -- Re-hydration from session storage on window focus --
+
+  // Reason: verify that the workspace re-hydrates connection state from session
+  // storage on mount and when the window gains focus. This fixes the cross-
+  // window state sync race where the workspace's boot-time hydration reads
+  // empty data because the launcher hasn't connected yet. (2026-04-29)
+  it("calls hydrateFromSession on mount", () => {
+    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    render(<WorkspacePage />);
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it("calls hydrateFromSession when the window gains focus", () => {
+    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    render(<WorkspacePage />);
+    spy.mockClear();
+
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

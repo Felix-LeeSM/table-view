@@ -649,6 +649,72 @@ describe("DbSwitcher", () => {
 
   // -- Label resolution sanity --
 
+  // Reason: verify that the DbSwitcher falls back to the focused connection's
+  // activeDb when no tab is open but a connection is focused and connected.
+  // This is the core fix for the "database not selected" bug — pre-fix the
+  // switcher showed "—" instead of the database name when the workspace first
+  // opened. (2026-04-29)
+  it("shows focused connection's activeDb when no tab is open (rdb)", () => {
+    const conn = makeConnection({
+      paradigm: "rdb",
+      id: "c1",
+    });
+    useConnectionStore.setState({
+      connections: [conn],
+      activeStatuses: {
+        c1: { type: "connected", activeDb: "warehouse" },
+      },
+      focusedConnId: "c1",
+    });
+    // No tabs open
+    useTabStore.setState({ tabs: [], activeTabId: null });
+
+    render(<DbSwitcher />);
+    const trigger = screen.getByRole("button", {
+      name: /active database switcher/i,
+    });
+    expect(trigger.textContent).toMatch(/warehouse/);
+  });
+
+  it("shows focused connection's activeDb when no tab is open (document)", () => {
+    const conn = makeConnection({
+      paradigm: "document",
+      id: "m1",
+      db_type: "mongodb",
+    });
+    useConnectionStore.setState({
+      connections: [conn],
+      activeStatuses: {
+        m1: { type: "connected", activeDb: "analytics" },
+      },
+      focusedConnId: "m1",
+    });
+    useTabStore.setState({ tabs: [], activeTabId: null });
+
+    render(<DbSwitcher />);
+    const trigger = screen.getByRole("button", {
+      name: /active database switcher/i,
+    });
+    expect(trigger.textContent).toMatch(/analytics/);
+  });
+
+  // Reason: when no tab AND no focused connection exist, the em-dash sentinel
+  // must still appear. (2026-04-29)
+  it("shows em-dash when no tab and no focused connection", () => {
+    useTabStore.setState({ tabs: [], activeTabId: null });
+    useConnectionStore.setState({
+      connections: [],
+      activeStatuses: {},
+      focusedConnId: null,
+    });
+
+    render(<DbSwitcher />);
+    const trigger = screen.getByRole("button", {
+      name: /active database \(read-only\)/i,
+    });
+    expect(trigger.textContent).toMatch(/—/);
+  });
+
   it("shows the activeDb on the trigger when set on the connected status", () => {
     setStores({ paradigm: "rdb", connected: true, activeDb: "warehouse" });
     render(<DbSwitcher />);

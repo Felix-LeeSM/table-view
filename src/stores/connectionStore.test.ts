@@ -11,6 +11,40 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
+// Mock session-storage so we can assert cross-call sequence without a
+// real Tauri invoke (the Tauri runtime is unavailable in vitest jsdom).
+// The mock stores arguments for later assertion; the functions themselves
+// are no-ops.
+const mockPersistFocusedConnId = vi.fn();
+const mockPersistActiveStatuses = vi.fn();
+const mockReadConnectionSession = vi.fn(
+  (): {
+    focusedConnId: string | null;
+    activeStatuses: Record<string, unknown> | null;
+  } => ({
+    focusedConnId: null,
+    activeStatuses: null,
+  }),
+);
+
+vi.mock("@lib/session-storage", () => ({
+  persistFocusedConnId: (...args: unknown[]) =>
+    mockPersistFocusedConnId(...args),
+  persistActiveStatuses: (...args: unknown[]) =>
+    mockPersistActiveStatuses(...args),
+  readConnectionSession: () => mockReadConnectionSession(),
+}));
+
+// Mock the IPC bridge so the module-level `attachZustandIpcBridge` call
+// inside connectionStore.ts does not attempt a real Tauri listen.
+vi.mock("@lib/zustand-ipc-bridge", () => ({
+  attachZustandIpcBridge: vi.fn(() => Promise.resolve(() => {})),
+}));
+
+vi.mock("@lib/window-label", () => ({
+  getCurrentWindowLabel: () => "test",
+}));
+
 // Mock the tauri invoke wrapper
 vi.mock("@lib/tauri", () => ({
   listConnections: vi.fn(() =>
@@ -74,6 +108,12 @@ describe("connectionStore", () => {
       // ignore
     }
     vi.clearAllMocks();
+    mockPersistFocusedConnId.mockClear();
+    mockPersistActiveStatuses.mockClear();
+    mockReadConnectionSession.mockReturnValue({
+      focusedConnId: null,
+      activeStatuses: null,
+    });
   });
 
   it("loads connections from backend", async () => {
@@ -813,6 +853,201 @@ describe("connectionStore", () => {
     it("does NOT include any sensitive or transient keys (loading/error)", () => {
       expect(SYNCED_KEYS).not.toContain("loading");
       expect(SYNCED_KEYS).not.toContain("error");
+    });
+  });
+
+  // -- Session storage persistence on connection switching --
+  //
+  // Reason: verify that switching from one connection to another correctly
+  // updates the session-scoped localStorage entries. Pre-sprint-152 the
+  // launcher persisted a stale focusedConnId/activeStatuses that the
+  // workspace would hydrate on boot, causing the workspace to show the
+  // previously-focused connection instead of the newly-selected one. (2026-04-28)
+
+  describe("session storage persistence on connection switching", () => {
+    function seedTwoConnections() {
+      useConnectionStore.setState({
+        connections: [
+          {
+            id: "c1",
+            name: "ProdDB",
+            db_type: "postgresql",
+            host: "localhost",
+            port: 5432,
+            user: "postgres",
+            database: "prod",
+            group_id: null,
+            color: null,
+            has_password: false,
+            paradigm: "rdb",
+          },
+          {
+            id: "c2",
+            name: "DevDB",
+            db_type: "postgresql",
+            host: "localhost",
+            port: 5432,
+            user: "postgres",
+            database: "dev",
+            group_id: null,
+            color: null,
+            has_password: false,
+            paradigm: "rdb",
+          },
+        ],
+        activeStatuses: {},
+        focusedConnId: null,
+      });
+    }
+
+    it("setFocusedConn(c1) then setFocusedConn(c2) — session reflects c2", () => {
+      const { setFocusedConn } = useConnectionStore.getState();
+      setFocusedConn("c1");
+      setFocusedConn("c2");
+
+      // The store must track c2, not c1.
+      expect(useConnectionStore.getState().focusedConnId).toBe("c2");
+      // Session persistence must have been called with both values in order.
+      expect(mockPersistFocusedConnId).toHaveBeenCalledWith("c1");
+      expect(mockPersistFocusedConnId).toHaveBeenCalledWith("c2");
+      // Last call wins — the most recent value is what session storage holds.
+      const calls = mockPersistFocusedConnId.mock.calls;
+      expect(calls[calls.length - 1]![0]).toBe("c2");
+    });
+
+    it("setFocusedConn(null) clears the persisted session entry", () => {
+      const { setFocusedConn } = useConnectionStore.getState();
+      setFocusedConn("c1");
+      setFocusedConn(null);
+
+      expect(useConnectionStore.getState().focusedConnId).toBeNull();
+      expect(mockPersistFocusedConnId).toHaveBeenCalledWith(null);
+    });
+
+    it("connecting c1 then c2 persists activeStatuses with both connections", async () => {
+      seedTwoConnections();
+      const { connectToDatabase } = useConnectionStore.getState();
+
+      await connectToDatabase("c1");
+      await connectToDatabase("c2");
+
+      const statuses = useConnectionStore.getState().activeStatuses;
+      expect(statuses["c1"]?.type).toBe("connected");
+      expect(statuses["c2"]?.type).toBe("connected");
+
+      // persistActiveStatuses should have been called after each connect.
+      expect(mockPersistActiveStatuses).toHaveBeenCalledTimes(2);
+      // The final call must contain both connections.
+      const lastCall = mockPersistActiveStatuses.mock.calls[
+        mockPersistActiveStatuses.mock.calls.length - 1
+      ]![0] as Record<string, unknown>;
+      expect(lastCall["c1"]).toBeDefined();
+      expect(lastCall["c2"]).toBeDefined();
+    });
+
+    it("disconnecting c1 after connecting both leaves only c2 in session", async () => {
+      seedTwoConnections();
+      const { connectToDatabase, disconnectFromDatabase } =
+        useConnectionStore.getState();
+
+      await connectToDatabase("c1");
+      await connectToDatabase("c2");
+      await disconnectFromDatabase("c1");
+
+      const statuses = useConnectionStore.getState().activeStatuses;
+      expect(statuses["c1"]?.type).toBe("disconnected");
+      expect(statuses["c2"]?.type).toBe("connected");
+
+      // Final session persist must reflect c1 disconnected, c2 connected.
+      const lastCall = mockPersistActiveStatuses.mock.calls[
+        mockPersistActiveStatuses.mock.calls.length - 1
+      ]![0] as Record<string, unknown>;
+      expect((lastCall["c1"] as { type: string }).type).toBe("disconnected");
+      expect((lastCall["c2"] as { type: string }).type).toBe("connected");
+    });
+
+    it("full switch cycle: focus c1 → connect c1 → focus c2 → connect c2", async () => {
+      seedTwoConnections();
+      const { setFocusedConn, connectToDatabase } =
+        useConnectionStore.getState();
+
+      // User double-clicks c1 in the launcher.
+      setFocusedConn("c1");
+      await connectToDatabase("c1");
+
+      // User then double-clicks c2 (switches connection).
+      setFocusedConn("c2");
+      await connectToDatabase("c2");
+
+      // Store must reflect c2 as focused.
+      expect(useConnectionStore.getState().focusedConnId).toBe("c2");
+      // Both connections must be in connected state.
+      expect(useConnectionStore.getState().activeStatuses["c1"]?.type).toBe(
+        "connected",
+      );
+      expect(useConnectionStore.getState().activeStatuses["c2"]?.type).toBe(
+        "connected",
+      );
+      // Session must have been updated with c2 as focused.
+      const focusCalls = mockPersistFocusedConnId.mock.calls;
+      expect(focusCalls[focusCalls.length - 1]![0]).toBe("c2");
+      // Session must have both connections in activeStatuses.
+      const lastStatuses = mockPersistActiveStatuses.mock.calls[
+        mockPersistActiveStatuses.mock.calls.length - 1
+      ]![0] as Record<string, unknown>;
+      expect((lastStatuses["c2"] as { type: string }).type).toBe("connected");
+    });
+
+    it("hydrateFromSession restores focusedConnId and activeStatuses", () => {
+      mockReadConnectionSession.mockReturnValue({
+        focusedConnId: "c2",
+        activeStatuses: {
+          c1: { type: "connected", activeDb: "prod" },
+          c2: { type: "connected", activeDb: "dev" },
+        },
+      });
+
+      useConnectionStore.getState().hydrateFromSession();
+
+      const state = useConnectionStore.getState();
+      expect(state.focusedConnId).toBe("c2");
+      expect(state.activeStatuses["c1"]).toEqual({
+        type: "connected",
+        activeDb: "prod",
+      });
+      expect(state.activeStatuses["c2"]).toEqual({
+        type: "connected",
+        activeDb: "dev",
+      });
+    });
+
+    it("hydrateFromSession is a no-op when session is empty", () => {
+      mockReadConnectionSession.mockReturnValue({
+        focusedConnId: null,
+        activeStatuses: null,
+      });
+
+      useConnectionStore.getState().hydrateFromSession();
+
+      expect(useConnectionStore.getState().focusedConnId).toBeNull();
+      expect(useConnectionStore.getState().activeStatuses).toEqual({});
+    });
+
+    it("connect failure does not persist activeStatuses to session", async () => {
+      seedTwoConnections();
+      const { connectToDatabase } = await import("@lib/tauri");
+      (connectToDatabase as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("Connection refused"),
+      );
+
+      await useConnectionStore.getState().connectToDatabase("c1");
+
+      // Error state must be set.
+      expect(useConnectionStore.getState().activeStatuses["c1"]?.type).toBe(
+        "error",
+      );
+      // persistActiveStatuses must NOT have been called (error path skips it).
+      expect(mockPersistActiveStatuses).not.toHaveBeenCalled();
     });
   });
 });

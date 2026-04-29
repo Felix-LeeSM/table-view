@@ -79,10 +79,18 @@ export default function DbSwitcher() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const setActiveDb = useConnectionStore((s) => s.setActiveDb);
+  // When no active tab is open, fall back to the focused connection so the
+  // switcher shows the database name immediately after opening the workspace
+  // (before any table/collection is clicked).
+  const focusedConnId = useConnectionStore((s) => s.focusedConnId);
 
+  // Resolve the "driving" connection: active tab's connection first, then
+  // focused connection as fallback (mirrors WorkspaceSidebar's resolution).
   const activeConn = activeTab
     ? (connections.find((c) => c.id === activeTab.connectionId) ?? null)
-    : null;
+    : focusedConnId
+      ? (connections.find((c) => c.id === focusedConnId) ?? null)
+      : null;
   const status = activeConn ? activeStatuses[activeConn.id] : undefined;
   const isConnected = status?.type === "connected";
   const paradigm = activeConn?.paradigm ?? null;
@@ -118,22 +126,21 @@ export default function DbSwitcher() {
   }, [activeConn, paradigm]);
 
   let label: string;
-  if (!activeTab) {
+  if (!activeConn) {
+    // No active tab AND no focused connection — nothing to show.
     label = "—";
   } else if (paradigm === "rdb" && activeDb) {
-    // Sprint 130 — RDB label always tracks the active sub-pool, not the
-    // tab's `schema`. `schema` and DB are orthogonal in PG and the
-    // toolbar must reflect *DB* selection.
     label = activeDb;
-  } else if (activeTab.type === "query" && activeTab.database) {
+  } else if (activeTab?.type === "query" && activeTab.database) {
     label = activeTab.database;
-  } else if (activeTab.type === "table" && activeTab.database) {
+  } else if (activeTab?.type === "table" && activeTab.database) {
     label = activeTab.database;
-  } else if (activeTab.type === "table" && activeTab.schema) {
-    // Legacy fallback for table tabs persisted before S130 that have no
-    // `database` field yet. Schema doubles as a passable "current DB"
-    // hint for the user until they reopen the tab.
+  } else if (activeTab?.type === "table" && activeTab.schema) {
     label = activeTab.schema;
+  } else if (activeDb) {
+    // Focused connection (or active tab on a document connection) with no
+    // tab-specific database — use the connection's activeDb.
+    label = activeDb;
   } else {
     label = "(default)";
   }
