@@ -1,8 +1,23 @@
 name: CI
 
+# Trigger policy:
+# - `push` on `main` only: validates what actually landed (post-merge gate).
+# - `pull_request`: validates feature branches before they merge.
+# This avoids the duplicate run that fires when an open PR's branch is
+# pushed (push + pull_request would each schedule a separate workflow on
+# the same SHA).
 on:
   push:
+    branches: [main]
   pull_request:
+
+# When a new commit is pushed to a PR, cancel the in-flight run for the
+# previous commit on the same ref. Runs on `main` are NOT cancelled —
+# the post-merge gate must complete to give us a reliable signal for the
+# tip of `main`.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
