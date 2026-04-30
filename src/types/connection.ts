@@ -209,18 +209,33 @@ export function parseConnectionUrl(
         paradigm: paradigmOf("sqlite"),
       };
     }
+    // Sprint 178 — scheme map covers the eight URL schemes the dialog
+    // recognises. `postgres` is a legacy shorthand for `postgresql`,
+    // `mongodb+srv` is the SRV-record transport variant of `mongodb`
+    // (frontend treats them identically; backend resolves SRV at connect
+    // time), and `mariadb` is wire-compatible with MySQL so it routes
+    // through the existing MySQL adapter. These are URL-scheme aliases —
+    // they do NOT introduce new `DatabaseType` variants.
     const dbTypeMap: Record<string, DatabaseType> = {
       postgresql: "postgresql",
       postgres: "postgresql",
       mysql: "mysql",
+      mariadb: "mysql",
       mongodb: "mongodb",
+      "mongodb+srv": "mongodb",
       redis: "redis",
     };
     const dbType = dbTypeMap[parsed.protocol.replace(":", "")];
     if (!dbType) return null;
+    // Sprint 178 (AC-178-04) — a URL whose host part is empty (e.g.
+    // `postgres://`, `mysql://@`, `mongodb+srv://`) is malformed enough
+    // that we cannot infer a connection target. Returning `null` lets the
+    // form-mode paste handler treat it as "no recognised paste" and leave
+    // the host field unchanged (silent best-effort, no alert).
+    if (!parsed.hostname) return null;
     return {
       db_type: dbType,
-      host: parsed.hostname || "localhost",
+      host: parsed.hostname,
       port: parsed.port ? parseInt(parsed.port, 10) : DATABASE_DEFAULTS[dbType],
       user: decodeURIComponent(parsed.username),
       password: decodeURIComponent(parsed.password),
