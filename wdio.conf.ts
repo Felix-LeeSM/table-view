@@ -37,12 +37,27 @@ export const config: Options.Testrunner = {
     timeout: 60000,
   },
 
-  // Build the Tauri app in debug mode before tests
+  // Build the Tauri app in debug mode before tests.
+  //
+  // ADR 0016 — wdio's onPrepare runs *after* run-e2e-docker.sh's tauri
+  // build, and without `--config` it would rebuild against the production
+  // tauri.conf.json (workspace.visible:false), silently overwriting the
+  // e2e overlay binary. Always pass the overlay so both build paths
+  // produce a webdriver-visible workspace window. cargo's incremental
+  // cache makes the second build a near no-op when the entrypoint already
+  // ran one.
   onPrepare: () => {
-    console.log("[wdio] Building Tauri debug binary...");
+    console.log("[wdio] Building Tauri debug binary (e2e overlay)...");
     const result = spawnSync(
       "pnpm",
-      ["tauri", "build", "--debug", "--no-bundle"],
+      [
+        "tauri",
+        "build",
+        "--debug",
+        "--no-bundle",
+        "--config",
+        "src-tauri/tauri.e2e.conf.json",
+      ],
       {
         cwd: __dirname,
         stdio: "inherit",
