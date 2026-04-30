@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for the main window",
-  "windows": ["main"],
+  "description": "Default capabilities for launcher + workspace windows. sprint-150 split the previous single `main` window into these two labels; without updating this list every event.listen / event.emit call from either window is denied with 'event.listen not allowed on window ...'.",
+  "windows": ["launcher", "workspace"],
   "permissions": [
     "core:default",
     "core:event:allow-listen",
