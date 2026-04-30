@@ -50,6 +50,6 @@ paths:
 ## 관련
 
 - ADR 0019 — E2E를 CI에서 제거하고 pre-push로 이동
+- ADR 0020 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원)
 - `.claude/hooks/pre-bash.sh` — 차단 패턴 코드
-- `lefthook.yml` — hook 정의
-- `scripts/e2e-host.sh` — host-native e2e 진입점
+- `lefthook.yml` — hook 정의 (pre-push `5_e2e: pnpm test:e2e:docker`)

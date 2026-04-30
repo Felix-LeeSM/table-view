@@ -49,8 +49,15 @@ pre-push:
       tags: build
       run: cd src-tauri && cargo check
     5_e2e:
+      # ADR 0020 (2026-05-01) — host docker pipeline, NOT host-native.
+      # `tauri-driver` is Linux-only (built on `WebKitWebDriver`) and
+      # exits with `tauri-driver is not supported on this platform` on
+      # macOS, so the docker compose `e2e` service (ubuntu + xvfb +
+      # webkit2gtk-driver) is the only working runtime. The dev
+      # machine's docker daemon is more deterministic than CI's shared
+      # ubuntu-latest runner — that's the actual win.
       tags: test e2e
-      run: bash scripts/e2e-host.sh
+      run: pnpm test:e2e:docker
 
 commit-msg:
   commands:
