@@ -1,10 +1,10 @@
 ---
 id: "0015"
 title: E2E 실행을 docker compose 파이프라인으로 표준화
-status: Accepted
+status: Superseded
 date: 2026-04-29
 supersedes: null
-superseded_by: null
+superseded_by: "0019"
 ---
 
 # ADR 0015 — E2E 실행을 docker compose 파이프라인으로 표준화

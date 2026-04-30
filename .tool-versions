@@ -2,3 +2,4 @@ nodejs 22.14.0
 rust 1.91.0
 pnpm 10.20.0
 direnv 2.37.1
+lefthook 2.1.5
