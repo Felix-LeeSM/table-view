@@ -3,17 +3,18 @@
 > 출처: [`docs/ux-laws-mapping.md`](ux-laws-mapping.md) Top 6
 > 작성일: 2026-04-30 · 작성자: 계획만, 실행 X
 > 사용법: 이 문서는 transient. 각 항목이 sprint contract로 분해되면 해당 항목 줄을 지운다. 마지막 항목까지 분해되면 본 문서 폐기.
+> 2026-04-30 갱신: §A-§E 모두 sprint-176~180으로 분해/구현 완료. 문서는 폐기 가능.
 
 ## 진행 상황
 
 | # | UX 법칙 | 상태 |
 |---|---------|------|
 | 1 | Peak-End / Zeigarnik / Von Restorff (P1 5건) | ✅ sprint-97~101 완료 |
-| 2 | Selective Attention | 📋 계획 (아래 §A) |
-| 3 | Law of Similarity + Jakob's Law (Mongo MQL) | 📋 계획 (§B) |
-| 4 | Postel's Law | 📋 계획 (§C) |
-| 5 | Mental Model | 📋 계획 (§D) |
-| 6 | Doherty + Goal-Gradient | 📋 계획 (§E) |
+| 2 | Selective Attention | ✅ sprint-176 완료 (8.2/10) |
+| 3 | Law of Similarity + Jakob's Law (Mongo MQL) | ✅ sprint-177 완료 (8.0/10) |
+| 4 | Postel's Law | ✅ sprint-178 완료 (8.6/10) |
+| 5 | Mental Model | ✅ sprint-179 완료 (8.4/10) |
+| 6 | Doherty + Goal-Gradient | ✅ sprint-180 완료 (7.0/10) |
 
 ---
 
