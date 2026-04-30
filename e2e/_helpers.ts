@@ -54,20 +54,48 @@ export async function isWorkspaceMounted(): Promise<boolean> {
  * Make sure the Home (launcher) screen is showing. Used by specs that need
  * to look up / create a connection before opening it. No-op when already on
  * the launcher.
+ *
+ * Sprint 169 — Tauri 2.0 on Linux/Xvfb does NOT create a webview for windows
+ * declared `visible: false` in `tauri.conf.json` until they are first shown.
+ * That makes `switchWindow("Table View — Workspace")` throw on a fresh boot.
+ * We therefore (1) attach to the launcher first, (2) wait long enough for
+ * its React tree to mount before probing visibility, and (3) only attempt
+ * the workspace-back-button recovery when the launcher really is hidden,
+ * inside a try/catch so a missing workspace handle is not fatal.
  */
 export async function ensureHomeScreen() {
-  // Try switching to workspace — if it exists, click Back first.
-  try {
-    await switchToWorkspaceWindow();
-    const back = await $('[aria-label="Back to connections"]');
-    await back.waitForDisplayed({ timeout: 5000 });
-    await back.click();
-  } catch {
-    // Workspace window not reachable — already on launcher or no workspace.
-  }
   await switchToLauncherWindow();
+
+  const launcherMain = await $('[data-testid="launcher-page"]');
+
+  let launcherReady = false;
+  try {
+    await launcherMain.waitForDisplayed({ timeout: 10000 });
+    launcherReady = true;
+  } catch {
+    launcherReady = false;
+  }
+
+  if (!launcherReady) {
+    // Launcher webview is hidden — workspace must be foregrounded. The
+    // workspace handle only exists after the user has activated a
+    // connection in the current session, so wrap the whole recovery in
+    // a try/catch.
+    try {
+      await switchToWorkspaceWindow();
+      const back = await $('[aria-label="Back to connections"]');
+      await back.waitForDisplayed({ timeout: 5000 });
+      await back.click();
+      await switchToLauncherWindow();
+      await launcherMain.waitForDisplayed({ timeout: 10000 });
+    } catch {
+      // Fall through — the New Connection wait below will surface a
+      // more actionable failure than a stale switchWindow rejection.
+    }
+  }
+
   const newBtn = await $('[aria-label="New Connection"]');
-  await newBtn.waitForDisplayed({ timeout: 5000 });
+  await newBtn.waitForDisplayed({ timeout: 10000 });
 }
 
 /** Create the canonical Test PG connection from the Home screen if it
@@ -123,15 +151,18 @@ export async function ensureTestPgConnection() {
 export async function openTestPgWorkspace() {
   await ensureTestPgConnection();
 
-  // Short-circuit: if already on the workspace, just verify it's responsive.
-  try {
+  // ensureTestPgConnection guarantees we are on launcher with the React
+  // tree mounted. We must double-click to *create* the workspace webview
+  // — on Linux the workspace handle does not exist until then. Detect
+  // "already on workspace" via launcher visibility: if launcher is no
+  // longer displayed, a previous spec activated the connection and the
+  // workspace handle exists.
+  const launcherMain = await $('[data-testid="launcher-page"]');
+  const launcherActive = await launcherMain.isDisplayed().catch(() => false);
+
+  if (!launcherActive) {
     await switchToWorkspaceWindow();
-    const back = await $('[aria-label="Back to connections"]');
-    await back.waitForExist({ timeout: 1000 });
-    // Already on workspace — skip navigation.
-  } catch {
-    // Not on workspace — open from launcher.
-    await switchToLauncherWindow();
+  } else {
     const conn = await $(`[aria-label^="${TEST_PG_NAME}"]`);
     await conn.waitForDisplayed({ timeout: 5000 });
     await conn.doubleClick();
@@ -151,20 +182,10 @@ export async function openTestPgWorkspace() {
 
 /**
  * Send the user back to the Home (launcher) screen. No-op when already
- * there.
+ * there. Mirrors `ensureHomeScreen`'s probe-launcher-first pattern (sprint 169).
  */
 export async function backToHome() {
-  try {
-    await switchToWorkspaceWindow();
-    const back = await $('[aria-label="Back to connections"]');
-    await back.waitForDisplayed({ timeout: 5000 });
-    await back.click();
-  } catch {
-    // Not on workspace — already on launcher.
-  }
-  await switchToLauncherWindow();
-  const newBtn = await $('[aria-label="New Connection"]');
-  await newBtn.waitForDisplayed({ timeout: 5000 });
+  await ensureHomeScreen();
 }
 
 /** Sanity guard so callers don't accidentally treat the helpers as

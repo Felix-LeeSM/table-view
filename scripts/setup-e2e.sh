@@ -1,28 +1,52 @@
 #!/usr/bin/env bash
 # Local E2E test environment setup guide.
 #
-# E2E tests run against the native Tauri window via tauri-driver.
-# They are designed for CI (GitHub Actions ubuntu-latest) but can
-# also run locally with the right dependencies.
+# As of sprint-169 (ADR 0015), the E2E suite is standardised on the docker
+# pipeline. The launcher+workspace flow runs inside the
+# `table-view-e2e:local` image (Dockerfile.e2e) against `postgres` and
+# `mongo` services managed by `docker-compose.yml`'s `test` profile.
 #
-# Usage:
-#   ./scripts/setup-e2e.sh          # prints instructions
-#   xvfb-run pnpm test:e2e          # run after installing deps
+# This script is informational only — it prints instructions and exits 0.
 
 set -euo pipefail
 
-echo "=== E2E Test Environment Setup ==="
-echo ""
-echo "Required system packages (Debian/Ubuntu):"
-echo "  sudo apt install -y webkit2gtk-driver xvfb libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev"
-echo ""
-echo "Required Rust tool:"
-echo "  cargo install tauri-driver --locked"
-echo ""
-echo "Required test database:"
-echo "  docker compose -f docker-compose.test.yml up -d"
-echo ""
-echo "Run E2E tests:"
-echo "  xvfb-run pnpm test:e2e"
-echo ""
-echo "Note: CI runs these automatically on every push."
+cat <<'EOF'
+=== E2E Test Environment Setup ===
+
+Canonical entrypoint (Linux host or CI):
+  pnpm test:e2e:docker
+    → docker compose --profile test up --build \
+        --abort-on-container-exit --exit-code-from e2e
+
+What this does:
+  1. Builds Dockerfile.e2e (table-view-e2e:local) — Node 22.14.0,
+     pnpm 10.20.0, Rust 1.91.0, tauri-driver, webkit2gtk-driver, xvfb,
+     postgresql-client, mongosh.
+  2. Starts the `postgres` (16-alpine) and `mongo` (mongo:7) services
+     and waits for their healthchecks.
+  3. Runs `e2e/run-e2e-docker.sh` inside the `e2e` service:
+        a. Seeds Postgres from `e2e/fixtures/seed.sql` (idempotent).
+        b. Builds the Tauri debug binary (`pnpm tauri build --debug
+           --no-bundle`) into a `tauri-target` named volume so
+           subsequent runs reuse the cached `target/`.
+        c. `exec xvfb-run pnpm test:e2e` — WebdriverIO's exit code
+           becomes the container's exit code.
+  4. Reports land on the host at `e2e/wdio-report/` via bind mount.
+
+macOS (Apple Silicon) limitation:
+  Tauri requires Linux-only webkit2gtk; the docker pipeline is therefore
+  not natively runnable on macOS. Use a Linux VM (or rely on CI) — running
+  the image under linux/amd64 emulation builds the toolchain but cannot
+  exercise the GUI window inside xvfb. See ADR 0015 for details.
+
+Required host tools:
+  - docker (Engine 24+ recommended)
+  - git
+
+No host-side Node, Rust, pnpm, webkit2gtk, or xvfb is required.
+
+Cleanup:
+  docker compose --profile test down            # keep the target cache
+  docker compose --profile test down -v         # nuke pgdata + tauri-target
+
+EOF

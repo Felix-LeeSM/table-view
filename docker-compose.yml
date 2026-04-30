@@ -10,6 +10,62 @@ services:
       - "${PGPORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-table_view_test}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  mongo:
+    image: mongo:7
+    container_name: table_view_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-testuser}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-testpass}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    working_dir: /app
+    # `tty: true` allocates a pseudo-TTY for stdout/stderr inside the
+    # container. Without it, Node.js (and pnpm) detect the docker-multiplexed
+    # stdout as a non-TTY pipe and switch to block-buffered output, which
+    # makes wdio's progress invisible until the run finishes — and on a hang,
+    # invisible forever. With a TTY, console.log flushes line-by-line and
+    # `docker compose up` can stream progress in real time.
+    tty: true
+    command: ["bash", "/app/e2e/run-e2e-docker.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:-postgres}
+      PGDATABASE: ${PGDATABASE:-table_view_test}
+      E2E_MONGO_HOST: mongo
+      E2E_PG_HOST: postgres
+      MONGO_USER: ${MONGO_USER:-testuser}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:-testpass}
+    volumes:
+      - ./e2e/wdio-report:/app/e2e/wdio-report
+      - tauri-target:/app/src-tauri/target
+    profiles:
+      - test
 
 volumes:
   pgdata:
+  tauri-target:

@@ -124,95 +124,35 @@ jobs:
   e2e:
     name: E2E Tests (tauri-driver)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: testuser
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: table_view_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U testuser -d table_view_test"
-          --health-interval 2s
-          --health-timeout 3s
-          --health-retries 15
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Seed database
-        run: |
-          sudo apt-get update && sudo apt-get install -y postgresql-client
-          PGPASSWORD=testpass psql -h localhost -U testuser -d table_view_test -c "
-            CREATE TABLE IF NOT EXISTS users (
-              id SERIAL PRIMARY KEY,
-              name VARCHAR(255) NOT NULL,
-              email VARCHAR(255) UNIQUE
-            );
-            CREATE TABLE IF NOT EXISTS orders (
-              id SERIAL PRIMARY KEY,
-              user_id INTEGER REFERENCES users(id),
-              total DECIMAL(10,2)
-            );
-            CREATE TABLE IF NOT EXISTS products (
-              id SERIAL PRIMARY KEY,
-              name VARCHAR(255) NOT NULL,
-              price DECIMAL(10,2)
-            );
-            INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
-            INSERT INTO users (name, email) VALUES ('Bob', 'bob@example.com');
-            INSERT INTO orders (user_id, total) VALUES (1, 99.99);
-            INSERT INTO products (name, price) VALUES ('Widget', 19.99);
-          "
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y webkit2gtk-driver xvfb libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.91.0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.20.0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.14.0
-          cache: pnpm
-
-      - name: Install frontend deps
-        run: pnpm install --frozen-lockfile
-
-      - name: Install tauri-driver
-        run: cargo install tauri-driver --locked
-
-      - name: Cache Rust artifacts
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - name: Run E2E tests
+      # The entire E2E pipeline (Postgres + Mongo + tauri-driver + xvfb +
+      # WebdriverIO) runs inside the `table-view-e2e:local` image built from
+      # Dockerfile.e2e. Drift between this job and the local
+      # `pnpm test:e2e:docker` entrypoint is treated as a defect (sprint-169
+      # ADR 0015). `--exit-code-from e2e` propagates WebdriverIO's exit code.
+      - name: Run E2E suite via docker compose
         env:
-          PGHOST: localhost
           PGUSER: testuser
           PGPASSWORD: testpass
           PGDATABASE: table_view_test
-        run: xvfb-run pnpm test:e2e
+          MONGO_USER: testuser
+          MONGO_PASSWORD: testpass
+        run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: |
+          docker compose --profile test ps -a || true
+          docker compose --profile test logs --no-color --timestamps e2e || true
 
       - name: Upload E2E logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-logs
-          path: wdio-report/
+          path: e2e/wdio-report/

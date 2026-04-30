@@ -1,0 +1,49 @@
+# sprint-169 / Sprint 1 — minimise build context while preserving every input
+# the Rust crate, the Vite/Tauri build, and the E2E specs read.
+#
+# Exclusions are audited row-by-row in docs/sprints/sprint-169/handoff.md.
+# Anything added here MUST be re-audited there. In particular:
+#   - tests/fixtures/** is REQUIRED at compile time
+#     (src-tauri/src/db/postgres.rs:include_str!("../../../tests/fixtures/...")).
+#   - e2e/**/*.spec.ts is REQUIRED at runtime — keep the e2e/ tree included
+#     except for the host-only report dir.
+
+# ---- Generated / cache artefacts (regenerated inside the image) ----
+node_modules
+src-tauri/target
+target
+dist
+coverage
+*.tsbuildinfo
+
+# ---- Version control / CI metadata (not read by the build) ----
+.git
+.gitignore
+.github
+
+# ---- Editor / OS junk ----
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Local-only secrets (never bake into image) ----
+.env
+.env.*
+!.env.example
+
+# ---- Documentation / memory palace (no Cargo `readme = ...`,
+#      no include_str! callsite references *.md or docs/ — audited) ----
+*.md
+docs/
+memory/
+.claude
+
+# ---- Host-only test reporter output ----
+e2e/wdio-report
+wdio-report
+test-results
+tmp
