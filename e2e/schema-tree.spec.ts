@@ -2,6 +2,15 @@ import { expect } from "@wdio/globals";
 import { openTestPgWorkspace } from "./_helpers";
 
 /**
+ * Sprint 170 — context menu specs removed (tauri-driver right-click 한계).
+ * SchemaTree 컨텍스트 메뉴 검증은 component test 로 강등 (sprint-171 작업).
+ * 결과 측 (테이블 클릭으로 데이터 그리드 열림) 은 `data-grid.spec.ts` 가
+ * 안정적인 click 경로로 이미 커버.
+ *
+ * 분류 동결: docs/sprints/sprint-170/triage.md (#1, #2, #3 — DELETE).
+ */
+
+/**
  * Expand a schema node only if it is not already expanded.
  * Prevents the toggle issue: clicking an already-expanded node collapses it.
  */
@@ -23,33 +32,6 @@ async function ensureCategoryExpanded(selector: string) {
   const expanded = await cat.getAttribute("aria-expanded");
   if (expanded !== "true") {
     await cat.click();
-  }
-}
-
-/**
- * Right-click an element using W3C WebDriver Actions API.
- * Falls back to dispatchEvent if actions API is not supported by tauri-driver.
- */
-async function rightClick(el: WebdriverIO.Element) {
-  try {
-    await browser
-      .action("pointer")
-      .move({ origin: el, x: 0, y: 0 })
-      .down({ button: 2 })
-      .up({ button: 2 })
-      .perform();
-  } catch {
-    // Fallback: dispatch a native contextmenu event via execute
-    await browser.execute((elem: HTMLElement) => {
-      const rect = elem.getBoundingClientRect();
-      const event = new MouseEvent("contextmenu", {
-        bubbles: true,
-        cancelable: true,
-        clientX: rect.x + rect.width / 2,
-        clientY: rect.y + rect.height / 2,
-      });
-      elem.dispatchEvent(event);
-    }, el);
   }
 }
 
@@ -99,66 +81,6 @@ describe("Schema Tree Features", () => {
     // Substring matching tolerates Tailwind's slash-modifier class names.
     const classes = await firstTable.getAttribute("class");
     expect(classes).toMatch(/bg-primary|text-primary/);
-  });
-
-  // NOTE: tauri-driver does not support right-click via Actions API or dispatchEvent.
-  // These context menu tests are skipped until tauri-driver adds right-click support.
-  it.skip("shows context menu on table right-click", async () => {
-    await ensureSchemaExpanded('[aria-label="public schema"]');
-    await ensureCategoryExpanded('[aria-label="Tables in public"]');
-
-    const firstTable = await $('[aria-label$=" table"]');
-    await firstTable.waitForDisplayed({ timeout: 5000 });
-    await firstTable.click();
-    await rightClick(firstTable);
-
-    // Context menu should appear with expected options
-    const structureOption = await $("span=Structure");
-    await structureOption.waitForDisplayed({ timeout: 3000 });
-    expect(await structureOption.isDisplayed()).toBe(true);
-
-    const dataOption = await $("span=Data");
-    expect(await dataOption.isDisplayed()).toBe(true);
-
-    const dropOption = await $("span=Drop Table");
-    expect(await dropOption.isDisplayed()).toBe(true);
-
-    const renameOption = await $("span=Rename Table");
-    expect(await renameOption.isDisplayed()).toBe(true);
-
-    // Close menu by pressing Escape
-    await browser.keys("Escape");
-  });
-
-  it.skip("opens table data tab from context menu", async () => {
-    await ensureSchemaExpanded('[aria-label="public schema"]');
-    await ensureCategoryExpanded('[aria-label="Tables in public"]');
-
-    const firstTable = await $('[aria-label$=" table"]');
-    await firstTable.waitForDisplayed({ timeout: 5000 });
-    await rightClick(firstTable);
-
-    const dataOption = await $("span=Data");
-    await dataOption.waitForDisplayed({ timeout: 3000 });
-    await dataOption.click();
-
-    // A tab should open with the table data grid
-    const dataGrid = await $(".grid-container");
-    await dataGrid.waitForDisplayed({ timeout: 10000 });
-    expect(await dataGrid.isDisplayed()).toBe(true);
-  });
-
-  it.skip("shows context menu on schema right-click with Refresh option", async () => {
-    const publicSchema = await $('[aria-label="public schema"]');
-    await publicSchema.waitForDisplayed({ timeout: 5000 });
-    await rightClick(publicSchema);
-
-    const refreshOption = await $("span=Refresh");
-    await refreshOption.waitForDisplayed({ timeout: 3000 });
-    expect(await refreshOption.isDisplayed()).toBe(true);
-
-    // Close menu
-    await browser.keys("Escape");
   });
 
   it("renders search input in Tables category and filters tables", async () => {

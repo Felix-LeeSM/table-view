@@ -29,7 +29,8 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - 신규 기능/버그 수정은 테스트 동반 필수 (테스트 없는 커밋 금지).
 - Rust: 같은 파일 하단 `#[cfg(test)] mod tests {}` 또는 `src-tauri/tests/` 통합 테스트. 핵심 로직(DbAdapter 구현체, 쿼리 파서) 커버리지 80% 이상.
 - React: Vitest + React Testing Library. 파일은 컴포넌트 옆 `*.test.tsx` 또는 `__tests__/`. Zustand 스토어는 순수 함수처럼.
-- E2E: Playwright로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인).
+- E2E: WebdriverIO + tauri-driver 로 핵심 플로우(연결 생성, 쿼리 실행, 결과 확인). 시나리오 설계 원칙은 [e2e-scenarios](e2e-scenarios/memory.md) 필독.
+- 시나리오 원칙: 비-E2E 는 [testing-scenarios](testing-scenarios/memory.md), E2E 는 [e2e-scenarios](e2e-scenarios/memory.md). 같은 P-시리즈로 일관.
 - 커버리지 기준 (CI 검증): 전체 라인 40% / 함수 40% / 브랜치 35%. 신규·수정 파일 라인 70% 권장.
 - 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세: `.claude/rules/test-scenarios.md`.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.
@@ -66,3 +67,5 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 
 - [architecture](../architecture/memory.md) — 모듈 구조
 - [decisions](../decisions/memory.md) — 컨벤션을 만든 결정들
+- [e2e-scenarios](e2e-scenarios/memory.md) — E2E 시나리오 설계 8원칙 + CUJ 5종
+- [testing-scenarios](testing-scenarios/memory.md) — 비-E2E 시나리오 설계 8원칙 (unit/component/store/integration/async)

@@ -58,16 +58,9 @@ describe("Raw query result editing (Sprint 61)", () => {
     expect(await banner.isDisplayed()).toBe(true);
   });
 
-  // The "Editable badge" path is exercised end-to-end at the unit/component
-  // level (analyzeResultEditability, EditableQueryResultGrid, QueryResultGrid
-  // tests). Reproducing it under tauri-driver is fragile: it depends on the
-  // seeded fixture having a PK-bearing table at a stable position in the
-  // sidebar AND on PK metadata fetching in time. Skip the e2e variant so it
-  // doesn't flake; the read-only and cell-detail checks below still cover the
-  // surrounding integration of QueryResultGrid in the real Tauri shell.
-  it.skip("shows Editable badge for a single-table SELECT with PK", async () => {
-    // Intentionally left blank — see comment above.
-  });
+  // Sprint 170 — "Editable badge" e2e 변형 제거. queryAnalyzer.test.ts +
+  // EditableQueryResultGrid.test.tsx 가 권위. P1 (피라미드) 적용.
+  // 분류: docs/sprints/sprint-170/triage.md #4 (DELETE).
 
   it("opens the cell detail dialog on double-click in raw result", async () => {
     await openNewQueryTab();
