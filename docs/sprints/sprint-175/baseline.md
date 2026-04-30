@@ -232,8 +232,8 @@ The new ACs cite this row's `~432ms` end-to-end median as the contractual refere
 
 > **Scaffold for the AC-175-02-01 release rebaseline.** All cells are
 > `PENDING` and **operator-required** — the harness sandbox cannot drive
-> a `pnpm tauri build --release` interactively (it takes ~5–10 minutes
-> and exceeds the bash timeout) nor launch a GUI Tauri window. Once the
+> a `pnpm tauri build` interactively (it takes ~5–10 minutes and exceeds
+> the bash timeout) nor launch a GUI Tauri window. Once the
 > operator runs the build + measurement protocol below, paste the
 > per-trial summaries verbatim into the "Raw trials" block, drop the
 > slowest of five, and replace the `PENDING` cells with the median + p95
@@ -254,7 +254,10 @@ The new ACs cite this row's `~432ms` end-to-end median as the contractual refere
 ```bash
 # 1. Build the release artifact (operator-required; takes ~5–10 minutes
 #    on the Apple M4 host above and is unsuitable for the harness sandbox).
-pnpm tauri build --release
+#    `tauri build` defaults to release; passing `--release` errors out
+#    because tauri already forwards `--release` to cargo. Use `--debug`
+#    only if you specifically want a debug build.
+pnpm tauri build
 
 # 2. Locate the bundled binary. On macOS the default path is:
 #      src-tauri/target/release/bundle/macos/Table View.app/Contents/MacOS/table-view
@@ -344,7 +347,7 @@ pnpm tauri build --release
 
 #### How to populate this section (operator action)
 
-1. Build: `pnpm tauri build --release` (operator-required; ~5–10 min).
+1. Build: `pnpm tauri build` (operator-required; ~5–10 min). `tauri build` defaults to release; do NOT pass `--release` (it errors with "the argument '--release' cannot be used multiple times").
 2. Confirm the binary path (default macOS: `src-tauri/target/release/bundle/macos/Table View.app/Contents/MacOS/table-view`; substitute `<binary-path>` if your host differs).
 3. For each of 5 trials:
    - Cold prep: `pkill -f "table-view" 2>/dev/null; pkill -f "Table View" 2>/dev/null; sudo purge 2>/dev/null || echo "purge skipped"`.

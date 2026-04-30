@@ -46,8 +46,9 @@
 - `pnpm test`: pass (159 files, 2,414 tests; bootInstrumentation.test.ts green)
 - `pnpm build`: pass (`dist/` emitted)
 - Sprint 1 marker grep: both `rust:entry` and `rust:first-ipc` still emit
-- **DEFERRED** to operator: `pnpm tauri build --release` (~5–10 min) and
-  `scripts/measure-startup.sh launcher-cold` against the bundled binary
+- **DEFERRED** to operator: `pnpm tauri build` (release is the default;
+  ~5–10 min) and `scripts/measure-startup.sh launcher-cold` against
+  the bundled binary
 
 ## Done Criteria Coverage (iteration 1)
 | AC | Status | Notes |
@@ -66,7 +67,11 @@ Run on the same macOS host as the Sprint 1 baseline (Apple M4):
 cd /Users/felix/Desktop/study/view-table
 
 # 1. Release build (5–10 minutes — DO NOT run in the harness sandbox)
-pnpm tauri build --release
+# `tauri build` defaults to release mode. Passing `--release` errors with
+# "the argument '--release' cannot be used multiple times" because tauri
+# already forwards `--release` to cargo. Use `--debug` only if you want
+# a debug build.
+pnpm tauri build
 
 # 2. Confirm the binary path
 ls "src-tauri/target/release/bundle/macos/Table View.app/Contents/MacOS/"
