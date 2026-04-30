@@ -11,13 +11,14 @@ on:
     branches: [main]
   pull_request:
 
-# When a new commit is pushed to a PR, cancel the in-flight run for the
-# previous commit on the same ref. Runs on `main` are NOT cancelled —
-# the post-merge gate must complete to give us a reliable signal for the
-# tip of `main`.
+# Always cancel in-flight runs on the same ref when a newer commit
+# arrives — the previous run's result is stale the moment a new commit
+# lands, both on PR branches and on `main`. We trade "permanent green
+# tip-of-main signal" for "fast feedback on the latest commit"; the
+# latest commit's run is what actually represents the state of `main`.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
