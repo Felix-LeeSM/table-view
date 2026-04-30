@@ -56,8 +56,14 @@ pre-push:
       # webkit2gtk-driver) is the only working runtime. The dev
       # machine's docker daemon is more deterministic than CI's shared
       # ubuntu-latest runner — that's the actual win.
+      #
+      # The wrapper script removes any stale `e2e` service container
+      # before running the pipeline. Without it, an aborted previous
+      # run leaves a Created/Exited container bound to a recycled docker
+      # network, and `up --profile test` then fails with
+      # `network <id> not found` before any spec executes.
       tags: test e2e
-      run: pnpm test:e2e:docker
+      run: bash scripts/e2e-pre-push.sh
 
 commit-msg:
   commands:
