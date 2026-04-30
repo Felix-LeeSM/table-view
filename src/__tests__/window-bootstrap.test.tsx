@@ -117,6 +117,19 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  // sprint-173 (2026-04-30) — `document.title` is the only thing webdriver's
+  // `getTitle()` sees, so it must reflect the OS window decoration title for
+  // `_helpers.ts:switchToWorkspaceWindow` to identify which window it landed
+  // on. Both windows load the same `index.html`, so without this the
+  // multi-window e2e suite cannot disambiguate them.
+  it("AC-173-01: label='launcher' sets document.title to the launcher title", () => {
+    mockedGetLabel.mockReturnValue("launcher");
+
+    render(<AppRouter />);
+
+    expect(document.title).toBe("Table View");
+  });
+
   it("AC-150-04b: label='workspace' mounts the WorkspacePage shell", () => {
     mockedGetLabel.mockReturnValue("workspace");
 
@@ -125,6 +138,14 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(screen.getByTestId("workspace-page")).toBeInTheDocument();
     expect(screen.queryByTestId("launcher-page")).not.toBeInTheDocument();
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("AC-173-02: label='workspace' sets document.title to the workspace title", () => {
+    mockedGetLabel.mockReturnValue("workspace");
+
+    render(<AppRouter />);
+
+    expect(document.title).toBe("Table View — Workspace");
   });
 
   it("AC-150-04c: unknown label falls back to launcher AND logs a warning", () => {

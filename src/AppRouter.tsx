@@ -32,6 +32,18 @@ import App from "./App";
 export default function AppRouter() {
   const label = getCurrentWindowLabel();
 
+  // sprint-173 — keep `document.title` in sync with the Tauri window
+  // decoration title. webdriver's `getTitle()` reports `document.title`
+  // (the webview's HTML `<title>`), NOT the OS window title from
+  // `tauri.conf.json`. Both windows load the same `index.html`, so
+  // without this they'd both report "Table View" and `_helpers.ts:
+  // switchToWorkspaceWindow` could not distinguish them. Aligning the
+  // two titles also fixes the dock/taskbar/alt-tab labels in prod.
+  useEffect(() => {
+    document.title =
+      label === "workspace" ? "Table View — Workspace" : "Table View";
+  }, [label]);
+
   // Resolve the route up front so the JSX has a single, exhaustive branch.
   // We intentionally accept `string | null` — `getCurrentWindowLabel()`
   // doesn't enforce the `KnownWindowLabel` union (future windows / runtime
