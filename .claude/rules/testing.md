@@ -7,6 +7,15 @@ paths:
 
 # 테스트 필수 작성 규칙
 
+## 시나리오 설계 원칙 (필독)
+
+새 테스트를 작성·수정하기 전에 시나리오 설계 8원칙을 읽는다:
+
+- 비-E2E (unit / component / store / integration): [`memory/conventions/testing-scenarios/memory.md`](../../memory/conventions/testing-scenarios/memory.md)
+- E2E: [`memory/conventions/e2e-scenarios/memory.md`](../../memory/conventions/e2e-scenarios/memory.md)
+
+이 파일은 그 위에서 동작하는 *메커니즘 룰* (위치, 명명, 도구) 을 다룬다.
+
 ## 원칙
 - 모든 새 기능과 버그 수정에는 테스트 필수
 - 테스트 없는 PR은 머지 불가

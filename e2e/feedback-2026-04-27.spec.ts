@@ -2,43 +2,34 @@ import { expect } from "@wdio/globals";
 import { openTestPgWorkspace } from "./_helpers";
 
 /**
- * 2026-04-27 user feedback bucket — 12 real-usage UX gaps surfaced after
- * the Phase 10 sprint chain. Each `it` encodes the *desired* behaviour as
- * a concrete contract between the next sprint chain and this spec; bodies
- * are deferred (`this.skip()`) until each gap is wired up so the suite
- * stays green.
+ * 2026-04-27 user feedback bucket — 12 real-usage UX gaps.
  *
- * The skip pattern mirrors `e2e/db-switcher.spec.ts` so the suite reports
- * pending work as skipped rather than silently passing.
+ * Sprint 170 triage (docs/sprints/sprint-170/triage.md):
+ *   - DELETE 4: #3 MySQL autocomplete (DBMS 미지원), #8 preview tab 3종
+ *     (SchemaTree.preview.test.tsx + tabStore.test.ts 권위), #9 dirty
+ *     indicator (TabBar.test.tsx AC-S134-06 권위).
+ *   - MOVE 5: #3 PG/Mongo autocomplete, #4 form 3종, #5 plaintext NOT
+ *     offered, #7 sprint copy / schema 위치 한 곳, #11 Functions layout
+ *     (sprint-171 에서 component test 신규 작성).
+ *   - REVIVE 4: #1 Home picker (RISK-025 resolved, sprint-172 에서
+ *     `app.spec.ts` 흡수), #2 connection swap, #5 encrypted round-trip,
+ *     #10 row count, #12 Mongo db 지속 (sprint-172).
+ *   - LIVE 1: #6 Disconnect button (그대로 유지).
  *
- * Sprint 149 post-chain: Phase 11 closing pass wires the P0 gaps —
- * #6 (Disconnect button) and #8 (PG preview tab parity) — to live
- * assertions. Remaining items stay `this.skip()` per the same pattern.
- *
- * Item #1 (Home picker window size) intentionally has no concrete
- * assertions yet — the design (Tauri window resize vs CSS layout vs
- * separate launcher window) is still under discussion with the user
- * (ADR 0011 / RISK-025 — phase 12 deferral).
+ * Sprint 170 작업 후 이 파일에 남는 것은:
+ *   - #6 (LIVE) — 변경 없음
+ *   - 사용자 피드백 ID 보존을 위한 placeholder describe 만 (REVIVE/MOVE 전환
+ *     시점에 흡수처에 인용).
  */
 
 describe("Phase 11 feedback (2026-04-27)", () => {
   describe("#1 Home picker should be smaller than Workspace", () => {
-    it("Home renders in a smaller viewport than Workspace [DESIGN-PENDING]", async function () {
-      // Pending design discussion — three candidate approaches:
-      //   A) Tauri WebviewWindow.setSize() on screen transition
-      //   B) CSS-only: Home content max-width inside same window
-      //   C) Two windows: small launcher + main workspace
-      // Outline once design lands:
-      //   1. ensureHomeScreen()
-      //   2. const home = await browser.execute(() => ({
-      //        w: window.innerWidth, h: window.innerHeight,
-      //      }));
-      //   3. openTestPgWorkspace()
-      //   4. const ws = await browser.execute(() => ({...}));
-      //   5. expect(home.w).toBeLessThan(ws.w);
-      this.skip();
-      expect(true).toBe(true);
-    });
+    // Sprint 170 — RISK-025 가 sprint 155 에 resolved. tauri.conf.json 에
+    // launcher 720x560 fixed / workspace 1280x800 resizable 로 분리됨.
+    // 본문 작성은 sprint-172 에서 `app.spec.ts` 에 흡수 (REVIVE).
+    it.skip(
+      "Home renders in a smaller viewport than Workspace [REVIVE-sprint-172]",
+    );
   });
 
   describe("#2 Switching connection from Home propagates to Workspace", () => {
@@ -79,14 +70,9 @@ describe("Phase 11 feedback (2026-04-27)", () => {
       expect(true).toBe(true);
     });
 
-    it("MySQL query editor flavour differs from PostgreSQL flavour", async function () {
-      if (!process.env.E2E_MYSQL_HOST) this.skip();
-      // Outline:
-      //   - PG offers RETURNING; MySQL offers LIMIT N,M form
-      //   - assert one DBMS-only keyword is present and the other absent
-      this.skip();
-      expect(true).toBe(true);
-    });
+    // Sprint 170 — MySQL autocomplete 시나리오 제거 (DBMS 미지원, Phase 17~20
+    // 도입 예정). 재도입 시 신규 spec 으로 들어옴 (P6 만료 조건 충족 — 만료
+    // 사유: DBMS 자체가 부재).
   });
 
   describe("#4 New Connection form is DBMS-specific", () => {
@@ -208,52 +194,12 @@ describe("Phase 11 feedback (2026-04-27)", () => {
     });
   });
 
-  describe("#8 PostgreSQL single-click parity with MongoDB preview tabs", () => {
-    // Sprint 149 wrap-up: e2e bodies were authored but consistently fail
-    // under the shared-app-instance test runner due to RISK-023 (E2E 테스트
-    // 상태 격리 부족 — maxInstances: 1, 같은 앱 인스턴스 재사용). Earlier
-    // specs (data-grid.spec.ts) leave preview tabs in the strip, so by
-    // the time this describe runs the tabStore has accumulated state that
-    // even an aggressive `closeAllTabs()` helper cannot reliably purge.
-    //
-    // Coverage is preserved at the unit / integration level instead:
-    //   - `src/components/schema/SchemaTree.preview.test.tsx`
-    //     AC-S136-01/02/03 (single-click preview, double-click promote,
-    //     swap-on-different-row) — same invariants this e2e would assert.
-    //   - `src/stores/tabStore.test.ts` AC-S136-01/02 — store-level
-    //     guarantees behind the UI.
-    //
-    // Re-enable once RISK-023 is resolved (per-spec app instance, or
-    // store-level reset hook).
-
-    it("single-click on a PG table opens a preview tab [DEFERRED-RISK-023]", async function () {
-      this.skip();
-      expect(true).toBe(true);
-    });
-
-    it("single-clicking a second table replaces the preview tab [DEFERRED-RISK-023]", async function () {
-      this.skip();
-      expect(true).toBe(true);
-    });
-
-    it("double-clicking pins the preview tab as permanent [DEFERRED-RISK-023]", async function () {
-      this.skip();
-      expect(true).toBe(true);
-    });
-  });
-
-  describe("#9 Dirty indicator follows the dirty tab, not the focused tab", () => {
-    it("typing in tab A then focusing tab B leaves the dot on A only", async function () {
-      // Outline:
-      //   1. openTestPgWorkspace()
-      //   2. open two query tabs (A, B)
-      //   3. focus A → type into .cm-editor
-      //   4. click tab B header
-      //   5. assert tab A has [data-dirty="true"]; B does not
-      this.skip();
-      expect(true).toBe(true);
-    });
-  });
+  // Sprint 170 — #8 (PG preview tab parity, 3 it) 와 #9 (dirty indicator)
+  // 는 component / store 레이어가 권위:
+  //   - #8: SchemaTree.preview.test.tsx (AC-S136-01/02/03) + tabStore.test.ts
+  //   - #9: TabBar.test.tsx AC-01/03/04 (sprint 97) + AC-S134-06 (sprint 134,
+  //     active 와 dirty 분리 정확히 검증)
+  // P1 (피라미드 분리) 적용 — e2e 변형 제거.
 
   describe("#10 PG sidebar table count is the row count (or correctly labelled)", () => {
     it("the number next to a table reflects its row count", async function () {
