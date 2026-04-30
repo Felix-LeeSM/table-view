@@ -2,14 +2,14 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-30 (RISK-026~034 ui-evaluation-followup 9건 흡수, RISK-035 REVIEW-P2P1 B1 흡수, 관련 docs 삭제)
+Last updated: 2026-04-30 (sprint-176 — RISK-009 + RISK-035 transitioned to resolved)
 
 ## Summary
 
 | Status    | Count |
 |-----------|-------|
-| Active    | 25    |
-| Resolved  | 9     |
+| Active    | 23    |
+| Resolved  | 11    |
 | Deferred  | 1     |
 | **Total** | **35** |
 
@@ -27,7 +27,7 @@ Last updated: 2026-04-30 (RISK-026~034 ui-evaluation-followup 9건 흡수, RISK-
 | RISK-006 | Backend tests couldn't run in environment                                               | resolved  | ci                | 0             | CI now runs all test jobs with proper services            |
 | RISK-007 | test-setup.ts TypeScript build error                                                    | resolved  | frontend/testing  | 0             | Fixed in subsequent sprints                               |
 | RISK-008 | commands/connection.rs async commands (connect, disconnect, keep_alive_loop) untested — needs Tauri AppHandle mock | active    | backend           | 14            | —                                                         |
-| RISK-009 | 오버레이 pointer-events 미설정 — refetch 중 테이블 조작 가능 (P3)                       | active    | frontend/ui       | 5, 11         | —                                                         |
+| RISK-009 | 오버레이 pointer-events 미설정 — refetch 중 테이블 조작 가능 (P3)                       | resolved  | frontend/ui       | 5, 11         | Sprint 176 — overlay swallows mouseDown/click/doubleClick/contextmenu in DataGridTable + DocumentDataGrid |
 | RISK-010 | 포트 5432 로컬 충돌 — env var 오버라이드로 부분 해결                                    | active    | infra             | 16            | —                                                         |
 | RISK-011 | CSS class명 의존 어설션 — refactoring 시 깨질 수 있음                                   | active    | frontend/testing  | 5, 8          | —                                                         |
 | RISK-012 | Mod-Enter 테스트 jsdom 한계 (keymap 직접 호출)                                         | active    | frontend/testing  | 6             | —                                                         |
@@ -53,7 +53,7 @@ Last updated: 2026-04-30 (RISK-026~034 ui-evaluation-followup 9건 흡수, RISK-
 | RISK-032 | `MainArea.tsx` EmptyState의 MRU 정책 도입 여부 미결정 (구 UI-FU-07) | active | frontend/ux | UI eval | 종결: MRU 도입/미도입 결정 + 근거 |
 | RISK-033 | Sprint 67 이후 Mongo 편집 경로 P0 milestone 미정 (read-only banner / partial / full CRUD) (구 UI-FU-08) | active | frontend/ux | UI eval | 종결: ADR 또는 roadmap 항목 존재 + paradigms 메모 반영 |
 | RISK-034 | `pendingEditErrors` 좁은 컬럼 표시 거동 미검증 (구 UI-FU-09) | active | frontend/ui | UI eval | 종결: 메시지 미클리핑 또는 hover/tooltip 접근 가능 |
-| RISK-035 | `StructurePanel` 첫 렌더에 "No columns found" 깜빡임 가능성 — `loading` 초기값 false, `hasFetched` 도입 안 됨 (구 REVIEW-P2P1 B1; 2026-04-30 검증: B2/B3/B4는 해결됨) | active | frontend/ui | P2 P1 review | 종결: 첫 fetch 전 빈 상태 비노출 또는 ColumnsList 자체 가드 |
+| RISK-035 | `StructurePanel` 첫 렌더에 "No columns found" 깜빡임 가능성 — `loading` 초기값 false, `hasFetched` 도입 안 됨 (구 REVIEW-P2P1 B1; 2026-04-30 검증: B2/B3/B4는 해결됨) | resolved  | frontend/ui       | P2 P1 review  | Sprint 176 — `hasFetchedColumns/Indexes/Constraints` 게이트가 첫 fetch settle 이전 empty-state 노출 차단 |
 
 ---
 
@@ -120,3 +120,15 @@ Details for every resolved risk.
   - **Sprint 153** — `tabStore`(workspace-only attach guard) / `mruStore` / `themeStore` / `favoritesStore` 4개 store에 symmetric IPC sync 부착, 5개 sync 채널 + malformed payload 무시 회귀 잠금.
   - **Sprint 154** — `@lib/window-controls` seam(show/hide/focus/exitApp/onCloseRequested) + `LauncherShell`/`WorkspaceShell` 라우터 분기 + 5개 user-facing 전환(Activate/Back/Disconnect/LauncherClose/WorkspaceClose) 와이어, `appShellStore.screen` deprecate.
   - **Sprint 155** — `window-lifecycle.ac141.test.tsx`의 5개 `it.todo()` 실제 회귀 변환, `appShellStore.screen` 좀비 필드 완전 제거, ADR 0011 → 0012 supersede.
+
+### RISK-009 — 오버레이 pointer-events 미설정
+
+- **Origin**: Sprint 5, 11
+- **Resolved in**: Sprint 176 (2026-04-30)
+- **Fix**: Refetch loading overlay (`absolute inset-0 z-20 ... bg-background/60`) 두 곳 — `DataGridTable.tsx`와 `DocumentDataGrid.tsx` — 에 명시적 이벤트 핸들러(`onMouseDown`/`onClick`/`onDoubleClick`/`onContextMenu` 모두 `preventDefault()` + `stopPropagation()`) 부착. CSS `pointer-events` 토글 대신 핸들러 swallow 방식을 선택해 (a) 오버레이 자체는 hit-test 가능하고 (b) 스피너 시각(Loader2 size=24, `animate-spin text-muted-foreground`)을 변경하지 않는다. AC-176-04 baseline은 두 신규 테스트 파일의 DOM-class 단언으로 잠금.
+
+### RISK-035 — `StructurePanel` 첫 렌더 empty-state 깜빡임
+
+- **Origin**: P2 P1 review (구 REVIEW-P2P1 B1)
+- **Resolved in**: Sprint 176 (2026-04-30)
+- **Fix**: `StructurePanel.tsx`에 sub-tab별 `hasFetchedColumns` / `hasFetchedIndexes` / `hasFetchedConstraints` 게이트 도입. `fetchData`가 각 fetch를 settle한 직후(성공 set 또는 catch 분기) 해당 플래그를 true로 전이하고, 에디터 분기는 `hasFetched*`가 true일 때에만 렌더한다. 결과: 첫 fetch가 in-flight인 동안 "No columns/indexes/constraints found" copy가 등장하지 않으며, fetch가 `[]`로 settle하면 즉시 노출된다. catch 분기에서도 플래그를 true로 전이하므로 retry 후 빈 결과도 정상적으로 surface한다.

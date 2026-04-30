@@ -827,8 +827,43 @@ export default function DataGridTable({
   return (
     <div className="relative flex-1 overflow-auto" ref={scrollContainerRef}>
       {loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
-          <Loader2 className="animate-spin text-muted-foreground" size={24} />
+        // sprint-176 (AC-176-01) — refetch overlay must swallow pointer
+        // events targeting the rows underneath. Without explicit handlers
+        // here the underlying <tr>/<td> click + dblclick + contextmenu
+        // listeners still fire (Tailwind's `bg-background/60` only sets
+        // opacity, not pointer-events). We attach `preventDefault` +
+        // `stopPropagation` on the four user-perceived gestures so a
+        // mid-flight refetch can't be hijacked into selecting a row,
+        // entering edit mode, or opening the context menu. AC-176-04 is
+        // preserved because every existing class on the wrapper + Loader2
+        // child is unchanged.
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Loading"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-background/60"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <Loader2
+            className="animate-spin text-muted-foreground"
+            size={24}
+            aria-hidden="true"
+          />
         </div>
       )}
       <table

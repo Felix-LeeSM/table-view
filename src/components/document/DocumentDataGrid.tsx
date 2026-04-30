@@ -322,10 +322,37 @@ export default function DocumentDataGrid({
       {data && (
         <div className="relative flex-1 overflow-auto">
           {loading && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
+            // sprint-176 (AC-176-02) — same Selective-Attention guard as
+            // DataGridTable: an in-flight refetch must swallow row clicks
+            // / double-clicks / right-clicks instead of letting them reach
+            // the rows underneath. Visuals (classes / Loader2 size / colour
+            // / animation) are untouched per AC-176-04.
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label="Loading"
+              className="absolute inset-0 z-20 flex items-center justify-center bg-background/60"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
               <Loader2
                 className="animate-spin text-muted-foreground"
                 size={24}
+                aria-hidden="true"
               />
             </div>
           )}
