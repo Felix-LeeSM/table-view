@@ -409,13 +409,30 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Loading state
+  // Loading state — Sprint 180 (AC-180-01) shifted the spinner to the
+  // threshold-gated `AsyncProgressOverlay`. The fetch must remain
+  // pending across the 1s threshold for the spinner to materialise; we
+  // use fake timers to advance past the threshold deterministically.
   // -----------------------------------------------------------------------
-  it("shows spinner while loading", () => {
-    mockGetTableColumns.mockReturnValue(new Promise(() => {}));
-    renderPanel();
+  it("shows spinner while loading (after 1s threshold)", () => {
+    vi.useFakeTimers();
+    try {
+      mockGetTableColumns.mockReturnValue(new Promise(() => {}));
+      renderPanel();
 
-    expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+      // Pre-threshold: spinner is absent (the overlay only paints after
+      // `loading` has been continuously true for 1s — Sprint 180 AC-180-01).
+      expect(document.querySelector(".animate-spin")).not.toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(1100);
+      });
+
+      // Post-threshold: spinner now visible, wrapped by AsyncProgressOverlay.
+      expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("removes spinner after data loads", async () => {

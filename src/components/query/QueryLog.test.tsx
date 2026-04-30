@@ -541,6 +541,44 @@ describe("QueryLog", () => {
     expect(dot.className).toContain("destructive");
   });
 
+  // [AC-180-03c] Cancelled entries paint a calm muted-foreground dot,
+  // distinct from both the success green and the destructive red. This
+  // pins the Sprint 180 Visual Direction quote ("calm secondary, not
+  // destructive") at the rendering layer.
+  // Date: 2026-04-30 (sprint-180)
+  it("[AC-180-03c] uses muted-foreground colour for cancelled status dot", () => {
+    const now = Date.now();
+    useQueryHistoryStore.setState({
+      entries: [
+        {
+          id: "h-1",
+          sql: "SELECT pg_sleep(60)",
+          executedAt: now,
+          duration: 1500,
+          status: "cancelled",
+          connectionId: "conn1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+      ],
+    });
+
+    render(<QueryLog />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent("toggle-query-log"));
+    });
+
+    const dot = screen.getByTitle("cancelled");
+    // Calm secondary — not destructive (red), not success (green).
+    expect(dot.className).toContain("bg-muted-foreground");
+    expect(dot.className).not.toContain("destructive");
+    expect(dot.className).not.toContain("success");
+    // The data-status attribute exposes the cancelled discriminator
+    // for downstream test queries / styling hooks.
+    expect(dot.getAttribute("data-status")).toBe("cancelled");
+  });
+
   // -----------------------------------------------------------------------
   // Sprint 177: Law of Similarity — paradigm-aware syntax highlighting
   //

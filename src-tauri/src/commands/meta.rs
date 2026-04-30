@@ -158,6 +158,7 @@ mod tests {
     use crate::models::{ColumnInfo, ConnectionConfig, DatabaseType, TableInfo};
     use std::future::Future;
     use std::pin::Pin;
+    use tokio_util::sync::CancellationToken;
 
     type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -213,6 +214,7 @@ mod tests {
         fn list_collections<'a>(
             &'a self,
             _db: &'a str,
+            _cancel: Option<&'a CancellationToken>,
         ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
@@ -221,6 +223,7 @@ mod tests {
             _db: &'a str,
             _collection: &'a str,
             _sample_size: usize,
+            _cancel: Option<&'a CancellationToken>,
         ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
@@ -229,6 +232,7 @@ mod tests {
             _db: &'a str,
             _collection: &'a str,
             _body: FindBody,
+            _cancel: Option<&'a CancellationToken>,
         ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
             Box::pin(async {
                 Ok(DocumentQueryResult {
@@ -245,6 +249,7 @@ mod tests {
             _db: &'a str,
             _collection: &'a str,
             _pipeline: Vec<bson::Document>,
+            _cancel: Option<&'a CancellationToken>,
         ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
             Box::pin(async {
                 Ok(DocumentQueryResult {
@@ -495,6 +500,7 @@ mod tests {
             fn list_collections<'a>(
                 &'a self,
                 _db: &'a str,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -503,6 +509,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _sample_size: usize,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -511,6 +518,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _body: FindBody,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {
@@ -527,6 +535,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _pipeline: Vec<bson::Document>,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {
@@ -695,6 +704,7 @@ mod tests {
                 &'a self,
                 _namespace: &'a str,
                 _table: &'a str,
+                _cancel: Option<&'a tokio_util::sync::CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -719,6 +729,7 @@ mod tests {
                 _order_by: Option<&'a str>,
                 _filters: Option<&'a [FilterCondition]>,
                 _raw_where: Option<&'a str>,
+                _cancel: Option<&'a tokio_util::sync::CancellationToken>,
             ) -> BoxFuture<'a, Result<TableData, AppError>> {
                 Box::pin(async { Err(AppError::Unsupported("not used".into())) })
             }
@@ -771,6 +782,7 @@ mod tests {
                 &'a self,
                 _namespace: &'a str,
                 _table: &'a str,
+                _cancel: Option<&'a tokio_util::sync::CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -778,6 +790,7 @@ mod tests {
                 &'a self,
                 _namespace: &'a str,
                 _table: &'a str,
+                _cancel: Option<&'a tokio_util::sync::CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -849,6 +862,7 @@ mod tests {
             fn list_collections<'a>(
                 &'a self,
                 _db: &'a str,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -857,6 +871,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _sample_size: usize,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -865,6 +880,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _body: FindBody,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {
@@ -881,6 +897,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _pipeline: Vec<bson::Document>,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {

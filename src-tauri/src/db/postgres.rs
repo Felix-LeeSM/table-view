@@ -1974,9 +1974,24 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         namespace: &'a str,
         table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ColumnInfo>, AppError>> + Send + 'a>> {
         // Concrete signature is `(table, schema)`; trait passes `(namespace, table)`.
-        Box::pin(async move { self.get_table_columns(table, namespace).await })
+        // Sprint 180 (AC-180-04): cooperate with cancellation. The pattern
+        // mirrors `execute_query` — race the inherent future against the
+        // token's `cancelled()` future and propagate the same
+        // `AppError::Database("Operation cancelled")` shape used at
+        // `postgres.rs:541`.
+        Box::pin(async move {
+            let work = self.get_table_columns(table, namespace);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
     }
 
     fn execute_sql<'a>(
@@ -1997,13 +2012,20 @@ impl RdbAdapter for PostgresAdapter {
         order_by: Option<&'a str>,
         filters: Option<&'a [FilterCondition]>,
         raw_where: Option<&'a str>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<TableData, AppError>> + Send + 'a>> {
+        // Sprint 180 (AC-180-04): cancel-token cooperation.
         Box::pin(async move {
-            // Concrete signature is `(table, schema, ...)`.
-            self.query_table_data(
+            let work = self.query_table_data(
                 table, namespace, page, page_size, order_by, filters, raw_where,
-            )
-            .await
+            );
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
         })
     }
 
@@ -2065,18 +2087,40 @@ impl RdbAdapter for PostgresAdapter {
         &'a self,
         namespace: &'a str,
         table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexInfo>, AppError>> + Send + 'a>> {
         // Concrete signature is `(table, schema)`.
-        Box::pin(async move { self.get_table_indexes(table, namespace).await })
+        // Sprint 180 (AC-180-04): cancel-token cooperation.
+        Box::pin(async move {
+            let work = self.get_table_indexes(table, namespace);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
     }
 
     fn get_table_constraints<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<ConstraintInfo>, AppError>> + Send + 'a>> {
         // Concrete signature is `(table, schema)`.
-        Box::pin(async move { self.get_table_constraints(table, namespace).await })
+        // Sprint 180 (AC-180-04): cancel-token cooperation.
+        Box::pin(async move {
+            let work = self.get_table_constraints(table, namespace);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
     }
 
     fn list_views<'a>(

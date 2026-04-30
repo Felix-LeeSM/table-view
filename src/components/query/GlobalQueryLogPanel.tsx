@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { Search, Trash2, X, Copy, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Search,
+  Trash2,
+  X,
+  Copy,
+  CheckCircle2,
+  XCircle,
+  CircleSlash,
+} from "lucide-react";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
@@ -184,7 +192,12 @@ export default function GlobalQueryLogPanel({
               data-testid={`global-log-entry-${entry.id}`}
               className={cn(
                 "flex flex-col px-3 py-1 text-xs hover:bg-muted cursor-pointer",
+                // Sprint 180 (AC-180-03) — cancelled gets a muted bg
+                // (calm secondary, not destructive) so the user can
+                // still pick the entry out of the log without it
+                // looking like a failure.
                 entry.status === "error" && "bg-destructive/10",
+                entry.status === "cancelled" && "bg-muted/40",
               )}
               onClick={() => handleEntryClick(entry.id)}
               onKeyDown={(e) => {
@@ -201,8 +214,14 @@ export default function GlobalQueryLogPanel({
                   title={entry.status}
                   data-status={entry.status}
                 >
+                  {/* Sprint 180 (AC-180-03) — three-way status icon.
+                      Cancelled entries get a calm CircleSlash in the
+                      muted-foreground colour so the user reads them as
+                      self-aborted rather than failed. */}
                   {entry.status === "success" ? (
                     <CheckCircle2 size={12} className="text-success" />
+                  ) : entry.status === "cancelled" ? (
+                    <CircleSlash size={12} className="text-muted-foreground" />
                   ) : (
                     <XCircle size={12} className="text-destructive" />
                   )}

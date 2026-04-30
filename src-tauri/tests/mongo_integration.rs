@@ -95,7 +95,7 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
     // list_collections against the `admin` database should succeed even if
     // the collection list is empty on a fresh instance.
     let collections = adapter
-        .list_collections("admin")
+        .list_collections("admin", None)
         .await
         .expect("list_collections should succeed");
     println!(
@@ -105,7 +105,7 @@ async fn test_mongo_adapter_connect_ping_list_disconnect_happy_path() {
 
     // Validate empty-name guard.
     let err = adapter
-        .list_collections("")
+        .list_collections("", None)
         .await
         .expect_err("list_collections(\"\") should reject");
     let msg = err.to_string();
@@ -198,7 +198,7 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
 
     // ── infer_collection_fields ───────────────────────────────────────────
     let columns = adapter
-        .infer_collection_fields("table_view_test", "users", 100)
+        .infer_collection_fields("table_view_test", "users", 100, None)
         .await
         .expect("infer_collection_fields should succeed");
 
@@ -242,7 +242,7 @@ async fn test_mongo_adapter_infer_and_find_on_seeded_collection() {
         ..Default::default()
     };
     let result = adapter
-        .find("table_view_test", "users", body)
+        .find("table_view_test", "users", body, None)
         .await
         .expect("find should succeed");
 
@@ -351,7 +351,7 @@ async fn test_mongo_adapter_aggregate_match_sort() {
     ];
 
     let result = adapter
-        .aggregate("table_view_test", "users", pipeline)
+        .aggregate("table_view_test", "users", pipeline, None)
         .await
         .expect("aggregate should succeed");
 
@@ -438,7 +438,7 @@ async fn test_mongo_adapter_aggregate_group_count() {
     }];
 
     let result = adapter
-        .aggregate("table_view_test", "users", pipeline)
+        .aggregate("table_view_test", "users", pipeline, None)
         .await
         .expect("aggregate should succeed");
 
@@ -569,7 +569,12 @@ async fn test_mongo_adapter_insert_roundtrip() {
     // Use the adapter's find to verify the document is visible through the
     // same read path the frontend will consume.
     let find_result = adapter
-        .find("table_view_test", "mutate_roundtrip", FindBody::default())
+        .find(
+            "table_view_test",
+            "mutate_roundtrip",
+            FindBody::default(),
+            None,
+        )
         .await
         .expect("find should succeed");
     assert_eq!(

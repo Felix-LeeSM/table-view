@@ -111,8 +111,12 @@ describe("StructurePanel first-render flash gate (sprint-176)", () => {
   it("[AC-176-03] does not render empty-state copy before first fetch settles", () => {
     renderPanel();
 
-    // Spinner is visible while the fetch is in flight.
-    expect(document.querySelector(".animate-spin")).toBeInTheDocument();
+    // Sprint-180 update (2026-04-30): the spinner is now threshold-gated
+    // (1s — `useDelayedFlag`) so the immediate-mount assertion that the
+    // spinner is present has been removed. The load-bearing AC-176-03
+    // invariant — that no empty-state copy paints during the pre-fetch
+    // window — is independent of the spinner's visibility and is
+    // exercised by the queryByText negatives below.
 
     // None of the empty-state strings appear during the pre-fetch window.
     expect(screen.queryByText("No columns found")).not.toBeInTheDocument();

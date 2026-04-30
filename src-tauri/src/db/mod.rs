@@ -182,10 +182,16 @@ pub trait RdbAdapter: DbAdapter {
         namespace: &'a str,
     ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>>;
 
+    /// Sprint 180 (AC-180-04): accepts `Option<&CancellationToken>` so an
+    /// in-flight schema-introspection query can be cooperatively aborted via
+    /// the same `query_tokens` registry that drives `execute_sql`. Adapters
+    /// observe the token at the same `tokio::select!` shape used by
+    /// `PostgresAdapter::execute_query`.
     fn get_columns<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>>;
 
     fn execute_sql<'a>(
@@ -194,6 +200,8 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
+    #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(
         &'a self,
         namespace: &'a str,
@@ -203,6 +211,7 @@ pub trait RdbAdapter: DbAdapter {
         order_by: Option<&'a str>,
         filters: Option<&'a [FilterCondition]>,
         raw_where: Option<&'a str>,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<TableData, AppError>>;
 
     // DDL
@@ -244,16 +253,20 @@ pub trait RdbAdapter: DbAdapter {
         req: &'a DropConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn get_table_indexes<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn get_table_constraints<'a>(
         &'a self,
         namespace: &'a str,
         table: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>>;
 
     // Views/Functions — default: empty list (each DBMS overrides as needed).
@@ -327,30 +340,40 @@ pub trait DocumentAdapter: DbAdapter {
 
     fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation. Adapters observe
+    /// the token via the same `tokio::select!` pattern used on the RDB
+    /// side; on cancel they return `AppError::Database("Operation cancelled")`.
     fn list_collections<'a>(
         &'a self,
         db: &'a str,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn infer_collection_fields<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         sample_size: usize,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn find<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         body: FindBody,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
+    /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn aggregate<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         pipeline: Vec<bson::Document>,
+        cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>>;
 
     fn insert_document<'a>(
@@ -505,6 +528,7 @@ mod tests {
             fn list_collections<'a>(
                 &'a self,
                 _db: &'a str,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -513,6 +537,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _sample_size: usize,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
                 Box::pin(async { Ok(Vec::new()) })
             }
@@ -521,6 +546,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _body: FindBody,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {
@@ -537,6 +563,7 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _pipeline: Vec<bson::Document>,
+                _cancel: Option<&'a CancellationToken>,
             ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
                 Box::pin(async {
                     Ok(DocumentQueryResult {
@@ -589,5 +616,685 @@ mod tests {
         // Cross-paradigm sanity: as_search/as_kv also yield Unsupported.
         assert!(matches!(active.as_search(), Err(AppError::Unsupported(_))));
         assert!(matches!(active.as_kv(), Err(AppError::Unsupported(_))));
+    }
+
+    // ── Sprint 180 (AC-180-04): cancel-token cooperation tests ───────────
+    //
+    // Reason for these tests (2026-04-30): the Sprint 180 contract requires
+    // every cancellable trait method (4 RDB + 4 Document) to wire
+    // `Option<&CancellationToken>` so the existing `cancel_query` registry
+    // can abort the in-flight call cooperatively. We exercise that contract
+    // here against fake adapters that simulate slow work and observe the
+    // token via the same `tokio::select!` shape used by
+    // `PostgresAdapter::execute_query`. Each test follows form (b): wire a
+    // pre-cancelled token, drive the trait method, assert the
+    // `AppError::Database("Operation cancelled")` short-circuit path.
+    //
+    // We deliberately split this into per-method tests (rather than a
+    // shared parametric helper) so a future regression on any single trait
+    // method is bisected by a clearly-named failing test.
+
+    use crate::models::FilterCondition;
+    use std::time::Duration;
+
+    /// Fake RDB adapter — drives a slow inner future via `tokio::sleep`
+    /// and observes the cancel token, so each trait method can assert
+    /// the cooperative-abort path independently.
+    struct FakeCancellableRdb;
+
+    impl DbAdapter for FakeCancellableRdb {
+        fn kind(&self) -> DatabaseType {
+            DatabaseType::Postgresql
+        }
+        fn connect<'a>(
+            &'a self,
+            _config: &'a ConnectionConfig,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    impl RdbAdapter for FakeCancellableRdb {
+        fn namespace_label(&self) -> NamespaceLabel {
+            NamespaceLabel::Schema
+        }
+        fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_tables<'a>(
+            &'a self,
+            _namespace: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_columns<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(Vec::new())
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn execute_sql<'a>(
+            &'a self,
+            _sql: &'a str,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+            Box::pin(async {
+                Ok(RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 0,
+                    execution_time_ms: 0,
+                    query_type: crate::models::QueryType::Select,
+                })
+            })
+        }
+        #[allow(clippy::too_many_arguments)]
+        fn query_table_data<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _page: i32,
+            _page_size: i32,
+            _order_by: Option<&'a str>,
+            _filters: Option<&'a [FilterCondition]>,
+            _raw_where: Option<&'a str>,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<TableData, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(TableData {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        total_count: 0,
+                        page: 1,
+                        page_size: 0,
+                        executed_query: String::new(),
+                    })
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn drop_table<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn rename_table<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _new_name: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn alter_table<'a>(
+            &'a self,
+            _req: &'a AlterTableRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn create_index<'a>(
+            &'a self,
+            _req: &'a CreateIndexRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_index<'a>(
+            &'a self,
+            _req: &'a DropIndexRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn add_constraint<'a>(
+            &'a self,
+            _req: &'a AddConstraintRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_constraint<'a>(
+            &'a self,
+            _req: &'a DropConstraintRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn get_table_indexes<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(Vec::new())
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn get_table_constraints<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(Vec::new())
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn get_view_definition<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _view: &'a str,
+        ) -> BoxFuture<'a, Result<String, AppError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+        fn get_view_columns<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _view: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_schema_columns<'a>(
+            &'a self,
+            _namespace: &'a str,
+        ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>>
+        {
+            Box::pin(async { Ok(std::collections::HashMap::new()) })
+        }
+        fn get_function_source<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _function: &'a str,
+        ) -> BoxFuture<'a, Result<String, AppError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+    }
+
+    /// Fake document adapter — same shape as the RDB fake; observes cancel
+    /// token so each Document trait method can assert cooperative abort.
+    struct FakeCancellableDocument;
+
+    impl DbAdapter for FakeCancellableDocument {
+        fn kind(&self) -> DatabaseType {
+            DatabaseType::Mongodb
+        }
+        fn connect<'a>(
+            &'a self,
+            _config: &'a ConnectionConfig,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    impl DocumentAdapter for FakeCancellableDocument {
+        fn list_databases<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_collections<'a>(
+            &'a self,
+            _db: &'a str,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(Vec::new())
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn infer_collection_fields<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _sample_size: usize,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(Vec::new())
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn find<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _body: FindBody,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn aggregate<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _pipeline: Vec<bson::Document>,
+            cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
+            Box::pin(async move {
+                let work = async {
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    Ok(DocumentQueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        raw_documents: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms: 0,
+                    })
+                };
+                match cancel {
+                    Some(token) => tokio::select! {
+                        result = work => result,
+                        _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                    },
+                    None => work.await,
+                }
+            })
+        }
+        fn insert_document<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _doc: bson::Document,
+        ) -> BoxFuture<'a, Result<DocumentId, AppError>> {
+            Box::pin(async { Ok(DocumentId::Number(0)) })
+        }
+        fn update_document<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _id: DocumentId,
+            _patch: bson::Document,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn delete_document<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _id: DocumentId,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+
+    /// Helper — assert the result is the cooperative-cancel `Operation
+    /// cancelled` error so each test stays terse.
+    fn assert_cancelled<T: std::fmt::Debug>(res: Result<T, AppError>) {
+        match res {
+            Err(AppError::Database(msg)) if msg.contains("Operation cancelled") => {}
+            other => panic!(
+                "expected AppError::Database(\"Operation cancelled\"), got: {:?}",
+                other
+            ),
+        }
+    }
+
+    // ── RDB ──────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_rdb_query_table_data_honors_cancel_token() {
+        // Reason (2026-04-30): pre-cancel the token before driving the
+        // trait method so the inner sleep would never resolve; the
+        // `tokio::select!` arm must short-circuit with the cancelled
+        // error before the 60s timer would.
+        let adapter = FakeCancellableRdb;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter
+            .query_table_data("public", "t", 1, 100, None, None, None, Some(&token))
+            .await;
+        assert_cancelled(result);
+    }
+
+    #[tokio::test]
+    async fn test_rdb_get_columns_honors_cancel_token() {
+        let adapter = FakeCancellableRdb;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter.get_columns("public", "t", Some(&token)).await;
+        assert_cancelled(result);
+    }
+
+    #[tokio::test]
+    async fn test_rdb_get_table_indexes_honors_cancel_token() {
+        let adapter = FakeCancellableRdb;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter.get_table_indexes("public", "t", Some(&token)).await;
+        assert_cancelled(result);
+    }
+
+    #[tokio::test]
+    async fn test_rdb_get_table_constraints_honors_cancel_token() {
+        let adapter = FakeCancellableRdb;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter
+            .get_table_constraints("public", "t", Some(&token))
+            .await;
+        assert_cancelled(result);
+    }
+
+    // ── Document ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_document_find_honors_cancel_token() {
+        // Reason (2026-04-30): same form as the RDB tests — pre-cancel,
+        // assert short-circuit. Mongo bundled driver does not expose
+        // killOperations, so this guarantees the future drops promptly
+        // even though the server may continue briefly (ADR-0018).
+        let adapter = FakeCancellableDocument;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter
+            .find("db", "c", FindBody::default(), Some(&token))
+            .await;
+        assert_cancelled(result);
+    }
+
+    #[tokio::test]
+    async fn test_document_aggregate_honors_cancel_token() {
+        let adapter = FakeCancellableDocument;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter.aggregate("db", "c", Vec::new(), Some(&token)).await;
+        assert_cancelled(result);
+    }
+
+    #[tokio::test]
+    async fn test_document_infer_collection_fields_honors_cancel_token() {
+        let adapter = FakeCancellableDocument;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter
+            .infer_collection_fields("db", "c", 100, Some(&token))
+            .await;
+        assert_cancelled(result);
+    }
+
+    #[tokio::test]
+    async fn test_document_list_collections_honors_cancel_token() {
+        let adapter = FakeCancellableDocument;
+        let token = CancellationToken::new();
+        token.cancel();
+        let result = adapter.list_collections("db", Some(&token)).await;
+        assert_cancelled(result);
+    }
+
+    // ── Sanity checks: passing `None` does NOT short-circuit ─────────────
+    //
+    // Reason (2026-04-30): Sprint 180 contract requires the non-cancelled
+    // path to behave identically to the pre-180 inherent call. We can't
+    // wait 60s in unit tests, so we assert the negative shape: with
+    // `cancel = None` and a fast-returning override the call resolves
+    // normally. We use a separate fake that returns immediately to
+    // verify the `None` branch does NOT degrade or return cancelled.
+
+    struct FastFakeRdb;
+    impl DbAdapter for FastFakeRdb {
+        fn kind(&self) -> DatabaseType {
+            DatabaseType::Postgresql
+        }
+        fn connect<'a>(
+            &'a self,
+            _config: &'a ConnectionConfig,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+    impl RdbAdapter for FastFakeRdb {
+        fn namespace_label(&self) -> NamespaceLabel {
+            NamespaceLabel::Schema
+        }
+        fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_tables<'a>(
+            &'a self,
+            _namespace: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_columns<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn execute_sql<'a>(
+            &'a self,
+            _sql: &'a str,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+            Box::pin(async {
+                Ok(RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 0,
+                    execution_time_ms: 0,
+                    query_type: crate::models::QueryType::Select,
+                })
+            })
+        }
+        #[allow(clippy::too_many_arguments)]
+        fn query_table_data<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _page: i32,
+            _page_size: i32,
+            _order_by: Option<&'a str>,
+            _filters: Option<&'a [FilterCondition]>,
+            _raw_where: Option<&'a str>,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<TableData, AppError>> {
+            Box::pin(async {
+                Ok(TableData {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 0,
+                    page: 1,
+                    page_size: 0,
+                    executed_query: String::new(),
+                })
+            })
+        }
+        fn drop_table<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn rename_table<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _new_name: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn alter_table<'a>(
+            &'a self,
+            _req: &'a AlterTableRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn create_index<'a>(
+            &'a self,
+            _req: &'a CreateIndexRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_index<'a>(
+            &'a self,
+            _req: &'a DropIndexRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn add_constraint<'a>(
+            &'a self,
+            _req: &'a AddConstraintRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_constraint<'a>(
+            &'a self,
+            _req: &'a DropConstraintRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn get_table_indexes<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_table_constraints<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _table: &'a str,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_view_definition<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _view: &'a str,
+        ) -> BoxFuture<'a, Result<String, AppError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+        fn get_view_columns<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _view: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_schema_columns<'a>(
+            &'a self,
+            _namespace: &'a str,
+        ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>>
+        {
+            Box::pin(async { Ok(std::collections::HashMap::new()) })
+        }
+        fn get_function_source<'a>(
+            &'a self,
+            _namespace: &'a str,
+            _function: &'a str,
+        ) -> BoxFuture<'a, Result<String, AppError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rdb_query_table_data_with_none_token_resolves_normally() {
+        // Reason (2026-04-30): Sprint 180 invariant — pre-180 callers
+        // pass `None` and must observe identical behaviour to the
+        // inherent path; this guards against an accidental regression
+        // where a future change always wraps the call in
+        // `tokio::select!` even when `cancel == None`.
+        let adapter = FastFakeRdb;
+        let result = adapter
+            .query_table_data("public", "t", 1, 100, None, None, None, None)
+            .await;
+        assert!(result.is_ok(), "None token should resolve normally");
     }
 }

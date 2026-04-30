@@ -15,12 +15,42 @@
 //! `AppError::Unsupported` (via `as_document()?`), adapter failures bubble up
 //! as `AppError::Database` / `AppError::Connection` / `AppError::Validation`.
 
+use tokio_util::sync::CancellationToken;
+
 use crate::commands::connection::AppState;
 use crate::db::{DocumentQueryResult, FindBody};
 use crate::error::AppError;
 
 fn not_connected(connection_id: &str) -> AppError {
     AppError::NotFound(format!("Connection '{}' not found", connection_id))
+}
+
+/// Sprint 180 (AC-180-04) — cancel-token registration helper.
+async fn register_cancel_token(
+    state: &tauri::State<'_, AppState>,
+    query_id: &Option<String>,
+) -> Option<(String, CancellationToken)> {
+    if let Some(qid) = query_id.as_ref() {
+        let token = CancellationToken::new();
+        let stored = token.clone();
+        {
+            let mut tokens = state.query_tokens.lock().await;
+            tokens.insert(qid.clone(), stored);
+        }
+        Some((qid.clone(), token))
+    } else {
+        None
+    }
+}
+
+async fn release_cancel_token(
+    state: &tauri::State<'_, AppState>,
+    cancel_handle: &Option<(String, CancellationToken)>,
+) {
+    if let Some((qid, _)) = cancel_handle {
+        let mut tokens = state.query_tokens.lock().await;
+        tokens.remove(qid);
+    }
 }
 
 /// Execute a MongoDB `find` against `database.collection` and return the
@@ -35,16 +65,30 @@ pub async fn find_documents(
     database: String,
     collection: String,
     body: Option<FindBody>,
+    // Sprint 180 (AC-180-04): optional cancel-token id.
+    query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+    let cancel_handle = register_cancel_token(&state, &query_id).await;
     let body = body.unwrap_or_default();
-    active
-        .as_document()?
-        .find(&database, &collection, body)
-        .await
+
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(&connection_id)
+            .ok_or_else(|| not_connected(&connection_id))?;
+        active
+            .as_document()?
+            .find(
+                &database,
+                &collection,
+                body,
+                cancel_handle.as_ref().map(|(_, tok)| tok),
+            )
+            .await
+    };
+
+    release_cancel_token(&state, &cancel_handle).await;
+    result
 }
 
 /// Execute a MongoDB aggregation pipeline against `database.collection` and
@@ -68,13 +112,27 @@ pub async fn aggregate_documents(
     database: String,
     collection: String,
     pipeline: Vec<bson::Document>,
+    // Sprint 180 (AC-180-04): optional cancel-token id, mirrors find_documents.
+    query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
-    active
-        .as_document()?
-        .aggregate(&database, &collection, pipeline)
-        .await
+    let cancel_handle = register_cancel_token(&state, &query_id).await;
+
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(&connection_id)
+            .ok_or_else(|| not_connected(&connection_id))?;
+        active
+            .as_document()?
+            .aggregate(
+                &database,
+                &collection,
+                pipeline,
+                cancel_handle.as_ref().map(|(_, tok)| tok),
+            )
+            .await
+    };
+
+    release_cancel_token(&state, &cancel_handle).await;
+    result
 }

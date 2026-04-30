@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
-import { Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
 import type { Paradigm } from "@/types/connection";
@@ -7,6 +6,9 @@ import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import ColumnsEditor from "@components/structure/ColumnsEditor";
 import IndexesEditor from "@components/structure/IndexesEditor";
 import ConstraintsEditor from "@components/structure/ConstraintsEditor";
+import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { cancelQuery } from "@lib/tauri";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 
 interface StructurePanelProps {
@@ -52,25 +54,37 @@ export default function StructurePanel({
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const getTableIndexes = useSchemaStore((s) => s.getTableIndexes);
   const getTableConstraints = useSchemaStore((s) => s.getTableConstraints);
+  // Sprint 180 — fetchId guard so a Cancel-then-retry can drop the
+  // stale resolve without overwriting the new state. Schema fetches
+  // don't have a tab-store-backed query id (unlike `executeQuery`),
+  // but the in-flight `query_id` is plumbed through the Tauri command
+  // so the Cancel button can route to `cancel_query` at the backend.
+  const fetchIdRef = useRef(0);
+  const queryIdRef = useRef<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
     try {
       if (activeSubTab === "columns") {
         const cols = await getTableColumns(connectionId, table, schema);
+        if (fetchIdRef.current !== fetchId) return;
         setColumns(cols);
         setHasFetchedColumns(true);
       } else if (activeSubTab === "indexes") {
         const idx = await getTableIndexes(connectionId, table, schema);
+        if (fetchIdRef.current !== fetchId) return;
         setIndexes(idx);
         setHasFetchedIndexes(true);
       } else {
         const cons = await getTableConstraints(connectionId, table, schema);
+        if (fetchIdRef.current !== fetchId) return;
         setConstraints(cons);
         setHasFetchedConstraints(true);
       }
     } catch (e) {
+      if (fetchIdRef.current !== fetchId) return;
       setError(String(e));
       // Sprint-176 — even on rejection mark the tab as fetched. The error
       // banner takes over the visible space and the editor branch stays
@@ -81,7 +95,10 @@ export default function StructurePanel({
       else if (activeSubTab === "indexes") setHasFetchedIndexes(true);
       else setHasFetchedConstraints(true);
     }
-    setLoading(false);
+    if (fetchIdRef.current === fetchId) {
+      setLoading(false);
+      queryIdRef.current = null;
+    }
   }, [
     connectionId,
     table,
@@ -91,6 +108,25 @@ export default function StructurePanel({
     getTableIndexes,
     getTableConstraints,
   ]);
+
+  // Sprint 180 (AC-180-02 / AC-180-05) — Cancel handler for the schema
+  // structure fetch. Bumps `fetchIdRef` so the in-flight resolve is
+  // treated as stale, clears `loading` synchronously, and best-effort
+  // cancels the backend driver handle.
+  const handleCancelStructureFetch = useCallback(() => {
+    fetchIdRef.current++;
+    setLoading(false);
+    const queryId = queryIdRef.current;
+    queryIdRef.current = null;
+    if (queryId) {
+      cancelQuery(queryId).catch(() => {
+        // best-effort — see DocumentDataGrid.handleCancelRefetch
+      });
+    }
+  }, []);
+
+  // Sprint 180 (AC-180-01) — threshold gate for the shared overlay.
+  const overlayVisible = useDelayedFlag(loading, 1000);
 
   // Listen for context-aware refresh events (Cmd+R / F5)
   useEffect(() => {
@@ -144,10 +180,23 @@ export default function StructurePanel({
         </div>
       )}
 
-      {/* Loading */}
+      {/* Loading — Sprint 180. Wrapped in a positioned container so the
+          shared `AsyncProgressOverlay` (which uses `absolute inset-0`)
+          has a relative ancestor to anchor against. The overlay only
+          paints after `loading` has been continuously true for 1s
+          (`useDelayedFlag`); for sub-second fetches this region stays
+          empty and the user proceeds straight to the editor branch
+          when the fetch resolves. */}
       {loading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin text-muted-foreground" size={24} />
+        <div
+          data-testid="structure-loading-region"
+          className="relative flex items-center justify-center py-8"
+        >
+          <AsyncProgressOverlay
+            visible={overlayVisible}
+            onCancel={handleCancelStructureFetch}
+            className="static py-8"
+          />
         </div>
       )}
 

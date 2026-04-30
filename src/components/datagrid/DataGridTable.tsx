@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Loader2, Key, Binary, ArrowUpRight } from "lucide-react";
+import { Key, Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
+import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { truncateCell } from "@lib/format";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
@@ -133,6 +135,17 @@ export interface DataGridTableProps {
    * dataset.
    */
   onClearFilters?: () => void;
+  /**
+   * Sprint 180 (AC-180-02) — invoked when the user clicks the Cancel
+   * button on the threshold-gated overlay. Parent aborts the in-flight
+   * `query_table_data` op, clears `loading`, and reverts to the
+   * pre-fetch dataset (refetch case) or empty (initial-fetch case).
+   * Optional to keep the prop surface backwards-compatible with
+   * legacy callers that don't yet wire cancel; the overlay only
+   * renders when `loading` is true AND the threshold has elapsed,
+   * so omitting the prop simply makes the Cancel button a no-op.
+   */
+  onCancelRefetch?: () => void;
   onSetEditValue: (v: string | null) => void;
   onSetEditNull: () => void;
   onSaveCurrentEdit: () => void;
@@ -175,6 +188,7 @@ export default function DataGridTable({
   table,
   activeFilterCount = 0,
   onClearFilters,
+  onCancelRefetch,
   onSetEditValue,
   onSetEditNull,
   onSaveCurrentEdit,
@@ -824,48 +838,19 @@ export default function DataGridTable({
     );
   };
 
+  // Sprint 180 (AC-180-01) — threshold gate. The overlay only paints
+  // after `loading` has been continuously true for 1s, so sub-second
+  // refetches never flicker. Sprint 176 hardening (4 pointer-event
+  // handlers) lives inside `AsyncProgressOverlay` itself. The Cancel
+  // callback is wired up by the host (DataGrid) which aborts the
+  // in-flight `query_table_data` Tauri command and clears `loading`.
+  const overlayVisible = useDelayedFlag(loading, 1000);
   return (
     <div className="relative flex-1 overflow-auto" ref={scrollContainerRef}>
-      {loading && (
-        // sprint-176 (AC-176-01) — refetch overlay must swallow pointer
-        // events targeting the rows underneath. Without explicit handlers
-        // here the underlying <tr>/<td> click + dblclick + contextmenu
-        // listeners still fire (Tailwind's `bg-background/60` only sets
-        // opacity, not pointer-events). We attach `preventDefault` +
-        // `stopPropagation` on the four user-perceived gestures so a
-        // mid-flight refetch can't be hijacked into selecting a row,
-        // entering edit mode, or opening the context menu. AC-176-04 is
-        // preserved because every existing class on the wrapper + Loader2
-        // child is unchanged.
-        <div
-          role="status"
-          aria-live="polite"
-          aria-label="Loading"
-          className="absolute inset-0 z-20 flex items-center justify-center bg-background/60"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onDoubleClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-        >
-          <Loader2
-            className="animate-spin text-muted-foreground"
-            size={24}
-            aria-hidden="true"
-          />
-        </div>
-      )}
+      <AsyncProgressOverlay
+        visible={overlayVisible}
+        onCancel={onCancelRefetch ?? (() => {})}
+      />
       <table
         className="min-w-full table-fixed border-collapse text-sm"
         ref={tableRef}

@@ -104,12 +104,20 @@ export default function QueryLog() {
               className="w-full justify-start gap-2 px-3 py-1 text-left font-normal rounded-none h-auto"
               onClick={() => handleEntryClick(entry.sql)}
             >
-              {/* Status dot */}
+              {/* Status dot — Sprint 180 (AC-180-03) widens the colour
+                  branches: cancelled queries paint a calm muted dot
+                  rather than the destructive red so the user can tell
+                  apart a true error from a self-aborted op at a glance. */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                  entry.status === "success" ? "bg-success" : "bg-destructive"
+                  entry.status === "success"
+                    ? "bg-success"
+                    : entry.status === "cancelled"
+                      ? "bg-muted-foreground"
+                      : "bg-destructive"
                 }`}
                 title={entry.status}
+                data-status={entry.status}
               />
               {/* SQL text — paradigm-aware syntax highlighting (Sprint 177).
                   Mirrors the consumption pattern in `GlobalQueryLogPanel.tsx`
