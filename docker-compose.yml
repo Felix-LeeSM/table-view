@@ -6,14 +6,17 @@ services:
       POSTGRES_USER: ${PGUSER:-postgres}
       POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
       POSTGRES_DB: ${PGDATABASE:-table_view_test}
-    # Host port binding — the host-side dev app (Tauri tray + e2e harness on
-    # bare metal) connects via `localhost:${PGPORT}`. CI and any setup that
-    # collides with another local Postgres can override `PGPORT` (e.g.
-    # `PGPORT=15432`) without editing this file. The e2e service container
-    # still reaches postgres via the `postgres` hostname on the docker
-    # network, so this binding only affects host-originated clients.
+    # Host port binding — non-default by design (ADR 0019 follow-up,
+    # 2026-05-01). Host devs frequently run another Postgres on :5432
+    # (Postgres.app, brew, app project DBs) and the collision blocks the
+    # e2e gate every time. We bind the test container to **15432** by
+    # default (`prod default + 10000`); override with `PGPORT=...` when a
+    # specific shard / parallel run needs a different port. The e2e
+    # service container still reaches postgres via the `postgres`
+    # hostname on the docker network at the internal :5432, so this
+    # binding only affects host-originated clients.
     ports:
-      - "${PGPORT:-5432}:5432"
+      - "${PGPORT:-15432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -29,10 +32,12 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-testuser}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-testpass}
-    # Host port binding — same rationale as `postgres.ports`. Override
-    # `MONGO_PORT` to dodge collisions with another local mongo instance.
+    # Host port binding — same `prod default + 10000` rule (ADR 0019
+    # follow-up): bind to **37017** so a host mongod on :27017 doesn't
+    # clobber the e2e gate. Override with `MONGO_PORT=...` to pick a
+    # different port.
     ports:
-      - "${MONGO_PORT:-27017}:27017"
+      - "${MONGO_PORT:-37017}:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s

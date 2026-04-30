@@ -42,10 +42,17 @@ if ! command -v pnpm >/dev/null 2>&1; then
 fi
 
 PGHOST="${PGHOST:-localhost}"
-PGPORT="${PGPORT:-5432}"
+# Non-default port (15432) — see docker-compose.yml `postgres.ports`.
+# Avoids collisions with a host postgres on :5432 (the common case for
+# devs running Postgres.app / brew postgres alongside this repo).
+PGPORT="${PGPORT:-15432}"
 PGUSER="${PGUSER:-postgres}"
 PGPASSWORD="${PGPASSWORD:-postgres}"
 PGDATABASE="${PGDATABASE:-table_view_test}"
+# Mongo host port — default 37017 (prod 27017 + 10000), override via
+# `MONGO_PORT=...` for parallel shards.
+MONGO_HOST="${MONGO_HOST:-localhost}"
+MONGO_PORT="${MONGO_PORT:-37017}"
 
 echo "[e2e-host] Starting postgres + mongo (compose --wait --no-recreate)..."
 # `--no-recreate` keeps already-healthy containers as-is. Without it,
@@ -70,4 +77,6 @@ exec env \
   PGUSER="$PGUSER" \
   PGPASSWORD="$PGPASSWORD" \
   PGDATABASE="$PGDATABASE" \
+  MONGO_HOST="$MONGO_HOST" \
+  MONGO_PORT="$MONGO_PORT" \
   pnpm test:e2e

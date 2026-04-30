@@ -166,7 +166,14 @@ export async function ensureTestPgConnection() {
 
   const portInput = await $("#conn-port");
   await portInput.clearValue();
-  await portInput.setValue("5432");
+  // Default 15432 = the host port that docker-compose.yml binds the test
+  // postgres to (prod default + 10000, ADR 0019 follow-up). Inside the
+  // docker `e2e` service container the postgres hostname `postgres`
+  // resolves on the compose network at the internal :5432, so the
+  // container path overrides via `PGPORT=5432` set in compose env.
+  await portInput.setValue(
+    process.env.E2E_PG_PORT ?? process.env.PGPORT ?? "15432",
+  );
 
   const userInput = await $("#conn-user");
   await userInput.clearValue();
