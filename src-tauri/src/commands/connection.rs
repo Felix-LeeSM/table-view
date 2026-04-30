@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -101,11 +102,35 @@ impl Default for AppState {
     }
 }
 
+/// Sprint 175 — captured once on the very first `get_session_id` call. The
+/// delta `rust:first-ipc - rust:entry` is the "Tauri startup overhead" line
+/// item in `docs/sprints/sprint-175/baseline.md`. `OnceLock::set` returns
+/// `Ok(())` only on the first call, guaranteeing the `info!` line is emitted
+/// exactly once regardless of how many windows race to invoke this command.
+static FIRST_IPC_INSTANT: OnceLock<Instant> = OnceLock::new();
+
 /// Return the process-scoped session UUID. Both launcher and workspace windows
 /// receive the same value, which the frontend uses to tag localStorage entries
 /// so stale data from a previous app run is automatically ignored.
 #[tauri::command]
 pub async fn get_session_id(state: tauri::State<'_, AppState>) -> Result<String, AppError> {
+    // Sprint 175 — `rust:first-ipc`. `set` is atomic and returns `Ok(())`
+    // only on the first call across all threads/windows; later invocations
+    // see `Err(_)` and skip the log emission. The delta is computed against
+    // `crate::BOOT_T0` (set in `lib.rs::run()`) when available; if the
+    // static is not yet populated we still emit the literal token so the
+    // log scraper never sees a silent gap.
+    let now = Instant::now();
+    if FIRST_IPC_INSTANT.set(now).is_ok() {
+        let delta_ms = crate::BOOT_T0
+            .get()
+            .map(|t0| now.duration_since(*t0).as_secs_f64() * 1000.0);
+        info!(
+            target: "boot",
+            "rust:first-ipc cmd=get_session_id delta_ms={:?}",
+            delta_ms,
+        );
+    }
     Ok(state.session_id.clone())
 }
 

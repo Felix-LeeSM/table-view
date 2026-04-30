@@ -6,10 +6,47 @@ pub mod models;
 pub mod storage;
 
 use commands::connection::AppState;
+use std::sync::OnceLock;
+use std::time::Instant;
 use tauri::Manager;
+use tracing::info;
+
+/// Sprint 175 — process-wide `Instant` captured at the very top of `run()`.
+/// Every later "Tauri startup overhead" measurement (notably
+/// `rust:first-ipc` in `commands::connection::get_session_id`) reads this
+/// to compute its delta. Using `OnceLock` keeps the API allocation-free
+/// after the first set and thread-safe without a mutex; subsequent
+/// invocations of `run()` (which `tauri` does not actually do, but we are
+/// defensive) keep the original `Instant`.
+pub static BOOT_T0: OnceLock<Instant> = OnceLock::new();
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Sprint 175 — `rust:entry` is the first observable timestamp on the
+    // Rust side. Capture it BEFORE the subscriber init so the "Tauri
+    // startup overhead" delta honestly includes subscriber bootstrap;
+    // we won't print until the subscriber is alive a few microseconds
+    // later.
+    let _ = BOOT_T0.set(Instant::now());
+
+    // Without an explicit subscriber, every `tracing::info!` is dropped
+    // on the floor. Default to RUST_LOG semantics ("info" minimum); honor
+    // an env override so debugging-heavy sessions can opt into "debug" or
+    // "trace" without a recompile. `try_init` so a re-entry (e.g. an
+    // integration test that already installed a subscriber) is a no-op.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with_target(true)
+        .try_init();
+
+    // `info!` (NOT `debug!`) so the message survives a release build's
+    // default log filter; `target: "boot"` so the protocol script can grep
+    // for the literal token regardless of binary name.
+    info!(target: "boot", "rust:entry t={:?}", BOOT_T0.get());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
