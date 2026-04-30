@@ -60,14 +60,27 @@
 ## 우선 적용 Top 6
 
 1. **[Peak-End](https://lawsofux.com/peak-end-rule/)**(절정·끝 인상) + **[Zeigarnik](https://lawsofux.com/zeigarnik-effect/)**(미완 작업이 잘 기억됨) + **[Von Restorff](https://lawsofux.com/von-restorff-effect/)**(튀는 것이 기억됨)
-   → 진행 중인 P1 5건 (Dirty indicator, Cmd+S 피드백, 빈 상태, 다중 statement 분리, Mongo 배너)
+   → ✅ 완료: P1 5건 sprint-97~101 처리 (Dirty indicator / Cmd+S flash / 빈 상태 분리 / 다중 statement 탭 / Mongo 배너)
 2. **[Selective Attention](https://lawsofux.com/selective-attention/)**(목표 외 자극 차단)
-   → RISK-009 — refetch 오버레이 포인터 차단
-3. **[Mental Model](https://lawsofux.com/mental-model/)**(사용자가 가진 작동 모델) + **[Jakob's Law](https://lawsofux.com/jakobs-law/)**(익숙한 패턴 기대)
-   → Mongo 용어 정합성 (column → field) + Mongo 쿼리는 MQL/JSON 색으로 표시
-4. **[Law of Similarity](https://lawsofux.com/law-of-similarity/)**(같은 종류는 같은 시각)
-   → 쿼리가 노출되는 모든 위치에 `QuerySyntax` 일관 적용 (`QueryLog.tsx` 격차 보완 — 누락된 호출처 회수 성격, 비용 대비 효과 큼)
-5. **[Doherty Threshold](https://lawsofux.com/doherty-threshold/)**(400ms 이하 생산성 최대) + **[Goal-Gradient](https://lawsofux.com/goal-gradient-effect/)**(목표 근접 시 추진력↑)
-   → 400ms 초과 작업의 progress·취소 정책 통일
-6. **[Postel's Law](https://lawsofux.com/postels-law/)**(받을 땐 관대)
-   → ConnectionDialog 입력 정규화 (URL 붙여넣기·trim)
+   → RISK-009 — refetch 오버레이 포인터 차단 (`DataGridTable.tsx:829` loading overlay)
+3. **[Law of Similarity](https://lawsofux.com/law-of-similarity/)**(같은 종류는 같은 시각) + **[Jakob's Law](https://lawsofux.com/jakobs-law/)**(익숙한 패턴) Mongo MQL 색
+   → 쿼리 노출 모든 위치에 `QuerySyntax` 일관 적용 (`QueryLog.tsx`만 plain text 격차) + Mongo paradigm 시 MQL/JSON 색
+4. **[Postel's Law](https://lawsofux.com/postels-law/)**(받을 땐 관대)
+   → ConnectionDialog 입력 정규화 (URL 붙여넣기 자동 파싱·trim·port 분리)
+5. **[Mental Model](https://lawsofux.com/mental-model/)**(사용자 작동 모델)
+   → Mongo 컨텍스트 용어 정합성 (column → field, table → collection 등 paradigm-aware)
+6. **[Doherty Threshold](https://lawsofux.com/doherty-threshold/)**(400ms) + **[Goal-Gradient](https://lawsofux.com/goal-gradient-effect/)**(추진력)
+   → 1초+ 작업의 progress UI + cancel 통일 (RISK-028 page-size 1000 휠 지연도 부분 흡수)
+
+## Sprint 분해 (제안, 2026-04-30)
+
+| # | Sprint | 범위 | 비용 | 종결 효과 |
+|---|--------|------|------|-----------|
+| 1 | sprint-97~101 | P1 5건 | ✅ 완료 | Peak-End/Zeigarnik/Von Restorff |
+| 2 | sprint-176 | refetch overlay `pointer-events: none` 일관 적용 + 회귀 가드 | 작음 (1d) | RISK-009 resolve |
+| 3 | sprint-177 | `QueryLog.tsx`의 `truncateSql`을 `QuerySyntax`로 교체, paradigm prop 드릴 + Mongo MQL/JSON 토큰 색 | 중 (2~3d) | 시각 일관성, Mongo 가독성 |
+| 4 | sprint-178 | ConnectionDialog: `postgres://`/`mongodb://`/`mysql://` URL 파싱·trim·공백 normalize·port:host 분리 | 중 (2d) | 입력 마찰 감소 |
+| 5 | sprint-179 | Mongo paradigm에서 column→field, table→collection 용어 통일 (DataGridToolbar/FilterBar/StructurePanel/ColumnsList 등) | 중 (2~3d) | Mental Model 정렬 |
+| 6 | sprint-180 | 1초+ async 작업에 progress + cancel (AbortController 어댑터까지 propagate, fetch/query/schema/refetch 4 vector) | 큼 (4~5d) | Doherty/Goal-Gradient |
+
+> 추가 후보 (Top 6 외): RISK-035 (StructurePanel "No columns found" flash) → sprint-176에 끼워넣거나 별도 마이크로 sprint.
