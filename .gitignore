@@ -53,3 +53,6 @@ tmp/
 docs/ui-evaluation.md
 docs/ui-evaluation-results.md
 docs/ui-fixes-plan.md
+
+# sprint-175 startup measurement trial logs (regenerated locally)
+.startup-trials/
