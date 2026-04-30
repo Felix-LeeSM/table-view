@@ -228,6 +228,134 @@ Original spec's Sprint 2/3 (JS-side) chase a ~5% slice of the user-perceived pro
 
 The new ACs cite this row's `~432ms` end-to-end median as the contractual reference. JS-side `T0 → app:effects-fired` (`18.5ms`) becomes a regression-only guard — sprints must not increase it.
 
+### launcher-cold (release-mode, pre-sprint-2)
+
+> **Scaffold for the AC-175-02-01 release rebaseline.** All cells are
+> `PENDING` and **operator-required** — the harness sandbox cannot drive
+> a `pnpm tauri build --release` interactively (it takes ~5–10 minutes
+> and exceeds the bash timeout) nor launch a GUI Tauri window. Once the
+> operator runs the build + measurement protocol below, paste the
+> per-trial summaries verbatim into the "Raw trials" block, drop the
+> slowest of five, and replace the `PENDING` cells with the median + p95
+> of the remaining four.
+>
+> This section is the **pre-shrinkage** rebaseline. Sprint 2's
+> AC-175-02-04 path (≥ 30% / ≥ 15% relaxed / "no work needed") is
+> selected by reading the `rust:entry → rust:first-ipc` median row
+> below: < 50ms hits the exit door (no shrinkage required); 50–100ms
+> selects the 15% relaxed target; ≥ 100ms holds the default 30% target.
+>
+> A second sibling section `launcher-cold (release-mode, post-sprint-2)`
+> is appended in iteration 2 of Sprint 2 (after the operator runs the
+> instrumented release binary) using the same protocol.
+
+#### Build recipe (release)
+
+```bash
+# 1. Build the release artifact (operator-required; takes ~5–10 minutes
+#    on the Apple M4 host above and is unsuitable for the harness sandbox).
+pnpm tauri build --release
+
+# 2. Locate the bundled binary. On macOS the default path is:
+#      src-tauri/target/release/bundle/macos/Table View.app/Contents/MacOS/table-view
+#    (verify with `ls src-tauri/target/release/bundle/macos/` after the
+#    build completes — Tauri's `productName` is "Table View" per
+#    tauri.conf.json, so the .app directory carries that exact name and
+#    the binary inside is `table-view` per the crate's `name` field).
+#    If the path differs on your host, substitute it everywhere
+#    `<binary-path>` appears below.
+
+# 3. Run five trials with the slowest dropped (matches the Sprint 1 protocol).
+#    Note: release mode disables WKWebView devtools by default. Read the
+#    `[boot]` summary line from the binary's stdout (when launched from a
+#    terminal) instead of the webview console:
+#
+#      "<binary-path>" 2>&1 | tee ./trial-N.log
+#      grep -E "^\[boot\]|rust:entry|rust:first-ipc|phase=" ./trial-N.log
+#
+#    Or use the harness:
+#      ./scripts/measure-startup.sh launcher-cold
+#    (note: the script's interactive prompt currently instructs the
+#    operator to use `pnpm tauri build --debug --no-bundle` for devtools;
+#    for the release rebaseline, manually launch the bundled binary as
+#    above and paste the stdout-captured summary line into the prompt).
+```
+
+#### Raw trials
+
+> Operator: paste the verbatim console / stdout summary lines here, one
+> per trial, before populating the table. Mark the slowest with
+> `(dropped — slowest)`.
+>
+> - trial 1: PENDING — operator-required
+> - trial 2: PENDING — operator-required
+> - trial 3: PENDING — operator-required
+> - trial 4: PENDING — operator-required
+> - trial 5: PENDING — operator-required
+
+| milestone | median (ms) | p95 (ms) | notes |
+|---|---|---|---|
+| rust:entry → T0 | PENDING | PENDING | derived from `rust:first-ipc` minus T0→session:initialized round-trip; operator-required |
+| T0 | 0 | 0 | anchor |
+| theme:applied | PENDING | PENDING | operator-required |
+| session:initialized | PENDING | PENDING | operator-required |
+| connectionStore:imported | PENDING | PENDING | operator-required |
+| connectionStore:hydrated | PENDING | PENDING | operator-required |
+| react:render-called | PENDING | PENDING | operator-required |
+| react:first-paint | PENDING | PENDING | operator-required |
+| app:effects-fired | PENDING | PENDING | regression-only guard per Global AC #7; must be ≤ 18.5ms × 1.10 = 20.4ms |
+| rust:entry → rust:first-ipc | **PENDING** | **PENDING** | **release-mode rebaseline of the dominant segment.** Operator-required. AC-175-02-04 path is selected from this median: < 50ms = exit door; 50–100ms = 15% relaxed; ≥ 100ms = 30%. |
+| **end-to-end (T0 → app:effects-fired)** | **PENDING** | **PENDING** | JS-side only. Regression-only after Sprint 1 (must be ≤ 20.4ms). |
+| **end-to-end (rust:entry → app:effects-fired)** | **PENDING** | **PENDING** | full perceived blank window in release mode. |
+
+#### Phase breakdown (from sprint-2 instrumentation)
+
+> Sprint 2 added named `phase=…` markers inside `src-tauri/src/lib.rs::run()`
+> bracketing each segment of the `rust:entry → rust:first-ipc` region. Each
+> phase emits one `info!` line of shape:
+>
+> ```
+> INFO boot: phase=<name> delta_ms=<wall-clock-since-previous-phase>
+> ```
+>
+> Operator action: after the release binary runs, grep stdout for
+> `phase=` lines and paste the `delta_ms` values per trial. Drop the
+> slowest trial (matching the Sprint 1 protocol), then median + p95 of
+> the remaining four.
+>
+> The `before-builder-run → rust:first-ipc` residual row at the bottom is
+> *implied* — it equals `rust:first-ipc.delta_ms` minus the sum of all
+> `phase=` deltas above, and represents window creation + WKWebView
+> spawn + bundle parse + first-IPC service. The operator computes it
+> offline from the captured logs.
+
+| phase | median delta_ms | p95 delta_ms | notes |
+|---|---|---|---|
+| subscriber-init | PENDING | PENDING | tracing_subscriber::fmt().try_init() — unavoidable cost; reported for completeness |
+| builder-default | PENDING | PENDING | tauri::Builder::default() |
+| plugin-shell-init | PENDING | PENDING | tauri-plugin-shell registration |
+| plugin-dialog-init | PENDING | PENDING | tauri-plugin-dialog registration |
+| app-state-new | PENDING | PENDING | likely top contributor — AppState::new() builds Mutex<HashMap<...>> × 4 + uuid::Uuid::new_v4() |
+| invoke-handler-register | PENDING | PENDING | generate_handler! macro expansion + 56-entry handler list |
+| window-event-register | PENDING | PENDING | on_window_event closure registration |
+| generate-context | PENDING | PENDING | tauri::generate_context!() — bundle config + asset table |
+| before-builder-run | PENDING | PENDING | bookkeeping mark; cumulative delta from rust:entry to start of `.run()` is the sum of all phases above |
+| **(implied) builder-run → rust:first-ipc** | **PENDING** | **PENDING** | residual — window creation + WKWebView spawn + bundle parse + first-IPC service. Computed offline from `rust:first-ipc.delta_ms` minus the sum of `phase=` deltas above. |
+
+#### How to populate this section (operator action)
+
+1. Build: `pnpm tauri build --release` (operator-required; ~5–10 min).
+2. Confirm the binary path (default macOS: `src-tauri/target/release/bundle/macos/Table View.app/Contents/MacOS/table-view`; substitute `<binary-path>` if your host differs).
+3. For each of 5 trials:
+   - Cold prep: `pkill -f "table-view" 2>/dev/null; pkill -f "Table View" 2>/dev/null; sudo purge 2>/dev/null || echo "purge skipped"`.
+   - Launch from terminal: `"<binary-path>" 2>&1 | tee /tmp/trial-N.log`.
+   - When the launcher renders, open devtools (release mode disables them by default — if you need the webview console, use `pnpm tauri build --debug --no-bundle` instead and document the deviation in the notes column; otherwise the `[boot]` summary line is also written to stdout via `console.info` in the launcher's webview, which Tauri does NOT pipe to the parent terminal — in which case you read it from the webview's Inspect Element console after enabling devtools, OR rebuild with `--debug` for this measurement only).
+   - Capture the `[boot] T0=0 …` line and every `phase=…`, `rust:entry`, and `rust:first-ipc` line.
+4. Identify the slowest trial (highest `app:effects-fired` value or highest `rust:first-ipc delta_ms`) and mark it `(dropped — slowest)` in the Raw trials block.
+5. Compute median + p95 of the remaining four trials per row using the same protocol Sprint 1 used (the `scripts/measure-startup.sh` helpers `median` and `p95` produce the right values; pipe each per-row column into them).
+6. Replace every `PENDING` cell with the computed value.
+7. Read the `rust:entry → rust:first-ipc` median to select the AC-175-02-04 path (exit door / 15% relaxed / 30%) and report it in `handoff.md`.
+
 ### launcher-warm
 
 > Per-trial numbers PENDING — run `scripts/measure-startup.sh all` on a host with an interactive Tauri build. The runnable script + protocol are committed; only the numeric population requires interactive execution.
