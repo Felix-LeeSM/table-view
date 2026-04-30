@@ -161,3 +161,111 @@ build for the Rust `phase=` deltas. Document the deviation in the
 3. Sprint 2 Evaluator (Phase 4): scores the closed iteration-2 work
    against AC-175-02-01..05 with concrete numbers.
 4. On pass, harness moves to Sprint 3 (pre-paint splash HTML).
+
+---
+
+# Sprint 2 Iteration 1.5 — re-measurement requested
+
+> Iteration 1 closed with operator data confirming
+> `rust:entry → rust:first-ipc = 1567.21 ms median / 1623.88 ms p95`
+> (5 trials, slowest dropped). The phase breakdown attributed only ~15 ms
+> (~1%) to Builder-internal phases; ~1552 ms (~99%) is in the residual
+> `.run() interior → first IPC` segment. Sprint 2 spec AC-175-02-02
+> ("the chosen shrinkage must be backed by profile evidence") therefore
+> forbids iteration 2 from picking any Builder-internal target — there
+> is no profile-justified shrinkage available below 1ms granularity.
+>
+> Iteration 1.5 adds two more cheap hooks (`tauri::Builder::setup` and
+> `tauri::Builder::on_page_load`) to slice the 1552ms residual before
+> iteration 2 picks the actual shrinkage target.
+
+## Changed Files (iteration 1.5)
+- `src-tauri/src/lib.rs`: appended a `setup` callback that emits one
+  `info!(target: "boot", "rust:setup-done delta_ms=…")` line when
+  Tauri's event loop is alive (i.e. window creation + WKWebView spawn
+  are complete, before any JS runs). Appended `on_page_load(...)` that
+  emits `info!(target: "boot", "rust:page-load label=… event=… delta_ms=…")`
+  per-window for both `Started` (URL committed, parse beginning) and
+  `Finished` (DOMContentLoaded). Both hooks gated behind
+  `BOOT_T0.get().is_some()` so missing-subscriber test environments do
+  not panic. Recorded as `setup-register` and `page-load-register`
+  phase markers.
+
+## Commit Made (iteration 1.5)
+- `2f19544` perf(boot): add Tauri 2 setup + on_page_load hooks for residual sub-instrumentation
+
+## Checks Run (Generator-side, iteration 1.5)
+- `cargo fmt --check` (in src-tauri): pass
+- `cargo clippy --all-targets --all-features -- -D warnings`: pass
+- `cargo test --lib`: pass (293/293)
+- `pnpm tsc --noEmit`: pass
+- Sprint 1 + iteration-1 marker grep: `rust:entry`, `rust:first-ipc`,
+  `phase=` all still present alongside the new `rust:setup-done` and
+  `rust:page-load` lines.
+
+## Operator Action — Required for Iteration 2
+
+Re-run the build + 5-trial protocol. Same recipe as iteration 1's
+runbook above, but the captured logs now include three additional
+markers (one `rust:setup-done` line + two `rust:page-load` lines per
+window per trial). Copy-paste:
+
+```bash
+cd /Users/felix/Desktop/study/view-table
+
+# 1. Rebuild release (5–10 min — DO NOT run in the harness sandbox).
+pnpm tauri build
+
+# 2. Confirm binary path.
+ls "src-tauri/target/release/bundle/macos/Table View.app/Contents/MacOS/"
+
+# 3. Run 5 cold trials, capturing stdout per trial.
+BIN="src-tauri/target/release/table-view"
+mkdir -p .startup-trials
+for i in 1 2 3 4 5; do
+  pkill -f "table-view" 2>/dev/null
+  pkill -f "Table View" 2>/dev/null
+  sudo purge 2>/dev/null || echo "purge skipped (no sudo)"
+  echo "=== iter1.5 trial $i ==="
+  "$BIN" 2>&1 | tee ".startup-trials/iter1.5-trial-$i.log" &
+  APP_PID=$!
+  sleep 8
+  kill $APP_PID 2>/dev/null
+  wait $APP_PID 2>/dev/null
+done
+
+# 4. Extract iteration 1.5 markers per trial.
+for i in 1 2 3 4 5; do
+  echo "=== iter1.5 trial $i ==="
+  grep -E "rust:entry|rust:first-ipc|rust:setup-done|rust:page-load|phase=" \
+    ".startup-trials/iter1.5-trial-$i.log"
+done
+```
+
+Then paste the output of the final loop back to the chat. The Generator
+will (a) drop the slowest trial by `rust:first-ipc` delta, (b) compute
+median + p95 of `rust:entry → rust:setup-done`,
+`setup-done → page-load Started` (per window), and
+`page-load Started → Finished` (per window), (c) attribute the residual
+to one of those four sub-segments, and (d) pick iteration 2's shrinkage
+target.
+
+## Iteration 2 Decision Tree (data-driven)
+
+| Sub-segment dominates | Iteration 2 shrinkage |
+|---|---|
+| `rust:entry → setup-done` ≥ 700ms | Lazy workspace window creation. `tauri.conf.json` declares both `launcher` and `workspace` windows; Tauri creates BOTH WKWebViews at `.run()` even though `workspace.visible: false`. Move workspace creation into `launcher::workspace_show` / `workspace_ensure`. |
+| `setup-done → launcher page-load Started` ≥ 300ms | Custom-protocol bundle delivery is the bottleneck. Flatten `dist/` asset graph or pre-warm the protocol handler in `setup`. |
+| `launcher page-load Started → Finished` ≥ 400ms | Bundle parse dominates. Sprint 5 (dep audit + chunk split) moves earlier and lands inside iteration 2. |
+| `page-load Finished → rust:first-ipc` ≥ 200ms | JS boot path itself is heavy. Reconsider `await initSession()` placement in `src/main.tsx` / `src/App.tsx`. |
+| All sub-segments < 200ms but sum ≈ 1552ms | Pre-paint splash (Sprint 3) is the only path to a perceived win; iteration 2 declares AC-175-02-04 (a) exit door unreachable by Builder-internal work and ships the rebaseline + the profile evidence. |
+
+## Notes for the Operator
+- The two new markers are emitted by **release** binaries unconditionally —
+  no `RUST_LOG` override needed.
+- `rust:page-load` lines fire for both `launcher` and `workspace` labels.
+  The `workspace` line is the smoking gun: if it shows up before any user
+  action, the eager-creation hypothesis is confirmed.
+- If the operator wants to skip the rebuild (since iteration-1 binary
+  already has `phase=` data): the previous binary does NOT carry the new
+  hooks, so iteration 2 cannot proceed without this rebuild.
