@@ -286,30 +286,50 @@ pnpm tauri build
 
 #### Raw trials
 
-> Operator: paste the verbatim console / stdout summary lines here, one
-> per trial, before populating the table. Mark the slowest with
-> `(dropped — slowest)`.
+> Captured 2026-04-30 from `src-tauri/target/release/table-view` (raw
+> binary; not the `.app` bundle, but timing was within ~12ms of the bundle
+> launch in a separate cross-check, confirming Gatekeeper / LaunchServices
+> is not a meaningful contributor on this host). Logs persisted at
+> `.startup-trials/release-raw-trial-{1..5}.log`. The grep harness
+> `grep -E "rust:entry|rust:first-ipc|phase=" .startup-trials/release-raw-trial-N.log`
+> reproduces the lines below.
 >
-> - trial 1: PENDING — operator-required
-> - trial 2: PENDING — operator-required
-> - trial 3: PENDING — operator-required
-> - trial 4: PENDING — operator-required
-> - trial 5: PENDING — operator-required
+> - trial 1: `rust:first-ipc delta_ms=1427.895`
+> - trial 2: `rust:first-ipc delta_ms=1603.563`
+> - trial 3: `rust:first-ipc delta_ms=1893.338` (dropped — slowest)
+> - trial 4: `rust:first-ipc delta_ms=1530.853`
+> - trial 5: `rust:first-ipc delta_ms=1623.882`
+>
+> Sorted (after dropping trial 3): 1427.895 / 1530.853 / 1603.563 / 1623.882.
+> Median = (1530.853 + 1603.563) / 2 = **1567.208 ms**.
+> p95 = max of the 4 = **1623.882 ms** (Sprint 1 protocol: nearest-rank
+> p95 with N=4 = the 4th value).
+>
+> **JS-side `[boot]` summary line was NOT captured in this trial set.** In
+> release mode the launcher's `console.info("[boot] …")` is written to the
+> WKWebView's renderer-process stdout, which Tauri does NOT pipe to the
+> parent terminal that `tee` captures. AC-175-02-05's regression-only
+> guard for `T0 → app:effects-fired` cannot be evaluated against this
+> rebaseline alone; it must be re-measured separately by either (a)
+> rebuilding once with `pnpm tauri build --debug --no-bundle` and reading
+> the line from the WKWebView Inspect Element console, or (b) adding a
+> small `tauri::ipc` sink in iteration 2 that forwards the JS milestone
+> times to Rust stdout.
 
 | milestone | median (ms) | p95 (ms) | notes |
 |---|---|---|---|
-| rust:entry → T0 | PENDING | PENDING | derived from `rust:first-ipc` minus T0→session:initialized round-trip; operator-required |
+| rust:entry → T0 | PENDING | PENDING | requires JS `[boot]` line (see caveat above); `rust:first-ipc - JS T0→session:initialized` derivation needs the per-trial JS T0 anchor to compute |
 | T0 | 0 | 0 | anchor |
-| theme:applied | PENDING | PENDING | operator-required |
-| session:initialized | PENDING | PENDING | operator-required |
-| connectionStore:imported | PENDING | PENDING | operator-required |
-| connectionStore:hydrated | PENDING | PENDING | operator-required |
-| react:render-called | PENDING | PENDING | operator-required |
-| react:first-paint | PENDING | PENDING | operator-required |
-| app:effects-fired | PENDING | PENDING | regression-only guard per Global AC #7; must be ≤ 18.5ms × 1.10 = 20.4ms |
-| rust:entry → rust:first-ipc | **PENDING** | **PENDING** | **release-mode rebaseline of the dominant segment.** Operator-required. AC-175-02-04 path is selected from this median: < 50ms = exit door; 50–100ms = 15% relaxed; ≥ 100ms = 30%. |
-| **end-to-end (T0 → app:effects-fired)** | **PENDING** | **PENDING** | JS-side only. Regression-only after Sprint 1 (must be ≤ 20.4ms). |
-| **end-to-end (rust:entry → app:effects-fired)** | **PENDING** | **PENDING** | full perceived blank window in release mode. |
+| theme:applied | PENDING | PENDING | requires JS `[boot]` line (see caveat) |
+| session:initialized | PENDING | PENDING | requires JS `[boot]` line |
+| connectionStore:imported | PENDING | PENDING | requires JS `[boot]` line |
+| connectionStore:hydrated | PENDING | PENDING | requires JS `[boot]` line |
+| react:render-called | PENDING | PENDING | requires JS `[boot]` line |
+| react:first-paint | PENDING | PENDING | requires JS `[boot]` line |
+| app:effects-fired | PENDING | PENDING | regression-only guard per Global AC #7; must be ≤ 18.5ms × 1.10 = 20.4ms — captured separately (see caveat) |
+| rust:entry → rust:first-ipc | **1567.21** | **1623.88** | **release-mode rebaseline of the dominant segment.** 5 trials: 1427.90 / 1603.56 / 1893.34 / 1530.85 / 1623.88. Slowest dropped (trial 3 = 1893.34); median + p95 of remaining 4. **AC-175-02-04 path: ≥ 100ms → default 30% target applies.** ⚠️ Surprising result: release median is ~3.8× the debug median (414ms). Hypothesis: Sprint 1 measured raw `target/debug/table-view`, which dyld-loads faster than the codesigned `.app` bundle launch; cross-check showed raw-release (1567ms) ≈ `.app`-release (1578ms) on this host, so the gap is genuine and not LaunchServices noise. Most likely explanation: the residual after `before-builder-run` (≈ 1552ms; see implied row at the bottom of the phase breakdown) is dominated by WKWebView spawn + bundle parse + first-paint to first-IPC, none of which benefit from Rust release optimization. |
+| **end-to-end (T0 → app:effects-fired)** | **PENDING** | **PENDING** | JS-side only. Requires JS `[boot]` line (see caveat). |
+| **end-to-end (rust:entry → app:effects-fired)** | **PENDING** | **PENDING** | derived; needs JS `app:effects-fired` to compute. |
 
 #### Phase breakdown (from sprint-2 instrumentation)
 
@@ -334,16 +354,58 @@ pnpm tauri build
 
 | phase | median delta_ms | p95 delta_ms | notes |
 |---|---|---|---|
-| subscriber-init | PENDING | PENDING | tracing_subscriber::fmt().try_init() — unavoidable cost; reported for completeness |
-| builder-default | PENDING | PENDING | tauri::Builder::default() |
-| plugin-shell-init | PENDING | PENDING | tauri-plugin-shell registration |
-| plugin-dialog-init | PENDING | PENDING | tauri-plugin-dialog registration |
-| app-state-new | PENDING | PENDING | likely top contributor — AppState::new() builds Mutex<HashMap<...>> × 4 + uuid::Uuid::new_v4() |
-| invoke-handler-register | PENDING | PENDING | generate_handler! macro expansion + 56-entry handler list |
-| window-event-register | PENDING | PENDING | on_window_event closure registration |
-| generate-context | PENDING | PENDING | tauri::generate_context!() — bundle config + asset table |
-| before-builder-run | PENDING | PENDING | bookkeeping mark; cumulative delta from rust:entry to start of `.run()` is the sum of all phases above |
-| **(implied) builder-run → rust:first-ipc** | **PENDING** | **PENDING** | residual — window creation + WKWebView spawn + bundle parse + first-IPC service. Computed offline from `rust:first-ipc.delta_ms` minus the sum of `phase=` deltas above. |
+| subscriber-init | 8.19 | 11.50 | tracing_subscriber::fmt().try_init() — first-trial-cold cost; reported for completeness |
+| builder-default | 2.89 | 3.54 | tauri::Builder::default() |
+| plugin-shell-init | 0.94 | 0.97 | tauri-plugin-shell registration |
+| plugin-dialog-init | 0.36 | 0.88 | tauri-plugin-dialog registration |
+| app-state-new | 0.67 | 1.28 | hypothesized top contributor pre-measurement — actually negligible; `Mutex<HashMap<...>>` × 4 + `uuid::Uuid::new_v4()` is sub-millisecond |
+| invoke-handler-register | 0.005 | 0.005 | generate_handler! macro expansion already happened at compile time; runtime registration of 56-entry handler list is microseconds |
+| window-event-register | 0.003 | 0.003 | on_window_event closure registration; cost is closure capture only |
+| generate-context | 1.98 | 4.80 | tauri::generate_context!() — bundle config + asset table |
+| before-builder-run | 0.011 | 0.015 | bookkeeping mark; cumulative delta from rust:entry to start of `.run()` is the sum of all phases above ≈ 15.04ms (1.0% of `rust:entry → rust:first-ipc`) |
+| **(implied) builder-run → rust:first-ipc** | **~1552.17** | **~1600.89** | residual — window creation + WKWebView spawn + bundle parse + first-paint to first-IPC. **99.0% of the rebaseline median.** Computed offline as `rust:first-ipc median (1567.21) − sum-of-phase medians (15.04) = 1552.17 ms`. **This is where any meaningful AC-175-02-04 shrinkage must come from** — Builder-internal phases sum to <1.5% of the segment and have no actionable surface. Iteration 1.5 adds Tauri 2 `setup` callback + per-window `on_page_load` hooks to slice this residual into window-creation / bundle-parse / JS-boot sub-segments before iteration 2 picks a profile-justified shrinkage target. |
+
+##### Iteration 1 finding: Builder phases are not the bottleneck
+
+The phase breakdown above falsifies the iteration-1 hypothesis that
+`AppState::new()` or `generate_handler!` registration would dominate. All
+9 measured phases combined sum to ~15ms / 1% of the segment; the
+remaining 99% is in the residual `builder-run → rust:first-ipc` window —
+window creation, WKWebView (web + GPU + network) process spawn, custom-
+protocol bundle delivery, JS parse, React first paint, and the first
+`get_session_id` IPC. Sprint 2 spec's AC-175-02-02 ("the chosen
+shrinkage must be backed by profile evidence") therefore forbids picking
+any Builder-internal target — the profile shows it is below the 1ms
+granularity reported here.
+
+Iteration 1.5 adds the Tauri 2 `setup` callback (fires once after the
+event loop is alive) plus `on_page_load(WebviewWindow, PageLoadPayload)`
+(fires per-window for `Started` and `Finished` events) to attribute the
+1552ms residual to:
+
+- `before-builder-run → setup-done` (window creation + WKWebView spawn)
+- per-window `setup-done → page-load:Started` (bundle protocol round-trip)
+- per-window `page-load:Started → page-load:Finished` (HTML+JS parse + first paint)
+- `page-load:Finished → rust:first-ipc` (JS boot to first IPC dispatch)
+
+Once those numbers land, iteration 2 selects the largest sub-segment as
+the AC-175-02-04 ≥ 30% shrinkage target. Likely candidates the operator
+data will adjudicate:
+
+- **Lazy workspace window creation** — `tauri.conf.json` declares both
+  `launcher` (visible) and `workspace` (visible: false) windows, so
+  Tauri creates *both* WKWebViews at `.run()`. If `setup-done` proves
+  significantly later than `before-builder-run` (≥ 200ms), creating only
+  the launcher at boot and lazily creating workspace from `workspace_show`
+  would be the targeted fix.
+- **Bundle parse cost** — if the per-window `page-load:Started → Finished`
+  delta dominates, Sprint 5's bundle audit moves earlier in the program
+  and Sprint 2's `≥ 30%` target is satisfied by a chunk-split or import-
+  audit landing in iteration 2 itself.
+- **Pre-paint splash** — if `page-load:Started → Finished` is large but
+  hard to shrink, Sprint 3's splash-HTML target moves earlier and Sprint
+  2 declares the AC-175-02-04 (a) exit door is unreachable by Builder-
+  internal work alone, with the iteration-1.5 profile as evidence.
 
 #### How to populate this section (operator action)
 
