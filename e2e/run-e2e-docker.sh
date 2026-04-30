@@ -28,8 +28,12 @@ PGPASSWORD="$PGPASSWORD" psql \
   -v ON_ERROR_STOP=1 \
   -f /app/e2e/fixtures/seed.sql
 
-echo "[e2e] Building Tauri debug binary..."
-pnpm tauri build --debug --no-bundle
+echo "[e2e] Building Tauri debug binary (with e2e visibility overlay)..."
+# ADR 0016 — overlay forces workspace.visible=true so the webview mounts at
+# boot. tauri-driver on Linux/Xvfb does NOT expose handles for windows that
+# stay `visible: false`, even after a runtime `workspace.show()` IPC, which
+# is what blocked sprint-172's polling-only fix.
+pnpm tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json
 
 # Verify the binary exists before handing off to wdio.
 ls -la /app/src-tauri/target/debug/table-view

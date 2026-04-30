@@ -22,9 +22,40 @@ import { expect } from "@wdio/globals";
 const TEST_PG_NAME = "Test PG";
 const WORKSPACE_TITLE = "Table View — Workspace";
 
-/** Switch WebDriver context to the workspace window. */
-export async function switchToWorkspaceWindow() {
-  await browser.switchWindow(WORKSPACE_TITLE);
+/**
+ * Switch WebDriver context to the workspace window.
+ *
+ * Sprint 172 — `browser.switchWindow(matcher)` matches *only* windows
+ * already known to wdio at call time. On Linux/Xvfb the workspace window
+ * is `visible: false` in `tauri.conf.json` and only joins the
+ * `getWindowHandles()` list after the user has triggered `workspace.show()`.
+ * `switchWindow` does not poll, so calling it the moment the activation
+ * IPC fires races the webview mount and throws "No window found...".
+ *
+ * Match-by-handle (mirroring `switchToLauncherWindow`) plus a polling loop
+ * makes the helper resilient: each iteration re-fetches the handle list,
+ * so the workspace handle becomes addressable as soon as Tauri exposes it.
+ */
+export async function switchToWorkspaceWindow(timeoutMs = 15000) {
+  const start = Date.now();
+  let lastError: unknown = null;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const handles = await browser.getWindowHandles();
+      for (const handle of handles) {
+        await browser.switchToWindow(handle);
+        const title = await browser.getTitle();
+        if (title === WORKSPACE_TITLE) return;
+      }
+    } catch (e) {
+      lastError = e;
+    }
+    await browser.pause(200);
+  }
+  const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
+  throw new Error(
+    `switchToWorkspaceWindow: workspace window did not appear within ${timeoutMs}ms${detail}`,
+  );
 }
 
 /** Switch WebDriver context to the launcher window.
@@ -82,7 +113,10 @@ export async function ensureHomeScreen() {
     // connection in the current session, so wrap the whole recovery in
     // a try/catch.
     try {
-      await switchToWorkspaceWindow();
+      // Short timeout: if the workspace genuinely doesn't exist (fresh
+      // boot path), we want to fall through to the New Connection probe
+      // quickly rather than stall the recovery for 15s.
+      await switchToWorkspaceWindow(3000);
       const back = await $('[aria-label="Back to connections"]');
       await back.waitForDisplayed({ timeout: 5000 });
       await back.click();
