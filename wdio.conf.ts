@@ -37,6 +37,89 @@ export const config: Options.Testrunner = {
     timeout: 60000,
   },
 
+  // sprint-174 — When a spec fails on CI we get a generic timeout
+  // message and zero forensic context (no screenshot, no DOM, no
+  // window-handle inventory). Dump everything we can for every failure
+  // into `e2e/wdio-report/` so the docker volume + actions/upload-artifact
+  // step surfaces it as a CI artifact. Best-effort: any throw inside the
+  // hook is swallowed so we never mask the original failure.
+  afterTest: async function (test, _context, { passed }) {
+    if (passed) return;
+    try {
+      const reportDir = path.resolve(__dirname, "e2e/wdio-report");
+      fs.mkdirSync(reportDir, { recursive: true });
+      const safe = `${test.parent || "root"}__${test.title}`
+        .replace(/[^a-z0-9]+/gi, "_")
+        .slice(0, 120);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const prefix = `${stamp}__${safe}`;
+
+      let handles: string[] = [];
+      try {
+        handles = await browser.getWindowHandles();
+      } catch (e) {
+        fs.writeFileSync(
+          `${reportDir}/${prefix}__handles_error.txt`,
+          String(e),
+        );
+        return;
+      }
+
+      const inventory: string[] = [];
+      for (const [i, h] of handles.entries()) {
+        try {
+          await browser.switchToWindow(h);
+          const title = await browser.getTitle();
+          const url = await browser.getUrl();
+          inventory.push(`[${i}] handle=${h} title=${title} url=${url}`);
+          try {
+            const png = await browser.takeScreenshot();
+            fs.writeFileSync(
+              `${reportDir}/${prefix}__win${i}.png`,
+              Buffer.from(png, "base64"),
+            );
+          } catch (screenshotErr) {
+            fs.writeFileSync(
+              `${reportDir}/${prefix}__win${i}_screenshot_error.txt`,
+              String(screenshotErr),
+            );
+          }
+          try {
+            const html = await browser.getPageSource();
+            fs.writeFileSync(`${reportDir}/${prefix}__win${i}.html`, html);
+          } catch {
+            /* ignore */
+          }
+          try {
+            const ariaInventory = await browser.execute(() => {
+              const els = document.querySelectorAll("[aria-label]");
+              return Array.from(els)
+                .slice(0, 200)
+                .map(
+                  (el) =>
+                    `${el.tagName.toLowerCase()}[aria-label="${el.getAttribute("aria-label")}"] visible=${(el as HTMLElement).offsetParent !== null}`,
+                );
+            });
+            fs.writeFileSync(
+              `${reportDir}/${prefix}__win${i}_aria.txt`,
+              (ariaInventory as string[]).join("\n"),
+            );
+          } catch {
+            /* ignore */
+          }
+        } catch (e) {
+          inventory.push(`[${i}] handle=${h} ERR=${String(e)}`);
+        }
+      }
+      fs.writeFileSync(
+        `${reportDir}/${prefix}__windows.txt`,
+        inventory.join("\n"),
+      );
+    } catch (outerErr) {
+      console.error("[wdio afterTest dump] failed:", outerErr);
+    }
+  },
+
   // Build the Tauri app in debug mode before tests.
   //
   // ADR 0016 — wdio's onPrepare runs *after* run-e2e-docker.sh's tauri

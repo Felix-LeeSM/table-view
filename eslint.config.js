@@ -53,7 +53,7 @@ const tvLocal = {
 };
 
 export default tseslint.config(
-  { ignores: ["dist", "src-tauri", "coverage"] },
+  { ignores: ["dist", "src-tauri", "coverage", "cargo-target"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
