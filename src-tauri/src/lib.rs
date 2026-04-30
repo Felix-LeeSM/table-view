@@ -174,6 +174,55 @@ pub fn run() {
     });
     record_phase(&mut cursor, "window-event-register");
 
+    // Sprint 175 Sprint 2 — iteration 1.5 sub-instrumentation. The
+    // iteration-1 phase breakdown showed Builder-internal phases sum to
+    // ~15ms / ~1% of `rust:entry → rust:first-ipc` (1567ms median in
+    // release-mode operator data). The remaining ~1552ms residual is in
+    // the `.run()` interior — window creation, WKWebView spawn, bundle
+    // delivery, JS parse, first IPC. Sprint 2 spec AC-175-02-02 forbids a
+    // shrinkage claim without profile evidence, so we add two more hooks
+    // to slice that residual:
+    //
+    // - `setup` fires once after Tauri's event loop is alive and managed
+    //   state is wired. The delta `rust:entry → rust:setup-done` captures
+    //   "process up to first event-loop tick" — i.e. window creation +
+    //   WKWebView process spawn (web + GPU + network) before any JS runs.
+    //
+    // - `on_page_load` fires per-window for both `Started` (URL committed,
+    //   parse beginning) and `Finished` (DOMContentLoaded). Per-window
+    //   deltas attribute bundle delivery + parse separately for the
+    //   `launcher` and (eagerly-created) `workspace` windows. If the
+    //   `workspace` window contributes meaningfully even though it is
+    //   `visible: false`, lazy-creating it from `workspace_show` becomes
+    //   the iteration-2 shrinkage target.
+    //
+    // The hooks themselves are cheap (one `Instant::elapsed` + one
+    // `info!` per fire). Both stay permanent — Sprint 1 set the precedent
+    // that boot instrumentation persists in production builds so future
+    // sprints can re-baseline against the same emission shape.
+    let builder = builder.setup(|_app| {
+        if let Some(t0) = BOOT_T0.get() {
+            let delta_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);
+        }
+        Ok(())
+    });
+    record_phase(&mut cursor, "setup-register");
+
+    let builder = builder.on_page_load(|webview, payload| {
+        if let Some(t0) = BOOT_T0.get() {
+            let delta_ms = t0.elapsed().as_secs_f64() * 1000.0;
+            info!(
+                target: "boot",
+                "rust:page-load label={} event={:?} delta_ms={:.3}",
+                webview.label(),
+                payload.event(),
+                delta_ms
+            );
+        }
+    });
+    record_phase(&mut cursor, "page-load-register");
+
     let context = tauri::generate_context!();
     record_phase(&mut cursor, "generate-context");
 
