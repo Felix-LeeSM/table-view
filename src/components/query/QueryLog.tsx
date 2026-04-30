@@ -4,6 +4,7 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import ConfirmDialog from "@components/shared/ConfirmDialog";
+import QuerySyntax from "@components/shared/QuerySyntax";
 
 function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
@@ -110,10 +111,18 @@ export default function QueryLog() {
                 }`}
                 title={entry.status}
               />
-              {/* SQL text */}
-              <span className="flex-1 truncate text-foreground">
-                {truncateSql(entry.sql, 80)}
-              </span>
+              {/* SQL text — paradigm-aware syntax highlighting (Sprint 177).
+                  Mirrors the consumption pattern in `GlobalQueryLogPanel.tsx`
+                  and `QueryTab.tsx`: truncate first (preserves the existing
+                  80-char invariant), then route through the paradigm
+                  dispatcher so Mongo entries surface MQL operator coloring
+                  while RDB entries keep SQL keyword treatment. */}
+              <QuerySyntax
+                className="flex-1 truncate text-foreground"
+                sql={truncateSql(entry.sql, 80)}
+                paradigm={entry.paradigm}
+                queryMode={entry.queryMode}
+              />
               {/* Timestamp */}
               <span className="shrink-0 text-muted-foreground">
                 {formatRelativeTime(entry.executedAt)}
