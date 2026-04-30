@@ -74,6 +74,7 @@ table-view/
 
 ## 관련 방
 
+- [paradigms](paradigms/memory.md) — Phase 7(ES) · Phase 8(Redis) UI slot 비교 + 일급 개념 대조 + 결정 이력
 - [decisions](../decisions/memory.md) — 구조 결정 이력
 - [roadmap](../roadmap/memory.md) — 어느 모듈이 어느 Phase에 확장되는지
 - [conventions](../conventions/memory.md) — Rust/TS 코딩 규칙, 테스트, 커밋
