@@ -4,11 +4,23 @@ import AppRouter from "./AppRouter";
 import { bootTheme } from "@lib/themeBoot";
 import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
 import { initSession } from "@lib/session-storage";
+import { getCurrentWindowLabel } from "@lib/window-label";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
 // Each step depends on the previous one, so we await in order.
 async function boot() {
+  // sprint-173 — set document.title synchronously *before* React mounts.
+  // `AppRouter`'s useEffect also sets it, but useEffect runs after first
+  // paint, and on Xvfb cold-boot React's first paint can take 10+ seconds.
+  // webdriver's `getTitle()` reads `document.title`, so without this the
+  // e2e helper `switchToWorkspaceWindow` (which polls getTitle to identify
+  // which window it landed on) wastes those 10s matching the stale HTML
+  // default "Table View" on the workspace handle.
+  const label = getCurrentWindowLabel();
+  document.title =
+    label === "workspace" ? "Table View — Workspace" : "Table View";
+
   bootTheme();
 
   // Session-scoped localStorage: fetch the process UUID from Rust so both

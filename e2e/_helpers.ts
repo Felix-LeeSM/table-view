@@ -156,7 +156,13 @@ export async function ensureTestPgConnection() {
 
   const hostInput = await $("#conn-host");
   await hostInput.clearValue();
-  await hostInput.setValue("localhost");
+  // sprint-173 — in Docker, postgres is reachable at hostname `postgres`,
+  // not `localhost`. Honour both `E2E_PG_HOST` (e2e-specific) and `PGHOST`
+  // (the env that `seed.sql` already uses) so the helper works in both
+  // host-shell dev (no env → localhost) and `docker compose --profile test`.
+  await hostInput.setValue(
+    process.env.E2E_PG_HOST ?? process.env.PGHOST ?? "localhost",
+  );
 
   const portInput = await $("#conn-port");
   await portInput.clearValue();

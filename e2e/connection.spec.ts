@@ -36,7 +36,12 @@ describe("Database Connection Flow", () => {
     const hostInput = await $("#conn-host");
     // Clear existing default and set
     await hostInput.clearValue();
-    await hostInput.setValue("localhost");
+    // sprint-173 — same env-aware host as `_helpers.ts:ensureTestPgConnection`.
+    // In Docker, postgres is at hostname `postgres`; on host-shell dev it's
+    // `localhost`. `E2E_PG_HOST` and `PGHOST` are both wired by docker-compose.
+    await hostInput.setValue(
+      process.env.E2E_PG_HOST ?? process.env.PGHOST ?? "localhost",
+    );
 
     const portInput = await $("#conn-port");
     await portInput.clearValue();
