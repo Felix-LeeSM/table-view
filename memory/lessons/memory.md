@@ -1,7 +1,7 @@
 ---
 title: Lessons 인덱스
 type: index
-updated: 2026-04-27
+updated: 2026-04-30
 ---
 
 # Lessons 인덱스
@@ -22,6 +22,8 @@ updated: 2026-04-27
 - [2026-04-29 · Tauri hidden workspace의 boot-time hydration은 빈 데이터를 읽는다 — window focus에서 re-hydrate 해야 한다](2026-04-29-cross-window-boot-hydration-race/memory.md)
 - [2026-04-29 · DbSwitcher는 active tab이 없을 때 focusedConnId 기반으로 activeDb를 표시해야 한다](2026-04-29-dbswitcher-no-tab-fallback/memory.md)
 - [2026-04-25 · Phase 종료 시 정적 UI evaluation → sprint 분해 워크플로우 (Phase 5 = 3.17/5, 41 이슈 → sprint-88~119)](2026-04-25-phase-end-ui-evaluation-workflow/memory.md)
+- [2026-04-30 · Cold-boot 측정은 tracing::info! phase markers + Tauri 2 setup/on_page_load hooks가 가장 가벼운 instrumentation](2026-04-30-cold-boot-tracing-instrumentation/memory.md)
+- [2026-04-30 · Tauri 2 다중 WKWebView spawn은 OS-level parallel — 한 윈도우 lazy화로는 wall-clock을 크게 못 줄인다](2026-04-30-wkwebview-spawn-os-parallel/memory.md)
 
 ## 형식
 
