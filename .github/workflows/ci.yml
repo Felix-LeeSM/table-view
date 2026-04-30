@@ -137,9 +137,19 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
 
   e2e:
-    name: E2E Tests (tauri-driver)
+    name: E2E Tests (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+
+    # sprint-173 — split the spec files into 4 alphabetical shards so
+    # each runner does 1/4 of the work in parallel. `fail-fast: false`
+    # so one shard's failure still surfaces the others' results, which
+    # makes triage faster than a single 11-minute job that aborts on
+    # the first regression.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout
@@ -157,6 +167,8 @@ jobs:
           PGDATABASE: table_view_test
           MONGO_USER: testuser
           MONGO_PASSWORD: testpass
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: 4
         run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
 
       - name: Dump container logs on failure
@@ -169,5 +181,5 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs
+          name: e2e-logs-shard-${{ matrix.shard }}
           path: e2e/wdio-report/

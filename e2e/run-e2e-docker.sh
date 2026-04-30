@@ -59,4 +59,36 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 echo "[e2e] Running E2E tests..."
-exec pnpm test:e2e
+
+# sprint-173 — optional sharding. When SHARD_INDEX/SHARD_TOTAL are set
+# (passed in by the CI matrix), pick the 1/Nth slice of spec files
+# alphabetically and pass them to wdio via repeated --spec args. WDIO 9's
+# spec-file glob (`./e2e/**/*.spec.ts` in wdio.conf.ts) is overridden by
+# any explicit --spec argument. When the variables are unset, the entire
+# suite runs as before.
+WDIO_ARGS=()
+if [ -n "${SHARD_INDEX:-}" ] && [ -n "${SHARD_TOTAL:-}" ]; then
+  mapfile -t ALL_SPECS < <(ls /app/e2e/*.spec.ts | sort)
+  TOTAL=${#ALL_SPECS[@]}
+  if [ "$TOTAL" -eq 0 ]; then
+    echo "[e2e] No spec files found under /app/e2e"
+    exit 1
+  fi
+  # Distribute remainder evenly: ceil(TOTAL / SHARD_TOTAL).
+  PER_SHARD=$(( (TOTAL + SHARD_TOTAL - 1) / SHARD_TOTAL ))
+  START=$(( (SHARD_INDEX - 1) * PER_SHARD ))
+  if [ "$START" -ge "$TOTAL" ]; then
+    echo "[e2e] Shard ${SHARD_INDEX}/${SHARD_TOTAL} has no specs (TOTAL=${TOTAL}); exiting 0."
+    exit 0
+  fi
+  SHARD_SPECS=("${ALL_SPECS[@]:START:PER_SHARD}")
+  echo "[e2e] Shard ${SHARD_INDEX}/${SHARD_TOTAL} → ${#SHARD_SPECS[@]} of ${TOTAL} specs:"
+  printf '  %s\n' "${SHARD_SPECS[@]}"
+  for s in "${SHARD_SPECS[@]}"; do
+    WDIO_ARGS+=(--spec "$s")
+  done
+else
+  echo "[e2e] No SHARD_INDEX/SHARD_TOTAL set — running full suite."
+fi
+
+exec pnpm test:e2e "${WDIO_ARGS[@]}"

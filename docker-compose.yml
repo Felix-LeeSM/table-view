@@ -60,6 +60,10 @@ services:
       E2E_PG_HOST: postgres
       MONGO_USER: ${MONGO_USER:-testuser}
       MONGO_PASSWORD: ${MONGO_PASSWORD:-testpass}
+      # sprint-173 e2e sharding — when both are set the entrypoint
+      # selects the 1/Nth slice of spec files; unset → run full suite.
+      SHARD_INDEX: ${SHARD_INDEX:-}
+      SHARD_TOTAL: ${SHARD_TOTAL:-}
     volumes:
       - ./e2e/wdio-report:/app/e2e/wdio-report
       - tauri-target:/app/src-tauri/target
