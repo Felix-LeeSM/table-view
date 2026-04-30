@@ -6,6 +6,8 @@
  * or tests. Re-export the constant from any document component that renders it.
  */
 
+import { PARADIGM_VOCABULARY } from "./paradigm-vocabulary";
+
 /**
  * Banner copy shown above MongoDB collection grids.
  *
@@ -26,10 +28,22 @@ export const COLLECTION_READONLY_BANNER_TEXT =
  * RDB tests stay green; document callers spread `DOCUMENT_LABELS` to swap
  * the user-visible strings without touching paradigm-coupling code in the
  * toolbar itself.
+ *
+ * Sprint 179 — the constant is now derived from `PARADIGM_VOCABULARY` so
+ * the dictionary is the single source of truth. The literal output strings
+ * are preserved exactly (lower-cased `"documents"` for the inline count
+ * label, sentence-case `"Add document"` / `"Delete document"` /
+ * `"Duplicate document"` for the action buttons) — the dictionary's
+ * `document` entry uses the title-case schema vocabulary
+ * (`"Documents"`, `"Add Field"`), which is intentionally distinct from the
+ * toolbar action copy. Hand-rolling these four strings here (rather than
+ * reusing the dictionary's `addUnit` / `records` directly) keeps the
+ * existing RDB-vs-document toolbar tone parity intact.
  */
+const docVocab = PARADIGM_VOCABULARY.document;
 export const DOCUMENT_LABELS = {
-  rowCountLabel: "documents",
-  addRowLabel: "Add document",
-  deleteRowLabel: "Delete document",
-  duplicateRowLabel: "Duplicate document",
+  rowCountLabel: docVocab.records.toLowerCase(),
+  addRowLabel: `Add ${docVocab.record.toLowerCase()}`,
+  deleteRowLabel: `Delete ${docVocab.record.toLowerCase()}`,
+  duplicateRowLabel: `Duplicate ${docVocab.record.toLowerCase()}`,
 } as const;

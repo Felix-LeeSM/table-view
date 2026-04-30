@@ -13,6 +13,7 @@ import {
   Eye,
 } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
+import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -23,6 +24,22 @@ import {
 } from "@components/ui/select";
 
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
+
+// Sprint 179 — toolbar default labels are sourced from the RDB paradigm
+// dictionary entry instead of inline literals so the dictionary remains
+// the single source of truth. The toolbar still accepts label-prop
+// overrides (the document grid spreads DOCUMENT_LABELS), so callers that
+// already pass values keep their behavior. The literal strings here
+// ("rows", "Add row", "Delete row", "Duplicate row") match the legacy
+// defaults — the dictionary's rdb entry uses title-case schema vocabulary
+// ("Rows", "Add Column"), so we hand-roll the toolbar tone the same way
+// document.ts does for the document paradigm.
+const RDB_TOOLBAR_LABELS = {
+  rowCountLabel: PARADIGM_VOCABULARY.rdb.records.toLowerCase(),
+  addRowLabel: `Add ${PARADIGM_VOCABULARY.rdb.record.toLowerCase()}`,
+  deleteRowLabel: `Delete ${PARADIGM_VOCABULARY.rdb.record.toLowerCase()}`,
+  duplicateRowLabel: `Duplicate ${PARADIGM_VOCABULARY.rdb.record.toLowerCase()}`,
+} as const;
 
 export interface DataGridToolbarProps {
   data: TableData | null;
@@ -87,10 +104,10 @@ export default function DataGridToolbar({
   pendingNewRowsCount,
   pendingDeletedRowKeysSize,
   selectedRowIdsCount,
-  rowCountLabel = "rows",
-  addRowLabel = "Add row",
-  deleteRowLabel = "Delete row",
-  duplicateRowLabel = "Duplicate row",
+  rowCountLabel = RDB_TOOLBAR_LABELS.rowCountLabel,
+  addRowLabel = RDB_TOOLBAR_LABELS.addRowLabel,
+  deleteRowLabel = RDB_TOOLBAR_LABELS.deleteRowLabel,
+  duplicateRowLabel = RDB_TOOLBAR_LABELS.duplicateRowLabel,
   onSetPage,
   onSetPageSize,
   onToggleFilters,

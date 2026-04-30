@@ -2066,4 +2066,74 @@ describe("StructurePanel", () => {
     const previewBtn = screen.getByRole("button", { name: "Preview SQL" });
     expect(previewBtn).toBeDisabled();
   });
+
+  // =========================================================================
+  // SPRINT 179 — Paradigm-aware vocabulary (AC-179-02 / AC-179-03 / AC-179-04)
+  // =========================================================================
+  describe("paradigm-aware vocabulary (Sprint 179)", () => {
+    // Reason: AC-179-02a — paradigm="document" renders the Mongo tab
+    // label ("Fields") and the Mongo Add/Empty copy delegated to
+    // ColumnsEditor; the legacy RDB tab label ("Columns") is absent.
+    // Mongo collection's columns endpoint returning [] is a realistic
+    // fixture (StructurePanel is RDB-only-mounted today; the test
+    // simulates the future paradigm="document" mount path).
+    // Date: 2026-04-30.
+    it('[AC-179-02a] paradigm="document" renders Mongo tab label + empty-state copy', async () => {
+      mockGetTableColumns.mockResolvedValue([]);
+
+      await act(async () => {
+        render(
+          <StructurePanel
+            connectionId="conn-1"
+            table="users"
+            schema="public"
+            paradigm="document"
+          />,
+        );
+      });
+
+      // Tab label is "Fields" (dictionary's document.units).
+      expect(screen.getByRole("tab", { name: "Fields" })).toBeInTheDocument();
+      // RDB tab label "Columns" is absent.
+      expect(
+        screen.queryByRole("tab", { name: "Columns" }),
+      ).not.toBeInTheDocument();
+      // Editor empty-state delegates to ColumnsEditor with paradigm prop.
+      expect(screen.getByText("No fields found")).toBeInTheDocument();
+      expect(screen.queryByText("No columns found")).not.toBeInTheDocument();
+    });
+
+    // Reason: AC-179-03a — explicit paradigm="rdb" preserves the legacy
+    // tab label "Columns". Anchors the dictionary's rdb entry equals the
+    // existing literal. Date: 2026-04-30.
+    it("[AC-179-03a] paradigm=\"rdb\" renders the legacy 'Columns' tab", async () => {
+      mockGetTableColumns.mockReturnValue(new Promise(() => {}));
+
+      render(
+        <StructurePanel
+          connectionId="conn-1"
+          table="users"
+          schema="public"
+          paradigm="rdb"
+        />,
+      );
+
+      expect(screen.getByRole("tab", { name: "Columns" })).toBeInTheDocument();
+    });
+
+    // Reason: AC-179-04a — paradigm prop missing/undefined falls back to
+    // the RDB dictionary entry (tab label "Columns"). Component-level
+    // fence; the dictionary-level fence is in paradigm-vocabulary.test.ts.
+    // Date: 2026-04-30.
+    it("[AC-179-04a] paradigm undefined falls back to 'Columns' tab", async () => {
+      mockGetTableColumns.mockReturnValue(new Promise(() => {}));
+
+      // Render without the prop entirely.
+      render(
+        <StructurePanel connectionId="conn-1" table="users" schema="public" />,
+      );
+
+      expect(screen.getByRole("tab", { name: "Columns" })).toBeInTheDocument();
+    });
+  });
 });

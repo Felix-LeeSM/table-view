@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
+import type { Paradigm } from "@/types/connection";
+import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import ColumnsEditor from "@components/structure/ColumnsEditor";
 import IndexesEditor from "@components/structure/IndexesEditor";
 import ConstraintsEditor from "@components/structure/ConstraintsEditor";
@@ -11,6 +13,13 @@ interface StructurePanelProps {
   connectionId: string;
   table: string;
   schema: string;
+  /**
+   * Sprint 179 — paradigm-aware tab labels and empty-state copy. Defaults
+   * to `"rdb"` so existing RDB callers see the legacy English vocabulary
+   * unchanged. Mongo callers can pass `"document"` to render
+   * "Fields" / "Add Field" / "No fields found".
+   */
+  paradigm?: Paradigm;
 }
 
 type SubTab = "columns" | "indexes" | "constraints";
@@ -19,7 +28,11 @@ export default function StructurePanel({
   connectionId,
   table,
   schema,
+  paradigm,
 }: StructurePanelProps) {
+  // Sprint 179 (AC-179-04) — `getParadigmVocabulary` enforces the
+  // `undefined → rdb` fallback in one place; component just looks up.
+  const vocab = getParadigmVocabulary(paradigm);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("columns");
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [indexes, setIndexes] = useState<IndexInfo[]>([]);
@@ -90,8 +103,13 @@ export default function StructurePanel({
     fetchData();
   }, [fetchData]);
 
+  // Sprint 179 — `key: "columns"` stays a stable identifier (it backs the
+  // `activeSubTab` state and never appears in the DOM as user-visible
+  // text); only the `label` value flows through the paradigm dictionary.
+  // "Indexes" and "Constraints" stay paradigm-fixed for now: structural
+  // concepts that have no Mongo / kv equivalent in the current scope.
   const subTabs: { key: SubTab; label: string }[] = [
-    { key: "columns", label: "Columns" },
+    { key: "columns", label: vocab.units },
     { key: "indexes", label: "Indexes" },
     { key: "constraints", label: "Constraints" },
   ];
@@ -152,6 +170,7 @@ export default function StructurePanel({
             schema={schema}
             columns={columns}
             onRefresh={fetchData}
+            paradigm={paradigm}
           />
         )}
       {!loading &&

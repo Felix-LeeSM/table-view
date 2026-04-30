@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Key, Link2, Plus, Pencil, Trash2, X, Check, Eye } from "lucide-react";
 import type { ColumnInfo, ColumnChange } from "@/types/schema";
+import type { Paradigm } from "@/types/connection";
+import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { Button } from "@components/ui/button";
@@ -314,6 +316,13 @@ interface ColumnsEditorProps {
   columns: ColumnInfo[];
   /** Called after a successful execute to trigger data refresh */
   onRefresh: () => Promise<void>;
+  /**
+   * Sprint 179 — paradigm-aware button + empty-state copy. Defaults to
+   * `"rdb"` so existing callers (StructurePanel without an explicit
+   * paradigm) see the legacy English vocabulary unchanged. Mongo callers
+   * pass `"document"` to render "Add Field" / "No fields found".
+   */
+  paradigm?: Paradigm;
 }
 
 export default function ColumnsEditor({
@@ -322,7 +331,17 @@ export default function ColumnsEditor({
   schema,
   columns,
   onRefresh,
+  paradigm,
 }: ColumnsEditorProps) {
+  // Sprint 179 (AC-179-04) — `getParadigmVocabulary` enforces the
+  // `undefined → rdb` fallback in one place; component just looks up.
+  const vocab = getParadigmVocabulary(paradigm);
+  // Sprint 179 — accessibility-name preserves the sentence-case form the
+  // legacy RDB tests assert (`"Add column"` lowercase 'c'). The visible
+  // button text uses the dictionary's title-case form (`"Add Column"`).
+  // For document paradigm this yields aria-label "Add field" + visible
+  // "Add Field"; AC-179-02 asserts both.
+  const ariaAddUnit = `Add ${vocab.unit.toLowerCase()}`;
   // Column editing state
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
   const [pendingChanges, setPendingChanges] = useState<PendingColumnChange[]>(
@@ -498,10 +517,10 @@ export default function ColumnsEditor({
           variant="ghost"
           size="xs"
           onClick={handleAddColumn}
-          aria-label="Add column"
+          aria-label={ariaAddUnit}
         >
           <Plus />
-          Add Column
+          {vocab.addUnit}
         </Button>
         {pendingCount > 0 && (
           <Button
@@ -640,7 +659,7 @@ export default function ColumnsEditor({
         pendingChanges.length === 0 &&
         newColumnDrafts.length === 0 && (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            No columns found
+            {vocab.emptyUnits}
           </div>
         )}
 
