@@ -6,8 +6,11 @@ services:
       POSTGRES_USER: ${PGUSER:-postgres}
       POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
       POSTGRES_DB: ${PGDATABASE:-table_view_test}
-    ports:
-      - "${PGPORT:-5432}:5432"
+    # No host `ports:` mapping — the e2e service reaches postgres via the
+    # `postgres` hostname on the docker network, so a host binding is not
+    # needed and conflicts with local Postgres / other docker projects on
+    # 5432. For ad-hoc debugging:
+    #   docker compose exec postgres psql -U postgres -d table_view_test
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,8 +26,9 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-testuser}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-testpass}
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
+    # See `postgres.ports` comment — same rationale: e2e reaches mongo via
+    # the docker network. Use `docker compose exec mongo mongosh ...` for
+    # ad-hoc debugging.
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
