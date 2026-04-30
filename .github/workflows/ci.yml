@@ -156,11 +156,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # sprint-173 caching: image build + cargo target.
+      #
+      # Measured on run 25147699532 (cold cache):
+      #   - Dockerfile build       ~108s  (apt 48s + rustup 10s + tauri-driver 18s + node/pnpm/mongosh ~25s)
+      #   - in-container `pnpm tauri build --debug`  ~156s
+      # Both layers were rebuilt from scratch on every shard (4×) every run
+      # because (a) the `tauri-target` named volume is per-runner-VM and
+      # ephemeral and (b) compose's `--build` had no shared cache. With
+      # GHA's actions/cache + buildx GHA cache backend, subsequent pushes
+      # hit the cache for both, cutting per-shard wall-clock by ~4 min.
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Tauri debug target
+        uses: actions/cache@v4
+        with:
+          path: cargo-target
+          # Keying on Rust source hash ensures source edits invalidate
+          # the cache; the restore-keys ladder still hits cargo's
+          # incremental cache from the most-recent prior build.
+          key: e2e-tauri-target-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml', 'src-tauri/tauri.e2e.conf.json', 'src-tauri/src/**/*.rs', 'src-tauri/build.rs') }}
+          restore-keys: |
+            e2e-tauri-target-
+
+      - name: Build E2E image with GHA buildx cache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.e2e
+          load: true
+          tags: table-view-e2e:local
+          cache-from: type=gha,scope=e2e
+          cache-to: type=gha,mode=max,scope=e2e
+
       # The entire E2E pipeline (Postgres + Mongo + tauri-driver + xvfb +
       # WebdriverIO) runs inside the `table-view-e2e:local` image built from
       # Dockerfile.e2e. Drift between this job and the local
       # `pnpm test:e2e:docker` entrypoint is treated as a defect (sprint-169
       # ADR 0015). `--exit-code-from e2e` propagates WebdriverIO's exit code.
+      # `--build` is intentionally omitted — the buildx step above already
+      # tagged the image as `table-view-e2e:local` (matching compose's
+      # `image:` field), so compose reuses it instead of rebuilding.
       - name: Run E2E suite via docker compose
         env:
           PGUSER: testuser
@@ -170,7 +207,17 @@ jobs:
           MONGO_PASSWORD: testpass
           SHARD_INDEX: ${{ matrix.shard }}
           SHARD_TOTAL: 4
-        run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from e2e
+        run: |
+          mkdir -p cargo-target
+          docker compose --profile test up --abort-on-container-exit --exit-code-from e2e
+
+      # The container runs as root, so cargo writes target files as root
+      # on the host bind-mount. actions/cache's post-step runs as the
+      # `runner` user and would fail to tar root-owned files. Chown back
+      # before the implicit cache-save fires.
+      - name: Reset cache dir ownership
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" cargo-target || true
 
       - name: Dump container logs on failure
         if: failure()

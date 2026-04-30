@@ -11,6 +11,9 @@ dist/
 # Tauri
 src-tauri/target/
 
+# E2E cache mount (CI: actions/cache restores into here; local dev: ignore)
+cargo-target/
+
 # Environment
 .env
 .env.*

@@ -36,6 +36,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.e2e
+    # CI pre-builds this image with buildx + GHA cache and tags it as
+    # `table-view-e2e:local` (sprint-173) so `docker compose up` can reuse
+    # the cached layers instead of rebuilding from scratch on every shard.
+    # Local dev is unchanged: `docker compose --profile test up --build`
+    # will still build under this tag from Dockerfile.e2e above.
+    image: table-view-e2e:local
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,10 +72,13 @@ services:
       SHARD_TOTAL: ${SHARD_TOTAL:-}
     volumes:
       - ./e2e/wdio-report:/app/e2e/wdio-report
-      - tauri-target:/app/src-tauri/target
+      # `./cargo-target` is a gitignored host directory — in CI it is
+      # populated/restored by actions/cache (sprint-173); locally it
+      # persists across `docker compose down` so subsequent runs reuse
+      # cargo's incremental cache instead of rebuilding from scratch.
+      - ./cargo-target:/app/src-tauri/target
     profiles:
       - test
 
 volumes:
   pgdata:
-  tauri-target:
