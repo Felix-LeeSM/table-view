@@ -35,12 +35,6 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v psql >/dev/null 2>&1; then
-  echo "ERROR: psql is required to seed the e2e database." >&2
-  echo "macOS: 'brew install libpq && brew link --force libpq'" >&2
-  exit 1
-fi
-
 if ! command -v pnpm >/dev/null 2>&1; then
   echo "ERROR: pnpm is required to run wdio." >&2
   echo "Install via 'corepack enable' or https://pnpm.io/installation" >&2
@@ -53,17 +47,21 @@ PGUSER="${PGUSER:-postgres}"
 PGPASSWORD="${PGPASSWORD:-postgres}"
 PGDATABASE="${PGDATABASE:-table_view_test}"
 
-echo "[e2e-host] Starting postgres + mongo (compose --wait)..."
-docker compose up -d --wait postgres mongo
+echo "[e2e-host] Starting postgres + mongo (compose --wait --no-recreate)..."
+# `--no-recreate` keeps already-healthy containers as-is. Without it,
+# compose detects benign config drift (e.g. unrelated docker-compose.yml
+# edits) and tries to recreate the container — which then fails with a
+# host-port collision (5432) because the old one still owns the bind.
+docker compose up -d --wait --no-recreate postgres mongo
 
-echo "[e2e-host] Seeding postgres at ${PGHOST}:${PGPORT}/${PGDATABASE}..."
-PGPASSWORD="$PGPASSWORD" psql \
-  -h "$PGHOST" \
-  -p "$PGPORT" \
-  -U "$PGUSER" \
-  -d "$PGDATABASE" \
-  -v ON_ERROR_STOP=1 \
-  -f e2e/fixtures/seed.sql
+# Seed via the postgres container's bundled psql so the host doesn't need
+# libpq/psql installed. `-T` disables TTY allocation (safe for stdin
+# redirect); `-e PGPASSWORD=` propagates the secret without leaking it
+# into the compose env.
+echo "[e2e-host] Seeding postgres via container psql..."
+docker compose exec -T -e PGPASSWORD="$PGPASSWORD" postgres \
+  psql -U "$PGUSER" -d "$PGDATABASE" -v ON_ERROR_STOP=1 \
+  < e2e/fixtures/seed.sql
 
 echo "[e2e-host] Running wdio (host-native WebView)..."
 exec env \
