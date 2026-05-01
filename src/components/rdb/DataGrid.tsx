@@ -26,6 +26,7 @@ import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 
 interface DataGridProps {
   connectionId: string;
@@ -33,8 +34,6 @@ interface DataGridProps {
   schema: string;
   initialFilters?: FilterCondition[];
 }
-
-const DEFAULT_PAGE_SIZE = 300;
 
 export default function DataGrid({
   connectionId,

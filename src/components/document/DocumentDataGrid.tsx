@@ -20,14 +20,13 @@ import { DOCUMENT_LABELS } from "@/lib/strings/document";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { insertDocument, cancelQuery } from "@lib/tauri";
 import { cn } from "@lib/utils";
+import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 
 interface DocumentDataGridProps {
   connectionId: string;
   database: string;
   collection: string;
 }
-
-const DEFAULT_PAGE_SIZE = 300;
 
 /**
  * Sprint 87 — editable grid for the document paradigm.

@@ -246,7 +246,7 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
 
     // total_count must be > pageSize × 2 so the user can click Next
     // page twice (page 1 → 2 → 3) without hitting the last-page disabled
-    // state. DEFAULT_PAGE_SIZE = 300 in DocumentDataGrid, so we use
+    // state. DEFAULT_PAGE_SIZE = 300 (from `@lib/gridPolicy`), so we use
     // 1500 (= 5 pages worth) to leave plenty of room.
     findMock
       .mockResolvedValueOnce(buildResult({ total_count: 1500 }))
