@@ -362,4 +362,52 @@ describe("EditableQueryResultGrid", () => {
     // Old per-statement wording is gone.
     expect(alert.textContent ?? "").not.toMatch(/executed: \d/);
   });
+
+  it("[AC-185-06] Preview Dialog header renders environment color stripe (production red)", async () => {
+    // AC-185-06 — visual confirmation that the user is committing into a
+    // production-tagged connection. The stripe is a 1px coloured div above
+    // the dialog header, with `data-environment-stripe` for test queries.
+    // date 2026-05-01.
+    const { useConnectionStore } = await import("@stores/connectionStore");
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "prod-conn",
+          db_type: "postgres",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "production",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    renderGrid();
+    const tds = document.querySelectorAll("tbody tr:first-child td");
+    act(() => {
+      fireEvent.doubleClick(tds[1]!);
+    });
+    const input = screen.getByLabelText("Editing name") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, { target: { value: "Alicia" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    act(() => {
+      screen.getByLabelText("Commit pending changes").click();
+    });
+    const stripe = await waitFor(() =>
+      document.querySelector('[data-environment-stripe="production"]'),
+    );
+    expect(stripe).not.toBeNull();
+    expect((stripe as HTMLElement).style.background).toMatch(
+      /#ef4444|rgb\(239,?\s*68,?\s*68\)/i,
+    );
+    // Reset for hygiene.
+    useConnectionStore.setState({ connections: [] });
+  });
 });

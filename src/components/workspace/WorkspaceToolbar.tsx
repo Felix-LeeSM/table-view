@@ -1,5 +1,6 @@
 import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
+import SafeModeToggle from "./SafeModeToggle";
 
 /**
  * Sprint 127 — workspace toolbar. Top-of-pane container that hosts the
@@ -36,7 +37,8 @@ export default function WorkspaceToolbar() {
           toolbar, adjacent to the (keyboard-only) refresh action.
           Disabled when the focused connection is not currently
           connected, so it never silently no-ops. */}
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <SafeModeToggle />
         <DisconnectButton />
       </div>
     </div>

@@ -22,6 +22,11 @@ import {
 } from "@components/datagrid/useDataGridEdit";
 import { buildRawEditSql, type RawEditPlan } from "@lib/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
+import { analyzeStatement } from "@lib/sqlSafety";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
+import { toast } from "@lib/toast";
 import PendingChangesTray from "./PendingChangesTray";
 
 export interface EditableQueryResultGridProps {
@@ -67,6 +72,14 @@ export default function EditableQueryResultGrid({
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
+
+  // Sprint 185 — Safe Mode gate inputs (production-tagged connection +
+  // strict mode + dangerous statement → block before executeQueryBatch).
+  const safeMode = useSafeModeStore((s) => s.mode);
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -198,6 +211,22 @@ export default function EditableQueryResultGrid({
 
   const handleExecute = useCallback(async () => {
     if (!sqlPreview) return;
+    // Sprint 185 — Safe Mode gate. Identical shape to the DataGrid gate
+    // (see useDataGridEdit.handleExecuteCommit). Blocks before the
+    // executeQueryBatch IPC when the active connection is production-tagged
+    // and the user has not explicitly disabled the toggle.
+    if (safeMode === "strict" && connectionEnvironment === "production") {
+      for (const sql of sqlPreview) {
+        const analysis = analyzeStatement(sql);
+        if (analysis.severity === "danger") {
+          const reason = analysis.reasons[0] ?? "dangerous statement";
+          const blockMessage = `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`;
+          setExecuteError(blockMessage);
+          toast.error(blockMessage);
+          return;
+        }
+      }
+    }
     setExecuting(true);
     setExecuteError(null);
     try {
@@ -219,7 +248,13 @@ export default function EditableQueryResultGrid({
     } finally {
       setExecuting(false);
     }
-  }, [sqlPreview, connectionId, onAfterCommit]);
+  }, [
+    sqlPreview,
+    connectionId,
+    onAfterCommit,
+    safeMode,
+    connectionEnvironment,
+  ]);
 
   // Cmd+S → commit. We listen on window so the global App-level dispatch
   // (already wired up for Cmd+S) reaches us when this grid is on screen.
@@ -494,6 +529,19 @@ export default function EditableQueryResultGrid({
               }
             }}
           >
+            {connectionEnvironment &&
+              connectionEnvironment in ENVIRONMENT_META && (
+                <div
+                  className="h-1"
+                  style={{
+                    background:
+                      ENVIRONMENT_META[connectionEnvironment as EnvironmentTag]
+                        .color,
+                  }}
+                  data-environment-stripe={connectionEnvironment}
+                  aria-hidden="true"
+                />
+              )}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview

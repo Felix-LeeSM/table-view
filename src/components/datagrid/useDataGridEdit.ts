@@ -1,6 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { analyzeStatement } from "@/lib/sqlSafety";
 import type { TableData } from "@/types/schema";
 import {
   generateSqlWithKeys,
@@ -353,6 +356,15 @@ export function useDataGridEdit({
   const executeQueryBatch = useSchemaStore((s) => s.executeQueryBatch);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
+  // Sprint 185 — Safe Mode gate inputs. The gate fires only when the
+  // current connection is tagged `production` and the user has not opted
+  // out via the toolbar toggle. The gate runs once per commit; reading
+  // both selectors here keeps the closure dep list tight.
+  const safeMode = useSafeModeStore((s) => s.mode);
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
   // Sprint 97 — surface dirty state to the store so TabBar can render a
   // dirty dot + gate close-on-dirty without coupling to grid internals.
   const setTabDirty = useTabStore((s) => s.setTabDirty);
@@ -770,6 +782,30 @@ export function useDataGridEdit({
     const statements: GeneratedSqlStatement[] =
       sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
     const statementCount = statements.length;
+    // Sprint 185 — Safe Mode gate. Block when the user is on a production
+    // connection with strict mode and any statement in the batch is a
+    // dangerous shape (WHERE-less DML, DROP, TRUNCATE). The block aborts
+    // before `executeQueryBatch` so the backend never sees the batch.
+    if (safeMode === "strict" && connectionEnvironment === "production") {
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
+        if (!stmt) continue;
+        const analysis = analyzeStatement(stmt.sql);
+        if (analysis.severity === "danger") {
+          const reason = analysis.reasons[0] ?? "dangerous statement";
+          const blockMessage = `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`;
+          setCommitError({
+            statementIndex: i,
+            statementCount,
+            sql: stmt.sql,
+            message: blockMessage,
+            failedKey: stmt.key,
+          });
+          toast.error(blockMessage);
+          return;
+        }
+      }
+    }
     try {
       // Sprint 183 — single transaction batch. The backend runs
       // BEGIN → all statements → COMMIT (or ROLLBACK on first failure), so
@@ -838,6 +874,8 @@ export function useDataGridEdit({
     fetchData,
     paradigm,
     dispatchMqlCommand,
+    safeMode,
+    connectionEnvironment,
   ]);
 
   const handleDiscard = useCallback(() => {

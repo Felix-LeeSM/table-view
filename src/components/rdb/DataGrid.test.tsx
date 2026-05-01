@@ -1778,4 +1778,56 @@ describe("DataGrid", () => {
     expect(screen.queryByText("▲")).not.toBeInTheDocument();
     expect(screen.queryByText("▼")).not.toBeInTheDocument();
   });
+
+  it("[AC-185-06] Preview Dialog header renders environment color stripe (production red)", async () => {
+    // AC-185-06 — DataGrid Preview Dialog inserts a 1px coloured div above
+    // the header when the active connection has an environment tag. The
+    // stripe is purely decorative (aria-hidden) and uses the colour from
+    // ENVIRONMENT_META. date 2026-05-01.
+    const { useConnectionStore } = await import("@stores/connectionStore");
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "prod-conn",
+          db_type: "postgres",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "production",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    renderDataGrid();
+    await screen.findByText("3 rows");
+    // Edit a cell so handleCommit has something to preview.
+    const tds = document.querySelectorAll("tbody tr:first-child td");
+    act(() => {
+      fireEvent.doubleClick(tds[2]!); // 'name' column
+    });
+    const input = document.querySelector(
+      "tbody tr:first-child input",
+    ) as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, { target: { value: "Alicia" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    // Trigger commit via the toolbar Commit button.
+    act(() => {
+      window.dispatchEvent(new Event("commit-changes"));
+    });
+    const stripe = await waitFor(() =>
+      document.querySelector('[data-environment-stripe="production"]'),
+    );
+    expect(stripe).not.toBeNull();
+    expect((stripe as HTMLElement).style.background).toMatch(
+      /#ef4444|rgb\(239,?\s*68,?\s*68\)/i,
+    );
+    useConnectionStore.setState({ connections: [] });
+  });
 });

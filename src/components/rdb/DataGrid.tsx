@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 import { cancelQuery } from "@lib/tauri";
 import FilterBar from "@components/rdb/FilterBar";
 import {
@@ -42,6 +44,11 @@ export default function DataGrid({
   const queryTableData = useSchemaStore((s) => s.queryTableData);
   const addTab = useTabStore((s) => s.addTab);
   const updateTabSorts = useTabStore((s) => s.updateTabSorts);
+  // Sprint 185 — environment color stripe on the SQL Preview Dialog header.
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
   // Sprint 76: sort state lives on the active tab so it survives tab
   // switches (this component unmounts/remounts when the user navigates
   // away and back). Reading `tab.sorts` makes the tab the single source
@@ -513,6 +520,19 @@ export default function DataGrid({
               }
             }}
           >
+            {connectionEnvironment &&
+              connectionEnvironment in ENVIRONMENT_META && (
+                <div
+                  className="h-1"
+                  style={{
+                    background:
+                      ENVIRONMENT_META[connectionEnvironment as EnvironmentTag]
+                        .color,
+                  }}
+                  data-environment-stripe={connectionEnvironment}
+                  aria-hidden="true"
+                />
+              )}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview
