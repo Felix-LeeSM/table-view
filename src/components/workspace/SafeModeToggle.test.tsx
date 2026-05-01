@@ -1,4 +1,5 @@
 // AC-185-03 — SafeModeToggle component tests. 3 cases per Sprint 185 contract.
+// AC-186-02 — Sprint 186 adds warn-mode visual + 3-way cycle.
 // date 2026-05-01.
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -29,11 +30,30 @@ describe("SafeModeToggle", () => {
     expect(btn).toHaveTextContent("Safe Mode: Off");
   });
 
-  it("[AC-185-03c] click toggles store mode", async () => {
+  it("[AC-185-03c] click toggles store mode (3-way: strict → warn first)", async () => {
     const user = userEvent.setup();
     render(<SafeModeToggle />);
     expect(useSafeModeStore.getState().mode).toBe("strict");
     await user.click(screen.getByRole("button", { name: "Safe Mode" }));
+    expect(useSafeModeStore.getState().mode).toBe("warn");
+  });
+
+  it('[AC-186-02a] warn renders shield-alert + "Safe Mode: Warn" label + aria-pressed="mixed"', () => {
+    useSafeModeStore.setState({ mode: "warn" });
+    render(<SafeModeToggle />);
+    const btn = screen.getByRole("button", { name: "Safe Mode: Warn" });
+    expect(btn).toHaveAttribute("aria-pressed", "mixed");
+    expect(btn).toHaveAttribute("data-mode", "warn");
+    expect(btn).toHaveTextContent("Safe Mode: Warn");
+  });
+
+  it("[AC-186-02b] click cycles strict → warn → off → strict", async () => {
+    const user = userEvent.setup();
+    render(<SafeModeToggle />);
+    expect(useSafeModeStore.getState().mode).toBe("strict");
+    await user.click(screen.getByRole("button", { name: "Safe Mode" }));
+    expect(useSafeModeStore.getState().mode).toBe("warn");
+    await user.click(screen.getByRole("button", { name: "Safe Mode: Warn" }));
     expect(useSafeModeStore.getState().mode).toBe("off");
     await user.click(screen.getByRole("button", { name: "Safe Mode: Off" }));
     expect(useSafeModeStore.getState().mode).toBe("strict");

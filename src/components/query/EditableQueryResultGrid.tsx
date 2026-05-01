@@ -15,6 +15,7 @@ import {
   type ContextMenuItem,
 } from "@components/shared/ContextMenu";
 import CellDetailDialog from "@components/datagrid/CellDetailDialog";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import {
   cellToEditString,
   editKey,
@@ -72,6 +73,12 @@ export default function EditableQueryResultGrid({
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
+  // Sprint 186 — warn-tier handoff. Set when warn mode + production +
+  // dangerous statement; consumed by <ConfirmDangerousDialog>.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    reason: string;
+    sql: string;
+  } | null>(null);
 
   // Sprint 185 — Safe Mode gate inputs (production-tagged connection +
   // strict mode + dangerous statement → block before executeQueryBatch).
@@ -209,12 +216,32 @@ export default function EditableQueryResultGrid({
     setExecuteError(null);
   }, []);
 
+  // Sprint 186 — extracted batch runner so warn-tier confirmDangerous
+  // can reuse the same try/catch + cleanup without duplicating the body.
+  const runBatch = useCallback(
+    async (sqls: string[]) => {
+      setExecuting(true);
+      setExecuteError(null);
+      try {
+        await executeQueryBatch(connectionId, sqls, `raw-edit-${Date.now()}`);
+        setSqlPreview(null);
+        setPendingEdits(new Map());
+        setPendingDeletedRowKeys(new Set());
+        onAfterCommit?.();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setExecuteError(`Commit failed — all changes rolled back: ${message}`);
+      } finally {
+        setExecuting(false);
+      }
+    },
+    [connectionId, onAfterCommit],
+  );
+
   const handleExecute = useCallback(async () => {
     if (!sqlPreview) return;
-    // Sprint 185 — Safe Mode gate. Identical shape to the DataGrid gate
-    // (see useDataGridEdit.handleExecuteCommit). Blocks before the
-    // executeQueryBatch IPC when the active connection is production-tagged
-    // and the user has not explicitly disabled the toggle.
+    // Sprint 185 — strict-tier gate. Blocks before executeQueryBatch when
+    // production + strict + dangerous.
     if (safeMode === "strict" && connectionEnvironment === "production") {
       for (const sql of sqlPreview) {
         const analysis = analyzeStatement(sql);
@@ -227,34 +254,37 @@ export default function EditableQueryResultGrid({
         }
       }
     }
-    setExecuting(true);
-    setExecuteError(null);
-    try {
-      // Sprint 183 — single-transaction batch. Backend wraps the
-      // statements in BEGIN/COMMIT and rolls back on first failure, so
-      // partial application is no longer possible.
-      await executeQueryBatch(
-        connectionId,
-        sqlPreview,
-        `raw-edit-${Date.now()}`,
-      );
-      setSqlPreview(null);
-      setPendingEdits(new Map());
-      setPendingDeletedRowKeys(new Set());
-      onAfterCommit?.();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setExecuteError(`Commit failed — all changes rolled back: ${message}`);
-    } finally {
-      setExecuting(false);
+    // Sprint 186 — warn-tier handoff. Production + warn + dangerous pauses
+    // the run and surfaces ConfirmDangerousDialog.
+    if (safeMode === "warn" && connectionEnvironment === "production") {
+      for (const sql of sqlPreview) {
+        const analysis = analyzeStatement(sql);
+        if (analysis.severity === "danger") {
+          setPendingConfirm({
+            reason: analysis.reasons[0] ?? "dangerous statement",
+            sql,
+          });
+          return;
+        }
+      }
     }
-  }, [
-    sqlPreview,
-    connectionId,
-    onAfterCommit,
-    safeMode,
-    connectionEnvironment,
-  ]);
+    await runBatch(sqlPreview);
+  }, [sqlPreview, safeMode, connectionEnvironment, runBatch]);
+
+  const confirmDangerous = useCallback(async () => {
+    if (!pendingConfirm || !sqlPreview) return;
+    setPendingConfirm(null);
+    await runBatch(sqlPreview);
+  }, [pendingConfirm, sqlPreview, runBatch]);
+
+  const cancelDangerous = useCallback(() => {
+    if (!pendingConfirm) return;
+    const message =
+      "Safe Mode (warn): confirmation cancelled — no changes committed";
+    setExecuteError(message);
+    setPendingConfirm(null);
+    toast.info(message);
+  }, [pendingConfirm]);
 
   // Cmd+S → commit. We listen on window so the global App-level dispatch
   // (already wired up for Cmd+S) reaches us when this grid is on screen.
@@ -596,6 +626,17 @@ export default function EditableQueryResultGrid({
           </div>
         </DialogContent>
       </Dialog>
+      {pendingConfirm && (
+        <ConfirmDangerousDialog
+          open={true}
+          reason={pendingConfirm.reason}
+          sqlPreview={pendingConfirm.sql}
+          onConfirm={() => {
+            void confirmDangerous();
+          }}
+          onCancel={cancelDangerous}
+        />
+      )}
     </div>
   );
 }

@@ -1830,4 +1830,76 @@ describe("DataGrid", () => {
     );
     useConnectionStore.setState({ connections: [] });
   });
+
+  it("[AC-186-06] warn + production + dangerous → ConfirmDangerousDialog rendered with reason", async () => {
+    // AC-186-06 — Sprint 186 mounts ConfirmDangerousDialog when the
+    // useDataGridEdit hook surfaces pendingConfirm. The generator is
+    // PK-bounded so it never emits a WHERE-less DELETE on its own; we
+    // mock generateSqlWithKeys to inject a danger shape and verify the
+    // warn handoff renders the dialog with the analyzer's reason text.
+    // date 2026-05-01.
+    const { useConnectionStore } = await import("@stores/connectionStore");
+    const { useSafeModeStore } = await import("@stores/safeModeStore");
+    const sqlGen = await import("@components/datagrid/sqlGenerator");
+    const spy = vi
+      .spyOn(sqlGen, "generateSqlWithKeys")
+      .mockReturnValue([{ sql: "DELETE FROM users", key: "row-1-0" }]);
+
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "prod-conn",
+          db_type: "postgres",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "production",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    useSafeModeStore.setState({ mode: "warn" });
+
+    try {
+      renderDataGrid();
+      await screen.findByText("3 rows");
+      // Edit a cell so the toolbar Commit button has something to commit.
+      const tds = document.querySelectorAll("tbody tr:first-child td");
+      act(() => {
+        fireEvent.doubleClick(tds[2]!);
+      });
+      const input = document.querySelector(
+        "tbody tr:first-child input",
+      ) as HTMLInputElement;
+      act(() => {
+        fireEvent.change(input, { target: { value: "Alicia" } });
+      });
+      act(() => {
+        fireEvent.keyDown(input, { key: "Enter" });
+      });
+      // Open the SQL preview, then click Execute. The mocked generator
+      // returns the WHERE-less DELETE; warn mode + production should
+      // surface the ConfirmDangerousDialog.
+      act(() => {
+        window.dispatchEvent(new Event("commit-changes"));
+      });
+      await screen.findByLabelText("Execute SQL");
+      act(() => {
+        screen.getByLabelText("Execute SQL").click();
+      });
+      await screen.findByText("Confirm dangerous statement");
+      const dialogContent = document.querySelector(
+        '[data-slot="alert-dialog-content"]',
+      );
+      expect(dialogContent).not.toBeNull();
+      expect(dialogContent?.textContent).toMatch(/DELETE without WHERE clause/);
+    } finally {
+      spy.mockRestore();
+      useConnectionStore.setState({ connections: [] });
+      useSafeModeStore.setState({ mode: "strict" });
+    }
+  });
 });

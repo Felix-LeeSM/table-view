@@ -1,4 +1,5 @@
 // AC-185-02 — safeModeStore unit tests. 5 cases per Sprint 185 contract.
+// AC-186-01 — Sprint 186 extends toggle to 3-way (strict → warn → off → strict).
 // date 2026-05-01.
 import { describe, it, expect, beforeEach } from "vitest";
 import {
@@ -24,10 +25,28 @@ describe("safeModeStore", () => {
     expect(useSafeModeStore.getState().mode).toBe("strict");
   });
 
-  it("[AC-185-02c] toggle flips strict↔off", () => {
+  it("[AC-185-02c] toggle is reversible — full cycle returns to start", () => {
     expect(useSafeModeStore.getState().mode).toBe("strict");
     useSafeModeStore.getState().toggle();
+    useSafeModeStore.getState().toggle();
+    useSafeModeStore.getState().toggle();
+    expect(useSafeModeStore.getState().mode).toBe("strict");
+  });
+
+  it("[AC-186-01a] toggle: strict → warn", () => {
+    expect(useSafeModeStore.getState().mode).toBe("strict");
+    useSafeModeStore.getState().toggle();
+    expect(useSafeModeStore.getState().mode).toBe("warn");
+  });
+
+  it("[AC-186-01b] toggle: warn → off", () => {
+    useSafeModeStore.setState({ mode: "warn" });
+    useSafeModeStore.getState().toggle();
     expect(useSafeModeStore.getState().mode).toBe("off");
+  });
+
+  it("[AC-186-01c] toggle: off → strict (no skipping warn)", () => {
+    useSafeModeStore.setState({ mode: "off" });
     useSafeModeStore.getState().toggle();
     expect(useSafeModeStore.getState().mode).toBe("strict");
   });

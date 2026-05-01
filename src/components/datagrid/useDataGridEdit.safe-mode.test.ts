@@ -1,4 +1,5 @@
 // AC-185-04 — useDataGridEdit Safe Mode gate. 4 cases per Sprint 185 contract.
+// AC-186-04 — Sprint 186 adds warn-tier handoff (pendingConfirm + confirmDangerous + cancelDangerous).
 // date 2026-05-01.
 //
 // The gate fires when the active connection is environment === "production"
@@ -15,6 +16,7 @@ import type { TableData } from "@/types/schema";
 
 const mockExecuteQueryBatch = vi.fn();
 const mockToastError = vi.fn();
+const mockToastInfo = vi.fn();
 const mockFetchData = vi.fn();
 
 vi.mock("@stores/schemaStore", () => ({
@@ -52,7 +54,7 @@ vi.mock("@/lib/toast", () => ({
   toast: {
     error: (msg: string) => mockToastError(msg),
     success: vi.fn(),
-    info: vi.fn(),
+    info: (msg: string) => mockToastInfo(msg),
     warn: vi.fn(),
   },
 }));
@@ -77,7 +79,7 @@ const RDB_DATA: TableData = {
   executed_query: "SELECT * FROM users",
 };
 
-function renderHookFor(env: string | null, mode: "strict" | "off") {
+function renderHookFor(env: string | null, mode: "strict" | "warn" | "off") {
   mockEnvironment = env;
   useSafeModeStore.setState({ mode });
   return renderHook(() =>
@@ -161,5 +163,76 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
 
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     expect(result.current.commitError).toBeNull();
+  });
+
+  it("[AC-186-04a] production + warn + WHERE-less DELETE → pendingConfirm set, executeQueryBatch not called", async () => {
+    const { result } = renderHookFor("production", "warn");
+
+    act(() => {
+      result.current.setSqlPreview(["DELETE FROM users"]);
+    });
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(result.current.pendingConfirm).not.toBeNull();
+    expect(result.current.pendingConfirm!.reason).toBe(
+      "DELETE without WHERE clause",
+    );
+    expect(result.current.pendingConfirm!.sql).toBe("DELETE FROM users");
+    expect(result.current.pendingConfirm!.statementIndex).toBe(0);
+    expect(result.current.commitError).toBeNull();
+  });
+
+  it("[AC-186-04b] confirmDangerous → executeQueryBatch called once + pendingConfirm cleared", async () => {
+    const { result } = renderHookFor("production", "warn");
+
+    act(() => {
+      result.current.setSqlPreview(["DELETE FROM users"]);
+    });
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(result.current.pendingConfirm).not.toBeNull();
+
+    await act(async () => {
+      await result.current.confirmDangerous();
+    });
+
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingConfirm).toBeNull();
+    expect(result.current.commitError).toBeNull();
+  });
+
+  it("[AC-186-04c] cancelDangerous → commitError set with warn message + toast.info", async () => {
+    const { result } = renderHookFor("production", "warn");
+
+    act(() => {
+      result.current.setSqlPreview(["DELETE FROM users"]);
+    });
+
+    await act(async () => {
+      await result.current.handleExecuteCommit();
+    });
+
+    expect(result.current.pendingConfirm).not.toBeNull();
+
+    act(() => {
+      result.current.cancelDangerous();
+    });
+
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(result.current.pendingConfirm).toBeNull();
+    expect(result.current.commitError).not.toBeNull();
+    expect(result.current.commitError!.message).toMatch(
+      /Safe Mode \(warn\): confirmation cancelled/,
+    );
+    expect(mockToastInfo).toHaveBeenCalledWith(
+      expect.stringMatching(/confirmation cancelled/),
+    );
   });
 });

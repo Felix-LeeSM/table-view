@@ -25,6 +25,7 @@ import DataGridTable from "@components/datagrid/DataGridTable";
 import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 interface DataGridProps {
   connectionId: string;
@@ -604,6 +605,17 @@ export default function DataGrid({
           </div>
         </DialogContent>
       </Dialog>
+      {editState.pendingConfirm && (
+        <ConfirmDangerousDialog
+          open={true}
+          reason={editState.pendingConfirm.reason}
+          sqlPreview={editState.pendingConfirm.sql}
+          onConfirm={() => {
+            void editState.confirmDangerous();
+          }}
+          onCancel={editState.cancelDangerous}
+        />
+      )}
     </div>
   );
 }

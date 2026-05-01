@@ -395,22 +395,15 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
 
   it("static regression guard: SQL branch catch block is non-empty", () => {
     // AC-05 / Sprint 183 — ensure no future change re-introduces the
-    // silent-swallow bug. The MQL branch has its own (out-of-scope) empty
-    // catch which a separate sprint will tackle, so we narrow the guard
-    // to the SQL branch only by slicing the source between the
-    // `if (!sqlPreview) return;` marker and the `}, [` end of the
-    // `handleExecuteCommit` useCallback.
-    //
-    // Sprint 183 swapped the per-statement loop for a single batch call,
-    // so the positive markers also moved: instead of "executed:" / "failed
-    // at:" we now look for the standardised rolled-back wording and the
-    // batch indirection ("executeQueryBatch").
+    // silent-swallow bug. Sprint 186 extracted the try/catch + cleanup
+    // into a `runRdbBatch` helper above `handleExecuteCommit`, so the
+    // slice now covers that helper instead of the inline body.
     const source = useDataGridEditSource;
 
-    const sqlBranchStart = source.indexOf("if (!sqlPreview) return;");
+    const sqlBranchStart = source.indexOf("const runRdbBatch = useCallback(");
     expect(
       sqlBranchStart,
-      "SQL branch marker not found — useDataGridEdit refactor required",
+      "runRdbBatch marker not found — useDataGridEdit refactor required",
     ).toBeGreaterThan(-1);
     const sqlBranchSlice = source.slice(sqlBranchStart);
     // First `}, [` after the slice closes the useCallback dependency array.

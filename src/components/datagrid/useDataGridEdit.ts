@@ -338,6 +338,21 @@ export interface DataGridEditState {
   ) => void;
   handleCommit: () => void;
   handleExecuteCommit: () => Promise<void>;
+  /**
+   * Sprint 186 — warn-tier Safe Mode handoff. Set when an RDB commit on a
+   * production-tagged connection is intercepted by warn mode; the consumer
+   * surfaces a `<ConfirmDangerousDialog>`. `null` means no pending warn
+   * confirmation.
+   */
+  pendingConfirm: {
+    reason: string;
+    sql: string;
+    statementIndex: number;
+  } | null;
+  /** Sprint 186 — user confirmed the warn dialog; bypass the warn gate and run the batch. */
+  confirmDangerous: () => Promise<void>;
+  /** Sprint 186 — user cancelled the warn dialog; surface a warn-tier commitError. */
+  cancelDangerous: () => void;
   handleDiscard: () => void;
   handleAddRow: () => void;
   handleDeleteRow: () => void;
@@ -400,6 +415,13 @@ export function useDataGridEdit({
   // successful commit, on `handleDiscard`, and when a fresh `handleCommit`
   // re-opens the preview with a new batch.
   const [commitError, setCommitError] = useState<CommitError | null>(null);
+  // Sprint 186 — warn-tier Safe Mode handoff. Non-null while the user is
+  // looking at a `<ConfirmDangerousDialog>`. Cleared on confirm/cancel/discard.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    reason: string;
+    sql: string;
+    statementIndex: number;
+  } | null>(null);
   // Sprint 86 — parallel MQL preview state for the document paradigm. Lives
   // next to `sqlPreview` so `hasPendingChanges` and the commit shortcut can
   // reason about both in a single place. Mutually exclusive in practice: a
@@ -733,6 +755,63 @@ export function useDataGridEdit({
     [connectionId],
   );
 
+  // Sprint 186 — extracted RDB commit body so warn-tier `confirmDangerous`
+  // can reuse the same try/catch + cleanup without duplicating ~50 lines.
+  const runRdbBatch = useCallback(
+    async (statements: GeneratedSqlStatement[], statementCount: number) => {
+      try {
+        await executeQueryBatch(
+          connectionId,
+          statements.map((s) => s.sql),
+          `edit-${Date.now()}`,
+        );
+        setSqlPreview(null);
+        setSqlPreviewStatements(null);
+        setCommitError(null);
+        setPendingEdits(new Map());
+        setPendingEditErrors(new Map());
+        setPendingNewRows([]);
+        setPendingDeletedRowKeys(new Set());
+        setSelectedRowIds(new Set());
+        setAnchorRowIdx(null);
+        setEditingCell(null);
+        setEditValue("");
+        fetchData();
+        toast.success(
+          `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+              ? err
+              : "Failed to commit changes.";
+        const indexMatch = message.match(/statement (\d+) of \d+ failed/);
+        const failedIndex = indexMatch
+          ? Math.max(0, Number(indexMatch[1]) - 1)
+          : 0;
+        const failedStmt = statements[failedIndex] ?? statements[0];
+        setCommitError({
+          statementIndex: failedIndex,
+          statementCount,
+          sql: failedStmt?.sql ?? "",
+          message: `Commit failed — all changes rolled back: ${message}`,
+          failedKey: failedStmt?.key,
+        });
+        if (failedStmt?.key) {
+          setPendingEditErrors((prev) => {
+            const next = new Map(prev);
+            next.set(failedStmt.key!, message);
+            return next;
+          });
+        }
+        toast.error(`Commit failed — all changes rolled back: ${message}`);
+      }
+    },
+    [executeQueryBatch, connectionId, fetchData],
+  );
+
   const handleExecuteCommit = useCallback(async () => {
     if (paradigm === "document") {
       if (!mqlPreview || mqlPreview.commands.length === 0) return;
@@ -806,77 +885,66 @@ export function useDataGridEdit({
         }
       }
     }
-    try {
-      // Sprint 183 — single transaction batch. The backend runs
-      // BEGIN → all statements → COMMIT (or ROLLBACK on first failure), so
-      // partial application is no longer possible.
-      await executeQueryBatch(
-        connectionId,
-        statements.map((s) => s.sql),
-        `edit-${Date.now()}`,
-      );
-      // Happy path: all statements succeeded.
-      setSqlPreview(null);
-      setSqlPreviewStatements(null);
-      setCommitError(null);
-      setPendingEdits(new Map());
-      setPendingEditErrors(new Map());
-      setPendingNewRows([]);
-      setPendingDeletedRowKeys(new Set());
-      setSelectedRowIds(new Set());
-      setAnchorRowIdx(null);
-      // Any cell editor that moved along with Tab/Enter during commit is now
-      // stale (pointing at soon-to-be-refetched data). Close it.
-      setEditingCell(null);
-      setEditValue("");
-      fetchData();
-      toast.success(
-        `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
-      );
-    } catch (err) {
-      // Sprint 183 — backend has already rolled back. We keep `sqlPreview`
-      // populated so the modal stays open with the failure banner.
-      // `pendingEditErrors` flags the failed cell when the backend message
-      // names the statement index ("statement K of N failed: ...").
-      const message =
-        err instanceof Error
-          ? err.message
-          : typeof err === "string"
-            ? err
-            : "Failed to commit changes.";
-      const indexMatch = message.match(/statement (\d+) of \d+ failed/);
-      const failedIndex = indexMatch
-        ? Math.max(0, Number(indexMatch[1]) - 1)
-        : 0;
-      const failedStmt = statements[failedIndex] ?? statements[0];
-      setCommitError({
-        statementIndex: failedIndex,
-        statementCount,
-        sql: failedStmt?.sql ?? "",
-        message: `Commit failed — all changes rolled back: ${message}`,
-        failedKey: failedStmt?.key,
-      });
-      if (failedStmt?.key) {
-        setPendingEditErrors((prev) => {
-          const next = new Map(prev);
-          next.set(failedStmt.key!, message);
-          return next;
-        });
+    // Sprint 186 — warn-tier handoff. Production + warn + danger pauses the
+    // commit pipeline; the consumer renders ConfirmDangerousDialog and calls
+    // confirmDangerous/cancelDangerous to resolve.
+    if (safeMode === "warn" && connectionEnvironment === "production") {
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
+        if (!stmt) continue;
+        const analysis = analyzeStatement(stmt.sql);
+        if (analysis.severity === "danger") {
+          setPendingConfirm({
+            reason: analysis.reasons[0] ?? "dangerous statement",
+            sql: stmt.sql,
+            statementIndex: i,
+          });
+          return;
+        }
       }
-      toast.error(`Commit failed — all changes rolled back: ${message}`);
     }
+    await runRdbBatch(statements, statementCount);
   }, [
     sqlPreview,
     sqlPreviewStatements,
     mqlPreview,
-    executeQueryBatch,
-    connectionId,
-    fetchData,
     paradigm,
     dispatchMqlCommand,
+    fetchData,
     safeMode,
     connectionEnvironment,
+    runRdbBatch,
   ]);
+
+  // Sprint 186 — warn-tier resolution helpers. confirmDangerous re-derives
+  // statements from current state (same as handleExecuteCommit) and runs
+  // the batch unconditionally. cancelDangerous surfaces a warn-tier
+  // commitError so the user sees why nothing happened.
+  const confirmDangerous = useCallback(async () => {
+    if (!pendingConfirm) return;
+    setPendingConfirm(null);
+    if (!sqlPreview) return;
+    const statements: GeneratedSqlStatement[] =
+      sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
+    await runRdbBatch(statements, statements.length);
+  }, [pendingConfirm, sqlPreview, sqlPreviewStatements, runRdbBatch]);
+
+  const cancelDangerous = useCallback(() => {
+    if (!pendingConfirm) return;
+    const statementCount =
+      sqlPreviewStatements?.length ?? sqlPreview?.length ?? 0;
+    const message =
+      "Safe Mode (warn): confirmation cancelled — no changes committed";
+    setCommitError({
+      statementIndex: pendingConfirm.statementIndex,
+      statementCount,
+      sql: pendingConfirm.sql,
+      message,
+      failedKey: undefined,
+    });
+    setPendingConfirm(null);
+    toast.info(message);
+  }, [pendingConfirm, sqlPreview, sqlPreviewStatements]);
 
   const handleDiscard = useCallback(() => {
     setPendingEdits(new Map());
@@ -895,6 +963,8 @@ export function useDataGridEdit({
     // clean and the dismissed banner doesn't reappear on re-open.
     setSqlPreviewStatements(null);
     setCommitError(null);
+    // Sprint 186 — close any open warn-tier dialog when the user discards.
+    setPendingConfirm(null);
   }, []);
 
   const handleAddRow = useCallback(() => {
@@ -1079,6 +1149,9 @@ export function useDataGridEdit({
     handleSelectRow,
     handleCommit,
     handleExecuteCommit,
+    pendingConfirm,
+    confirmDangerous,
+    cancelDangerous,
     handleDiscard,
     handleAddRow,
     handleDeleteRow,

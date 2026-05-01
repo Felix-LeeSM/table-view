@@ -1,4 +1,5 @@
 // AC-185-05 — EditableQueryResultGrid Safe Mode gate. 4 cases per Sprint 185.
+// AC-186-05 — Sprint 186 adds warn-tier dialog handoff (3 cases).
 // date 2026-05-01.
 //
 // Same gate shape as useDataGridEdit — block when (production + strict +
@@ -11,6 +12,7 @@ import {
   fireEvent,
   act,
   waitFor,
+  within,
 } from "@testing-library/react";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -21,6 +23,7 @@ import type { ConnectionConfig } from "@/types/connection";
 
 const mockExecuteQueryBatch = vi.fn();
 const mockToastError = vi.fn();
+const mockToastInfo = vi.fn();
 
 vi.mock("@lib/tauri", () => ({
   executeQuery: vi.fn(),
@@ -31,7 +34,7 @@ vi.mock("@lib/toast", () => ({
   toast: {
     error: (msg: string) => mockToastError(msg),
     success: vi.fn(),
-    info: vi.fn(),
+    info: (msg: string) => mockToastInfo(msg),
     warn: vi.fn(),
   },
 }));
@@ -74,7 +77,7 @@ function makeConnection(
   } as unknown as ConnectionConfig;
 }
 
-function setup(env: string | null, mode: "strict" | "off") {
+function setup(env: string | null, mode: "strict" | "warn" | "off") {
   // Seed the connection store with a single connection that has the
   // requested environment tag. Reset any pending state on the safe mode
   // store between tests for hygiene.
@@ -114,12 +117,9 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     );
   }
 
-  async function openPreviewAndExecute(buildSqls: string[]) {
+  async function clickExecute(buildSqls: string[]) {
     vi.mocked(buildRawEditSql).mockReturnValue(buildSqls);
     renderGrid();
-    // Trigger one pending edit so handleCommit short-circuit ("no pending
-    // changes") doesn't fire. We edit a non-PK cell and re-save with the
-    // same value would skip — change to a new value.
     const tds = document.querySelectorAll("tbody tr:first-child td");
     act(() => {
       fireEvent.doubleClick(tds[1]!);
@@ -131,18 +131,21 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     act(() => {
       fireEvent.keyDown(input, { key: "Enter" });
     });
-    // Open the SQL Preview Dialog.
     act(() => {
       screen.getByLabelText("Commit pending changes").click();
     });
     await waitFor(() => screen.getByLabelText("Execute SQL"));
-    // Click Execute.
     act(() => {
       screen.getByLabelText("Execute SQL").click();
     });
-    // Allow the async handleExecute to settle.
+  }
+
+  async function openPreviewAndExecute(buildSqls: string[]) {
+    await clickExecute(buildSqls);
+    // Strict + off + non-prod paths immediately fire either the toast (block)
+    // or executeQueryBatch (pass). Warn paths use clickExecute directly and
+    // assert against the dialog.
     await waitFor(() => {
-      // either gate fired (toast called) or executeQueryBatch was invoked.
       return (
         mockToastError.mock.calls.length +
           mockExecuteQueryBatch.mock.calls.length >
@@ -186,5 +189,72 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
 
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  function getWarnDialog() {
+    // Scope queries to the AlertDialogContent (warn dialog) so the SQL
+    // preview Dialog's Cancel button doesn't collide.
+    return screen
+      .getByText("Confirm dangerous statement")
+      .closest('[data-slot="alert-dialog-content"]')! as HTMLElement;
+  }
+
+  it("[AC-186-05a] production + warn + WHERE-less DELETE → ConfirmDangerousDialog opens, executeQueryBatch not called", async () => {
+    setup("production", "warn");
+    await clickExecute(["DELETE FROM users"]);
+
+    await screen.findByText("Confirm dangerous statement");
+    const dialog = getWarnDialog();
+    const confirmBtn = within(dialog).getByRole("button", {
+      name: "Run anyway",
+    });
+    expect(confirmBtn).toBeDisabled();
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it("[AC-186-05b] warn dialog Confirm with reason typed → executeQueryBatch called", async () => {
+    setup("production", "warn");
+    await clickExecute(["DELETE FROM users"]);
+
+    await screen.findByText("Confirm dangerous statement");
+    const dialog = getWarnDialog();
+    const input = within(dialog).getByTestId(
+      "confirm-dangerous-input",
+    ) as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, {
+        target: { value: "DELETE without WHERE clause" },
+      });
+    });
+    const confirmBtn = within(dialog).getByRole("button", {
+      name: "Run anyway",
+    });
+    act(() => {
+      confirmBtn.click();
+    });
+    await waitFor(() => {
+      expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("[AC-186-05c] warn dialog Cancel → executeError set with warn message + toast.info", async () => {
+    setup("production", "warn");
+    await clickExecute(["DELETE FROM users"]);
+
+    await screen.findByText("Confirm dangerous statement");
+    const dialog = getWarnDialog();
+    act(() => {
+      within(dialog).getByRole("button", { name: "Cancel" }).click();
+    });
+    await waitFor(() => {
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        expect.stringMatching(/Safe Mode \(warn\): confirmation cancelled/),
+      );
+    });
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /confirmation cancelled/,
+    );
   });
 });

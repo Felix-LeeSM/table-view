@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
-export type SafeMode = "strict" | "off";
+export type SafeMode = "strict" | "warn" | "off";
 
 export interface SafeModeState {
   mode: SafeMode;
@@ -13,12 +13,21 @@ export interface SafeModeState {
 
 export const SAFE_MODE_STORAGE_KEY = "view-table.safeMode";
 
+// Sprint 186 — toggle order strict → warn → off → strict.
+// Going strict→off in one click would silently disable the production
+// guard; the warn step forces the user past an intermediate state.
+const NEXT_MODE: Record<SafeMode, SafeMode> = {
+  strict: "warn",
+  warn: "off",
+  off: "strict",
+};
+
 export const useSafeModeStore = create<SafeModeState>()(
   persist(
     (set, get) => ({
       mode: "strict",
       setMode: (next) => set({ mode: next }),
-      toggle: () => set({ mode: get().mode === "strict" ? "off" : "strict" }),
+      toggle: () => set({ mode: NEXT_MODE[get().mode] }),
     }),
     {
       name: SAFE_MODE_STORAGE_KEY,
