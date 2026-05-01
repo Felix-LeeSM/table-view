@@ -40,11 +40,19 @@ export default function App() {
     loadPersistedMru,
   ]);
 
-  // Cmd+W / Ctrl+W closes the active tab (does NOT close the app)
+  // Cmd+W / Ctrl+W closes the active tab (does NOT close the app).
+  //
+  // We deliberately do NOT call `isEditableTarget` here, unlike every other
+  // global shortcut: on macOS, Tauri/wry's WebView falls through to the
+  // native Close-Window action whenever our handler returns without
+  // calling `preventDefault`. After running a query, focus is typically
+  // inside the SQL editor (Monaco / CodeMirror, both `contenteditable`)
+  // or the result grid — so the editable-target guard would skip our
+  // handler and the OS would close the entire window instead of the tab.
+  // Cmd+W has no in-editor meaning to preserve, so always intercept it.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
-        if (isEditableTarget(e.target)) return;
         e.preventDefault();
         const activeTabId = useTabStore.getState().activeTabId;
         if (activeTabId) {

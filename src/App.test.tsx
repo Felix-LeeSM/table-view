@@ -103,6 +103,37 @@ describe("App global shortcuts", () => {
     expect(useTabStore.getState().tabs).toHaveLength(0);
   });
 
+  // 2026-05-01 회귀 — 쿼리 실행 후 SQL 에디터(contenteditable)에 포커스가
+  // 있는 상태에서 Cmd+W를 누르면 macOS WebView가 native Close-Window를
+  // 발동시켜 창 자체가 닫혀버렸다. 다른 단축키와 달리 Cmd+W는
+  // editable surface 안에서도 항상 가로채 preventDefault + 탭 닫기로
+  // 처리해야 한다.
+  it("Cmd+W intercepts even when focus is in a contenteditable target", () => {
+    const tab = makeTableTab();
+    useTabStore.setState({ tabs: [tab], activeTabId: "tab-1" });
+    render(<App />);
+
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    document.body.appendChild(editor);
+    editor.focus();
+
+    const event = new KeyboardEvent("keydown", {
+      key: "w",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      editor.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(useTabStore.getState().tabs).toHaveLength(0);
+
+    document.body.removeChild(editor);
+  });
+
   it("Cmd+T creates a new query tab using active tab's connectionId", () => {
     const tab = makeTableTab();
     useTabStore.setState({ tabs: [tab], activeTabId: "tab-1" });
