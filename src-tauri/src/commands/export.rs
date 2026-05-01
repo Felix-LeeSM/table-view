@@ -686,6 +686,33 @@ mod tests {
         assert!(body.contains("\"$numberDecimal\""));
     }
 
+    // [AC-181-06] Mongo Extended JSON: $binary preserved end-to-end.
+    // 2026-05-01 — guarantees BinData passes through `relax_extended_json`
+    // tree walk without flattening. Closes the four-key gate from the
+    // contract Verification Plan static grep (`$oid|$date|$binary|$numberDecimal`).
+    #[test]
+    fn test_extended_json_binary_preserved() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("out.json");
+        let rows = vec![vec![json!({
+            "blob": {"$binary": {"base64": "aGVsbG8=", "subType": "00"}}
+        })]];
+        write_export(
+            ExportFormat::Json,
+            &path,
+            &["_doc".into()],
+            &rows,
+            &ExportContext::Collection {
+                name: "files".into(),
+            },
+            None,
+        )
+        .unwrap();
+        let body = read_to_string(&path);
+        assert!(body.contains("\"$binary\""), "missing $binary: {}", body);
+        assert!(body.contains("aGVsbG8="));
+    }
+
     // [AC-181-07] Streaming 100k rows — file line count + bytes_written.
     // 2026-05-01 — proves we don't load all rows into memory at once
     // (BufWriter sized at default 8 KiB writes incrementally).
