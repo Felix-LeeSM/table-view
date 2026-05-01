@@ -1,11 +1,14 @@
 // AC-185-03 — SafeModeToggle component tests. 3 cases per Sprint 185 contract.
 // AC-186-02 — Sprint 186 adds warn-mode visual + 3-way cycle.
-// Post-Sprint-187 hotfix (HF-187-A) — verbose info HoverCard wrapping the
-// toggle itself + colour-free styling. The hover-trigger model replaces an
-// earlier sibling Info-button design after user feedback ("hovering 만으로
-// 떴으면 좋겠다"). One new case asserts the help content is reachable via
-// pointer hover and surfaces the Strict / Warn / Off descriptions plus the
-// non-production scoping note. date 2026-05-01.
+// Post-Sprint-187 hotfix (HF-187-A) — verbose per-mode help is delivered via
+// the native `title` tooltip (same surface as DisconnectButton /
+// HistoryButton) for affordance uniformity. An earlier HoverCard prototype
+// was reverted after the user pointed out it fired alongside the `title`
+// attribute and an Info-icon variant would have collided with the parent
+// button's tooltip on hover. One new case pins the per-mode title content
+// (Strict / Warn / Off heading + canonical danger statement examples for
+// strict + non-production scoping note) so the help text stays in sync with
+// the contract. date 2026-05-01.
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
@@ -64,29 +67,48 @@ describe("SafeModeToggle", () => {
     expect(useSafeModeStore.getState().mode).toBe("strict");
   });
 
-  // [HF-187-A1] — hovering the SafeMode button reveals the verbose help
-  // HoverCard. Asserting on the visible copy (Strict / Warn / Off headings
-  // + canonical danger statement examples + non-production scoping note)
-  // pins both the hover wiring and the help-text content as a single
-  // regression net. The hover MUST NOT change the safe-mode state — a
-  // toggle requires an explicit click. date 2026-05-01.
-  it("[HF-187-A1] hover surfaces help content without mutating mode", async () => {
-    const user = userEvent.setup();
-    render(<SafeModeToggle />);
-    const btn = screen.getByRole("button", { name: "Safe Mode" });
-    await user.hover(btn);
+  // [HF-187-A1] — per-mode `title` tooltip pins three contract pieces:
+  //   1. heading line names the mode AND its next click action;
+  //   2. strict tooltip surfaces the canonical blocked-statement set so the
+  //      copy can't drift away from `analyzeStatement`;
+  //   3. non-production scoping note appears in the gating modes
+  //      (strict / warn) so users on local don't think they're being
+  //      blocked.
+  // We test through the rendered DOM `title` attribute rather than mocking
+  // a tooltip primitive — the toolbar uses native browser tooltips for
+  // every sibling button (DisconnectButton, HistoryButton), so this is the
+  // real user-visible surface. date 2026-05-01.
+  it("[HF-187-A1] per-mode tooltip exposes mode summary + danger statements + scoping note", () => {
+    const { rerender } = render(<SafeModeToggle />);
+    const strictTitle = screen
+      .getByRole("button", { name: "Safe Mode" })
+      .getAttribute("title");
+    expect(strictTitle).toMatch(
+      /Safe Mode: Strict \(click to switch to warn\)/,
+    );
+    expect(strictTitle).toMatch(
+      /DROP TABLE \/ DATABASE \/ SCHEMA \/ INDEX \/ VIEW/,
+    );
+    expect(strictTitle).toMatch(/UPDATE \/ DELETE without WHERE/);
+    expect(strictTitle).toMatch(/Non-production environments .* never gated/);
 
-    expect(await screen.findByText("About Safe Mode")).toBeInTheDocument();
-    expect(screen.getByText("Strict")).toBeInTheDocument();
-    expect(screen.getByText("Warn")).toBeInTheDocument();
-    expect(screen.getByText("Off")).toBeInTheDocument();
-    expect(
-      screen.getByText(/DROP TABLE \/ DATABASE \/ SCHEMA \/ INDEX \/ VIEW/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Non-production environments .* are never gated\./),
-    ).toBeInTheDocument();
-    // Hover-only path must not have toggled the store.
-    expect(useSafeModeStore.getState().mode).toBe("strict");
+    useSafeModeStore.setState({ mode: "warn" });
+    rerender(<SafeModeToggle />);
+    const warnTitle = screen
+      .getByRole("button", { name: "Safe Mode: Warn" })
+      .getAttribute("title");
+    expect(warnTitle).toMatch(/Safe Mode: Warn \(click to disable\)/);
+    expect(warnTitle).toMatch(/type-to-confirm/);
+    expect(warnTitle).toMatch(/Non-production environments are never gated/);
+
+    useSafeModeStore.setState({ mode: "off" });
+    rerender(<SafeModeToggle />);
+    const offTitle = screen
+      .getByRole("button", { name: "Safe Mode: Off" })
+      .getAttribute("title");
+    expect(offTitle).toMatch(
+      /Safe Mode: Off \(click to re-enable production guard\)/,
+    );
+    expect(offTitle).toMatch(/No guard\./);
   });
 });
