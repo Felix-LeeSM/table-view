@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -euo pipefail
+# `set -x` (line trace)는 사용자가 명시적으로 `E2E_TRACE=1`을 줄 때만
+# 켠다. CI hang 디버깅 외 일상적인 pre-push에서는 trace가 너무 시끄러워
+# (cargo/wdio 라인 위에 `+ ...` prefix가 끝없이 쌓임) 노이즈만 만든다.
+if [[ "${E2E_TRACE:-0}" == "1" ]]; then
+  set -x
+fi
 
 # sprint-169 / Sprint 3 — E2E container entrypoint.
 #
@@ -16,9 +22,6 @@ set -euxo pipefail
 #   3. Start Xvfb explicitly (`xvfb-run` was hanging silently in CI even with
 #      `--auto-servernum` — bypassing it gives us a known-good display +
 #      observable Xvfb stderr) and hand off to `pnpm test:e2e` via `exec`.
-#
-# `set -x` is intentional — the trace is the only evidence we have of how
-# far we got when something hangs in CI.
 
 echo "[e2e] Seeding database..."
 PGPASSWORD="$PGPASSWORD" psql \

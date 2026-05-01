@@ -1,5 +1,15 @@
 min_version: 1.7.0
 
+# pre-push 노이즈 차단 — 성공한 커맨드의 stdout/stderr는 캡처해서 숨기고,
+# 실패 시에만 dump한다. `execution_info`는 어떤 단계가 도는지 표식만 남겨
+# 진행 상황을 잃지 않게 한다. (pre-commit은 본래 빠르고 조용해서 이 설정의
+# 영향이 거의 없음 — pre-push의 cargo / vitest / docker compose 폭주를
+#막는 게 주 목적.)
+output:
+  - summary
+  - failure
+  - execution_info
+
 pre-commit:
   parallel: true
   commands:
