@@ -14,6 +14,8 @@ import {
 import { useSchemaStore } from "@stores/schemaStore";
 import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { ExportButton } from "@components/shared/ExportButton";
+import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 
 interface QueryResultGridProps {
@@ -206,9 +208,27 @@ function SelectResultArea({
     [sql, result.columns, tableColumns],
   );
 
+  const exportContext: ExportContext = {
+    kind: "query",
+    source_table: parsed ? { schema: parsed.schema, name: parsed.table } : null,
+  };
+  const disabledExportFormats: ExportFormat[] = parsed ? [] : ["sql"];
+
+  const exportToolbar = (
+    <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1">
+      <ExportButton
+        context={exportContext}
+        headers={result.columns.map((c) => c.name)}
+        getRows={() => result.rows as unknown[][]}
+        disabledFormats={disabledExportFormats}
+      />
+    </div>
+  );
+
   if (editability && editability.editable) {
     return (
       <>
+        {exportToolbar}
         <div className="flex items-center gap-1.5 border-b border-border bg-success/10 px-3 py-1 text-xs text-success">
           <Pencil size={12} />
           <span>
@@ -232,6 +252,7 @@ function SelectResultArea({
 
   return (
     <>
+      {exportToolbar}
       {editability && (
         <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
           <Info size={12} />

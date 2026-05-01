@@ -22,6 +22,7 @@ import DataGridToolbar from "@components/datagrid/DataGridToolbar";
 import DataGridTable from "@components/datagrid/DataGridTable";
 import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
+import { ExportButton } from "@components/shared/ExportButton";
 
 interface DataGridProps {
   connectionId: string;
@@ -345,6 +346,13 @@ export default function DataGrid({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1">
+        <ExportButton
+          context={{ kind: "table", schema, name: table }}
+          headers={(data?.columns ?? []).map((c) => c.name)}
+          getRows={() => (data?.rows ?? []) as unknown[][]}
+        />
+      </div>
       {/* Toolbar */}
       <DataGridToolbar
         data={data}

@@ -151,6 +151,7 @@ pub fn run() {
         commands::document::mutate::insert_document,
         commands::document::mutate::update_document,
         commands::document::mutate::delete_document,
+        commands::export::export_grid_rows,
         launcher::launcher_show,
         launcher::launcher_hide,
         launcher::launcher_focus,

@@ -505,3 +505,45 @@ export async function deleteDocument(
     documentId,
   });
 }
+
+// ── Sprint 181 — Export grid rows ──────────────────────────────────────────
+
+export type ExportFormat = "csv" | "tsv" | "sql" | "json";
+
+export type ExportContext =
+  | { kind: "table"; schema: string; name: string }
+  | { kind: "collection"; name: string }
+  | {
+      kind: "query";
+      source_table: { schema: string; name: string } | null;
+    };
+
+export interface ExportSummary {
+  rows_written: number;
+  bytes_written: number;
+}
+
+/**
+ * Stream the supplied rows to `targetPath` in the requested `format`. All
+ * encoding decisions (CSV escape / SQL identifier quoting / Mongo Extended
+ * JSON shape) live in the Rust handler so output is deterministic across
+ * platforms. Pass `exportId` to register a cooperative cancel token in the
+ * Sprint 180 query-token registry.
+ */
+export async function exportGridRows(
+  format: ExportFormat,
+  targetPath: string,
+  headers: string[],
+  rows: unknown[][],
+  context: ExportContext,
+  exportId: string | null = null,
+): Promise<ExportSummary> {
+  return invoke<ExportSummary>("export_grid_rows", {
+    format,
+    targetPath,
+    headers,
+    rows,
+    context,
+    exportId,
+  });
+}

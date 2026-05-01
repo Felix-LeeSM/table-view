@@ -4,6 +4,7 @@ import { useDocumentStore } from "@stores/documentStore";
 import type { ColumnInfo, TableData } from "@/types/schema";
 import { isDocumentSentinel } from "@/types/document";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
+import { ExportButton } from "@components/shared/ExportButton";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import {
@@ -298,6 +299,13 @@ export default function DocumentDataGrid({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <CollectionReadOnlyBanner />
+      <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1">
+        <ExportButton
+          context={{ kind: "collection", name: collection }}
+          headers={(data?.columns ?? []).map((c) => c.name)}
+          getRows={() => (data?.rows ?? []) as unknown[][]}
+        />
+      </div>
       <DataGridToolbar
         data={data}
         schema={database}
