@@ -320,6 +320,9 @@ pub async fn test_connection(req: TestConnectionRequest) -> Result<String, AppEr
         DatabaseType::Postgresql => {
             PostgresAdapter::test(&full).await?;
         }
+        DatabaseType::Mongodb => {
+            MongoAdapter::test(&full).await?;
+        }
         other => {
             return Err(AppError::Unsupported(format!(
                 "Database type {:?} is not supported yet",
@@ -1114,6 +1117,50 @@ mod tests {
         // Sanity: stored password is still intact and decryptable
         let pw = storage::get_decrypted_password("c1").unwrap();
         assert_eq!(pw, Some("lkpme".to_string()));
+
+        cleanup_test_env();
+    }
+
+    /// Regression for "Unsupported operation: Mongodb is not supported yet"
+    /// returned by `test_connection` (2026-05-01). The MongoAdapter has had
+    /// `connect`/`ping`/CRUD wired since Sprint 65–80, but the test-connection
+    /// dispatcher in `commands::connection` only listed `Postgresql`, so the
+    /// "Test Connection" button on the Mongo dialog always returned
+    /// `AppError::Unsupported`.
+    ///
+    /// The assertion is purely about routing: we send an unreachable host
+    /// (with a tight server-selection timeout so the test stays fast) and
+    /// require that the resulting error is `Connection(_)` — *not*
+    /// `Unsupported(_)`.
+    #[tokio::test]
+    #[serial]
+    async fn test_test_connection_routes_mongodb_to_mongo_adapter() {
+        let _dir = setup_test_env();
+
+        let mut conn = sample_connection("m1", "Mongo1");
+        conn.db_type = DatabaseType::Mongodb;
+        conn.port = 27017;
+        conn.host = "definitely-not-a-real-host.invalid".into();
+        conn.password = String::new();
+        conn.user = String::new();
+        // Cap server-selection so the test doesn't sit on the driver's
+        // default 30-second timeout.
+        conn.connection_timeout = Some(1);
+
+        let req = TestConnectionRequest {
+            config: ConnectionConfigPublic::from(&conn),
+            password: Some(String::new()),
+            existing_id: None,
+        };
+        let result = test_connection(req).await;
+
+        match result {
+            Err(AppError::Connection(_)) => { /* expected */ }
+            Err(AppError::Unsupported(msg)) => {
+                panic!("Mongodb routing regressed — got Unsupported: {msg}");
+            }
+            other => panic!("Expected AppError::Connection, got: {:?}", other),
+        }
 
         cleanup_test_env();
     }

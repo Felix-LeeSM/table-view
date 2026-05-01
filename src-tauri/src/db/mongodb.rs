@@ -180,6 +180,25 @@ impl MongoAdapter {
         Ok(opts)
     }
 
+    /// Stateless connection probe used by the `test_connection` Tauri command.
+    ///
+    /// Mirrors `PostgresAdapter::test`'s contract — build a one-shot client,
+    /// run a single round-trip against the server, and drop the client. The
+    /// driver's connection pool is owned by `Client` and disposed when this
+    /// function returns, so no explicit teardown is needed (vs. the PG case
+    /// which calls `pool.close()`).
+    pub async fn test(config: &ConnectionConfig) -> Result<(), AppError> {
+        let opts = Self::build_options(config)?;
+        let client = Client::with_options(opts)
+            .map_err(|e| AppError::Connection(format!("MongoDB client build failed: {e}")))?;
+        client
+            .database("admin")
+            .run_command(doc! { "ping": 1 })
+            .await
+            .map_err(|e| AppError::Connection(format!("MongoDB ping failed: {e}")))?;
+        Ok(())
+    }
+
     async fn current_client(&self) -> Result<Client, AppError> {
         let guard = self.client.lock().await;
         guard
