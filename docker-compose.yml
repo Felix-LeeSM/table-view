@@ -3,8 +3,14 @@ services:
     image: postgres:16-alpine
     container_name: table_view_postgres
     environment:
-      POSTGRES_USER: ${PGUSER:-postgres}
-      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+      # default `testuser`/`testpass` — 같은 한 쌍을 (1) CI workflow,
+      # (2) `src-tauri/tests/common/mod.rs` 통합 테스트, (3) e2e UI 폼
+      # (`e2e/_helpers.ts`), (4) `scripts/wait-for-test-db.sh`, (5) Mongo
+      # 서비스가 모두 사용한다. 이 default가 `postgres`로 drift 하면 e2e가
+      # `testuser`로 form 채우는 순간 인증 실패로 schema 트리가 안 뜨고
+      # spec 10/13개가 도미노로 무너진다 (2026-05-01 진단).
+      POSTGRES_USER: ${PGUSER:-testuser}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-testpass}
       POSTGRES_DB: ${PGDATABASE:-table_view_test}
     # Host port binding — non-default by design (ADR 0019 follow-up,
     # 2026-05-01). Host devs frequently run another Postgres on :5432
@@ -20,7 +26,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-table_view_test}"]
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-testuser} -d ${PGDATABASE:-table_view_test}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -72,8 +78,8 @@ services:
     environment:
       PGHOST: postgres
       PGPORT: 5432
-      PGUSER: ${PGUSER:-postgres}
-      PGPASSWORD: ${PGPASSWORD:-postgres}
+      PGUSER: ${PGUSER:-testuser}
+      PGPASSWORD: ${PGPASSWORD:-testpass}
       PGDATABASE: ${PGDATABASE:-table_view_test}
       E2E_MONGO_HOST: mongo
       E2E_PG_HOST: postgres
