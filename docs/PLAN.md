@@ -38,14 +38,37 @@ sprint 등록 불필요. 나머지 4건은 신규 sprint 로 분할:
 
 | ID | 항목 | 소속 | 우선 sprint 후보 |
 |----|------|------|------------------|
-| FB-1b | production 환경 자동 SafeMode 활성화 (Hard auto 정책) | Phase 23 closure 후 | Sprint 189 |
-| FB-3  | DB 단위 export (`pg_dump` / `mongodump` equivalent + Sidebar 진입점) | Phase 21 후속 | Sprint 190 |
-| FB-4  | Quick Look 편집 모드 (`useDataGridEdit` 와 합류) | Phase 22 후속 | Sprint 191 |
-| FB-5b | Query history source 필드 + 범위 확장 (raw / grid-edit / ddl-structure / mongo-* 통합 audit) | Phase 23 후속 | Sprint 192 |
+| FB-1b | production 환경 자동 SafeMode 활성화 (Hard auto 정책) | Phase 23 closure 후 | Sprint 190 |
+| FB-3  | DB 단위 export (`pg_dump` / `mongodump` equivalent + Sidebar 진입점) | Phase 21 후속 | Sprint 192 |
+| FB-4  | Quick Look 편집 모드 (`useDataGridEdit` 와 합류) | Phase 22 후속 | Sprint 194 |
+| FB-5b | Query history source 필드 + 범위 확장 (raw / grid-edit / ddl-structure / mongo-* 통합 audit) | Phase 23 후속 | Sprint 196 |
 
 각 항목은 진입 sprint 작성 시 별 contract 로 옮겨 ADR / AC 세분화. 본 표는
 Phase 23 (Sprint 188 = Mongo dangerous-op) 종료 후 우선순위 재평가의 1차
 입력값이다.
+
+### 리팩토링 sequencing (Sprint 189–198)
+
+Phase 23 종료 직후 Sprint 189–198 의 10단계는
+[`docs/refactoring-plan.md`](refactoring-plan.md) 와 1:1 동기. refactor-only
+sprint (홀수) 와 feature/FB sprint (짝수) 를 인터리브하여 각 refactor 가
+바로 다음 feature sprint 의 dependency 를 정리한다.
+
+| # | Sprint | 종류 | 내용 |
+|---|--------|------|------|
+| 1 | 189 | refactor | Phase 23 closure — RDB 5 사이트 inline gate → `useSafeModeGate` |
+| 2 | 190 | feature  | FB-1b production 환경 자동 SafeMode |
+| 3 | 191 | refactor | SchemaTree 분해 (Sprint 192 export entry-point 의존) |
+| 4 | 192 | feature  | FB-3 DB 단위 export |
+| 5 | 193 | refactor | `useDataGridEdit` 분해 (Sprint 194 Quick Look 편집 의존) |
+| 6 | 194 | feature  | FB-4 Quick Look 편집 |
+| 7 | 195 | refactor | `tabStore` intent actions (Sprint 196 history source 필드 의존) |
+| 8 | 196 | feature  | FB-5b query history source 필드 |
+| 9 | 197 | refactor | `mongodb.rs` 4분할 (Sprint 198 bulk-write 신규 명령 의존) |
+| 10 | 198 | feature | Mongo bulk-write 신규 (`delete_many` / `update_many` / `drop_collection`). **Phase 신설 안 함** — Phase 24 = Index Write UI 와 명명 충돌 회피 위해 sprint 단위로 처리. |
+
+코드 작성 표준: [`memory/conventions/refactoring/memory.md`](../memory/conventions/refactoring/memory.md) (영속).
+원본 smell 카탈로그: [`docs/refactoring-smells.md`](refactoring-smells.md) (시한부).
 
 ## 문서 목차
 
@@ -78,7 +101,7 @@ Phase 23 (Sprint 188 = Mongo dangerous-op) 종료 후 우선순위 재평가의 
 | 20 | Oracle 어댑터 | **보류** (2026-05-01) | [phase-20.md](phases/phase-20.md) |
 | 21 | CSV / SQL / JSON Export | 계획 (Sprint 181) | [phase-21.md](phases/phase-21.md) |
 | 22 | Row 인라인 편집 RDB + Preview/Commit/Discard 게이트 | 계획 | [phase-22.md](phases/phase-22.md) |
-| 23 | Safe Mode (프로덕션 가드) | 계획 | [phase-23.md](phases/phase-23.md) |
+| 23 | Safe Mode (프로덕션 가드) | 종료 (Sprint 185–188, 2026-05-01) | [phase-23.md](phases/phase-23.md) |
 | 24 | Index Write UI | 계획 | [phase-24.md](phases/phase-24.md) |
 | 25 | Constraint Write UI | 계획 | [phase-25.md](phases/phase-25.md) |
 | 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |

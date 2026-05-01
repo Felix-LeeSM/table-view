@@ -23,15 +23,27 @@ updated: 2026-05-01
 
 ## 작업 순서 (Impact 큰 순) — Phase 21–27
 
-| # | Phase | 추정 sprint | 핵심 |
+| # | Phase | 실제 sprint | 핵심 |
 |---|-------|-------------|------|
 | 1 | [Phase 21](../../docs/phases/phase-21.md) CSV/SQL/JSON Export | 181 | 단판승, 의존 0 |
 | 2 | [Phase 22](../../docs/phases/phase-22.md) Row 인라인 + Preview/Commit/Discard 게이트 | 182–184 | **#3~#7 공통 인프라** |
-| 3 | [Phase 23](../../docs/phases/phase-23.md) Safe Mode | 185 | production 가드 |
-| 4 | [Phase 24](../../docs/phases/phase-24.md) Index Write UI | 186 | DDL 패턴 첫 검증 |
-| 5 | [Phase 25](../../docs/phases/phase-25.md) Constraint Write UI | 187 | 동일 패턴 확장 |
-| 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | 188 | Function 옵션 |
-| 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | 189–191 | 패리티 마일스톤 |
+| 3 | [Phase 23](../../docs/phases/phase-23.md) Safe Mode | **종료 (185–188)** | production 가드 + Mongo aggregate 가드 + `useSafeModeGate` |
+| 4 | [Phase 24](../../docs/phases/phase-24.md) Index Write UI | 미정 | DDL 패턴 첫 검증 |
+| 5 | [Phase 25](../../docs/phases/phase-25.md) Constraint Write UI | 미정 | 동일 패턴 확장 |
+| 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | 미정 | Function 옵션 |
+| 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | 미정 | 패리티 마일스톤 |
+
+## Sprint 189–198 sequencing (refactoring + feature 인터리브)
+
+상세는 [`docs/refactoring-plan.md`](../../docs/refactoring-plan.md).
+홀수 sprint = refactor-only, 짝수 = feature/FB. 각 refactor 가 바로 다음
+feature sprint 의 dependency 를 정리한다.
+
+189 (closure refactor) → 190 (FB-1b prod-auto) → 191 (SchemaTree 분해) →
+192 (FB-3 export) → 193 (useDataGridEdit 분해) → 194 (FB-4 Quick Look) →
+195 (tabStore intent) → 196 (FB-5b history source) → 197 (mongodb.rs 분할)
+→ 198 (Mongo bulk-write — Phase 신설 안 함, Phase 24 명명 충돌 회피).
+코드 표준은 [conventions/refactoring](../conventions/refactoring/memory.md).
 
 ## 진행 중 / 대기 / 보류
 

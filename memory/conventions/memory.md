@@ -35,6 +35,16 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 - 시나리오 체크: happy path, 빈/누락 입력, 에러 복구, 동시성(빠른 더블 클릭 등), 상태 전이. 상세: `.claude/rules/test-scenarios.md`.
 - 변경 후 필수 검증: `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`.
 
+## 리팩토링 코드 표준
+
+[refactoring](./refactoring/memory.md) sub-room — 4 카테고리
+(B store coupling / D lib·hook 경계 / C hook API shape / A 분해 경계).
+Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을 따른다.
+
+스멜 카탈로그 원본 ([`docs/refactoring-smells.md`](../../docs/refactoring-smells.md))
+및 sequencing ([`docs/refactoring-plan.md`](../../docs/refactoring-plan.md))
+은 시한부 docs — Sprint 198 closure 후 retire.
+
 ## 금지 사항
 
 - `unwrap()` 남용 (Rust 테스트 제외).
