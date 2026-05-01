@@ -2718,4 +2718,91 @@ describe("SchemaTree", () => {
       "people",
     );
   });
+
+  // AC-191-03 — Sprint 191 silent failure → toast 정리. dropTable 과
+  // renameTable 의 store 액션은 실제로 throw 하므로 SchemaTree 가 catch
+  // 분기에서 toast.error 를 발사하는지를 직접 단언한다 (
+  // useSchemaCache.test.ts 는 store-swallowing 분기만 단언). date 2026-05-02.
+  it("[AC-191-03-1] dropTable rejection surfaces toast error instead of silent swallow", async () => {
+    const toastMod = await import("@/lib/toast");
+    const errorSpy = vi
+      .spyOn(toastMod.toast, "error")
+      .mockImplementation(() => "");
+    const failingDropTable = vi
+      .fn()
+      .mockRejectedValue(new Error("permission denied"));
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+    useSchemaStore.setState({ dropTable: failingDropTable });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const tableItem = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.contextMenu(tableItem, { clientX: 100, clientY: 200 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText("Drop"));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Drop Table" }));
+    });
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Failed to drop public\.users:.*permission denied/,
+        ),
+      );
+    });
+    errorSpy.mockRestore();
+  });
+
+  it("[AC-191-03-2] renameTable rejection surfaces toast error", async () => {
+    const toastMod = await import("@/lib/toast");
+    const errorSpy = vi
+      .spyOn(toastMod.toast, "error")
+      .mockImplementation(() => "");
+    const failingRename = vi
+      .fn()
+      .mockRejectedValue(new Error("name already exists"));
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+    useSchemaStore.setState({ renameTable: failingRename });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const tableButton = screen.getByLabelText("users table");
+    await act(async () => {
+      fireEvent.keyDown(tableButton, { key: "F2" });
+    });
+    const input = screen.getByLabelText("New table name");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "people" } });
+    });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    await waitFor(() => {
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Failed to rename public\.users:.*name already exists/,
+        ),
+      );
+    });
+    errorSpy.mockRestore();
+  });
 });

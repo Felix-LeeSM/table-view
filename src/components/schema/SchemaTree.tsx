@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ChevronRight,
@@ -21,6 +21,8 @@ import {
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaCache } from "@/hooks/useSchemaCache";
+import { toast } from "@/lib/toast";
 import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
 import {
   ContextMenu,
@@ -39,8 +41,6 @@ import {
 import { Button } from "@components/ui/button";
 import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
 import { cn } from "@lib/utils";
-
-const EMPTY_SCHEMAS: never[] = [];
 
 /**
  * Sprint 137 (AC-S137-03) — DBMS-aware label for the row-count cell in the
@@ -247,7 +247,7 @@ interface BuildVisibleRowsArgs {
   schemas: ReadonlyArray<{ name: string }>;
   expandedSchemas: Set<string>;
   expandedCategories: Record<string, Set<CategoryKey>>;
-  loadingTables: Set<string>;
+  loadingTables: ReadonlySet<string>;
   tables: Record<string, TableInfo[]>;
   views: Record<string, ViewInfo[]>;
   functions: Record<string, FunctionInfo[]>;
@@ -434,13 +434,23 @@ function getVisibleRows({
 }
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
-  const schemas =
-    useSchemaStore((s) => s.schemas[connectionId]) ?? EMPTY_SCHEMAS;
-  const loadSchemas = useSchemaStore((s) => s.loadSchemas);
-  const loadTables = useSchemaStore((s) => s.loadTables);
-  const prefetchSchemaColumns = useSchemaStore((s) => s.prefetchSchemaColumns);
-  const loadViews = useSchemaStore((s) => s.loadViews);
-  const loadFunctions = useSchemaStore((s) => s.loadFunctions);
+  // Sprint 191 (AC-191-02) — 데이터 레이어 (load / refresh / prefetch +
+  // loading state) 는 useSchemaCache 가 담당. 컴포넌트는 트리 UI state
+  // (expanded / selected / search / dialog) 와 사용자 액션 (drop /
+  // rename / open) 만 보유.
+  const {
+    schemas,
+    loadingSchemas,
+    loadingTables,
+    refreshConnection,
+    refreshSchema,
+    expandSchema: loadExpandedSchema,
+  } = useSchemaCache(connectionId);
+  // 트리 렌더링에 필요한 캐시 read-only selector. write 는 모두 hook
+  // 또는 dropTable / renameTable 액션을 통해 일어난다.
+  const tables = useSchemaStore((s) => s.tables);
+  const views = useSchemaStore((s) => s.views);
+  const functions = useSchemaStore((s) => s.functions);
   const dropTable = useSchemaStore((s) => s.dropTable);
   const renameTableAction = useSchemaStore((s) => s.renameTable);
   const addTab = useTabStore((s) => s.addTab);
@@ -460,9 +470,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     ? resolveRdbTreeShape(dbType)
     : "with-schema";
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
-  const tables = useSchemaStore((s) => s.tables);
-  const views = useSchemaStore((s) => s.views);
-  const functions = useSchemaStore((s) => s.functions);
   // Track active tab for highlight & auto-expand
   const activeTab = useTabStore((s) => {
     const tabId = s.activeTabId;
@@ -478,8 +485,6 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     Record<string, Set<CategoryKey>>
   >({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [loadingSchemas, setLoadingSchemas] = useState(false);
-  const [loadingTables, setLoadingTables] = useState<Set<string>>(new Set());
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
     null,
   );
@@ -487,36 +492,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const [renameInput, setRenameInput] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [isOperating, setIsOperating] = useState(false);
-  const autoLoadedRef = useRef<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
 
-  // Auto-load schemas on mount, then prefetch tables + columns for autocomplete
+  // Sprint 191 (AC-191-04) — refresh-schema (Cmd+R / F5) listener.
+  // `refreshConnection` is stable (useCallback in useSchemaCache) so deps
+  // 정상화 — 기존 exhaustive-deps ignore 제거.
   useEffect(() => {
-    if (autoLoadedRef.current === connectionId) return;
-    autoLoadedRef.current = connectionId;
-    setLoadingSchemas(true);
-    loadSchemas(connectionId)
-      .then(() => {
-        const state = useSchemaStore.getState();
-        const schemaList = state.schemas[connectionId] ?? [];
-        for (const s of schemaList) {
-          if (!state.tables[`${connectionId}:${s.name}`]) {
-            loadTables(connectionId, s.name).catch(() => {});
-          }
-          prefetchSchemaColumns(connectionId, s.name);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingSchemas(false));
-  }, [connectionId, loadSchemas, loadTables, prefetchSchemaColumns]);
-
-  // Listen for context-aware refresh events (Cmd+R / F5)
-  useEffect(() => {
-    const handler = () => handleRefresh();
+    const handler = () => refreshConnection();
     window.addEventListener("refresh-schema", handler);
     return () => window.removeEventListener("refresh-schema", handler);
-  }, [connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshConnection]);
 
   // Auto-expand schema when active tab changes to a table in that schema
   useEffect(() => {
@@ -565,64 +551,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     }
     newExpanded.add(schemaName);
     setExpandedSchemas(newExpanded);
-
-    const key = `${connectionId}:${schemaName}`;
-    if (!tables[key]) {
-      setLoadingTables((prev) => new Set(prev).add(schemaName));
-      loadTables(connectionId, schemaName)
-        .catch(() => {})
-        .finally(() =>
-          setLoadingTables((prev) => {
-            const next = new Set(prev);
-            next.delete(schemaName);
-            return next;
-          }),
-        );
-    }
-    // Also load views and functions for this schema
-    if (!views[key]) {
-      loadViews(connectionId, schemaName).catch(() => {});
-    }
-    if (!functions[key]) {
-      loadFunctions(connectionId, schemaName).catch(() => {});
-    }
+    void loadExpandedSchema(schemaName);
   };
 
-  const handleRefresh = useCallback(() => {
-    setLoadingSchemas(true);
-    loadSchemas(connectionId)
-      .catch(() => {})
-      .finally(() => setLoadingSchemas(false));
-  }, [connectionId, loadSchemas]);
-
-  const handleRefreshSchema = useCallback(
-    (schemaName: string) => {
-      const key = `${connectionId}:${schemaName}`;
-      setLoadingTables((prev) => new Set(prev).add(schemaName));
-      // Clear cached tables, views, functions to force a reload
-      useSchemaStore.setState((state) => {
-        const newTables = { ...state.tables };
-        delete newTables[key];
-        const newViews = { ...state.views };
-        delete newViews[key];
-        const newFunctions = { ...state.functions };
-        delete newFunctions[key];
-        return { tables: newTables, views: newViews, functions: newFunctions };
-      });
-      loadTables(connectionId, schemaName)
-        .catch(() => {})
-        .finally(() =>
-          setLoadingTables((prev) => {
-            const next = new Set(prev);
-            next.delete(schemaName);
-            return next;
-          }),
-        );
-      loadViews(connectionId, schemaName).catch(() => {});
-      loadFunctions(connectionId, schemaName).catch(() => {});
-    },
-    [connectionId, loadTables, loadViews, loadFunctions],
-  );
+  const handleRefresh = refreshConnection;
+  const handleRefreshSchema = refreshSchema;
 
   /**
    * Sprint 136 (AC-S136-01) — single-click on a table row opens the table in
@@ -694,7 +627,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       onConfirm: () => {
         setIsOperating(true);
         dropTable(connectionId, tableName, schemaName)
-          .catch(() => {})
+          .catch((err) => {
+            // Sprint 191 (AC-191-03) — surface drop failures via toast +
+            // dev console instead of silent swallow. The dialog still
+            // closes so the user isn't trapped, but they get a visible
+            // signal that nothing was dropped.
+            const detail = err instanceof Error ? err.message : String(err);
+            toast.error(`Failed to drop ${schemaName}.${tableName}: ${detail}`);
+            if (import.meta.env.DEV) {
+              console.error("[SchemaTree] dropTable:", err);
+            }
+          })
           .finally(() => {
             setIsOperating(false);
             setConfirmDialog(null);
@@ -735,7 +678,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       renameDialog.schemaName,
       newName,
     )
-      .catch(() => {})
+      .catch((err) => {
+        // Sprint 191 (AC-191-03) — see dropTable rationale.
+        const detail = err instanceof Error ? err.message : String(err);
+        toast.error(
+          `Failed to rename ${renameDialog.schemaName}.${renameDialog.tableName}: ${detail}`,
+        );
+        if (import.meta.env.DEV) {
+          console.error("[SchemaTree] renameTable:", err);
+        }
+      })
       .finally(() => {
         setIsOperating(false);
         setRenameDialog(null);

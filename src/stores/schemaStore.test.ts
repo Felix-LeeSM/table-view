@@ -349,6 +349,54 @@ describe("schemaStore", () => {
     );
   });
 
+  it("[AC-191-01] evictSchemaForName drops tables/views/functions for one (conn, schema)", async () => {
+    // Sprint 191 (AC-191-01) — single-schema cache eviction action that
+    // replaces the SchemaTree:603 direct setState. Asserts (a) the
+    // targeted (conn, schemaName) entries are removed across all three
+    // caches and (b) sibling entries (other schemaName, other conn) stay
+    // intact so a refresh-this-schema action doesn't blow the rest of the
+    // cache. date 2026-05-02.
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        "conn1:private": [{ name: "secrets", schema: "private", row_count: 5 }],
+        "conn2:public": [{ name: "orders", schema: "public", row_count: 10 }],
+      },
+      views: {
+        "conn1:public": [
+          { name: "v_users", schema: "public", definition: null },
+        ],
+        "conn1:private": [
+          { name: "v_secrets", schema: "private", definition: null },
+        ],
+      },
+      functions: {
+        "conn1:public": [
+          {
+            name: "fn_one",
+            schema: "public",
+            arguments: null,
+            returnType: null,
+            language: null,
+            source: null,
+            kind: "function",
+          },
+        ],
+      },
+    });
+
+    useSchemaStore.getState().evictSchemaForName("conn1", "public");
+
+    const state = useSchemaStore.getState();
+    expect(state.tables["conn1:public"]).toBeUndefined();
+    expect(state.views["conn1:public"]).toBeUndefined();
+    expect(state.functions["conn1:public"]).toBeUndefined();
+    // Sibling schema and other connection are preserved.
+    expect(state.tables["conn1:private"]).toHaveLength(1);
+    expect(state.views["conn1:private"]).toHaveLength(1);
+    expect(state.tables["conn2:public"]).toHaveLength(1);
+  });
+
   it("clearSchema removes connection-related tables", async () => {
     // Set up tables for multiple schemas of same connection
     useSchemaStore.setState({

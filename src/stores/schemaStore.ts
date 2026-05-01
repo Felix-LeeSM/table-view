@@ -102,6 +102,14 @@ interface SchemaState {
    * eviction) without touching disconnect-side code.
    */
   clearForConnection: (connectionId: string) => void;
+  /**
+   * Sprint 191 (AC-191-01) — drop the cached `tables` / `views` /
+   * `functions` entries for a single (connectionId, schemaName) pair so
+   * the next `loadTables` / `loadViews` / `loadFunctions` call hits the
+   * backend. Replaces the SchemaTree-side direct `useSchemaStore.setState`
+   * mutation that was leaking cache-shape knowledge into the UI layer.
+   */
+  evictSchemaForName: (connectionId: string, schemaName: string) => void;
   prefetchSchemaColumns: (
     connectionId: string,
     schema: string,
@@ -328,6 +336,19 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     // body is identical today; we keep both wired through the same
     // helper to avoid behavioural drift.
     set((state) => clearConnectionEntries(state, connectionId));
+  },
+
+  evictSchemaForName: (connectionId, schemaName) => {
+    const key = `${connectionId}:${schemaName}`;
+    set((state) => {
+      const newTables = { ...state.tables };
+      delete newTables[key];
+      const newViews = { ...state.views };
+      delete newViews[key];
+      const newFunctions = { ...state.functions };
+      delete newFunctions[key];
+      return { tables: newTables, views: newViews, functions: newFunctions };
+    });
   },
 
   prefetchSchemaColumns: async (connectionId, schema) => {
