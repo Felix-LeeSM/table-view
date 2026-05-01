@@ -75,8 +75,8 @@
 ## 기타
 
 - [x] Connection Import/Export (JSON, no passwords ever included)
-- [ ] Import/Export of table data (CSV, JSON, SQL)
-- [ ] SSH 터널링
-- [ ] MySQL 지원 (DbAdapter 구현체 추가)
-- [ ] SQLite 지원 (DbAdapter 구현체 추가)
+- [ ] Import/Export of table data (CSV, JSON, SQL) — **Phase 21 (Sprint 181)** 으로 이관, export 부분 우선 (import 는 별도)
+- [ ] SSH 터널링 — TablePlus 패리티 7단계 후순위
+- [ ] MySQL 지원 (DbAdapter 구현체 추가) — **Phase 17 보류** (2026-05-01)
+- [ ] SQLite 지원 (DbAdapter 구현체 추가) — **Phase 19 보류** (2026-05-01)
 - [ ] 모바일 (Tauri 2.0, 반응형 UI 조정)

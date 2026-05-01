@@ -1,6 +1,8 @@
 # Phase 18: MariaDB 어댑터 지원
 
-> **상태: 계획** — Phase 17(MySQL) 직후. 통상 MariaDB는 MySQL wire-compatible.
+> **상태: 보류 (2026-05-01 결정)** — TablePlus 패리티 우선 정책으로 Phase
+> 21–27 종료까지 보류. 이전 상태는 "계획" (Phase 17 직후, MariaDB MySQL
+> wire-compatible). Phase 27 종료 시 재개 평가. 본 문서 본문은 동결.
 
 ## 배경
 

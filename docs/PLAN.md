@@ -12,9 +12,23 @@ TablePlus와 동등한 로컬 데이터베이스 관리 도구를 만든다.
 
 Phase 1–4 완료 (Sprint 24–54 PASS). Phase 5–11 부분 진행. **Phase 12 완료(2026-04-27, Sprint 150–155)** — launcher/workspace 별도 `WebviewWindow` + 5 store cross-window IPC sync + 실제 lifecycle wiring + ADR 0011 → 0012 supersede + RISK-025 resolved.
 
-진행 중/대기: **Phase 13** (PG preview tab parity + multi-window activation 회귀 진단), Phase 14 (workspace theme toggle), Phase 15 (connection group DnD + nested indent), Phase 16 (Recent connections 동작 보장), Phase 17–20 (MySQL / MariaDB / SQLite / Oracle 어댑터).
+진행 중/대기: **Phase 13** (PG preview tab parity + multi-window activation 회귀 진단), Phase 14 (workspace theme toggle), Phase 15 (connection group DnD + nested indent), Phase 16 (Recent connections 동작 보장).
 
-주요 미구현 항목 (이전): 연결 색상 라벨 UI, View Structure 탭(F2.6), Functions CRUD, 즐겨찾기 키워드 바인딩, 결과 분할(F4.8), 패널 관리 시스템(F5.6), Import/Export, SSH 터널링.
+## 방향 결정 (2026-05-01)
+
+**TablePlus 패리티 우선, 신규 DBMS 추가는 보류.** PostgreSQL + MongoDB 두 패러다임 위에서 TablePlus의 데일리 워크플로(grid export · row inline edit · DDL UI · Safe Mode)를 닫는 것이 최우선. **Phase 17–20 (MySQL / MariaDB / SQLite / Oracle 어댑터)은 패리티 달성 이후 재개**한다 (`보류` 상태).
+
+### 작업 순서 (Impact 큰 순) — Phase 21–27
+
+1. **Phase 21** — CSV / SQL / JSON Export (단판승)
+2. **Phase 22** — Row 인라인 편집 RDB 완성 + Preview/Commit/Discard 게이트 (#3~#7 의 공통 인프라)
+3. **Phase 23** — Safe Mode (프로덕션 가드)
+4. **Phase 24** — Index Write UI
+5. **Phase 25** — Constraint Write UI
+6. **Phase 26** — Trigger 관리
+7. **Phase 27** — Table / Column DDL UI (패리티 달성 마일스톤)
+
+근거: [`docs/tableplus-comparison.md`](tableplus-comparison.md) Section H/I.
 
 ## 문서 목차
 
@@ -41,12 +55,19 @@ Phase 1–4 완료 (Sprint 24–54 PASS). Phase 5–11 부분 진행. **Phase 12
 | 14 | Workspace theme toggle | 계획 | [phase-14.md](phases/phase-14.md) |
 | 15 | Connection group DnD + nested indent | 계획 | [phase-15.md](phases/phase-15.md) |
 | 16 | Recent connections (MRU) 동작 보장 | 계획 | [phase-16.md](phases/phase-16.md) |
-| 17 | MySQL 어댑터 | 계획 | [phase-17.md](phases/phase-17.md) |
-| 18 | MariaDB 어댑터 | 계획 | [phase-18.md](phases/phase-18.md) |
-| 19 | SQLite 어댑터 | 계획 | [phase-19.md](phases/phase-19.md) |
-| 20 | Oracle 어댑터 | 계획 | [phase-20.md](phases/phase-20.md) |
+| 17 | MySQL 어댑터 | **보류** (2026-05-01) | [phase-17.md](phases/phase-17.md) |
+| 18 | MariaDB 어댑터 | **보류** (2026-05-01) | [phase-18.md](phases/phase-18.md) |
+| 19 | SQLite 어댑터 | **보류** (2026-05-01) | [phase-19.md](phases/phase-19.md) |
+| 20 | Oracle 어댑터 | **보류** (2026-05-01) | [phase-20.md](phases/phase-20.md) |
+| 21 | CSV / SQL / JSON Export | 계획 (Sprint 181) | [phase-21.md](phases/phase-21.md) |
+| 22 | Row 인라인 편집 RDB + Preview/Commit/Discard 게이트 | 계획 | [phase-22.md](phases/phase-22.md) |
+| 23 | Safe Mode (프로덕션 가드) | 계획 | [phase-23.md](phases/phase-23.md) |
+| 24 | Index Write UI | 계획 | [phase-24.md](phases/phase-24.md) |
+| 25 | Constraint Write UI | 계획 | [phase-25.md](phases/phase-25.md) |
+| 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |
+| 27 | Table / Column DDL UI | 계획 | [phase-27.md](phases/phase-27.md) |
 
-> Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할.
+> Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가.
 
 ## TDD / E2E 정책 (Phase 13 이후)
 

@@ -1,37 +1,51 @@
 ---
 title: Roadmap
 type: memory
-updated: 2026-04-27
+updated: 2026-05-01
 ---
 
 # 로드맵
 
-상세: [docs/PLAN.md](../../docs/PLAN.md)
+상세: [docs/PLAN.md](../../docs/PLAN.md). 비교 근거:
+[docs/tableplus-comparison.md](../../docs/tableplus-comparison.md).
+
+## 방향 (2026-05-01)
+
+**TablePlus 패리티 우선, 신규 DBMS 추가는 보류.** Phase 17–20
+(MySQL/MariaDB/SQLite/Oracle) 은 패리티 7단계 (Phase 21–27) 종료까지 보류.
 
 ## 현재 상태
 
 - **Phase 1–4** 완료 (Sprint 24–54 PASS)
-- **Phase 5–11** 부분 진행 (Phase 5 Extended Features, Phase 6 MongoDB Sprint 63~66+ 등)
-- **Phase 12 완료 (2026-04-27, Sprint 150–155)** — launcher/workspace 별도 `WebviewWindow` + 5 store cross-window IPC sync + 실제 lifecycle wiring. ADR 0011 → 0012 supersede, RISK-025 resolved.
+- **Phase 5–11** 부분 진행 (Phase 5 Extended Features, Phase 6 MongoDB)
+- **Phase 12 완료 (2026-04-27, Sprint 150–155)** — launcher/workspace
+  split, ADR 0012, RISK-025 resolved.
 
-## 다음 Phase (계획 문서)
+## 작업 순서 (Impact 큰 순) — Phase 21–27
 
-- **Phase 13** PG preview tab parity + multi-window activation 회귀 진단 — [docs/phases/phase-13.md](../../docs/phases/phase-13.md)
-- **Phase 14** Workspace theme toggle — [docs/phases/phase-14.md](../../docs/phases/phase-14.md)
-- **Phase 15** Connection group DnD + nested indent — [docs/phases/phase-15.md](../../docs/phases/phase-15.md)
-- **Phase 16** Recent connections (MRU) 동작 보장 — [docs/phases/phase-16.md](../../docs/phases/phase-16.md)
-- **Phase 17** MySQL 어댑터 — [docs/phases/phase-17.md](../../docs/phases/phase-17.md)
-- **Phase 18** MariaDB 어댑터 — [docs/phases/phase-18.md](../../docs/phases/phase-18.md)
-- **Phase 19** SQLite 어댑터 — [docs/phases/phase-19.md](../../docs/phases/phase-19.md)
-- **Phase 20** Oracle 어댑터 — [docs/phases/phase-20.md](../../docs/phases/phase-20.md)
+| # | Phase | 추정 sprint | 핵심 |
+|---|-------|-------------|------|
+| 1 | [Phase 21](../../docs/phases/phase-21.md) CSV/SQL/JSON Export | 181 | 단판승, 의존 0 |
+| 2 | [Phase 22](../../docs/phases/phase-22.md) Row 인라인 + Preview/Commit/Discard 게이트 | 182–184 | **#3~#7 공통 인프라** |
+| 3 | [Phase 23](../../docs/phases/phase-23.md) Safe Mode | 185 | production 가드 |
+| 4 | [Phase 24](../../docs/phases/phase-24.md) Index Write UI | 186 | DDL 패턴 첫 검증 |
+| 5 | [Phase 25](../../docs/phases/phase-25.md) Constraint Write UI | 187 | 동일 패턴 확장 |
+| 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | 188 | Function 옵션 |
+| 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | 189–191 | 패리티 마일스톤 |
 
-> Phase 9 (`phase-9.md`)는 임시 스케치 — Phase 17–20이 RDBMS 확장 계획을 승계해 분할.
+## 진행 중 / 대기 / 보류
+
+- 진행/대기: [13](../../docs/phases/phase-13.md), [14](../../docs/phases/phase-14.md),
+  [15](../../docs/phases/phase-15.md), [16](../../docs/phases/phase-16.md).
+- 보류 (2026-05-01): [17](../../docs/phases/phase-17.md),
+  [18](../../docs/phases/phase-18.md), [19](../../docs/phases/phase-19.md),
+  [20](../../docs/phases/phase-20.md). Phase 27 종료 시 재개 평가.
 
 ## Active 작업
 
-현재 스프린트는 [docs/sprints/](../../docs/sprints/)의 최신 번호 디렉토리 참조.
-각 스프린트는 `contract.md`(계약) + `execution-brief.md`(실행 지시) + `handoff.md`(결과) 보유.
-비-스프린트 개별 커밋으로 선행되는 작업도 있음 (Sprint 62가 예시) — 문서화와 구현이 비동기일 수 있음.
+현재 스프린트는 [docs/sprints/](../../docs/sprints/)의 최신 번호 디렉토리.
+각 스프린트는 `contract.md` + `execution-brief.md` + `handoff.md` 보유.
+비-스프린트 개별 커밋도 있음 (Sprint 62가 예시) — 문서화와 구현이 비동기일 수 있음.
 
 ## 판단 기준
 

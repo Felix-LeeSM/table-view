@@ -1,6 +1,8 @@
 # Phase 17: MySQL 어댑터 지원
 
-> **상태: 계획** — 기존 [`phase-9.md`](phase-9.md)의 F-Refactor + MySQL 부분을 본 phase로 승계.
+> **상태: 보류 (2026-05-01 결정)** — TablePlus 패리티 우선 정책으로 Phase
+> 21–27 종료까지 보류. 이전 상태는 "계획" (phase-9 F-Refactor + MySQL 승계).
+> Phase 27 종료 시 재개 평가. 본 문서 본문은 동결, 재개 시 갱신.
 
 ## 배경
 
