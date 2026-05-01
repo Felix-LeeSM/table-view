@@ -2,16 +2,16 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-04-30 (sprint-176 — RISK-009 + RISK-035 transitioned to resolved)
+Last updated: 2026-05-01 (RISK-036 추가 — pre-push e2e 게이트 일시 비활성화)
 
 ## Summary
 
 | Status    | Count |
 |-----------|-------|
-| Active    | 23    |
+| Active    | 24    |
 | Resolved  | 11    |
 | Deferred  | 1     |
-| **Total** | **35** |
+| **Total** | **36** |
 
 ---
 
@@ -54,6 +54,7 @@ Last updated: 2026-04-30 (sprint-176 — RISK-009 + RISK-035 transitioned to res
 | RISK-033 | Sprint 67 이후 Mongo 편집 경로 P0 milestone 미정 (read-only banner / partial / full CRUD) (구 UI-FU-08) | active | frontend/ux | UI eval | 종결: ADR 또는 roadmap 항목 존재 + paradigms 메모 반영 |
 | RISK-034 | `pendingEditErrors` 좁은 컬럼 표시 거동 미검증 (구 UI-FU-09) | active | frontend/ui | UI eval | 종결: 메시지 미클리핑 또는 hover/tooltip 접근 가능 |
 | RISK-035 | `StructurePanel` 첫 렌더에 "No columns found" 깜빡임 가능성 — `loading` 초기값 false, `hasFetched` 도입 안 됨 (구 REVIEW-P2P1 B1; 2026-04-30 검증: B2/B3/B4는 해결됨) | resolved  | frontend/ui       | P2 P1 review  | Sprint 176 — `hasFetchedColumns/Indexes/Constraints` 게이트가 첫 fetch settle 이전 empty-state 노출 차단 |
+| RISK-036 | pre-push e2e 게이트가 image staleness + vite build OOM(4GB)으로 모든 push를 차단 — `lefthook.yml`의 `5_e2e`를 `skip: true`로 일시 비활성화 (2026-05-01) | active | ci/e2e | post-ADR-0019 | 종결: image freshness 자동 rebuild + vite build memory 회귀 해결 + 13 spec 그린 후 `skip` 제거 |
 
 ---
 
