@@ -40,4 +40,37 @@ fi
 # because the first run on a fresh checkout has no container to remove.
 docker compose --profile test rm -fs e2e >/dev/null 2>&1 || true
 
-exec pnpm test:e2e:docker
+# Capture full e2e output to a log file. Without this, lefthook's
+# `output: failure` setting dumps the entire run (cargo build, pnpm,
+# wdio session setup, docker boot, ...) on the first failed assertion,
+# burying the actual wdio failure under thousands of build lines.
+# On failure we extract the wdio failure block + tail and point at the
+# log file for full inspection.
+LOG_DIR="e2e/wdio-report"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/last-pre-push.log"
+
+if pnpm test:e2e:docker >"$LOG_FILE" 2>&1; then
+  exit 0
+fi
+rc=$?
+
+echo
+echo "=========================================="
+echo "[e2e] FAILED (exit $rc)"
+echo "  Full log:           $LOG_FILE"
+echo "  Failure artifacts:  $LOG_DIR (screenshots/HTML per failed test)"
+echo "  Re-run with trace:  E2E_TRACE=1 pnpm test:e2e:docker"
+echo "=========================================="
+echo
+echo "--- wdio failure summary ---"
+# wdio spec reporter marks failures with `✖`; mocha prints `Error:` /
+# `TimeoutError:` blocks. Filter to the most diagnostic lines.
+grep -nE "✖|Error:|TimeoutError|AssertionError|still not displayed|Spec Files:|passed,.*failed" "$LOG_FILE" \
+  | tail -n 60 \
+  || echo "(no wdio failure markers matched — see full log)"
+echo
+echo "--- last 80 lines of full log ---"
+tail -n 80 "$LOG_FILE"
+
+exit "$rc"
