@@ -30,6 +30,23 @@ Phase 1–4 완료 (Sprint 24–54 PASS). Phase 5–11 부분 진행. **Phase 12
 
 근거: [`docs/tableplus-comparison.md`](tableplus-comparison.md) Section H/I.
 
+### 사용자 피드백 후속 작업 (2026-05-01 채집)
+
+Sprint 187 직후 사용자 피드백 5건 분석. UI 폴리시 (info popover / 색깔 정리
+/ history 진입점) 는 비-스프린트 hotfix 한 commit 으로 즉시 반영 — 별도
+sprint 등록 불필요. 나머지 4건은 신규 sprint 로 분할:
+
+| ID | 항목 | 소속 | 우선 sprint 후보 |
+|----|------|------|------------------|
+| FB-1b | production 환경 자동 SafeMode 활성화 (Hard auto 정책) | Phase 23 closure 후 | Sprint 189 |
+| FB-3  | DB 단위 export (`pg_dump` / `mongodump` equivalent + Sidebar 진입점) | Phase 21 후속 | Sprint 190 |
+| FB-4  | Quick Look 편집 모드 (`useDataGridEdit` 와 합류) | Phase 22 후속 | Sprint 191 |
+| FB-5b | Query history source 필드 + 범위 확장 (raw / grid-edit / ddl-structure / mongo-* 통합 audit) | Phase 23 후속 | Sprint 192 |
+
+각 항목은 진입 sprint 작성 시 별 contract 로 옮겨 ADR / AC 세분화. 본 표는
+Phase 23 (Sprint 188 = Mongo dangerous-op) 종료 후 우선순위 재평가의 1차
+입력값이다.
+
 ## 문서 목차
 
 | 문서 | 설명 |

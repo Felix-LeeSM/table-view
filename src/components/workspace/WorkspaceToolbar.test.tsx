@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import WorkspaceToolbar from "./WorkspaceToolbar";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
@@ -183,5 +183,22 @@ describe("WorkspaceToolbar", () => {
     });
 
     expect(db.textContent).toMatch(/analytics/);
+  });
+
+  // Post-Sprint-187 hotfix [HF-187-A3] — the History button surfaces the
+  // existing `GlobalQueryLogPanel` from the toolbar so the panel is
+  // discoverable without the Cmd+Shift+C shortcut. It must dispatch the
+  // canonical `toggle-global-query-log` CustomEvent on click. date 2026-05-01.
+  it("[HF-187-A3] History button mounts and dispatches toggle-global-query-log", () => {
+    render(<WorkspaceToolbar />);
+
+    const btn = screen.getByRole("button", { name: /toggle query history/i });
+    expect(btn).toBeInTheDocument();
+
+    const handler = vi.fn();
+    window.addEventListener("toggle-global-query-log", handler);
+    fireEvent.click(btn);
+    expect(handler).toHaveBeenCalledTimes(1);
+    window.removeEventListener("toggle-global-query-log", handler);
   });
 });

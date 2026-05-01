@@ -1,3 +1,5 @@
+import { History } from "lucide-react";
+import { Button } from "@components/ui/button";
 import DbSwitcher from "./DbSwitcher";
 import DisconnectButton from "./DisconnectButton";
 import SafeModeToggle from "./SafeModeToggle";
@@ -24,7 +26,32 @@ import SafeModeToggle from "./SafeModeToggle";
  * The toolbar itself is paradigm-agnostic — every paradigm shows the
  * same slots. Children read tab + connection state directly from
  * zustand selectors; there is no orchestration here.
+ *
+ * Post-Sprint-187 hotfix — the History button surfaces the existing
+ * `GlobalQueryLogPanel` (already reachable via Cmd+Shift+C) as a
+ * visible toolbar entry point. It dispatches the same custom event
+ * that `App.tsx` wires for the keyboard shortcut so we keep one source
+ * of truth for the toggle channel.
  */
+function HistoryButton() {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      type="button"
+      aria-label="Toggle query history"
+      title="Query history (Cmd/Ctrl+Shift+C)"
+      data-testid="workspace-history-toggle"
+      onClick={() =>
+        window.dispatchEvent(new CustomEvent("toggle-global-query-log"))
+      }
+    >
+      <History className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <span className="ml-1 text-xs">History</span>
+    </Button>
+  );
+}
+
 export default function WorkspaceToolbar() {
   return (
     <div
@@ -38,6 +65,7 @@ export default function WorkspaceToolbar() {
           Disabled when the focused connection is not currently
           connected, so it never silently no-ops. */}
       <div className="ml-auto flex items-center gap-2">
+        <HistoryButton />
         <SafeModeToggle />
         <DisconnectButton />
       </div>
