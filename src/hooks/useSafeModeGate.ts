@@ -2,31 +2,19 @@ import { useCallback } from "react";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { StatementAnalysis } from "@/lib/sqlSafety";
+import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 
 /**
- * Sprint 188 — paradigm-agnostic safe-mode decision helper.
+ * Sprint 188 — paradigm-agnostic Safe Mode gate.
+ * Sprint 189 (D-4) — decision matrix moved to `decideSafeModeAction`
+ * (`src/lib/safeMode.ts`); this hook is now pure store wiring.
  *
- * Centralises the strict / warn / off branching that 4 RDB call sites
- * (`useDataGridEdit`, `EditableQueryResultGrid`, `ColumnsEditor`,
- * `ConstraintsEditor`) currently inline. The Mongo aggregate gate is the
- * 5th site and enters via this hook so the pattern is captured once.
- *
- * Migration of the 4 RDB sites is intentionally out of scope for Sprint 188
- * (each site manages `ConfirmDangerousDialog` state differently —
- * regression risk is separated into a follow-up sprint).
- *
- * Decision matrix (mirrors RDB inline gates verbatim):
- *
- *   analysis.severity === "safe"  →  allow
- *   environment !== "production"  →  allow
- *   mode === "off"                →  allow
- *   mode === "strict"             →  block (with canonical reason text)
- *   mode === "warn"               →  confirm (caller mounts dialog)
+ * Consumed by:
+ * - Mongo aggregate (Sprint 188 — QueryTab)
+ * - RDB 5 sites (Sprint 189 — useDataGridEdit, EditableQueryResultGrid,
+ *   ColumnsEditor, IndexesEditor, ConstraintsEditor)
  */
-export type SafeModeDecision =
-  | { action: "allow" }
-  | { action: "block"; reason: string }
-  | { action: "confirm"; reason: string };
+export type { SafeModeDecision };
 
 export interface SafeModeGate {
   decide(analysis: StatementAnalysis): SafeModeDecision;
@@ -40,20 +28,8 @@ export function useSafeModeGate(connectionId: string | null): SafeModeGate {
   );
 
   const decide = useCallback(
-    (analysis: StatementAnalysis): SafeModeDecision => {
-      if (analysis.severity === "safe") return { action: "allow" };
-      if (environment !== "production") return { action: "allow" };
-      if (mode === "off") return { action: "allow" };
-      const primary = analysis.reasons[0] ?? "Dangerous statement";
-      if (mode === "strict") {
-        return {
-          action: "block",
-          reason: `Safe Mode blocked: ${primary} (toggle Safe Mode off in toolbar to override)`,
-        };
-      }
-      // mode === "warn"
-      return { action: "confirm", reason: primary };
-    },
+    (analysis: StatementAnalysis) =>
+      decideSafeModeAction(mode, environment, analysis),
     [mode, environment],
   );
 

@@ -1,9 +1,12 @@
-// AC-188-02 — `useSafeModeGate` decision-matrix tests. Pin every cell of
-// the table the contract enumerates: safe analysis (always allow), non-prod
-// environment (always allow), production × strict (block), production ×
-// warn (confirm), production × off (allow). Block reason text is checked
-// verbatim because consumers paste it into queryState/error UIs and a drift
-// would silently change user-visible copy. date 2026-05-01.
+// Sprint 189 (D-4) — `useSafeModeGate` is now pure store wiring around
+// `decideSafeModeAction` (covered by `src/lib/safeMode.test.ts`). These
+// tests assert that the hook reads from `useSafeModeStore` and
+// `useConnectionStore` correctly; the decision matrix itself is not
+// re-tested here to avoid duplicate coverage.
+//
+// Sprint 188 baseline (AC-188-02) lived here as a 6-case matrix — the
+// canonical-block-reason verbatim assertion was migrated to the lib test
+// (AC-189-06a-3). date 2026-05-02.
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useSafeModeGate } from "./useSafeModeGate";
@@ -16,11 +19,6 @@ const DANGER: StatementAnalysis = {
   kind: "ddl-drop",
   severity: "danger",
   reasons: ["DROP TABLE"],
-};
-const SAFE: StatementAnalysis = {
-  kind: "select",
-  severity: "safe",
-  reasons: [],
 };
 
 function makeConn(overrides: Partial<ConnectionConfig> = {}): ConnectionConfig {
@@ -41,66 +39,40 @@ function makeConn(overrides: Partial<ConnectionConfig> = {}): ConnectionConfig {
   };
 }
 
-describe("useSafeModeGate", () => {
+describe("useSafeModeGate (store wiring)", () => {
   beforeEach(() => {
     localStorage.removeItem(SAFE_MODE_STORAGE_KEY);
     useSafeModeStore.setState({ mode: "strict" });
     useConnectionStore.setState({ connections: [] });
   });
 
-  it("[AC-188-02a] safe analysis → allow regardless of mode/env", () => {
+  it("reads `mode` from useSafeModeStore", () => {
     useConnectionStore.setState({ connections: [makeConn()] });
-    useSafeModeStore.setState({ mode: "strict" });
+    useSafeModeStore.setState({ mode: "off" });
     const { result } = renderHook(() => useSafeModeGate("c1"));
-    expect(result.current.decide(SAFE)).toEqual({ action: "allow" });
+    // mode=off + production + danger → allow (lib decision matrix).
+    // Asserts hook propagates `mode` change into the pure call.
+    expect(result.current.decide(DANGER).action).toBe("allow");
   });
 
-  it("[AC-188-02b] non-production environment → allow even with strict + danger", () => {
+  it("reads `environment` from useConnectionStore via connectionId", () => {
     useConnectionStore.setState({
       connections: [makeConn({ environment: "staging" })],
     });
     useSafeModeStore.setState({ mode: "strict" });
     const { result } = renderHook(() => useSafeModeGate("c1"));
-    expect(result.current.decide(DANGER)).toEqual({ action: "allow" });
+    // staging + strict + danger → allow (non-prod path in lib matrix).
+    // Asserts hook propagates `environment` lookup into the pure call.
+    expect(result.current.decide(DANGER).action).toBe("allow");
   });
 
-  it("[AC-188-02c] production × strict + danger → block with canonical reason", () => {
-    useConnectionStore.setState({ connections: [makeConn()] });
-    useSafeModeStore.setState({ mode: "strict" });
-    const { result } = renderHook(() => useSafeModeGate("c1"));
-    const decision = result.current.decide(DANGER);
-    expect(decision.action).toBe("block");
-    if (decision.action === "block") {
-      expect(decision.reason).toBe(
-        "Safe Mode blocked: DROP TABLE (toggle Safe Mode off in toolbar to override)",
-      );
-    }
-  });
-
-  it("[AC-188-02d] production × warn + danger → confirm with reason verbatim", () => {
-    useConnectionStore.setState({ connections: [makeConn()] });
-    useSafeModeStore.setState({ mode: "warn" });
-    const { result } = renderHook(() => useSafeModeGate("c1"));
-    const decision = result.current.decide(DANGER);
-    expect(decision.action).toBe("confirm");
-    if (decision.action === "confirm") {
-      expect(decision.reason).toBe("DROP TABLE");
-    }
-  });
-
-  it("[AC-188-02e] production × off + danger → allow", () => {
-    useConnectionStore.setState({ connections: [makeConn()] });
-    useSafeModeStore.setState({ mode: "off" });
-    const { result } = renderHook(() => useSafeModeGate("c1"));
-    expect(result.current.decide(DANGER)).toEqual({ action: "allow" });
-  });
-
-  it("[AC-188-02f] missing connection (id not found) → treated as non-production / allow", () => {
+  it("missing connection (id not found) → null environment / allow", () => {
     // Mongo aggregate path can fire before the connection store has hydrated
-    // a particular id; default to safe (allow) rather than block.
+    // a particular id; the hook normalises missing → null and the lib
+    // matrix maps null → non-production → allow.
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "strict" });
     const { result } = renderHook(() => useSafeModeGate("missing"));
-    expect(result.current.decide(DANGER)).toEqual({ action: "allow" });
+    expect(result.current.decide(DANGER).action).toBe("allow");
   });
 });

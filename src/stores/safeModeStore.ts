@@ -2,8 +2,13 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import type { SafeMode } from "@/lib/safeMode";
 
-export type SafeMode = "strict" | "warn" | "off";
+// Sprint 189 (D-4) — `SafeMode` type lives in `src/lib/safeMode.ts` so the
+// pure decision matrix (`decideSafeModeAction`) can reference it without
+// pulling a store dep into the lib layer. Re-exported here for backward
+// compat with existing `import { SafeMode } from "@stores/safeModeStore"`.
+export type { SafeMode };
 
 export interface SafeModeState {
   mode: SafeMode;
