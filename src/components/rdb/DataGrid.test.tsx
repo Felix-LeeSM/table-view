@@ -216,6 +216,9 @@ describe("DataGrid", () => {
     // Data
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("Charlie")).toBeInTheDocument();
+    // [AC-181-10] Sprint 181 ExportButton mounted into the toolbar.
+    // 2026-05-01 — regression guard so future toolbar refactors don't drop it.
+    expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
   // 5. NULL value display

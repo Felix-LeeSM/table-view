@@ -145,6 +145,9 @@ describe("DocumentDataGrid", () => {
     // wording overrides so the row label says "documents", not "rows".
     expect(screen.getByText(/2 documents/)).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
+    // [AC-181-10] Sprint 181 ExportButton mounted into the toolbar.
+    // 2026-05-01 — regression guard so future toolbar refactors don't drop it.
+    expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
   it("renders composite sentinels via isDocumentSentinel with muted italic styling", async () => {

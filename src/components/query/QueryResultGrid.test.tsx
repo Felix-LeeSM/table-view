@@ -114,6 +114,9 @@ describe("QueryResultGrid", () => {
     expect(screen.getByText(/2 rows/)).toBeInTheDocument();
     // Execution time
     expect(screen.getByText("15 ms")).toBeInTheDocument();
+    // [AC-181-10] Sprint 181 ExportButton mounted into the SELECT toolbar.
+    // 2026-05-01 — regression guard so future toolbar refactors don't drop it.
+    expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
   it("renders NULL values as italic text for SELECT", () => {
