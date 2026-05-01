@@ -6,7 +6,7 @@
 // commitError.message) don't silently drift. date 2026-05-02.
 import { describe, it, expect } from "vitest";
 import { decideSafeModeAction } from "./safeMode";
-import type { StatementAnalysis } from "./sqlSafety";
+import type { StatementAnalysis } from "./sql/sqlSafety";
 
 const DANGER: StatementAnalysis = {
   kind: "ddl-drop",

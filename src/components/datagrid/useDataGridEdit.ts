@@ -3,7 +3,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { analyzeStatement } from "@/lib/sqlSafety";
+import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import type { TableData } from "@/types/schema";
 import {
   generateSqlWithKeys,

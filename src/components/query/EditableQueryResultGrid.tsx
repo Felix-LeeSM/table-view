@@ -21,9 +21,9 @@ import {
   editKey,
   getInputTypeForColumn,
 } from "@components/datagrid/useDataGridEdit";
-import { buildRawEditSql, type RawEditPlan } from "@lib/rawQuerySqlBuilder";
+import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
-import { analyzeStatement } from "@lib/sqlSafety";
+import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";

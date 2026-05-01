@@ -4,7 +4,7 @@ import {
   cellToEditString,
   editKey,
 } from "@components/datagrid/useDataGridEdit";
-import { buildRawEditSql, type RawEditPlan } from "@lib/rawQuerySqlBuilder";
+import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 
 export interface PendingChangesTrayProps {
   result: QueryResult;

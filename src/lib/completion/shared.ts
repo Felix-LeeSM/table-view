@@ -13,8 +13,8 @@ import {
   tokenizeSql,
   type SqlToken,
   type SqlTokenKind,
-} from "@lib/sqlTokenize";
-import { splitSqlStatements, formatSql, uglifySql } from "@lib/sqlUtils";
+} from "@lib/sql/sqlTokenize";
+import { splitSqlStatements, formatSql, uglifySql } from "@lib/sql/sqlUtils";
 import type { Paradigm } from "@/types/connection";
 import type { DatabaseType } from "@/types/connection";
 

@@ -6,7 +6,7 @@
 // are absent so cross-dialect contamination cannot happen.
 
 import { prefixMatch, parseFromContext, type FromContext } from "./shared";
-import { COMMON_SQL_KEYWORDS } from "@lib/sqlDialectKeywords";
+import { COMMON_SQL_KEYWORDS } from "@lib/sql/sqlDialectKeywords";
 
 /** PG-only keywords, layered on top of `COMMON_SQL_KEYWORDS`. */
 const POSTGRES_ONLY: readonly string[] = [

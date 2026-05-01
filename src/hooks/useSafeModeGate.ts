@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { StatementAnalysis } from "@/lib/sqlSafety";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 
 /**

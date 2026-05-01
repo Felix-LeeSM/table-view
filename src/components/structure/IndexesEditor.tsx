@@ -22,7 +22,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
-import { analyzeStatement } from "@/lib/sqlSafety";
+import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------

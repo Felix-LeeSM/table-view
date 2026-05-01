@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { tokenizeSql, type SqlTokenKind } from "@lib/sqlTokenize";
+import { tokenizeSql, type SqlTokenKind } from "@lib/sql/sqlTokenize";
 import { cn } from "@lib/utils";
 
 interface SqlSyntaxProps {

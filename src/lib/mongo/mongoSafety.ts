@@ -1,4 +1,4 @@
-import type { StatementAnalysis } from "@/lib/sqlSafety";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 
 /**
  * Sprint 188 — MongoDB aggregate-pipeline danger analyzer.

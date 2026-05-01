@@ -1,4 +1,4 @@
-import { MONGO_ALL_OPERATORS } from "@lib/mongoAutocomplete";
+import { MONGO_ALL_OPERATORS } from "@lib/mongo/mongoAutocomplete";
 
 export type MongoTokenKind =
   | "string"

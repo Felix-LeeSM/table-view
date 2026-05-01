@@ -157,7 +157,7 @@ vi.mock("@hooks/useSqlAutocomplete", () => ({
   useSqlAutocomplete: () => ({}),
 }));
 
-vi.mock("@lib/sqlUtils", () => ({
+vi.mock("@lib/sql/sqlUtils", () => ({
   splitSqlStatements: (sql: string) => {
     // Simple split by semicolons for testing
     const parts = sql

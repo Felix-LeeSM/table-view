@@ -5,7 +5,7 @@
 // cross-dialect contamination cannot happen.
 
 import { prefixMatch, parseFromContext, type FromContext } from "./shared";
-import { COMMON_SQL_KEYWORDS } from "@lib/sqlDialectKeywords";
+import { COMMON_SQL_KEYWORDS } from "@lib/sql/sqlDialectKeywords";
 import type {
   CompletionCursor,
   CompletionCandidate,

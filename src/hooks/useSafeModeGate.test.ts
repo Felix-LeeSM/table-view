@@ -12,7 +12,7 @@ import { renderHook } from "@testing-library/react";
 import { useSafeModeGate } from "./useSafeModeGate";
 import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import type { StatementAnalysis } from "@/lib/sqlSafety";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import type { ConnectionConfig } from "@/types/connection";
 
 const DANGER: StatementAnalysis = {

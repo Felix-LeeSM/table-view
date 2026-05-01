@@ -18,7 +18,7 @@ import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { QueryResult } from "@/types/query";
-import type { RawEditPlan } from "@lib/rawQuerySqlBuilder";
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import type { ConnectionConfig } from "@/types/connection";
 
 const mockExecuteQueryBatch = vi.fn();
@@ -91,15 +91,15 @@ function setup(env: string | null, mode: "strict" | "warn" | "off") {
 // gate should see. The generator is PK-bounded and would never emit a
 // WHERE-less DELETE on its own — so we substitute the builder's output
 // to exercise the gate's response to dangerous shapes.
-vi.mock("@lib/rawQuerySqlBuilder", async (orig) => {
-  const actual = await orig<typeof import("@lib/rawQuerySqlBuilder")>();
+vi.mock("@lib/sql/rawQuerySqlBuilder", async (orig) => {
+  const actual = await orig<typeof import("@lib/sql/rawQuerySqlBuilder")>();
   return {
     ...actual,
     buildRawEditSql: vi.fn(),
   };
 });
 
-import { buildRawEditSql } from "@lib/rawQuerySqlBuilder";
+import { buildRawEditSql } from "@lib/sql/rawQuerySqlBuilder";
 
 describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
   beforeEach(() => {

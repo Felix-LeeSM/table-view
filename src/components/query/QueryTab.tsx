@@ -13,12 +13,12 @@ import {
   findDocuments,
   aggregateDocuments,
 } from "@lib/tauri";
-import { splitSqlStatements, formatSql, uglifySql } from "@lib/sqlUtils";
-import { databaseTypeToSqlDialect } from "@lib/sqlDialect";
+import { splitSqlStatements, formatSql, uglifySql } from "@lib/sql/sqlUtils";
+import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
 import {
   extractDbMutation,
   type SqlMutationDialect,
-} from "@lib/sqlDialectMutations";
+} from "@lib/sql/sqlDialectMutations";
 import { verifyActiveDb } from "@lib/api/verifyActiveDb";
 import { useSchemaStore } from "@stores/schemaStore";
 import { toast } from "@lib/toast";
@@ -26,7 +26,7 @@ import type { Paradigm } from "@/types/connection";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { analyzeMongoPipeline } from "@lib/mongoSafety";
+import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import { useDocumentStore } from "@stores/documentStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";

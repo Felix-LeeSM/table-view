@@ -10,7 +10,7 @@ import { prefixMatch } from "./shared";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
-} from "@lib/mongoAutocomplete";
+} from "@lib/mongo/mongoAutocomplete";
 
 export { createMongoCompletionSource, createMongoOperatorHighlight };
 

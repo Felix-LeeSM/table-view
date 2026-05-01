@@ -5,7 +5,7 @@ import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
 } from "@/lib/completion/mongo";
-import type { MongoQueryMode } from "@lib/mongoAutocomplete";
+import type { MongoQueryMode } from "@lib/mongo/mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {
   queryMode: MongoQueryMode;

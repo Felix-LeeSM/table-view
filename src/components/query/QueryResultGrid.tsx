@@ -10,7 +10,7 @@ import { truncateCell } from "@lib/format";
 import {
   analyzeResultEditability,
   parseSingleTableSelect,
-} from "@lib/queryAnalyzer";
+} from "@lib/sql/queryAnalyzer";
 import { useSchemaStore } from "@stores/schemaStore";
 import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";

@@ -11,7 +11,7 @@ import QueryEditor from "./QueryEditor";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
-} from "@lib/mongoAutocomplete";
+} from "@lib/mongo/mongoAutocomplete";
 
 // CodeMirror works in jsdom, so we do NOT mock it.
 // Note: CodeMirror's .cm-content div also has role="textbox", so we use

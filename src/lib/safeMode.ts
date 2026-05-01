@@ -1,4 +1,4 @@
-import type { StatementAnalysis } from "@/lib/sqlSafety";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 
 /**
  * Sprint 189 (D-4) — paradigm-agnostic Safe Mode decision matrix as a pure

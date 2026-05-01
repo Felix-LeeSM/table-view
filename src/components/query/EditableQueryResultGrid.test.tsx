@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import type { QueryResult } from "@/types/query";
-import type { RawEditPlan } from "@lib/rawQuerySqlBuilder";
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 
 const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();

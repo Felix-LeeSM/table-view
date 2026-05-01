@@ -10,7 +10,7 @@ import MongoQueryEditor from "./MongoQueryEditor";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
-} from "@lib/mongoAutocomplete";
+} from "@lib/mongo/mongoAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
 
 /** Extract all keymap bindings from the editor state. */
