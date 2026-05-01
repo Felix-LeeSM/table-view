@@ -47,8 +47,26 @@ describe("decideSafeModeAction", () => {
     });
   });
 
-  it("[AC-189-06a-5] production × off + danger → allow", () => {
+  it("[AC-190-01-1] production × off + danger → block (prod-auto, Sprint 190)", () => {
+    // Sprint 190 (FB-1b) — Hard auto. The toolbar "off" toggle is a no-op
+    // on production connections; the gate now treats off-on-production as
+    // strict-equivalent block, with a different override hint pointing at
+    // the connection environment tag instead of the toolbar. Verbatim copy
+    // is asserted because downstream UIs (queryState.error, commitError.
+    // message) must not silently drift. Was AC-189-06a-5 (allow). date
+    // 2026-05-02.
     expect(decideSafeModeAction("off", "production", DANGER)).toEqual({
+      action: "block",
+      reason:
+        "Safe Mode blocked: DROP TABLE (production environment forces Safe Mode — change connection environment tag to override)",
+    });
+  });
+
+  it("[AC-190-01-2] production × off + safe → allow (prod-auto only fires on danger)", () => {
+    // Negative case: Hard auto must not block safe statements just because
+    // the connection is production. SELECT / read-only flows on a
+    // production-tagged connection still proceed. date 2026-05-02.
+    expect(decideSafeModeAction("off", "production", SAFE)).toEqual({
       action: "allow",
     });
   });

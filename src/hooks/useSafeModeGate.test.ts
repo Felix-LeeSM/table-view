@@ -47,12 +47,18 @@ describe("useSafeModeGate (store wiring)", () => {
   });
 
   it("reads `mode` from useSafeModeStore", () => {
+    // Sprint 190 — flip wiring assertion to use the warn → confirm path
+    // because the previous "off + production → allow" branch became
+    // "off + production → block" under prod-auto. Confirm is the only
+    // remaining decision that requires `mode` to flow through (strict /
+    // off both block on production-danger, so they don't disambiguate
+    // mode propagation by themselves). date 2026-05-02.
     useConnectionStore.setState({ connections: [makeConn()] });
-    useSafeModeStore.setState({ mode: "off" });
+    useSafeModeStore.setState({ mode: "warn" });
     const { result } = renderHook(() => useSafeModeGate("c1"));
-    // mode=off + production + danger → allow (lib decision matrix).
+    // mode=warn + production + danger → confirm (lib decision matrix).
     // Asserts hook propagates `mode` change into the pure call.
-    expect(result.current.decide(DANGER).action).toBe("allow");
+    expect(result.current.decide(DANGER).action).toBe("confirm");
   });
 
   it("reads `environment` from useConnectionStore via connectionId", () => {

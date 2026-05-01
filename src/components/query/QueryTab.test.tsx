@@ -2233,8 +2233,12 @@ describe("QueryTab", () => {
       }
     });
 
-    it("[AC-188-03d] production × off × $out → dispatch proceeds (gate bypassed)", async () => {
-      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    it("[AC-190-01-5] production × off × $out → blocked (prod-auto, Sprint 190)", async () => {
+      // Sprint 190 (FB-1b) — Hard auto. Was AC-188-03d (off bypassed gate).
+      // Off is no-op on production: aggregate dispatch is blocked exactly
+      // like strict, with the production-forces-Safe-Mode copy. Asserts
+      // queryState.error verbatim (same pattern as AC-188-03a) so the lib
+      // copy reaches the QueryTab error surface intact. date 2026-05-02.
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "off" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
@@ -2245,9 +2249,17 @@ describe("QueryTab", () => {
         screen.getByTestId("execute-btn").click();
       });
 
-      await waitFor(() => {
-        expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
-      });
+      expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      const updated = useTabStore
+        .getState()
+        .tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query" && updated.queryState.status === "error") {
+        expect(updated.queryState.error).toMatch(
+          /production environment forces Safe Mode/,
+        );
+      } else {
+        throw new Error("expected error queryState");
+      }
     });
 
     it("[AC-188-03e] non-production × strict × $out → dispatch proceeds (env scoping)", async () => {

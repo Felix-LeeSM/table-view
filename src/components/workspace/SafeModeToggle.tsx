@@ -60,9 +60,11 @@ const MODE_META: Record<
   off: {
     label: "Safe Mode: Off",
     tooltip: [
-      "Safe Mode: Off (click to re-enable production guard)",
+      "Safe Mode: Off (click to re-enable for non-production)",
       "",
-      "No guard. Use only for one-off destructive maintenance.",
+      "Production-tagged connections still force Safe Mode automatically.",
+      "Use Off only for one-off destructive maintenance on local / testing",
+      "/ development / staging.",
     ].join("\n"),
     ariaPressed: "false",
     icon: ShieldOff,

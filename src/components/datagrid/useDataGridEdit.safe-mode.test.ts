@@ -150,7 +150,14 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
     expect(result.current.commitError).toBeNull();
   });
 
-  it("[AC-185-04d] production + off + WHERE-less DELETE → passes (mode override)", async () => {
+  it("[AC-190-01-3] production + off + WHERE-less DELETE → blocked (prod-auto)", async () => {
+    // Sprint 190 (FB-1b) — Hard auto. Was AC-185-04d which asserted that
+    // toggling Safe Mode off let the danger statement through; under
+    // prod-auto the off toggle is a no-op on production connections, so
+    // the gate now blocks with the dedicated "production environment
+    // forces Safe Mode" copy. The connection-environment override path
+    // is asserted via the message text (downstream UI copy guard). date
+    // 2026-05-02.
     const { result } = renderHookFor("production", "off");
 
     act(() => {
@@ -161,8 +168,14 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
       await result.current.handleExecuteCommit();
     });
 
-    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    expect(result.current.commitError).toBeNull();
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(result.current.commitError).not.toBeNull();
+    expect(result.current.commitError!.message).toMatch(
+      /production environment forces Safe Mode/,
+    );
+    expect(mockToastError).toHaveBeenCalledWith(
+      expect.stringMatching(/production environment forces Safe Mode/),
+    );
   });
 
   it("[AC-186-04a] production + warn + WHERE-less DELETE → pendingConfirm set, executeQueryBatch not called", async () => {

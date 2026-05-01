@@ -106,9 +106,20 @@ describe("SafeModeToggle", () => {
     const offTitle = screen
       .getByRole("button", { name: "Safe Mode: Off" })
       .getAttribute("title");
+    // Sprint 190 (AC-190-04) — off-tooltip carries the prod-auto disclaimer
+    // because the toolbar "off" toggle is now a no-op on production-tagged
+    // connections (Hard auto via decideSafeModeAction). The previous "No
+    // guard." copy was a verbatim lie post-Sprint-190; the new copy makes
+    // the production carve-out explicit and points at the legitimate
+    // off-mode use cases (local / testing / development / staging). date
+    // 2026-05-02.
     expect(offTitle).toMatch(
-      /Safe Mode: Off \(click to re-enable production guard\)/,
+      /Safe Mode: Off \(click to re-enable for non-production\)/,
     );
-    expect(offTitle).toMatch(/No guard\./);
+    expect(offTitle).toMatch(
+      /Production-tagged connections still force Safe Mode/,
+    );
+    expect(offTitle).toMatch(/local \/ testing/);
+    expect(offTitle).toMatch(/development \/ staging/);
   });
 });

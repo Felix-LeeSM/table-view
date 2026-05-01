@@ -183,12 +183,20 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  it("[AC-185-05d] production + off + WHERE-less DELETE → passes (mode override)", async () => {
+  it("[AC-190-01-4] production + off + WHERE-less DELETE → blocked (prod-auto)", async () => {
+    // Sprint 190 (FB-1b) — Hard auto. Was AC-185-05d (mode override let
+    // it through). Off is now no-op on production; gate fires with the
+    // production-forces-Safe-Mode copy. date 2026-05-02.
     setup("production", "off");
     await openPreviewAndExecute(["DELETE FROM users"]);
 
-    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    expect(mockToastError).not.toHaveBeenCalled();
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(
+      expect.stringMatching(/production environment forces Safe Mode/),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /production environment forces Safe Mode/,
+    );
   });
 
   function getWarnDialog() {
