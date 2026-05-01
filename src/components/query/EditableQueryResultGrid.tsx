@@ -22,6 +22,7 @@ import {
 } from "@components/datagrid/useDataGridEdit";
 import { buildRawEditSql, type RawEditPlan } from "@lib/rawQuerySqlBuilder";
 import { executeQuery } from "@lib/tauri";
+import PendingChangesTray from "./PendingChangesTray";
 
 export interface EditableQueryResultGridProps {
   result: QueryResult;
@@ -81,6 +82,12 @@ export default function EditableQueryResultGrid({
 
   const rowKeyFn = useCallback((rowIdx: number) => `row-1-${rowIdx}`, []);
 
+  // Defense-in-depth: `analyzeResultEditability` already routes PK-less
+  // results to the read-only `<ResultTable>`, so this guard only fires if
+  // some future caller mounts us directly. Without it, `buildPkWhere`
+  // would emit `WHERE ;` and the DB would reject with a syntax error.
+  const noPk = plan.pkColumns.length === 0;
+
   const hasPendingChanges =
     pendingEdits.size > 0 || pendingDeletedRowKeys.size > 0;
 
@@ -105,6 +112,7 @@ export default function EditableQueryResultGrid({
 
   const startEdit = useCallback(
     (rowIdx: number, colIdx: number) => {
+      if (noPk) return;
       // Persist the previous in-flight edit (with the unchanged-skip rule)
       // before opening a new editor.
       setPendingEdits(persistInflightEdit);
@@ -114,7 +122,7 @@ export default function EditableQueryResultGrid({
       setEditingCell({ row: rowIdx, col: colIdx });
       setEditValue(pending ?? cellToEditString(cell));
     },
-    [pendingEdits, persistInflightEdit, result.rows],
+    [noPk, pendingEdits, persistInflightEdit, result.rows],
   );
 
   const cancelEdit = useCallback(() => {
@@ -160,6 +168,24 @@ export default function EditableQueryResultGrid({
     result.rows,
     persistInflightEdit,
   ]);
+
+  const handleRevertEdit = useCallback((key: string) => {
+    setPendingEdits((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Map(prev);
+      next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const handleRevertDelete = useCallback((rowKey: string) => {
+    setPendingDeletedRowKeys((prev) => {
+      if (!prev.has(rowKey)) return prev;
+      const next = new Set(prev);
+      next.delete(rowKey);
+      return next;
+    });
+  }, []);
 
   const handleDiscard = useCallback(() => {
     setPendingEdits(new Map());
@@ -220,12 +246,14 @@ export default function EditableQueryResultGrid({
         {
           label: "Edit Cell",
           icon: <Pencil size={14} />,
+          disabled: noPk,
           onClick: () => startEdit(contextMenu.rowIdx, contextMenu.colIdx),
         },
         {
           label: "Delete Row",
           icon: <Trash2 size={14} />,
           danger: true,
+          disabled: noPk,
           onClick: () => deleteRow(contextMenu.rowIdx),
         },
       ]
@@ -233,6 +261,14 @@ export default function EditableQueryResultGrid({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {noPk && (
+        <div
+          role="status"
+          className="border-b border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground"
+        >
+          Read-only — primary key required to edit
+        </div>
+      )}
       {/* Edit toolbar — only visible when there are pending changes. */}
       {hasPendingChanges && (
         <div className="flex items-center justify-between border-b border-border bg-warning/10 px-3 py-1.5 text-xs">
@@ -262,6 +298,15 @@ export default function EditableQueryResultGrid({
           </div>
         </div>
       )}
+
+      <PendingChangesTray
+        result={result}
+        pendingEdits={pendingEdits}
+        pendingDeletedRowKeys={pendingDeletedRowKeys}
+        plan={plan}
+        onRevertEdit={handleRevertEdit}
+        onRevertDelete={handleRevertDelete}
+      />
 
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse text-sm">

@@ -105,4 +105,16 @@ describe("buildRawEditSql", () => {
     ]);
     expect(buildRawEditSql(ROWS, badEdits, new Set(), PLAN)).toEqual([]);
   });
+
+  // [AC-182-04b] Regression: Sprint 182 surfaced the historical "" → SQL
+  // NULL convention in the PendingChangesTray UI (italic NULL + tooltip).
+  // The builder itself must not change — the empty-string mapping is what
+  // the tray's italic NULL display visually pins. 2026-05-01.
+  it("[AC-182-04b] (regression) maps empty-string new value to literal SQL NULL", () => {
+    const edits = new Map([["0-2", ""]]);
+    const sqls = buildRawEditSql(ROWS, edits, new Set(), PLAN);
+    expect(sqls).toEqual([
+      `UPDATE "public"."users" SET "email" = NULL WHERE "id" = 1;`,
+    ]);
+  });
 });
