@@ -77,6 +77,13 @@ interface SchemaState {
     sql: string,
     queryId: string,
   ) => Promise<QueryResult>;
+  // Sprint 183 — batch variant that runs all statements inside a single
+  // BEGIN/COMMIT transaction. All-or-nothing.
+  executeQueryBatch: (
+    connectionId: string,
+    statements: string[],
+    queryId: string,
+  ) => Promise<QueryResult[]>;
   renameTable: (
     connectionId: string,
     table: string,
@@ -280,6 +287,10 @@ export const useSchemaStore = create<SchemaState>((set) => ({
 
   executeQuery: async (connectionId, sql, queryId) => {
     return tauri.executeQuery(connectionId, sql, queryId);
+  },
+
+  executeQueryBatch: async (connectionId, statements, queryId) => {
+    return tauri.executeQueryBatch(connectionId, statements, queryId);
   },
 
   renameTable: async (connectionId, table, schema, newName) => {

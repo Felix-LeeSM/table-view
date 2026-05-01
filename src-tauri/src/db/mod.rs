@@ -200,6 +200,23 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>>;
 
+    /// Sprint 183 — execute a list of statements inside a single
+    /// transaction (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on
+    /// statement K rolls back statements 1..K-1. The default impl returns
+    /// `Unsupported` so adapters that have not yet wired transactional
+    /// commit (SQLite/MySQL placeholders) still type-check.
+    fn execute_sql_batch<'a>(
+        &'a self,
+        _statements: &'a [String],
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<RdbQueryResult>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support batched transactions".into(),
+            ))
+        })
+    }
+
     /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(

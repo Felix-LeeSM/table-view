@@ -17,11 +17,28 @@ const mockExecuteQuery = vi.fn(() =>
     query_type: "dml" as const,
   }),
 );
+// Sprint 183 — RDB commit pipeline now uses executeQueryBatch instead of
+// executeQuery N times. Default to a happy-path resolution with one entry
+// per submitted statement.
+const mockExecuteQueryBatch = vi.fn((_conn: string, stmts: string[]) =>
+  Promise.resolve(
+    stmts.map(() => ({
+      columns: [],
+      rows: [],
+      total_count: 0,
+      execution_time_ms: 5,
+      query_type: "dml" as const,
+    })),
+  ),
+);
 const mockFetchData = vi.fn();
 
 vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ executeQuery: mockExecuteQuery }),
+    selector({
+      executeQuery: mockExecuteQuery,
+      executeQueryBatch: mockExecuteQueryBatch,
+    }),
 }));
 
 vi.mock("@stores/tabStore", () => ({

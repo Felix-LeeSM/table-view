@@ -19,6 +19,7 @@ const mockDeleteDocument = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
   Promise.resolve(),
 );
 const mockExecuteQuery = vi.fn();
+const mockExecuteQueryBatch = vi.fn();
 const mockFetchData = vi.fn();
 
 vi.mock("@/lib/tauri", () => ({
@@ -29,7 +30,10 @@ vi.mock("@/lib/tauri", () => ({
 
 vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ executeQuery: mockExecuteQuery }),
+    selector({
+      executeQuery: mockExecuteQuery,
+      executeQueryBatch: mockExecuteQueryBatch,
+    }),
 }));
 
 vi.mock("@stores/tabStore", () => ({
@@ -222,6 +226,11 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
     expect(result.current.editValue).toBe("");
     expect(mockFetchData).toHaveBeenCalledTimes(1);
     expect(mockExecuteQuery).not.toHaveBeenCalled();
+    // [AC-183-09a] — Mongo branch must NOT funnel through the new RDB
+    // batch transaction helper. Mongo retains its iterative dispatch
+    // (out-of-scope for Sprint 183, separate sprint will introduce
+    // multi-document transactions). 2026-05-01.
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
   });
 
   it("handleExecuteCommit preserves pending state on dispatch failure", async () => {

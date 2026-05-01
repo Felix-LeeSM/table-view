@@ -118,6 +118,87 @@ pub async fn execute_query(
     result
 }
 
+/// Sprint 183 — execute a batch of SQL statements inside a single
+/// transaction (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on
+/// statement K causes statements 1..K-1 to be rolled back and the original
+/// failure to surface as `AppError::Database("statement K of N failed: ...")`.
+///
+/// Used by the inline-edit commit pipeline (Sprint 182 SQL Preview Dialog →
+/// Commit). Pre-Sprint-183 the frontend looped over `execute_query`, which
+/// applied earlier statements before the failure surfaced; that left rows
+/// in inconsistent state on partial failure. The batch command makes the
+/// commit atomic.
+#[tauri::command]
+pub async fn execute_query_batch(
+    state: State<'_, AppState>,
+    connection_id: String,
+    statements: Vec<String>,
+    query_id: String,
+) -> Result<Vec<QueryResult>, AppError> {
+    info!(
+        connection_id = %connection_id,
+        query_id = %query_id,
+        batch_size = statements.len(),
+        "Executing query batch"
+    );
+
+    if connection_id.trim().is_empty() {
+        return Err(AppError::Validation("Connection ID cannot be empty".into()));
+    }
+    if statements.is_empty() {
+        return Err(AppError::Validation("Query batch cannot be empty".into()));
+    }
+    for (idx, sql) in statements.iter().enumerate() {
+        if sql.trim().is_empty() {
+            return Err(AppError::Validation(format!(
+                "Statement {} of {} is empty",
+                idx + 1,
+                statements.len()
+            )));
+        }
+    }
+
+    let cancel_token = CancellationToken::new();
+    let child_token = cancel_token.clone();
+
+    {
+        let mut tokens = state.query_tokens.lock().await;
+        tokens.insert(query_id.clone(), cancel_token);
+    }
+
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(&connection_id)
+            .ok_or_else(|| not_connected(&connection_id))?;
+        active
+            .as_rdb()?
+            .execute_sql_batch(&statements, Some(&child_token))
+            .await
+    };
+
+    {
+        let mut tokens = state.query_tokens.lock().await;
+        tokens.remove(&query_id);
+    }
+
+    match &result {
+        Ok(results) => info!(
+            query_id = %query_id,
+            executed = results.len(),
+            "Query batch committed"
+        ),
+        Err(e) => warn!(
+            query_id = %query_id,
+            batch_size = statements.len(),
+            error = %e,
+            "Query batch failed"
+        ),
+    }
+
+    result
+}
+
 /// Cancel a running query by its ID.
 ///
 /// # Arguments

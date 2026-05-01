@@ -262,6 +262,22 @@ export async function cancelQuery(queryId: string): Promise<string> {
   return invoke<string>("cancel_query", { queryId });
 }
 
+// Sprint 183 — execute a list of SQL statements inside a single transaction
+// (BEGIN/COMMIT/ROLLBACK). All-or-nothing: a failure on statement K rolls
+// back statements 1..K-1 and surfaces the original error with
+// "statement K of N failed: ..." in the message body.
+export async function executeQueryBatch(
+  connectionId: string,
+  statements: string[],
+  queryId: string,
+): Promise<QueryResult[]> {
+  return invoke<QueryResult[]>("execute_query_batch", {
+    connectionId,
+    statements,
+    queryId,
+  });
+}
+
 // Table management
 export async function dropTable(
   connectionId: string,

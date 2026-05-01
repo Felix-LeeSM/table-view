@@ -11,8 +11,10 @@ import type { QueryResult } from "@/types/query";
 import type { RawEditPlan } from "@lib/rawQuerySqlBuilder";
 
 const mockExecuteQuery = vi.fn();
+const mockExecuteQueryBatch = vi.fn();
 vi.mock("@lib/tauri", () => ({
   executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+  executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
 }));
 
 const RESULT: QueryResult = {
@@ -54,6 +56,10 @@ describe("EditableQueryResultGrid", () => {
   beforeEach(() => {
     mockExecuteQuery.mockReset();
     mockExecuteQuery.mockResolvedValue({});
+    mockExecuteQueryBatch.mockReset();
+    // Sprint 183 — default to a happy-path batch resolve so the legacy
+    // tests that don't override the mock still see a successful commit.
+    mockExecuteQueryBatch.mockResolvedValue([]);
   });
 
   it("renders rows and PK column marker", () => {
@@ -178,7 +184,8 @@ describe("EditableQueryResultGrid", () => {
     expect(dialog.textContent).toMatch(/UPDATE/);
   });
 
-  it("Execute calls executeQuery for each statement and triggers onAfterCommit", async () => {
+  it("[AC-183-08c] Execute calls executeQueryBatch once with all statements and triggers onAfterCommit", async () => {
+    // Sprint 183 — single transaction batch (was: N × executeQuery loop).
     const onAfterCommit = vi.fn();
     renderGrid({ onAfterCommit });
     const tds = document.querySelectorAll("tbody tr:first-child td");
@@ -202,13 +209,17 @@ describe("EditableQueryResultGrid", () => {
     });
 
     await waitFor(() => {
-      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+      expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     });
-    expect(mockExecuteQuery).toHaveBeenCalledWith(
+    // Sprint 183 — single batch call with the connection id, the array
+    // of statements, and a query id. Legacy single-statement helper is
+    // not invoked.
+    expect(mockExecuteQueryBatch).toHaveBeenCalledWith(
       "conn1",
-      expect.stringMatching(/UPDATE/),
+      [expect.stringMatching(/UPDATE/)],
       expect.any(String),
     );
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(onAfterCommit).toHaveBeenCalled();
     });
@@ -284,8 +295,50 @@ describe("EditableQueryResultGrid", () => {
     );
   });
 
-  it("Execute surfaces errors from executeQuery without clearing the dialog", async () => {
-    mockExecuteQuery.mockRejectedValueOnce(new Error("permission denied"));
+  // Sprint 183 — regression that the Cmd+S → SQL preview → Execute path
+  // still flows all the way through to executeQueryBatch. The dialog body
+  // must still render the per-statement SQL list (Sprint 87 contract) so a
+  // user can review individual statements before committing.
+  it("[AC-183-08d] Cmd+S → SQL preview lists each statement; Execute runs the batch", async () => {
+    renderGrid();
+    const tds = document.querySelectorAll("tbody tr:first-child td");
+    act(() => {
+      fireEvent.doubleClick(tds[1]!);
+    });
+    const input = screen.getByLabelText("Editing name") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, { target: { value: "Alicia" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    act(() => {
+      window.dispatchEvent(new Event("commit-changes"));
+    });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toMatch(
+      /UPDATE "public"\."users" SET "name" = 'Alicia' WHERE "id" = 1/,
+    );
+
+    const execBtn = await screen.findByLabelText("Execute SQL");
+    await act(async () => {
+      execBtn.click();
+    });
+    await waitFor(() => {
+      expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    });
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+  });
+
+  it("[AC-183-08c] Execute surfaces rolled-back batch failure without clearing the dialog", async () => {
+    // Sprint 183 — backend rolls back atomically; the catch block surfaces
+    // "Commit failed — all changes rolled back: <message>" and keeps the
+    // SQL preview dialog open so the user can re-try without losing the
+    // pending edits.
+    mockExecuteQueryBatch.mockRejectedValueOnce(
+      new Error("statement 1 of 1 failed: permission denied"),
+    );
     renderGrid();
     const tds = document.querySelectorAll("tbody tr:first-child td");
     act(() => {
@@ -303,8 +356,10 @@ describe("EditableQueryResultGrid", () => {
       execBtn.click();
     });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "permission denied",
-    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("permission denied");
+    expect(alert).toHaveTextContent("all changes rolled back");
+    // Old per-statement wording is gone.
+    expect(alert.textContent ?? "").not.toMatch(/executed: \d/);
   });
 });

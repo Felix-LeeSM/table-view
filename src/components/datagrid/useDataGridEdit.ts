@@ -350,7 +350,7 @@ export function useDataGridEdit({
   fetchData,
   paradigm = "rdb",
 }: UseDataGridEditParams): DataGridEditState {
-  const executeQuery = useSchemaStore((s) => s.executeQuery);
+  const executeQueryBatch = useSchemaStore((s) => s.executeQueryBatch);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
   // Sprint 97 — surface dirty state to the store so TabBar can render a
@@ -762,61 +762,23 @@ export function useDataGridEdit({
       return;
     }
     if (!sqlPreview) return;
-    // Prefer the keyed statement list (set in lockstep with `sqlPreview`) so a
-    // commit failure can route back to the offending cell. Fall back to a
-    // key-less view of `sqlPreview` if the keyed list is somehow absent — this
-    // keeps the catch block safe even in the (theoretical) event of state
-    // skew between the two parallel arrays.
+    // Sprint 183 — prefer the keyed statement list (set in lockstep with
+    // `sqlPreview`) so a commit failure can route back to the offending
+    // cell. Fall back to a key-less view of `sqlPreview` if the keyed list
+    // is somehow absent — keeps the catch block safe under (theoretical)
+    // state skew.
     const statements: GeneratedSqlStatement[] =
       sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
     const statementCount = statements.length;
-    let executedCount = 0;
     try {
-      for (let i = 0; i < statements.length; i++) {
-        const stmt = statements[i]!;
-        try {
-          await executeQuery(connectionId, stmt.sql, `edit-${Date.now()}`);
-          executedCount = i + 1;
-        } catch (err) {
-          // Sprint 93 — surface the failure instead of swallowing it. We keep
-          // `sqlPreview` populated (no `setSqlPreview(null)`) so the modal
-          // stays open with the failed-statement banner. `pendingEditErrors`
-          // gets the failed cell key so the inline hint also lights up when
-          // the user dismisses the modal.
-          const message =
-            err instanceof Error
-              ? err.message
-              : typeof err === "string"
-                ? err
-                : "Failed to execute statement.";
-          setCommitError({
-            statementIndex: i,
-            statementCount,
-            sql: stmt.sql,
-            message: `executed: ${executedCount}, failed at: ${i + 1} of ${statementCount} — ${message}`,
-            failedKey: stmt.key,
-          });
-          if (stmt.key) {
-            setPendingEditErrors((prev) => {
-              const next = new Map(prev);
-              next.set(stmt.key!, message);
-              return next;
-            });
-          }
-          // Sprint 94 — surface the failure as a toast so the user still sees
-          // the failure context if they dismiss the SQL Preview modal. The
-          // toast lives outside the modal portal, so it survives the close
-          // (AC-03). The message intentionally embeds the partial-failure
-          // counts ("executed: N, failed at: K") to satisfy AC-02.
-          toast.error(
-            `Commit failed (executed: ${executedCount}, failed at: ${i + 1} of ${statementCount}): ${message}`,
-          );
-          // Stop on first failure — `executeQuery` runs statements serially
-          // outside a transaction, so already-applied statements stay applied.
-          // The user can re-open the preview after fixing the failed row.
-          return;
-        }
-      }
+      // Sprint 183 — single transaction batch. The backend runs
+      // BEGIN → all statements → COMMIT (or ROLLBACK on first failure), so
+      // partial application is no longer possible.
+      await executeQueryBatch(
+        connectionId,
+        statements.map((s) => s.sql),
+        `edit-${Date.now()}`,
+      );
       // Happy path: all statements succeeded.
       setSqlPreview(null);
       setSqlPreviewStatements(null);
@@ -831,44 +793,47 @@ export function useDataGridEdit({
       // stale (pointing at soon-to-be-refetched data). Close it.
       setEditingCell(null);
       setEditValue("");
-      // Refresh data
       fetchData();
-      // Sprint 94 — success toast. AC-02 calls for "commit success" coverage;
-      // we report the statement count so a multi-row commit is visibly
-      // summarised.
       toast.success(
         `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
       );
     } catch (err) {
-      // Defensive outer catch — the inner try/catch already handles
-      // `executeQuery` rejections. This branch only runs if a synchronous
-      // throw escapes the loop (e.g. a programming error inside the loop
-      // body). Surface it through the same channel so the user is never left
-      // with a silent failure. Empty catch is explicitly forbidden here
-      // (sprint-93 / sprint-88 catch-audit).
+      // Sprint 183 — backend has already rolled back. We keep `sqlPreview`
+      // populated so the modal stays open with the failure banner.
+      // `pendingEditErrors` flags the failed cell when the backend message
+      // names the statement index ("statement K of N failed: ...").
       const message =
         err instanceof Error
           ? err.message
           : typeof err === "string"
             ? err
-            : "Unexpected commit failure.";
+            : "Failed to commit changes.";
+      const indexMatch = message.match(/statement (\d+) of \d+ failed/);
+      const failedIndex = indexMatch
+        ? Math.max(0, Number(indexMatch[1]) - 1)
+        : 0;
+      const failedStmt = statements[failedIndex] ?? statements[0];
       setCommitError({
-        statementIndex: executedCount,
+        statementIndex: failedIndex,
         statementCount,
-        sql: statements[executedCount]?.sql ?? "",
-        message: `executed: ${executedCount}, failed at: ${executedCount + 1} of ${statementCount} — ${message}`,
+        sql: failedStmt?.sql ?? "",
+        message: `Commit failed — all changes rolled back: ${message}`,
+        failedKey: failedStmt?.key,
       });
-      // Sprint 94 — also surface defensive-catch failures as a toast so the
-      // user is not left guessing if the modal is dismissed.
-      toast.error(
-        `Commit failed (executed: ${executedCount}, failed at: ${executedCount + 1} of ${statementCount}): ${message}`,
-      );
+      if (failedStmt?.key) {
+        setPendingEditErrors((prev) => {
+          const next = new Map(prev);
+          next.set(failedStmt.key!, message);
+          return next;
+        });
+      }
+      toast.error(`Commit failed — all changes rolled back: ${message}`);
     }
   }, [
     sqlPreview,
     sqlPreviewStatements,
     mqlPreview,
-    executeQuery,
+    executeQueryBatch,
     connectionId,
     fetchData,
     paradigm,

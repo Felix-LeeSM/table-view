@@ -139,6 +139,7 @@ pub fn run() {
         commands::rdb::schema::get_view_columns,
         commands::rdb::schema::get_function_source,
         commands::rdb::query::execute_query,
+        commands::rdb::query::execute_query_batch,
         commands::rdb::query::cancel_query,
         commands::meta::list_databases,
         commands::meta::switch_active_db,

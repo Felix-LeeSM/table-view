@@ -601,6 +601,93 @@ impl PostgresAdapter {
         result
     }
 
+    /// Sprint 183 — execute a list of statements inside a single
+    /// transaction. All-or-nothing: a failure on statement K rolls back
+    /// statements 1..K-1 and surfaces the original sqlx error wrapped in
+    /// `AppError::Database("statement K of N failed: <msg>")`. Empty input
+    /// short-circuits with `Ok(vec![])` (no BEGIN/COMMIT round-trip).
+    /// Each non-empty statement is run via `sqlx::query::execute` on the
+    /// `Transaction<Postgres>`. We do not classify SELECT vs DML here —
+    /// commit-pipeline statements (UPDATE/DELETE/INSERT) only need
+    /// `rows_affected`, and the existing `execute_query` path is preserved
+    /// for the rare SELECT-inside-batch case (still rare enough that the
+    /// caller would issue a single `executeQuery`).
+    pub async fn execute_query_batch(
+        &self,
+        statements: &[String],
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<Vec<QueryResult>, AppError> {
+        if statements.is_empty() {
+            return Ok(Vec::new());
+        }
+        for (idx, raw) in statements.iter().enumerate() {
+            if strip_trailing_terminator(raw).trim().is_empty() {
+                return Err(AppError::Validation(format!(
+                    "Statement {} of {} is empty",
+                    idx + 1,
+                    statements.len()
+                )));
+            }
+        }
+
+        let pool = self.active_pool().await?;
+        let total = statements.len();
+
+        let work = async {
+            let mut tx = pool
+                .begin()
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+            let mut results: Vec<QueryResult> = Vec::with_capacity(total);
+            for (idx, raw) in statements.iter().enumerate() {
+                let stmt = strip_trailing_terminator(raw);
+                let start = std::time::Instant::now();
+                let exec_result = sqlx::query(stmt).execute(&mut *tx).await;
+                match exec_result {
+                    Ok(res) => {
+                        let rows_affected = res.rows_affected();
+                        results.push(QueryResult {
+                            columns: Vec::new(),
+                            rows: Vec::new(),
+                            total_count: rows_affected as i64,
+                            execution_time_ms: start.elapsed().as_millis() as u64,
+                            query_type: QueryType::Dml { rows_affected },
+                        });
+                    }
+                    Err(e) => {
+                        // Best-effort rollback. `tx.rollback()` consumes
+                        // the transaction; any error during rollback is
+                        // discarded so the original failure stays the
+                        // user-facing message (matches PG's protocol-level
+                        // rollback on first error anyway).
+                        let _ = tx.rollback().await;
+                        return Err(AppError::Database(format!(
+                            "statement {} of {} failed: {}",
+                            idx + 1,
+                            total,
+                            e
+                        )));
+                    }
+                }
+            }
+
+            tx.commit()
+                .await
+                .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+            Ok::<Vec<QueryResult>, AppError>(results)
+        };
+
+        if let Some(token) = cancel_token {
+            tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Query cancelled".into())),
+            }
+        } else {
+            work.await
+        }
+    }
+
     pub async fn ping(&self) -> Result<(), AppError> {
         let pool = self.active_pool().await?;
         sqlx::query("SELECT 1")
@@ -2002,6 +2089,14 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.execute_query(sql, cancel).await })
     }
 
+    fn execute_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<RdbQueryResult>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.execute_query_batch(statements, cancel).await })
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(
         &'a self,
@@ -2233,6 +2328,38 @@ mod tests {
             err_msg.contains("Not connected"),
             "Expected 'Not connected' error, got: {err_msg}"
         );
+    }
+
+    // [AC-183-07a] — empty input must short-circuit without acquiring a
+    // pool or starting a transaction; matches the contract's "no-op
+    // commit" expectation. Date 2026-05-01.
+    #[tokio::test]
+    async fn test_execute_sql_batch_empty_returns_empty_vec() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.execute_query_batch(&[], None).await;
+        match result {
+            Ok(v) => assert!(v.is_empty(), "Expected empty Vec, got {} items", v.len()),
+            Err(e) => panic!("Empty input should succeed, got error: {:?}", e),
+        }
+    }
+
+    // [AC-183-07b] — validation must reject a batch where any statement
+    // is empty (or whitespace-only) before BEGIN is issued, so a misformed
+    // batch never opens a transaction it cannot close. Date 2026-05-01.
+    #[tokio::test]
+    async fn test_execute_sql_batch_validation_rejects_empty_statement() {
+        let adapter = PostgresAdapter::new();
+        let stmts = vec!["UPDATE t SET x = 1".to_string(), "   ".to_string()];
+        let result = adapter.execute_query_batch(&stmts, None).await;
+        match result {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("Statement 2 of 2 is empty"),
+                    "Expected validation error citing index, got: {msg}"
+                );
+            }
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
     }
 
     // -------------------------------------------------------------------

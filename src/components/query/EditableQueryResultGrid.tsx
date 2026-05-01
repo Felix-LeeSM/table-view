@@ -21,7 +21,7 @@ import {
   getInputTypeForColumn,
 } from "@components/datagrid/useDataGridEdit";
 import { buildRawEditSql, type RawEditPlan } from "@lib/rawQuerySqlBuilder";
-import { executeQuery } from "@lib/tauri";
+import { executeQueryBatch } from "@lib/tauri";
 import PendingChangesTray from "./PendingChangesTray";
 
 export interface EditableQueryResultGridProps {
@@ -201,15 +201,21 @@ export default function EditableQueryResultGrid({
     setExecuting(true);
     setExecuteError(null);
     try {
-      for (const sql of sqlPreview) {
-        await executeQuery(connectionId, sql, `raw-edit-${Date.now()}`);
-      }
+      // Sprint 183 — single-transaction batch. Backend wraps the
+      // statements in BEGIN/COMMIT and rolls back on first failure, so
+      // partial application is no longer possible.
+      await executeQueryBatch(
+        connectionId,
+        sqlPreview,
+        `raw-edit-${Date.now()}`,
+      );
       setSqlPreview(null);
       setPendingEdits(new Map());
       setPendingDeletedRowKeys(new Set());
       onAfterCommit?.();
     } catch (err) {
-      setExecuteError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setExecuteError(`Commit failed — all changes rolled back: ${message}`);
     } finally {
       setExecuting(false);
     }

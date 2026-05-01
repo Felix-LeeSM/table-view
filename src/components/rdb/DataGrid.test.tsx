@@ -75,12 +75,27 @@ const mockExecuteQuery = vi.fn(() =>
     query_type: "dml" as const,
   }),
 );
+// Sprint 183 — RDB commit pipeline now flows through executeQueryBatch.
+// Default to a happy resolution that mirrors the backend contract (one
+// QueryResult per submitted statement).
+const mockExecuteQueryBatch = vi.fn((_id: string, statements: string[]) =>
+  Promise.resolve(
+    statements.map(() => ({
+      columns: [],
+      rows: [],
+      total_count: 0,
+      execution_time_ms: 5,
+      query_type: "dml" as const,
+    })),
+  ),
+);
 
 vi.mock("@stores/schemaStore", () => ({
   useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       queryTableData: mockQueryTableData,
       executeQuery: mockExecuteQuery,
+      executeQueryBatch: mockExecuteQueryBatch,
     }),
 }));
 
@@ -168,6 +183,21 @@ describe("DataGrid", () => {
       execution_time_ms: 5,
       query_type: "dml" as const,
     });
+    // Sprint 183 — restore the default happy-path batch resolver after
+    // each test (mockReset wipes the implementation we registered at
+    // module scope).
+    mockExecuteQueryBatch.mockReset();
+    mockExecuteQueryBatch.mockImplementation((_id: string, stmts: string[]) =>
+      Promise.resolve(
+        stmts.map(() => ({
+          columns: [],
+          rows: [],
+          total_count: 0,
+          execution_time_ms: 5,
+          query_type: "dml" as const,
+        })),
+      ),
+    );
     mockPromoteTab.mockReset();
     resetMockTabStore();
   });
@@ -1188,6 +1218,9 @@ describe("DataGrid", () => {
   });
 
   // 44. Commit executes SQL and refreshes data
+  // Sprint 183 — assertion updated from `mockExecuteQuery` to
+  // `mockExecuteQueryBatch` because the commit pipeline now wraps the
+  // pending edits in a single transaction batch. 2026-05-01.
   it("Commit executes SQL and refreshes data", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -1205,8 +1238,9 @@ describe("DataGrid", () => {
       fireEvent.click(executeBtn);
     });
 
-    // executeQuery should have been called
-    expect(mockExecuteQuery).toHaveBeenCalled();
+    // executeQueryBatch should have been called once with the pending UPDATE.
+    expect(mockExecuteQueryBatch).toHaveBeenCalled();
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
 
     // Pending edits should be cleared after commit
     expect(screen.queryByText(/edit/)).not.toBeInTheDocument();

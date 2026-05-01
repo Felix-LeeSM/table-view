@@ -109,6 +109,20 @@ vi.mock("@lib/tauri", () => ({
       query_type: "select",
     }),
   ),
+  // Sprint 183 — schemaStore exposes a batch helper that wraps the
+  // multi-statement Tauri command. Mock kept simple; the store layer just
+  // forwards arguments.
+  executeQueryBatch: vi.fn((_id: string, statements: string[]) =>
+    Promise.resolve(
+      statements.map(() => ({
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 1,
+        query_type: "dml" as const,
+      })),
+    ),
+  ),
   dropTable: vi.fn(() => Promise.resolve()),
   renameTable: vi.fn(() => Promise.resolve()),
   getViewColumns: vi.fn(() =>
