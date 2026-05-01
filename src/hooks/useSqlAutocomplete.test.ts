@@ -392,4 +392,41 @@ describe("useSqlAutocomplete", () => {
     expect(ns.users).toHaveProperty("id");
     expect(ns.users).toHaveProperty("email");
   });
+
+  // 2026-04-30 regression: SQL keywords (and function names) MUST NOT be
+  // auto-quoted by CodeMirror's `nameCompletion`. The default behaviour
+  // wraps any label outside `[a-z_][a-z_0-9]*` in the dialect's identifier
+  // quote — so `SELECT` becomes `"SELECT"` for PG/SQLite, which the parser
+  // then treats as a string literal. The fix wraps each keyword / function
+  // in `{ self, children }` with an explicit `apply` so CodeMirror
+  // bypasses the quoting branch.
+  it("does NOT auto-quote uppercase SQL keywords for PG dialect", () => {
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", {
+        dialect: PostgreSQL,
+        dbType: "postgresql",
+      }),
+    );
+    const ns = result.current as Record<
+      string,
+      { self?: { label?: string; apply?: string; type?: string } }
+    >;
+    // SELECT must be present and its `apply` must be the bare keyword,
+    // NOT `"SELECT"`. Earlier shape `ns.SELECT = {}` triggered the
+    // dialect's quote-on-uppercase rule and produced apply='"SELECT"'.
+    expect(ns).toHaveProperty("SELECT");
+    expect(ns.SELECT?.self?.apply).toBe("SELECT");
+    expect(ns.SELECT?.self?.type).toBe("keyword");
+  });
+
+  it("does NOT auto-quote uppercase SQL function names", () => {
+    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const ns = result.current as Record<
+      string,
+      { self?: { label?: string; apply?: string; type?: string } }
+    >;
+    expect(ns).toHaveProperty("COUNT");
+    expect(ns.COUNT?.self?.apply).toBe("COUNT");
+    expect(ns.COUNT?.self?.type).toBe("function");
+  });
 });

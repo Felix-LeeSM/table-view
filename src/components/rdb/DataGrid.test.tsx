@@ -521,9 +521,11 @@ describe("DataGrid", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  // 17. Refetch shows overlay spinner on top of existing table
-  it("shows overlay spinner on top of table during refetch", async () => {
-    // First load completes
+  // 17. Refetch shows overlay spinner on top of existing table — Sprint 180
+  // (AC-180-01) shifted the overlay behind a 1s threshold gate. We use
+  // `findByRole` which polls on real timers to wait past the gate.
+  it("shows overlay spinner on top of table during refetch (post-threshold)", async () => {
+    // First load completes (real timers — the fetch resolves on a microtask).
     renderDataGrid();
     await screen.findByText("3 rows");
 
@@ -533,13 +535,24 @@ describe("DataGrid", () => {
       fireEvent.click(screen.getByTitle("Sort by id"));
     });
 
-    // Both table AND overlay spinner should exist
+    // Pre-threshold: overlay should not yet be visible.
+    expect(document.querySelectorAll(".animate-spin").length).toBe(0);
+
+    // Wait past the 1s threshold (real timer). The overlay element has
+    // role="status" with accessible name "Loading".
+    const overlay = await screen.findByRole(
+      "status",
+      { name: "Loading" },
+      { timeout: 2000 },
+    );
+
+    // Both table AND overlay spinner should exist.
     expect(document.querySelector("table")).toBeInTheDocument();
     const spinners = document.querySelectorAll(".animate-spin");
     expect(spinners.length).toBe(1);
-    // The spinner should be inside an absolutely-positioned overlay
-    const overlay = spinners[0]!.closest('[class*="absolute"]');
+    // The spinner should be inside an absolutely-positioned overlay.
     expect(overlay).toBeInTheDocument();
+    expect(spinners[0]!.closest('[class*="absolute"]')).toBe(overlay);
   });
 
   // 18. Overlay disappears when refetch completes

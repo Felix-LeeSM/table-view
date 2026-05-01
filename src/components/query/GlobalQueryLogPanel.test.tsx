@@ -5,7 +5,10 @@ import GlobalQueryLogPanel from "./GlobalQueryLogPanel";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
 
-// Mock lucide-react icons
+// Mock lucide-react icons. Sprint 180 (AC-180-03c) — `CircleSlash` is the
+// calm cancelled-status icon and must propagate its className so the test
+// can assert `text-muted-foreground` is applied. We render an `<svg>`
+// (not `<span>`) so the parent `.querySelector("svg")` lookup matches.
 vi.mock("lucide-react", () => ({
   Search: () => <span data-testid="icon-search" />,
   X: () => <span data-testid="icon-x" />,
@@ -13,6 +16,9 @@ vi.mock("lucide-react", () => ({
   Copy: () => <span data-testid="icon-copy" />,
   CheckCircle2: () => <span data-testid="icon-check" />,
   XCircle: () => <span data-testid="icon-x-circle" />,
+  CircleSlash: ({ className }: { className?: string }) => (
+    <svg data-testid="icon-circle-slash" className={className} />
+  ),
   ChevronDown: () => <span data-testid="icon-chevron" />,
   // Sprint-112: Radix-based <Select> from @components/ui/select pulls
   // these three icons. Stub them so the dropdown renders in the test
@@ -361,6 +367,51 @@ describe("GlobalQueryLogPanel", () => {
     const errorIcon = screen.getByTitle("error");
     expect(successIcon).toBeInTheDocument();
     expect(errorIcon).toBeInTheDocument();
+  });
+
+  // [AC-180-03c] Cancelled entries surface the calm CircleSlash icon
+  // (not the destructive XCircle) and the row carries the muted-bg
+  // class so the user reads them as self-aborted, not failed.
+  // Date: 2026-04-30 (sprint-180)
+  it("[AC-180-03c] renders cancelled entries with CircleSlash icon and muted background", () => {
+    useQueryHistoryStore.setState({
+      globalLog: [
+        {
+          id: "h-cancel",
+          sql: "SELECT pg_sleep(60)",
+          executedAt: Date.now(),
+          duration: 1500,
+          status: "cancelled",
+          connectionId: "conn-1",
+          paradigm: "rdb",
+          queryMode: "sql",
+        },
+      ],
+    });
+
+    render(<GlobalQueryLogPanel visible={true} onClose={onClose} />);
+
+    // The status icon span carries title="cancelled" and data-status.
+    const cancelledIcon = screen.getByTitle("cancelled");
+    expect(cancelledIcon).toBeInTheDocument();
+    expect(cancelledIcon.getAttribute("data-status")).toBe("cancelled");
+    // The icon SVG inside should be the CircleSlash (lucide renders as
+    // <svg class="lucide-circle-slash"> or similar) with the calm
+    // muted-foreground colour. We assert on the colour class rather
+    // than the lucide-specific tagname so a future icon refresh that
+    // keeps the same calm treatment stays green.
+    const svg = cancelledIcon.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg?.className.baseVal ?? svg?.getAttribute("class")).toContain(
+      "text-muted-foreground",
+    );
+
+    // The entry row carries the muted-bg discriminator (bg-muted/40)
+    // so the cancelled row stands out from successes WITHOUT looking
+    // destructive.
+    const row = screen.getByTestId("global-log-entry-h-cancel");
+    expect(row.className).toContain("bg-muted/40");
+    expect(row.className).not.toContain("bg-destructive/10");
   });
 
   it("expands SQL on entry click when SQL is long", async () => {

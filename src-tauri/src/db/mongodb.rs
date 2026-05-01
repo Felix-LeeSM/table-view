@@ -415,6 +415,7 @@ impl DocumentAdapter for MongoAdapter {
     fn list_collections<'a>(
         &'a self,
         db: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
         Box::pin(async move {
             // Sprint 137 (AC-S137-01) — route through `resolved_db_name`
@@ -427,25 +428,45 @@ impl DocumentAdapter for MongoAdapter {
             // the "stale collection list" bug from the 2026-04-27 user
             // check. Falls back to the connection's `default_db` only when
             // no `switch_active_db` has ever been called.
-            let requested = if db.trim().is_empty() { None } else { Some(db) };
-            let resolved = self
-                .resolved_db_name(requested)
-                .await
-                .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
-            let client = self.current_client().await?;
-            let names = client
-                .database(&resolved)
-                .list_collection_names()
-                .await
-                .map_err(|e| AppError::Database(format!("list_collection_names failed: {e}")))?;
-            Ok(names
-                .into_iter()
-                .map(|name| TableInfo {
-                    name,
-                    schema: resolved.clone(),
-                    row_count: None,
-                })
-                .collect())
+            //
+            // Sprint 180 (AC-180-04): the `tokio::select!` races driver work
+            // against the cancel-token's `cancelled()` future. On cancel
+            // we return the same `AppError::Database("Operation cancelled")`
+            // shape used by `PostgresAdapter::execute_query`. The Mongo
+            // driver's bundled version does NOT expose `killOperations`
+            // so cancellation is cooperative-only — the future drops
+            // locally; server-side work may continue briefly until the
+            // driver's connection-level cleanup applies. This is the
+            // documented per-adapter policy in ADR-0018.
+            let work = async move {
+                let requested = if db.trim().is_empty() { None } else { Some(db) };
+                let resolved = self.resolved_db_name(requested).await.ok_or_else(|| {
+                    AppError::Validation("Database name must not be empty".into())
+                })?;
+                let client = self.current_client().await?;
+                let names = client
+                    .database(&resolved)
+                    .list_collection_names()
+                    .await
+                    .map_err(|e| {
+                        AppError::Database(format!("list_collection_names failed: {e}"))
+                    })?;
+                Ok(names
+                    .into_iter()
+                    .map(|name| TableInfo {
+                        name,
+                        schema: resolved.clone(),
+                        row_count: None,
+                    })
+                    .collect())
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
         })
     }
 
@@ -454,35 +475,49 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
         collection: &'a str,
         sample_size: usize,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
         Box::pin(async move {
-            validate_ns(db, collection)?;
-            let client = self.current_client().await?;
-            let coll = client.database(db).collection::<Document>(collection);
+            // Sprint 180 (AC-180-04): cancel-token cooperation; same shape
+            // as `list_collections` above.
+            let work = async move {
+                validate_ns(db, collection)?;
+                let client = self.current_client().await?;
+                let coll = client.database(db).collection::<Document>(collection);
 
-            // Sprint 66 uses a best-effort sample: `find(None)` + `limit`.
-            // Aggregation with `$sample` would be more uniform but requires
-            // pipeline support which is still stubbed. The first N documents
-            // is plenty for P0 inference and matches what the Quick Open
-            // grid will preview initially.
-            let limit_i64: i64 = sample_size.max(1).min(i64::MAX as usize) as i64;
-            let mut cursor = coll
-                .find(Document::new())
-                .limit(limit_i64)
-                .await
-                .map_err(|e| AppError::Database(format!("find(sample) failed: {e}")))?;
+                // Sprint 66 uses a best-effort sample: `find(None)` + `limit`.
+                // Aggregation with `$sample` would be more uniform but requires
+                // pipeline support which is still stubbed. The first N documents
+                // is plenty for P0 inference and matches what the Quick Open
+                // grid will preview initially.
+                let limit_i64: i64 = sample_size.max(1).min(i64::MAX as usize) as i64;
+                let mut cursor = coll
+                    .find(Document::new())
+                    .limit(limit_i64)
+                    .await
+                    .map_err(|e| AppError::Database(format!("find(sample) failed: {e}")))?;
 
-            let mut samples: Vec<Document> = Vec::new();
-            while let Some(next) = cursor.next().await {
-                match next {
-                    Ok(d) => samples.push(d),
-                    Err(e) => {
-                        return Err(AppError::Database(format!("cursor iteration failed: {e}")));
+                let mut samples: Vec<Document> = Vec::new();
+                while let Some(next) = cursor.next().await {
+                    match next {
+                        Ok(d) => samples.push(d),
+                        Err(e) => {
+                            return Err(AppError::Database(format!(
+                                "cursor iteration failed: {e}"
+                            )));
+                        }
                     }
                 }
-            }
 
-            Ok(infer_columns_from_samples(&samples))
+                Ok(infer_columns_from_samples(&samples))
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
         })
     }
 
@@ -491,86 +526,98 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
         collection: &'a str,
         body: FindBody,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
         Box::pin(async move {
-            validate_ns(db, collection)?;
-            let started = Instant::now();
-            let client = self.current_client().await?;
-            let coll = client.database(db).collection::<Document>(collection);
+            // Sprint 180 (AC-180-04): cancel-token cooperation.
+            let work = async move {
+                validate_ns(db, collection)?;
+                let started = Instant::now();
+                let client = self.current_client().await?;
+                let coll = client.database(db).collection::<Document>(collection);
 
-            let FindBody {
-                filter,
-                sort,
-                projection,
-                skip,
-                limit,
-            } = body;
+                let FindBody {
+                    filter,
+                    sort,
+                    projection,
+                    skip,
+                    limit,
+                } = body;
 
-            let mut opts = FindOptions::default();
-            if let Some(s) = sort {
-                opts.sort = Some(s);
-            }
-            if let Some(p) = projection {
-                opts.projection = Some(p);
-            }
-            if skip > 0 {
-                opts.skip = Some(skip);
-            }
-            // `limit = 0` is treated as "no explicit limit" to match the
-            // default behaviour documented on the DocumentAdapter trait;
-            // values > 0 are forwarded verbatim.
-            if limit > 0 {
-                opts.limit = Some(limit);
-            }
+                let mut opts = FindOptions::default();
+                if let Some(s) = sort {
+                    opts.sort = Some(s);
+                }
+                if let Some(p) = projection {
+                    opts.projection = Some(p);
+                }
+                if skip > 0 {
+                    opts.skip = Some(skip);
+                }
+                // `limit = 0` is treated as "no explicit limit" to match the
+                // default behaviour documented on the DocumentAdapter trait;
+                // values > 0 are forwarded verbatim.
+                if limit > 0 {
+                    opts.limit = Some(limit);
+                }
 
-            let mut cursor = coll
-                .find(filter)
-                .with_options(opts)
-                .await
-                .map_err(|e| AppError::Database(format!("find failed: {e}")))?;
+                let mut cursor = coll
+                    .find(filter)
+                    .with_options(opts)
+                    .await
+                    .map_err(|e| AppError::Database(format!("find failed: {e}")))?;
 
-            let mut raw_documents: Vec<Document> = Vec::new();
-            while let Some(next) = cursor.next().await {
-                match next {
-                    Ok(d) => raw_documents.push(d),
-                    Err(e) => {
-                        return Err(AppError::Database(format!("cursor iteration failed: {e}")));
+                let mut raw_documents: Vec<Document> = Vec::new();
+                while let Some(next) = cursor.next().await {
+                    match next {
+                        Ok(d) => raw_documents.push(d),
+                        Err(e) => {
+                            return Err(AppError::Database(format!(
+                                "cursor iteration failed: {e}"
+                            )));
+                        }
                     }
                 }
+
+                // Derive the column order from the returned batch so the grid
+                // has a stable projection even when the caller did not pre-call
+                // `infer_collection_fields`. `_id` is forced to the leading
+                // position to match the inference helper's contract.
+                let columns = columns_from_docs(&raw_documents);
+
+                // Flatten each document into the projected row order.
+                let rows: Vec<Vec<serde_json::Value>> = raw_documents
+                    .iter()
+                    .map(|doc| project_row(doc, &columns))
+                    .collect();
+
+                // `estimated_document_count` is O(1) via collection metadata and
+                // is acceptable for the P0 total-count badge — exact counts
+                // require a full collection scan which Sprint 66 explicitly
+                // defers.
+                let total_count_u64 = coll.estimated_document_count().await.map_err(|e| {
+                    AppError::Database(format!("estimated_document_count failed: {e}"))
+                })?;
+                let total_count = total_count_u64.min(i64::MAX as u64) as i64;
+
+                let elapsed = started.elapsed();
+                let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
+
+                Ok(DocumentQueryResult {
+                    columns,
+                    rows,
+                    raw_documents,
+                    total_count,
+                    execution_time_ms,
+                })
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
             }
-
-            // Derive the column order from the returned batch so the grid
-            // has a stable projection even when the caller did not pre-call
-            // `infer_collection_fields`. `_id` is forced to the leading
-            // position to match the inference helper's contract.
-            let columns = columns_from_docs(&raw_documents);
-
-            // Flatten each document into the projected row order.
-            let rows: Vec<Vec<serde_json::Value>> = raw_documents
-                .iter()
-                .map(|doc| project_row(doc, &columns))
-                .collect();
-
-            // `estimated_document_count` is O(1) via collection metadata and
-            // is acceptable for the P0 total-count badge — exact counts
-            // require a full collection scan which Sprint 66 explicitly
-            // defers.
-            let total_count_u64 = coll
-                .estimated_document_count()
-                .await
-                .map_err(|e| AppError::Database(format!("estimated_document_count failed: {e}")))?;
-            let total_count = total_count_u64.min(i64::MAX as u64) as i64;
-
-            let elapsed = started.elapsed();
-            let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
-
-            Ok(DocumentQueryResult {
-                columns,
-                rows,
-                raw_documents,
-                total_count,
-                execution_time_ms,
-            })
         })
     }
 
@@ -579,55 +626,66 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
         collection: &'a str,
         pipeline: Vec<Document>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
     ) -> BoxFuture<'a, Result<DocumentQueryResult, AppError>> {
         Box::pin(async move {
-            validate_ns(db, collection)?;
-            let started = Instant::now();
-            let client = self.current_client().await?;
-            let coll = client.database(db).collection::<Document>(collection);
+            // Sprint 180 (AC-180-04): cancel-token cooperation.
+            let work = async move {
+                validate_ns(db, collection)?;
+                let started = Instant::now();
+                let client = self.current_client().await?;
+                let coll = client.database(db).collection::<Document>(collection);
 
-            let mut cursor = coll
-                .aggregate(pipeline)
-                .await
-                .map_err(|e| AppError::Database(format!("aggregate failed: {e}")))?;
+                let mut cursor = coll
+                    .aggregate(pipeline)
+                    .await
+                    .map_err(|e| AppError::Database(format!("aggregate failed: {e}")))?;
 
-            let mut raw_documents: Vec<Document> = Vec::new();
-            while let Some(next) = cursor.next().await {
-                match next {
-                    Ok(d) => raw_documents.push(d),
-                    Err(e) => {
-                        return Err(AppError::Database(format!(
-                            "aggregate cursor iteration failed: {e}"
-                        )));
+                let mut raw_documents: Vec<Document> = Vec::new();
+                while let Some(next) = cursor.next().await {
+                    match next {
+                        Ok(d) => raw_documents.push(d),
+                        Err(e) => {
+                            return Err(AppError::Database(format!(
+                                "aggregate cursor iteration failed: {e}"
+                            )));
+                        }
                     }
                 }
+
+                // Derive the column order from the pipeline output so grid layout
+                // is stable without a pre-inference round-trip. Mirrors `find`.
+                let columns = columns_from_docs(&raw_documents);
+                let rows: Vec<Vec<serde_json::Value>> = raw_documents
+                    .iter()
+                    .map(|doc| project_row(doc, &columns))
+                    .collect();
+
+                // `total_count` reflects aggregate output cardinality, not the
+                // backing collection's document count. `estimated_document_count`
+                // is deliberately NOT called here: pipelines like `$match` /
+                // `$group` / `$limit` reshape the row set, so the upstream
+                // estimate would be misleading.
+                let total_count = rows.len() as i64;
+
+                let elapsed = started.elapsed();
+                let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
+
+                Ok(DocumentQueryResult {
+                    columns,
+                    rows,
+                    raw_documents,
+                    total_count,
+                    execution_time_ms,
+                })
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
             }
-
-            // Derive the column order from the pipeline output so grid layout
-            // is stable without a pre-inference round-trip. Mirrors `find`.
-            let columns = columns_from_docs(&raw_documents);
-            let rows: Vec<Vec<serde_json::Value>> = raw_documents
-                .iter()
-                .map(|doc| project_row(doc, &columns))
-                .collect();
-
-            // `total_count` reflects aggregate output cardinality, not the
-            // backing collection's document count. `estimated_document_count`
-            // is deliberately NOT called here: pipelines like `$match` /
-            // `$group` / `$limit` reshape the row set, so the upstream
-            // estimate would be misleading.
-            let total_count = rows.len() as i64;
-
-            let elapsed = started.elapsed();
-            let execution_time_ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
-
-            Ok(DocumentQueryResult {
-                columns,
-                rows,
-                raw_documents,
-                total_count,
-                execution_time_ms,
-            })
         })
     }
 
@@ -1141,7 +1199,7 @@ mod tests {
     #[tokio::test]
     async fn list_collections_rejects_empty_db_name() {
         let adapter = MongoAdapter::new();
-        match adapter.list_collections("   ").await {
+        match adapter.list_collections("   ", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Database name"), "unexpected message: {msg}");
             }
@@ -1159,7 +1217,7 @@ mod tests {
     #[tokio::test]
     async fn infer_collection_fields_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
-        match adapter.infer_collection_fields("db", "c", 10).await {
+        match adapter.infer_collection_fields("db", "c", 10, None).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected message: {msg}");
             }
@@ -1170,7 +1228,7 @@ mod tests {
     #[tokio::test]
     async fn infer_collection_fields_rejects_empty_db_name() {
         let adapter = MongoAdapter::new();
-        match adapter.infer_collection_fields("   ", "c", 10).await {
+        match adapter.infer_collection_fields("   ", "c", 10, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Database name"), "unexpected message: {msg}");
             }
@@ -1181,7 +1239,7 @@ mod tests {
     #[tokio::test]
     async fn infer_collection_fields_rejects_empty_collection_name() {
         let adapter = MongoAdapter::new();
-        match adapter.infer_collection_fields("db", "   ", 10).await {
+        match adapter.infer_collection_fields("db", "   ", 10, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Collection name"), "unexpected message: {msg}");
             }
@@ -1193,7 +1251,7 @@ mod tests {
     async fn find_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         let body = FindBody::default();
-        match adapter.find("db", "c", body).await {
+        match adapter.find("db", "c", body, None).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected message: {msg}");
             }
@@ -1205,7 +1263,7 @@ mod tests {
     async fn find_rejects_empty_namespace() {
         let adapter = MongoAdapter::new();
         let body = FindBody::default();
-        match adapter.find("   ", "", body).await {
+        match adapter.find("   ", "", body, None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Database name"), "unexpected message: {msg}");
             }
@@ -1331,7 +1389,7 @@ mod tests {
     #[tokio::test]
     async fn test_aggregate_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
-        match adapter.aggregate("db", "c", Vec::new()).await {
+        match adapter.aggregate("db", "c", Vec::new(), None).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected message: {msg}");
             }
@@ -1342,13 +1400,13 @@ mod tests {
     #[tokio::test]
     async fn test_aggregate_rejects_empty_namespace() {
         let adapter = MongoAdapter::new();
-        match adapter.aggregate("", "c", Vec::new()).await {
+        match adapter.aggregate("", "c", Vec::new(), None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Database name"), "unexpected message: {msg}");
             }
             other => panic!("expected Validation error, got ok? {}", other.is_ok()),
         }
-        match adapter.aggregate("db", "   ", Vec::new()).await {
+        match adapter.aggregate("db", "   ", Vec::new(), None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Collection name"), "unexpected message: {msg}");
             }

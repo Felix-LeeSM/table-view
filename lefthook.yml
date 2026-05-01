@@ -26,19 +26,44 @@ pre-commit:
         fi
 
 pre-push:
+  # ADR 0019 (2026-05-01) — E2E를 CI에서 떼고 host-native pre-push 게이트로
+  # 이동. push 전에 단위/린트/빌드 체크를 끝낸 다음 e2e가 실제 사용자 환경
+  # (macOS WKWebView)에서 통과해야만 push 허용. `--no-verify` / `LEFTHOOK=0`
+  # 회피는 `.claude/hooks/pre-bash.sh`에서 차단.
+  #
+  # 순서: 빠른 체크(test/lint/check)가 먼저 실패하면 e2e 부팅 비용을 아낌.
+  # `piped: true`로 직렬 실행 — e2e는 cold start ~1-3분이라 다른 체크와
+  # 동시에 돌리면 docker boot 비용이 항상 부과됨.
+  piped: true
   commands:
-    rust-test:
+    1_rust-test:
       tags: test rust
       run: cd src-tauri && cargo test --lib --test storage_integration
-    ts-test:
+    2_ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage
-    ts-lint:
+    3_ts-lint:
       tags: lint frontend
       run: npm run lint
-    tauri-check:
+    4_tauri-check:
       tags: build
       run: cd src-tauri && cargo check
+    5_e2e:
+      # ADR 0020 (2026-05-01) — host docker pipeline, NOT host-native.
+      # `tauri-driver` is Linux-only (built on `WebKitWebDriver`) and
+      # exits with `tauri-driver is not supported on this platform` on
+      # macOS, so the docker compose `e2e` service (ubuntu + xvfb +
+      # webkit2gtk-driver) is the only working runtime. The dev
+      # machine's docker daemon is more deterministic than CI's shared
+      # ubuntu-latest runner — that's the actual win.
+      #
+      # The wrapper script removes any stale `e2e` service container
+      # before running the pipeline. Without it, an aborted previous
+      # run leaves a Created/Exited container bound to a recycled docker
+      # network, and `up --profile test` then fails with
+      # `network <id> not found` before any spec executes.
+      tags: test e2e
+      run: bash scripts/e2e-pre-push.sh
 
 commit-msg:
   commands:

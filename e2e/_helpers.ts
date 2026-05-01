@@ -36,7 +36,7 @@ const WORKSPACE_TITLE = "Table View — Workspace";
  * makes the helper resilient: each iteration re-fetches the handle list,
  * so the workspace handle becomes addressable as soon as Tauri exposes it.
  */
-export async function switchToWorkspaceWindow(timeoutMs = 15000) {
+export async function switchToWorkspaceWindow(timeoutMs = 30000) {
   const start = Date.now();
   let lastError: unknown = null;
   while (Date.now() - start < timeoutMs) {
@@ -166,7 +166,14 @@ export async function ensureTestPgConnection() {
 
   const portInput = await $("#conn-port");
   await portInput.clearValue();
-  await portInput.setValue("5432");
+  // Default 15432 = the host port that docker-compose.yml binds the test
+  // postgres to (prod default + 10000, ADR 0019 follow-up). Inside the
+  // docker `e2e` service container the postgres hostname `postgres`
+  // resolves on the compose network at the internal :5432, so the
+  // container path overrides via `PGPORT=5432` set in compose env.
+  await portInput.setValue(
+    process.env.E2E_PG_PORT ?? process.env.PGPORT ?? "15432",
+  );
 
   const userInput = await $("#conn-user");
   await userInput.clearValue();
@@ -210,14 +217,18 @@ export async function openTestPgWorkspace() {
   }
 
   // The Workspace's [← Connections] back button is the unambiguous
-  // Workspace marker.
+  // Workspace marker. 15s was too tight on cold tauri-driver + xvfb +
+  // first-connect — the Sprint 174 ARIA dumps showed the back button
+  // (and the schema tree) eventually populate, just after the original
+  // 15s window. Bump to 30s so cold shards have headroom; the outer
+  // mocha timeout (120s in wdio.conf.ts) still bounds the test.
   const back = await $('[aria-label="Back to connections"]');
-  await back.waitForDisplayed({ timeout: 15000 });
+  await back.waitForDisplayed({ timeout: 30000 });
 
   // Wait for the schema tree to render — Workspace's Sidebar mounts the
   // SchemaPanel which lazily loads the public schema once connected.
   const publicSchema = await $('[aria-label="public schema"]');
-  await publicSchema.waitForDisplayed({ timeout: 15000 });
+  await publicSchema.waitForDisplayed({ timeout: 30000 });
 }
 
 /**

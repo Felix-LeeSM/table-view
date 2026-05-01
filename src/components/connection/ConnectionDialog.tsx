@@ -77,6 +77,43 @@ import RedisFormFields from "./forms/RedisFormFields";
 // The form's `environment` field still stores `null` (canonical empty).
 const ENV_NONE_SENTINEL = "__none__";
 
+/**
+ * Sprint 178 (AC-178-05): sanitise an error message before surfacing it
+ * in any user-visible region (`role="alert"`, `role="status"`, the
+ * `<DialogFeedback>` slot's `aria-live="polite"` body, etc.). Backends
+ * sometimes echo the connection string (including the password) in
+ * their error copy; ADR-0005 says no plaintext password leaves the
+ * frontend without an IPC handshake — so even if the IPC layer hands
+ * us back an error containing the password, the renderer must mask it
+ * before painting the DOM.
+ *
+ * Replaces every occurrence of the plaintext password (raw + URL-encoded
+ * variant) with `***`. Empty/whitespace-only password values are
+ * treated as no-op so legitimate error copy isn't mutated for users
+ * with no password set.
+ */
+export function sanitizeMessage(
+  raw: string,
+  ...secrets: Array<string | null | undefined>
+): string {
+  let out = raw;
+  for (const secret of secrets) {
+    if (!secret || secret.length === 0) continue;
+    // `replaceAll` requires a literal substring (not a regex) to avoid
+    // accidental regex-meta interpretation of the password.
+    out = out.split(secret).join("***");
+    // Also mask the URL-encoded form (e.g. `pass@1` → `pass%401`) so
+    // the literal connection-string echo can't surface the encoded
+    // password. `encodeURIComponent` is the same routine the URL parser
+    // expects; if encoding is a no-op we don't add a redundant pass.
+    const encoded = encodeURIComponent(secret);
+    if (encoded !== secret) {
+      out = out.split(encoded).join("***");
+    }
+  }
+  return out;
+}
+
 interface ConnectionDialogProps {
   connection?: ConnectionConfig;
   onClose: () => void;
@@ -126,6 +163,13 @@ export default function ConnectionDialog({
   const [pendingDbTypeChange, setPendingDbTypeChange] = useState<{
     to: DatabaseType;
   } | null>(null);
+  // Sprint 178 (Postel's Law): when the form-mode host paste is recognised
+  // as a connection URL, we render a calm inline note next to the host
+  // field announcing what was detected. The note is non-modal, advisory,
+  // never role="alert"/"status" — that contract is enforced by AC-178-04
+  // (silent on malformed pastes) and AC-178-05 (no password leak via
+  // alert regions).
+  const [detectedScheme, setDetectedScheme] = useState<string | null>(null);
 
   // Sprint-95 Layer-1 migration: project the local 4-state union onto the
   // generic DialogFeedback contract. `pending` → `loading` is the only naming
@@ -202,32 +246,64 @@ export default function ConnectionDialog({
     return null;
   };
 
+  // Sprint 178 (AC-178-02): trim user-pasteable string fields at the
+  // save/test boundary, NEVER on keystroke. The list is narrowly scoped:
+  // `password` is excluded per ADR-0005 (some legacy systems require
+  // whitespace in the password) and `database` for SQLite is treated as
+  // a file path which `parseSqliteFilePath` already trims at parse time.
+  // Future SSH-key-path or SSH-host fields can extend this list when
+  // they are introduced.
+  const trimDraft = (draft: ConnectionDraft): ConnectionDraft => ({
+    ...draft,
+    name: draft.name.trim(),
+    host: draft.host.trim(),
+    database: draft.database.trim(),
+    user: draft.user.trim(),
+  });
+
   const handleTest = async () => {
     // Sprint-92: publish pending first so the alert slot shows the spinner +
     // "Testing..." while the request is in flight; the slot itself stays
     // mounted across this transition.
     setTestResult({ status: "pending" });
     try {
-      const draft: ConnectionDraft = { ...form, password: resolvePassword() };
+      // Sprint 178 (AC-178-02): trim non-password string fields before
+      // dispatching the test. Password is sent verbatim per ADR-0005.
+      const draft: ConnectionDraft = trimDraft({
+        ...form,
+        password: resolvePassword(),
+      });
       const msg = await testConnection(draft, connection?.id ?? null);
       setTestResult({ status: "success", message: msg });
     } catch (e) {
-      setTestResult({ status: "error", message: String(e) });
+      // Sprint 178 (AC-178-05): the backend's error message can naively
+      // echo the connection string (including the password). Sanitise
+      // the rendered message so no password substring lands in any
+      // role="alert"/role="status"/aria-live region.
+      setTestResult({
+        status: "error",
+        message: sanitizeMessage(String(e), passwordInput, form.password),
+      });
     }
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) {
+    // Sprint 178: validate against trimmed values so a user typing only
+    // whitespace into Name/Host gets the same "required" error they'd
+    // get from a blank input. The existing `.trim()` checks already
+    // covered Name; the trim helper centralises the policy.
+    const trimmed = trimDraft({ ...form, password: resolvePassword() });
+    if (!trimmed.name) {
       setError("Name is required");
       return;
     }
     // SQLite uses `database` as the file path; host is irrelevant. The
     // host check applies only to network DBMSes.
-    if (!isSqlite && !form.host.trim()) {
+    if (!isSqlite && !trimmed.host) {
       setError("Host is required");
       return;
     }
-    if (isSqlite && !form.database.trim()) {
+    if (isSqlite && !trimmed.database) {
       setError("Database file is required");
       return;
     }
@@ -235,20 +311,113 @@ export default function ConnectionDialog({
     setSaving(true);
     setError(null);
     try {
-      const draft: ConnectionDraft = { ...form, password: resolvePassword() };
+      // Sprint 178 (AC-178-02): outgoing payload uses trimmed values.
+      // Password (resolvePassword()) is set on the trimmed copy
+      // verbatim — `trimDraft` only trims non-password keys.
       if (isEditing) {
-        await updateConnection(draft);
+        await updateConnection(trimmed);
       } else {
-        await addConnection(draft);
+        await addConnection(trimmed);
         // After a new connection is saved, surface it to the user — Sidebar
         // listens for this and flips to Connections mode if needed.
         window.dispatchEvent(new Event("connection-added"));
       }
       onClose();
     } catch (e) {
-      setError(String(e));
+      // Sprint 178 (AC-178-05): sanitise error text so a backend that
+      // echoes the connection string does not surface the password.
+      setError(sanitizeMessage(String(e), passwordInput, form.password));
     }
     setSaving(false);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Sprint 178 — form-mode URL paste detection (AC-178-01) + host:port
+  // blur split (AC-178-03). Paste is the explicit user-intent trigger;
+  // change events are intentionally NOT used because typing a host like
+  // `db.example.com` would otherwise fire detection mid-stream.
+  //
+  // The handlers live on the form wrapper (delegated via React's
+  // synthetic-event bubbling). They short-circuit on any target other
+  // than `#conn-host` so other inputs (name/user/database/password) are
+  // not affected.
+  // ─────────────────────────────────────────────────────────────────────
+  const RECOGNISED_SCHEMES = [
+    "postgres",
+    "postgresql",
+    "mysql",
+    "mariadb",
+    "mongodb",
+    "mongodb+srv",
+    "redis",
+    "sqlite",
+  ] as const;
+
+  const looksLikeRecognisedUrl = (text: string): boolean => {
+    const trimmed = text.trim();
+    return RECOGNISED_SCHEMES.some(
+      (scheme) =>
+        trimmed.startsWith(`${scheme}://`) ||
+        // sqlite uses `sqlite:/path` (single slash), so accept that too.
+        (scheme === "sqlite" && trimmed.startsWith("sqlite:")),
+    );
+  };
+
+  const handleHostPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.id !== "conn-host") return;
+    const pasted = e.clipboardData?.getData("text") ?? "";
+    if (!pasted) return;
+    if (!looksLikeRecognisedUrl(pasted)) return;
+    // Try the URL parser first. SQLite URLs land in the same parser
+    // branch (`sqlite:/path` is supported by `parseConnectionUrl`). A
+    // falsy result means malformed (e.g. `postgres://`); per AC-178-04
+    // we silently leave the host field unchanged — no toast, no alert.
+    const parsed = parseConnectionUrl(pasted.trim());
+    if (!parsed) {
+      // Malformed URL paste — silent best-effort, do nothing. The user's
+      // pasted text continues into the host field via the default paste
+      // behaviour. No alert region added.
+      return;
+    }
+    // Successful parse: prevent the literal URL from also landing in the
+    // host field (which would create a fight between `parsed.host` and
+    // the raw paste). Then merge the parsed fields into the draft and
+    // populate the password input separately.
+    e.preventDefault();
+    const { password, ...rest } = parsed;
+    setForm((f) => ({
+      ...f,
+      ...rest,
+      // Borrow the database name as a connection name only if the user
+      // hasn't started typing one yet (matches URL-mode `Parse & Continue`
+      // behaviour at lines 414-416).
+      name: f.name || parsed.database || f.name,
+    }));
+    if (typeof password === "string" && password.length > 0) {
+      setPasswordInput(password);
+    }
+    setDetectedScheme(parsed.db_type ?? null);
+  };
+
+  // AC-178-03: on blur of the host field, split a single-`:`-then-digits
+  // suffix into the port. The regex `^([^\[:][^:]*):(\d+)$` rejects
+  // bracket-form IPv6 (`[::1]:5432` — first char `[`), multi-colon IPv6
+  // (`::1:5432` — first char `:`, second `:` violates the no-colon
+  // segment), and non-digit ports (`db.example.com:abcd`).
+  const HOST_PORT_RE = /^([^[:][^:]*):(\d+)$/;
+  const handleHostBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.id !== "conn-host") return;
+    const value = (target as HTMLInputElement).value;
+    const match = value.match(HOST_PORT_RE);
+    if (!match) return;
+    const hostPart = match[1];
+    const portPart = match[2];
+    if (typeof hostPart !== "string" || typeof portPart !== "string") return;
+    const port = parseInt(portPart, 10);
+    if (Number.isNaN(port)) return;
+    setForm((f) => ({ ...f, host: hostPart, port }));
   };
 
   const inputClass =
@@ -427,7 +596,17 @@ export default function ConnectionDialog({
 
           {/* Form fields */}
           {inputMode === "form" && (
-            <div className="space-y-3">
+            // Sprint 178 (AC-178-01 / AC-178-03): paste-detect + blur-split
+            // are wired via React's bubbled synthetic events on the form
+            // wrapper. Both handlers short-circuit on any target other
+            // than `#conn-host` (the input rendered by the DBMS-specific
+            // form field). This avoids prop-drilling new handler props
+            // through every form sub-component.
+            <div
+              className="space-y-3"
+              onPaste={handleHostPaste}
+              onBlur={handleHostBlur}
+            >
               {/* Name */}
               <div>
                 <label htmlFor="conn-name" className={labelClass}>
@@ -505,6 +684,26 @@ export default function ConnectionDialog({
 
               {/* DBMS-aware fields (Sprint 138) */}
               {renderDbmsFields()}
+
+              {/* Sprint 178 (AC-178-01) — non-modal "detected" affordance.
+                  This is a calm, advisory inline note shown after a
+                  successful URL paste into the host field. It deliberately
+                  does NOT carry `role="alert"` or `role="status"` so it
+                  cannot be confused with an error region (AC-178-04
+                  silence on malformed pastes) and the AC-178-05 password
+                  leak guard does not need to walk this region (it never
+                  contains password text either way). The copy is
+                  declarative ("Detected … URL — fields populated") and
+                  matches the muted-foreground tone of the URL-mode help
+                  text at line 546-549. */}
+              {detectedScheme && (
+                <p
+                  className="text-2xs text-muted-foreground"
+                  data-testid="connection-url-detected"
+                >
+                  Detected {detectedScheme} URL — fields populated.
+                </p>
+              )}
 
               {/* Advanced Settings */}
               <div className="border-t border-border pt-3">

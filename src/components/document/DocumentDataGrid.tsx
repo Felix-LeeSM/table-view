@@ -5,6 +5,7 @@ import type { ColumnInfo, TableData } from "@/types/schema";
 import { isDocumentSentinel } from "@/types/document";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
+import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import {
   editKey,
   cellToEditValue,
@@ -15,7 +16,8 @@ import AddDocumentModal from "@components/document/AddDocumentModal";
 import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
-import { insertDocument } from "@lib/tauri";
+import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import { insertDocument, cancelQuery } from "@lib/tauri";
 import { cn } from "@lib/utils";
 
 interface DocumentDataGridProps {
@@ -70,6 +72,16 @@ export default function DocumentDataGrid({
   const [addError, setAddError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const fetchIdRef = useRef(0);
+  // Sprint 180 — track the in-flight `find_documents` query id so the
+  // shared Cancel button can route through `cancel_query`. Mongo runs
+  // its find / aggregate on a `tokio::select!` shape that observes the
+  // registered token (Sprint 180 backend extension); the Tauri command
+  // accepts an optional query_id and registers the token before
+  // dispatching the driver call. When the user clicks Cancel we
+  // (a) call `cancel_query(queryId)` for backend-side abort and
+  // (b) clear `loading` immediately so the overlay drops within one
+  // frame without waiting for the driver to settle (AC-180-02).
+  const queryIdRef = useRef<string | null>(null);
 
   const filterFieldNames = useMemo<readonly string[]>(
     () => (fieldsCacheEntry ? fieldsCacheEntry.map((c) => c.name) : []),
@@ -94,7 +106,10 @@ export default function DocumentDataGrid({
     } catch (e) {
       if (fetchIdRef.current === fetchId) setError(String(e));
     } finally {
-      if (fetchIdRef.current === fetchId) setLoading(false);
+      if (fetchIdRef.current === fetchId) {
+        setLoading(false);
+        queryIdRef.current = null;
+      }
     }
   }, [
     runFind,
@@ -106,6 +121,28 @@ export default function DocumentDataGrid({
     activeFilter,
     activeFilterCount,
   ]);
+
+  // Sprint 180 — Cancel handler for the threshold overlay. Bumps
+  // `fetchIdRef` so the in-flight resolve is treated as stale (its
+  // result is dropped) and clears `loading` synchronously so the
+  // overlay disappears within one frame even if the backend hasn't
+  // yet observed the cancel token. The best-effort `cancel_query` call
+  // tells the backend to drop its driver-side handle; we swallow the
+  // result because the user-visible state is already consistent.
+  const handleCancelRefetch = useCallback(() => {
+    fetchIdRef.current++;
+    setLoading(false);
+    const queryId = queryIdRef.current;
+    queryIdRef.current = null;
+    if (queryId) {
+      cancelQuery(queryId).catch(() => {
+        // best-effort: backend cancel registry may have already evicted
+        // the token (race with finally clause), or the connection may
+        // have been swapped. The frontend has already settled into a
+        // consistent state, so we do not surface this to the user.
+      });
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -169,6 +206,12 @@ export default function DocumentDataGrid({
   const totalPages = data
     ? Math.max(1, Math.ceil(data.total_count / pageSize))
     : 1;
+
+  // Sprint 180 (AC-180-01) — threshold gate for the shared overlay. The
+  // overlay only paints after `loading` has been continuously true for
+  // 1s; sub-second refetches resolve before this flips and never paint
+  // the overlay at all. See `useDelayedFlag` for the timer ownership.
+  const overlayVisible = useDelayedFlag(loading, 1000);
 
   const showQuickLookMounted =
     showQuickLook && editState.selectedRowIds.size > 0 && !!queryResult;
@@ -321,14 +364,21 @@ export default function DocumentDataGrid({
 
       {data && (
         <div className="relative flex-1 overflow-auto">
-          {loading && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/60">
-              <Loader2
-                className="animate-spin text-muted-foreground"
-                size={24}
-              />
-            </div>
-          )}
+          {/* Sprint 180 — Doherty + Goal-Gradient async UX. The shared
+              `AsyncProgressOverlay` materialises only after `loading`
+              has been continuously true for 1s (`useDelayedFlag`), so
+              sub-second refetches no longer flicker an overlay. The
+              overlay still preserves the Sprint 176 pointer-event
+              hardening (mouseDown / click / doubleClick / contextMenu
+              all `preventDefault + stopPropagation`) — that logic is
+              now internal to `AsyncProgressOverlay`. The Cancel button
+              fires `handleCancelRefetch`, which clears `loading`
+              synchronously (AC-180-02) and best-effort cancels the
+              backend driver handle (AC-180-04 / AC-180-05). */}
+          <AsyncProgressOverlay
+            visible={overlayVisible}
+            onCancel={handleCancelRefetch}
+          />
           <table className="min-w-full table-fixed border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-secondary">
               <tr>

@@ -34,7 +34,14 @@ export const config: Options.Testrunner = {
   framework: "mocha",
   mochaOpts: {
     ui: "bdd",
-    timeout: 60000,
+    // Sprint 172/174 ARIA artifacts confirmed Workspace/SchemaTree ARIA
+    // eventually populates (back button + `public schema` + tables all
+    // visible in `wdio-report/*win0_aria.txt`), but on cold xvfb +
+    // tauri-driver + first-connect the boot+navigate flow can blow past
+    // 60s. Bumping to 120s covers cold shards while still failing fast on
+    // genuinely stuck tests (the helpers' internal 15→30s probes still
+    // bound any single wait).
+    timeout: 120000,
   },
 
   // sprint-174 — When a spec fails on CI we get a generic timeout

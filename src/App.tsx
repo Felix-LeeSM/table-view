@@ -11,6 +11,7 @@ import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 import { useThemeStore } from "./stores/themeStore";
+import { markBootMilestone } from "./lib/perf/bootInstrumentation";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -27,6 +28,10 @@ export default function App() {
     initEventListeners();
     loadPersistedFavorites();
     loadPersistedMru();
+    // sprint-175 — emit `app:effects-fired` once the workspace's five IPC
+    // dispatches have been kicked off. This is the workspace-side anchor
+    // for the end-to-end `T0 → app:effects-fired` row in baseline.md.
+    markBootMilestone("app:effects-fired");
   }, [
     loadConnections,
     loadGroups,

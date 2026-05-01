@@ -157,9 +157,20 @@ export function useSqlAutocomplete(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ns: Record<string, any> = {};
 
-    // SQL functions — grouped under a virtual "functions" namespace entry
+    // SQL functions and keywords. Both are wrapped in `{ self, children }`
+    // so CodeMirror's `nameCompletion` does NOT auto-quote them: its
+    // default rule wraps any label that contains uppercase letters in the
+    // dialect's identifier quote (`"SELECT"` for PG / SQLite). Keywords
+    // and functions are reserved tokens, not identifiers — quoting them
+    // turns `SELECT` into a string literal at parse time.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reservedToken = (label: string, type: string): any => ({
+      self: { label, type, apply: label },
+      children: {},
+    });
+
     for (const fn of SQL_FUNCTIONS) {
-      ns[fn] = {};
+      ns[fn] = reservedToken(fn, "function");
     }
 
     // Sprint 139 — surface dialect-specific SQL keywords as top-level
@@ -170,7 +181,7 @@ export function useSqlAutocomplete(
       for (const kw of keywordsForDbType(dbType)) {
         // Avoid clobbering an existing entry (e.g. `SELECT` would never
         // collide with a table name, but stay defensive).
-        if (!(kw in ns)) ns[kw] = {};
+        if (!(kw in ns)) ns[kw] = reservedToken(kw, "keyword");
       }
     }
 

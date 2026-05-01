@@ -24,6 +24,42 @@ fn window_by_label<R: Runtime>(
         .ok_or_else(|| AppError::NotFound(format!("window '{label}' not found")))
 }
 
+/// Sprint 175 Sprint 2 iteration 2 — build the workspace `WebviewWindow`
+/// from hardcoded defaults instead of `tauri.conf.json` `app.windows[]`.
+///
+/// The workspace was removed from the static config (commit landed alongside
+/// this fn) because Tauri eagerly creates EVERY config-declared window at
+/// `tauri::Builder::run()`, including those marked `visible: false`. The
+/// iteration 1.5 sub-instrumentation showed that `rust:entry → rust:setup-done`
+/// runs 1124ms median (75% of the 1490ms cold-boot segment), with both
+/// launcher and workspace `page-load:Started` events firing within 0.1ms of
+/// each other on every trial — i.e. the workspace WKWebView was being
+/// spawned + bundle-loaded at boot in parallel with the launcher even when
+/// hidden. Skipping the workspace at boot is the AC-175-02-04 ≥30%
+/// shrinkage target picked by data.
+///
+/// Hardcoded values mirror the previous `tauri.conf.json` entry so the
+/// runtime window shape is byte-for-byte identical to Sprint 154's
+/// behavior; the only diff is *when* the window is constructed (on first
+/// `workspace_show` / `workspace_ensure` instead of at boot).
+fn build_workspace_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError> {
+    tauri::WebviewWindowBuilder::new(
+        app,
+        "workspace",
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .title("Table View — Workspace")
+    .inner_size(1280.0, 800.0)
+    .min_inner_size(960.0, 600.0)
+    .resizable(true)
+    .maximizable(true)
+    .center()
+    .visible(false)
+    .build()
+    .map(|_| ())
+    .map_err(|e| AppError::Connection(format!("workspace build failed: {e}")))
+}
+
 /// Show the launcher window. Idempotent — calling on an already-visible
 /// window is a no-op from the user's perspective.
 #[tauri::command]
@@ -51,10 +87,18 @@ pub async fn launcher_focus<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErro
         .map_err(|e| AppError::Connection(format!("launcher.focus failed: {e}")))
 }
 
-/// Show the workspace window. The window is born hidden (`visible: false`
-/// in `tauri.conf.json`) so the first show is the activation event.
+/// Show the workspace window. The window is **lazy-built** (Sprint 175
+/// Sprint 2 iteration 2): the first call to `workspace_show` constructs the
+/// `WebviewWindow` via `build_workspace_window`, subsequent calls hit the
+/// already-built window and just `.show()` it. This defers ~700ms of
+/// WKWebView spawn from boot to the user's first activation click — a
+/// latency the user is already prepared for since they explicitly clicked
+/// a connection.
 #[tauri::command]
 pub async fn workspace_show<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
+    if app.get_webview_window("workspace").is_none() {
+        build_workspace_window(&app)?;
+    }
     window_by_label(&app, "workspace")?
         .show()
         .map_err(|e| AppError::Connection(format!("workspace.show failed: {e}")))
@@ -78,36 +122,25 @@ pub async fn workspace_focus<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErr
         .map_err(|e| AppError::Connection(format!("workspace.focus failed: {e}")))
 }
 
-/// Ensure the workspace window exists. If it was closed/destroyed (e.g. OS
-/// closed it before the `onCloseRequested` listener was registered), recreate
-/// it from the `workspace` entry in `tauri.conf.json` `app.windows[]` using
-/// `WebviewWindowBuilder::from_config`.
+/// Ensure the workspace window exists. If it has not yet been constructed
+/// (Sprint 175 Sprint 2 iteration 2 — workspace is lazy-built; see
+/// `build_workspace_window`) or was destroyed (e.g. OS closed it before the
+/// `onCloseRequested` listener was registered), build it now from
+/// hardcoded defaults.
 ///
-/// This is the recovery path: the frontend's `showWindow("workspace")` calls
-/// `getByLabel` first; when that returns `null` it invokes `workspace_ensure`
-/// to recreate the window, then retries the show.
+/// This is the recovery / first-activation path: the frontend's
+/// `showWindow("workspace")` calls `getByLabel` first; when that returns
+/// `null` it invokes `workspace_ensure` to construct the window, then
+/// retries the show. With workspace removed from `tauri.conf.json`
+/// `app.windows[]`, the very first `workspace_ensure` (or `workspace_show`,
+/// which now calls into the same builder) is the *creation* event, not a
+/// recovery from destruction.
 #[tauri::command]
 pub async fn workspace_ensure<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     if app.get_webview_window("workspace").is_some() {
         return Ok(());
     }
-
-    let config = app.config();
-    let window_config = config
-        .app
-        .windows
-        .iter()
-        .find(|w| w.label == "workspace")
-        .ok_or_else(|| {
-            AppError::NotFound("workspace window config not found in tauri.conf.json".into())
-        })?;
-
-    tauri::WebviewWindowBuilder::from_config(&app, window_config)
-        .map_err(|e| AppError::Connection(format!("workspace from_config failed: {e}")))?
-        .build()
-        .map_err(|e| AppError::Connection(format!("workspace build failed: {e}")))?;
-
-    Ok(())
+    build_workspace_window(&app)
 }
 
 /// Exit the app cleanly. Used by Sprint 154's launcher-close handler so
@@ -216,25 +249,60 @@ mod tests {
         );
     }
 
-    /// Reason: workspace_ensure must return NotFound when the workspace config
-    /// is absent from tauri.conf.json (mock context has empty app.windows).
-    /// Verifies the error path when recreation is impossible. (2026-04-28)
+    /// Reason: Sprint 175 Sprint 2 iteration 2 — workspace was removed from
+    /// tauri.conf.json `app.windows[]` to skip its WKWebView spawn during
+    /// boot (saving ~75% of the 1490ms cold-boot rust:entry → rust:first-ipc
+    /// segment per iteration 1.5 sub-instrumentation). workspace_ensure must
+    /// now lazy-build the window from hardcoded defaults regardless of
+    /// whether the mock config carries a workspace entry — the
+    /// pre-iteration-2 NotFound path is gone because the workspace's
+    /// runtime shape is owned by `build_workspace_window`, not by the
+    /// static config. (2026-04-30)
     #[tokio::test]
-    async fn workspace_ensure_returns_not_found_when_config_missing() {
+    async fn workspace_ensure_lazy_creates_when_missing() {
         let app = mock_builder()
             .build(mock_context(noop_assets()))
             .expect("mock app build");
 
-        // No workspace window created, and mock config has no app.windows entry.
+        // No workspace window pre-created; mock config carries no workspace
+        // entry. Pre-iteration-2 this would error with NotFound.
+        assert!(app.get_webview_window("workspace").is_none());
+
         let result = workspace_ensure(app.handle().clone()).await;
-        match result {
-            Err(AppError::NotFound(msg)) => {
-                assert!(
-                    msg.contains("workspace"),
-                    "NotFound message should mention workspace, got {msg:?}"
-                );
-            }
-            other => panic!("Expected AppError::NotFound, got {other:?}"),
-        }
+        assert!(
+            result.is_ok(),
+            "workspace_ensure should lazy-build from hardcoded defaults, got {:?}",
+            result.err()
+        );
+        assert!(
+            app.get_webview_window("workspace").is_some(),
+            "workspace window should exist after lazy ensure"
+        );
+    }
+
+    /// Reason: Sprint 175 Sprint 2 iteration 2 — workspace_show used to
+    /// require a pre-built workspace window (the static config eagerly
+    /// constructed it at boot). After iteration 2, the first workspace_show
+    /// is the lazy-creation event; verify it both builds and shows the
+    /// window in one call so frontend ensure→show retry chains stay
+    /// optional. (2026-04-30)
+    #[tokio::test]
+    async fn workspace_show_lazy_creates_when_missing() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+
+        assert!(app.get_webview_window("workspace").is_none());
+
+        let result = workspace_show(app.handle().clone()).await;
+        assert!(
+            result.is_ok(),
+            "workspace_show should lazy-create + show, got {:?}",
+            result.err()
+        );
+        assert!(
+            app.get_webview_window("workspace").is_some(),
+            "workspace window should exist after lazy show"
+        );
     }
 }

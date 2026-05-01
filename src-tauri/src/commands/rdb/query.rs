@@ -166,23 +166,58 @@ pub async fn query_table_data(
     order_by: Option<String>,
     filters: Option<Vec<FilterCondition>>,
     raw_where: Option<String>,
+    // Sprint 180 (AC-180-04): optional per-call cancellation token id.
+    // When provided, the command registers a `CancellationToken` in
+    // `state.query_tokens` so the existing `cancel_query(query_id)`
+    // command can abort the in-flight call cooperatively. When omitted
+    // (legacy callers, fast paths) the trait method is invoked with
+    // `None` and behaves identically to pre-Sprint-180.
+    query_id: Option<String>,
 ) -> Result<TableData, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
-    active
-        .as_rdb()?
-        .query_table_data(
-            &schema,
-            &table,
-            page.unwrap_or(1),
-            page_size.unwrap_or(100),
-            order_by.as_deref(),
-            filters.as_deref(),
-            raw_where.as_deref(),
-        )
-        .await
+    // Hoist token registration outside the active_connections lock so
+    // `cancel_query` can flip the flag without contention. Mirrors the
+    // shape used by `execute_query` at lines 73-81 above.
+    let cancel_handle: Option<(String, CancellationToken)> = if let Some(qid) = query_id.as_ref() {
+        let token = CancellationToken::new();
+        let stored = token.clone();
+        {
+            let mut tokens = state.query_tokens.lock().await;
+            tokens.insert(qid.clone(), stored);
+        }
+        Some((qid.clone(), token))
+    } else {
+        None
+    };
+
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(&connection_id)
+            .ok_or_else(|| not_connected(&connection_id))?;
+        active
+            .as_rdb()?
+            .query_table_data(
+                &schema,
+                &table,
+                page.unwrap_or(1),
+                page_size.unwrap_or(100),
+                order_by.as_deref(),
+                filters.as_deref(),
+                raw_where.as_deref(),
+                cancel_handle.as_ref().map(|(_, tok)| tok),
+            )
+            .await
+    };
+
+    // Always remove the token after the call completes (success, error,
+    // or cancelled) so the registry stays clean for the next attempt
+    // (AC-180-05 retry contract).
+    if let Some((qid, _)) = cancel_handle {
+        let mut tokens = state.query_tokens.lock().await;
+        tokens.remove(&qid);
+    }
+
+    result
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import LauncherPage from "./pages/LauncherPage";
 import WorkspacePage from "./pages/WorkspacePage";
@@ -10,6 +10,7 @@ import { useConnectionStore } from "./stores/connectionStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { markBootMilestone } from "@lib/perf/bootInstrumentation";
 import App from "./App";
 
 /**
@@ -31,6 +32,18 @@ import App from "./App";
  */
 export default function AppRouter() {
   const label = getCurrentWindowLabel();
+
+  // sprint-175 — `react:first-paint` milestone. `useLayoutEffect` fires
+  // synchronously after React's first commit (after layout, before browser
+  // paint), which matches the contract's "first commit" semantic. The ref
+  // guard prevents StrictMode's double-invoke (and any subsequent re-render)
+  // from emitting the mark more than once.
+  const firstPaintMarkedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (firstPaintMarkedRef.current) return;
+    firstPaintMarkedRef.current = true;
+    markBootMilestone("react:first-paint");
+  }, []);
 
   // sprint-173 — keep `document.title` in sync with the Tauri window
   // decoration title. webdriver's `getTitle()` reports `document.title`
@@ -90,6 +103,10 @@ function LauncherShell() {
     initEventListeners();
     loadPersistedFavorites();
     loadPersistedMru();
+    // sprint-175 — emit `app:effects-fired` once the launcher's five IPC
+    // dispatches have been kicked off. This is the launcher-side anchor for
+    // the end-to-end `T0 → app:effects-fired` row in baseline.md.
+    markBootMilestone("app:effects-fired");
   }, [
     loadConnections,
     loadGroups,

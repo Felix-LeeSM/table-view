@@ -15,12 +15,23 @@ import type { QueryMode } from "@stores/tabStore";
  * `set({entries: [...]})` in tests or, later, via a localStorage migration
  * layer).
  */
+/**
+ * Sprint 180 (AC-180-03) — `"cancelled"` widens the status union so a
+ * user-aborted query records distinctly from success/error. Existing
+ * `"success" | "error"` callers continue to compile because the new
+ * union is a strict superset; the rendering branches in QueryLog /
+ * GlobalQueryLogPanel surface a calm muted treatment for the new
+ * variant per the spec Visual Direction ("calm secondary, not
+ * destructive").
+ */
+export type QueryHistoryStatus = "success" | "error" | "cancelled";
+
 export interface QueryHistoryEntry {
   id: string;
   sql: string;
   executedAt: number;
   duration: number;
-  status: "success" | "error";
+  status: QueryHistoryStatus;
   connectionId: string;
   /** Paradigm of the connection the query ran against. */
   paradigm: Paradigm;

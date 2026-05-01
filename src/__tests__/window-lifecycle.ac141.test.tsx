@@ -140,11 +140,15 @@ afterEach(() => {
 
 describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", () => {
   // ---------------------------------------------------------------------------
-  // AC-141-1 (real): launcher window 720×560 fixed; workspace 1280×800
-  // resizable. Read from `tauri.conf.json` so the assertion fails the moment
-  // anyone widens the launcher or removes the resizable: false guard.
+  // AC-141-1 (real): launcher window 720×560 fixed in `tauri.conf.json`.
+  // Sprint 175 (ADR-0017) — workspace is no longer declared statically; it is
+  // lazy-built by `src-tauri/src/launcher.rs::build_workspace_window` on the
+  // first `workspace_show`/`workspace_ensure` call to skip the WKWebView
+  // spawn at boot. The 1280×800 / resizable / born-hidden invariants moved
+  // into Rust; this test now asserts the *split*: launcher present here,
+  // workspace absent.
   // ---------------------------------------------------------------------------
-  it("AC-141-1 (real): launcher is 720×560 fixed (no resize/maximize, centered) and workspace is 1280×800 resizable", () => {
+  it("AC-141-1 (real): launcher is 720×560 fixed (no resize/maximize, centered) in tauri.conf.json; workspace is lazy-built (Rust-side, ADR-0017)", () => {
     type WindowConf = {
       label: string;
       width: number;
@@ -170,12 +174,13 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     // The launcher is the boot-visible chrome — Tauri opens it on app start.
     expect(launcher!.visible).toBe(true);
 
-    expect(workspace).toBeDefined();
-    expect(workspace!.width).toBe(1280);
-    expect(workspace!.height).toBe(800);
-    expect(workspace!.resizable).toBe(true);
-    // The workspace is born hidden and only shows on Activate (AC-141-2).
-    expect(workspace!.visible).toBe(false);
+    // ADR-0017 — workspace must NOT be declared in tauri.conf.json. Anyone
+    // re-adding it would re-introduce the boot-time WKWebView spawn we
+    // explicitly cut to recover 5.8% of cold-start wall time. The runtime
+    // shape (1280×800, resizable, born hidden) lives in
+    // `build_workspace_window` and is exercised by the Rust-side launcher
+    // tests at `src-tauri/src/launcher.rs::tests`.
+    expect(workspace).toBeUndefined();
   });
 
   // ---------------------------------------------------------------------------

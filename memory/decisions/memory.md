@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-04-27
+updated: 2026-05-01
 ---
 
 # ADR 인덱스
@@ -23,12 +23,17 @@ updated: 2026-04-27
 | [0012](./0012-multi-window-launcher-workspace/memory.md) | Phase 12 — launcher/workspace 별도 WebviewWindow + cross-window IPC sync 완성 | Accepted | 2026-04-27 | 0011 |
 | [0013](./0013-cross-window-focus-hydration-hook/memory.md) | 크로스 윈도우 상태 동기화: IPC bridge + session localStorage + useWindowFocusHydration 훅 | Accepted | 2026-04-29 | — |
 | [0016](./0016-e2e-window-visibility-override/memory.md) | e2e 빌드는 workspace.visible flag만 overlay로 override | Accepted | 2026-04-30 | — |
+| [0017](./0017-launcher-lazy-workspace-window/memory.md) | Sprint 175 — workspace WebviewWindow를 lazy 생성으로 전환 | Accepted | 2026-04-30 | — |
+| [0018](./0018-async-cancel-policy/memory.md) | Sprint 180 — 비동기 작업 1초 임계 + Cancel UX 단일화 | Accepted | 2026-04-30 | — |
+| [0019](./0019-e2e-pre-push-not-ci/memory.md) | E2E를 CI에서 제거하고 lefthook pre-push(host-native)로 이동 | Accepted | 2026-05-01 | 0015 |
+| [0020](./0020-e2e-pre-push-host-docker/memory.md) | ADR 0019 후속 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원) | Accepted | 2026-05-01 | — |
 
 ## 역사 (Superseded / Deprecated)
 
 | ID | 제목 | 상태 | 날짜 | Superseded by |
 |----|------|------|------|--------------|
 | [0011](./0011-single-window-stub-for-launcher-workspace/memory.md) | Sprint 149 — launcher/workspace lifecycle은 single-window stub으로 우선 잠그고 실제 윈도우 분리는 phase 12 이월 | Superseded | 2026-04-27 | [0012](./0012-multi-window-launcher-workspace/memory.md) |
+| [0015](./0015-e2e-docker-pipeline-canonical/memory.md) | E2E 실행을 docker compose 파이프라인으로 표준화 | Superseded | 2026-04-29 | [0019](./0019-e2e-pre-push-not-ci/memory.md) |
 
 형식:
 

@@ -6,11 +6,17 @@ services:
       POSTGRES_USER: ${PGUSER:-postgres}
       POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
       POSTGRES_DB: ${PGDATABASE:-table_view_test}
-    # No host `ports:` mapping — the e2e service reaches postgres via the
-    # `postgres` hostname on the docker network, so a host binding is not
-    # needed and conflicts with local Postgres / other docker projects on
-    # 5432. For ad-hoc debugging:
-    #   docker compose exec postgres psql -U postgres -d table_view_test
+    # Host port binding — non-default by design (ADR 0019 follow-up,
+    # 2026-05-01). Host devs frequently run another Postgres on :5432
+    # (Postgres.app, brew, app project DBs) and the collision blocks the
+    # e2e gate every time. We bind the test container to **15432** by
+    # default (`prod default + 10000`); override with `PGPORT=...` when a
+    # specific shard / parallel run needs a different port. The e2e
+    # service container still reaches postgres via the `postgres`
+    # hostname on the docker network at the internal :5432, so this
+    # binding only affects host-originated clients.
+    ports:
+      - "${PGPORT:-15432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,9 +32,12 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-testuser}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-testpass}
-    # See `postgres.ports` comment — same rationale: e2e reaches mongo via
-    # the docker network. Use `docker compose exec mongo mongosh ...` for
-    # ad-hoc debugging.
+    # Host port binding — same `prod default + 10000` rule (ADR 0019
+    # follow-up): bind to **37017** so a host mongod on :27017 doesn't
+    # clobber the e2e gate. Override with `MONGO_PORT=...` to pick a
+    # different port.
+    ports:
+      - "${MONGO_PORT:-37017}:27017"
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import DataGridToolbar from "./DataGridToolbar";
 import type { SortInfo, TableData } from "@/types/schema";
+import { DOCUMENT_LABELS } from "@/lib/strings/document";
 
 const MOCK_DATA: TableData = {
   columns: [
@@ -143,5 +144,63 @@ describe("DataGridToolbar — Sprint 98 commit flashing", () => {
     // attributes (they change between major versions).
     const spinner = container.querySelector(".animate-spin");
     expect(spinner).not.toBeNull();
+  });
+});
+
+// Reason: Sprint 179 (AC-179-03b) regression guard — DataGridToolbar's
+// label-prop default is now sourced from the RDB paradigm dictionary
+// entry (lower-cased) instead of inline literals. The DocumentDataGrid
+// caller still spreads DOCUMENT_LABELS, which is itself derived from the
+// same dictionary's `document` entry. These tests anchor (a) RDB defaults
+// produce "rows" / "Add row" etc., and (b) spreading DOCUMENT_LABELS
+// produces "documents" / "Add document" etc. — guarding against any
+// silent drift in the derivation. Date: 2026-04-30.
+describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () => {
+  it("[AC-179-03b] default RDB labels render legacy 'rows' / 'Add row' vocabulary", () => {
+    renderToolbar();
+
+    // Inline count label.
+    expect(screen.getByText(/2 rows/)).toBeInTheDocument();
+    // Action button accessible names — these are what the existing
+    // RDB-default Sprint 79/93/98 tests assert.
+    expect(screen.getByRole("button", { name: "Add row" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete row" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Duplicate row" }),
+    ).toBeInTheDocument();
+  });
+
+  it("[AC-179-03b] spreading DOCUMENT_LABELS produces 'documents' / 'Add document' vocabulary", () => {
+    renderToolbar({
+      ...DOCUMENT_LABELS,
+      selectedRowIdsCount: 1,
+    });
+
+    // Inline count label uses lower-cased plural.
+    expect(screen.getByText(/2 documents/)).toBeInTheDocument();
+    // Action buttons use sentence-case action copy.
+    expect(
+      screen.getByRole("button", { name: "Add document" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete document" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Duplicate document" }),
+    ).toBeInTheDocument();
+  });
+
+  it("[AC-179-03b] DOCUMENT_LABELS literal output is unchanged byte-for-byte", () => {
+    // Anchors the derived constant's literal strings so DocumentDataGrid
+    // (the existing consumer at DocumentDataGrid.tsx:273-276) sees no
+    // shape drift after Sprint 179's derivation refactor.
+    expect(DOCUMENT_LABELS).toEqual({
+      rowCountLabel: "documents",
+      addRowLabel: "Add document",
+      deleteRowLabel: "Delete document",
+      duplicateRowLabel: "Duplicate document",
+    });
   });
 });

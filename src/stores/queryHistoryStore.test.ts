@@ -92,6 +92,97 @@ describe("queryHistoryStore", () => {
     });
   });
 
+  // -- Sprint 180 cancelled status (AC-180-03) --
+  //
+  // Reason: AC-180-03 widens `QueryHistoryEntry.status` to
+  // `"success" | "error" | "cancelled"` so an aborted query records
+  // distinctly. These cases pin the new variant at the store boundary —
+  // both write (addHistoryEntry) and read (filteredGlobalLog) paths
+  // honour the wider union. Type-level rejection of arbitrary string
+  // literals is enforced by `pnpm tsc --noEmit`.
+  // Date: 2026-04-30
+  describe("cancelled status (sprint-180)", () => {
+    // [AC-180-03a] Inserting a cancelled entry preserves the status
+    // field exactly. The default normalisation path (paradigm/queryMode)
+    // must not coerce or drop the new variant.
+    // Date: 2026-04-30
+    it("[AC-180-03a] insert cancelled entry preserves status field", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "SELECT pg_sleep(5)",
+        executedAt: 1000,
+        duration: 1234,
+        status: "cancelled",
+        connectionId: "conn-1",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.globalLog).toHaveLength(1);
+      expect(state.globalLog[0]!.status).toBe("cancelled");
+      expect(state.entries[0]!.status).toBe("cancelled");
+    });
+
+    // [AC-180-03b] Cancelled entries flow through `filteredGlobalLog`
+    // selectors unchanged — the search/connection filters are content-
+    // based, not status-based, so the new variant is visible by default.
+    // Date: 2026-04-30
+    it("[AC-180-03b] cancelled entries flow through filteredGlobalLog", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "SELECT pg_sleep(5)",
+        executedAt: 1000,
+        duration: 800,
+        status: "cancelled",
+        connectionId: "conn-1",
+      });
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "SELECT 1",
+        executedAt: 2000,
+        duration: 5,
+        status: "success",
+        connectionId: "conn-1",
+      });
+
+      const filtered = useQueryHistoryStore.getState().filteredGlobalLog();
+      expect(filtered).toHaveLength(2);
+      const cancelled = filtered.find((e) => e.status === "cancelled");
+      expect(cancelled).toBeDefined();
+      expect(cancelled?.sql).toBe("SELECT pg_sleep(5)");
+    });
+
+    // Mix of success / error / cancelled — proves the three-way union
+    // round-trips through both write and read without silent coercion.
+    // Date: 2026-04-30
+    it("preserves all three status variants in the same log", () => {
+      const base = {
+        executedAt: Date.now(),
+        duration: 10,
+        connectionId: "conn-1",
+      };
+      useQueryHistoryStore.getState().addHistoryEntry({
+        ...base,
+        sql: "S",
+        status: "success",
+      });
+      useQueryHistoryStore.getState().addHistoryEntry({
+        ...base,
+        sql: "E",
+        status: "error",
+      });
+      useQueryHistoryStore.getState().addHistoryEntry({
+        ...base,
+        sql: "C",
+        status: "cancelled",
+      });
+
+      const log = useQueryHistoryStore.getState().globalLog;
+      // FIFO prepend: most recent first.
+      expect(log.map((e) => e.status)).toEqual([
+        "cancelled",
+        "error",
+        "success",
+      ]);
+    });
+  });
+
   // -- clearHistory --
 
   describe("clearHistory", () => {

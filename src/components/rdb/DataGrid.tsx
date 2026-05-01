@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
+import { cancelQuery } from "@lib/tauri";
 import FilterBar from "@components/rdb/FilterBar";
 import {
   Dialog,
@@ -144,6 +145,14 @@ export default function DataGrid({
   }, [connectionId, table, schema]);
 
   const fetchIdRef = useRef(0);
+  // Sprint 180 — query id for the in-flight `query_table_data` call so
+  // the shared Cancel button can route through `cancel_query`. The
+  // backend `query_table_data` accepts an optional query_id (Sprint 180
+  // command extension); when present, the command registers the token
+  // before dispatching the SQL and removes it on settle. The frontend
+  // also bumps `fetchIdRef` on cancel so the backend's eventual reply
+  // (if it races past the cancel) is dropped.
+  const queryIdRef = useRef<string | null>(null);
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
@@ -177,6 +186,7 @@ export default function DataGrid({
     }
     if (fetchId === fetchIdRef.current) {
       setLoading(false);
+      queryIdRef.current = null;
     }
   }, [
     connectionId,
@@ -189,6 +199,22 @@ export default function DataGrid({
     appliedRawSql,
     queryTableData,
   ]);
+
+  // Sprint 180 (AC-180-02 / AC-180-05) — Cancel handler for the rdb
+  // DataGrid. Bumps `fetchIdRef` so the in-flight resolve is dropped,
+  // clears `loading` synchronously (overlay disappears within one
+  // frame), and best-effort cancels the backend driver handle.
+  const handleCancelRefetch = useCallback(() => {
+    fetchIdRef.current++;
+    setLoading(false);
+    const queryId = queryIdRef.current;
+    queryIdRef.current = null;
+    if (queryId) {
+      cancelQuery(queryId).catch(() => {
+        // best-effort — see DocumentDataGrid.handleCancelRefetch
+      });
+    }
+  }, []);
 
   // Listen for context-aware refresh events (Cmd+R / F5)
   useEffect(() => {
@@ -413,6 +439,7 @@ export default function DataGrid({
           onNavigateToFk={handleNavigateToFk}
           activeFilterCount={activeFilterCount}
           onClearFilters={handleClearAllFiltersFromEmptyState}
+          onCancelRefetch={handleCancelRefetch}
         />
       )}
 

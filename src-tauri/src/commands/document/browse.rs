@@ -8,10 +8,41 @@
 //! `commands/rdb/schema.rs`.
 
 use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, TableInfo};
+
+/// Sprint 180 (AC-180-04) — cancel-token registration helper, mirrors
+/// the RDB schema-command shape so the document and RDB paths share the
+/// same lifecycle on `state.query_tokens`.
+async fn register_cancel_token(
+    state: &tauri::State<'_, AppState>,
+    query_id: &Option<String>,
+) -> Option<(String, CancellationToken)> {
+    if let Some(qid) = query_id.as_ref() {
+        let token = CancellationToken::new();
+        let stored = token.clone();
+        {
+            let mut tokens = state.query_tokens.lock().await;
+            tokens.insert(qid.clone(), stored);
+        }
+        Some((qid.clone(), token))
+    } else {
+        None
+    }
+}
+
+async fn release_cancel_token(
+    state: &tauri::State<'_, AppState>,
+    cancel_handle: &Option<(String, CancellationToken)>,
+) {
+    if let Some((qid, _)) = cancel_handle {
+        let mut tokens = state.query_tokens.lock().await;
+        tokens.remove(qid);
+    }
+}
 
 /// Wire shape for `list_mongo_databases`. The backend `NamespaceInfo`
 /// already has `{ name: String }` — this alias exists purely so the
@@ -74,13 +105,24 @@ pub async fn list_mongo_collections(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
+    // Sprint 180 (AC-180-04): optional cancel-token id.
+    query_id: Option<String>,
 ) -> Result<Vec<CollectionInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
-    let tables = active.as_document()?.list_collections(&database).await?;
-    Ok(tables.into_iter().map(CollectionInfo::from).collect())
+    let cancel_handle = register_cancel_token(&state, &query_id).await;
+
+    let result: Result<Vec<TableInfo>, AppError> = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(&connection_id)
+            .ok_or_else(|| not_connected(&connection_id))?;
+        active
+            .as_document()?
+            .list_collections(&database, cancel_handle.as_ref().map(|(_, tok)| tok))
+            .await
+    };
+
+    release_cancel_token(&state, &cancel_handle).await;
+    result.map(|tables| tables.into_iter().map(CollectionInfo::from).collect())
 }
 
 /// Infer the top-level column layout of `collection` by sampling up to
@@ -93,14 +135,28 @@ pub async fn infer_collection_fields(
     database: String,
     collection: String,
     sample_size: Option<u32>,
+    // Sprint 180 (AC-180-04): optional cancel-token id.
+    query_id: Option<String>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+    let cancel_handle = register_cancel_token(&state, &query_id).await;
     let size = sample_size.unwrap_or(100) as usize;
-    active
-        .as_document()?
-        .infer_collection_fields(&database, &collection, size)
-        .await
+
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(&connection_id)
+            .ok_or_else(|| not_connected(&connection_id))?;
+        active
+            .as_document()?
+            .infer_collection_fields(
+                &database,
+                &collection,
+                size,
+                cancel_handle.as_ref().map(|(_, tok)| tok),
+            )
+            .await
+    };
+
+    release_cancel_token(&state, &cancel_handle).await;
+    result
 }
