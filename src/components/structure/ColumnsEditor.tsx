@@ -6,6 +6,10 @@ import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { Button } from "@components/ui/button";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { analyzeStatement } from "@/lib/sqlSafety";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -356,6 +360,19 @@ export default function ColumnsEditor({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // Sprint 187 — production-tier color stripe + warn gate. The
+  // `connectionEnvironment` powers the SQL preview header stripe; `safeMode`
+  // gates `handleExecute` for danger-classified ALTER statements.
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
+  const safeMode = useSafeModeStore((s) => s.mode);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    reason: string;
+    sql: string;
+  } | null>(null);
+
   const pendingCount = pendingChanges.length;
 
   // -------------------------------------------------------------------------
@@ -475,7 +492,10 @@ export default function ColumnsEditor({
     setPreviewLoading(false);
   };
 
-  const handleExecute = async () => {
+  // Sprint 187 — actual commit body extracted so `handleExecute` (initial
+  // path) and `confirmDangerous` (post type-to-confirm) can both invoke it
+  // without duplicating the cleanup + onRefresh sequence.
+  const runAlter = async () => {
     setPreviewLoading(true);
     setPreviewError(null);
     try {
@@ -493,12 +513,55 @@ export default function ColumnsEditor({
     setPreviewLoading(false);
   };
 
+  const handleExecute = async () => {
+    // Sprint 187 — strict / warn gate for production-tagged connections.
+    // Multi-statement previews are split on `;` so any DROP COLUMN /
+    // DROP CONSTRAINT inside an ALTER batch trips the gate even when
+    // siblings are safe ADDs.
+    if (connectionEnvironment === "production" && safeMode !== "off") {
+      const statements = previewSql
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const stmt of statements) {
+        const analysis = analyzeStatement(stmt);
+        if (analysis.severity === "danger") {
+          const reason = analysis.reasons[0] ?? "dangerous statement";
+          if (safeMode === "strict") {
+            setPreviewError(
+              `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`,
+            );
+            return;
+          }
+          if (safeMode === "warn") {
+            setPendingConfirm({ reason, sql: stmt });
+            return;
+          }
+        }
+      }
+    }
+    await runAlter();
+  };
+
+  const confirmDangerous = async () => {
+    setPendingConfirm(null);
+    await runAlter();
+  };
+
+  const cancelDangerous = () => {
+    setPendingConfirm(null);
+    setPreviewError(
+      "Safe Mode (warn): confirmation cancelled — no changes committed",
+    );
+  };
+
   const handleCancelPending = () => {
     setPendingChanges([]);
     setDroppedColumns(new Set());
     setNewColumnDrafts([]);
     setEditingColumn(null);
     setShowSqlModal(false);
+    setPendingConfirm(null);
   };
 
   // -------------------------------------------------------------------------
@@ -669,8 +732,23 @@ export default function ColumnsEditor({
           sql={previewSql}
           loading={previewLoading}
           error={previewError}
+          environment={connectionEnvironment}
           onConfirm={handleExecute}
           onCancel={handleCancelPending}
+        />
+      )}
+
+      {/* Sprint 187 — warn-tier confirmation. Mounted as a sibling so it
+          stacks above the SQL preview dialog. */}
+      {pendingConfirm && (
+        <ConfirmDangerousDialog
+          open
+          reason={pendingConfirm.reason}
+          sqlPreview={pendingConfirm.sql}
+          onConfirm={() => {
+            void confirmDangerous();
+          }}
+          onCancel={cancelDangerous}
         />
       )}
     </div>

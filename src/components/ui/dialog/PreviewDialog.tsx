@@ -75,6 +75,14 @@ export interface PreviewDialogProps {
   className?: string;
   /** Optional aria-label for the confirm button. */
   confirmAriaLabel?: string;
+  /**
+   * Sprint 187 — optional decoration rendered above the dialog header.
+   * Used by `SqlPreviewDialog` (structure surface) to surface a tiny
+   * environment color stripe so production-tagged commits read at a glance
+   * matching the DataGrid + EditableQueryResultGrid stripe pattern from
+   * Sprint 185. Default `null` keeps every existing caller untouched.
+   */
+  headerStripe?: ReactNode;
 }
 
 export default function PreviewDialog({
@@ -93,6 +101,7 @@ export default function PreviewDialog({
   tone = "default",
   className,
   confirmAriaLabel,
+  headerStripe = null,
 }: PreviewDialogProps) {
   return (
     <Dialog
@@ -102,6 +111,7 @@ export default function PreviewDialog({
       }}
     >
       <DialogContent className={cn(className)} tone={tone}>
+        {headerStripe}
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold text-foreground">
             {title}

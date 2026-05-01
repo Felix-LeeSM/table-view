@@ -23,6 +23,10 @@ import type {
 } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { analyzeStatement } from "@/lib/sqlSafety";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
 // Constraint type
@@ -341,6 +345,18 @@ export default function ConstraintsEditor({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
+  // Sprint 187 — production stripe + warn / strict gate. Constraint drops
+  // emit `ALTER TABLE … DROP CONSTRAINT …` which the analyzer now flags.
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
+  const safeMode = useSafeModeStore((s) => s.mode);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    reason: string;
+    sql: string;
+  } | null>(null);
+
   // -------------------------------------------------------------------------
   // Add constraint handler
   // -------------------------------------------------------------------------
@@ -410,7 +426,8 @@ export default function ConstraintsEditor({
   // Preview confirm/cancel
   // -------------------------------------------------------------------------
 
-  const handlePreviewConfirm = async () => {
+  // Sprint 187 — pure commit body extracted for warn-tier re-entry.
+  const runPendingExecute = async () => {
     if (!pendingExecuteRef.current) return;
     setPreviewLoading(true);
     setPreviewError(null);
@@ -426,11 +443,51 @@ export default function ConstraintsEditor({
     setPreviewLoading(false);
   };
 
+  const handlePreviewConfirm = async () => {
+    if (!pendingExecuteRef.current) return;
+    if (connectionEnvironment === "production" && safeMode !== "off") {
+      const statements = previewSql
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const stmt of statements) {
+        const analysis = analyzeStatement(stmt);
+        if (analysis.severity === "danger") {
+          const reason = analysis.reasons[0] ?? "dangerous statement";
+          if (safeMode === "strict") {
+            setPreviewError(
+              `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`,
+            );
+            return;
+          }
+          if (safeMode === "warn") {
+            setPendingConfirm({ reason, sql: stmt });
+            return;
+          }
+        }
+      }
+    }
+    await runPendingExecute();
+  };
+
+  const confirmDangerous = async () => {
+    setPendingConfirm(null);
+    await runPendingExecute();
+  };
+
+  const cancelDangerous = () => {
+    setPendingConfirm(null);
+    setPreviewError(
+      "Safe Mode (warn): confirmation cancelled — no changes committed",
+    );
+  };
+
   const handlePreviewCancel = () => {
     setShowPreviewModal(false);
     pendingExecuteRef.current = null;
     setPreviewSql("");
     setPreviewError(null);
+    setPendingConfirm(null);
   };
 
   // -------------------------------------------------------------------------
@@ -539,6 +596,7 @@ export default function ConstraintsEditor({
           sql={previewSql}
           loading={previewLoading}
           error={previewError}
+          environment={connectionEnvironment}
           onConfirm={handlePreviewConfirm}
           onCancel={handlePreviewCancel}
         />
@@ -550,6 +608,19 @@ export default function ConstraintsEditor({
           columns={columns}
           onSubmit={handleAddConstraintPreview}
           onCancel={() => setShowAddConstraintModal(false)}
+        />
+      )}
+
+      {/* Sprint 187 — warn-tier type-to-confirm dialog. */}
+      {pendingConfirm && (
+        <ConfirmDangerousDialog
+          open
+          reason={pendingConfirm.reason}
+          sqlPreview={pendingConfirm.sql}
+          onConfirm={() => {
+            void confirmDangerous();
+          }}
+          onCancel={cancelDangerous}
         />
       )}
     </div>

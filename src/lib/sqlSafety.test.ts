@@ -108,4 +108,53 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(b.kind).toBe("ddl-other");
     expect(b.severity).toBe("safe");
   });
+
+  // -------------------------------------------------------------------------
+  // Sprint 187 — analyzer extension for structure-surface DDL.
+  // The structure editors (Columns / Indexes / Constraints) emit
+  // `DROP INDEX`, `ALTER TABLE … DROP COLUMN`, and `ALTER TABLE … DROP
+  // CONSTRAINT`. Sprint 185 / 186 only flagged `DROP TABLE/DATABASE/SCHEMA`
+  // and `DELETE/UPDATE` without WHERE, so structure-surface destructive ops
+  // slipped past the production warn / strict gate. AC-187-01 closes that
+  // gap. date 2026-05-01.
+  // -------------------------------------------------------------------------
+
+  it("[AC-187-01a] DROP INDEX → danger / ddl-drop", () => {
+    const a = analyzeStatement("DROP INDEX idx_users_email");
+    expect(a.kind).toBe("ddl-drop");
+    expect(a.severity).toBe("danger");
+    expect(a.reasons).toEqual(["DROP INDEX"]);
+    expect(isDangerous(a)).toBe(true);
+  });
+
+  it("[AC-187-01b] DROP VIEW → danger / ddl-drop", () => {
+    const a = analyzeStatement("DROP VIEW v_active_users");
+    expect(a.kind).toBe("ddl-drop");
+    expect(a.severity).toBe("danger");
+    expect(a.reasons).toEqual(["DROP VIEW"]);
+  });
+
+  it("[AC-187-01c] ALTER TABLE … DROP COLUMN → danger / ddl-alter-drop", () => {
+    const a = analyzeStatement("ALTER TABLE users DROP COLUMN email");
+    expect(a.kind).toBe("ddl-alter-drop");
+    expect(a.severity).toBe("danger");
+    expect(a.reasons).toEqual(["ALTER TABLE DROP COLUMN"]);
+  });
+
+  it("[AC-187-01d] ALTER TABLE … DROP CONSTRAINT → danger / ddl-alter-drop", () => {
+    const a = analyzeStatement(
+      "ALTER TABLE orders DROP CONSTRAINT fk_orders_user",
+    );
+    expect(a.kind).toBe("ddl-alter-drop");
+    expect(a.severity).toBe("danger");
+    expect(a.reasons).toEqual(["ALTER TABLE DROP CONSTRAINT"]);
+  });
+
+  it("[AC-187-01e] ALTER TABLE … ADD COLUMN stays ddl-other / safe (regression)", () => {
+    const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
+    expect(a.kind).toBe("ddl-other");
+    expect(a.severity).toBe("safe");
+    expect(a.reasons).toEqual([]);
+    expect(isDangerous(a)).toBe(false);
+  });
 });

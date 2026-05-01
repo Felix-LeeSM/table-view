@@ -20,6 +20,10 @@ import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
 import SqlPreviewDialog from "./SqlPreviewDialog";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { analyzeStatement } from "@/lib/sqlSafety";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -255,6 +259,18 @@ export default function IndexesEditor({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
+  // Sprint 187 — production stripe + warn / strict gate. The DROP INDEX
+  // path is the dangerous one here; CREATE INDEX is analyzer-safe.
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
+  const safeMode = useSafeModeStore((s) => s.mode);
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    reason: string;
+    sql: string;
+  } | null>(null);
+
   // -------------------------------------------------------------------------
   // Create index handlers
   // -------------------------------------------------------------------------
@@ -292,7 +308,9 @@ export default function IndexesEditor({
     setShowPreviewModal(true);
   };
 
-  const handlePreviewConfirm = async () => {
+  // Sprint 187 — pure commit body extracted so the warn confirm path can
+  // re-enter without duplicating cleanup. Mirrors ColumnsEditor.runAlter.
+  const runPendingExecute = async () => {
     if (!pendingExecuteRef.current) return;
     setPreviewLoading(true);
     setPreviewError(null);
@@ -308,11 +326,51 @@ export default function IndexesEditor({
     setPreviewLoading(false);
   };
 
+  const handlePreviewConfirm = async () => {
+    if (!pendingExecuteRef.current) return;
+    if (connectionEnvironment === "production" && safeMode !== "off") {
+      const statements = previewSql
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const stmt of statements) {
+        const analysis = analyzeStatement(stmt);
+        if (analysis.severity === "danger") {
+          const reason = analysis.reasons[0] ?? "dangerous statement";
+          if (safeMode === "strict") {
+            setPreviewError(
+              `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`,
+            );
+            return;
+          }
+          if (safeMode === "warn") {
+            setPendingConfirm({ reason, sql: stmt });
+            return;
+          }
+        }
+      }
+    }
+    await runPendingExecute();
+  };
+
+  const confirmDangerous = async () => {
+    setPendingConfirm(null);
+    await runPendingExecute();
+  };
+
+  const cancelDangerous = () => {
+    setPendingConfirm(null);
+    setPreviewError(
+      "Safe Mode (warn): confirmation cancelled — no changes committed",
+    );
+  };
+
   const handlePreviewCancel = () => {
     setShowPreviewModal(false);
     pendingExecuteRef.current = null;
     setPreviewSql("");
     setPreviewError(null);
+    setPendingConfirm(null);
   };
 
   // -------------------------------------------------------------------------
@@ -468,6 +526,7 @@ export default function IndexesEditor({
           sql={previewSql}
           loading={previewLoading}
           error={previewError}
+          environment={connectionEnvironment}
           onConfirm={handlePreviewConfirm}
           onCancel={handlePreviewCancel}
         />
@@ -479,6 +538,19 @@ export default function IndexesEditor({
           columns={columns}
           onSubmit={handleCreateIndexPreview}
           onCancel={() => setShowCreateIndexModal(false)}
+        />
+      )}
+
+      {/* Sprint 187 — warn-tier type-to-confirm dialog. */}
+      {pendingConfirm && (
+        <ConfirmDangerousDialog
+          open
+          reason={pendingConfirm.reason}
+          sqlPreview={pendingConfirm.sql}
+          onConfirm={() => {
+            void confirmDangerous();
+          }}
+          onCancel={cancelDangerous}
         />
       )}
     </div>

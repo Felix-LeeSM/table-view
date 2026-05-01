@@ -7,6 +7,7 @@ export type StatementKind =
   | "delete"
   | "ddl-drop"
   | "ddl-truncate"
+  | "ddl-alter-drop"
   | "ddl-other"
   | "other";
 
@@ -63,14 +64,28 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     return { kind: "update", severity: "safe", reasons: [] };
   }
 
-  if (/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/.test(upper)) {
-    const match = upper.match(/^DROP\s+(TABLE|DATABASE|SCHEMA)\b/);
+  if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW)\b/.test(upper)) {
+    const match = upper.match(/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW)\b/);
     const reason = match ? `DROP ${match[1]}` : "DROP";
     return { kind: "ddl-drop", severity: "danger", reasons: [reason] };
   }
 
   if (/^TRUNCATE\b/.test(upper)) {
     return { kind: "ddl-truncate", severity: "danger", reasons: ["TRUNCATE"] };
+  }
+
+  // Sprint 187 — `ALTER TABLE … DROP COLUMN/CONSTRAINT` is destructive enough
+  // (column + data loss / FK invalidation) that the structure-surface gate
+  // needs to flag it for the production warn / strict tier.
+  if (/^ALTER\s+TABLE\b/.test(upper)) {
+    const dropMatch = upper.match(/\bDROP\s+(COLUMN|CONSTRAINT)\b/);
+    if (dropMatch) {
+      return {
+        kind: "ddl-alter-drop",
+        severity: "danger",
+        reasons: [`ALTER TABLE DROP ${dropMatch[1]}`],
+      };
+    }
   }
 
   if (

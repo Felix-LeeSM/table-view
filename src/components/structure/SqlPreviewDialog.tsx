@@ -1,6 +1,7 @@
 import { Loader2, Play } from "lucide-react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
+import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 
 /**
  * Sprint 93 — surfaced commit failure passed through from `useDataGridEdit`'s
@@ -44,6 +45,19 @@ export interface SqlPreviewDialogProps {
    * at: K" partial-failure count.
    */
   commitError?: SqlPreviewCommitError | null;
+  /**
+   * Sprint 187 — optional environment tag for the connection backing this
+   * commit. When set, a 1px-h color stripe matching the DataGrid +
+   * EditableQueryResultGrid pattern (Sprint 185) renders above the dialog
+   * header. `null` keeps the dialog visually unchanged for paradigm /
+   * surface variants that do not plumb an environment.
+   *
+   * Typed as `string | null` so the editors can plumb
+   * `connection.environment` (which is loosely typed in the store) without
+   * casting; the runtime guard `environment in ENVIRONMENT_META` narrows
+   * to `EnvironmentTag` before lookup.
+   */
+  environment?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -53,14 +67,28 @@ export default function SqlPreviewDialog({
   loading,
   error,
   commitError,
+  environment = null,
   onConfirm,
   onCancel,
 }: SqlPreviewDialogProps) {
+  const stripe =
+    environment && environment in ENVIRONMENT_META ? (
+      <div
+        className="-mx-6 -mt-6 mb-2 h-1"
+        style={{
+          background: ENVIRONMENT_META[environment as EnvironmentTag].color,
+        }}
+        data-environment-stripe={environment}
+        aria-hidden="true"
+      />
+    ) : null;
+
   return (
     <PreviewDialog
       title="Review SQL Changes"
       description="Review and execute SQL changes"
       className="w-dialog-md bg-secondary"
+      headerStripe={stripe}
       preview={
         <pre className="max-h-scroll-lg overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
           {sql.trim() ? (

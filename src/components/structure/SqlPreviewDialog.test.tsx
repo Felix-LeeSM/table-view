@@ -100,4 +100,27 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
   });
+
+  // AC-187-03a — production environment renders the color stripe so the
+  // structure-surface SQL preview reads at a glance matching the DataGrid /
+  // EditableQueryResultGrid stripe Sprint 185 introduced. date 2026-05-01.
+  it("[AC-187-03a] production environment renders color stripe", () => {
+    render(
+      <SqlPreviewDialog
+        sql="DROP INDEX idx_users_email"
+        loading={false}
+        error={null}
+        environment="production"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog");
+    const stripe = dialog.querySelector(
+      '[data-environment-stripe="production"]',
+    );
+    expect(stripe).not.toBeNull();
+    expect(stripe?.getAttribute("aria-hidden")).toBe("true");
+  });
 });
