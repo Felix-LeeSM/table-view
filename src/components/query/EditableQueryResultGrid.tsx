@@ -24,8 +24,8 @@ import {
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 import { toast } from "@lib/toast";
 import PendingChangesTray from "./PendingChangesTray";
@@ -80,9 +80,10 @@ export default function EditableQueryResultGrid({
     sql: string;
   } | null>(null);
 
-  // Sprint 185 — Safe Mode gate inputs (production-tagged connection +
-  // strict mode + dangerous statement → block before executeQueryBatch).
-  const safeMode = useSafeModeStore((s) => s.mode);
+  // Sprint 189 (AC-189-02) — Safe Mode gate via shared hook. Environment
+  // is still selected separately for the production stripe banner below
+  // (paradigm-agnostic UI hint, not part of the gate matrix).
+  const safeModeGate = useSafeModeGate(connectionId);
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
@@ -240,36 +241,24 @@ export default function EditableQueryResultGrid({
 
   const handleExecute = useCallback(async () => {
     if (!sqlPreview) return;
-    // Sprint 185 — strict-tier gate. Blocks before executeQueryBatch when
-    // production + strict + dangerous.
-    if (safeMode === "strict" && connectionEnvironment === "production") {
-      for (const sql of sqlPreview) {
-        const analysis = analyzeStatement(sql);
-        if (analysis.severity === "danger") {
-          const reason = analysis.reasons[0] ?? "dangerous statement";
-          const blockMessage = `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`;
-          setExecuteError(blockMessage);
-          toast.error(blockMessage);
-          return;
-        }
+    // Sprint 189 (AC-189-02) — gate every preview statement through the
+    // shared decision matrix (`decideSafeModeAction`). block → setExecuteError
+    // + toast; confirm → pendingConfirm (dialog handoff); allow → fall through.
+    for (const sql of sqlPreview) {
+      const analysis = analyzeStatement(sql);
+      const decision = safeModeGate.decide(analysis);
+      if (decision.action === "block") {
+        setExecuteError(decision.reason);
+        toast.error(decision.reason);
+        return;
       }
-    }
-    // Sprint 186 — warn-tier handoff. Production + warn + dangerous pauses
-    // the run and surfaces ConfirmDangerousDialog.
-    if (safeMode === "warn" && connectionEnvironment === "production") {
-      for (const sql of sqlPreview) {
-        const analysis = analyzeStatement(sql);
-        if (analysis.severity === "danger") {
-          setPendingConfirm({
-            reason: analysis.reasons[0] ?? "dangerous statement",
-            sql,
-          });
-          return;
-        }
+      if (decision.action === "confirm") {
+        setPendingConfirm({ reason: decision.reason, sql });
+        return;
       }
     }
     await runBatch(sqlPreview);
-  }, [sqlPreview, safeMode, connectionEnvironment, runBatch]);
+  }, [sqlPreview, safeModeGate, runBatch]);
 
   const confirmDangerous = useCallback(async () => {
     if (!pendingConfirm || !sqlPreview) return;

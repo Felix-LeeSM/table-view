@@ -7,8 +7,8 @@ import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
+import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
@@ -360,14 +360,14 @@ export default function ColumnsEditor({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  // Sprint 187 — production-tier color stripe + warn gate. The
-  // `connectionEnvironment` powers the SQL preview header stripe; `safeMode`
-  // gates `handleExecute` for danger-classified ALTER statements.
+  // Sprint 189 (AC-189-03) — Safe Mode gate via shared hook.
+  // `connectionEnvironment` is still selected separately for the
+  // production-tier color stripe banner (UI hint, not part of the matrix).
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  const safeMode = useSafeModeStore((s) => s.mode);
+  const safeModeGate = useSafeModeGate(connectionId);
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
@@ -514,30 +514,24 @@ export default function ColumnsEditor({
   };
 
   const handleExecute = async () => {
-    // Sprint 187 — strict / warn gate for production-tagged connections.
-    // Multi-statement previews are split on `;` so any DROP COLUMN /
-    // DROP CONSTRAINT inside an ALTER batch trips the gate even when
-    // siblings are safe ADDs.
-    if (connectionEnvironment === "production" && safeMode !== "off") {
-      const statements = previewSql
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      for (const stmt of statements) {
-        const analysis = analyzeStatement(stmt);
-        if (analysis.severity === "danger") {
-          const reason = analysis.reasons[0] ?? "dangerous statement";
-          if (safeMode === "strict") {
-            setPreviewError(
-              `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`,
-            );
-            return;
-          }
-          if (safeMode === "warn") {
-            setPendingConfirm({ reason, sql: stmt });
-            return;
-          }
-        }
+    // Sprint 189 (AC-189-03) — gate every ALTER sub-statement through the
+    // shared decision matrix. Multi-statement previews are split on `;` so
+    // any DROP COLUMN / DROP CONSTRAINT inside the batch trips the gate
+    // even when siblings are safe ADDs.
+    const statements = previewSql
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const stmt of statements) {
+      const analysis = analyzeStatement(stmt);
+      const decision = safeModeGate.decide(analysis);
+      if (decision.action === "block") {
+        setPreviewError(decision.reason);
+        return;
+      }
+      if (decision.action === "confirm") {
+        setPendingConfirm({ reason: decision.reason, sql: stmt });
+        return;
       }
     }
     await runAlter();

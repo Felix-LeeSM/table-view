@@ -24,8 +24,8 @@ import type {
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSafeModeStore } from "@stores/safeModeStore";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
+import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
@@ -345,13 +345,14 @@ export default function ConstraintsEditor({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Sprint 187 — production stripe + warn / strict gate. Constraint drops
-  // emit `ALTER TABLE … DROP CONSTRAINT …` which the analyzer now flags.
+  // Sprint 189 (AC-189-05) — Safe Mode gate via shared hook. Constraint
+  // drops emit `ALTER TABLE … DROP CONSTRAINT …` which the analyzer flags.
+  // `connectionEnvironment` stays for the production stripe banner.
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  const safeMode = useSafeModeStore((s) => s.mode);
+  const safeModeGate = useSafeModeGate(connectionId);
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
@@ -445,26 +446,22 @@ export default function ConstraintsEditor({
 
   const handlePreviewConfirm = async () => {
     if (!pendingExecuteRef.current) return;
-    if (connectionEnvironment === "production" && safeMode !== "off") {
-      const statements = previewSql
-        .split(";")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      for (const stmt of statements) {
-        const analysis = analyzeStatement(stmt);
-        if (analysis.severity === "danger") {
-          const reason = analysis.reasons[0] ?? "dangerous statement";
-          if (safeMode === "strict") {
-            setPreviewError(
-              `Safe Mode blocked: ${reason} (toggle Safe Mode off in toolbar to override)`,
-            );
-            return;
-          }
-          if (safeMode === "warn") {
-            setPendingConfirm({ reason, sql: stmt });
-            return;
-          }
-        }
+    // Sprint 189 (AC-189-05) — gate every sub-statement through the shared
+    // matrix. block → previewError; confirm → ConfirmDangerousDialog handoff.
+    const statements = previewSql
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const stmt of statements) {
+      const analysis = analyzeStatement(stmt);
+      const decision = safeModeGate.decide(analysis);
+      if (decision.action === "block") {
+        setPreviewError(decision.reason);
+        return;
+      }
+      if (decision.action === "confirm") {
+        setPendingConfirm({ reason: decision.reason, sql: stmt });
+        return;
       }
     }
     await runPendingExecute();
