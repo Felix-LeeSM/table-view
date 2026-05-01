@@ -72,18 +72,18 @@ export function ExportButton({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="ghost"
+          size="xs"
           disabled={running}
           aria-label="Export"
           data-testid="export-button"
-          className={cn("gap-1.5", className)}
+          className={cn("text-muted-foreground", className)}
         >
-          <Download className="size-3.5" aria-hidden />
+          <Download aria-hidden />
           <span>Export</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-1" role="menu">
+      <PopoverContent align="end" className="w-36 p-1" role="menu">
         {formats.map((format) => {
           const disabled = disabledFormats.includes(format);
           return (
@@ -100,14 +100,14 @@ export function ExportButton({
                   : `Export as ${FORMAT_LABELS[format]}`
               }
               className={cn(
-                "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm",
+                "flex w-full items-center justify-between rounded-sm px-2 py-1 text-left text-xs",
                 "hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:outline-none",
                 disabled &&
                   "cursor-not-allowed opacity-50 hover:bg-transparent",
               )}
             >
               <span>{FORMAT_LABELS[format]}</span>
-              <span className="text-xs text-muted-foreground">.{format}</span>
+              <span className="text-3xs text-muted-foreground">.{format}</span>
             </button>
           );
         })}

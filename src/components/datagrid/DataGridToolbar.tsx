@@ -76,6 +76,13 @@ export interface DataGridToolbarProps {
   addRowLabel?: string;
   deleteRowLabel?: string;
   duplicateRowLabel?: string;
+  /**
+   * Sprint 182 — optional slot for the toolbar's right-side action group.
+   * Used to host the Sprint 181 ExportButton inline with the other ghost
+   * icon buttons instead of in a dedicated `border-b` row above the toolbar
+   * (which clashed visually with the rest of the row's tone).
+   */
+  exportSlot?: React.ReactNode;
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
@@ -108,6 +115,7 @@ export default function DataGridToolbar({
   addRowLabel = RDB_TOOLBAR_LABELS.addRowLabel,
   deleteRowLabel = RDB_TOOLBAR_LABELS.deleteRowLabel,
   duplicateRowLabel = RDB_TOOLBAR_LABELS.duplicateRowLabel,
+  exportSlot,
   onSetPage,
   onSetPageSize,
   onToggleFilters,
@@ -233,6 +241,7 @@ export default function DataGridToolbar({
             )}
           </>
         )}
+        {exportSlot}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -332,14 +341,21 @@ export default function DataGridToolbar({
             onValueChange={(v) => onSetPageSize(Number(v))}
           >
             <SelectTrigger
-              className="rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground"
+              className="h-auto min-h-0 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground shadow-none"
               aria-label="Page size"
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent
+              align="end"
+              className="min-w-[var(--radix-select-trigger-width)]"
+            >
               {PAGE_SIZE_OPTIONS.map((size) => (
-                <SelectItem key={size} value={String(size)}>
+                <SelectItem
+                  key={size}
+                  value={String(size)}
+                  className="py-1 pr-6 pl-2 text-xs"
+                >
                   {size}
                 </SelectItem>
               ))}

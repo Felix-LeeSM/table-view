@@ -299,13 +299,6 @@ export default function DocumentDataGrid({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <CollectionReadOnlyBanner />
-      <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1">
-        <ExportButton
-          context={{ kind: "collection", name: collection }}
-          headers={(data?.columns ?? []).map((c) => c.name)}
-          getRows={() => (data?.rows ?? []) as unknown[][]}
-        />
-      </div>
       <DataGridToolbar
         data={data}
         schema={database}
@@ -325,6 +318,13 @@ export default function DocumentDataGrid({
         addRowLabel={DOCUMENT_LABELS.addRowLabel}
         deleteRowLabel={DOCUMENT_LABELS.deleteRowLabel}
         duplicateRowLabel={DOCUMENT_LABELS.duplicateRowLabel}
+        exportSlot={
+          <ExportButton
+            context={{ kind: "collection", name: collection }}
+            headers={(data?.columns ?? []).map((c) => c.name)}
+            getRows={() => (data?.rows ?? []) as unknown[][]}
+          />
+        }
         onSetPage={setPage}
         onSetPageSize={(size) => {
           setPageSize(size);

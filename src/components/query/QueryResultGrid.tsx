@@ -214,26 +214,26 @@ function SelectResultArea({
   };
   const disabledExportFormats: ExportFormat[] = parsed ? [] : ["sql"];
 
-  const exportToolbar = (
-    <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-1">
-      <ExportButton
-        context={exportContext}
-        headers={result.columns.map((c) => c.name)}
-        getRows={() => result.rows as unknown[][]}
-        disabledFormats={disabledExportFormats}
-      />
-    </div>
+  const exportButton = (
+    <ExportButton
+      context={exportContext}
+      headers={result.columns.map((c) => c.name)}
+      getRows={() => result.rows as unknown[][]}
+      disabledFormats={disabledExportFormats}
+    />
   );
 
   if (editability && editability.editable) {
     return (
       <>
-        {exportToolbar}
-        <div className="flex items-center gap-1.5 border-b border-border bg-success/10 px-3 py-1 text-xs text-success">
-          <Pencil size={12} />
-          <span>
-            Editable — double-click a cell to edit, right-click for delete
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-success/10 px-3 py-0.5 text-xs text-success">
+          <span className="flex items-center gap-1.5">
+            <Pencil size={12} />
+            <span>
+              Editable — double-click a cell to edit, right-click for delete
+            </span>
           </span>
+          {exportButton}
         </div>
         <EditableQueryResultGrid
           result={result}
@@ -252,11 +252,17 @@ function SelectResultArea({
 
   return (
     <>
-      {exportToolbar}
-      {editability && (
-        <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-          <Info size={12} />
-          <span>Read-only — {editability.reason}</span>
+      {editability ? (
+        <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-0.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Info size={12} />
+            <span>Read-only — {editability.reason}</span>
+          </span>
+          {exportButton}
+        </div>
+      ) : (
+        <div className="flex items-center justify-end gap-2 border-b border-border px-2 py-0.5">
+          {exportButton}
         </div>
       )}
       <ResultTable result={result} />
