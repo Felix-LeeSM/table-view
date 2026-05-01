@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import ErrorBoundary from "./components/shared/ErrorBoundary";
 import LauncherPage from "./pages/LauncherPage";
 import WorkspacePage from "./pages/WorkspacePage";
@@ -12,6 +13,29 @@ import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { markBootMilestone } from "@lib/perf/bootInstrumentation";
 import App from "./App";
+
+/**
+ * Bridge the macOS native menu click (`File > New Connection`, Cmd+N) into
+ * the existing `new-connection` DOM event flow that `HomePage` and
+ * `Sidebar` already listen for. Rust emits `menu:new-connection` only
+ * after the launcher window is shown/focused (see `install_macos_menu` in
+ * `src-tauri/src/lib.rs`), so by the time this listener fires the
+ * `<HomePage>` mounted under `<LauncherShell>` is guaranteed to be alive.
+ *
+ * No-op on Windows/Linux where the menu is never installed and the event
+ * is never emitted. `listen` resolves regardless — it is a passive
+ * subscription and cheap to keep mounted.
+ */
+function useMenuNewConnectionBridge() {
+  useEffect(() => {
+    const unlistenPromise = listen("menu:new-connection", () => {
+      window.dispatchEvent(new CustomEvent("new-connection"));
+    });
+    return () => {
+      unlistenPromise.then((fn) => fn()).catch(() => {});
+    };
+  }, []);
+}
 
 /**
  * AppRouter — Sprint 150 boot-time label dispatcher (Phase 12).
@@ -96,6 +120,8 @@ function LauncherShell() {
     (s) => s.loadPersistedFavorites,
   );
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
+
+  useMenuNewConnectionBridge();
 
   useEffect(() => {
     loadConnections();

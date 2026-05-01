@@ -24,6 +24,31 @@ fn window_by_label<R: Runtime>(
         .ok_or_else(|| AppError::NotFound(format!("window '{label}' not found")))
 }
 
+/// Build the launcher `WebviewWindow` from hardcoded defaults that mirror
+/// the entry in `tauri.conf.json` `app.windows[]`. Used as the recovery
+/// path when the launcher has been destroyed (e.g. user closed the
+/// launcher window directly on macOS where the app stays alive without
+/// any windows) and we need to bring it back — notably from the macOS
+/// File > New Connection menu item and the dock-icon reopen handler
+/// (2026-05-01).
+///
+/// Shape MUST stay byte-for-byte identical to the static config so the
+/// re-created window is indistinguishable from the boot one. Any future
+/// edit to the launcher's geometry/title in `tauri.conf.json` must be
+/// mirrored here.
+fn build_launcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError> {
+    tauri::WebviewWindowBuilder::new(app, "launcher", tauri::WebviewUrl::App("index.html".into()))
+        .title("Table View")
+        .inner_size(720.0, 560.0)
+        .resizable(false)
+        .maximizable(false)
+        .center()
+        .visible(true)
+        .build()
+        .map(|_| ())
+        .map_err(|e| AppError::Connection(format!("launcher build failed: {e}")))
+}
+
 /// Sprint 175 Sprint 2 iteration 2 — build the workspace `WebviewWindow`
 /// from hardcoded defaults instead of `tauri.conf.json` `app.windows[]`.
 ///
@@ -62,8 +87,18 @@ fn build_workspace_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError
 
 /// Show the launcher window. Idempotent — calling on an already-visible
 /// window is a no-op from the user's perspective.
+///
+/// Lazy-builds the window if it was destroyed. macOS-only scenario: the
+/// app remains alive after the launcher window is closed, and the native
+/// File > New Connection menu (Cmd+N) plus the dock-icon reopen handler
+/// both call into this command to bring the launcher back. On
+/// Windows/Linux the app would have terminated when the last window
+/// closed, so the lazy-build path is dormant there.
 #[tauri::command]
 pub async fn launcher_show<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
+    if app.get_webview_window("launcher").is_none() {
+        build_launcher_window(&app)?;
+    }
     window_by_label(&app, "launcher")?
         .show()
         .map_err(|e| AppError::Connection(format!("launcher.show failed: {e}")))
@@ -277,6 +312,34 @@ mod tests {
         assert!(
             app.get_webview_window("workspace").is_some(),
             "workspace window should exist after lazy ensure"
+        );
+    }
+
+    /// Reason: macOS native File > New Connection menu (Cmd+N) and the
+    /// dock-icon reopen handler both call `launcher_show` after the
+    /// launcher window has been destroyed. Pre-2026-05-01 this returned
+    /// `NotFound` and silently failed; now it must lazy-build the
+    /// launcher from the same hardcoded shape as the static config.
+    /// (2026-05-01)
+    #[tokio::test]
+    async fn launcher_show_lazy_creates_when_missing() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+
+        // No launcher window pre-created (mock_context's noop assets do
+        // not declare any). Pre-2026-05-01 this was a NotFound.
+        assert!(app.get_webview_window("launcher").is_none());
+
+        let result = launcher_show(app.handle().clone()).await;
+        assert!(
+            result.is_ok(),
+            "launcher_show should lazy-build + show, got {:?}",
+            result.err()
+        );
+        assert!(
+            app.get_webview_window("launcher").is_some(),
+            "launcher window should exist after lazy show"
         );
     }
 

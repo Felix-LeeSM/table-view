@@ -8,7 +8,7 @@ pub mod storage;
 use commands::connection::AppState;
 use std::sync::OnceLock;
 use std::time::Instant;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tracing::info;
 
 /// Sprint 175 — process-wide `Instant` captured at the very top of `run()`.
@@ -200,11 +200,34 @@ pub fn run() {
     // `info!` per fire). Both stay permanent — Sprint 1 set the precedent
     // that boot instrumentation persists in production builds so future
     // sprints can re-baseline against the same emission shape.
-    let builder = builder.setup(|_app| {
+    let builder = builder.setup(|app| {
         if let Some(t0) = BOOT_T0.get() {
             let delta_ms = t0.elapsed().as_secs_f64() * 1000.0;
             info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);
         }
+
+        // macOS-only native application menu (2026-05-01).
+        //
+        // macOS keeps the app process alive after every window has been
+        // closed; the dock icon stays lit and the user expects File > New
+        // Connection (Cmd+N) to bring the launcher back. The webview-side
+        // keydown handler in `App.tsx` only fires when a webview has focus,
+        // so it cannot serve this scenario. We register a native NSMenu
+        // here and bridge the click into the existing `new-connection`
+        // DOM event flow via a Tauri event.
+        //
+        // Windows/Linux take their menu from the per-window decoration
+        // bar; reproducing that there would be a UI regression because
+        // (a) the launcher is a 720×560 fixed window where a menu bar
+        // would consume disproportionate vertical space, and (b) those
+        // OSes terminate the app on last-window-close, so the "no window
+        // open" scenario this menu fixes never arises. cfg-gated to
+        // macOS.
+        #[cfg(target_os = "macos")]
+        {
+            install_macos_menu(app)?;
+        }
+
         Ok(())
     });
     record_phase(&mut cursor, "setup-register");
@@ -235,7 +258,144 @@ pub fn run() {
     // `[boot] phase=…` lines plus the `rust:first-ipc` line.
     record_phase(&mut cursor, "before-builder-run");
 
+    // macOS picks up the dock-icon-clicked reopen path (and the menu's
+    // Cmd+N restore path) by replacing the simpler `builder.run(context)`
+    // with a `build` + `run(|handle, event| ...)` pair. The callback
+    // observes `RunEvent::Reopen { has_visible_windows, .. }` and, when
+    // every window has been closed (`has_visible_windows == false`),
+    // brings the launcher back via the same lazy-build path the menu
+    // event uses. Other OSes terminate the process when the last window
+    // closes, so the original `.run(context)` is preserved there.
+    #[cfg(target_os = "macos")]
+    {
+        let app = builder
+            .build(context)
+            .expect("error while building tauri application");
+
+        app.run(|handle, event| {
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } = event
+            {
+                if !has_visible_windows {
+                    let h = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(e) = launcher::launcher_show(h).await {
+                            tracing::warn!(
+                                target: "menu",
+                                "dock-reopen launcher_show failed: {}",
+                                e
+                            );
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
     builder
         .run(context)
         .expect("error while running tauri application");
+}
+
+/// macOS native menu installer (2026-05-01).
+///
+/// Builds an NSMenu with the macOS-standard layout — App / File / Edit /
+/// View / Window — and registers a click handler that re-opens the
+/// launcher and forwards `new-connection` to the frontend's existing DOM
+/// event listener (`HomePage.tsx` / `Sidebar.tsx`).
+///
+/// `PredefinedMenuItem` is used wherever possible (Quit/Hide/Cut/Copy/
+/// Paste/Minimize/etc.) so the items pick up macOS's native localized
+/// titles and accelerators. The only custom item is `new_connection`,
+/// keyed by id so `on_menu_event` can identify it.
+#[cfg(target_os = "macos")]
+fn install_macos_menu<R: tauri::Runtime>(
+    app: &mut tauri::App<R>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+
+    let new_connection = MenuItemBuilder::with_id("new_connection", "New Connection…")
+        .accelerator("CmdOrCtrl+N")
+        .build(app)?;
+
+    let app_submenu = SubmenuBuilder::new(app, "Table View")
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("About Table View"),
+            None,
+        )?)
+        .separator()
+        .item(&PredefinedMenuItem::services(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::hide(app, None)?)
+        .item(&PredefinedMenuItem::hide_others(app, None)?)
+        .item(&PredefinedMenuItem::show_all(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, None)?)
+        .build()?;
+
+    let file_submenu = SubmenuBuilder::new(app, "File")
+        .item(&new_connection)
+        .separator()
+        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .build()?;
+
+    let edit_submenu = SubmenuBuilder::new(app, "Edit")
+        .item(&PredefinedMenuItem::undo(app, None)?)
+        .item(&PredefinedMenuItem::redo(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, None)?)
+        .item(&PredefinedMenuItem::copy(app, None)?)
+        .item(&PredefinedMenuItem::paste(app, None)?)
+        .item(&PredefinedMenuItem::select_all(app, None)?)
+        .build()?;
+
+    let window_submenu = SubmenuBuilder::new(app, "Window")
+        .item(&PredefinedMenuItem::minimize(app, None)?)
+        .item(&PredefinedMenuItem::maximize(app, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .build()?;
+
+    let menu = MenuBuilder::new(app)
+        .item(&app_submenu)
+        .item(&file_submenu)
+        .item(&edit_submenu)
+        .item(&window_submenu)
+        .build()?;
+
+    app.set_menu(menu)?;
+
+    app.on_menu_event(|handle, event| {
+        if event.id().0 == "new_connection" {
+            // Spawn so we can `.await` the launcher_show command without
+            // blocking the menu-event dispatcher.
+            let handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = launcher::launcher_show(handle.clone()).await {
+                    tracing::warn!(
+                        target: "menu",
+                        "launcher_show failed before emit: {}",
+                        e
+                    );
+                    return;
+                }
+                if let Some(launcher) = handle.get_webview_window("launcher") {
+                    let _ = launcher.set_focus();
+                    if let Err(e) = launcher.emit("menu:new-connection", ()) {
+                        tracing::warn!(
+                            target: "menu",
+                            "menu:new-connection emit failed: {}",
+                            e
+                        );
+                    }
+                }
+            });
+        }
+    });
+
+    Ok(())
 }

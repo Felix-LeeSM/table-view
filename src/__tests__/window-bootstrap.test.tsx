@@ -90,9 +90,11 @@ vi.mock("@/App", () => ({
 }));
 
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { listen } from "@tauri-apps/api/event";
 import AppRouter from "@/AppRouter";
 
 const mockedGetLabel = getCurrentWindowLabel as Mock;
+const mockedListen = listen as Mock;
 
 describe("AC-150-*: window-label-driven boot routing", () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -167,5 +169,40 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(screen.getByTestId("launcher-page")).toBeInTheDocument();
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toMatch(/unknown window label/i);
+  });
+
+  // 2026-05-01 — macOS native File > New Connection (Cmd+N) menu fires
+  // the Tauri event `menu:new-connection`. The launcher shell must adapt
+  // it into the existing `new-connection` DOM event so HomePage's listener
+  // (HomePage.tsx:78) opens the ConnectionDialog. Regression guard for the
+  // case where the user closed every window on macOS and Cmd+N is the only
+  // path back to the connection dialog.
+  it("LauncherShell bridges menu:new-connection Tauri event into the new-connection DOM event", () => {
+    mockedGetLabel.mockReturnValue("launcher");
+
+    let menuCallback: ((e: { payload: unknown }) => void) | undefined;
+    mockedListen.mockImplementation(
+      (event: string, cb: (e: { payload: unknown }) => void) => {
+        if (event === "menu:new-connection") {
+          menuCallback = cb;
+        }
+        return Promise.resolve(() => {});
+      },
+    );
+
+    render(<AppRouter />);
+
+    expect(mockedListen).toHaveBeenCalledWith(
+      "menu:new-connection",
+      expect.any(Function),
+    );
+
+    const domSpy = vi.fn();
+    window.addEventListener("new-connection", domSpy);
+
+    menuCallback?.({ payload: undefined });
+    expect(domSpy).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener("new-connection", domSpy);
   });
 });
