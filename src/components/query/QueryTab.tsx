@@ -25,6 +25,9 @@ import { toast } from "@lib/toast";
 import type { Paradigm } from "@/types/connection";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
 import { useMongoAutocomplete } from "@hooks/useMongoAutocomplete";
+import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { analyzeMongoPipeline } from "@lib/mongoSafety";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import { useDocumentStore } from "@stores/documentStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import { assertNever } from "@/lib/paradigm";
@@ -213,6 +216,17 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const addFavorite = useFavoritesStore((s) => s.addFavorite);
   const favorites = useFavoritesStore((s) => s.favorites);
 
+  // Sprint 188 — Mongo aggregate pipeline danger gate. The hook centralises
+  // the strict / warn / off decision against the connection's environment;
+  // pendingMongoConfirm holds the pipeline + reason while the warn-tier
+  // confirm dialog is open so executing it requires re-dispatching with the
+  // exact stages the user already typed.
+  const mongoGate = useSafeModeGate(tab.connectionId);
+  const [pendingMongoConfirm, setPendingMongoConfirm] = useState<{
+    pipeline: Record<string, unknown>[];
+    reason: string;
+  } | null>(null);
+
   const handleSaveFavorite = useCallback(() => {
     const name = favoriteName.trim();
     const sql = tab.sql.trim();
@@ -228,6 +242,128 @@ export default function QueryTab({ tab }: QueryTabProps) {
     },
     [tab.id, updateQuerySql],
   );
+
+  // Sprint 188 — Mongo aggregate dispatch + queryState/history book-keeping
+  // extracted so the warn-confirm dialog can re-enter the same path with
+  // the pending pipeline. Mirrors the inline find branch below
+  // (running-set → dispatch → queryResult adapt → completed/error sync →
+  // history entry) but for `aggregateDocuments` only.
+  const runMongoAggregateNow = useCallback(
+    async (pipeline: Record<string, unknown>[]) => {
+      const docCtx = readDocumentContext(tab);
+      if (!docCtx) {
+        updateQueryState(tab.id, {
+          status: "error",
+          error:
+            "Document query tabs require a target database and collection.",
+        });
+        return;
+      }
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const docResult = await aggregateDocuments(
+          tab.connectionId,
+          docCtx.database,
+          docCtx.collection,
+          pipeline,
+        );
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: docResult.columns,
+          rows: docResult.rows,
+          total_count: docResult.total_count,
+          execution_time_ms: docResult.execution_time_ms,
+          query_type: "select",
+        };
+        useTabStore.setState((state) => {
+          const current = state.tabs.find((t) => t.id === tab.id);
+          if (
+            current &&
+            current.type === "query" &&
+            current.queryState.status === "running" &&
+            "queryId" in current.queryState &&
+            current.queryState.queryId === queryId
+          ) {
+            return {
+              tabs: state.tabs.map((t) =>
+                t.id === tab.id && t.type === "query"
+                  ? {
+                      ...t,
+                      queryState: {
+                        status: "completed" as const,
+                        result: queryResult,
+                      },
+                    }
+                  : t,
+              ),
+            };
+          }
+          return state;
+        });
+        addHistoryEntry({
+          sql: tab.sql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          connectionId: tab.connectionId,
+          paradigm: tab.paradigm,
+          queryMode: tab.queryMode,
+          database: tab.database,
+          collection: tab.collection,
+        });
+      } catch (err) {
+        useTabStore.setState((state) => {
+          const current = state.tabs.find((t) => t.id === tab.id);
+          if (
+            current &&
+            current.type === "query" &&
+            current.queryState.status === "running" &&
+            "queryId" in current.queryState &&
+            current.queryState.queryId === queryId
+          ) {
+            return {
+              tabs: state.tabs.map((t) =>
+                t.id === tab.id && t.type === "query"
+                  ? {
+                      ...t,
+                      queryState: {
+                        status: "error" as const,
+                        error: err instanceof Error ? err.message : String(err),
+                      },
+                    }
+                  : t,
+              ),
+            };
+          }
+          return state;
+        });
+        addHistoryEntry({
+          sql: tab.sql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          connectionId: tab.connectionId,
+          paradigm: tab.paradigm,
+          queryMode: tab.queryMode,
+          database: tab.database,
+          collection: tab.collection,
+        });
+      }
+    },
+    [tab, addHistoryEntry, updateQueryState],
+  );
+
+  const confirmMongoDangerous = useCallback(async () => {
+    const pending = pendingMongoConfirm;
+    if (!pending) return;
+    setPendingMongoConfirm(null);
+    await runMongoAggregateNow(pending.pipeline);
+  }, [pendingMongoConfirm, runMongoAggregateNow]);
+
+  const cancelMongoDangerous = useCallback(() => {
+    setPendingMongoConfirm(null);
+  }, []);
 
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
@@ -272,48 +408,69 @@ export default function QueryTab({ tab }: QueryTabProps) {
         return;
       }
 
+      // Sprint 188 — aggregate pipeline danger gate. Runs before the
+      // running-state set so a blocked / pending-confirm pipeline cannot
+      // strand the tab in a "running" indicator. The actual dispatch +
+      // queryState/history book-keeping is shared with the warn-confirm
+      // path through `runMongoAggregateNow`.
+      if (tab.queryMode === "aggregate") {
+        if (!isRecordArray(parsed)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "Pipeline must be a JSON array of stage objects.",
+          });
+          return;
+        }
+        const decision = mongoGate.decide(analyzeMongoPipeline(parsed));
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        if (decision.action === "confirm") {
+          setPendingMongoConfirm({
+            pipeline: parsed,
+            reason: decision.reason,
+          });
+          return;
+        }
+        await runMongoAggregateNow(parsed);
+        return;
+      }
+
+      // Document find path — kept inline because the FindBody shaping is
+      // unique to this branch and adding a helper would not save a call site.
       const queryId = `${tab.id}-${Date.now()}`;
       const startTime = Date.now();
       updateQueryState(tab.id, { status: "running", queryId });
 
       try {
-        let docResult;
-        if (tab.queryMode === "aggregate") {
-          if (!isRecordArray(parsed)) {
-            throw new Error("Pipeline must be a JSON array of stage objects.");
-          }
-          docResult = await aggregateDocuments(
-            tab.connectionId,
-            docCtx.database,
-            docCtx.collection,
-            parsed,
-          );
-        } else {
-          // Default find path. Accept either an object (treated as the
-          // filter) or the full FindBody shape if the user already wrapped
-          // it.
-          if (!isRecord(parsed)) {
-            throw new Error(
-              "Find body must be a JSON object (filter or FindBody).",
-            );
-          }
-          const candidate = parsed as Record<string, unknown>;
-          const looksLikeFindBody =
-            "filter" in candidate ||
-            "sort" in candidate ||
-            "projection" in candidate ||
-            "skip" in candidate ||
-            "limit" in candidate;
-          const body: FindBody = looksLikeFindBody
-            ? (candidate as FindBody)
-            : { filter: candidate };
-          docResult = await findDocuments(
-            tab.connectionId,
-            docCtx.database,
-            docCtx.collection,
-            body,
+        // Default find path. Accept either an object (treated as the
+        // filter) or the full FindBody shape if the user already wrapped
+        // it.
+        if (!isRecord(parsed)) {
+          throw new Error(
+            "Find body must be a JSON object (filter or FindBody).",
           );
         }
+        const candidate = parsed as Record<string, unknown>;
+        const looksLikeFindBody =
+          "filter" in candidate ||
+          "sort" in candidate ||
+          "projection" in candidate ||
+          "skip" in candidate ||
+          "limit" in candidate;
+        const body: FindBody = looksLikeFindBody
+          ? (candidate as FindBody)
+          : { filter: candidate };
+        const docResult = await findDocuments(
+          tab.connectionId,
+          docCtx.database,
+          docCtx.collection,
+          body,
+        );
 
         // Adapt DocumentQueryResult → QueryResult so the existing grid
         // can render the flattened rows without forking the result panel.
@@ -641,6 +798,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.queryMode,
     tab.database,
     tab.collection,
+    mongoGate,
+    runMongoAggregateNow,
   ]);
   useEffect(() => {
     const handler = (e: Event) => {
@@ -1059,6 +1218,15 @@ export default function QueryTab({ tab }: QueryTabProps) {
             </Button>
           </div>
         </div>
+      )}
+      {pendingMongoConfirm && (
+        <ConfirmDangerousDialog
+          open
+          reason={pendingMongoConfirm.reason}
+          sqlPreview={JSON.stringify(pendingMongoConfirm.pipeline, null, 2)}
+          onConfirm={confirmMongoDangerous}
+          onCancel={cancelMongoDangerous}
+        />
       )}
     </div>
   );

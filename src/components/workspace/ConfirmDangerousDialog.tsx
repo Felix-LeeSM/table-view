@@ -13,11 +13,15 @@ import { Input } from "@components/ui/input";
 /**
  * Sprint 186 — type-to-confirm dialog for Safe Mode warn-tier.
  *
- * When the user has Safe Mode set to "warn" and triggers a dangerous SQL
- * statement on a production-tagged connection, the commit gate hands off to
- * this dialog. The user must type the analyzer's reason string verbatim
- * (e.g. "DELETE without WHERE clause", "DROP TABLE") to enable the
- * destructive Confirm button.
+ * When the user has Safe Mode set to "warn" and triggers a dangerous
+ * statement on a production-tagged connection, the commit gate hands off
+ * to this dialog. The user must type the analyzer's reason string verbatim
+ * (e.g. "DELETE without WHERE clause", "DROP TABLE", "MongoDB $out
+ * (collection replace)") to enable the destructive Confirm button.
+ *
+ * Sprint 188 — `sqlPreview` is retained as the prop name for RDB call-site
+ * compatibility, but the preview pane now also renders Mongo aggregate
+ * pipelines (JSON). The aria-label is paradigm-agnostic accordingly.
  *
  * Comparison rule (Sprint 186 contract): trim both sides, case-sensitive.
  */
@@ -57,7 +61,7 @@ export default function ConfirmDangerousDialog({
         </AlertDialogHeader>
         <pre
           className="max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono text-xs text-muted-foreground"
-          aria-label="SQL preview"
+          aria-label="Statement preview"
         >
           {sqlPreview}
         </pre>

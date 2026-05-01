@@ -9,6 +9,13 @@ export type StatementKind =
   | "ddl-truncate"
   | "ddl-alter-drop"
   | "ddl-other"
+  // Sprint 188 — Mongo aggregate-pipeline analyser shares this union so the
+  // `useSafeModeGate` decision matrix is paradigm-agnostic. The mongo-*
+  // variants only originate from `analyzeMongoPipeline`, never from
+  // `analyzeStatement` (SQL).
+  | "mongo-out"
+  | "mongo-merge"
+  | "mongo-other"
   | "other";
 
 export interface StatementAnalysis {

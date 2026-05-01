@@ -20,6 +20,8 @@ import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import type { QueryResult } from "@/types/query";
 import { useToastStore } from "@lib/toast";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
+import { userEvent } from "@testing-library/user-event";
 
 const MOCK_RESULT: QueryResult = {
   columns: [
@@ -2119,5 +2121,176 @@ describe("QueryTab", () => {
     if (status?.type === "connected") {
       expect(status.activeDb).toBe("table_view_test");
     }
+  });
+
+  // ── Sprint 188: Mongo aggregate dangerous-op gate ────────────────────────
+  // AC-188-03 — `useSafeModeGate` is wired into the aggregate dispatch
+  // path. Pin every cell of the matrix that the contract enumerates by
+  // exercising the actual user-visible surface (queryState transitions +
+  // ConfirmDangerousDialog) rather than asserting on the gate hook
+  // internals — those have unit coverage in `useSafeModeGate.test.ts`.
+  // date 2026-05-01.
+  describe("Sprint 188 — Mongo aggregate safe-mode gate", () => {
+    const PROD_PIPELINE = '[{"$match":{}},{"$out":"snapshot"}]';
+    const SAFE_PIPELINE = '[{"$match":{"active":true}}]';
+
+    function setupProductionMongo(): void {
+      useConnectionStore.setState({
+        connections: [
+          makeConn({
+            id: "conn-mongo",
+            db_type: "mongodb",
+            paradigm: "document",
+            environment: "production",
+          }),
+        ],
+      });
+    }
+
+    beforeEach(() => {
+      localStorage.removeItem(SAFE_MODE_STORAGE_KEY);
+      useSafeModeStore.setState({ mode: "strict" });
+    });
+
+    it("[AC-188-03a] production × strict × $out → blocks dispatch with canonical error", async () => {
+      setupProductionMongo();
+      useSafeModeStore.setState({ mode: "strict" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      const updated = useTabStore
+        .getState()
+        .tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query" && updated.queryState.status === "error") {
+        expect(updated.queryState.error).toMatch(
+          /Safe Mode blocked: MongoDB \$out/,
+        );
+      } else {
+        throw new Error("expected error queryState");
+      }
+    });
+
+    it("[AC-188-03b] production × warn × $out → opens confirm dialog; type-to-confirm dispatches", async () => {
+      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+      setupProductionMongo();
+      useSafeModeStore.setState({ mode: "warn" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      // Dialog should be visible and dispatch should be deferred.
+      expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      const input = await screen.findByTestId("confirm-dangerous-input");
+      const user = userEvent.setup();
+      await user.type(input, "MongoDB $out (collection replace)");
+      await user.click(screen.getByRole("button", { name: /Run anyway/ }));
+
+      await waitFor(() => {
+        expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
+      });
+      expect(mockAggregateDocuments).toHaveBeenCalledWith(
+        "conn-mongo",
+        "table_view_test",
+        "users",
+        [{ $match: {} }, { $out: "snapshot" }],
+      );
+    });
+
+    it("[AC-188-03c] production × warn × cancel → no dispatch, queryState untouched", async () => {
+      setupProductionMongo();
+      useSafeModeStore.setState({ mode: "warn" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      await screen.findByTestId("confirm-dangerous-input");
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: /Cancel/ }));
+
+      expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      const updated = useTabStore
+        .getState()
+        .tabs.find((t) => t.id === "query-1");
+      if (updated?.type === "query") {
+        // queryState started as "idle" (default for newly-mounted tabs);
+        // cancel must not have transitioned it.
+        expect(updated.queryState.status).not.toBe("error");
+        expect(updated.queryState.status).not.toBe("running");
+      }
+    });
+
+    it("[AC-188-03d] production × off × $out → dispatch proceeds (gate bypassed)", async () => {
+      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+      setupProductionMongo();
+      useSafeModeStore.setState({ mode: "off" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      await waitFor(() => {
+        expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("[AC-188-03e] non-production × strict × $out → dispatch proceeds (env scoping)", async () => {
+      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+      useConnectionStore.setState({
+        connections: [
+          makeConn({
+            id: "conn-mongo",
+            db_type: "mongodb",
+            paradigm: "document",
+            environment: "staging",
+          }),
+        ],
+      });
+      useSafeModeStore.setState({ mode: "strict" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      await waitFor(() => {
+        expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("[AC-188-03f] production × strict × safe pipeline → dispatch proceeds (gate not triggered)", async () => {
+      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+      setupProductionMongo();
+      useSafeModeStore.setState({ mode: "strict" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: SAFE_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      await waitFor(() => {
+        expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });
