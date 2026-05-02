@@ -5,8 +5,10 @@ import type { TableData } from "@/types/schema";
 // `?raw` is a Vite-supported query suffix that imports a file's text as a
 // string. We use it for the static regression guard so the test verifies the
 // SQL branch catch block is not empty without depending on Node fs APIs
-// (the project tsconfig does not pull in `@types/node`).
-import useDataGridEditSource from "./useDataGridEdit.ts?raw";
+// (the project tsconfig does not pull in `@types/node`). Sprint 193
+// (AC-193-03) extracted runRdbBatch into useDataGridPreviewCommit; the
+// guard now reads that hook's source instead of useDataGridEdit's.
+import useDataGridPreviewCommitSource from "@/hooks/useDataGridPreviewCommit.ts?raw";
 
 // Sprint 93 — handleExecuteCommit's SQL branch must surface commit failures
 // instead of swallowing them. Sprint 183 (date 2026-05-01) flipped the call
@@ -396,9 +398,10 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
   it("static regression guard: SQL branch catch block is non-empty", () => {
     // AC-05 / Sprint 183 — ensure no future change re-introduces the
     // silent-swallow bug. Sprint 186 extracted the try/catch + cleanup
-    // into a `runRdbBatch` helper above `handleExecuteCommit`, so the
-    // slice now covers that helper instead of the inline body.
-    const source = useDataGridEditSource;
+    // into a `runRdbBatch` helper. Sprint 193 (AC-193-03) moved that
+    // helper into `useDataGridPreviewCommit`, so the slice now reads
+    // from the hook's source.
+    const source = useDataGridPreviewCommitSource;
 
     const sqlBranchStart = source.indexOf("const runRdbBatch = useCallback(");
     expect(

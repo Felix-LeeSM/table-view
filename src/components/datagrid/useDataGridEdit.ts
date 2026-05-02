@@ -1,20 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useSchemaStore } from "@stores/schemaStore";
+import { useState, useCallback, useEffect } from "react";
 import { useTabStore } from "@stores/tabStore";
-import { analyzeStatement } from "@/lib/sql/sqlSafety";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
+import { useCommitFlash } from "@/hooks/useCommitFlash";
+import { useDataGridSelection } from "@/hooks/useDataGridSelection";
+import { useDataGridPreviewCommit } from "@/hooks/useDataGridPreviewCommit";
 import type { TableData } from "@/types/schema";
-import {
-  generateSqlWithKeys,
-  type CoerceError,
-  type GeneratedSqlStatement,
-} from "./sqlGenerator";
-import {
-  generateMqlPreview,
-  type MqlCommand,
-  type MqlPreview,
-} from "@/lib/mongo/mqlGenerator";
-import { insertDocument, updateDocument, deleteDocument } from "@/lib/tauri";
+import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
 import { toast } from "@/lib/toast";
 
 /**
@@ -367,14 +357,8 @@ export function useDataGridEdit({
   fetchData,
   paradigm = "rdb",
 }: UseDataGridEditParams): DataGridEditState {
-  const executeQueryBatch = useSchemaStore((s) => s.executeQueryBatch);
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
-  // Sprint 189 (AC-189-01) — Safe Mode gate. Sprint 185 hand-rolled the
-  // mode×environment×severity matrix here; Sprint 189 routes everything
-  // through `useSafeModeGate` so RDB / Mongo / DDL editors share one
-  // decision matrix (`decideSafeModeAction` in `src/lib/safeMode.ts`).
-  const safeModeGate = useSafeModeGate(connectionId);
   // Sprint 97 — surface dirty state to the store so TabBar can render a
   // dirty dot + gate close-on-dirty without coupling to grid internals.
   const setTabDirty = useTabStore((s) => s.setTabDirty);
@@ -394,76 +378,78 @@ export function useDataGridEdit({
   const [pendingEditErrors, setPendingEditErrors] = useState<
     Map<string, string>
   >(new Map());
+  const [pendingNewRows, setPendingNewRows] = useState<unknown[][]>([]);
+  const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
+    Set<string>
+  >(new Set());
 
-  // SQL preview modal state
-  const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
-  // Sprint 93 — keyed statements that produced `sqlPreview`. Kept in lockstep
-  // with `sqlPreview` (every `setSqlPreview(...)` call has a matching
-  // `setSqlPreviewStatements(...)` so the two arrays never drift). Used by
-  // `handleExecuteCommit` to map a failing statement index back to the
-  // pending-edit cell key.
-  const [sqlPreviewStatements, setSqlPreviewStatements] = useState<
-    GeneratedSqlStatement[] | null
-  >(null);
-  // Sprint 93 — commit error state for the SQL branch. Populated only when
-  // `handleExecuteCommit` catches a rejected `executeQuery`; cleared on
-  // successful commit, on `handleDiscard`, and when a fresh `handleCommit`
-  // re-opens the preview with a new batch.
-  const [commitError, setCommitError] = useState<CommitError | null>(null);
-  // Sprint 186 — warn-tier Safe Mode handoff. Non-null while the user is
-  // looking at a `<ConfirmDangerousDialog>`. Cleared on confirm/cancel/discard.
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    reason: string;
-    sql: string;
-    statementIndex: number;
-  } | null>(null);
-  // Sprint 86 — parallel MQL preview state for the document paradigm. Lives
-  // next to `sqlPreview` so `hasPendingChanges` and the commit shortcut can
-  // reason about both in a single place. Mutually exclusive in practice: a
-  // single grid is either RDB or document, never both.
-  const [mqlPreview, setMqlPreview] = useState<MqlPreview | null>(null);
+  // Sprint 193 (AC-193-02) — multi-row selection 책임을
+  // `useDataGridSelection` sub-hook 으로 위임. paradigm-agnostic.
+  const {
+    selectedRowIds,
+    anchorRowIdx,
+    selectedRowIdx,
+    handleSelectRow,
+    clearSelection,
+  } = useDataGridSelection();
 
-  // Sprint 98 — Cmd+S immediate visual feedback. Flipped to `true` at the
-  // entry of every commit attempt (commit-changes event handler + toolbar
-  // handleCommit) so the Commit button can render a spinner + aria-busy state
-  // BEFORE the SQL preview modal mounts. Cleared by an effect that watches the
-  // preview/error transitions, plus a 400ms safety fallback so a "no-op"
-  // validation-only branch can never leave the UI stuck in a busy state.
-  const [isCommitFlashing, setIsCommitFlashing] = useState(false);
-  // Ref so subsequent flashes can clear the previous safety timer without a
-  // re-render — and so the unmount cleanup can drain a pending timer without
-  // racing the watcher effect.
-  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Sprint 98 — entry-point helper. Both close vectors (commit-changes event
-  // and toolbar handleCommit) call this BEFORE any preview/validation work so
-  // the flash flag is observable synchronously, well within the AC-01 200ms
-  // budget. The 400ms safety fallback covers branches that never set a
-  // preview (e.g. dirty 0 toast path, validation-only no-op) — without it
-  // the spinner could stick on those paths until the next commit attempt.
-  const beginCommitFlash = useCallback(() => {
-    setIsCommitFlashing(true);
-    if (flashTimeoutRef.current !== null) {
-      clearTimeout(flashTimeoutRef.current);
-    }
-    flashTimeoutRef.current = setTimeout(() => {
-      setIsCommitFlashing(false);
-      flashTimeoutRef.current = null;
-    }, 400);
-  }, []);
-
-  // Drain any pending safety timer on unmount so a tab teardown can never
-  // schedule a setState on an unmounted hook (React 18 strict mode + the
-  // existing `removes the listener on unmount` regression test both rely on
-  // this being clean).
+  // Reset selection when page changes — facade 에 남는 effect (hook 은
+  // page 개념을 모르므로 escape hatch 호출).
   useEffect(() => {
-    return () => {
-      if (flashTimeoutRef.current !== null) {
-        clearTimeout(flashTimeoutRef.current);
-        flashTimeoutRef.current = null;
-      }
-    };
-  }, []);
+    clearSelection();
+  }, [page, clearSelection]);
+
+  // Sprint 193 (AC-193-01) — commit flash 책임을 `useCommitFlash` sub-hook
+  // 로 위임. Sprint 98 의 Cmd+S 즉시 시각 피드백 + 400ms 안전망 + unmount
+  // drain 동작은 hook 안에 보존. 본 facade 는 terminal-signal watcher
+  // (preview / commitError 전이 시 즉시 clear) 만 보유한다.
+  const { isCommitFlashing, beginCommitFlash, clearCommitFlash } =
+    useCommitFlash();
+
+  // Sprint 193 (AC-193-03) — preview / commit / Safe Mode handoff 를 한
+  // sub-hook 으로 위임. RDB SQL preview ↔ Mongo MQL preview paradigm 분기,
+  // executeQueryBatch / dispatchMqlCommand executor, useSafeModeGate
+  // consume, warn-tier confirm/cancel, commitError 라이프사이클이 hook
+  // 내부로 이동. facade 는 cleanup 콜백 (`clearAllPending`) 과 cell editing /
+  // pending state 만 협력 인자로 전달.
+  const clearAllPending = useCallback(() => {
+    setPendingEdits(new Map());
+    setPendingEditErrors(new Map());
+    setPendingNewRows([]);
+    setPendingDeletedRowKeys(new Set());
+    clearSelection();
+    setEditingCell(null);
+    setEditValue("");
+  }, [clearSelection]);
+
+  const {
+    sqlPreview,
+    setSqlPreview: setSqlPreviewExposed,
+    mqlPreview,
+    setMqlPreview,
+    commitError,
+    setCommitError,
+    pendingConfirm,
+    handleCommit,
+    handleExecuteCommit,
+    confirmDangerous,
+    cancelDangerous,
+    resetPreviewState,
+  } = useDataGridPreviewCommit({
+    data,
+    schema,
+    table,
+    connectionId,
+    page,
+    paradigm,
+    fetchData,
+    pendingEdits,
+    pendingNewRows,
+    pendingDeletedRowKeys,
+    setPendingEditErrors,
+    clearAllPending,
+    beginCommitFlash,
+  });
 
   // Clear the flash as soon as we have a real terminal signal: a preview
   // opened (sqlPreview / mqlPreview transitioned to non-null) or an executor
@@ -473,40 +459,9 @@ export function useDataGridEdit({
   useEffect(() => {
     if (!isCommitFlashing) return;
     if (sqlPreview !== null || mqlPreview !== null || commitError !== null) {
-      setIsCommitFlashing(false);
-      if (flashTimeoutRef.current !== null) {
-        clearTimeout(flashTimeoutRef.current);
-        flashTimeoutRef.current = null;
-      }
+      clearCommitFlash();
     }
-  }, [isCommitFlashing, sqlPreview, mqlPreview, commitError]);
-
-  // Sprint 93 — wrapped setter exposed to consumers. When the caller dismisses
-  // the SQL preview modal (passing `null`), we also clear the keyed-statement
-  // list and any surfaced commit failure so a re-open starts clean. Setting a
-  // new array goes through unchanged for backwards compatibility.
-  const setSqlPreviewExposed = useCallback((v: string[] | null) => {
-    setSqlPreview(v);
-    if (v === null) {
-      setSqlPreviewStatements(null);
-      setCommitError(null);
-    }
-  }, []);
-
-  // Row selection state (multi-row)
-  const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(new Set());
-  const [anchorRowIdx, setAnchorRowIdx] = useState<number | null>(null);
-
-  // Reset selection when page changes
-  useEffect(() => {
-    setSelectedRowIds(new Set());
-    setAnchorRowIdx(null);
-  }, [page]);
-
-  const [pendingNewRows, setPendingNewRows] = useState<unknown[][]>([]);
-  const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
-    Set<string>
-  >(new Set());
+  }, [isCommitFlashing, sqlPreview, mqlPreview, commitError, clearCommitFlash]);
 
   const saveCurrentEdit = useCallback(() => {
     if (!editingCell) return;
@@ -556,42 +511,7 @@ export function useDataGridEdit({
     clearActiveEditorError();
   }, [clearActiveEditorError]);
 
-  const handleSelectRow = useCallback(
-    (rowIdx: number, metaKey: boolean, shiftKey: boolean) => {
-      if (metaKey) {
-        // Cmd/Ctrl+Click: toggle individual row
-        setSelectedRowIds((prev) => {
-          const next = new Set(prev);
-          if (next.has(rowIdx)) {
-            next.delete(rowIdx);
-          } else {
-            next.add(rowIdx);
-          }
-          return next;
-        });
-        // Set anchor if this is the first selection
-        setAnchorRowIdx((prev) => (prev === null ? rowIdx : prev));
-      } else if (shiftKey && anchorRowIdx !== null) {
-        // Shift+Click with anchor: range selection
-        const start = Math.min(anchorRowIdx, rowIdx);
-        const end = Math.max(anchorRowIdx, rowIdx);
-        const range = new Set<number>();
-        for (let i = start; i <= end; i++) {
-          range.add(i);
-        }
-        setSelectedRowIds(range);
-      } else if (shiftKey && anchorRowIdx === null) {
-        // Shift+Click without anchor: fallback to single selection
-        setSelectedRowIds(new Set([rowIdx]));
-        setAnchorRowIdx(rowIdx);
-      } else {
-        // Normal click: single selection
-        setSelectedRowIds(new Set([rowIdx]));
-        setAnchorRowIdx(rowIdx);
-      }
-    },
-    [anchorRowIdx],
-  );
+  // Sprint 193 (AC-193-02) — handleSelectRow 는 useDataGridSelection 에서.
 
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string | null) => {
@@ -620,333 +540,17 @@ export function useDataGridEdit({
     [editingCell, editValue, data, activeTabId, promoteTab],
   );
 
-  const handleCommit = useCallback(() => {
-    if (!data) return;
-    // Sprint 98 — flip the flash flag before any branching so toolbar callers
-    // (which invoke handleCommit directly without going through the
-    // commit-changes event) still get the immediate spinner. The watcher
-    // effect or the 400ms safety timer clears it; for the document paradigm's
-    // empty-preview early return we explicitly clear right away so the
-    // spinner doesn't linger on what is effectively a no-op.
-    beginCommitFlash();
-    if (paradigm === "document") {
-      // Sprint 86 — document paradigm dispatch. The MQL generator accepts the
-      // same pending diff shape the RDB path uses, but expects record-keyed
-      // new rows so each insert's document layout is explicit. We
-      // reconstruct records from positional `pendingNewRows` using the
-      // current column layout; cells that are still `null` / `undefined` are
-      // dropped so the Tauri payload matches what JSON serialisation
-      // allows. `schema` / `table` double as MongoDB database / collection
-      // names — Sprint 87 will pass these via dedicated props.
-      const columns = data.columns.map((c) => ({
-        name: c.name,
-        data_type: c.data_type,
-        is_primary_key: c.is_primary_key,
-      }));
-      const insertRecords: Record<string, unknown>[] = pendingNewRows.map(
-        (row) => {
-          const record: Record<string, unknown> = {};
-          columns.forEach((col, idx) => {
-            const value = row[idx];
-            if (value !== null && value !== undefined) {
-              record[col.name] = value;
-            }
-          });
-          return record;
-        },
-      );
-      const preview = generateMqlPreview({
-        database: schema,
-        collection: table,
-        columns,
-        rows: data.rows,
-        page,
-        pendingEdits,
-        pendingDeletedRowKeys,
-        pendingNewRows: insertRecords,
-      });
-      // Clear RDB-shaped per-cell errors — the MQL path reports per-row
-      // errors on the preview itself, not through `pendingEditErrors`.
-      setPendingEditErrors(new Map());
-      if (preview.commands.length === 0) {
-        // Expose the preview even if empty so callers can inspect errors.
-        // Only open it when there's something actionable.
-        return;
-      }
-      setMqlPreview(preview);
-      return;
-    }
-    // Collect coercion failures in a fresh map so the commit-time view replaces
-    // (not appends to) any stale errors from a previous batch — each commit is
-    // a complete re-validation of the current pending state.
-    const nextErrors = new Map<string, string>();
-    const keyedStatements = generateSqlWithKeys(
-      data,
-      schema,
-      table,
-      pendingEdits,
-      pendingDeletedRowKeys,
-      pendingNewRows,
-      {
-        onCoerceError: (err: CoerceError) => {
-          nextErrors.set(err.key, err.message);
-        },
-      },
-    );
-    setPendingEditErrors(nextErrors);
-    if (keyedStatements.length === 0) return;
-    setSqlPreview(keyedStatements.map((s) => s.sql));
-    setSqlPreviewStatements(keyedStatements);
-    // Reset any previous commit failure so the preview opens clean.
-    setCommitError(null);
-  }, [
-    data,
-    pendingEdits,
-    pendingDeletedRowKeys,
-    pendingNewRows,
-    schema,
-    table,
-    paradigm,
-    page,
-    beginCommitFlash,
-  ]);
-
-  const dispatchMqlCommand = useCallback(
-    async (cmd: MqlCommand): Promise<void> => {
-      switch (cmd.kind) {
-        case "insertOne":
-          await insertDocument(
-            connectionId,
-            cmd.database,
-            cmd.collection,
-            cmd.document,
-          );
-          return;
-        case "updateOne":
-          await updateDocument(
-            connectionId,
-            cmd.database,
-            cmd.collection,
-            cmd.documentId,
-            cmd.patch,
-          );
-          return;
-        case "deleteOne":
-          await deleteDocument(
-            connectionId,
-            cmd.database,
-            cmd.collection,
-            cmd.documentId,
-          );
-          return;
-        default: {
-          // Exhaustiveness guard — adding a new MqlCommand variant without
-          // updating this switch will fail to compile.
-          const never: never = cmd;
-          return never;
-        }
-      }
-    },
-    [connectionId],
-  );
-
-  // Sprint 186 — extracted RDB commit body so warn-tier `confirmDangerous`
-  // can reuse the same try/catch + cleanup without duplicating ~50 lines.
-  const runRdbBatch = useCallback(
-    async (statements: GeneratedSqlStatement[], statementCount: number) => {
-      try {
-        await executeQueryBatch(
-          connectionId,
-          statements.map((s) => s.sql),
-          `edit-${Date.now()}`,
-        );
-        setSqlPreview(null);
-        setSqlPreviewStatements(null);
-        setCommitError(null);
-        setPendingEdits(new Map());
-        setPendingEditErrors(new Map());
-        setPendingNewRows([]);
-        setPendingDeletedRowKeys(new Set());
-        setSelectedRowIds(new Set());
-        setAnchorRowIdx(null);
-        setEditingCell(null);
-        setEditValue("");
-        fetchData();
-        toast.success(
-          `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
-        );
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : typeof err === "string"
-              ? err
-              : "Failed to commit changes.";
-        const indexMatch = message.match(/statement (\d+) of \d+ failed/);
-        const failedIndex = indexMatch
-          ? Math.max(0, Number(indexMatch[1]) - 1)
-          : 0;
-        const failedStmt = statements[failedIndex] ?? statements[0];
-        setCommitError({
-          statementIndex: failedIndex,
-          statementCount,
-          sql: failedStmt?.sql ?? "",
-          message: `Commit failed — all changes rolled back: ${message}`,
-          failedKey: failedStmt?.key,
-        });
-        if (failedStmt?.key) {
-          setPendingEditErrors((prev) => {
-            const next = new Map(prev);
-            next.set(failedStmt.key!, message);
-            return next;
-          });
-        }
-        toast.error(`Commit failed — all changes rolled back: ${message}`);
-      }
-    },
-    [executeQueryBatch, connectionId, fetchData],
-  );
-
-  const handleExecuteCommit = useCallback(async () => {
-    if (paradigm === "document") {
-      if (!mqlPreview || mqlPreview.commands.length === 0) return;
-      const docCount = mqlPreview.commands.length;
-      try {
-        for (const cmd of mqlPreview.commands) {
-          await dispatchMqlCommand(cmd);
-        }
-        setMqlPreview(null);
-        setPendingEdits(new Map());
-        setPendingEditErrors(new Map());
-        setPendingNewRows([]);
-        setPendingDeletedRowKeys(new Set());
-        setSelectedRowIds(new Set());
-        setAnchorRowIdx(null);
-        setEditingCell(null);
-        setEditValue("");
-        fetchData();
-        // Sprint 94 — surface the success so document-paradigm commits don't
-        // disappear silently into the schema tree refresh.
-        toast.success(
-          `${docCount} document ${docCount === 1 ? "change" : "changes"} committed.`,
-        );
-      } catch (err) {
-        // Sprint 94 — MQL branch was previously a silent swallow. We still
-        // don't have the rich `commitError` plumbing the SQL branch enjoys
-        // (Sprint 93 only wired SQL), but at least surface the failure as a
-        // toast so the user is never left wondering why their commit didn't
-        // take. The catch-audit (sprint-88) requires a comment + a recovery
-        // action — the toast is that action.
-        const message =
-          err instanceof Error
-            ? err.message
-            : typeof err === "string"
-              ? err
-              : "Failed to commit document changes.";
-        toast.error(`Commit failed: ${message}`);
-      }
-      return;
-    }
-    if (!sqlPreview) return;
-    // Sprint 183 — prefer the keyed statement list (set in lockstep with
-    // `sqlPreview`) so a commit failure can route back to the offending
-    // cell. Fall back to a key-less view of `sqlPreview` if the keyed list
-    // is somehow absent — keeps the catch block safe under (theoretical)
-    // state skew.
-    const statements: GeneratedSqlStatement[] =
-      sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
-    const statementCount = statements.length;
-    // Sprint 189 (AC-189-01) — gate every statement through `useSafeModeGate`.
-    // We loop per-statement (not the whole batch) so a block / confirm
-    // surfaces the offending `statementIndex` for the "failed at: K"
-    // commitError UI and the warn-tier dialog.
-    for (let i = 0; i < statements.length; i++) {
-      const stmt = statements[i];
-      if (!stmt) continue;
-      const analysis = analyzeStatement(stmt.sql);
-      const decision = safeModeGate.decide(analysis);
-      if (decision.action === "block") {
-        setCommitError({
-          statementIndex: i,
-          statementCount,
-          sql: stmt.sql,
-          message: decision.reason,
-          failedKey: stmt.key,
-        });
-        toast.error(decision.reason);
-        return;
-      }
-      if (decision.action === "confirm") {
-        setPendingConfirm({
-          reason: decision.reason,
-          sql: stmt.sql,
-          statementIndex: i,
-        });
-        return;
-      }
-    }
-    await runRdbBatch(statements, statementCount);
-  }, [
-    sqlPreview,
-    sqlPreviewStatements,
-    mqlPreview,
-    paradigm,
-    dispatchMqlCommand,
-    fetchData,
-    safeModeGate,
-    runRdbBatch,
-  ]);
-
-  // Sprint 186 — warn-tier resolution helpers. confirmDangerous re-derives
-  // statements from current state (same as handleExecuteCommit) and runs
-  // the batch unconditionally. cancelDangerous surfaces a warn-tier
-  // commitError so the user sees why nothing happened.
-  const confirmDangerous = useCallback(async () => {
-    if (!pendingConfirm) return;
-    setPendingConfirm(null);
-    if (!sqlPreview) return;
-    const statements: GeneratedSqlStatement[] =
-      sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
-    await runRdbBatch(statements, statements.length);
-  }, [pendingConfirm, sqlPreview, sqlPreviewStatements, runRdbBatch]);
-
-  const cancelDangerous = useCallback(() => {
-    if (!pendingConfirm) return;
-    const statementCount =
-      sqlPreviewStatements?.length ?? sqlPreview?.length ?? 0;
-    const message =
-      "Safe Mode (warn): confirmation cancelled — no changes committed";
-    setCommitError({
-      statementIndex: pendingConfirm.statementIndex,
-      statementCount,
-      sql: pendingConfirm.sql,
-      message,
-      failedKey: undefined,
-    });
-    setPendingConfirm(null);
-    toast.info(message);
-  }, [pendingConfirm, sqlPreview, sqlPreviewStatements]);
+  // Sprint 193 (AC-193-03) — handleCommit / handleExecuteCommit /
+  // dispatchMqlCommand / runRdbBatch / confirmDangerous / cancelDangerous 는
+  // useDataGridPreviewCommit 에서. 본 facade 는 그 hook 의 return 만 묶어서
+  // 외부로 노출.
 
   const handleDiscard = useCallback(() => {
-    setPendingEdits(new Map());
-    setPendingEditErrors(new Map());
-    setEditingCell(null);
-    setEditValue("");
-    setPendingNewRows([]);
-    setPendingDeletedRowKeys(new Set());
-    setSelectedRowIds(new Set());
-    setAnchorRowIdx(null);
-    // Sprint 86 — clear the MQL preview alongside the pending diff so a
-    // subsequent commit doesn't replay stale commands in the document
-    // paradigm. No-op for RDB grids (mqlPreview is always null there).
-    setMqlPreview(null);
-    // Sprint 93 — wipe any surfaced commit failure so a fresh commit starts
-    // clean and the dismissed banner doesn't reappear on re-open.
-    setSqlPreviewStatements(null);
-    setCommitError(null);
-    // Sprint 186 — close any open warn-tier dialog when the user discards.
-    setPendingConfirm(null);
-  }, []);
+    clearAllPending();
+    // Sprint 86 / 93 / 186 — preview / commitError / pendingConfirm 4개를
+    // resetPreviewState 한 번으로 처리. discard 가 새 commit 의 baseline.
+    resetPreviewState();
+  }, [clearAllPending, resetPreviewState]);
 
   const handleAddRow = useCallback(() => {
     if (!data) return;
@@ -966,11 +570,10 @@ export function useDataGridEdit({
       });
       return next;
     });
-    setSelectedRowIds(new Set());
-    setAnchorRowIdx(null);
+    clearSelection();
     // Promote preview tab on row delete
     if (activeTabId) promoteTab(activeTabId);
-  }, [selectedRowIds, page, activeTabId, promoteTab]);
+  }, [selectedRowIds, page, activeTabId, promoteTab, clearSelection]);
 
   const handleDuplicateRow = useCallback(() => {
     if (!data || selectedRowIds.size === 0) return;
@@ -980,10 +583,9 @@ export function useDataGridEdit({
       return row ? [...(row as unknown[])] : data.columns.map(() => null);
     });
     setPendingNewRows((prev) => [...prev, ...newRows]);
-    setSelectedRowIds(new Set());
-    setAnchorRowIdx(null);
+    clearSelection();
     if (activeTabId) promoteTab(activeTabId);
-  }, [data, selectedRowIds, activeTabId, promoteTab]);
+  }, [data, selectedRowIds, activeTabId, promoteTab, clearSelection]);
 
   const hasPendingChanges =
     pendingEdits.size > 0 ||
@@ -1034,13 +636,15 @@ export function useDataGridEdit({
         return;
       }
       // Sprint 98 — flip the flash flag at the entry of the event handler so
-      // the spinner shows BEFORE we invoke `handleCommit` (which also flips
-      // the flag, but only after the in-flight-edit branch decides whether
-      // to short-circuit). The duplicate flip is intentionally idempotent —
-      // it just resets the 400ms safety timer.
+      // the spinner shows BEFORE handleCommit (which also flips the flag —
+      // the duplicate flip is intentionally idempotent and just resets the
+      // 400ms safety timer).
       beginCommitFlash();
-      // If a cell is being edited, persist its value before opening preview —
-      // but only if the value actually differs from the original.
+      // If a cell is being edited, merge its value into pendingEdits and
+      // commit with the merged map as override (state is async). When
+      // handleCommit reports a preview opened, dismiss the cell editor; on
+      // validation failure (`opened: false`) keep the editor so the user
+      // can fix the failing value.
       if (editingCell) {
         if (!data) return;
         const key = editKey(editingCell.row, editingCell.col);
@@ -1052,34 +656,12 @@ export function useDataGridEdit({
           editValue,
           originalValue,
         );
-        const nextErrors = new Map<string, string>();
-        const keyedStatements = generateSqlWithKeys(
-          data,
-          schema,
-          table,
-          merged,
-          pendingDeletedRowKeys,
-          pendingNewRows,
-          {
-            onCoerceError: (err: CoerceError) => {
-              nextErrors.set(err.key, err.message);
-            },
-          },
-        );
-        setPendingEditErrors(nextErrors);
-        if (keyedStatements.length === 0) {
-          // Preserve the pending edit so the user sees the failing value
-          // (and the inline hint) instead of silently losing it.
-          setPendingEdits(merged);
-          return;
-        }
         setPendingEdits(merged);
-        setEditingCell(null);
-        setEditValue("");
-        setSqlPreview(keyedStatements.map((s) => s.sql));
-        setSqlPreviewStatements(keyedStatements);
-        // Reset any previous commit failure so the preview opens clean.
-        setCommitError(null);
+        const { opened } = handleCommit({ pendingEditsOverride: merged });
+        if (opened) {
+          setEditingCell(null);
+          setEditValue("");
+        }
         return;
       }
       handleCommit();
@@ -1091,18 +673,10 @@ export function useDataGridEdit({
     editingCell,
     editValue,
     pendingEdits,
-    pendingDeletedRowKeys,
-    pendingNewRows,
     data,
-    schema,
-    table,
     handleCommit,
     beginCommitFlash,
   ]);
-
-  // Derived: single selected row index (backward compat)
-  const selectedRowIdx =
-    selectedRowIds.size === 1 ? [...selectedRowIds][0]! : null;
 
   return {
     editingCell,
