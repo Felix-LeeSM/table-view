@@ -63,7 +63,7 @@ TablePlus `gui-tools/code-review-and-safemode/safe-mode.md`.
 
 - **Sprint 189** — RDB 5 사이트 inline gate 를 `useSafeModeGate` 로
   마이그레이션 (Phase 23 closure refactor). 회귀 risk 격리 단위.
-  [`docs/refactoring-plan.md`](../refactoring-plan.md) 의 Sprint 189 항목.
+  세부는 `docs/sprints/sprint-189/{contract,handoff}.md`.
 - **Sprint 198** — Mongo bulk-write Tauri command 신규 (Phase 신설 안 함
   — Phase 24 = Index Write UI 와 명명 충돌 회피).
 - **단건 mutate 정책** — `insert_document` / `update_document` /

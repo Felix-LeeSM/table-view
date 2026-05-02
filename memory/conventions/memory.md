@@ -41,9 +41,9 @@ Rust / TypeScript / 테스트 / 커밋 / 금지 사항. 작업 전 훑어볼 것
 (B store coupling / D lib·hook 경계 / C hook API shape / A 분해 경계).
 Sprint 189–198 의 모든 refactor / feature 커밋은 본 표준의 규칙을 따른다.
 
-스멜 카탈로그 원본 ([`docs/refactoring-smells.md`](../../docs/refactoring-smells.md))
-및 sequencing ([`docs/refactoring-plan.md`](../../docs/refactoring-plan.md))
-은 시한부 docs — Sprint 198 closure 후 retire.
+본 표준은 영속. Sprint 189–198 의 시한부 sequencing / smell 카탈로그는
+2026-05-02 Sprint 198 종료로 retire — 결정 / 결과는 각 sprint 의
+`docs/sprints/sprint-189` ~ `sprint-198` handoff 가 source of truth.
 
 ## 금지 사항
 

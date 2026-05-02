@@ -47,12 +47,13 @@ sprint 등록 불필요. 나머지 4건은 신규 sprint 로 분할:
 Phase 23 (Sprint 188 = Mongo dangerous-op) 종료 후 우선순위 재평가의 1차
 입력값이다.
 
-### 리팩토링 sequencing (Sprint 189–198)
+### 리팩토링 sequencing (Sprint 189–198, 종료)
 
-Phase 23 종료 직후 Sprint 189–198 의 10단계는
-[`docs/refactoring-plan.md`](refactoring-plan.md) 와 1:1 동기. refactor-only
-sprint (홀수) 와 feature/FB sprint (짝수) 를 인터리브하여 각 refactor 가
-바로 다음 feature sprint 의 dependency 를 정리한다.
+Phase 23 종료 직후 Sprint 189–198 의 10단계 — refactor-only sprint
+(홀수) 와 feature/FB sprint (짝수) 를 인터리브하여 각 refactor 가 바로
+다음 feature sprint 의 dependency 를 정리하는 패턴으로 진행. 2026-05-02
+Sprint 198 종료로 sequencing 완료, 시한부 docs (`refactoring-plan.md` /
+`refactoring-smells.md`) retire.
 
 | # | Sprint | 종류 | 내용 |
 |---|--------|------|------|
@@ -67,8 +68,9 @@ sprint (홀수) 와 feature/FB sprint (짝수) 를 인터리브하여 각 refact
 | 9 | 197 | refactor | `mongodb.rs` 4분할 (Sprint 198 bulk-write 신규 명령 의존) |
 | 10 | 198 | feature | Mongo bulk-write 신규 (`delete_many` / `update_many` / `drop_collection`). **Phase 신설 안 함** — Phase 24 = Index Write UI 와 명명 충돌 회피 위해 sprint 단위로 처리. |
 
-코드 작성 표준: [`memory/conventions/refactoring/memory.md`](../memory/conventions/refactoring/memory.md) (영속).
-원본 smell 카탈로그: [`docs/refactoring-smells.md`](refactoring-smells.md) (시한부).
+각 sprint 의 결정 / AC / handoff 는 `docs/sprints/sprint-189` ~
+`sprint-198` 의 `contract.md` / `findings.md` / `handoff.md` 가 source
+of truth. 코드 작성 표준: [`memory/conventions/refactoring/memory.md`](../memory/conventions/refactoring/memory.md) (영속).
 
 ## 문서 목차
 

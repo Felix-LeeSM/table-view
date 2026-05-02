@@ -33,17 +33,20 @@ updated: 2026-05-01
 | 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | 미정 | Function 옵션 |
 | 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | 미정 | 패리티 마일스톤 |
 
-## Sprint 189–198 sequencing (refactoring + feature 인터리브)
+## Sprint 189–198 sequencing (refactoring + feature 인터리브, 종료 2026-05-02)
 
-상세는 [`docs/refactoring-plan.md`](../../docs/refactoring-plan.md).
 홀수 sprint = refactor-only, 짝수 = feature/FB. 각 refactor 가 바로 다음
-feature sprint 의 dependency 를 정리한다.
+feature sprint 의 dependency 를 정리하는 패턴으로 진행, 2026-05-02
+Sprint 198 종료로 sequencing 완료.
 
 189 (closure refactor) → 190 (FB-1b prod-auto) → 191 (SchemaTree 분해) →
 192 (FB-3 export) → 193 (useDataGridEdit 분해) → 194 (FB-4 Quick Look) →
 195 (tabStore intent) → 196 (FB-5b history source) → 197 (mongodb.rs 분할)
 → 198 (Mongo bulk-write — Phase 신설 안 함, Phase 24 명명 충돌 회피).
-코드 표준은 [conventions/refactoring](../conventions/refactoring/memory.md).
+
+각 sprint 의 결정 / AC / handoff 는 `docs/sprints/sprint-189` ~
+`sprint-198` 의 `contract.md` / `findings.md` / `handoff.md`. 코드 표준은
+[conventions/refactoring](../conventions/refactoring/memory.md).
 
 ## 진행 중 / 대기 / 보류
 
