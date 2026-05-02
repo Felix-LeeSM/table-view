@@ -21,6 +21,7 @@ import {
 } from "@components/ui/select";
 import ConfirmDialog from "@components/shared/ConfirmDialog";
 import QuerySyntax from "@components/shared/QuerySyntax";
+import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
 import { cn } from "@lib/utils";
 
 // Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
@@ -281,6 +282,9 @@ export default function GlobalQueryLogPanel({
                     {entry.queryMode}
                   </span>
                 )}
+                {/* Source badge — Sprint 196 (AC-196-06). raw entries
+                    suppressed inside component. */}
+                <QueryHistorySourceBadge source={entry.source} />
               </div>
               {/* Expanded SQL view */}
               {expandedEntry === entry.id && entry.sql.length > 80 && (

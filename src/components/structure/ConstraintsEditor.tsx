@@ -24,6 +24,7 @@ import type {
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
@@ -353,6 +354,7 @@ export default function ConstraintsEditor({
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
   const safeModeGate = useSafeModeGate(connectionId);
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
@@ -432,14 +434,36 @@ export default function ConstraintsEditor({
     if (!pendingExecuteRef.current) return;
     setPreviewLoading(true);
     setPreviewError(null);
+    const startedAt = Date.now();
+    const recordedSql = previewSql;
     try {
       await pendingExecuteRef.current();
       setShowPreviewModal(false);
       pendingExecuteRef.current = null;
       setPreviewSql("");
       await onRefresh();
+      addHistoryEntry({
+        sql: recordedSql,
+        executedAt: startedAt,
+        duration: Date.now() - startedAt,
+        status: "success",
+        connectionId,
+        paradigm: "rdb",
+        queryMode: "sql",
+        source: "ddl-structure",
+      });
     } catch (e) {
       setPreviewError(String(e));
+      addHistoryEntry({
+        sql: recordedSql,
+        executedAt: startedAt,
+        duration: Date.now() - startedAt,
+        status: "error",
+        connectionId,
+        paradigm: "rdb",
+        queryMode: "sql",
+        source: "ddl-structure",
+      });
     }
     setPreviewLoading(false);
   };

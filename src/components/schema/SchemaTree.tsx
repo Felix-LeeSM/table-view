@@ -23,6 +23,7 @@ import {
   Rows3,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useTabStore } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
@@ -465,6 +466,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const renameTableAction = useSchemaStore((s) => s.renameTable);
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
@@ -646,7 +648,24 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       danger: true,
       onConfirm: () => {
         setIsOperating(true);
+        // Sprint 196 (FB-5b) — DDL fire point. Synthesise a user-readable
+        // SQL string for the history row (real DROP statement is generated
+        // server-side by `tauri.dropTable`, not surfaced here).
+        const startedAt = Date.now();
+        const recordedSql = `DROP TABLE "${schemaName}"."${tableName}"`;
         dropTable(connectionId, tableName, schemaName)
+          .then(() => {
+            addHistoryEntry({
+              sql: recordedSql,
+              executedAt: startedAt,
+              duration: Date.now() - startedAt,
+              status: "success",
+              connectionId,
+              paradigm: "rdb",
+              queryMode: "sql",
+              source: "ddl-structure",
+            });
+          })
           .catch((err) => {
             // Sprint 191 (AC-191-03) — surface drop failures via toast +
             // dev console instead of silent swallow. The dialog still
@@ -657,6 +676,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
             if (import.meta.env.DEV) {
               console.error("[SchemaTree] dropTable:", err);
             }
+            addHistoryEntry({
+              sql: recordedSql,
+              executedAt: startedAt,
+              duration: Date.now() - startedAt,
+              status: "error",
+              connectionId,
+              paradigm: "rdb",
+              queryMode: "sql",
+              source: "ddl-structure",
+            });
           })
           .finally(() => {
             setIsOperating(false);

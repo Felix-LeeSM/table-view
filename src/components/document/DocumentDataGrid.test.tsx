@@ -422,6 +422,47 @@ describe("DocumentDataGrid", () => {
     });
   });
 
+  // AC-196-05-1 — Sprint 196 (FB-5b). The Add Document submit path is the
+  // first non-`raw` Mongo fire point: it bypasses the QueryTab editor and
+  // calls `insertDocument` directly, so the global log would otherwise miss
+  // it. Successful insert must surface a `source: "mongo-op"` history
+  // entry with the synthesised `db.<col>.insertOne(...)` SQL line.
+  // 2026-05-02.
+  it("[AC-196-05-1] Add Document submit records a mongo-op history entry on success", async () => {
+    const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
+    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Add document" }));
+    const editorContainer = await screen.findByLabelText("Document JSON");
+    const cmEditor = editorContainer.querySelector(".cm-editor") as HTMLElement;
+    const view = EditorView.findFromDOM(cmEditor);
+    if (!view) throw new Error("CodeMirror EditorView not found");
+    act(() => {
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: '{"name":"Dana"}',
+        },
+      });
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit add document" }),
+    );
+
+    await waitFor(() => {
+      const entries = useQueryHistoryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.source).toBe("mongo-op");
+      expect(entries[0]!.status).toBe("success");
+      expect(entries[0]!.paradigm).toBe("document");
+      expect(entries[0]!.collection).toBe("users");
+    });
+  });
+
   // ── Sprint 101 — collection beta/limitation banner ──────────────────────
 
   it("renders the collection read-only banner above the toolbar", async () => {

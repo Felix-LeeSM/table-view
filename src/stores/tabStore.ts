@@ -9,7 +9,10 @@ import type { FilterCondition, SortInfo } from "@/types/schema";
 import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
+import type {
+  QueryHistorySource,
+  QueryHistoryStatus,
+} from "@stores/queryHistoryStore";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
@@ -250,9 +253,12 @@ interface TabState {
    * Sprint 195 — record a query history entry derived from a query tab.
    * Auto-extracts `connectionId` / `paradigm` / `queryMode` / `database` /
    * `collection` from the tab so callsites only carry the variable fields
-   * (sql / executedAt / duration / status). Sprint 196 will widen the
-   * payload with a `source` field — adding it here keeps callsite churn
-   * minimal. No-op on missing tab or non-query tab.
+   * (sql / executedAt / duration / status). No-op on missing tab or
+   * non-query tab.
+   *
+   * Sprint 196 (FB-5b) — `source` widens the payload. Default `"raw"` so
+   * QueryTab callsites stay unchanged after the Sprint 195 refactor; other
+   * surfaces (grid commit, DDL editors, mongo-op) pass their own source.
    */
   recordHistory: (
     tabId: string,
@@ -261,6 +267,7 @@ interface TabState {
       executedAt: number;
       duration: number;
       status: QueryHistoryStatus;
+      source?: QueryHistorySource;
     },
   ) => void;
   /**
@@ -704,6 +711,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       executedAt: payload.executedAt,
       duration: payload.duration,
       status: payload.status,
+      source: payload.source ?? "raw",
       connectionId: tab.connectionId,
       paradigm: tab.paradigm,
       queryMode: tab.queryMode,

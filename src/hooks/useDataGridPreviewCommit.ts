@@ -29,6 +29,7 @@ import {
 } from "@/lib/mongo/mqlGenerator";
 import { insertDocument, updateDocument, deleteDocument } from "@/lib/tauri";
 import { toast } from "@/lib/toast";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import type { TableData } from "@/types/schema";
 import type { CommitError } from "@/components/datagrid/useDataGridEdit";
 
@@ -129,6 +130,7 @@ export function useDataGridPreviewCommit(
   } = params;
 
   const executeQueryBatch = useSchemaStore((s) => s.executeQueryBatch);
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   // Sprint 189 (AC-189-01) — Safe Mode gate. RDB / Mongo / DDL editors
   // 가 같은 decision matrix (`decideSafeModeAction`) 를 공유.
   const safeModeGate = useSafeModeGate(connectionId);
@@ -279,6 +281,8 @@ export function useDataGridPreviewCommit(
   // handleExecuteCommit / confirmDangerous 가 공유.
   const runRdbBatch = useCallback(
     async (statements: GeneratedSqlStatement[], statementCount: number) => {
+      const startedAt = Date.now();
+      const joinedSql = statements.map((s) => s.sql).join(";\n");
       try {
         await executeQueryBatch(
           connectionId,
@@ -293,6 +297,19 @@ export function useDataGridPreviewCommit(
         toast.success(
           `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
         );
+        // Sprint 196 (FB-5b) — record grid commit. Mongo commits flow
+        // through `handleExecuteCommit`'s document branch and record there;
+        // RDB commits land here.
+        addHistoryEntry({
+          sql: joinedSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "success",
+          connectionId,
+          paradigm: "rdb",
+          queryMode: "sql",
+          source: "grid-edit",
+        });
       } catch (err) {
         const message =
           err instanceof Error
@@ -320,6 +337,16 @@ export function useDataGridPreviewCommit(
           });
         }
         toast.error(`Commit failed — all changes rolled back: ${message}`);
+        addHistoryEntry({
+          sql: joinedSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "error",
+          connectionId,
+          paradigm: "rdb",
+          queryMode: "sql",
+          source: "grid-edit",
+        });
       }
     },
     [
@@ -328,6 +355,7 @@ export function useDataGridPreviewCommit(
       fetchData,
       clearAllPending,
       setPendingEditErrors,
+      addHistoryEntry,
     ],
   );
 
@@ -335,6 +363,12 @@ export function useDataGridPreviewCommit(
     if (paradigm === "document") {
       if (!mqlPreview || mqlPreview.commands.length === 0) return;
       const docCount = mqlPreview.commands.length;
+      const startedAt = Date.now();
+      // Sprint 196 (FB-5b) — collapse the per-command preview lines into a
+      // single SQL/MQL string for the history row. `mqlPreview.previewLines`
+      // contains the human-readable per-command rendering used in the
+      // preview modal.
+      const joinedMql = mqlPreview.previewLines.join("\n");
       try {
         for (const cmd of mqlPreview.commands) {
           await dispatchMqlCommand(cmd);
@@ -345,6 +379,21 @@ export function useDataGridPreviewCommit(
         toast.success(
           `${docCount} document ${docCount === 1 ? "change" : "changes"} committed.`,
         );
+        addHistoryEntry({
+          sql: joinedMql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "success",
+          connectionId,
+          paradigm: "document",
+          queryMode: "find",
+          // `data?.` plumbing: schema / table prop on this hook is repurposed
+          // for Mongo as `database` / `collection`. The cell-edit hook contract
+          // already passes the Mongo db/collection through these slots.
+          database: schema,
+          collection: table,
+          source: "grid-edit",
+        });
       } catch (err) {
         // Sprint 94 — MQL branch 의 catch 는 commitError 까지 wiring 되지
         // 않았으나 toast 로 surface 해 catch-audit (sprint-88) 의 빈
@@ -356,6 +405,18 @@ export function useDataGridPreviewCommit(
               ? err
               : "Failed to commit document changes.";
         toast.error(`Commit failed: ${message}`);
+        addHistoryEntry({
+          sql: joinedMql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "error",
+          connectionId,
+          paradigm: "document",
+          queryMode: "find",
+          database: schema,
+          collection: table,
+          source: "grid-edit",
+        });
       }
       return;
     }
@@ -402,6 +463,10 @@ export function useDataGridPreviewCommit(
     safeModeGate,
     runRdbBatch,
     clearAllPending,
+    addHistoryEntry,
+    connectionId,
+    schema,
+    table,
   ]);
 
   // Sprint 186 — warn-tier handoff. confirmDangerous 는 현재 sqlPreview /

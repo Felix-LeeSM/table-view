@@ -2309,5 +2309,77 @@ describe("tabStore", () => {
         expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
       });
     });
+
+    // -------------------------------------------------------------------------
+    // AC-196-02 — `recordHistory` accepts an optional `source` and forwards it
+    // to the queryHistoryStore. Sprint 195 added the wrapper, Sprint 196
+    // (FB-5b) widens the payload so callsites that originate outside the
+    // editor pipeline (Sprint 195 already wired Tab → editor; Sprint 196 is
+    // adding grid-edit / DDL / mongo-op fire points) can label themselves.
+    // 2026-05-02.
+    // -------------------------------------------------------------------------
+
+    describe("[AC-196-02] recordHistory source argument", () => {
+      it("[AC-196-02-1] defaults missing source to 'raw'", async () => {
+        const tab: QueryTab = {
+          type: "query",
+          id: "q1",
+          title: "Query 1",
+          connectionId: "conn1",
+          closable: true,
+          sql: "SELECT 1",
+          queryState: { status: "completed", result: sampleResult } as never,
+          paradigm: "rdb",
+          queryMode: "sql",
+        } as QueryTab;
+        useTabStore.setState({ tabs: [tab], activeTabId: "q1" });
+
+        const { useQueryHistoryStore } =
+          await import("@stores/queryHistoryStore");
+        useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+        useTabStore.getState().recordHistory("q1", {
+          sql: "SELECT 1",
+          executedAt: 1,
+          duration: 1,
+          status: "success",
+        });
+
+        expect(useQueryHistoryStore.getState().entries[0]!.source).toBe("raw");
+      });
+
+      it("[AC-196-02-2] forwards explicit source onto the stored entry", async () => {
+        const tab: QueryTab = {
+          type: "query",
+          id: "q1",
+          title: "Query 1",
+          connectionId: "conn1",
+          closable: true,
+          sql: "db.users.insertOne({})",
+          queryState: { status: "completed", result: sampleResult } as never,
+          paradigm: "document",
+          queryMode: "find",
+          database: "appdb",
+          collection: "users",
+        } as QueryTab;
+        useTabStore.setState({ tabs: [tab], activeTabId: "q1" });
+
+        const { useQueryHistoryStore } =
+          await import("@stores/queryHistoryStore");
+        useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+        useTabStore.getState().recordHistory("q1", {
+          sql: "db.users.insertOne({})",
+          executedAt: 1,
+          duration: 1,
+          status: "success",
+          source: "mongo-op",
+        });
+
+        expect(useQueryHistoryStore.getState().entries[0]!.source).toBe(
+          "mongo-op",
+        );
+      });
+    });
   });
 });

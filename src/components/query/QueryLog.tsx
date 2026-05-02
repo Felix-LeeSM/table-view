@@ -5,6 +5,7 @@ import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import ConfirmDialog from "@components/shared/ConfirmDialog";
 import QuerySyntax from "@components/shared/QuerySyntax";
+import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
 
 function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
@@ -131,6 +132,9 @@ export default function QueryLog() {
                 paradigm={entry.paradigm}
                 queryMode={entry.queryMode}
               />
+              {/* Source badge — Sprint 196 (AC-196-06). raw entries are
+                  suppressed inside the badge component. */}
+              <QueryHistorySourceBadge source={entry.source} />
               {/* Timestamp */}
               <span className="shrink-0 text-muted-foreground">
                 {formatRelativeTime(entry.executedAt)}

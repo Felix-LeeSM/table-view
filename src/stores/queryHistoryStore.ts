@@ -26,6 +26,27 @@ import type { QueryMode } from "@stores/tabStore";
  */
 export type QueryHistoryStatus = "success" | "error" | "cancelled";
 
+/**
+ * Sprint 196 (FB-5b) — origin of the recorded query/operation. Lets the
+ * UI distinguish a raw query the user typed from a generated SQL emitted
+ * by another surface (grid commit, DDL editor, mongo-specific op). Legacy
+ * entries (pre-Sprint 196) lack this field and are normalised to `"raw"`.
+ *
+ * - `raw`            — user-typed SQL / MQL ran from the QueryTab editor.
+ * - `grid-edit`      — DataGrid pending-edit commit (RDB executeQueryBatch
+ *                     or Mongo dispatchMqlCommand loop) + EditableQueryResultGrid
+ *                     inline edits on raw query results.
+ * - `ddl-structure`  — StructurePanel editors (Columns / Indexes /
+ *                     Constraints) + SchemaTree drop-table context menu.
+ * - `mongo-op`       — Mongo-specific direct operations that bypass the
+ *                     grid pending pipeline (e.g. Add Document modal).
+ */
+export type QueryHistorySource =
+  | "raw"
+  | "grid-edit"
+  | "ddl-structure"
+  | "mongo-op";
+
 export interface QueryHistoryEntry {
   id: string;
   sql: string;
@@ -41,6 +62,15 @@ export interface QueryHistoryEntry {
   database?: string;
   /** MongoDB collection name when the entry originated from a document paradigm tab. */
   collection?: string;
+  /**
+   * Sprint 196 (FB-5b) — origin of the entry. Optional on the type so legacy
+   * fixtures / persisted entries (pre-Sprint 196) keep compiling. Stored
+   * shape via `addHistoryEntry` is always populated to `"raw"` (default)
+   * when the caller omits it. Read sites should default with `?? "raw"` for
+   * defensive normalisation when reading directly from the raw `entries`
+   * array (bypassing `filteredGlobalLog`).
+   */
+  source?: QueryHistorySource;
 }
 
 const MAX_GLOBAL_LOG = 500;
@@ -52,10 +82,11 @@ const MAX_GLOBAL_LOG = 500;
  */
 type AddHistoryEntryPayload = Omit<
   QueryHistoryEntry,
-  "id" | "paradigm" | "queryMode"
+  "id" | "paradigm" | "queryMode" | "source"
 > & {
   paradigm?: Paradigm;
   queryMode?: QueryMode;
+  source?: QueryHistorySource;
 };
 
 interface QueryHistoryState {
@@ -85,8 +116,12 @@ let historyCounter = 0;
 function normaliseEntry(entry: QueryHistoryEntry): QueryHistoryEntry {
   const paradigm: Paradigm = entry.paradigm ?? "rdb";
   const queryMode: QueryMode = entry.queryMode ?? "sql";
-  if (entry.paradigm && entry.queryMode) return entry;
-  return { ...entry, paradigm, queryMode };
+  // Sprint 196 — `source` is required on the current shape but legacy
+  // persisted entries / entries seeded directly via `set({entries:...})` in
+  // tests may lack it. Default to `"raw"` to stay safe.
+  const source: QueryHistorySource = entry.source ?? "raw";
+  if (entry.paradigm && entry.queryMode && entry.source) return entry;
+  return { ...entry, paradigm, queryMode, source };
 }
 
 export const useQueryHistoryStore = create<QueryHistoryState>((set, get) => ({
@@ -99,10 +134,12 @@ export const useQueryHistoryStore = create<QueryHistoryState>((set, get) => ({
     historyCounter++;
     const paradigm: Paradigm = entry.paradigm ?? "rdb";
     const queryMode: QueryMode = entry.queryMode ?? "sql";
+    const source: QueryHistorySource = entry.source ?? "raw";
     const newEntry: QueryHistoryEntry = {
       ...entry,
       paradigm,
       queryMode,
+      source,
       id: `history-${historyCounter}`,
     };
     set((state) => {

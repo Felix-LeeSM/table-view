@@ -25,6 +25,7 @@ import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 import { toast } from "@lib/toast";
@@ -88,6 +89,7 @@ export default function EditableQueryResultGrid({
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -223,20 +225,42 @@ export default function EditableQueryResultGrid({
     async (sqls: string[]) => {
       setExecuting(true);
       setExecuteError(null);
+      const startedAt = Date.now();
+      const joinedSql = sqls.join(";\n");
       try {
         await executeQueryBatch(connectionId, sqls, `raw-edit-${Date.now()}`);
         setSqlPreview(null);
         setPendingEdits(new Map());
         setPendingDeletedRowKeys(new Set());
         onAfterCommit?.();
+        addHistoryEntry({
+          sql: joinedSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "success",
+          connectionId,
+          paradigm: "rdb",
+          queryMode: "sql",
+          source: "grid-edit",
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setExecuteError(`Commit failed — all changes rolled back: ${message}`);
+        addHistoryEntry({
+          sql: joinedSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "error",
+          connectionId,
+          paradigm: "rdb",
+          queryMode: "sql",
+          source: "grid-edit",
+        });
       } finally {
         setExecuting(false);
       }
     },
-    [connectionId, onAfterCommit],
+    [connectionId, onAfterCommit, addHistoryEntry],
   );
 
   const handleExecute = useCallback(async () => {

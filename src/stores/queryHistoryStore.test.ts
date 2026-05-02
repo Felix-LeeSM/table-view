@@ -512,4 +512,71 @@ describe("queryHistoryStore", () => {
       expect(normalised[0]!.queryMode).toBe("sql");
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // AC-196-01 — `source` field plumbing on the entry type. Sprint 196 (FB-5b)
+  // adds an explicit fire-point source so the global log can show which UI
+  // surface produced an entry. `addHistoryEntry` accepts `source?` and the
+  // store fills `"raw"` for omitted callsites; legacy `setState` paths
+  // (no `source` at all) get normalised on read so badges + filters never
+  // hit `undefined`. 2026-05-02.
+  // ---------------------------------------------------------------------------
+
+  describe("AC-196-01 — source field", () => {
+    it("[AC-196-01-1] persists explicit source on the entry", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "DROP TABLE foo",
+        executedAt: Date.now(),
+        duration: 5,
+        status: "success",
+        connectionId: "conn-1",
+        source: "ddl-structure",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.entries[0]!.source).toBe("ddl-structure");
+      expect(state.globalLog[0]!.source).toBe("ddl-structure");
+    });
+
+    it("[AC-196-01-2] defaults missing source to 'raw'", () => {
+      useQueryHistoryStore.getState().addHistoryEntry({
+        sql: "SELECT 1",
+        executedAt: Date.now(),
+        duration: 5,
+        status: "success",
+        connectionId: "conn-1",
+      });
+
+      const state = useQueryHistoryStore.getState();
+      expect(state.entries[0]!.source).toBe("raw");
+      expect(state.globalLog[0]!.source).toBe("raw");
+    });
+
+    it("[AC-196-01-3] normalises legacy entries (no source field) to 'raw'", () => {
+      // Mirrors the Sprint 84 legacy-paradigm normalisation pattern: a
+      // pre-Sprint-196 entry restored via `setState` has no `source` field,
+      // and the read path must fill it so the UI badge renders without
+      // hitting `undefined`.
+      useQueryHistoryStore.setState({
+        globalLog: [
+          {
+            id: "legacy-1",
+            sql: "SELECT 1",
+            executedAt: 1000,
+            duration: 10,
+            status: "success",
+            connectionId: "conn-rdb",
+            paradigm: "rdb",
+            queryMode: "sql",
+          },
+        ] as unknown as ReturnType<
+          typeof useQueryHistoryStore.getState
+        >["globalLog"],
+      });
+
+      const normalised = useQueryHistoryStore.getState().filteredGlobalLog();
+      expect(normalised).toHaveLength(1);
+      expect(normalised[0]!.source).toBe("raw");
+    });
+  });
 });

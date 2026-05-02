@@ -225,6 +225,43 @@ describe("EditableQueryResultGrid", () => {
     });
   });
 
+  // AC-196-03-3 — Sprint 196 (FB-5b). Successful raw-edit commit appends a
+  // queryHistoryStore entry tagged `source: "grid-edit"` so the global log
+  // can label commits driven by the editor grid (vs. raw editor execution).
+  // 2026-05-02.
+  it("[AC-196-03-3] raw-edit commit records a grid-edit history entry", async () => {
+    const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
+    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+    renderGrid();
+    const tds = document.querySelectorAll("tbody tr:first-child td");
+    act(() => {
+      fireEvent.doubleClick(tds[1]!);
+    });
+    const input = screen.getByLabelText("Editing name") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(input, { target: { value: "Alicia" } });
+    });
+    act(() => {
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+    act(() => {
+      screen.getByLabelText("Commit pending changes").click();
+    });
+    const execBtn = await screen.findByLabelText("Execute SQL");
+    await act(async () => {
+      execBtn.click();
+    });
+
+    await waitFor(() => {
+      const entries = useQueryHistoryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.source).toBe("grid-edit");
+      expect(entries[0]!.status).toBe("success");
+      expect(entries[0]!.connectionId).toBe("conn1");
+    });
+  });
+
   // [AC-182-03a] Defense-in-depth: when `analyzeResultEditability` is bypassed
   // and a PK-less plan reaches us, double-click must not open the editor.
   // 2026-05-01 — without this guard, `buildPkWhere` would emit `WHERE ;` and

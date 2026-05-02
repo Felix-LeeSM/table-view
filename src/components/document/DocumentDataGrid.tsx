@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import type { ColumnInfo, TableData } from "@/types/schema";
 import { isDocumentSentinel } from "@/types/document";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
@@ -53,6 +54,7 @@ export default function DocumentDataGrid({
   collection,
 }: DocumentDataGridProps) {
   const runFind = useDocumentStore((s) => s.runFind);
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const queryResult = useDocumentStore(
     (s) => s.queryResults[`${connectionId}:${database}:${collection}`],
   );
@@ -249,17 +251,46 @@ export default function DocumentDataGrid({
     async (record: Record<string, unknown>) => {
       setAddLoading(true);
       setAddError(null);
+      // Sprint 196 (FB-5b) — Mongo single-document insert. Synthesise a
+      // user-readable mql line for the history row (mirrors the per-document
+      // MQL preview format used in `mqlGenerator`).
+      const startedAt = Date.now();
+      const recordedSql = `db.${collection}.insertOne(${JSON.stringify(record)})`;
       try {
         await insertDocument(connectionId, database, collection, record);
         setAddModalOpen(false);
         await fetchData();
+        addHistoryEntry({
+          sql: recordedSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "success",
+          connectionId,
+          paradigm: "document",
+          queryMode: "find",
+          database,
+          collection,
+          source: "mongo-op",
+        });
       } catch (e) {
         setAddError(e instanceof Error ? e.message : String(e));
+        addHistoryEntry({
+          sql: recordedSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "error",
+          connectionId,
+          paradigm: "document",
+          queryMode: "find",
+          database,
+          collection,
+          source: "mongo-op",
+        });
       } finally {
         setAddLoading(false);
       }
     },
-    [connectionId, database, collection, fetchData],
+    [connectionId, database, collection, fetchData, addHistoryEntry],
   );
 
   const handleExecuteMql = useCallback(async () => {

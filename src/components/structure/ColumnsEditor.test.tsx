@@ -323,4 +323,46 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
       ).toBe(true);
     });
   });
+
+  // AC-196-04-1 — Sprint 196 (FB-5b). Successful ALTER apply records a
+  // queryHistoryStore entry tagged `source: "ddl-structure"`. We re-use
+  // the development-environment scaffold so the Safe Mode gate stays in
+  // permissive mode (development connection) and the apply flows directly
+  // to runAlter without a confirm-dialog detour. 2026-05-02.
+  it("[AC-196-04-1] runAlter records a ddl-structure history entry on success", async () => {
+    const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
+    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "dev-conn",
+          db_type: "postgres",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+    useSafeModeStore.setState({ mode: "strict" });
+    vi.mocked(tauri.alterTable).mockResolvedValue({
+      sql: "ALTER TABLE users ADD COLUMN nickname text",
+    });
+    await renderEditorAndOpenPreview();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
+    });
+
+    await waitFor(() => {
+      const entries = useQueryHistoryStore.getState().entries;
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.source).toBe("ddl-structure");
+      expect(entries[0]!.status).toBe("success");
+    });
+  });
 });
