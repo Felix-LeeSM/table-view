@@ -1,7 +1,14 @@
 # Code Bad Smell 리포트 (Table View)
 
-작성일: 2026-05-02  
+작성일: 2026-05-02
 목표: “나쁜 냄새(bad smell)” 후보를 넓게 수집하고, 왜 그렇게 보이는지(근거/리스크)를 함께 정리.
+
+> **Status: 시한부 — Sprint 199–N 입력값 전용.** 이전 cycle 의
+> `docs/refactoring-smells.md` (2026-05-02 retire) 와 동일한 위상.
+> Sprint 199 부터 `docs/PLAN.md` 의 "리팩토링 sequencing (Sprint 199–...)"
+> 섹션이 본 카탈로그를 입력값으로 sprint 매핑 — sequencing 종료 시 본
+> 문서 retire. 진행 중 발견된 smell 변경은 본 문서 갱신이 아니라 해당
+> sprint findings 에 기록.
 
 > 참고: 이 문서는 **휴리스틱 기반**(grep/규모/패턴 탐지)이라 false positive/false negative가 존재합니다. “정확한 버그 리포트”가 아니라 **리팩터링/품질 개선 우선순위 잡기**를 위한 자료입니다.
 

@@ -72,6 +72,36 @@ Sprint 198 종료로 sequencing 완료, 시한부 docs (`refactoring-plan.md` /
 `sprint-198` 의 `contract.md` / `findings.md` / `handoff.md` 가 source
 of truth. 코드 작성 표준: [`memory/conventions/refactoring/memory.md`](../memory/conventions/refactoring/memory.md) (영속).
 
+### 리팩토링 sequencing (Sprint 199–..., post-198 cycle)
+
+Sprint 198 종료 직후 wide-net 재스캔 결과 ([`/CODE_SMELLS.md`](../CODE_SMELLS.md),
+시한부) 를 입력값으로 새 cycle. 같은 패턴 답습 — refactor-only sprint
+(홀수) 와 feature/FB sprint (짝수) 인터리브, 각 refactor 가 바로 다음
+feature sprint 의 dependency 를 정리. **본 표는 candidate sequencing**
+— 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후속 항목은 발견에
+따라 재배치 가능.
+
+| # | Sprint | 종류 | 입력 (CODE_SMELLS) | 내용 |
+|---|--------|------|--------------------|------|
+| 1 | **199** | refactor | §1-1 (frontend god file #1) | `SchemaTree.tsx` (2105) 분해 — entry + `SchemaTree/{rows,actions,dialogs}.tsx`. 행동 변경 0. |
+| 2 | 200 | feature  | TBD                              | 미정 — 다음 feature backlog 에서 결정. |
+| 3 | 201 | refactor | §1-1 (frontend god file #2~3)    | `DataGridTable.tsx` (1071) 또는 `QueryTab.tsx` (1040) 중 의존성 큰 쪽 우선. |
+| 4 | 202 | feature  | TBD                              | 미정. |
+| 5 | 203 | refactor | §1-2 (backend god file #1)       | `db/postgres.rs` (3803) 분할 — Sprint 197 mongodb.rs 패턴 답습. |
+| 6 | 204 | feature  | TBD                              | 미정. |
+| 7 | 205 | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. 짧은 sprint. |
+| 8 | 206 | refactor | §4–5 (catch + console 정책)      | logger 중앙화 + DEV-only gate 정책. |
+| 9 | 207 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
+| 10 | 208 | refactor | §7 (Rust prod expect)           | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |
+
+본 sequencing 의 목적은 [`/CODE_SMELLS.md`](../CODE_SMELLS.md) 의 7
+카테고리를 **다음 N sprint 의 feature work 와 매핑** 해 just-in-time
+refactor 로 회귀 risk 를 낮추는 것. Sprint 200 / 202 / 204 의 feature
+는 backlog priority 결정 시점에 채워 넣는다 (현 시점 미정).
+
+본 cycle 종료 시 [`/CODE_SMELLS.md`](../CODE_SMELLS.md) retire — 이전
+cycle 의 `refactoring-{plan,smells}.md` 처리와 동일.
+
 ## 문서 목차
 
 | 문서 | 설명 |
