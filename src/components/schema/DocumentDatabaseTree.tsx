@@ -7,10 +7,29 @@ import {
   Loader2,
   RefreshCw,
 } from "lucide-react";
+import { toast } from "@/lib/toast";
 import { Button } from "@components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@components/ui/dialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentStore } from "@stores/documentStore";
 import { useTabStore } from "@stores/tabStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
+import { dropCollection } from "@lib/tauri";
 import { cn } from "@lib/utils";
 
 interface DocumentDatabaseTreeProps {
@@ -41,6 +60,8 @@ export default function DocumentDatabaseTree({
   const loadDatabases = useDocumentStore((s) => s.loadDatabases);
   const loadCollections = useDocumentStore((s) => s.loadCollections);
   const addTab = useTabStore((s) => s.addTab);
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  const safeModeGate = useSafeModeGate(connectionId);
 
   // Sprint 137 (AC-S137-02) — track the connection's user-active Mongo
   // database. The DbSwitcher writes this slot via `setActiveDb` after a
@@ -60,6 +81,14 @@ export default function DocumentDatabaseTree({
   const [loadingDbs, setLoadingDbs] = useState<Set<string>>(new Set());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Sprint 198 — Drop Collection confirm dialog. Mirrors SchemaTree's
+  // `handleDropTable` shape so the document branch surfaces an
+  // identically-styled destructive confirmation.
+  const [dropDialog, setDropDialog] = useState<{
+    database: string;
+    collection: string;
+  } | null>(null);
+  const [isDropping, setIsDropping] = useState(false);
   // Sprint 137 — keys the auto-load guard on `(connectionId, activeDb)` so a
   // DB swap (toolbar DbSwitcher) re-runs the database list fetch. Prior to
   // S137 the guard only watched `connectionId`, which caused the
@@ -162,6 +191,72 @@ export default function DocumentDatabaseTree({
       });
     },
     [addTab, connectionId],
+  );
+
+  // Sprint 198 — Drop Collection. Mirrors SchemaTree's `handleDropTable`:
+  // analyzeMongoOperation → safeModeGate.decide → confirm → invoke → history.
+  // Safe Mode classifies `dropCollection` as `danger` unconditionally; on
+  // production the gate either blocks (strict / off) or surfaces a confirm
+  // dialog (warn). On non-prod the gate auto-allows so the user only sees
+  // the destructive-confirm dialog below.
+  const handleConfirmDropCollection = useCallback(async () => {
+    if (!dropDialog) return;
+    const { database, collection } = dropDialog;
+    setIsDropping(true);
+    const recordedSql = `db.${collection}.drop()`;
+    const startedAt = Date.now();
+    try {
+      await dropCollection(connectionId, database, collection);
+      addHistoryEntry({
+        sql: recordedSql,
+        executedAt: startedAt,
+        duration: Date.now() - startedAt,
+        status: "success",
+        connectionId,
+        paradigm: "document",
+        queryMode: "find",
+        source: "mongo-op",
+      });
+      // Refresh the collection list under this database so the dropped
+      // entry disappears from the sidebar without a manual refresh.
+      await loadCollections(connectionId, database);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to drop ${database}.${collection}: ${detail}`);
+      if (import.meta.env.DEV) {
+        console.error("[DocumentDatabaseTree] dropCollection:", err);
+      }
+      addHistoryEntry({
+        sql: recordedSql,
+        executedAt: startedAt,
+        duration: Date.now() - startedAt,
+        status: "error",
+        connectionId,
+        paradigm: "document",
+        queryMode: "find",
+        source: "mongo-op",
+      });
+    } finally {
+      setIsDropping(false);
+      setDropDialog(null);
+    }
+  }, [dropDialog, connectionId, addHistoryEntry, loadCollections]);
+
+  const handleDropCollectionRequest = useCallback(
+    (database: string, collection: string) => {
+      const decision = safeModeGate.decide(
+        analyzeMongoOperation({ kind: "dropCollection" }),
+      );
+      if (decision.action === "block") {
+        toast.error(decision.reason);
+        return;
+      }
+      // For both `confirm` (Safe Mode warn-prod) and `allow` (non-prod)
+      // we still want the destructive confirmation modal — surfacing the
+      // Safe Mode reason via the dialog body when present.
+      setDropDialog({ database, collection });
+    },
+    [safeModeGate],
   );
 
   const databaseList = useMemo(() => databases ?? [], [databases]);
@@ -374,46 +469,61 @@ export default function DocumentDatabaseTree({
                     const collNodeId = `coll:${db.name}:${coll.name}`;
                     const isSelected = selectedNodeId === collNodeId;
                     return (
-                      <button
-                        key={coll.name}
-                        type="button"
-                        className={cn(
-                          "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 hover:bg-muted",
-                          isSelected
-                            ? "bg-primary/10 text-primary font-semibold"
-                            : "text-foreground",
-                        )}
-                        aria-label={`${coll.name} collection`}
-                        // Sprint 136 (AC-S136-03) — single-click opens a
-                        // preview tab on the collection (`addTab` defaults
-                        // new tabs to `isPreview: true`); double-click
-                        // promotes the preview tab to a persistent tab.
-                        // Same model as the relational tree (AC-S136-01/02)
-                        // so paradigm doesn't change the click semantics.
-                        onClick={() => {
-                          setSelectedNodeId(collNodeId);
-                          handleCollectionOpen(db.name, coll.name);
-                        }}
-                        onDoubleClick={() =>
-                          handleCollectionDoubleClick(db.name, coll.name)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            handleCollectionOpen(db.name, coll.name);
-                          }
-                        }}
-                      >
-                        <FileText
-                          size={12}
-                          className="shrink-0 text-muted-foreground"
-                        />
-                        <span className="truncate text-xs">{coll.name}</span>
-                        {coll.document_count != null && (
-                          <span className="ml-auto text-3xs text-muted-foreground">
-                            {coll.document_count.toLocaleString()}
-                          </span>
-                        )}
-                      </button>
+                      <ContextMenu key={coll.name}>
+                        <ContextMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 hover:bg-muted",
+                              isSelected
+                                ? "bg-primary/10 text-primary font-semibold"
+                                : "text-foreground",
+                            )}
+                            aria-label={`${coll.name} collection`}
+                            // Sprint 136 (AC-S136-03) — single-click opens a
+                            // preview tab on the collection (`addTab` defaults
+                            // new tabs to `isPreview: true`); double-click
+                            // promotes the preview tab to a persistent tab.
+                            // Same model as the relational tree (AC-S136-01/02)
+                            // so paradigm doesn't change the click semantics.
+                            onClick={() => {
+                              setSelectedNodeId(collNodeId);
+                              handleCollectionOpen(db.name, coll.name);
+                            }}
+                            onDoubleClick={() =>
+                              handleCollectionDoubleClick(db.name, coll.name)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleCollectionOpen(db.name, coll.name);
+                              }
+                            }}
+                          >
+                            <FileText
+                              size={12}
+                              className="shrink-0 text-muted-foreground"
+                            />
+                            <span className="truncate text-xs">
+                              {coll.name}
+                            </span>
+                            {coll.document_count != null && (
+                              <span className="ml-auto text-3xs text-muted-foreground">
+                                {coll.document_count.toLocaleString()}
+                              </span>
+                            )}
+                          </button>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem
+                            danger
+                            onSelect={() =>
+                              handleDropCollectionRequest(db.name, coll.name)
+                            }
+                          >
+                            Drop Collection
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     );
                   })
                 )}
@@ -422,6 +532,52 @@ export default function DocumentDatabaseTree({
           </div>
         );
       })}
+
+      {/* Sprint 198 — Drop Collection confirm dialog. Mirrors SchemaTree's
+          destructive Drop Table dialog so the document branch has a matching
+          UX. The Safe Mode gate already pre-classified upstream — this
+          dialog is the second-line "are you sure" the user actually clicks. */}
+      <Dialog
+        open={!!dropDialog}
+        onOpenChange={(open) => !open && setDropDialog(null)}
+      >
+        <DialogContent
+          className="w-80 bg-secondary p-4"
+          showCloseButton={false}
+        >
+          <div className="rounded-lg border border-border bg-secondary p-4 shadow-xl">
+            <DialogHeader>
+              <DialogTitle className="mb-2 text-sm font-semibold text-foreground">
+                Drop Collection
+              </DialogTitle>
+              <DialogDescription className="mb-4 text-sm text-secondary-foreground">
+                {dropDialog
+                  ? `Are you sure you want to drop "${dropDialog.database}.${dropDialog.collection}"? This action cannot be undone.`
+                  : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDropDialog(null)}
+                disabled={isDropping}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmDropCollection}
+                disabled={isDropping}
+                aria-label="Drop Collection"
+              >
+                {isDropping ? "Dropping..." : "Drop Collection"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

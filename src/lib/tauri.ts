@@ -522,6 +522,68 @@ export async function deleteDocument(
   });
 }
 
+// ── Document paradigm — bulk-write (Sprint 198) ────────────────────────────
+// Sprint 197 의 mutations.rs 위에 얹은 3 신규 command 의 frontend shim.
+// 각 caller (SchemaTree drop / DocumentDataGrid toolbar) 는 invoke 직전
+// `analyzeMongoOperation(...)` → `useSafeModeGate.decide(...)` 으로 위험
+// 분류를 통과시킨다. 본 shim 자체는 gate 책임 없음 — 단순 invoke wrapper.
+
+/**
+ * Sprint 198 — bulk-delete every document matching `filter`. Returns the
+ * driver's `deleted_count` so the UI can surface a "N row(s) deleted" toast.
+ * Empty filter (`{}`) is allowed at this layer; Safe Mode classifier gates.
+ */
+export async function deleteMany(
+  connectionId: string,
+  database: string,
+  collection: string,
+  filter: Record<string, unknown>,
+): Promise<number> {
+  return invoke<number>("delete_many", {
+    connectionId,
+    database,
+    collection,
+    filter,
+  });
+}
+
+/**
+ * Sprint 198 — bulk-apply `{ $set: patch }` to every document matching
+ * `filter`. Returns the driver's `modified_count`. Backend rejects `_id` in
+ * `patch` (identity mutation) — same contract as `updateDocument`.
+ */
+export async function updateMany(
+  connectionId: string,
+  database: string,
+  collection: string,
+  filter: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Promise<number> {
+  return invoke<number>("update_many", {
+    connectionId,
+    database,
+    collection,
+    filter,
+    patch,
+  });
+}
+
+/**
+ * Sprint 198 — drop the entire collection. Mongo parallel of RDB
+ * `dropTable`; Safe Mode classifier always tags this as `danger`.
+ */
+export async function dropCollection(
+  connectionId: string,
+  database: string,
+  collection: string,
+): Promise<void> {
+  return invoke<void>("drop_collection", {
+    connectionId,
+    database,
+    collection,
+  });
+}
+
 // ── Sprint 181 — Export grid rows ──────────────────────────────────────────
 
 export type ExportFormat = "csv" | "tsv" | "sql" | "json";

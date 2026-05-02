@@ -83,6 +83,13 @@ export interface DataGridToolbarProps {
    * (which clashed visually with the rest of the row's tone).
    */
   exportSlot?: React.ReactNode;
+  /**
+   * Sprint 198 — optional slot for paradigm-specific bulk-write actions.
+   * The document grid hosts "Delete matching" / "Update matching" here,
+   * driven by the current `activeFilter`. RDB grids leave this empty —
+   * RDB bulk DELETE / UPDATE is the user's job to write in the SQL editor.
+   */
+  bulkOpsSlot?: React.ReactNode;
   onSetPage: (page: number) => void;
   onSetPageSize: (size: number) => void;
   onToggleFilters: () => void;
@@ -116,6 +123,7 @@ export default function DataGridToolbar({
   deleteRowLabel = RDB_TOOLBAR_LABELS.deleteRowLabel,
   duplicateRowLabel = RDB_TOOLBAR_LABELS.duplicateRowLabel,
   exportSlot,
+  bulkOpsSlot,
   onSetPage,
   onSetPageSize,
   onToggleFilters,
@@ -241,6 +249,7 @@ export default function DataGridToolbar({
             )}
           </>
         )}
+        {bulkOpsSlot}
         {exportSlot}
         <Button
           variant="ghost"

@@ -51,3 +51,67 @@ function isPipelineStage(value: unknown): value is Record<string, unknown> {
     Object.getPrototypeOf(value) !== null
   );
 }
+
+/**
+ * Sprint 198 — MongoDB write-op (bulk-write 3) safety classifier.
+ *
+ * `analyzeMongoPipeline` 와 마주보는 분류기. pipeline 이 read-shape
+ * (find / aggregate) 인 데 비해 본 함수는 collection 통째 변형의 위험을
+ * 본다. shape 은 같은 `StatementAnalysis` 라 `useSafeModeGate.decide` 가
+ * paradigm 무관하게 호출 가능.
+ *
+ * 분류:
+ * - `dropCollection` → 항상 `danger` (drop 자체가 partial 보호 불가).
+ * - `deleteMany` with empty filter (`{}`) → `danger` (whole collection
+ *   delete; RDB `DELETE without WHERE` 의 Mongo 평행).
+ * - `updateMany` with empty filter → `danger` (whole collection mass
+ *   update; `UPDATE without WHERE` 의 Mongo 평행).
+ * - filter 가 non-empty → `safe` (실제 위험은 driver/사용자 의도 영역).
+ *
+ * Patch 의 `_id` mutation 은 **여기서 검사하지 않는다** — 백엔드의
+ * `update_many_impl` 가 Validation error 로 거절하고 드라이버 round-trip
+ * 전에 차단한다. UI 층은 동일 contract 의 사후 catch 에서 toast 처리.
+ */
+export type MongoOperation =
+  | { kind: "deleteMany"; filter: Record<string, unknown> }
+  | {
+      kind: "updateMany";
+      filter: Record<string, unknown>;
+      patch: Record<string, unknown>;
+    }
+  | { kind: "dropCollection" };
+
+export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
+  if (op.kind === "dropCollection") {
+    return {
+      kind: "mongo-drop",
+      severity: "danger",
+      reasons: ["MongoDB dropCollection (whole collection)"],
+    };
+  }
+  if (op.kind === "deleteMany") {
+    if (isEmptyFilter(op.filter)) {
+      return {
+        kind: "mongo-delete-all",
+        severity: "danger",
+        reasons: ["MongoDB deleteMany without filter"],
+      };
+    }
+    return { kind: "mongo-delete-many", severity: "safe", reasons: [] };
+  }
+  // updateMany
+  if (isEmptyFilter(op.filter)) {
+    return {
+      kind: "mongo-update-all",
+      severity: "danger",
+      reasons: ["MongoDB updateMany without filter"],
+    };
+  }
+  return { kind: "mongo-update-many", severity: "safe", reasons: [] };
+}
+
+function isEmptyFilter(filter: Record<string, unknown>): boolean {
+  // analyzeMongoPipeline 의 isPipelineStage 와 동일 가드를 적용해도 되지만
+  // operation analyzer 는 caller 가 Record 보장 후 호출하므로 key 수만 본다.
+  return Object.keys(filter).length === 0;
+}

@@ -5,7 +5,7 @@
 // violations (first wins), and malformed input shapes that the JSON parser
 // in QueryTab might let through. date 2026-05-01.
 import { describe, it, expect } from "vitest";
-import { analyzeMongoPipeline } from "./mongoSafety";
+import { analyzeMongoOperation, analyzeMongoPipeline } from "./mongoSafety";
 
 describe("analyzeMongoPipeline", () => {
   it("[AC-188-01a] empty pipeline → safe", () => {
@@ -78,5 +78,58 @@ describe("analyzeMongoPipeline", () => {
       { $group: { _id: "$category", n: { $sum: 1 } } },
     ]);
     expect(a.severity).toBe("safe");
+  });
+});
+
+// AC-198-03 — `analyzeMongoOperation` unit tests. Sprint 198 ships 3 bulk-write
+// commands (deleteMany / updateMany / dropCollection) — each must be classified
+// before the Tauri shim ever fires so `useSafeModeGate.decide` can block / warn
+// the same way it does for RDB DELETE-without-WHERE. Cases mirror the contract:
+// drop is always danger, empty-filter many-ops are danger, non-empty filter is
+// safe. date 2026-05-02.
+describe("analyzeMongoOperation", () => {
+  it("[AC-198-03a] dropCollection → danger / mongo-drop", () => {
+    const a = analyzeMongoOperation({ kind: "dropCollection" });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-drop");
+    expect(a.reasons[0]).toMatch(/dropCollection/);
+  });
+
+  it("[AC-198-03b] deleteMany with empty filter → danger / mongo-delete-all", () => {
+    const a = analyzeMongoOperation({ kind: "deleteMany", filter: {} });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-delete-all");
+    expect(a.reasons[0]).toMatch(/deleteMany without filter/);
+  });
+
+  it("[AC-198-03c] updateMany with empty filter → danger / mongo-update-all", () => {
+    const a = analyzeMongoOperation({
+      kind: "updateMany",
+      filter: {},
+      patch: { status: "x" },
+    });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-update-all");
+    expect(a.reasons[0]).toMatch(/updateMany without filter/);
+  });
+
+  it("[AC-198-03d] deleteMany with non-empty filter → safe / mongo-delete-many", () => {
+    const a = analyzeMongoOperation({
+      kind: "deleteMany",
+      filter: { _id: "abc" },
+    });
+    expect(a.severity).toBe("safe");
+    expect(a.kind).toBe("mongo-delete-many");
+    expect(a.reasons).toEqual([]);
+  });
+
+  it("[AC-198-03e] updateMany with non-empty filter → safe / mongo-update-many", () => {
+    const a = analyzeMongoOperation({
+      kind: "updateMany",
+      filter: { archived: false },
+      patch: { reviewed: true },
+    });
+    expect(a.severity).toBe("safe");
+    expect(a.kind).toBe("mongo-update-many");
   });
 });

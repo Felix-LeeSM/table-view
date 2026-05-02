@@ -16,6 +16,14 @@ export type StatementKind =
   | "mongo-out"
   | "mongo-merge"
   | "mongo-other"
+  // Sprint 198 — bulk-write operation analyser variants (`analyzeMongoOperation`).
+  // `*-all` (empty filter) is danger; `*-many` (non-empty filter) is safe;
+  // `mongo-drop` is unconditionally danger.
+  | "mongo-drop"
+  | "mongo-delete-all"
+  | "mongo-delete-many"
+  | "mongo-update-all"
+  | "mongo-update-many"
   | "other";
 
 export interface StatementAnalysis {

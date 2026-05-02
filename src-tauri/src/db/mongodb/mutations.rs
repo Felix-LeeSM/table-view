@@ -106,6 +106,79 @@ impl MongoAdapter {
 
         Ok(())
     }
+
+    /// Sprint 198 — body of `DocumentAdapter::delete_many`.
+    ///
+    /// Empty filter `{}` is allowed at this layer — the Safe Mode
+    /// classifier (`analyzeMongoOperation`) gates on the frontend before
+    /// the call ever reaches the adapter.
+    pub(super) async fn delete_many_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: Document,
+    ) -> Result<u64, AppError> {
+        validate_ns(db, collection)?;
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let result = coll
+            .delete_many(filter)
+            .await
+            .map_err(|e| AppError::Database(format!("delete_many failed: {e}")))?;
+
+        Ok(result.deleted_count)
+    }
+
+    /// Sprint 198 — body of `DocumentAdapter::update_many`.
+    ///
+    /// Mirrors `update_document_impl`'s `_id` rejection: a bulk update
+    /// must never rewrite the identity column. The check runs before
+    /// `current_client()` so a misuse does not burn a round-trip.
+    pub(super) async fn update_many_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: Document,
+        patch: Document,
+    ) -> Result<u64, AppError> {
+        validate_ns(db, collection)?;
+
+        if patch.contains_key("_id") {
+            return Err(AppError::Validation(
+                "update_many: patch must not contain _id".into(),
+            ));
+        }
+
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let update = doc! { "$set": patch };
+
+        let result = coll
+            .update_many(filter, update)
+            .await
+            .map_err(|e| AppError::Database(format!("update_many failed: {e}")))?;
+
+        Ok(result.modified_count)
+    }
+
+    /// Sprint 198 — body of `DocumentAdapter::drop_collection`.
+    pub(super) async fn drop_collection_impl(
+        &self,
+        db: &str,
+        collection: &str,
+    ) -> Result<(), AppError> {
+        validate_ns(db, collection)?;
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        coll.drop()
+            .await
+            .map_err(|e| AppError::Database(format!("drop collection failed: {e}")))?;
+
+        Ok(())
+    }
 }
 
 // ── Mutate helpers (Sprint 80) ─────────────────────────────────────────
@@ -329,6 +402,106 @@ mod tests {
         match id32 {
             DocumentId::Number(n) => assert_eq!(n, 5_i64),
             other => panic!("expected DocumentId::Number(5), got {other:?}"),
+        }
+    }
+
+    // ── Sprint 198 — bulk-write smoke tests ───────────────────────────
+    //
+    // Each `*_without_connection` case probes the same `current_client()`
+    // gate as the single-doc variants so we know the new methods plug into
+    // the same connection-state machinery (no hidden bypass). The
+    // `_rejects_empty_namespace` and `_rejects_id_in_patch` cases run
+    // before any connection call, exercising the validators that the UI
+    // (Safe Mode + `analyzeMongoOperation`) relies on as a backend
+    // safety net.
+    //
+    // Sprint 198 / 2026-05-02.
+
+    #[tokio::test]
+    async fn delete_many_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.delete_many("db", "c", Document::new()).await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn delete_many_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter.delete_many("   ", "c", Document::new()).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_many_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .update_many("db", "c", Document::new(), doc! { "name": "x" })
+            .await
+        {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_many_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .update_many("db", "   ", Document::new(), doc! { "name": "x" })
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn update_many_rejects_id_in_patch() {
+        use bson::oid::ObjectId;
+        let adapter = MongoAdapter::new();
+        let patch = doc! { "_id": ObjectId::new(), "name": "x" };
+        match adapter.update_many("db", "c", Document::new(), patch).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("patch must not contain _id"),
+                    "unexpected message: {msg}"
+                );
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_collection_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.drop_collection("db", "c").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_collection_rejects_empty_namespace() {
+        let adapter = MongoAdapter::new();
+        match adapter.drop_collection("   ", "c").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected message: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
         }
     }
 

@@ -286,6 +286,30 @@ mod tests {
         ) -> BoxFuture<'a, Result<(), AppError>> {
             Box::pin(async { Ok(()) })
         }
+        fn delete_many<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+        ) -> BoxFuture<'a, Result<u64, AppError>> {
+            Box::pin(async { Ok(0) })
+        }
+        fn update_many<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+            _patch: bson::Document,
+        ) -> BoxFuture<'a, Result<u64, AppError>> {
+            Box::pin(async { Ok(0) })
+        }
+        fn drop_collection<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
     }
 
     /// Minimal Search adapter — only `DbAdapter` is required by the trait
@@ -569,6 +593,30 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _id: DocumentId,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn delete_many<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _filter: bson::Document,
+            ) -> BoxFuture<'a, Result<u64, AppError>> {
+                Box::pin(async { Ok(0) })
+            }
+            fn update_many<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _filter: bson::Document,
+                _patch: bson::Document,
+            ) -> BoxFuture<'a, Result<u64, AppError>> {
+                Box::pin(async { Ok(0) })
+            }
+            fn drop_collection<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
             ) -> BoxFuture<'a, Result<(), AppError>> {
                 Box::pin(async { Ok(()) })
             }
@@ -931,6 +979,30 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _id: DocumentId,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn delete_many<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _filter: bson::Document,
+            ) -> BoxFuture<'a, Result<u64, AppError>> {
+                Box::pin(async { Ok(0) })
+            }
+            fn update_many<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _filter: bson::Document,
+                _patch: bson::Document,
+            ) -> BoxFuture<'a, Result<u64, AppError>> {
+                Box::pin(async { Ok(0) })
+            }
+            fn drop_collection<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
             ) -> BoxFuture<'a, Result<(), AppError>> {
                 Box::pin(async { Ok(()) })
             }

@@ -118,3 +118,69 @@ pub async fn delete_document(
         .delete_document(&database, &collection, document_id)
         .await
 }
+
+/// Sprint 198 — bulk delete every document matching `filter`. Returns the
+/// driver's `deleted_count` so the UI can surface "N row(s) deleted" toast.
+///
+/// Empty filter (`{}`) is allowed at this layer — the Safe Mode classifier
+/// (`analyzeMongoOperation` on the frontend) gates the call. Bypassing the
+/// gate via direct IPC would still execute the call, so backend treats this
+/// as the same trust boundary as the underlying driver.
+#[tauri::command]
+pub async fn delete_many(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    filter: bson::Document,
+) -> Result<u64, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&connection_id)
+        .ok_or_else(|| not_connected(&connection_id))?;
+    active
+        .as_document()?
+        .delete_many(&database, &collection, filter)
+        .await
+}
+
+/// Sprint 198 — bulk apply `$set` patch to every document matching `filter`.
+/// Returns `modified_count`. The adapter rejects `_id` in patch (identity
+/// mutation) — same contract as `update_document`.
+#[tauri::command]
+pub async fn update_many(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    filter: bson::Document,
+    patch: bson::Document,
+) -> Result<u64, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&connection_id)
+        .ok_or_else(|| not_connected(&connection_id))?;
+    active
+        .as_document()?
+        .update_many(&database, &collection, filter, patch)
+        .await
+}
+
+/// Sprint 198 — drop the entire collection. Mongo parallel of RDB
+/// `dropTable`; Safe Mode always classifies this as `danger`.
+#[tauri::command]
+pub async fn drop_collection(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&connection_id)
+        .ok_or_else(|| not_connected(&connection_id))?;
+    active
+        .as_document()?
+        .drop_collection(&database, &collection)
+        .await
+}

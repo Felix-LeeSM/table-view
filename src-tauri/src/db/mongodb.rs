@@ -195,4 +195,31 @@ impl DocumentAdapter for MongoAdapter {
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.delete_document_impl(db, collection, id).await })
     }
+
+    fn delete_many<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: Document,
+    ) -> BoxFuture<'a, Result<u64, AppError>> {
+        Box::pin(async move { self.delete_many_impl(db, collection, filter).await })
+    }
+
+    fn update_many<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: Document,
+        patch: Document,
+    ) -> BoxFuture<'a, Result<u64, AppError>> {
+        Box::pin(async move { self.update_many_impl(db, collection, filter, patch).await })
+    }
+
+    fn drop_collection<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.drop_collection_impl(db, collection).await })
+    }
 }

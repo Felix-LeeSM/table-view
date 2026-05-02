@@ -445,6 +445,35 @@ pub trait DocumentAdapter: DbAdapter {
         collection: &'a str,
         id: DocumentId,
     ) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 198: bulk delete by filter. Returns deleted_count surfaced
+    /// from the driver. Empty filter `{}` is allowed — Safe Mode classifier
+    /// gates the call on the frontend (`analyzeMongoOperation`).
+    fn delete_many<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+    ) -> BoxFuture<'a, Result<u64, AppError>>;
+
+    /// Sprint 198: bulk update by filter. Returns modified_count surfaced
+    /// from the driver. `_id` in patch is rejected (mirrors single-doc
+    /// `update_document` contract).
+    fn update_many<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+        patch: bson::Document,
+    ) -> BoxFuture<'a, Result<u64, AppError>>;
+
+    /// Sprint 198: drop the entire collection. RDB `dropTable` parallel.
+    /// Safe Mode always classifies this as `danger`.
+    fn drop_collection<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────
@@ -645,6 +674,30 @@ mod tests {
                 _db: &'a str,
                 _collection: &'a str,
                 _id: DocumentId,
+            ) -> BoxFuture<'a, Result<(), AppError>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn delete_many<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _filter: bson::Document,
+            ) -> BoxFuture<'a, Result<u64, AppError>> {
+                Box::pin(async { Ok(0) })
+            }
+            fn update_many<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
+                _filter: bson::Document,
+                _patch: bson::Document,
+            ) -> BoxFuture<'a, Result<u64, AppError>> {
+                Box::pin(async { Ok(0) })
+            }
+            fn drop_collection<'a>(
+                &'a self,
+                _db: &'a str,
+                _collection: &'a str,
             ) -> BoxFuture<'a, Result<(), AppError>> {
                 Box::pin(async { Ok(()) })
             }
@@ -1046,6 +1099,30 @@ mod tests {
             _db: &'a str,
             _collection: &'a str,
             _id: DocumentId,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn delete_many<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+        ) -> BoxFuture<'a, Result<u64, AppError>> {
+            Box::pin(async { Ok(0) })
+        }
+        fn update_many<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+            _patch: bson::Document,
+        ) -> BoxFuture<'a, Result<u64, AppError>> {
+            Box::pin(async { Ok(0) })
+        }
+        fn drop_collection<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
         ) -> BoxFuture<'a, Result<(), AppError>> {
             Box::pin(async { Ok(()) })
         }
