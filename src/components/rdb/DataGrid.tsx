@@ -466,6 +466,7 @@ export default function DataGrid({
           schema={schema}
           table={table}
           onClose={() => setShowQuickLook(false)}
+          editState={editState}
         />
       )}
 

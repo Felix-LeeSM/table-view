@@ -1,10 +1,23 @@
 import { useState, useCallback, useMemo } from "react";
-import { X, Binary, GripHorizontal } from "lucide-react";
+import { X, Binary, GripHorizontal, Pencil, PencilOff } from "lucide-react";
 import { Button } from "@components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import { cn } from "@lib/utils";
 import type { ColumnInfo, TableData } from "@/types/schema";
 import BlobViewerDialog from "@components/datagrid/BlobViewerDialog";
 import BsonTreeViewer from "@components/shared/BsonTreeViewer";
+import {
+  cellToEditValue,
+  editKey,
+  getInputTypeForColumn,
+  type DataGridEditState,
+} from "@components/datagrid/useDataGridEdit";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -22,6 +35,11 @@ function isBlobColumn(dataType: string): boolean {
 function isJsonColumn(dataType: string): boolean {
   const lower = dataType.toLowerCase();
   return lower.includes("json");
+}
+
+function isBoolColumn(dataType: string): boolean {
+  const lower = dataType.toLowerCase();
+  return lower === "bool" || lower.includes("boolean");
 }
 
 /** Try to detect JSON-like string values. */
@@ -56,15 +74,36 @@ function formatCellValue(value: unknown, col: ColumnInfo): string {
   return String(value);
 }
 
+// Sprint 194 — column is editable in QuickLook iff (a) editState available,
+// (b) not a primary key, (c) not a BLOB family. Generated/computed columns
+// fall through the same gate via the underlying hook's commit path.
+function isEditableColumn(col: ColumnInfo): boolean {
+  if (col.is_primary_key) return false;
+  if (isBlobColumn(col.data_type)) return false;
+  return true;
+}
+
 // ── Field Row ─────────────────────────────────────────────────────────
 
 interface FieldRowProps {
   column: ColumnInfo;
   value: unknown;
+  rowIdx: number;
+  colIdx: number;
   onBlobView: (data: unknown, columnName: string) => void;
+  editing: boolean;
+  editState?: DataGridEditState;
 }
 
-function FieldRow({ column, value, onBlobView }: FieldRowProps) {
+function FieldRow({
+  column,
+  value,
+  rowIdx,
+  colIdx,
+  onBlobView,
+  editing,
+  editState,
+}: FieldRowProps) {
   const isNull = value == null;
   const isBool = typeof value === "boolean";
   const isBlob = isBlobColumn(column.data_type) && value != null;
@@ -78,6 +117,8 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
     () => formatCellValue(value, column),
     [value, column],
   );
+
+  const editable = editing && !!editState && isEditableColumn(column);
 
   return (
     <div className="flex border-b border-border last:border-b-0">
@@ -97,7 +138,18 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
 
       {/* Value */}
       <div className="flex-1 overflow-hidden px-3 py-2 text-xs">
-        {isNull ? (
+        {editable ? (
+          <EditableValue
+            column={column}
+            value={value}
+            rowIdx={rowIdx}
+            colIdx={colIdx}
+            editState={editState}
+            isJsonString={isJsonString}
+            isObject={isObject}
+            isLargeText={isLargeText}
+          />
+        ) : isNull ? (
           <span className="italic text-muted-foreground">NULL</span>
         ) : isBool ? (
           <span
@@ -136,7 +188,188 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
         ) : (
           <span className="font-mono text-foreground">{displayValue}</span>
         )}
+
+        {/* Read-only marker for PK / BLOB so the user understands the input
+            is intentionally absent in edit mode. Stays out of the DOM in
+            read-only call-sites. */}
+        {editing && !!editState && !isEditableColumn(column) && (
+          <span
+            className="ml-2 text-3xs italic text-muted-foreground"
+            aria-disabled
+          >
+            (read-only)
+          </span>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── Editable value (Sprint 194) ──────────────────────────────────────
+
+interface EditableValueProps {
+  column: ColumnInfo;
+  value: unknown;
+  rowIdx: number;
+  colIdx: number;
+  editState: DataGridEditState;
+  isJsonString: boolean;
+  isObject: boolean;
+  isLargeText: boolean;
+}
+
+function EditableValue({
+  column,
+  value,
+  rowIdx,
+  colIdx,
+  editState,
+  isJsonString,
+  isObject,
+  isLargeText,
+}: EditableValueProps) {
+  // Pending edit (if any) wins over the raw cell — so re-entering edit mode
+  // shows the user's queued value, not the original.
+  const key = editKey(rowIdx, colIdx);
+  const pendingValue = editState.pendingEdits.has(key)
+    ? (editState.pendingEdits.get(key) ?? null)
+    : null;
+
+  const initialString = useMemo(() => {
+    if (pendingValue !== null) return pendingValue;
+    return cellToEditValue(value) ?? "";
+  }, [pendingValue, value]);
+
+  const [draft, setDraft] = useState<string>(initialString);
+
+  const dispatchSave = useCallback(
+    (next: string | null) => {
+      const original = cellToEditValue(value);
+      editState.handleStartEdit(rowIdx, colIdx, original);
+      editState.setEditValue(next);
+      editState.saveCurrentEdit();
+    },
+    [editState, rowIdx, colIdx, value],
+  );
+
+  const dispatchSetNull = useCallback(() => {
+    setDraft("");
+    dispatchSave(null);
+  }, [dispatchSave]);
+
+  const useTextarea =
+    isObject || isJsonString || isLargeText || isJsonColumn(column.data_type);
+  const isBoolean = isBoolColumn(column.data_type);
+
+  // Boolean — three-way select (true / false / NULL).
+  if (isBoolean) {
+    const current =
+      pendingValue === null && value == null
+        ? "NULL"
+        : pendingValue !== null
+          ? pendingValue
+          : value === true
+            ? "true"
+            : value === false
+              ? "false"
+              : "NULL";
+    return (
+      <Select
+        value={current}
+        onValueChange={(v) => {
+          if (v === "NULL") dispatchSave(null);
+          else dispatchSave(v);
+        }}
+      >
+        <SelectTrigger
+          className="h-auto min-h-0 rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground shadow-none"
+          aria-label={`Edit value for ${column.name}`}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="true" className="font-mono text-xs">
+            true
+          </SelectItem>
+          <SelectItem value="false" className="font-mono text-xs">
+            false
+          </SelectItem>
+          <SelectItem value="NULL" className="font-mono text-xs">
+            NULL
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  if (useTextarea) {
+    return (
+      <div className="flex flex-col gap-1">
+        <textarea
+          className="max-h-48 w-full resize-y rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+          value={draft}
+          rows={4}
+          aria-label={`Edit value for ${column.name}`}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setDraft(initialString);
+              return;
+            }
+            // Cmd/Ctrl+Enter saves; plain Enter inserts newline.
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              dispatchSave(draft);
+            }
+          }}
+          onBlur={() => {
+            if (draft !== initialString) dispatchSave(draft);
+          }}
+        />
+        <div className="flex gap-1">
+          <button
+            type="button"
+            className="text-3xs text-muted-foreground hover:text-foreground hover:underline"
+            aria-label={`Set NULL for ${column.name}`}
+            onClick={dispatchSetNull}
+          >
+            Set NULL
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type={getInputTypeForColumn(column.data_type)}
+        className="flex-1 rounded border border-border bg-background px-1 py-0.5 font-mono text-xs text-foreground outline-none focus:ring-1 focus:ring-ring"
+        value={draft}
+        aria-label={`Edit value for ${column.name}`}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setDraft(initialString);
+            return;
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            dispatchSave(draft);
+          }
+        }}
+        onBlur={() => {
+          if (draft !== initialString) dispatchSave(draft);
+        }}
+      />
+      <button
+        type="button"
+        className="text-3xs text-muted-foreground hover:text-foreground hover:underline"
+        aria-label={`Set NULL for ${column.name}`}
+        onClick={dispatchSetNull}
+      >
+        Set NULL
+      </button>
     </div>
   );
 }
@@ -150,6 +383,12 @@ function FieldRow({ column, value, onBlobView }: FieldRowProps) {
  * existing call-sites in `DataGrid.tsx` working without any changes; a
  * paradigm-aware call-site opts in with `mode: "document"` and supplies
  * `rawDocuments` plus `database`/`collection` labels.
+ *
+ * Sprint 194 — Optional `editState` enables in-panel editing. When present,
+ * the header surfaces an Edit toggle and per-column cells become editable
+ * (RDB) or the BSON tree swaps to per-field FieldRows (document). When
+ * absent the panel stays fully read-only — existing read-only call-sites
+ * are unaffected.
  */
 export interface QuickLookPanelRdbProps {
   mode?: "rdb";
@@ -158,6 +397,7 @@ export interface QuickLookPanelRdbProps {
   schema: string;
   table: string;
   onClose: () => void;
+  editState?: DataGridEditState;
 }
 
 export interface QuickLookPanelDocumentProps {
@@ -167,6 +407,13 @@ export interface QuickLookPanelDocumentProps {
   database: string;
   collection: string;
   onClose: () => void;
+  /**
+   * Sprint 194 — Required when `editState` is provided so document edit mode
+   * can render FieldRows over the synthesized columns. The existing read-only
+   * call-site can omit it.
+   */
+  data?: TableData;
+  editState?: DataGridEditState;
 }
 
 export type QuickLookPanelProps =
@@ -182,8 +429,25 @@ function clampHeight(value: number): number {
   return Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, value));
 }
 
+// Sprint 194 — does the selected row have any pending change? Pending edits
+// carry the row idx as a `${rowIdx}-${colIdx}` prefix; pendingDeletedRowKeys
+// uses a page-aware row key the panel does not have, so we only check the
+// edit map for V1. New-row inserts are addressed via separate dedicated UI.
+function selectedRowIsDirty(
+  selectedRowIdx: number | null,
+  pendingEdits: Map<string, string | null>,
+): boolean {
+  if (selectedRowIdx == null) return false;
+  const prefix = `${selectedRowIdx}-`;
+  for (const key of pendingEdits.keys()) {
+    if (key.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 export default function QuickLookPanel(props: QuickLookPanelProps) {
   const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  const [editing, setEditing] = useState(false);
 
   // Shared selection arithmetic — both paradigms use the smallest-index
   // row as the "first" selected, matching the existing RDB behaviour.
@@ -247,6 +511,10 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
         height={height}
         onResizeMouseDown={handleMouseDown}
         onResizeKeyDown={handleResizeKeyDown}
+        editState={props.editState}
+        data={props.data}
+        editing={editing}
+        onToggleEdit={() => setEditing((v) => !v)}
       />
     );
   }
@@ -262,7 +530,60 @@ export default function QuickLookPanel(props: QuickLookPanelProps) {
       height={height}
       onResizeMouseDown={handleMouseDown}
       onResizeKeyDown={handleResizeKeyDown}
+      editState={props.editState}
+      editing={editing}
+      onToggleEdit={() => setEditing((v) => !v)}
     />
+  );
+}
+
+// ── Header chrome (Sprint 194) ───────────────────────────────────────
+
+interface HeaderControlsProps {
+  editState?: DataGridEditState;
+  editing: boolean;
+  onToggleEdit: () => void;
+  isDirty: boolean;
+  onClose: () => void;
+  closeLabel: string;
+}
+
+function HeaderControls({
+  editState,
+  editing,
+  onToggleEdit,
+  isDirty,
+  onClose,
+  closeLabel,
+}: HeaderControlsProps) {
+  return (
+    <div className="flex items-center gap-1">
+      {isDirty && (
+        <span className="rounded bg-warning/15 px-1.5 py-0.5 text-3xs font-semibold text-warning">
+          ● Modified
+        </span>
+      )}
+      {editState && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="Toggle edit mode"
+          aria-pressed={editing}
+          title={editing ? "Exit edit mode" : "Enter edit mode"}
+          onClick={onToggleEdit}
+        >
+          {editing ? <PencilOff /> : <Pencil />}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        onClick={onClose}
+        aria-label={closeLabel}
+      >
+        <X />
+      </Button>
+    </div>
   );
 }
 
@@ -278,6 +599,9 @@ interface RdbBodyProps {
   height: number;
   onResizeMouseDown: (e: React.MouseEvent) => void;
   onResizeKeyDown: (e: React.KeyboardEvent) => void;
+  editState?: DataGridEditState;
+  editing: boolean;
+  onToggleEdit: () => void;
 }
 
 function RdbModeBody({
@@ -290,6 +614,9 @@ function RdbModeBody({
   height,
   onResizeMouseDown,
   onResizeKeyDown,
+  editState,
+  editing,
+  onToggleEdit,
 }: RdbBodyProps) {
   const [blobViewer, setBlobViewer] = useState<{
     data: unknown;
@@ -308,6 +635,12 @@ function RdbModeBody({
       setBlobViewer({ data: blobData, columnName });
     },
     [],
+  );
+
+  const isDirty = useMemo(
+    () =>
+      selectedRowIsDirty(firstSelectedId, editState?.pendingEdits ?? new Map()),
+    [firstSelectedId, editState?.pendingEdits],
   );
 
   if (!row) return null;
@@ -350,26 +683,30 @@ function RdbModeBody({
             </span>
           )}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onClose}
-          aria-label="Close row details"
-        >
-          <X />
-        </Button>
+        <HeaderControls
+          editState={editState}
+          editing={editing}
+          onToggleEdit={onToggleEdit}
+          isDirty={isDirty}
+          onClose={onClose}
+          closeLabel="Close row details"
+        />
       </div>
 
       {/* Scrollable field list */}
       <div className="flex-1 overflow-auto">
         {data.columns.map((col, idx) => {
-          const cellValue = row[idx as number];
+          const cellValue = (row as unknown[])[idx];
           return (
             <FieldRow
               key={col.name}
               column={col}
               value={cellValue}
+              rowIdx={firstSelectedId ?? 0}
+              colIdx={idx}
               onBlobView={handleBlobView}
+              editing={editing}
+              editState={editState}
             />
           );
         })}
@@ -402,6 +739,10 @@ interface DocumentBodyProps {
   height: number;
   onResizeMouseDown: (e: React.MouseEvent) => void;
   onResizeKeyDown: (e: React.KeyboardEvent) => void;
+  editState?: DataGridEditState;
+  data?: TableData;
+  editing: boolean;
+  onToggleEdit: () => void;
 }
 
 function DocumentModeBody({
@@ -414,6 +755,10 @@ function DocumentModeBody({
   height,
   onResizeMouseDown,
   onResizeKeyDown,
+  editState,
+  data,
+  editing,
+  onToggleEdit,
 }: DocumentBodyProps) {
   // Out-of-range or missing selection → pass `null` so BsonTreeViewer's
   // built-in empty state takes over. This keeps the panel mounted (so the
@@ -430,6 +775,24 @@ function DocumentModeBody({
   }, [firstSelectedId, rawDocuments]);
 
   const displayNamespace = `${database}.${collection}`;
+
+  const isDirty = useMemo(
+    () =>
+      selectedRowIsDirty(firstSelectedId, editState?.pendingEdits ?? new Map()),
+    [firstSelectedId, editState?.pendingEdits],
+  );
+
+  // In edit mode we render FieldRows over the synthesized columns — same
+  // per-field flow as RDB. Falls back to the BSON tree when not editing or
+  // when the call-site did not supply `data`.
+  const showFieldRows = editing && !!editState && !!data;
+
+  const editRow = useMemo(() => {
+    if (!showFieldRows) return null;
+    if (firstSelectedId == null || !data) return null;
+    if (firstSelectedId < 0 || firstSelectedId >= data.rows.length) return null;
+    return data.rows[firstSelectedId] as unknown[];
+  }, [showFieldRows, firstSelectedId, data]);
 
   return (
     <div
@@ -467,19 +830,36 @@ function DocumentModeBody({
             </span>
           )}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={onClose}
-          aria-label="Close document details"
-        >
-          <X />
-        </Button>
+        <HeaderControls
+          editState={editState}
+          editing={editing}
+          onToggleEdit={onToggleEdit}
+          isDirty={isDirty}
+          onClose={onClose}
+          closeLabel="Close document details"
+        />
       </div>
 
-      {/* BSON tree — null falls through to the viewer's built-in empty state */}
+      {/* Body — FieldRows in edit mode, BSON tree otherwise */}
       <div className="flex-1 overflow-auto">
-        <BsonTreeViewer value={documentValue} />
+        {showFieldRows && editRow && data ? (
+          data.columns.map((col, idx) => (
+            <FieldRow
+              key={col.name}
+              column={col}
+              value={editRow[idx]}
+              rowIdx={firstSelectedId ?? 0}
+              colIdx={idx}
+              onBlobView={() => {
+                /* Document mode doesn't have BLOB columns in V1. */
+              }}
+              editing={editing}
+              editState={editState}
+            />
+          ))
+        ) : (
+          <BsonTreeViewer value={documentValue} />
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,51 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import QuickLookPanel from "./QuickLookPanel";
 import type { TableData } from "@/types/schema";
+import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
+
+// Sprint 194 — minimal `DataGridEditState` factory for QuickLook edit-mode
+// tests. Only the surface QuickLook actually consumes is filled in; the rest
+// is `vi.fn()` no-ops to satisfy the type contract. Pendingedits / errors
+// default to empty Maps so `Modified` pill stays off unless overridden.
+function makeEditState(
+  overrides: Partial<DataGridEditState> = {},
+): DataGridEditState {
+  return {
+    editingCell: null,
+    editValue: null,
+    setEditValue: vi.fn(),
+    setEditNull: vi.fn(),
+    pendingEdits: new Map(),
+    pendingNewRows: [],
+    pendingDeletedRowKeys: new Set(),
+    pendingEditErrors: new Map(),
+    sqlPreview: null,
+    setSqlPreview: vi.fn(),
+    commitError: null,
+    setCommitError: vi.fn(),
+    mqlPreview: null,
+    setMqlPreview: vi.fn(),
+    selectedRowIds: new Set(),
+    anchorRowIdx: null,
+    selectedRowIdx: null,
+    hasPendingChanges: false,
+    isCommitFlashing: false,
+    saveCurrentEdit: vi.fn(),
+    cancelEdit: vi.fn(),
+    handleStartEdit: vi.fn(),
+    handleSelectRow: vi.fn(),
+    handleCommit: vi.fn(),
+    handleExecuteCommit: vi.fn().mockResolvedValue(undefined),
+    pendingConfirm: null,
+    confirmDangerous: vi.fn().mockResolvedValue(undefined),
+    cancelDangerous: vi.fn(),
+    handleDiscard: vi.fn(),
+    handleAddRow: vi.fn(),
+    handleDeleteRow: vi.fn(),
+    handleDuplicateRow: vi.fn(),
+    ...overrides,
+  };
+}
 
 // Mock BlobViewerDialog so we don't need to mock its internals
 vi.mock("@components/datagrid/BlobViewerDialog", () => ({
@@ -251,6 +296,203 @@ describe("QuickLookPanel", () => {
       ).toBeInTheDocument();
     });
 
+    // ── Sprint 194 — FB-4 edit mode (RDB) ────────────────────────────
+    describe("edit mode (sprint-194 FB-4 RDB)", () => {
+      it("[AC-194-01-1] does not render the edit toggle when editState is absent", () => {
+        // Read-only call-site (existing): no editState prop → no toggle.
+        render(<QuickLookPanel {...defaultProps} />);
+        expect(
+          screen.queryByLabelText(/Toggle edit mode/i),
+        ).not.toBeInTheDocument();
+      });
+
+      it("[AC-194-01-2] renders the edit toggle when editState is provided", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        expect(screen.getByLabelText(/Toggle edit mode/i)).toBeInTheDocument();
+      });
+
+      it("[AC-194-01-3] entering edit mode swaps editable values into <input> / <textarea> / <select> by column family", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+
+        // Toggle on
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        // name (text) → input
+        const nameInput = screen.getByLabelText("Edit value for name");
+        expect(nameInput).toBeInTheDocument();
+        expect(nameInput.tagName).toBe("INPUT");
+
+        // active (boolean) → Radix <Select> trigger (combobox role).
+        const activeSelect = screen.getByLabelText("Edit value for active");
+        expect(activeSelect).toBeInTheDocument();
+        expect(activeSelect.getAttribute("role")).toBe("combobox");
+
+        // meta (jsonb) → textarea
+        const metaTextarea = screen.getByLabelText("Edit value for meta");
+        expect(metaTextarea.tagName).toBe("TEXTAREA");
+      });
+
+      it("[AC-194-01-4] PK / BLOB columns stay read-only in edit mode (no input rendered)", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        // id (PK) — no editable input
+        expect(
+          screen.queryByLabelText("Edit value for id"),
+        ).not.toBeInTheDocument();
+        // data (bytea / BLOB) — no editable input
+        expect(
+          screen.queryByLabelText("Edit value for data"),
+        ).not.toBeInTheDocument();
+        // BLOB button remains
+        expect(
+          screen.getByLabelText(/View BLOB data for data/),
+        ).toBeInTheDocument();
+      });
+
+      it("[AC-194-01-5] Enter on a text input dispatches handleStartEdit + setEditValue + saveCurrentEdit (in that order)", () => {
+        const handleStartEdit = vi.fn();
+        const setEditValue = vi.fn();
+        const saveCurrentEdit = vi.fn();
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          handleStartEdit,
+          setEditValue,
+          saveCurrentEdit,
+        });
+
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        const nameInput = screen.getByLabelText(
+          "Edit value for name",
+        ) as HTMLInputElement;
+        fireEvent.change(nameInput, { target: { value: "Bob" } });
+        fireEvent.keyDown(nameInput, { key: "Enter" });
+
+        // QuickLook dispatches the hook's start→set→save trio. colIdx for
+        // `name` is 1.
+        expect(handleStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
+        expect(setEditValue).toHaveBeenCalledWith("Bob");
+        expect(saveCurrentEdit).toHaveBeenCalledOnce();
+        // Order: start before set before save.
+        const startOrder = handleStartEdit.mock.invocationCallOrder[0]!;
+        const setOrder = setEditValue.mock.invocationCallOrder[0]!;
+        const saveOrder = saveCurrentEdit.mock.invocationCallOrder[0]!;
+        expect(startOrder).toBeLessThan(setOrder);
+        expect(setOrder).toBeLessThan(saveOrder);
+      });
+
+      it("[AC-194-01-6] Esc on an input cancels the local edit (no dispatch)", () => {
+        const handleStartEdit = vi.fn();
+        const setEditValue = vi.fn();
+        const saveCurrentEdit = vi.fn();
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          handleStartEdit,
+          setEditValue,
+          saveCurrentEdit,
+        });
+
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        const nameInput = screen.getByLabelText(
+          "Edit value for name",
+        ) as HTMLInputElement;
+        fireEvent.change(nameInput, { target: { value: "Bob" } });
+        fireEvent.keyDown(nameInput, { key: "Escape" });
+
+        // Esc → no save dispatched, value reverts to original on next render.
+        expect(saveCurrentEdit).not.toHaveBeenCalled();
+        expect(handleStartEdit).not.toHaveBeenCalled();
+      });
+
+      it("[AC-194-01-7] Set NULL button dispatches handleStartEdit + setEditValue(null) + saveCurrentEdit", () => {
+        const handleStartEdit = vi.fn();
+        const setEditValue = vi.fn();
+        const saveCurrentEdit = vi.fn();
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          handleStartEdit,
+          setEditValue,
+          saveCurrentEdit,
+        });
+
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        // The "Set NULL" button is per-row inside the FieldRow; pick the one
+        // for `name` column.
+        const setNullBtn = screen.getByLabelText("Set NULL for name");
+        fireEvent.click(setNullBtn);
+
+        expect(handleStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
+        expect(setEditValue).toHaveBeenCalledWith(null);
+        expect(saveCurrentEdit).toHaveBeenCalledOnce();
+      });
+
+      it("[AC-194-02-1] textarea (jsonb) Cmd+Enter saves; plain Enter does not", () => {
+        const setEditValue = vi.fn();
+        const saveCurrentEdit = vi.fn();
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          setEditValue,
+          saveCurrentEdit,
+        });
+
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        const metaTextarea = screen.getByLabelText(
+          "Edit value for meta",
+        ) as HTMLTextAreaElement;
+
+        // Plain Enter inside textarea → no save (newline insertion is the
+        // user's intent).
+        fireEvent.change(metaTextarea, { target: { value: '{"a":1}' } });
+        fireEvent.keyDown(metaTextarea, { key: "Enter" });
+        expect(saveCurrentEdit).not.toHaveBeenCalled();
+
+        // Cmd+Enter → save.
+        fireEvent.keyDown(metaTextarea, { key: "Enter", metaKey: true });
+        expect(saveCurrentEdit).toHaveBeenCalledOnce();
+        expect(setEditValue).toHaveBeenCalledWith('{"a":1}');
+      });
+
+      it("[AC-194-04-1] dirty pill renders when pendingEdits has an entry for the selected row", () => {
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          // colIdx 1 = name
+          pendingEdits: new Map([["0-1", "Bob"]]),
+        });
+
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        expect(screen.getByText(/Modified/)).toBeInTheDocument();
+      });
+
+      it("[AC-194-04-2] dirty pill does NOT render when pendingEdits has only OTHER rows", () => {
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          // pending edit is for row 2, not the selected row 0
+          pendingEdits: new Map([["2-1", "Charlie-edit"]]),
+        });
+
+        render(<QuickLookPanel {...defaultProps} editState={editState} />);
+        expect(screen.queryByText(/Modified/)).not.toBeInTheDocument();
+      });
+
+      it("[AC-194-04-3] dirty pill does NOT render in read-only call-site (no editState)", () => {
+        // Read-only path stays clean — no pill chrome at all.
+        render(<QuickLookPanel {...defaultProps} />);
+        expect(screen.queryByText(/Modified/)).not.toBeInTheDocument();
+      });
+    });
+
     it("shows column data types next to column names", () => {
       render(<QuickLookPanel {...defaultProps} />);
       // The column data types should appear in the panel
@@ -471,6 +713,138 @@ describe("QuickLookPanel", () => {
       expect(
         screen.queryByTestId("blob-viewer-dialog"),
       ).not.toBeInTheDocument();
+    });
+
+    // ── Sprint 194 — FB-4 edit mode (document) ───────────────────────
+    describe("edit mode (sprint-194 FB-4 document)", () => {
+      const docColumns = [
+        {
+          name: "_id",
+          data_type: "objectId",
+          nullable: false,
+          default_value: null,
+          is_primary_key: true,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "name",
+          data_type: "string",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "age",
+          data_type: "int32",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "tags",
+          data_type: "array",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+      ];
+
+      const docData: TableData = {
+        columns: docColumns,
+        rows: [
+          [
+            { $oid: "65abcdef0123456789abcdef" },
+            "Alice",
+            30,
+            ["admin", "beta"],
+          ],
+          [{ $oid: "65abcdef0123456789abcde0" }, "Bob", 27, []],
+        ],
+        total_count: 2,
+        page: 1,
+        page_size: 100,
+        executed_query: "db.users.find({}).limit(100)",
+      };
+
+      const baseEditableProps = {
+        ...documentDefaultProps,
+        data: docData,
+      };
+
+      it("[AC-194-03-1] document mode shows the edit toggle when editState is provided", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...baseEditableProps} editState={editState} />);
+        expect(screen.getByLabelText(/Toggle edit mode/i)).toBeInTheDocument();
+      });
+
+      it("[AC-194-03-2] entering edit mode swaps the BSON tree for per-field inputs", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...baseEditableProps} editState={editState} />);
+
+        // Tree is mounted in read-only mode.
+        expect(
+          screen.getByRole("tree", { name: /BSON document tree/i }),
+        ).toBeInTheDocument();
+
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        // After toggle: tree gone, per-field inputs present.
+        expect(
+          screen.queryByRole("tree", { name: /BSON document tree/i }),
+        ).not.toBeInTheDocument();
+        expect(
+          screen.getByLabelText("Edit value for name"),
+        ).toBeInTheDocument();
+        expect(screen.getByLabelText("Edit value for age")).toBeInTheDocument();
+      });
+
+      it("[AC-194-03-3] _id stays read-only in document edit mode (Mongo paradigm contract)", () => {
+        const editState = makeEditState({ selectedRowIds: new Set([0]) });
+        render(<QuickLookPanel {...baseEditableProps} editState={editState} />);
+
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        expect(
+          screen.queryByLabelText("Edit value for _id"),
+        ).not.toBeInTheDocument();
+      });
+
+      it("[AC-194-03-4] saving a field dispatches handleStartEdit + setEditValue + saveCurrentEdit on the synthesized column index", () => {
+        const handleStartEdit = vi.fn();
+        const setEditValue = vi.fn();
+        const saveCurrentEdit = vi.fn();
+        const editState = makeEditState({
+          selectedRowIds: new Set([0]),
+          handleStartEdit,
+          setEditValue,
+          saveCurrentEdit,
+        });
+
+        render(<QuickLookPanel {...baseEditableProps} editState={editState} />);
+        fireEvent.click(screen.getByLabelText(/Toggle edit mode/i));
+
+        const nameInput = screen.getByLabelText(
+          "Edit value for name",
+        ) as HTMLInputElement;
+        fireEvent.change(nameInput, { target: { value: "Alicia" } });
+        fireEvent.keyDown(nameInput, { key: "Enter" });
+
+        // colIdx for `name` in docColumns is 1.
+        expect(handleStartEdit).toHaveBeenCalledWith(0, 1, "Alice");
+        expect(setEditValue).toHaveBeenCalledWith("Alicia");
+        expect(saveCurrentEdit).toHaveBeenCalledOnce();
+      });
     });
 
     // ── Sprint 105 #QL-1: keyboard-accessible resizer (document mode) ─

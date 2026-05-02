@@ -542,6 +542,8 @@ export default function DocumentDataGrid({
           database={database}
           collection={collection}
           onClose={() => setShowQuickLook(false)}
+          editState={editState}
+          data={data ?? undefined}
         />
       )}
 
