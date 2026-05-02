@@ -1,100 +1,48 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Key, Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
-import { truncateCell } from "@lib/format";
 import type { SortInfo, TableData } from "@/types/schema";
-import {
-  editKey,
-  cellToEditValue,
-  deriveEditorSeed,
-  getInputTypeForColumn,
-} from "./useDataGridEdit";
-import {
-  ContextMenu,
-  type ContextMenuItem,
-} from "@components/shared/ContextMenu";
-import {
-  Pencil,
-  Trash2,
-  Copy,
-  Clipboard,
-  FileJson,
-  FileText,
-  Database,
-  Maximize2,
-  CircleSlash,
-} from "lucide-react";
+import { ContextMenu } from "@components/shared/ContextMenu";
 import BlobViewerDialog from "./BlobViewerDialog";
 import CellDetailDialog from "./CellDetailDialog";
 import {
-  rowsToPlainText,
-  rowsToJson,
-  rowsToCsv,
-  rowsToSqlInsert,
-} from "@lib/format";
-import type { CopyRowData } from "@lib/format";
-
-const MIN_COL_WIDTH = 60;
-
-/**
- * Sprint-114 (#PERF-1, #GRID-3) — page sizes above this threshold switch the
- * tbody render path to a `@tanstack/react-virtual` viewport. Below it we
- * keep the eager render so the 73 existing DataGrid tests (which use small
- * fixtures) continue to assert against full DOM output without spacers.
- */
-const VIRTUALIZE_THRESHOLD = 200;
+  MIN_COL_WIDTH,
+  VIRTUALIZE_THRESHOLD,
+  ROW_HEIGHT_ESTIMATE,
+  calcDefaultColWidth,
+} from "./DataGridTable/columnUtils";
+import { useCellNavigation } from "./DataGridTable/useCellNavigation";
+import { useColumnResize } from "./DataGridTable/useColumnResize";
+import {
+  useContextMenu,
+  buildContextMenuItems,
+} from "./DataGridTable/contextMenu";
+import HeaderRow from "./DataGridTable/HeaderRow";
+import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
 
 /**
- * Sprint-114 — single-source row height for the virtualizer. The body cells
- * use `px-3 py-1 text-xs` which renders ~28-32px in the table; we estimate
- * 32px to include the `border-b` and stay slightly conservative so overscan
- * doesn't clip when row content varies. `react-virtual` measures actual DOM
- * heights as rows render, so the estimate only governs initial layout.
- */
-const ROW_HEIGHT_ESTIMATE = 32;
-
-/**
- * Parse a foreign-key reference string of the form
- * `"<schema>.<table>(<column>)"` (the canonical contract aligned by
- * sprint-89 / #FK-1) into its three components.
+ * `DataGridTable` — RDB 테이블 데이터의 단일-그리드 표시 + inline 편집
+ * shell. Sprint 200 에서 1071-line 단일 파일을 entry + 6 sub-file 로
+ * 분해 — `DataGridTable/{columnUtils,useCellNavigation,useColumnResize,
+ * contextMenu,DataRow,HeaderRow}` 가 책임을 나눠 가짐. 본 entry 는
+ * imports + props interface + state/refs + virtualizer wiring + ctx
+ * 빌드 + return JSX shell 로 압축.
  *
- * Returns `null` when the input does not match the expected shape — for
- * example bare `"<table>.<column>"` strings (the pre-sprint-89 backend
- * shape) or empty input.
- *
- * Exported so that both the production `DataGridTable` render path and the
- * vitest contract tests (`DataGridTable.parseFkReference.test.ts`) consume
- * exactly one implementation. The Rust counterpart is
- * `format_fk_reference` in `src-tauri/src/db/postgres.rs` and the two
- * sides are kept in lock-step via `tests/fixtures/fk_reference_samples.json`.
+ * 외부 invariant:
+ * - `<DataGridTable>` props (`DataGridTableProps`) 시그니처 byte-for-byte
+ *   동결 — `src/components/rdb/DataGrid.tsx` 가 직접 import.
+ * - `parseFkReference` named export 위치 동결 — 외부 test
+ *   (`DataGridTable.parseFkReference.test.ts`) 가 entry 에서 import.
+ *   `./DataGridTable/columnUtils` 로부터 re-export.
  */
-export function parseFkReference(
-  ref: string,
-): { schema: string; table: string; column: string } | null {
-  const match = ref.match(/^(.+)\.(.+)\((.+)\)$/);
-  if (!match) return null;
-  return { schema: match[1]!, table: match[2]!, column: match[3]! };
-}
 
-function isBlobColumn(dataType: string): boolean {
-  const lower = dataType.toLowerCase();
-  return (
-    lower.includes("blob") ||
-    lower.includes("bytea") ||
-    lower.includes("binary") ||
-    lower.includes("varbinary") ||
-    lower.includes("image")
-  );
-}
-
-function calcDefaultColWidth(name: string, dataType: string): number {
-  const nameWidth = name.length * 8 + 40;
-  const typeWidth = dataType.length * 6 + 20;
-  return Math.max(MIN_COL_WIDTH, Math.min(400, Math.max(nameWidth, typeWidth)));
-}
+// Sprint 89 — entry 가 sub-file 의 named symbol 을 외부 caller 에게
+// 그대로 노출 하는 re-export. wire format `"<schema>.<table>(<column>)"`
+// 의 contract test (`DataGridTable.parseFkReference.test.ts`) 가 본 path
+// 를 import 하므로 위치 동결 필수.
+export { parseFkReference } from "./DataGridTable/columnUtils";
 
 export interface DataGridTableProps {
   data: TableData;
@@ -202,17 +150,6 @@ export default function DataGridTable({
   onNavigateToFk,
 }: DataGridTableProps) {
   const tableRef = useRef<HTMLTableElement>(null);
-  // Tracks mousedown position on column headers to distinguish clicks from drags.
-  // When movement exceeds 4px we suppress the sort so that dragging the header
-  // (e.g. to scroll horizontally) doesn't accidentally change sort order.
-  const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
-  const resizingRef = useRef<{
-    colName: string;
-    startX: number;
-    startWidth: number;
-    startTableWidth: number;
-    colIdx: number;
-  } | null>(null);
 
   // Active cell editor focus target. Only one cell edits at a time, so a
   // single ref is enough — wired to either the <input> or the NULL chip <div>.
@@ -226,14 +163,6 @@ export default function DataGridTable({
       editorFocusRef.current.focus();
     }
   }, [editingCell, isNullEditor]);
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    rowIdx: number;
-    colIdx: number;
-  } | null>(null);
 
   // BLOB viewer state
   const [blobViewer, setBlobViewer] = useState<{
@@ -265,69 +194,25 @@ export default function DataGridTable({
     [columnWidths],
   );
 
-  /**
-   * Move the inline edit cursor to a neighboring cell.
-   *
-   * Visual layout uses `order` so that `direction` is always interpreted
-   * relative to what the user sees, not the underlying data column index.
-   * Wraps to the next/previous row when the requested move overflows the
-   * row boundary; clamps at the table boundaries (no wrap across the entire
-   * grid — staying in-place is less surprising than jumping back to (0,0)).
-   */
-  const moveEditCursor = useCallback(
-    (
-      currentRow: number,
-      currentDataCol: number,
-      direction: "next-col" | "prev-col" | "next-row" | "prev-row",
-    ) => {
-      const totalRows = data.rows.length;
-      if (totalRows === 0) return;
-      const totalCols = order.length;
-      if (totalCols === 0) return;
+  const { moveEditCursor } = useCellNavigation({
+    data,
+    order,
+    pendingEdits,
+    onSaveCurrentEdit,
+    onStartEdit,
+  });
 
-      const visualCol = order.indexOf(currentDataCol);
-      if (visualCol === -1) return;
+  const { handleResizeStart } = useColumnResize({
+    tableRef,
+    columnWidths,
+    onColumnWidthsChange,
+  });
 
-      let nextRow = currentRow;
-      let nextVisualCol = visualCol;
-
-      if (direction === "next-col") {
-        nextVisualCol = visualCol + 1;
-        if (nextVisualCol >= totalCols) {
-          nextVisualCol = 0;
-          nextRow = currentRow + 1;
-        }
-      } else if (direction === "prev-col") {
-        nextVisualCol = visualCol - 1;
-        if (nextVisualCol < 0) {
-          nextVisualCol = totalCols - 1;
-          nextRow = currentRow - 1;
-        }
-      } else if (direction === "next-row") {
-        nextRow = currentRow + 1;
-      } else if (direction === "prev-row") {
-        nextRow = currentRow - 1;
-      }
-
-      if (nextRow < 0 || nextRow >= totalRows) {
-        // Past the edge of the grid — just save and stop here
-        onSaveCurrentEdit();
-        return;
-      }
-
-      const nextDataCol = order[nextVisualCol]!;
-      const nextCell = (data.rows[nextRow] as unknown[])[nextDataCol];
-      const editKeyStr = editKey(nextRow, nextDataCol);
-      const pendingValue = pendingEdits.get(editKeyStr);
-      const startValue =
-        pendingValue !== undefined ? pendingValue : cellToEditValue(nextCell);
-
-      // onStartEdit persists the current in-flight edit before opening
-      // the next cell, so callers don't need to call onSaveCurrentEdit.
-      onStartEdit(nextRow, nextDataCol, startValue);
-    },
-    [data.rows, order, pendingEdits, onSaveCurrentEdit, onStartEdit],
-  );
+  const { contextMenu, setContextMenu, handleContextMenu } = useContextMenu({
+    data,
+    selectedRowIds,
+    onSelectRow,
+  });
 
   const copyToClipboard = useCallback((text: string) => {
     navigator.clipboard.writeText(text).catch(() => {
@@ -335,191 +220,12 @@ export default function DataGridTable({
     });
   }, []);
 
-  const getSelectedCopyData = useCallback((): CopyRowData => {
-    const sortedIds = [...selectedRowIds].sort((a, b) => a - b);
-    const colNames = data.columns.map((c) => c.name);
-    const rows = sortedIds.map((idx) => data.rows[idx] as unknown[]);
-    return { columns: colNames, rows, schema, table };
-  }, [selectedRowIds, data, schema, table]);
-
-  const handleContextMenu = useCallback(
-    (e: React.MouseEvent, rowIdx: number, colIdx: number) => {
-      e.preventDefault();
-      if (data.rows.length === 0) return;
-      // If right-clicked row is not selected, select it first
-      if (!selectedRowIds.has(rowIdx)) {
-        onSelectRow(rowIdx, false, false);
-      }
-      setContextMenu({ x: e.clientX, y: e.clientY, rowIdx, colIdx });
-    },
-    [data.rows.length, selectedRowIds, onSelectRow],
-  );
-
-  const contextMenuItems: ContextMenuItem[] = contextMenu
-    ? [
-        {
-          label: "Show Cell Details",
-          icon: <Maximize2 size={14} />,
-          onClick: () => {
-            const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
-            const col = data.columns[contextMenu.colIdx];
-            if (col) {
-              setCellDetail({
-                data: cell,
-                columnName: col.name,
-                dataType: col.data_type,
-              });
-            }
-          },
-        },
-        {
-          label: "Edit Cell",
-          icon: <Pencil size={14} />,
-          onClick: () => {
-            const cell = data.rows[contextMenu.rowIdx]?.[contextMenu.colIdx];
-            const editVal = cellToEditValue(cell);
-            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, editVal);
-          },
-        },
-        {
-          label: "Set to NULL",
-          icon: <CircleSlash size={14} />,
-          onClick: () => {
-            onStartEdit(contextMenu.rowIdx, contextMenu.colIdx, null);
-            onSetEditNull();
-          },
-        },
-        {
-          label: "Delete Row",
-          icon: <Trash2 size={14} />,
-          danger: true,
-          onClick: onDeleteRow,
-        },
-        {
-          label: "Duplicate Row",
-          icon: <Copy size={14} />,
-          onClick: onDuplicateRow,
-        },
-        {
-          label: "",
-          separator: true,
-          onClick: () => {},
-        },
-        {
-          label: "Copy as Plain Text",
-          icon: <Clipboard size={14} />,
-          onClick: () =>
-            copyToClipboard(rowsToPlainText(getSelectedCopyData())),
-        },
-        {
-          label: "Copy as JSON",
-          icon: <FileJson size={14} />,
-          onClick: () => copyToClipboard(rowsToJson(getSelectedCopyData())),
-        },
-        {
-          label: "Copy as CSV",
-          icon: <FileText size={14} />,
-          onClick: () => copyToClipboard(rowsToCsv(getSelectedCopyData())),
-        },
-        {
-          label: "Copy as SQL Insert",
-          icon: <Database size={14} />,
-          onClick: () =>
-            copyToClipboard(rowsToSqlInsert(getSelectedCopyData())),
-        },
-      ]
-    : [];
-
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent, colName: string, colIdx: number) => {
-      e.stopPropagation();
-      e.preventDefault();
-      const th = tableRef.current?.querySelector(
-        `th:nth-child(${colIdx + 1})`,
-      ) as HTMLElement | null;
-      // Prioritise the stored width so that a second resize always starts
-      // from the result of the first one, not from the default/DOM value.
-      const currentWidth =
-        columnWidths[colName] ??
-        th?.getBoundingClientRect().width ??
-        calcDefaultColWidth(colName, "");
-      const startTableWidth =
-        tableRef.current?.getBoundingClientRect().width ?? 0;
-      resizingRef.current = {
-        colName,
-        startX: e.clientX,
-        startWidth: currentWidth,
-        startTableWidth,
-        colIdx,
-      };
-
-      const applyWidth = (width: number) => {
-        if (!tableRef.current || !resizingRef.current) return;
-        const delta = width - resizingRef.current.startWidth;
-        tableRef.current.style.width = `${resizingRef.current.startTableWidth + delta}px`;
-        const w = `${width}px`;
-        const th = tableRef.current.querySelector(
-          `th:nth-child(${colIdx + 1})`,
-        ) as HTMLElement | null;
-        if (th) th.style.width = w;
-        const cells = tableRef.current.querySelectorAll(
-          `td:nth-child(${colIdx + 1})`,
-        );
-        cells.forEach((td) => {
-          (td as HTMLElement).style.width = w;
-        });
-      };
-
-      const handleMouseMove = (moveEvent: MouseEvent) => {
-        if (!resizingRef.current) return;
-        const delta = moveEvent.clientX - resizingRef.current.startX;
-        const newWidth = Math.max(
-          MIN_COL_WIDTH,
-          resizingRef.current.startWidth + delta,
-        );
-        applyWidth(newWidth);
-      };
-
-      const handleMouseUp = () => {
-        if (resizingRef.current) {
-          const {
-            colName: resizedColName,
-            colIdx: resizedColIdx,
-            startWidth,
-          } = resizingRef.current;
-          const finalWidth = tableRef.current?.querySelector(
-            `th:nth-child(${resizedColIdx + 1})`,
-          ) as HTMLElement | null;
-          const rawW = finalWidth ? parseInt(finalWidth.style.width, 10) : NaN;
-          const w = Number.isNaN(rawW) ? startWidth : rawW;
-          onColumnWidthsChange((prev) => ({
-            ...prev,
-            [resizedColName]: w,
-          }));
-        }
-        resizingRef.current = null;
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-    },
-    [columnWidths, onColumnWidthsChange],
-  );
-
-  const rowKeyFn = (rowIdx: number) => `row-${page}-${rowIdx}`;
-
   /**
    * Sprint-114 — once the dataset crosses `VIRTUALIZE_THRESHOLD` rows we let
    * `useVirtualizer` decide which rows enter the DOM. Counting includes
    * `pendingNewRows` because they share the tbody scroll surface; the
    * threshold is conservative so small queries (≤ 200) keep the eager
-   * render path that the 73 existing DataGrid tests assert against.
+   * render path that the existing DataGrid tests assert against.
    */
   const totalBodyRowCount = data.rows.length + pendingNewRows.length;
   const shouldVirtualize = totalBodyRowCount > VIRTUALIZE_THRESHOLD;
@@ -552,292 +258,6 @@ export default function DataGridTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.executed_query, sorts, shouldVirtualize]);
 
-  /**
-   * Render a single body row by data-row index. Extracted so the eager and
-   * virtualized branches share exactly one cell-rendering implementation
-   * (sprint-114). The return is a `<tr>` so callers can drop it directly
-   * into `<tbody>`. `aria-rowindex` is always `rowIdx + 2` (header is row 1)
-   * regardless of which path is rendering — preserving sprint-106 ARIA
-   * after virtualization.
-   */
-  const renderDataRow = (rowIdx: number) => {
-    const row = data.rows[rowIdx] as unknown[] | undefined;
-    if (!row) return null;
-    const rk = rowKeyFn(rowIdx);
-    const isDeleted = pendingDeletedRowKeys.has(rk);
-    const isSelected = selectedRowIds.has(rowIdx);
-    return (
-      <tr
-        key={rk}
-        role="row"
-        aria-rowindex={rowIdx + 2}
-        className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
-        onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
-        onContextMenu={(e) => {
-          // Fallback when the right-click lands between cells.
-          // Cell-level handlers below override this when the click
-          // hits a real td so the context menu reflects that cell.
-          handleContextMenu(e, rowIdx, 0);
-        }}
-      >
-        {order.map((dIdx, visualIdx) => {
-          const cell = row[dIdx];
-          const col = data.columns[dIdx]!;
-          const key = editKey(rowIdx, dIdx);
-          const isEditing =
-            editingCell?.row === rowIdx && editingCell?.col === dIdx;
-          const hasPendingEdit = pendingEdits.has(key);
-          const cellEditValue = cellToEditValue(cell);
-          const pendingValue: string | null = hasPendingEdit
-            ? (pendingEdits.get(key) as string | null)
-            : null;
-          const editStartValue = hasPendingEdit ? pendingValue : cellEditValue;
-          const isBlob = isBlobColumn(col.data_type);
-
-          const fkRef =
-            col.is_foreign_key && col.fk_reference && cell != null
-              ? parseFkReference(col.fk_reference)
-              : null;
-
-          return (
-            <td
-              key={`${dIdx}-${visualIdx}`}
-              role="gridcell"
-              aria-colindex={visualIdx + 1}
-              data-editing={isEditing ? "true" : undefined}
-              className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
-                isEditing
-                  ? " bg-primary/10 ring-2 ring-inset ring-primary"
-                  : hasPendingEdit
-                    ? " bg-highlight/20"
-                    : ""
-              }`}
-              style={{
-                width: getColumnWidth(col.name, col.data_type),
-                minWidth: MIN_COL_WIDTH,
-              }}
-              title={
-                cell == null
-                  ? "NULL"
-                  : typeof cell === "object" && cell !== null
-                    ? JSON.stringify(cell, null, 2)
-                    : String(cell)
-              }
-              onDoubleClick={() => onStartEdit(rowIdx, dIdx, editStartValue)}
-              onClick={() => {
-                if (editingCell) {
-                  onSaveCurrentEdit();
-                }
-              }}
-              onContextMenu={(e) => {
-                // Stop the row-level handler from overwriting our
-                // accurate per-cell coordinates with colIdx=0.
-                e.stopPropagation();
-                handleContextMenu(e, rowIdx, dIdx);
-              }}
-            >
-              {isEditing ? (
-                (() => {
-                  // Sprint 75 — inline validation hint for the active
-                  // cell. When a previous commit attempt left a
-                  // coercion error on this cell, render a
-                  // `text-destructive` message beneath the editor. The
-                  // error is cleared entry-by-entry by the hook when
-                  // `onSetEditValue`/`onSetEditNull` is called, so the
-                  // hint disappears as soon as the user edits.
-                  const errorMessage = pendingEditErrors?.get(key);
-                  return (
-                    <div className="flex flex-col">
-                      {editValue === null ? (
-                        <div
-                          ref={(el) => {
-                            editorFocusRef.current = el;
-                          }}
-                          className="flex items-center gap-2 outline-none"
-                          role="textbox"
-                          aria-label={`Editing ${col.name} — currently NULL`}
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === "Tab") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveEditCursor(
-                                rowIdx,
-                                dIdx,
-                                e.shiftKey ? "prev-col" : "next-col",
-                              );
-                            } else if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveEditCursor(
-                                rowIdx,
-                                dIdx,
-                                e.shiftKey ? "prev-row" : "next-row",
-                              );
-                            } else if (e.key === "Escape") {
-                              e.stopPropagation();
-                              onCancelEdit();
-                            } else if (
-                              (e.metaKey || e.ctrlKey) &&
-                              e.key === "Backspace"
-                            ) {
-                              // Already NULL — just eat the shortcut.
-                              e.preventDefault();
-                            } else if (
-                              e.key.length === 1 &&
-                              !e.metaKey &&
-                              !e.ctrlKey &&
-                              !e.altKey
-                            ) {
-                              // Printable key flips NULL → typed editor.
-                              // The column's data type picks both the seed
-                              // value (often `""` for pickers) and the
-                              // `<input type>` on the next render — routed
-                              // through `deriveEditorSeed` so the flip lands
-                              // on a type-appropriate editor, not a bare
-                              // text input with the raw character seeded in.
-                              e.preventDefault();
-                              const { seed, accept } = deriveEditorSeed(
-                                col.data_type,
-                                e.key,
-                              );
-                              if (!accept) return;
-                              onSetEditValue(seed);
-                            }
-                          }}
-                        >
-                          <span
-                            className="italic text-muted-foreground"
-                            aria-hidden="true"
-                          >
-                            NULL
-                          </span>
-                          <span className="text-2xs text-muted-foreground">
-                            Type to edit · Esc to cancel
-                          </span>
-                        </div>
-                      ) : (
-                        <input
-                          ref={(el) => {
-                            editorFocusRef.current = el;
-                          }}
-                          type={getInputTypeForColumn(col.data_type)}
-                          className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
-                          value={editValue}
-                          aria-label={`Editing ${col.name}`}
-                          onChange={(e) => onSetEditValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (
-                              (e.metaKey || e.ctrlKey) &&
-                              e.key === "Backspace"
-                            ) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              onSetEditNull();
-                            } else if (e.key === "Tab") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveEditCursor(
-                                rowIdx,
-                                dIdx,
-                                e.shiftKey ? "prev-col" : "next-col",
-                              );
-                            } else if (e.key === "Enter") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              moveEditCursor(
-                                rowIdx,
-                                dIdx,
-                                e.shiftKey ? "prev-row" : "next-row",
-                              );
-                            } else if (e.key === "Escape") {
-                              e.stopPropagation();
-                              onCancelEdit();
-                            }
-                          }}
-                        />
-                      )}
-                      {errorMessage && (
-                        <span
-                          role="alert"
-                          aria-live="polite"
-                          className="mt-0.5 text-2xs text-destructive"
-                        >
-                          {errorMessage}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()
-              ) : hasPendingEdit ? (
-                pendingValue === null ? (
-                  <span
-                    className="italic text-muted-foreground"
-                    aria-label="NULL"
-                  >
-                    NULL
-                  </span>
-                ) : (
-                  <span className="line-clamp-3">{pendingValue}</span>
-                )
-              ) : isBlob && cell != null ? (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setBlobViewer({ data: cell, columnName: col.name });
-                  }}
-                  aria-label={`View BLOB data for ${col.name}`}
-                >
-                  <Binary />
-                  <span>(BLOB)</span>
-                </Button>
-              ) : cell == null ? (
-                <span className="italic text-muted-foreground">NULL</span>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <span className="line-clamp-3">
-                    {truncateCell(
-                      typeof cell === "object" && cell !== null
-                        ? JSON.stringify(cell, null, 2)
-                        : String(cell),
-                    )}
-                  </span>
-                  {fkRef && onNavigateToFk && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      // Sprint-89 (#FK-3): icon stays visible on every
-                      // FK + non-null cell so users can discover the
-                      // jump without first hovering. Hover lifts the
-                      // opacity to full strength.
-                      className="shrink-0 opacity-40 transition-opacity group-hover/cell:opacity-100 text-muted-foreground hover:text-foreground"
-                      aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
-                      title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onNavigateToFk(
-                          fkRef.schema,
-                          fkRef.table,
-                          fkRef.column,
-                          String(cell),
-                        );
-                      }}
-                    >
-                      <ArrowUpRight size={10} />
-                    </Button>
-                  )}
-                </span>
-              )}
-            </td>
-          );
-        })}
-      </tr>
-    );
-  };
-
   // Sprint 180 (AC-180-01) — threshold gate. The overlay only paints
   // after `loading` has been continuously true for 1s, so sub-second
   // refetches never flicker. Sprint 176 hardening (4 pointer-event
@@ -845,6 +265,58 @@ export default function DataGridTable({
   // callback is wired up by the host (DataGrid) which aborts the
   // in-flight `query_table_data` Tauri command and clears `loading`.
   const overlayVisible = useDelayedFlag(loading, 1000);
+
+  // Sprint 200 — DataRow ctx 묶음. `useMemo` 는 reconciliation cost 보다
+  // 의도 표현 — DataRow 컴포넌트는 ctx 를 prop 으로 받아 매 렌더 새
+  // 객체 reference 가 들어가도 동작은 동일 (memo 안 씀). 단, ctx 의
+  // identity 가 고정되면 향후 React.memo 적용 시 재렌더 최소화 가능.
+  const rowCtx: DataGridRowContext = useMemo(
+    () => ({
+      data,
+      page,
+      order,
+      editingCell,
+      editValue,
+      pendingEdits,
+      pendingEditErrors,
+      pendingDeletedRowKeys,
+      selectedRowIds,
+      editorFocusRef,
+      getColumnWidth,
+      moveEditCursor,
+      handleContextMenu,
+      setBlobViewer,
+      onSelectRow,
+      onStartEdit,
+      onSetEditValue,
+      onSetEditNull,
+      onSaveCurrentEdit,
+      onCancelEdit,
+      onNavigateToFk,
+    }),
+    [
+      data,
+      page,
+      order,
+      editingCell,
+      editValue,
+      pendingEdits,
+      pendingEditErrors,
+      pendingDeletedRowKeys,
+      selectedRowIds,
+      getColumnWidth,
+      moveEditCursor,
+      handleContextMenu,
+      onSelectRow,
+      onStartEdit,
+      onSetEditValue,
+      onSetEditNull,
+      onSaveCurrentEdit,
+      onCancelEdit,
+      onNavigateToFk,
+    ],
+  );
+
   return (
     <div className="relative flex-1 overflow-auto" ref={scrollContainerRef}>
       <AsyncProgressOverlay
@@ -858,82 +330,16 @@ export default function DataGridTable({
         aria-rowcount={1 + data.rows.length + pendingNewRows.length}
         aria-colcount={data.columns.length}
       >
-        <thead className="sticky top-0 z-10 bg-secondary">
-          <tr role="row" aria-rowindex={1}>
-            {order.map((dIdx, visualIdx) => {
-              const col = data.columns[dIdx]!;
-              const sortInfo = sorts.find((s) => s.column === col.name);
-              const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
-              return (
-                <th
-                  key={col.name}
-                  role="columnheader"
-                  aria-colindex={visualIdx + 1}
-                  className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
-                  style={{
-                    width: getColumnWidth(col.name, col.data_type),
-                    minWidth: MIN_COL_WIDTH,
-                  }}
-                  onMouseDown={(e) => {
-                    sortMouseStartRef.current = { x: e.clientX, y: e.clientY };
-                  }}
-                  onClick={(e) => {
-                    // Suppress sort when the user dragged the header rather
-                    // than simply clicking it (movement threshold: 4 px).
-                    if (sortMouseStartRef.current) {
-                      const dx = Math.abs(
-                        e.clientX - sortMouseStartRef.current.x,
-                      );
-                      const dy = Math.abs(
-                        e.clientY - sortMouseStartRef.current.y,
-                      );
-                      sortMouseStartRef.current = null;
-                      if (dx > 4 || dy > 4) return;
-                    }
-                    // If a cell is being edited, save it before changing sort
-                    // so the input doesn't stay visible at the wrong position.
-                    if (editingCell) onSaveCurrentEdit();
-                    onSort(col.name, e.shiftKey);
-                  }}
-                  title={`Sort by ${col.name}`}
-                >
-                  <div className="flex items-center gap-1">
-                    {col.is_primary_key && (
-                      <span title="Primary Key">
-                        <Key
-                          size={12}
-                          className="shrink-0 text-warning"
-                          aria-label="Primary Key"
-                        />
-                      </span>
-                    )}
-                    <span className="truncate">{col.name}</span>
-                    {sortInfo && (
-                      <span className="flex shrink-0 items-center gap-0.5 text-primary">
-                        <span className="text-3xs font-bold">{sortRank}</span>
-                        {sortInfo.direction === "ASC" ? "\u25B2" : "\u25BC"}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    className="mt-0.5 truncate text-3xs text-muted-foreground"
-                    title={col.data_type}
-                  >
-                    {col.data_type}
-                  </div>
-                  {/* Resize handle */}
-                  <div
-                    className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
-                    onMouseDown={(e) =>
-                      handleResizeStart(e, col.name, visualIdx)
-                    }
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
+        <HeaderRow
+          data={data}
+          order={order}
+          sorts={sorts}
+          editingCell={editingCell}
+          onSort={onSort}
+          onSaveCurrentEdit={onSaveCurrentEdit}
+          onResizeStart={handleResizeStart}
+          getColumnWidth={getColumnWidth}
+        />
         <tbody>
           {shouldVirtualize
             ? (() => {
@@ -963,9 +369,13 @@ export default function DataGridTable({
                         />
                       </tr>
                     )}
-                    {virtualItems.map((virtualRow) =>
-                      renderDataRow(virtualRow.index),
-                    )}
+                    {virtualItems.map((virtualRow) => (
+                      <DataRow
+                        key={`row-${page}-${virtualRow.index}`}
+                        rowIdx={virtualRow.index}
+                        ctx={rowCtx}
+                      />
+                    ))}
                     {paddingBottom > 0 && (
                       <tr aria-hidden="true" style={{ height: paddingBottom }}>
                         <td
@@ -977,7 +387,13 @@ export default function DataGridTable({
                   </>
                 );
               })()
-            : data.rows.map((_row, rowIdx) => renderDataRow(rowIdx))}
+            : data.rows.map((_row, rowIdx) => (
+                <DataRow
+                  key={`row-${page}-${rowIdx}`}
+                  rowIdx={rowIdx}
+                  ctx={rowCtx}
+                />
+              ))}
           {data.rows.length === 0 && pendingNewRows.length === 0 && (
             <tr role="row">
               <td
@@ -1041,7 +457,19 @@ export default function DataGridTable({
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          items={contextMenuItems}
+          items={buildContextMenuItems({
+            contextMenu,
+            data,
+            selectedRowIds,
+            schema,
+            table,
+            setCellDetail,
+            onStartEdit,
+            onSetEditNull,
+            onDeleteRow,
+            onDuplicateRow,
+            copyToClipboard,
+          })}
           onClose={() => setContextMenu(null)}
         />
       )}
