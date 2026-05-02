@@ -73,17 +73,17 @@ export function ExportButton({
         <Button
           type="button"
           variant="ghost"
-          size="xs"
+          size="icon-xs"
           disabled={running}
           aria-label="Export"
+          title="Export"
           data-testid="export-button"
           className={cn("text-muted-foreground", className)}
         >
-          <Download aria-hidden />
-          <span>Export</span>
+          <Download size={12} aria-hidden />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-36 p-1" role="menu">
+      <PopoverContent align="start" className="w-36 p-1" role="menu">
         {formats.map((format) => {
           const disabled = disabledFormats.includes(format);
           return (

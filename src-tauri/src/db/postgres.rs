@@ -1226,6 +1226,110 @@ impl PostgresAdapter {
             .collect())
     }
 
+    /// Sprint 192 — server-side cursor 기반 row streaming.
+    ///
+    /// `BEGIN; DECLARE NO SCROLL CURSOR FOR SELECT row_to_json(t)::text FROM
+    /// "schema"."table" t; FETCH FORWARD batch_size; …; CLOSE; COMMIT`.
+    /// row_to_json 으로 모든 PG 타입을 JSON 으로 직렬화 — bytea (`\x...`),
+    /// timestamp (ISO 8601), array / JSON / record 모두 자동 처리.
+    ///
+    /// 호출자가 넘긴 `column_names` 를 source order 로 신뢰하고, JSON
+    /// object 에서 그 순서대로 lookup 해 `Vec<Value>` 를 만든다.
+    /// `serde_json::Map` 은 `preserve_order` feature 가 비활성이라
+    /// alphabetical sorted 일 수 있는데, lookup-by-name 으로 우회.
+    ///
+    /// Cancellation: 매 batch loop 의 시작에서 `cancel.is_cancelled()` 를
+    /// 체크. token fired / receiver drop 모두 `CLOSE cursor; ROLLBACK` 한
+    /// 뒤 `AppError::Database("Operation cancelled")` 또는 `"Receiver
+    /// dropped — export aborted"` 를 반환한다.
+    pub async fn stream_table_rows(
+        &self,
+        schema: &str,
+        table: &str,
+        batch_size: u32,
+        column_names: &[String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        if batch_size == 0 {
+            return Err(AppError::Validation(
+                "stream_table_rows: batch_size must be > 0".into(),
+            ));
+        }
+        if column_names.is_empty() {
+            return Err(AppError::Validation(
+                "stream_table_rows: column_names must not be empty".into(),
+            ));
+        }
+
+        let pool = self.active_pool().await?;
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(format!("BEGIN failed: {e}")))?;
+
+        let qualified = qualified_table(schema, table);
+        let cursor_name = "_vt_export_cur";
+        let declare = format!(
+            "DECLARE {cursor_name} NO SCROLL CURSOR FOR \
+             SELECT row_to_json(t)::text FROM {qualified} AS t",
+        );
+        sqlx::query(&declare)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Database(format!("DECLARE CURSOR failed: {e}")))?;
+
+        let mut total: u64 = 0;
+        let fetch_sql = format!("FETCH FORWARD {batch_size} FROM {cursor_name}");
+        loop {
+            if let Some(t) = cancel {
+                if t.is_cancelled() {
+                    let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
+                        .execute(&mut *tx)
+                        .await;
+                    let _ = tx.rollback().await;
+                    return Err(AppError::Database("Operation cancelled".into()));
+                }
+            }
+            let strings: Vec<String> = sqlx::query_scalar(&fetch_sql)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(|e| AppError::Database(format!("FETCH failed: {e}")))?;
+            if strings.is_empty() {
+                break;
+            }
+            let mut batch: Vec<Vec<serde_json::Value>> = Vec::with_capacity(strings.len());
+            for s in strings {
+                let obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&s)
+                    .map_err(|e| AppError::Database(format!("row_to_json parse failed: {e}")))?;
+                let row: Vec<serde_json::Value> = column_names
+                    .iter()
+                    .map(|name| obj.get(name).cloned().unwrap_or(serde_json::Value::Null))
+                    .collect();
+                batch.push(row);
+            }
+            let count = batch.len() as u64;
+            if sender.send(batch).await.is_err() {
+                let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
+                    .execute(&mut *tx)
+                    .await;
+                let _ = tx.rollback().await;
+                return Err(AppError::Database(
+                    "Receiver dropped — export aborted".into(),
+                ));
+            }
+            total += count;
+        }
+
+        let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
+            .execute(&mut *tx)
+            .await;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("COMMIT failed: {e}")))?;
+        Ok(total)
+    }
+
     /// Drop a table permanently. Uses parameterized schema validation but
     /// table-safe quoting since table names cannot be bound as parameters.
     pub async fn drop_table(&self, table: &str, schema: &str) -> Result<(), AppError> {
@@ -2215,6 +2319,21 @@ impl RdbAdapter for PostgresAdapter {
                 },
                 None => work.await,
             }
+        })
+    }
+
+    fn stream_table_rows<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        batch_size: u32,
+        column_names: &'a [String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<u64, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.stream_table_rows(namespace, table, batch_size, column_names, sender, cancel)
+                .await
         })
     }
 

@@ -17,11 +17,16 @@ import {
   X,
   Search,
   Terminal,
+  Download,
+  Database,
+  FileText,
+  Rows3,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
+import { useMigrationExport } from "@/hooks/useMigrationExport";
 import { toast } from "@/lib/toast";
 import { resolveRdbTreeShape, type RdbTreeShape } from "./treeShape";
 import {
@@ -38,6 +43,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@components/ui/dialog";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@components/ui/popover";
 import { Button } from "@components/ui/button";
 import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
 import { cn } from "@lib/utils";
@@ -469,6 +479,16 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const treeShape: RdbTreeShape = dbType
     ? resolveRdbTreeShape(dbType)
     : "with-schema";
+  // Sprint 192 (AC-192-04) — RDB schema 단위 migration export. Mongo /
+  // Redis 연결에서는 메뉴를 hide. dbType 미정 (load 전) 도 hide — 사용자
+  // 가 메뉴를 열기 전에는 connection metadata 가 항상 도착해 있음.
+  const isRdbConnection =
+    dbType === "postgresql" || dbType === "mysql" || dbType === "sqlite";
+  const {
+    exportSchema: exportSchemaWithInclude,
+    exportDatabase: exportDatabaseWithInclude,
+    isExporting: isMigrationExporting,
+  } = useMigrationExport();
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   // Track active tab for highlight & auto-expand
   const activeTab = useTabStore((s) => {
@@ -1138,25 +1158,166 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       {/* sr-only connection name for accessibility */}
       <span className="sr-only">{connectionName || connectionId}</span>
 
-      {/* "Schemas" header label + refresh button */}
+      {/* "Schemas" header label + action buttons (export, refresh) */}
       <div className="flex items-center justify-between px-3 py-1">
         <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
           Schemas
         </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={handleRefresh}
-          disabled={loadingSchemas}
-          aria-label="Refresh schemas"
-          title="Refresh schemas"
-        >
-          {loadingSchemas ? (
-            <Loader2 className="animate-spin" size={12} />
-          ) : (
-            <RefreshCw size={12} />
+        <div className="flex items-center gap-0.5">
+          {/* Sprint 192 (AC-192-04) — RDB export 진입점. 헤더 Popover 안
+              에서 3 모드 (DDL / DML / Full) × 2 단위 (single schema / all
+              schemas) 노출. icon 옆 native title 로 의미 명시.
+              MySQL/SQLite adapter 가 Phase 9 placeholder 라 현재 실제 동작
+              은 PG only — UI 는 paradigm === rdb 면 노출. */}
+          {isRdbConnection && schemas.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled={isMigrationExporting}
+                  aria-label="Export"
+                  title="Export"
+                >
+                  <Download size={12} />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={4} className="w-56 p-1">
+                {schemas.length > 1 && (
+                  <>
+                    <div className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50">
+                      <span className="truncate flex-1 px-2 text-xs italic text-muted-foreground">
+                        All schemas
+                      </span>
+                      <div className="flex items-center gap-0.5 pr-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={isMigrationExporting}
+                          aria-label="Export all schemas DDL"
+                          title="Schema only (DDL — CREATE TABLE/INDEX/FK)"
+                          onClick={() =>
+                            exportDatabaseWithInclude(
+                              connectionId,
+                              schemas.map((s) => s.name),
+                              "ddl",
+                            )
+                          }
+                        >
+                          <FileText size={12} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={isMigrationExporting}
+                          aria-label="Export all schemas data"
+                          title="Data only (DML — INSERT)"
+                          onClick={() =>
+                            exportDatabaseWithInclude(
+                              connectionId,
+                              schemas.map((s) => s.name),
+                              "dml",
+                            )
+                          }
+                        >
+                          <Rows3 size={12} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={isMigrationExporting}
+                          aria-label="Export all schemas full"
+                          title="Full dump (DDL + data)"
+                          onClick={() =>
+                            exportDatabaseWithInclude(
+                              connectionId,
+                              schemas.map((s) => s.name),
+                              "both",
+                            )
+                          }
+                        >
+                          <Database size={12} />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="my-1 h-px bg-border" />
+                  </>
+                )}
+                <div className="px-2 py-1 text-3xs uppercase tracking-wider text-muted-foreground">
+                  Schemas
+                </div>
+                <div className="flex flex-col">
+                  {schemas.map((s) => (
+                    <div
+                      key={s.name}
+                      className="flex items-center justify-between rounded-sm py-0.5 hover:bg-muted/50"
+                    >
+                      <span className="truncate flex-1 px-2 text-xs">
+                        {s.name}
+                      </span>
+                      <div className="flex items-center gap-0.5 pr-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={isMigrationExporting}
+                          aria-label={`Export ${s.name} DDL`}
+                          title="Schema only (DDL — CREATE TABLE/INDEX/FK)"
+                          onClick={() =>
+                            exportSchemaWithInclude(connectionId, s.name, "ddl")
+                          }
+                        >
+                          <FileText size={12} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={isMigrationExporting}
+                          aria-label={`Export ${s.name} data`}
+                          title="Data only (DML — INSERT)"
+                          onClick={() =>
+                            exportSchemaWithInclude(connectionId, s.name, "dml")
+                          }
+                        >
+                          <Rows3 size={12} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={isMigrationExporting}
+                          aria-label={`Export ${s.name} full`}
+                          title="Full dump (DDL + data)"
+                          onClick={() =>
+                            exportSchemaWithInclude(
+                              connectionId,
+                              s.name,
+                              "both",
+                            )
+                          }
+                        >
+                          <Database size={12} />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
-        </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={handleRefresh}
+            disabled={loadingSchemas}
+            aria-label="Refresh schemas"
+            title="Refresh schemas"
+          >
+            {loadingSchemas ? (
+              <Loader2 className="animate-spin" size={12} />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+          </Button>
+        </div>
       </div>
 
       {shouldVirtualize

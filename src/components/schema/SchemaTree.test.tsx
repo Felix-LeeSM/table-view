@@ -2764,6 +2764,89 @@ describe("SchemaTree", () => {
     errorSpy.mockRestore();
   });
 
+  // AC-192-04 — Sprint 192 통합 export. 진입점은 헤더 Popover (Download
+  // 아이콘 → 클릭 시 schema 별 [Schema/Data/Full] 3 액션 노출). 우클릭
+  // context menu 에서 헤더 Popover 으로 이전된 이유: schema 행이 hide
+  // 되는 MySQL/SQLite tree shape 에서도 동작해야 하고, 사용자가 우클릭은
+  // 발견성이 떨어진다고 피드백 (2026-05-02). RDB 연결에서만 노출되고
+  // mongodb / redis 연결에서는 trigger button 자체가 hide.
+  // date 2026-05-02
+  it("[AC-192-04-1] header Export popover surfaces 3 actions per schema for RDB connections", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {
+        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+    });
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "PG",
+          db_type: "postgresql",
+          host: "localhost",
+          port: 5432,
+          user: "u",
+          database: "db",
+          group_id: null,
+          color: null,
+          environment: "local",
+          paradigm: "rdb",
+          has_password: false,
+        },
+      ],
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const trigger = screen.getByLabelText("Export");
+    expect(trigger).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(trigger);
+    });
+
+    // Popover 안에서 schema row 의 3 가지 액션이 모두 노출.
+    expect(screen.getByLabelText("Export public DDL")).toBeInTheDocument();
+    expect(screen.getByLabelText("Export public data")).toBeInTheDocument();
+    expect(screen.getByLabelText("Export public full")).toBeInTheDocument();
+  });
+
+  it("[AC-192-04-2] header Export popover trigger is hidden for non-RDB connections", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: {},
+    });
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn1",
+          name: "Mongo",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "u",
+          database: "db",
+          group_id: null,
+          color: null,
+          environment: "local",
+          paradigm: "document",
+          has_password: false,
+        },
+      ],
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Mongo connection 에선 paradigm !== "rdb" 이므로 Popover trigger
+    // 자체가 hide — refresh 버튼만 노출.
+    expect(screen.queryByLabelText("Export")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Refresh schemas")).toBeInTheDocument();
+  });
+
   it("[AC-191-03-2] renameTable rejection surfaces toast error", async () => {
     const toastMod = await import("@/lib/toast");
     const errorSpy = vi

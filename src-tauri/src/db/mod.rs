@@ -286,6 +286,37 @@ pub trait RdbAdapter: DbAdapter {
         cancel: Option<&'a CancellationToken>,
     ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>>;
 
+    /// Sprint 192 — server-side cursor 기반 row streaming.
+    ///
+    /// 호출자는 미리 결정된 `column_names` (source column order) 를 넘긴다.
+    /// adapter 는 각 row 의 cell value 를 `column_names` 순서대로 정렬해
+    /// `Vec<serde_json::Value>` 로 만들고, batch (= `Vec<Vec<Value>>`) 단위로
+    /// `sender` 에 송신한다. 반환값은 송신한 row 총 개수.
+    ///
+    /// PG 의 정공법 구현은 `BEGIN; DECLARE NO SCROLL CURSOR FOR …; FETCH
+    /// FORWARD batch_size; …; CLOSE; COMMIT` — 단일 transaction 안에서
+    /// server-side cursor 운영. 매 batch 사이마다 `cancel.is_cancelled()`
+    /// 를 체크해 cooperatively abort. receiver drop 도 cancel signal 로
+    /// 취급해 transaction 을 ROLLBACK.
+    ///
+    /// MySQL/SQLite 는 Phase 9 합류 시 dialect 별 streaming 으로 구현.
+    /// default 는 `Unsupported` 라 dump 전 dispatch 단계에서 reject.
+    fn stream_table_rows<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _batch_size: u32,
+        _column_names: &'a [String],
+        _sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<u64, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "Row streaming is not supported by this adapter".into(),
+            ))
+        })
+    }
+
     // Views/Functions — default: empty list (each DBMS overrides as needed).
     fn list_views<'a>(
         &'a self,
