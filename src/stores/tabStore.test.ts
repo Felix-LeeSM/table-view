@@ -2063,4 +2063,251 @@ describe("tabStore", () => {
       expect(SYNCED_KEYS).not.toContain("closedTabHistory");
     });
   });
+
+  // ── Sprint 195 — intent-revealing query lifecycle actions ───────────────
+  //
+  // These actions hide the guarded `running → completed | error` transition
+  // pattern that QueryTab.tsx previously inlined 7 times via raw
+  // `useTabStore.setState((state) => ...)`. The guards ensure stale
+  // responses (late-arriving result for a queryId that was already
+  // superseded) cannot overwrite a fresher query's state.
+  describe("query lifecycle actions (sprint-195 §3.1 extraction)", () => {
+    function seedRunningQueryTab(
+      tabId = "q1",
+      queryId = "q1-1700000000",
+    ): void {
+      const tab: QueryTab = {
+        type: "query",
+        id: tabId,
+        title: "Query 1",
+        connectionId: "conn1",
+        closable: true,
+        sql: "SELECT 1",
+        queryState: { status: "running", queryId },
+        paradigm: "rdb",
+        queryMode: "sql",
+      } as QueryTab;
+      useTabStore.setState({ tabs: [tab], activeTabId: tabId });
+    }
+
+    const sampleResult = {
+      columns: [{ name: "n", data_type: "integer" }],
+      rows: [[1]],
+      total_count: 1,
+      execution_time_ms: 5,
+      query_type: "select" as const,
+    };
+
+    describe("[AC-195-01] completeQuery / failQuery guards", () => {
+      it("[AC-195-01-1] completeQuery transitions running → completed when queryId matches", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore
+          .getState()
+          .completeQuery("q1", "q1-1", sampleResult as never);
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState).toEqual({
+          status: "completed",
+          result: sampleResult,
+        });
+      });
+
+      it("[AC-195-01-2] completeQuery is a no-op when queryId mismatches (stale response)", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore
+          .getState()
+          .completeQuery("q1", "q1-stale", sampleResult as never);
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState).toEqual({ status: "running", queryId: "q1-1" });
+      });
+
+      it("[AC-195-01-3] completeQuery is a no-op when tab is not running", () => {
+        const tab: QueryTab = {
+          type: "query",
+          id: "q1",
+          title: "Query 1",
+          connectionId: "conn1",
+          closable: true,
+          sql: "SELECT 1",
+          queryState: { status: "idle" },
+          paradigm: "rdb",
+          queryMode: "sql",
+        } as QueryTab;
+        useTabStore.setState({ tabs: [tab], activeTabId: "q1" });
+
+        useTabStore
+          .getState()
+          .completeQuery("q1", "anything", sampleResult as never);
+        const out = getQueryTab(useTabStore.getState(), 0);
+        expect(out.queryState).toEqual({ status: "idle" });
+      });
+
+      it("[AC-195-01-4] completeQuery is a no-op for missing tab", () => {
+        useTabStore.setState({ tabs: [], activeTabId: null });
+        useTabStore
+          .getState()
+          .completeQuery("missing", "any", sampleResult as never);
+        expect(useTabStore.getState().tabs).toHaveLength(0);
+      });
+
+      it("[AC-195-01-5] failQuery transitions running → error when queryId matches", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore.getState().failQuery("q1", "q1-1", "boom");
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState).toEqual({ status: "error", error: "boom" });
+      });
+
+      it("[AC-195-01-6] failQuery is a no-op when queryId mismatches (stale response)", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore.getState().failQuery("q1", "q1-stale", "boom");
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState).toEqual({ status: "running", queryId: "q1-1" });
+      });
+    });
+
+    describe("[AC-195-02] completeMultiStatementQuery allFailed branching", () => {
+      const stmt = (status: "success" | "error", error?: string) => ({
+        sql: status === "success" ? "SELECT 1" : "SELECT bad",
+        status,
+        result: status === "success" ? sampleResult : undefined,
+        error,
+        durationMs: 1,
+      });
+
+      it("[AC-195-02-1] allFailed → error with joined message", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore.getState().completeMultiStatementQuery("q1", "q1-1", {
+          statementResults: [
+            stmt("error", "syntax 1") as never,
+            stmt("error", "syntax 2") as never,
+          ],
+          lastResult: null,
+          allFailed: true,
+          joinedErrorMessage: "Statement 1: syntax 1\nStatement 2: syntax 2",
+        });
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState.status).toBe("error");
+      });
+
+      it("[AC-195-02-2] partial failure → completed with statements + lastResult", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore.getState().completeMultiStatementQuery("q1", "q1-1", {
+          statementResults: [
+            stmt("success") as never,
+            stmt("error", "later one failed") as never,
+          ],
+          lastResult: sampleResult as never,
+          allFailed: false,
+          joinedErrorMessage: "ignored",
+        });
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState.status).toBe("completed");
+        if (tab.queryState.status === "completed") {
+          expect(tab.queryState.result).toEqual(sampleResult);
+          expect(tab.queryState.statements).toHaveLength(2);
+        }
+      });
+
+      it("[AC-195-02-3] all-success → completed with statements + lastResult", () => {
+        seedRunningQueryTab("q1", "q1-1");
+        useTabStore.getState().completeMultiStatementQuery("q1", "q1-1", {
+          statementResults: [
+            stmt("success") as never,
+            stmt("success") as never,
+          ],
+          lastResult: sampleResult as never,
+          allFailed: false,
+          joinedErrorMessage: "",
+        });
+        const tab = getQueryTab(useTabStore.getState(), 0);
+        expect(tab.queryState.status).toBe("completed");
+      });
+    });
+
+    describe("[AC-195-03] recordHistory auto-extracts tab metadata", () => {
+      // A fresh queryHistoryStore instance is exposed on every test via
+      // beforeEach reset; we read entries through its `.getState()`.
+      it("[AC-195-03-1] records entry from a query tab with paradigm/queryMode/connectionId/database/collection", async () => {
+        const tab: QueryTab = {
+          type: "query",
+          id: "q1",
+          title: "Query 1",
+          connectionId: "conn1",
+          closable: true,
+          sql: "SELECT 1",
+          queryState: { status: "completed", result: sampleResult } as never,
+          paradigm: "document",
+          queryMode: "find",
+          database: "appdb",
+          collection: "users",
+        } as QueryTab;
+        useTabStore.setState({ tabs: [tab], activeTabId: "q1" });
+
+        const { useQueryHistoryStore } =
+          await import("@stores/queryHistoryStore");
+        useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+        useTabStore.getState().recordHistory("q1", {
+          sql: "db.users.find()",
+          executedAt: 1700000000,
+          duration: 12,
+          status: "success",
+        });
+
+        const entries = useQueryHistoryStore.getState().entries;
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({
+          sql: "db.users.find()",
+          status: "success",
+          connectionId: "conn1",
+          paradigm: "document",
+          queryMode: "find",
+          database: "appdb",
+          collection: "users",
+        });
+      });
+
+      it("[AC-195-03-2] silent no-op when tab is not a query tab", async () => {
+        const tab: TableTab = {
+          type: "table",
+          id: "t1",
+          title: "Users",
+          connectionId: "conn1",
+          closable: true,
+          schema: "public",
+          table: "users",
+          subView: "records" as const,
+        } as TableTab;
+        useTabStore.setState({ tabs: [tab], activeTabId: "t1" });
+
+        const { useQueryHistoryStore } =
+          await import("@stores/queryHistoryStore");
+        useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+        useTabStore.getState().recordHistory("t1", {
+          sql: "ignored",
+          executedAt: 1,
+          duration: 1,
+          status: "success",
+        });
+
+        expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+      });
+
+      it("[AC-195-03-3] silent no-op when tab is missing", async () => {
+        useTabStore.setState({ tabs: [], activeTabId: null });
+        const { useQueryHistoryStore } =
+          await import("@stores/queryHistoryStore");
+        useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+
+        useTabStore.getState().recordHistory("missing", {
+          sql: "ignored",
+          executedAt: 1,
+          duration: 1,
+          status: "error",
+        });
+
+        expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+      });
+    });
+  });
 });

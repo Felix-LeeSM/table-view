@@ -157,7 +157,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const updateQueryState = useTabStore((s) => s.updateQueryState);
   const setQueryMode = useTabStore((s) => s.setQueryMode);
   const loadQueryIntoTab = useTabStore((s) => s.loadQueryIntoTab);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  // Sprint 195 — intent-revealing query lifecycle actions. They replace the
+  // 7 inline `useTabStore.setState` sites previously inlined here. Their
+  // guards (running queryId match) are equivalent to the inlined version,
+  // so stale-response semantics are preserved.
+  const completeQuery = useTabStore((s) => s.completeQuery);
+  const failQuery = useTabStore((s) => s.failQuery);
+  const completeMultiStatementQuery = useTabStore(
+    (s) => s.completeMultiStatementQuery,
+  );
+  const recordHistory = useTabStore((s) => s.recordHistory);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);
   // Sprint 82 — resolve the active connection's dialect so the editor +
@@ -276,82 +285,28 @@ export default function QueryTab({ tab }: QueryTabProps) {
           execution_time_ms: docResult.execution_time_ms,
           query_type: "select",
         };
-        useTabStore.setState((state) => {
-          const current = state.tabs.find((t) => t.id === tab.id);
-          if (
-            current &&
-            current.type === "query" &&
-            current.queryState.status === "running" &&
-            "queryId" in current.queryState &&
-            current.queryState.queryId === queryId
-          ) {
-            return {
-              tabs: state.tabs.map((t) =>
-                t.id === tab.id && t.type === "query"
-                  ? {
-                      ...t,
-                      queryState: {
-                        status: "completed" as const,
-                        result: queryResult,
-                      },
-                    }
-                  : t,
-              ),
-            };
-          }
-          return state;
-        });
-        addHistoryEntry({
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory(tab.id, {
           sql: tab.sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "success",
-          connectionId: tab.connectionId,
-          paradigm: tab.paradigm,
-          queryMode: tab.queryMode,
-          database: tab.database,
-          collection: tab.collection,
         });
       } catch (err) {
-        useTabStore.setState((state) => {
-          const current = state.tabs.find((t) => t.id === tab.id);
-          if (
-            current &&
-            current.type === "query" &&
-            current.queryState.status === "running" &&
-            "queryId" in current.queryState &&
-            current.queryState.queryId === queryId
-          ) {
-            return {
-              tabs: state.tabs.map((t) =>
-                t.id === tab.id && t.type === "query"
-                  ? {
-                      ...t,
-                      queryState: {
-                        status: "error" as const,
-                        error: err instanceof Error ? err.message : String(err),
-                      },
-                    }
-                  : t,
-              ),
-            };
-          }
-          return state;
-        });
-        addHistoryEntry({
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory(tab.id, {
           sql: tab.sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "error",
-          connectionId: tab.connectionId,
-          paradigm: tab.paradigm,
-          queryMode: tab.queryMode,
-          database: tab.database,
-          collection: tab.collection,
         });
       }
     },
-    [tab, addHistoryEntry, updateQueryState],
+    [tab, recordHistory, completeQuery, failQuery, updateQueryState],
   );
 
   const confirmMongoDangerous = useCallback(async () => {
@@ -482,78 +437,24 @@ export default function QueryTab({ tab }: QueryTabProps) {
           query_type: "select",
         };
 
-        useTabStore.setState((state) => {
-          const current = state.tabs.find((t) => t.id === tab.id);
-          if (
-            current &&
-            current.type === "query" &&
-            current.queryState.status === "running" &&
-            "queryId" in current.queryState &&
-            current.queryState.queryId === queryId
-          ) {
-            return {
-              tabs: state.tabs.map((t) =>
-                t.id === tab.id && t.type === "query"
-                  ? {
-                      ...t,
-                      queryState: {
-                        status: "completed" as const,
-                        result: queryResult,
-                      },
-                    }
-                  : t,
-              ),
-            };
-          }
-          return state;
-        });
-        addHistoryEntry({
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory(tab.id, {
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "success",
-          connectionId: tab.connectionId,
-          paradigm: tab.paradigm,
-          queryMode: tab.queryMode,
-          database: tab.database,
-          collection: tab.collection,
         });
       } catch (err) {
-        useTabStore.setState((state) => {
-          const current = state.tabs.find((t) => t.id === tab.id);
-          if (
-            current &&
-            current.type === "query" &&
-            current.queryState.status === "running" &&
-            "queryId" in current.queryState &&
-            current.queryState.queryId === queryId
-          ) {
-            return {
-              tabs: state.tabs.map((t) =>
-                t.id === tab.id && t.type === "query"
-                  ? {
-                      ...t,
-                      queryState: {
-                        status: "error" as const,
-                        error: err instanceof Error ? err.message : String(err),
-                      },
-                    }
-                  : t,
-              ),
-            };
-          }
-          return state;
-        });
-        addHistoryEntry({
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory(tab.id, {
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "error",
-          connectionId: tab.connectionId,
-          paradigm: tab.paradigm,
-          queryMode: tab.queryMode,
-          database: tab.database,
-          collection: tab.collection,
         });
       }
       return;
@@ -579,76 +480,26 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
       try {
         const result = await executeQuery(tab.connectionId, sql, queryId);
-        // Only update if this is still the active query (prevent stale overwrites)
-        useTabStore.setState((state) => {
-          const current = state.tabs.find((t) => t.id === tab.id);
-          if (
-            current &&
-            current.type === "query" &&
-            current.queryState.status === "running" &&
-            "queryId" in current.queryState &&
-            current.queryState.queryId === queryId
-          ) {
-            return {
-              tabs: state.tabs.map((t) =>
-                t.id === tab.id && t.type === "query"
-                  ? {
-                      ...t,
-                      queryState: { status: "completed" as const, result },
-                    }
-                  : t,
-              ),
-            };
-          }
-          return state;
-        });
-        addHistoryEntry({
+        // Stale-response guard lives in the store action — late responses to
+        // a superseded queryId no-op there.
+        completeQuery(tab.id, queryId, result);
+        recordHistory(tab.id, {
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "success",
-          connectionId: tab.connectionId,
-          paradigm: tab.paradigm,
-          queryMode: tab.queryMode,
-          database: tab.database,
-          collection: tab.collection,
         });
       } catch (err) {
-        useTabStore.setState((state) => {
-          const current = state.tabs.find((t) => t.id === tab.id);
-          if (
-            current &&
-            current.type === "query" &&
-            current.queryState.status === "running" &&
-            "queryId" in current.queryState &&
-            current.queryState.queryId === queryId
-          ) {
-            return {
-              tabs: state.tabs.map((t) =>
-                t.id === tab.id && t.type === "query"
-                  ? {
-                      ...t,
-                      queryState: {
-                        status: "error" as const,
-                        error: err instanceof Error ? err.message : String(err),
-                      },
-                    }
-                  : t,
-              ),
-            };
-          }
-          return state;
-        });
-        addHistoryEntry({
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory(tab.id, {
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "error",
-          connectionId: tab.connectionId,
-          paradigm: tab.paradigm,
-          queryMode: tab.queryMode,
-          database: tab.database,
-          collection: tab.collection,
         });
       }
       // Sprint 132 — DB-change detection runs after the awaited execute
@@ -707,59 +558,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
     ).length;
     const allFailed = successCount === 0;
 
-    useTabStore.setState((state) => {
-      const current = state.tabs.find((t) => t.id === tab.id);
-      if (
-        current &&
-        current.type === "query" &&
-        current.queryState.status === "running" &&
-        "queryId" in current.queryState &&
-        current.queryState.queryId === queryId
-      ) {
-        if (allFailed) {
-          // All statements failed — collapse to `error` (same shape as the
-          // single-statement failure path) with a joined error message.
-          const joinedErrors = statementResults
-            .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
-            .join("\n");
-          return {
-            tabs: state.tabs.map((t) =>
-              t.id === tab.id && t.type === "query"
-                ? {
-                    ...t,
-                    queryState: {
-                      status: "error" as const,
-                      error: joinedErrors,
-                    },
-                  }
-                : t,
-            ),
-          };
-        }
-        // At least one success — keep `status: "completed"` and surface the
-        // full per-statement breakdown via `statements`. `result` mirrors
-        // the LAST SUCCESSFUL result so single-result fallbacks (history,
-        // grid collapse) keep working when callers ignore `statements`.
-        const fallbackResult = lastResult!;
-        return {
-          tabs: state.tabs.map((t) =>
-            t.id === tab.id && t.type === "query"
-              ? {
-                  ...t,
-                  queryState: {
-                    status: "completed" as const,
-                    result: fallbackResult,
-                    statements: statementResults,
-                  },
-                }
-              : t,
-          ),
-        };
-      }
-      return state;
+    // Sprint 195 — multi-statement final transition delegated to a single
+    // intent action. allFailed → error (with joined message); otherwise
+    // completed with `lastResult` + per-statement breakdown.
+    const joinedErrors = statementResults
+      .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
+      .join("\n");
+    completeMultiStatementQuery(tab.id, queryId, {
+      statementResults,
+      lastResult,
+      allFailed,
+      joinedErrorMessage: joinedErrors,
     });
 
-    addHistoryEntry({
+    recordHistory(tab.id, {
       sql,
       executedAt: Date.now(),
       duration: Date.now() - startTime,
@@ -767,11 +579,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
       // partial failure still surfaces a destructive marker in the
       // history list so users can spot it without opening the tab.
       status: successCount === statements.length ? "success" : "error",
-      connectionId: tab.connectionId,
-      paradigm: tab.paradigm,
-      queryMode: tab.queryMode,
-      database: tab.database,
-      collection: tab.collection,
     });
     // Sprint 132 — same hook as the single-statement path. Multi-statement
     // input feeds the full SQL through the lexer, which already takes the

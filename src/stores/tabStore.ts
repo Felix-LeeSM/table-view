@@ -1,9 +1,15 @@
 import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
-import type { QueryState } from "@/types/query";
+import type {
+  QueryResult,
+  QueryState,
+  QueryStatementResult,
+} from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
 import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
@@ -210,6 +216,53 @@ interface TabState {
   updateQuerySql: (tabId: string, sql: string) => void;
   updateQueryState: (tabId: string, state: QueryState) => void;
   setQueryMode: (tabId: string, mode: QueryMode) => void;
+  /**
+   * Sprint 195 — intent-revealing transition: running → completed. Guards
+   * (a) tab existence, (b) `type === "query"`, (c) `queryState.status ===
+   * "running"`, (d) `queryState.queryId === queryId`. Stale or mis-targeted
+   * dispatches are a no-op (preserves prior `useTabStore.setState` inline
+   * guard semantics so racing /late responses can't overwrite a fresher
+   * query's result).
+   */
+  completeQuery: (tabId: string, queryId: string, result: QueryResult) => void;
+  /**
+   * Sprint 195 — intent-revealing transition: running → error. Guards are
+   * identical to {@link completeQuery}.
+   */
+  failQuery: (tabId: string, queryId: string, errorMessage: string) => void;
+  /**
+   * Sprint 195 — multi-statement batch completion. `allFailed === true`
+   * collapses to `error` (with a joined error message); otherwise transitions
+   * to `completed` with `lastResult` and the per-statement breakdown. Same
+   * stale-response guards as {@link completeQuery}.
+   */
+  completeMultiStatementQuery: (
+    tabId: string,
+    queryId: string,
+    payload: {
+      statementResults: QueryStatementResult[];
+      lastResult: QueryResult | null;
+      allFailed: boolean;
+      joinedErrorMessage: string;
+    },
+  ) => void;
+  /**
+   * Sprint 195 — record a query history entry derived from a query tab.
+   * Auto-extracts `connectionId` / `paradigm` / `queryMode` / `database` /
+   * `collection` from the tab so callsites only carry the variable fields
+   * (sql / executedAt / duration / status). Sprint 196 will widen the
+   * payload with a `source` field — adding it here keeps callsite churn
+   * minimal. No-op on missing tab or non-query tab.
+   */
+  recordHistory: (
+    tabId: string,
+    payload: {
+      sql: string;
+      executedAt: number;
+      duration: number;
+      status: QueryHistoryStatus;
+    },
+  ) => void;
   /**
    * Sprint 84 — paradigm-aware restore helper used when the user loads a
    * history entry. Routes the payload to either an in-place update on the
@@ -542,6 +595,122 @@ export const useTabStore = create<TabState>((set, get) => ({
         return { ...t, queryMode: mode };
       }),
     })),
+
+  completeQuery: (tabId, queryId, result) =>
+    set((state) => {
+      const current = state.tabs.find((t) => t.id === tabId);
+      if (
+        !current ||
+        current.type !== "query" ||
+        current.queryState.status !== "running" ||
+        !("queryId" in current.queryState) ||
+        current.queryState.queryId !== queryId
+      ) {
+        return state;
+      }
+      return {
+        tabs: state.tabs.map((t) =>
+          t.id === tabId && t.type === "query"
+            ? { ...t, queryState: { status: "completed" as const, result } }
+            : t,
+        ),
+      };
+    }),
+
+  failQuery: (tabId, queryId, errorMessage) =>
+    set((state) => {
+      const current = state.tabs.find((t) => t.id === tabId);
+      if (
+        !current ||
+        current.type !== "query" ||
+        current.queryState.status !== "running" ||
+        !("queryId" in current.queryState) ||
+        current.queryState.queryId !== queryId
+      ) {
+        return state;
+      }
+      return {
+        tabs: state.tabs.map((t) =>
+          t.id === tabId && t.type === "query"
+            ? {
+                ...t,
+                queryState: {
+                  status: "error" as const,
+                  error: errorMessage,
+                },
+              }
+            : t,
+        ),
+      };
+    }),
+
+  completeMultiStatementQuery: (tabId, queryId, payload) =>
+    set((state) => {
+      const current = state.tabs.find((t) => t.id === tabId);
+      if (
+        !current ||
+        current.type !== "query" ||
+        current.queryState.status !== "running" ||
+        !("queryId" in current.queryState) ||
+        current.queryState.queryId !== queryId
+      ) {
+        return state;
+      }
+      const { statementResults, lastResult, allFailed, joinedErrorMessage } =
+        payload;
+      return {
+        tabs: state.tabs.map((t) => {
+          if (t.id !== tabId || t.type !== "query") return t;
+          if (allFailed) {
+            return {
+              ...t,
+              queryState: {
+                status: "error" as const,
+                error: joinedErrorMessage,
+              },
+            };
+          }
+          // `lastResult` is non-null when at least one statement succeeded —
+          // the caller's `allFailed` derivation guarantees it. The QueryState
+          // contract expects a `result: QueryResult` (not nullable) on the
+          // completed branch, so we collapse to error when lastResult slipped
+          // through as null (defensive — never observed in practice).
+          if (!lastResult) {
+            return {
+              ...t,
+              queryState: {
+                status: "error" as const,
+                error: joinedErrorMessage,
+              },
+            };
+          }
+          return {
+            ...t,
+            queryState: {
+              status: "completed" as const,
+              result: lastResult,
+              statements: statementResults,
+            },
+          };
+        }),
+      };
+    }),
+
+  recordHistory: (tabId, payload) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (!tab || tab.type !== "query") return;
+    useQueryHistoryStore.getState().addHistoryEntry({
+      sql: payload.sql,
+      executedAt: payload.executedAt,
+      duration: payload.duration,
+      status: payload.status,
+      connectionId: tab.connectionId,
+      paradigm: tab.paradigm,
+      queryMode: tab.queryMode,
+      database: tab.database,
+      collection: tab.collection,
+    });
+  },
 
   loadQueryIntoTab: (payload) => {
     const { connectionId, paradigm, queryMode, database, collection, sql } =
