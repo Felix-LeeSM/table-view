@@ -194,7 +194,13 @@ pub fn run() {
     let builder = builder.on_window_event(|window, event| {
         if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "workspace" {
             if let Some(launcher) = window.app_handle().get_webview_window("launcher") {
-                let _ = launcher.show();
+                if let Err(e) = launcher.show() {
+                    // The whole point of this branch is to recover from
+                    // "no visible window" — log loudly if even the
+                    // recovery failed so the user-facing symptom isn't
+                    // silent.
+                    tracing::warn!(target: "boot", error = %e, "safety-net launcher.show() failed");
+                }
             }
         }
     });
