@@ -75,29 +75,28 @@ of truth. 코드 작성 표준: [`memory/conventions/refactoring/memory.md`](../
 ### 리팩토링 sequencing (Sprint 199–..., post-198 cycle)
 
 Sprint 198 종료 직후 wide-net 재스캔 결과 ([`/CODE_SMELLS.md`](../CODE_SMELLS.md),
-시한부) 를 입력값으로 새 cycle. 같은 패턴 답습 — refactor-only sprint
-(홀수) 와 feature/FB sprint (짝수) 인터리브, 각 refactor 가 바로 다음
-feature sprint 의 dependency 를 정리. **본 표는 candidate sequencing**
-— 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후속 항목은 발견에
-따라 재배치 가능.
+시한부) 를 입력값으로 새 cycle. 사용자 결정 (Sprint 202, 2026-05-05) —
+인터리브 패턴 폐기, **refactor 연속** 으로 [`/CODE_SMELLS.md`](../CODE_SMELLS.md)
+7 카테고리 모두 처리 후 feature backlog 진입. **본 표는 candidate
+sequencing** — 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후속
+항목은 발견에 따라 재배치 가능.
 
 | # | Sprint | 종류 | 입력 (CODE_SMELLS) | 내용 |
 |---|--------|------|--------------------|------|
-| 1 | **199** | refactor | §1-1 (frontend god file #1) | `SchemaTree.tsx` (2105) 분해 — entry + `SchemaTree/{rows,actions,dialogs}.tsx`. 행동 변경 0. |
-| 2 | 200 | feature  | TBD                              | 미정 — 다음 feature backlog 에서 결정. |
-| 3 | 201 | refactor | §1-1 (frontend god file #2~3)    | `DataGridTable.tsx` (1071) 또는 `QueryTab.tsx` (1040) 중 의존성 큰 쪽 우선. |
-| 4 | 202 | feature  | TBD                              | 미정. |
-| 5 | 203 | refactor | §1-2 (backend god file #1)       | `db/postgres.rs` (3803) 분할 — Sprint 197 mongodb.rs 패턴 답습. |
-| 6 | 204 | feature  | TBD                              | 미정. |
-| 7 | 205 | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. 짧은 sprint. |
-| 8 | 206 | refactor | §4–5 (catch + console 정책)      | logger 중앙화 + DEV-only gate 정책. |
-| 9 | 207 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
-| 10 | 208 | refactor | §7 (Rust prod expect)           | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |
+| 1 | **199** ✓ | refactor | §1-1 (frontend god file #1) | `SchemaTree.tsx` (2105) → entry + `SchemaTree/{rows,actions,dialogs}.tsx`. (commit `19ee81f`) |
+| 2 | **200** ✓ | refactor | §1-1 (frontend god file #2)    | `DataGridTable.tsx` (1071) → entry + 6 sub-file. (commit `3b2b5b4`) |
+| 3 | **201** ✓ | refactor | §1-1 (frontend god file #3)    | `QueryTab.tsx` (1040) → entry + 6 sub-file. (commit `c0ab92e`) |
+| 4 | **202** ✓ | refactor | §1-2 (backend god file #1)     | `db/postgres.rs` (3803) → entry + 4 sub-file. mongodb.rs 패턴 답습. |
+| 5 | 203 | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. 짧은 sprint. |
+| 6 | 204 | refactor | §4–5 (catch + console 정책)      | logger 중앙화 + DEV-only gate 정책. |
+| 7 | 205 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
+| 8 | 206 | refactor | §7 (Rust prod expect)            | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |
+| 9 | 207 | refactor | §1-1 (frontend god file #4)      | `tabStore.ts` (1002) 분해 — store concerns 분리. |
+| 10 | 208 | refactor | §1-2 (backend god file #2)      | `commands/connection.rs` (1710) 분할 — postgres.rs 패턴 답습. |
 
 본 sequencing 의 목적은 [`/CODE_SMELLS.md`](../CODE_SMELLS.md) 의 7
-카테고리를 **다음 N sprint 의 feature work 와 매핑** 해 just-in-time
-refactor 로 회귀 risk 를 낮추는 것. Sprint 200 / 202 / 204 의 feature
-는 backlog priority 결정 시점에 채워 넣는다 (현 시점 미정).
+카테고리를 본 cycle 안에서 모두 소진하는 것. Sprint 199–208 모두
+refactor; cycle 종료 후 feature backlog (Phase 13 / 21 / 22 등) 진입.
 
 본 cycle 종료 시 [`/CODE_SMELLS.md`](../CODE_SMELLS.md) retire — 이전
 cycle 의 `refactoring-{plan,smells}.md` 처리와 동일.

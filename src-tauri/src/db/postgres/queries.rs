@@ -1,0 +1,796 @@
+//! PostgreSQL query execution paths — `execute` / `execute_query` /
+//! `execute_query_batch` (free-form SQL) + `query_table_data` /
+//! `stream_table_rows` (table-row paging / streaming).
+//!
+//! Sprint 202 split from `db/postgres.rs`. SQL-string normalization
+//! helpers (`strip_leading_comments`, `strip_trailing_terminator`,
+//! `pg_cast_type`) co-located here since query-path is the sole consumer.
+
+use sqlx::Column;
+use sqlx::Row;
+use tokio_util::sync::CancellationToken;
+
+use crate::error::AppError;
+use crate::models::{
+    FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
+};
+
+use super::mutations::qualified_table;
+use super::PostgresAdapter;
+
+/// Strip leading SQL comments and whitespace so that query type detection
+/// works on `-- comment\nSELECT ...` and `/* block */ SELECT ...` inputs.
+fn strip_leading_comments(sql: &str) -> &str {
+    let mut s = sql.trim_start();
+    loop {
+        if s.starts_with("--") {
+            // Line comment: skip to end of line
+            if let Some(idx) = s.find('\n') {
+                s = s[idx + 1..].trim_start();
+            } else {
+                // Entire rest is a comment
+                return "";
+            }
+        } else if s.starts_with("/*") {
+            // Block comment: find closing */
+            if let Some(idx) = s.find("*/") {
+                s = s[idx + 2..].trim_start();
+            } else {
+                // Unclosed block comment
+                return "";
+            }
+        } else {
+            break;
+        }
+    }
+    s
+}
+
+/// Strip trailing semicolons and whitespace from a SQL statement.
+///
+/// Raw queries are wrapped in subqueries (e.g. `SELECT row_to_json(q) FROM (…) q`)
+/// when projecting JSON, so a trailing `;` from the user input becomes a syntax
+/// error inside the parens. This helper normalises the input by removing any
+/// trailing `;` and whitespace before the wrapping happens.
+fn strip_trailing_terminator(sql: &str) -> &str {
+    sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
+}
+
+/// Maps PostgreSQL `data_type` strings (from `information_schema.columns`) to
+/// the corresponding cast target type name. Returns `None` for text-like types
+/// where no cast is needed (binding as `text` is fine).
+fn pg_cast_type(data_type: &str) -> Option<&'static str> {
+    match data_type {
+        // Integer types
+        "bigint" => Some("bigint"),
+        "integer" => Some("integer"),
+        "smallint" => Some("smallint"),
+        // Numeric / decimal
+        "numeric" | "decimal" => Some("numeric"),
+        // Floating-point
+        "real" => Some("real"),
+        "double precision" => Some("double precision"),
+        // Boolean
+        "boolean" => Some("boolean"),
+        // UUID
+        "uuid" => Some("uuid"),
+        // Date / time
+        "date" => Some("date"),
+        "timestamp without time zone" => Some("timestamp"),
+        "timestamp with time zone" => Some("timestamptz"),
+        "time without time zone" => Some("time"),
+        "time with time zone" => Some("timetz"),
+        // Text-like: no cast needed
+        "text" | "varchar" | "character varying" | "char" | "character" | "name" => None,
+        // Unknown types: no cast
+        _ => None,
+    }
+}
+
+impl PostgresAdapter {
+    pub async fn execute(&self, query: &str) -> Result<(), AppError> {
+        let pool = self.active_pool().await?;
+        sqlx::query(query)
+            .execute(&pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Execute an arbitrary SQL query and return the result.
+    /// Supports cancellation via CancellationToken.
+    ///
+    /// # Arguments
+    /// * `query` - The SQL query to execute
+    /// * `cancel_token` - Optional token to cancel the query execution
+    ///
+    /// # Returns
+    /// * `QueryResult` - Columns, rows, execution time, and query type
+    pub async fn execute_query(
+        &self,
+        query: &str,
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<QueryResult, AppError> {
+        let start = std::time::Instant::now();
+
+        // Strip a trailing `;` so it does not break the row_to_json wrapping
+        // for SELECT queries — PostgreSQL itself accepts a single trailing
+        // semicolon on top-level statements, but it is invalid inside parens.
+        let query = strip_trailing_terminator(query);
+        if query.trim().is_empty() {
+            return Err(AppError::Validation(
+                "SQL query is empty after removing trailing terminators".into(),
+            ));
+        }
+
+        // Detect query type from the SQL statement (strip comments first)
+        let stripped = strip_leading_comments(query);
+        let trimmed_query = stripped.to_uppercase();
+        let query_type = if trimmed_query.starts_with("SELECT")
+            || trimmed_query.starts_with("WITH")
+            || trimmed_query.starts_with("SHOW")
+            || trimmed_query.starts_with("EXPLAIN")
+        {
+            QueryType::Select
+        } else if trimmed_query.starts_with("INSERT")
+            || trimmed_query.starts_with("UPDATE")
+            || trimmed_query.starts_with("DELETE")
+        {
+            QueryType::Dml { rows_affected: 0 }
+        } else {
+            QueryType::Ddl
+        };
+
+        // Clone pool reference and release lock immediately
+        let pool = self.active_pool().await?;
+
+        // Execute query based on type
+        let result = match query_type {
+            QueryType::Select => {
+                let query_future = async {
+                    // First, get column metadata from a dry-run (LIMIT 0) or the actual query
+                    let rows = sqlx::query(query).fetch_all(&pool).await?;
+
+                    // Extract column metadata from rows when available
+                    let columns: Vec<QueryColumn> = if let Some(first_row) = rows.first() {
+                        first_row
+                            .columns()
+                            .iter()
+                            .map(|col| QueryColumn {
+                                name: col.name().to_string(),
+                                data_type: col.type_info().to_string(),
+                            })
+                            .collect()
+                    } else {
+                        // For empty results, we cannot determine columns from the row data.
+                        // Return empty columns — the frontend handles this gracefully.
+                        Vec::new()
+                    };
+
+                    // Use row_to_json via PostgreSQL to convert rows to proper JSON values.
+                    // Direct try_get::<serde_json::Value> only works for json/jsonb columns,
+                    // so we wrap the query in a subquery and use row_to_json().
+                    let wrapped_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", query);
+                    let json_rows_raw = sqlx::query_scalar::<_, String>(&wrapped_sql)
+                        .fetch_all(&pool)
+                        .await?;
+
+                    let col_names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
+                    let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
+                        .iter()
+                        .map(|json_str| {
+                            let obj: serde_json::Map<String, serde_json::Value> =
+                                serde_json::from_str(json_str).unwrap_or_default();
+                            col_names
+                                .iter()
+                                .map(|name| {
+                                    obj.get(*name).cloned().unwrap_or(serde_json::Value::Null)
+                                })
+                                .collect()
+                        })
+                        .collect();
+
+                    let total_count = json_rows.len() as i64;
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    Ok::<QueryResult, AppError>(QueryResult {
+                        columns,
+                        rows: json_rows,
+                        total_count,
+                        execution_time_ms,
+                        query_type: QueryType::Select,
+                    })
+                };
+
+                // Apply cancellation if token provided
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        result = query_future => result,
+                        _ = token.cancelled() => {
+                            return Err(AppError::Database("Query cancelled".into()));
+                        }
+                    }
+                } else {
+                    query_future.await
+                }
+            }
+            QueryType::Dml { .. } => {
+                let query_future = async {
+                    let result = sqlx::query(query).execute(&pool).await?;
+                    let rows_affected = result.rows_affected();
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    Ok::<QueryResult, AppError>(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        total_count: rows_affected as i64,
+                        execution_time_ms,
+                        query_type: QueryType::Dml { rows_affected },
+                    })
+                };
+
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        result = query_future => result,
+                        _ = token.cancelled() => {
+                            return Err(AppError::Database("Query cancelled".into()));
+                        }
+                    }
+                } else {
+                    query_future.await
+                }
+            }
+            QueryType::Ddl => {
+                let query_future = async {
+                    sqlx::query(query).execute(&pool).await?;
+                    let execution_time_ms = start.elapsed().as_millis() as u64;
+
+                    Ok::<QueryResult, AppError>(QueryResult {
+                        columns: Vec::new(),
+                        rows: Vec::new(),
+                        total_count: 0,
+                        execution_time_ms,
+                        query_type: QueryType::Ddl,
+                    })
+                };
+
+                if let Some(token) = cancel_token {
+                    tokio::select! {
+                        result = query_future => result,
+                        _ = token.cancelled() => {
+                            return Err(AppError::Database("Query cancelled".into()));
+                        }
+                    }
+                } else {
+                    query_future.await
+                }
+            }
+        };
+
+        result
+    }
+
+    /// Sprint 183 — execute a list of statements inside a single
+    /// transaction. All-or-nothing: a failure on statement K rolls back
+    /// statements 1..K-1 and surfaces the original sqlx error wrapped in
+    /// `AppError::Database("statement K of N failed: <msg>")`. Empty input
+    /// short-circuits with `Ok(vec![])` (no BEGIN/COMMIT round-trip).
+    /// Each non-empty statement is run via `sqlx::query::execute` on the
+    /// `Transaction<Postgres>`. We do not classify SELECT vs DML here —
+    /// commit-pipeline statements (UPDATE/DELETE/INSERT) only need
+    /// `rows_affected`, and the existing `execute_query` path is preserved
+    /// for the rare SELECT-inside-batch case (still rare enough that the
+    /// caller would issue a single `executeQuery`).
+    pub async fn execute_query_batch(
+        &self,
+        statements: &[String],
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<Vec<QueryResult>, AppError> {
+        if statements.is_empty() {
+            return Ok(Vec::new());
+        }
+        for (idx, raw) in statements.iter().enumerate() {
+            if strip_trailing_terminator(raw).trim().is_empty() {
+                return Err(AppError::Validation(format!(
+                    "Statement {} of {} is empty",
+                    idx + 1,
+                    statements.len()
+                )));
+            }
+        }
+
+        let pool = self.active_pool().await?;
+        let total = statements.len();
+
+        let work = async {
+            let mut tx = pool
+                .begin()
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+            let mut results: Vec<QueryResult> = Vec::with_capacity(total);
+            for (idx, raw) in statements.iter().enumerate() {
+                let stmt = strip_trailing_terminator(raw);
+                let start = std::time::Instant::now();
+                let exec_result = sqlx::query(stmt).execute(&mut *tx).await;
+                match exec_result {
+                    Ok(res) => {
+                        let rows_affected = res.rows_affected();
+                        results.push(QueryResult {
+                            columns: Vec::new(),
+                            rows: Vec::new(),
+                            total_count: rows_affected as i64,
+                            execution_time_ms: start.elapsed().as_millis() as u64,
+                            query_type: QueryType::Dml { rows_affected },
+                        });
+                    }
+                    Err(e) => {
+                        // Best-effort rollback. `tx.rollback()` consumes
+                        // the transaction; any error during rollback is
+                        // discarded so the original failure stays the
+                        // user-facing message (matches PG's protocol-level
+                        // rollback on first error anyway).
+                        let _ = tx.rollback().await;
+                        return Err(AppError::Database(format!(
+                            "statement {} of {} failed: {}",
+                            idx + 1,
+                            total,
+                            e
+                        )));
+                    }
+                }
+            }
+
+            tx.commit()
+                .await
+                .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+            Ok::<Vec<QueryResult>, AppError>(results)
+        };
+
+        if let Some(token) = cancel_token {
+            tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Query cancelled".into())),
+            }
+        } else {
+            work.await
+        }
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub async fn query_table_data(
+        &self,
+        table: &str,
+        schema: &str,
+        page: i32,
+        page_size: i32,
+        order_by: Option<&str>,
+        filters: Option<&[FilterCondition]>,
+        raw_where: Option<&str>,
+    ) -> Result<TableData, AppError> {
+        let pool = self.active_pool().await?;
+
+        // Get columns first
+        let columns = self.get_table_columns_inner(&pool, table, schema).await?;
+
+        // Build safe query — table/schema are validated identifiers
+        let qualified_table = format!(
+            "\"{}\".\"{}\"",
+            schema.replace('"', "\"\""),
+            table.replace('"', "\"\"")
+        );
+
+        // Validate raw_where if provided
+        let raw_where_trimmed = raw_where.map(|rw| rw.trim()).filter(|rw| !rw.is_empty());
+
+        if let Some(rw) = &raw_where_trimmed {
+            // Reject semicolons to prevent multi-statement injection
+            if rw.contains(';') {
+                return Err(AppError::Validation(
+                    "Raw WHERE clause must not contain semicolons".into(),
+                ));
+            }
+            // Reject dangerous statements at the start of the clause
+            let upper = rw.to_uppercase();
+            let dangerous_starts = [
+                "DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "CREATE", "TRUNCATE", "GRANT",
+                "REVOKE",
+            ];
+            for keyword in &dangerous_starts {
+                if upper.starts_with(keyword) {
+                    return Err(AppError::Validation(format!(
+                        "Raw WHERE clause must not start with {}",
+                        keyword
+                    )));
+                }
+            }
+        }
+
+        // Build WHERE clause: raw_where takes precedence over structured filters
+        let (where_clause, param_values) = if let Some(rw) = &raw_where_trimmed {
+            (format!(" WHERE {}", rw), Vec::<String>::new())
+        } else {
+            // Build WHERE clause from filters with parameterized values
+            let mut where_clause = String::new();
+            let mut param_values: Vec<String> = Vec::new();
+            if let Some(filters) = filters {
+                if !filters.is_empty() {
+                    let valid_columns: std::collections::HashSet<&str> =
+                        columns.iter().map(|c| c.name.as_str()).collect();
+                    // Build column-name -> data_type lookup for O(1) type casts
+                    let col_types: std::collections::HashMap<&str, &str> = columns
+                        .iter()
+                        .map(|c| (c.name.as_str(), c.data_type.as_str()))
+                        .collect();
+                    let mut conditions: Vec<String> = Vec::new();
+                    for f in filters {
+                        if !valid_columns.contains(f.column.as_str()) {
+                            continue;
+                        }
+                        let quoted_col = format!("\"{}\"", f.column.replace('"', "\"\""));
+                        match &f.operator {
+                            FilterOperator::IsNull => {
+                                conditions.push(format!("{} IS NULL", quoted_col));
+                            }
+                            FilterOperator::IsNotNull => {
+                                conditions.push(format!("{} IS NOT NULL", quoted_col));
+                            }
+                            _ => {
+                                let op = match f.operator {
+                                    FilterOperator::Eq => "=",
+                                    FilterOperator::Neq => "<>",
+                                    FilterOperator::Gt => ">",
+                                    FilterOperator::Lt => "<",
+                                    FilterOperator::Gte => ">=",
+                                    FilterOperator::Lte => "<=",
+                                    FilterOperator::Like => "LIKE",
+                                    _ => unreachable!(),
+                                };
+                                if let Some(val) = &f.value {
+                                    let param_idx = param_values.len() + 1;
+                                    let cast_suffix = col_types
+                                        .get(f.column.as_str())
+                                        .and_then(|dt| pg_cast_type(dt))
+                                        .map(|t| format!("::{}", t))
+                                        .unwrap_or_default();
+                                    conditions.push(format!(
+                                        "{} {} ${}{}",
+                                        quoted_col, op, param_idx, cast_suffix
+                                    ));
+                                    param_values.push(val.clone());
+                                }
+                            }
+                        }
+                    }
+                    if !conditions.is_empty() {
+                        where_clause = format!(" WHERE {}", conditions.join(" AND "));
+                    }
+                }
+            }
+            (where_clause, param_values)
+        };
+
+        // Count total
+        let count_sql = format!("SELECT COUNT(*) FROM {}{}", qualified_table, where_clause);
+        let mut count_query = sqlx::query_as::<_, (i64,)>(&count_sql);
+        for val in &param_values {
+            count_query = count_query.bind(val);
+        }
+        let (total,) = count_query
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        // Build data query using row_to_json for type-safe conversion
+        let offset = (page - 1).max(0) * page_size;
+
+        let mut order_clause = String::new();
+        if let Some(order_by) = &order_by {
+            // Parse comma-separated "column_name ASC, column_name DESC" format
+            let valid_columns: std::collections::HashSet<&str> =
+                columns.iter().map(|c| c.name.as_str()).collect();
+            let mut order_parts: Vec<String> = Vec::new();
+            for part in order_by.split(',') {
+                let part_trimmed = part.trim();
+                let parts: Vec<&str> = part_trimmed.split_whitespace().collect();
+                let (col_name, direction) = match parts.as_slice() {
+                    [col, dir] if *dir == "ASC" || *dir == "DESC" => (*col, *dir),
+                    [col] => (*col, "ASC"),
+                    _ => continue, // Skip invalid format
+                };
+                // Validate column name
+                if valid_columns.contains(col_name) {
+                    order_parts.push(format!(
+                        "\"{}\" {}",
+                        col_name.replace('"', "\"\""),
+                        direction
+                    ));
+                }
+            }
+            if !order_parts.is_empty() {
+                order_clause = format!(" ORDER BY {}", order_parts.join(", "));
+            }
+        }
+
+        // `executed_query` is what the user sees in the grid's "Query" panel,
+        // so it must be the user-facing SQL — not the `row_to_json(q)` wrapper
+        // we use internally to coerce arbitrary PG types into a JSON string
+        // (see `execute_query` for the same pattern and rationale).
+        let inner_sql = format!(
+            "SELECT * FROM {}{}{} LIMIT {} OFFSET {}",
+            qualified_table, where_clause, order_clause, page_size, offset
+        );
+        let data_sql = format!("SELECT row_to_json(q)::text FROM ({}) q", inner_sql);
+        let executed_query = inner_sql;
+
+        let mut data_query = sqlx::query_as::<_, (String,)>(&data_sql);
+        for val in &param_values {
+            data_query = data_query.bind(val);
+        }
+        let json_rows: Vec<(String,)> = data_query
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        // Parse JSON strings into Vec<Vec<serde_json::Value>> in column order
+        let result_rows: Vec<Vec<serde_json::Value>> = json_rows
+            .into_iter()
+            .map(|(json_str,)| {
+                let obj: serde_json::Map<String, serde_json::Value> =
+                    serde_json::from_str(&json_str).unwrap_or_default();
+                columns
+                    .iter()
+                    .map(|col| {
+                        obj.get(&col.name)
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null)
+                    })
+                    .collect()
+            })
+            .collect();
+
+        Ok(TableData {
+            columns,
+            rows: result_rows,
+            total_count: total,
+            page,
+            page_size,
+            executed_query,
+        })
+    }
+    /// Sprint 192 — server-side cursor 기반 row streaming.
+    ///
+    /// `BEGIN; DECLARE NO SCROLL CURSOR FOR SELECT row_to_json(t)::text FROM
+    /// "schema"."table" t; FETCH FORWARD batch_size; …; CLOSE; COMMIT`.
+    /// row_to_json 으로 모든 PG 타입을 JSON 으로 직렬화 — bytea (`\x...`),
+    /// timestamp (ISO 8601), array / JSON / record 모두 자동 처리.
+    ///
+    /// 호출자가 넘긴 `column_names` 를 source order 로 신뢰하고, JSON
+    /// object 에서 그 순서대로 lookup 해 `Vec<Value>` 를 만든다.
+    /// `serde_json::Map` 은 `preserve_order` feature 가 비활성이라
+    /// alphabetical sorted 일 수 있는데, lookup-by-name 으로 우회.
+    ///
+    /// Cancellation: 매 batch loop 의 시작에서 `cancel.is_cancelled()` 를
+    /// 체크. token fired / receiver drop 모두 `CLOSE cursor; ROLLBACK` 한
+    /// 뒤 `AppError::Database("Operation cancelled")` 또는 `"Receiver
+    /// dropped — export aborted"` 를 반환한다.
+    pub async fn stream_table_rows(
+        &self,
+        schema: &str,
+        table: &str,
+        batch_size: u32,
+        column_names: &[String],
+        sender: tokio::sync::mpsc::Sender<Vec<Vec<serde_json::Value>>>,
+        cancel: Option<&CancellationToken>,
+    ) -> Result<u64, AppError> {
+        if batch_size == 0 {
+            return Err(AppError::Validation(
+                "stream_table_rows: batch_size must be > 0".into(),
+            ));
+        }
+        if column_names.is_empty() {
+            return Err(AppError::Validation(
+                "stream_table_rows: column_names must not be empty".into(),
+            ));
+        }
+
+        let pool = self.active_pool().await?;
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(format!("BEGIN failed: {e}")))?;
+
+        let qualified = qualified_table(schema, table);
+        let cursor_name = "_vt_export_cur";
+        let declare = format!(
+            "DECLARE {cursor_name} NO SCROLL CURSOR FOR \
+             SELECT row_to_json(t)::text FROM {qualified} AS t",
+        );
+        sqlx::query(&declare)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| AppError::Database(format!("DECLARE CURSOR failed: {e}")))?;
+
+        let mut total: u64 = 0;
+        let fetch_sql = format!("FETCH FORWARD {batch_size} FROM {cursor_name}");
+        loop {
+            if let Some(t) = cancel {
+                if t.is_cancelled() {
+                    let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
+                        .execute(&mut *tx)
+                        .await;
+                    let _ = tx.rollback().await;
+                    return Err(AppError::Database("Operation cancelled".into()));
+                }
+            }
+            let strings: Vec<String> = sqlx::query_scalar(&fetch_sql)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(|e| AppError::Database(format!("FETCH failed: {e}")))?;
+            if strings.is_empty() {
+                break;
+            }
+            let mut batch: Vec<Vec<serde_json::Value>> = Vec::with_capacity(strings.len());
+            for s in strings {
+                let obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&s)
+                    .map_err(|e| AppError::Database(format!("row_to_json parse failed: {e}")))?;
+                let row: Vec<serde_json::Value> = column_names
+                    .iter()
+                    .map(|name| obj.get(name).cloned().unwrap_or(serde_json::Value::Null))
+                    .collect();
+                batch.push(row);
+            }
+            let count = batch.len() as u64;
+            if sender.send(batch).await.is_err() {
+                let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
+                    .execute(&mut *tx)
+                    .await;
+                let _ = tx.rollback().await;
+                return Err(AppError::Database(
+                    "Receiver dropped — export aborted".into(),
+                ));
+            }
+            total += count;
+        }
+
+        let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
+            .execute(&mut *tx)
+            .await;
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("COMMIT failed: {e}")))?;
+        Ok(total)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::postgres::PostgresAdapter;
+
+    // [AC-183-07a] — empty input must short-circuit without acquiring a
+    // pool or starting a transaction; matches the contract's "no-op
+    // commit" expectation. Date 2026-05-01.
+    #[tokio::test]
+    async fn test_execute_sql_batch_empty_returns_empty_vec() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.execute_query_batch(&[], None).await;
+        match result {
+            Ok(v) => assert!(v.is_empty(), "Expected empty Vec, got {} items", v.len()),
+            Err(e) => panic!("Empty input should succeed, got error: {:?}", e),
+        }
+    }
+
+    // [AC-183-07b] — validation must reject a batch where any statement
+    // is empty (or whitespace-only) before BEGIN is issued, so a misformed
+    // batch never opens a transaction it cannot close. Date 2026-05-01.
+    #[tokio::test]
+    async fn test_execute_sql_batch_validation_rejects_empty_statement() {
+        let adapter = PostgresAdapter::new();
+        let stmts = vec!["UPDATE t SET x = 1".to_string(), "   ".to_string()];
+        let result = adapter.execute_query_batch(&stmts, None).await;
+        match result {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("Statement 2 of 2 is empty"),
+                    "Expected validation error citing index, got: {msg}"
+                );
+            }
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Sprint 130 — sub-pool LRU + switch_active_db unit tests
+    // -------------------------------------------------------------------
+    //
+    // The cache-hit / eviction / current_db-protection tests drive the
+    // adapter's internal state directly via the `inner` mutex so we can
+    // verify LRU bookkeeping without standing up a real Postgres pool.
+    // The cache-miss path requires a live `PgPool` (it calls
+    // `connect_with`), so that test is gated behind `#[ignore]` and only
+    // runs when a developer has TEST_PG configured.
+
+    #[test]
+    fn strip_leading_comments_line_comment() {
+        assert_eq!(
+            strip_leading_comments("-- this is a comment\nSELECT 1"),
+            "SELECT 1"
+        );
+    }
+
+    #[test]
+    fn strip_leading_comments_block_comment() {
+        assert_eq!(strip_leading_comments("/* block */ SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_leading_comments_multiple_line_comments() {
+        assert_eq!(
+            strip_leading_comments("-- line 1\n-- line 2\nSELECT 1"),
+            "SELECT 1"
+        );
+    }
+
+    #[test]
+    fn strip_leading_comments_mixed_comments() {
+        assert_eq!(
+            strip_leading_comments("/* block */ -- line\nINSERT INTO t VALUES (1)"),
+            "INSERT INTO t VALUES (1)"
+        );
+    }
+
+    #[test]
+    fn strip_leading_comments_no_comment() {
+        assert_eq!(strip_leading_comments("SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_leading_comments_only_comment() {
+        assert_eq!(strip_leading_comments("-- just a comment"), "");
+    }
+
+    #[test]
+    fn strip_leading_comments_unclosed_block() {
+        assert_eq!(strip_leading_comments("/* never closed"), "");
+    }
+
+    #[test]
+    fn strip_leading_comments_whitespace_only() {
+        assert_eq!(strip_leading_comments("   "), "");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_removes_single_semicolon() {
+        assert_eq!(strip_trailing_terminator("SELECT 1;"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_removes_semicolon_with_whitespace() {
+        assert_eq!(strip_trailing_terminator("SELECT 1;  \n  "), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_removes_multiple_semicolons() {
+        assert_eq!(strip_trailing_terminator("SELECT 1;;"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_no_change_when_absent() {
+        assert_eq!(strip_trailing_terminator("SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_preserves_internal_semicolon() {
+        // Internal semicolons (e.g., inside string literals or between statements)
+        // are not the helper's responsibility — only true trailing ones go.
+        assert_eq!(
+            strip_trailing_terminator("SELECT ';' as v;"),
+            "SELECT ';' as v"
+        );
+    }
+
+    #[test]
+    fn strip_trailing_terminator_only_semicolons_returns_empty() {
+        assert_eq!(strip_trailing_terminator(";  ;  "), "");
+    }
+}
