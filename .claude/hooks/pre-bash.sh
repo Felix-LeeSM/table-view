@@ -4,24 +4,34 @@
 INPUT=$(cat)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
+# Each entry is a POSIX extended regex (ERE) consumed by `grep -qiE`. We
+# anchor with token boundaries — `(^|[[:space:]])` and `([[:space:]]|$)` —
+# so substrings inside unrelated tokens don't false-match. Example:
+# the previous substring "DROP TABLE" matched a comment like `# how to
+# DROP TABLE in postgres`; the regex form requires a word-edge.
+# Hook-bypass patterns stay aggressive on purpose — git-policy.md
+# forbids any escape route.
 DANGEROUS_PATTERNS=(
-  "rm -rf /"
-  "rm -rf ~"
-  "rm -rf *"
-  "rm -rf ."
-  "rm -rf src"
-  "rm -rf node_modules"
-  "rm -rf target"
-  "DROP DATABASE"
-  "DROP TABLE"
-  "TRUNCATE"
-  "git push --force"
-  "git reset --hard"
-  "--no-verify"
-  "LEFTHOOK=0"
-  "dd if="
-  "mkfs"
-  "> /dev/sda"
+  # Destructive rm against root/home/wildcard/cwd/critical dirs.
+  # Matches `rm -rf /`, `rm -fr ~`, `rm -Rf src`, etc.
+  '(^|[[:space:]])rm[[:space:]]+-[rRfF]*[rR][rRfF]*[[:space:]]+(/|~|\*|\.|src|node_modules|target)([[:space:]/]|$)'
+  # SQL destructive DDL/DML.
+  '(^|[[:space:]])DROP[[:space:]]+(DATABASE|TABLE)([[:space:]]|$)'
+  '(^|[[:space:]])TRUNCATE([[:space:]]|$)'
+  # Git destructive operations.
+  '(^|[[:space:]])git[[:space:]]+push[[:space:]]+.*--force'
+  '(^|[[:space:]])git[[:space:]]+reset[[:space:]]+--hard'
+  # Hook-bypass flags / env (git-policy.md). The form
+  # `--no-verify-<x>` is a different flag, so we require a real token
+  # edge after the flag name.
+  '--no-verify([[:space:]=]|$)'
+  '(^|[[:space:]])LEFTHOOK=0([[:space:]]|$)'
+  '(^|[[:space:]])LEFTHOOK_SKIP='
+  '(^|[[:space:]])HUSKY=0([[:space:]]|$)'
+  # Disk wipe / raw device write.
+  '(^|[[:space:]])dd[[:space:]]+if='
+  '(^|[[:space:]])mkfs(\.|[[:space:]])'
+  '>[[:space:]]*/dev/(sd[a-z]|nvme[0-9]|disk[0-9])'
 )
 
 block() {
@@ -32,7 +42,7 @@ block() {
 
 check_dangerous_patterns() {
   for pattern in "${DANGEROUS_PATTERNS[@]}"; do
-    if echo "$COMMAND" | grep -qi -e "$pattern"; then
+    if echo "$COMMAND" | grep -qiE -e "$pattern"; then
       block "Dangerous command pattern detected: $pattern"
     fi
   done
