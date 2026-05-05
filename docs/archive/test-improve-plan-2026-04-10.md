@@ -1,4 +1,9 @@
-# Test Improvement Plan
+# Test Improvement Plan (Archived)
+
+> **Archived 2026-05-05.** 이 문서는 2026-04-10 기준 스냅샷이며, Phase 1–4 의
+> task list 는 미체크 상태로 동결됨. 실제 테스트 개선 작업은 Sprint 189–209
+> refactoring cycle (CODE_SMELLS.md retired, 커밋 `0c64a1b` 참조) 안에서
+> 진행됨. 본 문서를 새 작업의 source-of-truth 로 사용하지 말 것.
 
 > 측정일: 2026-04-10
 > 목표: Frontend 전체 60%+, 핵심 파일 70%+ / Rust 단위 테스트 커버리지 측정 후 개선
