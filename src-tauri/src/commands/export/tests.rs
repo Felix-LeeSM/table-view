@@ -1,9 +1,13 @@
-//! Unit tests for `commands/export.rs` — moved out of the inline
-//! `mod tests` block (Sprint P5 step 2, 2026-05-05) so the production
-//! Tauri command + writer code in export.rs is no longer ~40% buried
-//! under test scaffolding. `super::*` continues to pull in everything
-//! export.rs exposes, so no test logic changes.
+//! Unit tests for `commands/export/*` — moved out of the inline
+//! `mod tests` block (Sprint P5 step 1, commit a60074d). Sprint 213
+//! (P5 step 2b) then split format-specific writers into the
+//! `grid_writers` sibling module, so this file imports the writer
+//! helpers explicitly. No test logic changed.
 
+use super::dump_writers::quote_pg_string;
+use super::grid_writers::{
+    json_to_cell_string, json_to_sql_literal, quote_sql_identifier, quote_sql_string,
+};
 use super::*;
 use serde_json::json;
 use std::path::Path;
