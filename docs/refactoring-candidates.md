@@ -20,7 +20,7 @@ Last updated: 2026-05-05
 | P1 | `DocumentDataGrid.tsx` | document grid orchestration 과 bulk mutation UI 과다 결합 |
 | P2 | `QuickLookPanel.tsx` | RDB/document 모드, resize, edit UI 가 단일 파일에 공존 |
 | P3 | `tabStore.ts` | store action 안의 cross-store 직접 의존 |
-| P4 | `tauri.ts` | 모든 Tauri invoke wrapper 가 단일 module 에 집중 |
+| ~~P4~~ | ~~`tauri.ts`~~ | ~~모든 Tauri invoke wrapper 가 단일 module 에 집중~~ — 완료 (2026-05-05, commit 879b003) |
 | P5 | Rust DB/export modules | trait/DTO/test/export writer 책임이 큰 파일에 공존 |
 | P6 | `ConnectionDialog.tsx` | URL parsing, credential policy, DBMS form, save/test flow 결합 |
 | P7 | Structure editors | Columns/Indexes/Constraints DDL preview/execute flow 중복 |
@@ -138,7 +138,11 @@ sprint에서 cross-store 의존을 제거해야 한다고 명시한다.
 - `pnpm vitest run src/__tests__/cross-window-store-sync.test.tsx src/__tests__/cross-window-connection-sync.test.tsx`
 - 수동 확인: table preview/persistent tab open, MRU default target, query history panel.
 
-## P4 — `src/lib/tauri.ts`
+## P4 — `src/lib/tauri.ts` ✅ 완료 (2026-05-05, commit 879b003)
+
+> 688-line god file이 `src/lib/tauri/{connection,schema,ddl,query,document,export}.ts`
+> 6개 도메인 파일 + 15-line barrel `index.ts`로 분해됨. `@lib/tauri` import surface는
+> 변경 없음. 아래 원문은 history 보존용으로 남겨둔다.
 
 ### Problem
 
