@@ -9,6 +9,7 @@
 use sqlx::Column;
 use sqlx::Row;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 
 use crate::error::AppError;
 use crate::models::{
@@ -17,6 +18,23 @@ use crate::models::{
 
 use super::mutations::qualified_table;
 use super::PostgresAdapter;
+
+/// Best-effort `CLOSE <cursor_name>` for the streaming export path. Logs a
+/// warning on failure but does not propagate — at the call sites the rows
+/// have already streamed (commit path) or the caller is about to ROLLBACK
+/// the transaction anyway (abort path), so a CLOSE failure isn't actionable.
+async fn close_cursor_warn(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    cursor_name: &str,
+    context: &str,
+) {
+    if let Err(e) = sqlx::query(&format!("CLOSE {cursor_name}"))
+        .execute(&mut **tx)
+        .await
+    {
+        warn!("CLOSE {cursor_name} ({context}) failed: {e}");
+    }
+}
 
 /// Strip leading SQL comments and whitespace so that query type detection
 /// works on `-- comment\nSELECT ...` and `/* block */ SELECT ...` inputs.
@@ -611,10 +629,10 @@ impl PostgresAdapter {
         loop {
             if let Some(t) = cancel {
                 if t.is_cancelled() {
-                    let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
-                        .execute(&mut *tx)
-                        .await;
-                    let _ = tx.rollback().await;
+                    close_cursor_warn(&mut tx, cursor_name, "cancellation").await;
+                    if let Err(e) = tx.rollback().await {
+                        warn!("ROLLBACK after cancellation failed: {e}");
+                    }
                     return Err(AppError::Database("Operation cancelled".into()));
                 }
             }
@@ -637,10 +655,10 @@ impl PostgresAdapter {
             }
             let count = batch.len() as u64;
             if sender.send(batch).await.is_err() {
-                let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
-                    .execute(&mut *tx)
-                    .await;
-                let _ = tx.rollback().await;
+                close_cursor_warn(&mut tx, cursor_name, "receiver dropped").await;
+                if let Err(e) = tx.rollback().await {
+                    warn!("ROLLBACK after receiver drop failed: {e}");
+                }
                 return Err(AppError::Database(
                     "Receiver dropped — export aborted".into(),
                 ));
@@ -648,9 +666,7 @@ impl PostgresAdapter {
             total += count;
         }
 
-        let _ = sqlx::query(&format!("CLOSE {cursor_name}"))
-            .execute(&mut *tx)
-            .await;
+        close_cursor_warn(&mut tx, cursor_name, "commit").await;
         tx.commit()
             .await
             .map_err(|e| AppError::Database(format!("COMMIT failed: {e}")))?;
