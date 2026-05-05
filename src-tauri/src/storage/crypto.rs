@@ -222,23 +222,16 @@ pub fn aead_decrypt_with_password(
     envelope: &EncryptedEnvelope,
     master_password: &str,
 ) -> Result<String, AppError> {
-    if envelope.v != ENVELOPE_VERSION {
-        return Err(AppError::Encryption(format!(
-            "Unsupported envelope version {}",
-            envelope.v
-        )));
-    }
-    if envelope.kdf != "argon2id" {
-        return Err(AppError::Encryption(format!(
-            "Unsupported KDF: {}",
-            envelope.kdf
-        )));
-    }
-    if envelope.alg != "aes-256-gcm" {
-        return Err(AppError::Encryption(format!(
-            "Unsupported algorithm: {}",
-            envelope.alg
-        )));
+    // Metadata mismatches (version / kdf / alg) collapse into the same
+    // constant wrong-password message as decrypt failure: an attacker who
+    // tampered with one of those fields would otherwise learn which one
+    // they hit via the distinct error string. Treat unknown envelopes as
+    // indistinguishable from "wrong password".
+    if envelope.v != ENVELOPE_VERSION || envelope.kdf != "argon2id" || envelope.alg != "aes-256-gcm"
+    {
+        return Err(AppError::Encryption(
+            INCORRECT_MASTER_PASSWORD_MESSAGE.into(),
+        ));
     }
 
     // Any base64 / length anomaly is folded into the constant
@@ -442,6 +435,30 @@ mod tests {
                 assert_eq!(msg, INCORRECT_MASTER_PASSWORD_MESSAGE);
             }
             other => panic!("Expected Encryption error, got: {:?}", other),
+        }
+    }
+
+    // C3 (audit 2026-05-05): envelope metadata tamper must collapse to the
+    // same wrong-password message as a decrypt failure, so a disk-access
+    // attacker cannot tell which field they hit by error-string diff.
+    #[test]
+    fn aead_envelope_tampered_metadata_rejected_with_constant_message() {
+        let make = || aead_encrypt_with_password("payload", "correct-pw").unwrap();
+
+        let mut bad_version = make();
+        bad_version.v = 99;
+        let mut bad_kdf = make();
+        bad_kdf.kdf = "scrypt".to_string();
+        let mut bad_alg = make();
+        bad_alg.alg = "chacha20-poly1305".to_string();
+
+        for envelope in [bad_version, bad_kdf, bad_alg] {
+            match aead_decrypt_with_password(&envelope, "correct-pw") {
+                Err(AppError::Encryption(msg)) => {
+                    assert_eq!(msg, INCORRECT_MASTER_PASSWORD_MESSAGE);
+                }
+                other => panic!("Expected Encryption error, got: {:?}", other),
+            }
         }
     }
 
