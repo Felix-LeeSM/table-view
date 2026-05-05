@@ -423,6 +423,9 @@ fn install_macos_menu<R: tauri::Runtime>(
                     return;
                 }
                 if let Some(launcher) = handle.get_webview_window("launcher") {
+                    // set_focus is a UX nicety; the launcher is already
+                    // shown by the call above, and the subsequent emit
+                    // (which IS logged on failure) is the real signal.
                     let _ = launcher.set_focus();
                     if let Err(e) = launcher.emit("menu:new-connection", ()) {
                         tracing::warn!(
