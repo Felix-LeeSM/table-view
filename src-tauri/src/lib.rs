@@ -91,6 +91,25 @@ pub fn run() {
     let mut cursor = entry;
     record_phase(&mut cursor, "subscriber-init");
 
+    // Builder chain ordering. Tauri resolves `State<T>` and plugin lookups at
+    // runtime, so only the following hard constraints apply — everything
+    // else (plugin order, the position of `manage(AppState)` relative to
+    // `invoke_handler`, the order of `on_window_event` / `setup` /
+    // `on_page_load` registrations) is reader-friendly grouping, not
+    // load-bearing:
+    //   1. Every `.manage(...)` call must complete before the FIRST IPC
+    //      handler invocation (not before `invoke_handler` registration).
+    //      Today we register `AppState` before `build()`, which is
+    //      sufficient — handlers cannot fire until the event loop runs.
+    //   2. The `setup` callback runs once during `build()`. Anything it
+    //      reads via `app.state::<T>()` must already be `.manage`-d (it is
+    //      — see `app-state-new` phase above).
+    //   3. `generate_context!()` is a compile-time macro; its source-order
+    //      position is irrelevant.
+    // Reordering for the sake of refactoring is therefore safe so long as
+    // (1) and (2) hold. The current order matches the phase-instrumentation
+    // narrative (Sprint 175) and should only change when that narrative
+    // changes.
     let builder = tauri::Builder::default();
     record_phase(&mut cursor, "builder-default");
 
