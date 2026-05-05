@@ -24,9 +24,9 @@ import QuerySyntax from "@components/shared/QuerySyntax";
 import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
 import { cn } from "@lib/utils";
 
-// Sprint-112: Radix `<SelectItem>` cannot have an empty value, so we use
-// sentinel string `__all__` for the "All connections" option. The component
-// state still keeps `null` (canonical "no filter").
+// Radix `<SelectItem>` rejects an empty value, so we use a sentinel for
+// the "All connections" option. The component state still treats `null`
+// as canonical "no filter".
 const CONN_FILTER_ALL_SENTINEL = "__all__";
 
 function truncateSql(sql: string, maxLen: number): string {
@@ -193,10 +193,9 @@ export default function GlobalQueryLogPanel({
               data-testid={`global-log-entry-${entry.id}`}
               className={cn(
                 "flex flex-col px-3 py-1 text-xs hover:bg-muted cursor-pointer",
-                // Sprint 180 (AC-180-03) — cancelled gets a muted bg
-                // (calm secondary, not destructive) so the user can
-                // still pick the entry out of the log without it
-                // looking like a failure.
+                // Cancelled gets a muted bg (not destructive) so the
+                // user can still pick the entry out without it reading
+                // as a failure.
                 entry.status === "error" && "bg-destructive/10",
                 entry.status === "cancelled" && "bg-muted/40",
               )}
@@ -215,10 +214,8 @@ export default function GlobalQueryLogPanel({
                   title={entry.status}
                   data-status={entry.status}
                 >
-                  {/* Sprint 180 (AC-180-03) — three-way status icon.
-                      Cancelled entries get a calm CircleSlash in the
-                      muted-foreground colour so the user reads them as
-                      self-aborted rather than failed. */}
+                  {/* Cancelled entries paint a muted CircleSlash so
+                      they read as self-aborted, not failed. */}
                   {entry.status === "success" ? (
                     <CheckCircle2 size={12} className="text-success" />
                   ) : entry.status === "cancelled" ? (
@@ -260,10 +257,9 @@ export default function GlobalQueryLogPanel({
                 <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
                   {getConnectionName(entry.connectionId)}
                 </span>
-                {/* Paradigm badge — SQL for relational entries, MQL for
-                    document entries. Sprint 123 introduces this so the
-                    mixed log is scannable at a glance without inspecting
-                    the truncated query text. */}
+                {/* Paradigm badge — SQL for relational, MQL for
+                    document — so a mixed log is scannable without
+                    reading the truncated query text. */}
                 <span
                   className="shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-secondary-foreground"
                   data-paradigm={entry.paradigm}
@@ -282,8 +278,7 @@ export default function GlobalQueryLogPanel({
                     {entry.queryMode}
                   </span>
                 )}
-                {/* Source badge — Sprint 196 (AC-196-06). raw entries
-                    suppressed inside component. */}
+                {/* `raw` source is suppressed inside the badge. */}
                 <QueryHistorySourceBadge source={entry.source} />
               </div>
               {/* Expanded SQL view */}

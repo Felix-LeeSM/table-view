@@ -12,18 +12,13 @@ import type { QueryFavoritesState } from "./useQueryFavorites";
  * Save/Favorites buttons + 2 popover (Save 폼 / `<FavoritesPanel>` mount).
  * Save 와 Favorites popover 는 상호 배타 — 한 쪽 열 때 다른 쪽 close.
  *
- * Sprint 201 에서 entry 의 toolbar JSX 영역에서 추출. DOM byte-for-byte
- * 동등 — Run 버튼 disabled 조건 (`!tab.sql.trim()`), Cancel 버튼
- * Square+Loader2 동시 노출, Format 버튼 document paradigm 에서 숨김,
- * Mongo Mode toggle 의 ToggleGroup value/onValueChange 동작 모두 동결.
- *
- * 외부 invariant:
- * - `<Save 버튼 disabled>` 는 SQL 이 비어있을 때만 disabled. favoriteName
- *   비어있으면 Save 폼의 confirm 버튼이 disabled (이 폼은 popover 안).
- * - `Favorites` 버튼은 항상 enabled — favorites 가 0개여도 panel 을 열 수
- *   있어야 (drag-and-drop 으로 처음 추가 가능).
- * - Run 버튼의 단축키 라벨 `⌘⏎` 은 사용자 onboarding 용 — 실제 단축키
- *   handler 는 keyboard layer 별도.
+ * Invariants:
+ * - The Save button is disabled iff `tab.sql` is empty. The save form's
+ *   own confirm button (inside the popover) gates on `favoriteName`.
+ * - The Favorites button is always enabled — even with zero favorites,
+ *   the panel must open so the user can add one via drag-and-drop.
+ * - Run's `⌘⏎` label is onboarding text; the actual shortcut lives in
+ *   the keyboard layer.
  */
 
 export interface QueryTabToolbarProps {

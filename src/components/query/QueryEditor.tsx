@@ -9,27 +9,15 @@ import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 
 /**
- * Sprint 139 — paradigm-aware editor router.
+ * Paradigm-aware editor router. `rdb` → `SqlQueryEditor`, `document` →
+ * `MongoQueryEditor`, kv/search → placeholder textbox until dedicated
+ * editors land. Each paradigm-specific editor imports only its own
+ * language + autocomplete extensions.
  *
- * Previously a monolithic CodeMirror component that switched the language
- * extension internally based on the `paradigm` prop. The Sprint 139
- * refactor splits the implementation into two paradigm-specific editors
- * (`SqlQueryEditor`, `MongoQueryEditor`) so each one only imports the
- * autocomplete + language extensions for its own paradigm. The router
- * here preserves the existing public surface (props, ref forwarding,
- * aria-labels) so existing call sites + tests keep working unchanged.
- *
- * Why a router instead of inlining the switch into `QueryTab`? Two reasons:
- *
- * 1. Test scaffolding: the existing `QueryEditor.test.tsx` exercises the
- *    paradigm flip via prop changes; keeping the router keeps that suite
- *    relevant as a regression guard against the routing rules.
- * 2. Symmetry: future paradigms (kv, search) will plug into this router
- *    once their editors land. The router is the single place that knows
- *    "paradigm string → editor component" mapping.
- *
- * The kv / search paradigms render a placeholder textbox until Phase 9
- * lands their dedicated editors.
+ * The single-place "paradigm → editor" mapping lives here so future
+ * paradigms plug in by extending one switch, and so the existing
+ * `QueryEditor.test.tsx` paradigm-flip suite still asserts against a
+ * stable surface.
  */
 
 interface QueryEditorProps {
@@ -105,9 +93,8 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
         );
       case "kv":
       case "search":
-        // Phase 9 will land dedicated editors for these paradigms. Until
-        // then we render a paradigm-tagged placeholder so QueryTab has a
-        // stable container to mount alongside its toolbar.
+        // Placeholder until dedicated editors land — keeps QueryTab's
+        // layout stable.
         return (
           <div
             className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"

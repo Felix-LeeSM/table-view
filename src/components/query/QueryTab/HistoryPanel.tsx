@@ -29,18 +29,11 @@ interface LoadQueryArgs {
  * 본 컴포넌트가 보유 — entry 의 lifecycle 과 묶여 tab unmount 시에만
  * 리셋됨 (분해 이전과 동등).
  *
- * Sprint 201 에서 entry 의 history JSX 영역에서 추출. DOM byte-for-byte
- * 동등 — chevron 아이콘 / 상태 dot color (success/error) / line-clamp /
- * font-mono duration badge / Clear 버튼 위치 모두 동결.
- *
- * 외부 invariant:
- * - entries.length === 0 일 때 panel 자체 비표시 (null 반환). 기존 entry
- *   의 `{entries.length > 0 && <div>...</div>}` 와 동일.
- * - Sprint 84 paradigm-aware 복원 — `loadQueryIntoTab` 의 entry-level
- *   defaults (paradigm ?? "rdb", queryMode ?? "sql") 가 legacy entries
- *   를 안전하게 처리.
- * - 더블클릭 row + 명시적 Load 버튼 모두 동일 `onLoad` 라우팅. 단일
- *   진입점.
+ * Invariants:
+ * - Renders nothing when `entries.length === 0`.
+ * - Both double-click and the explicit Load button route through the
+ *   same `onLoad`, with `paradigm ?? "rdb"` / `queryMode ?? "sql"`
+ *   defaults so legacy entries missing those fields still load.
  */
 
 export interface QueryHistoryPanelProps {
@@ -73,12 +66,6 @@ export default function QueryHistoryPanel({
       {expanded && (
         <ul className="max-h-40 overflow-y-auto">
           {entries.map((entry) => {
-            // Sprint 84 — both the double-click row and the explicit
-            // "Load into editor" button route through the paradigm-aware
-            // `loadQueryIntoTab` helper so the restore branches (same
-            // paradigm / different paradigm / new tab) live in a single
-            // store-owned function. Entry-level defaults guard against
-            // legacy entries missing paradigm / queryMode fields.
             const handleLoad = () =>
               onLoad({
                 connectionId: entry.connectionId,

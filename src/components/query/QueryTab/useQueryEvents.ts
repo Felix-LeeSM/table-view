@@ -19,15 +19,14 @@ import type { QueryTab } from "@stores/tabStore";
  *   - `editorRef` — CodeMirror EditorView ref. SqlQueryEditor /
  *     MongoQueryEditor 가 받음, format/uglify 핸들러가 selection 조회.
  *
- * Sprint 201 에서 entry 로부터 추출. 동작 0 변경.
- *
- * 외부 invariant:
- * - format / uglify listener 는 document paradigm 에서 즉시 short-circuit
- *   — JSON body 를 SQL formatter 로 돌리면 깨짐.
- * - 모든 listener 는 active tab (`activeTabId === tab.id`) 일 때만 처리.
- *   비활성 tab 은 단축키를 받아도 무반응.
- * - cancel-query handler 의 `cancelQuery(...).catch(() => {})` 는 promise
- *   method (best-effort). CODE_SMELLS §4 의 try/catch {} 와는 별개.
+ * Invariants:
+ * - format / uglify short-circuit on document paradigm — running a JSON
+ *   body through the SQL formatter corrupts it.
+ * - Listeners only fire on the active tab (`activeTabId === tab.id`) so
+ *   inactive tabs ignore the global shortcuts.
+ * - The cancel-query handler swallows `cancelQuery` rejections by design
+ *   (best-effort, the UI must not block on a backend that's already
+ *   gone).
  */
 
 export interface UseQueryEventsArgs {

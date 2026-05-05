@@ -10,29 +10,16 @@ import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/tabStore";
 
 /**
- * `QueryTab` 의 모듈-top pure helpers + Sprint 132 raw-query DB-change
- * detection hook.
- *
- * 책임:
- *   - `DocumentQueryContext` + `readDocumentContext` — document-paradigm
- *     tab 의 database/collection 읽기. Mongo find/aggregate Tauri 명령
- *     이 두 필드 없이는 실패하므로 명시적 null check.
- *   - `isRecord` / `isRecordArray` — JSON.parse 결과의 타입 좁히기. find
- *     body 는 object, aggregate pipeline 은 object[] 강제.
- *   - `applyDbMutationHint` — SQL 실행 후 `\c` / `USE` / `SET search_path`
- *     같은 DB-mutation 을 lex 해 optimistic active-DB 갱신 + verify
- *     round-trip. fire-and-forget — 어떤 실패도 query 결과 패널에
- *     영향 안 줌 ("verify 실패 ≠ query 실패").
- *
- * Sprint 201 에서 entry 의 모듈-top 영역에서 추출. catch {} 2곳
- * (verify-best-effort + outer guard) 그대로 보존 — Sprint 206 후보.
- *
- * 외부 invariant:
- * - `applyDbMutationHint` 는 절대 throw 하지 않음. 호출자는 fire-and-forget
- *   (`void` prefix) 로 호출. Sprint 132 contract.
- * - rdb 외 paradigm 은 즉시 short-circuit. 현재 구현은 PG dialect
- *   하드코딩 — MySQL 어댑터 sprint 에서 `tab.connectionMeta.databaseType`
- *   기반 dialect 결정으로 확장 예정.
+ * `QueryTab` module-top helpers:
+ *   - `readDocumentContext` reads `database`/`collection` for document
+ *     tabs (Mongo find/aggregate Tauri commands fail without both).
+ *   - `isRecord` / `isRecordArray` narrow JSON.parse output (find → object,
+ *     aggregate → object[]).
+ *   - `applyDbMutationHint` lexes a freshly-run SQL for `\c`/`USE`/
+ *     `SET search_path`; on a hit it optimistically flips the active DB
+ *     and round-trips `verify_active_db`. Fire-and-forget — never throws,
+ *     so a verify failure cannot tear down the query result panel
+ *     ("verify 실패 ≠ query 실패").
  */
 
 export interface DocumentQueryContext {
@@ -57,22 +44,16 @@ export function isRecordArray(
   return Array.isArray(value) && value.every(isRecord);
 }
 
-// ─── Sprint 132 — raw-query DB-change detection hook ──────────────────────
-// After `await executeQuery(...)` we re-scan the SQL the user just ran for
-// dialect-specific DB / schema / Redis-index switch patterns. A match
-// triggers an *optimistic* `setActiveDb(targetDb)` so the toolbar / sidebar
-// reflect the new context without a manual click, followed by a backend
-// `verify_active_db` round-trip. A verify-mismatch surfaces a `toast.warn`
-// and reverts the optimistic value to whatever the backend actually sees.
+// After `await executeQuery(...)` we re-scan the SQL for dialect-specific
+// DB/schema/Redis-index switches. A match optimistically flips
+// `setActiveDb(targetDb)` so the toolbar/sidebar reflect the new context
+// without a manual click, then round-trips `verify_active_db` and warns
+// + reverts on mismatch.
 //
-// `applyDbMutationHint` is intentionally fire-and-forget from the caller's
-// perspective: it never throws — verify failures are swallowed with a
-// console-free best-effort recovery so the query result panel stays
-// rendered even when the network bounced.
-//
-// Document-paradigm tabs short-circuit immediately — Mongo doesn't use the
-// SQL-style `\c` / `USE` syntax. Search/Kv paradigms aren't routed through
-// `executeQuery` so they never reach this helper.
+// The hook never throws — verify failures stay invisible to the user so
+// the query result panel survives a network blip. Document/kv/search
+// paradigms short-circuit (Mongo has no `\c`/`USE` equivalent;
+// kv/search don't reach `executeQuery`).
 export async function applyDbMutationHint(
   connectionId: string,
   paradigm: Paradigm,
@@ -81,10 +62,9 @@ export async function applyDbMutationHint(
   clearForConnection: (id: string) => void,
 ): Promise<void> {
   if (paradigm !== "rdb") return;
-  // Sprint 132 only ships Postgres. MySQL/Redis dialects fall through here
-  // (the lexer accepts them) but the QueryTab UI today only routes PG raw
-  // SQL, so the dialect map is hard-coded. A future MySQL adapter sprint
-  // will resolve dialect from `tab.connectionMeta.databaseType`.
+  // PG-only today. The lexer accepts MySQL/Redis dialects, but raw-SQL
+  // routing in the UI is PG-only, so the dialect is hard-coded until a
+  // future MySQL adapter resolves it from `tab.connectionMeta`.
   const dialect: SqlMutationDialect = "postgres";
   const hint = extractDbMutation(sql, dialect);
   if (!hint) return;
@@ -108,9 +88,8 @@ export async function applyDbMutationHint(
           setActiveDb(connectionId, actual);
         }
       } catch {
-        // Verify-best-effort. The query result must remain visible even
-        // when verify fails (network blip, backend restart) — sprint 132
-        // contract: "verify 실패 ≠ query 실패".
+        // Verify is best-effort — a network blip must not tear down the
+        // query result. "verify 실패 ≠ query 실패."
       }
     } else if (hint.kind === "switch_schema") {
       // Schema-level change — there's no cheap PG accessor to verify, so
@@ -118,8 +97,7 @@ export async function applyDbMutationHint(
       clearForConnection(connectionId);
       toast.info(`Active schema set to '${hint.targetSchema}'.`);
     } else if (hint.kind === "redis_select") {
-      // Phase 9 Redis adapter will wire DB-index switching. For sprint 132
-      // we only acknowledge the user's intent.
+      // Redis adapter not wired yet — acknowledge intent only.
       toast.info(`Redis SELECT ${hint.databaseIndex} acknowledged.`);
     }
   } catch {

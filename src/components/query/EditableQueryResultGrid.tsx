@@ -74,16 +74,15 @@ export default function EditableQueryResultGrid({
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
   const [executing, setExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
-  // Sprint 186 — warn-tier handoff. Set when warn mode + production +
-  // dangerous statement; consumed by <ConfirmDangerousDialog>.
+  // Warn-tier handoff: populated when warn mode + production +
+  // dangerous statement, consumed by `<ConfirmDangerousDialog>`.
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
   } | null>(null);
 
-  // Sprint 189 (AC-189-02) — Safe Mode gate via shared hook. Environment
-  // is still selected separately for the production stripe banner below
-  // (paradigm-agnostic UI hint, not part of the gate matrix).
+  // Safe Mode gate. Environment is still selected separately for the
+  // production stripe banner below (UI hint, not part of the gate).
   const safeModeGate = useSafeModeGate(connectionId);
   const connectionEnvironment = useConnectionStore(
     (s) =>
@@ -219,8 +218,8 @@ export default function EditableQueryResultGrid({
     setExecuteError(null);
   }, []);
 
-  // Sprint 186 — extracted batch runner so warn-tier confirmDangerous
-  // can reuse the same try/catch + cleanup without duplicating the body.
+  // Extracted so the warn-tier `confirmDangerous` path reuses the same
+  // try/catch + cleanup without duplicating the body.
   const runBatch = useCallback(
     async (sqls: string[]) => {
       setExecuting(true);
@@ -265,9 +264,9 @@ export default function EditableQueryResultGrid({
 
   const handleExecute = useCallback(async () => {
     if (!sqlPreview) return;
-    // Sprint 189 (AC-189-02) — gate every preview statement through the
-    // shared decision matrix (`decideSafeModeAction`). block → setExecuteError
-    // + toast; confirm → pendingConfirm (dialog handoff); allow → fall through.
+    // Run every preview statement through the Safe Mode gate.
+    // block → setExecuteError + toast; confirm → pendingConfirm (dialog
+    // handoff); allow → fall through.
     for (const sql of sqlPreview) {
       const analysis = analyzeStatement(sql);
       const decision = safeModeGate.decide(analysis);

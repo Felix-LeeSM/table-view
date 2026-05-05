@@ -22,21 +22,11 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 
 /**
- * Sprint 139 — RDB / SQL-paradigm query editor.
- *
- * Extracted from the previous monolithic `QueryEditor` so the autocomplete
- * provider and language extension this editor installs are exclusively
- * SQL-aware. The editor never imports `useMongoAutocomplete` and never
- * installs the JSON language extension — cross-contamination between
- * paradigms is structurally impossible.
- *
- * Receives the same minimal props the RDB branch of QueryEditor used to
- * receive: editor body (`sql`, `onSqlChange`), Mod-Enter execute callback
- * (`onExecute`), the dialect-aware SQL namespace (`schemaNamespace`) used
- * for autocomplete candidates, and the `SQLDialect` for keyword highlighting
- * + identifier-quoting behaviour. When `sqlDialect` is omitted the editor
- * falls back to `StandardSQL` so a tab whose connection has been deleted
- * mid-session still renders.
+ * RDB / SQL-paradigm query editor. Imports only SQL-aware extensions —
+ * never the JSON language extension or `useMongoAutocomplete`, so
+ * cross-paradigm contamination is structurally impossible. Falls back to
+ * `StandardSQL` when `sqlDialect` is missing (e.g. tab whose connection
+ * was deleted mid-session).
  */
 
 export interface SqlQueryEditorProps {

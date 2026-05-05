@@ -22,45 +22,26 @@ import {
 import { logger } from "@lib/logger";
 
 /**
- * `QueryTab` 의 query execution + mongo aggregate danger gate 캡슐화.
+ * `QueryTab` query-execution hook covering four `handleExecute` branches
+ * (cancel-running / document find+aggregate / SQL single / SQL multi),
+ * the Mongo aggregate danger gate, and history book-keeping.
  *
- * 책임:
- *   - `handleExecute` — Run/Cancel 버튼 핸들러. 4 분기를 한 곳에서:
- *     1. 이미 running 이면 cancel.
- *     2. document paradigm + find/aggregate.
- *     3. SQL single statement.
- *     4. SQL multi-statement (Sprint 100 — 순차 실행 + per-statement
- *        breakdown).
- *   - `runMongoAggregateNow` — aggregate dispatch + queryState/history
- *     book-keeping. warn-confirm 경로가 같은 함수로 재진입.
- *   - `confirmMongoDangerous` / `cancelMongoDangerous` — Sprint 188
- *     warn-tier dialog handlers.
- *   - `pendingMongoConfirm` state — pipeline + reason 보존 (dialog 가
- *     열려 있는 동안).
- *
- * Sprint 201 에서 entry 로부터 추출. 동작 0 변경. deps 억제 (Sprint 25
- * 정책 — keyboard shortcut layer ref staleness 회피) 1곳 보존.
- * cancelQuery 의 빈 catch 는 dev-only logger.warn 으로 대체 — race vs
- * 진짜 backend regression 구분 가능.
- *
- * 외부 invariant:
- * - Sprint 132 raw-query DB-change detection ("verify 실패 ≠ query 실패")
- *   — `dispatchDbMutationHint` 가 fire-and-forget. SQL single + multi
- *   양쪽 path 의 `await executeQuery` 직후 호출.
- * - Sprint 188 mongo aggregate 3-tier gate (block / confirm / off) —
- *   running-state set 이전에 실행. block / confirm 결정은 tab 을 running
- *   상태로 strand 시키지 않음.
- * - Sprint 195 intent-revealing query lifecycle actions — completeQuery /
- *   failQuery / completeMultiStatementQuery 의 stale-response guard 가
- *   running queryId 매칭 시에만 transition (store action 측 보장).
- * - Sprint 100 multi-statement — 마지막 success result 를 grid 에 노출
- *   + per-statement breakdown 별도 보존. allFailed → error transition.
- *   history entry 의 status 는 "any failed" 기준 (partial failure 도
- *   destructive marker).
- * - deps 억제 (`react-hooks/exhaustive-deps`) — Sprint 25 부터 동결된
- *   stale-closure 회피 정책. addHistoryEntry / updateQueryState 등을
- *   의도적으로 deps 에서 제외 (handler 가 매 store 변화에 재생성되면
- *   keyboard shortcut layer 의 ref 가 stale 됨).
+ * Invariants:
+ * - The raw-query DB-change detection (`dispatchDbMutationHint`) fires
+ *   fire-and-forget after every `await executeQuery`; verify failures
+ *   never tear down the result panel.
+ * - The Mongo aggregate 3-tier gate (block / confirm / off) runs before
+ *   the running-state transition, so `block`/`confirm` decisions never
+ *   strand the tab in `running`.
+ * - The lifecycle actions (`completeQuery`, `failQuery`,
+ *   `completeMultiStatementQuery`) match `queryId` against the currently
+ *   running query and ignore stale responses.
+ * - Multi-statement: the last success populates the grid; the
+ *   per-statement breakdown lives alongside; history is `error` if any
+ *   statement failed (partial failure ⇒ destructive marker).
+ * - The handler's `exhaustive-deps` is intentionally suppressed — the
+ *   keyboard layer holds a ref to it and a per-store-change identity
+ *   churn would stale that ref.
  */
 
 export interface UseQueryExecutionArgs {
@@ -81,26 +62,17 @@ export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
   const updateQueryState = useTabStore((s) => s.updateQueryState);
-  // Sprint 195 — intent-revealing query lifecycle actions. They replace the
-  // 7 inline `useTabStore.setState` sites previously inlined here. Their
-  // guards (running queryId match) are equivalent to the inlined version,
-  // so stale-response semantics are preserved.
+  // Lifecycle actions; their queryId guards encode the stale-response
+  // policy that used to be inlined as direct `useTabStore.setState` calls.
   const completeQuery = useTabStore((s) => s.completeQuery);
   const failQuery = useTabStore((s) => s.failQuery);
   const completeMultiStatementQuery = useTabStore(
     (s) => s.completeMultiStatementQuery,
   );
-  // Sprint 212 — cross-store coupling 제거. 사전에는 `useTabStore.recordHistory`
-  // action 안에서 tab 객체로부터 paradigm/queryMode/database/collection 을
-  // 자동 추출 + `useQueryHistoryStore.addHistoryEntry({...})` 를 호출했지만,
-  // store 행위에서 cross-store side effect 가 빠지면서 caller (이 hook) 가
-  // 동일 payload 모양을 직접 구성한다. `tab` 은 hook arg 로 보유 — store-side
-  // 와 동일한 데이터를 본다.
+  // History recording is the caller's responsibility (the tabStore no
+  // longer reaches across stores). We rebuild the payload here so the
+  // 8 call sites can pass only the variable fields below.
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-  // 8 call site 가 동일 mood 의 payload 를 만들어 보낸다. closure 로 묶어
-  // 호출 사이트가 가변 필드 (sql / executedAt / duration / status) 만
-  // 책임지게. 사전 store-side 의미 (Sprint 195 + 196 default `source: "raw"`)
-  // 보존.
   const recordHistory = useCallback(
     (payload: {
       sql: string;
@@ -131,22 +103,20 @@ export function useQueryExecution({
     ],
   );
 
-  // Sprint 188 — Mongo aggregate pipeline danger gate. The hook centralises
-  // the strict / warn / off decision against the connection's environment;
-  // pendingMongoConfirm holds the pipeline + reason while the warn-tier
-  // confirm dialog is open so executing it requires re-dispatching with the
-  // exact stages the user already typed.
+  // Mongo aggregate danger gate (strict / warn / off). While the
+  // warn-tier dialog is open, `pendingMongoConfirm` keeps the exact
+  // pipeline + reason so the re-dispatch on confirm runs the same
+  // stages the user typed.
   const mongoGate = useSafeModeGate(tab.connectionId);
   const [pendingMongoConfirm, setPendingMongoConfirm] = useState<{
     pipeline: Record<string, unknown>[];
     reason: string;
   } | null>(null);
 
-  // Sprint 188 — Mongo aggregate dispatch + queryState/history book-keeping
-  // extracted so the warn-confirm dialog can re-enter the same path with
-  // the pending pipeline. Mirrors the inline find branch below
-  // (running-set → dispatch → queryResult adapt → completed/error sync →
-  // history entry) but for `aggregateDocuments` only.
+  // Aggregate dispatch + book-keeping, extracted so the warn-confirm
+  // dialog can re-enter the same path with the pending pipeline. Mirrors
+  // the inline find branch (running-set → dispatch → adapt → complete →
+  // history) but for `aggregateDocuments`.
   const runMongoAggregateNow = useCallback(
     async (pipeline: Record<string, unknown>[]) => {
       const docCtx = readDocumentContext(tab);
@@ -229,13 +199,10 @@ export function useQueryExecution({
       return;
     }
 
-    // Sprint 73 — document paradigm (MongoDB find / aggregate). Runs on a
-    // separate code path from the SQL flow below: parses the editor body
-    // as JSON, dispatches to the matching Tauri command, and funnels the
-    // DocumentQueryResult into the existing queryState via a synthesized
-    // QueryResult shape so the downstream QueryResultGrid can render rows
-    // unchanged. Errors (invalid JSON, wrong pipeline type, backend
-    // failures) land in `queryState: "error"` with a descriptive message.
+    // Document paradigm (find / aggregate). Parses the editor body as
+    // JSON, dispatches the matching Tauri command, and adapts
+    // DocumentQueryResult into the shared QueryResult shape so the grid
+    // doesn't fork by paradigm.
     if (tab.paradigm === "document") {
       const docCtx = readDocumentContext(tab);
       if (!docCtx) {
@@ -258,11 +225,8 @@ export function useQueryExecution({
         return;
       }
 
-      // Sprint 188 — aggregate pipeline danger gate. Runs before the
-      // running-state set so a blocked / pending-confirm pipeline cannot
-      // strand the tab in a "running" indicator. The actual dispatch +
-      // queryState/history book-keeping is shared with the warn-confirm
-      // path through `runMongoAggregateNow`.
+      // The aggregate gate runs before the running-state transition so
+      // `block`/`confirm` decisions cannot strand the tab in `running`.
       if (tab.queryMode === "aggregate") {
         if (!isRecordArray(parsed)) {
           updateQueryState(tab.id, {
@@ -397,21 +361,16 @@ export function useQueryExecution({
           status: "error",
         });
       }
-      // Sprint 132 — DB-change detection runs after the awaited execute
-      // resolves, regardless of success/error. We call it from outside the
-      // try/catch so a thrown query error doesn't bypass the lex pass —
-      // `\c another_db` may surface as a PG syntax error but still flips
-      // the active pool on the backend, so the optimistic update + verify
-      // round-trip is still meaningful. The helper itself never throws.
+      // Run DB-change detection regardless of query success — `\c x` can
+      // surface as a PG syntax error yet still flip the active pool on
+      // the backend, so the optimistic update + verify is still useful.
       dispatchDbMutationHint(tab.connectionId, tab.paradigm, sql);
       return;
     }
 
-    // Multiple statements — execute sequentially.
-    // Sprint 100 — collect a per-statement breakdown so the result panel
-    // can render one tab per statement. Each iteration pushes either a
-    // `success` entry (with `result`) or an `error` entry (with `error`).
-    // We track wall-clock duration per statement around `executeQuery`.
+    // Multiple statements: execute sequentially and collect a
+    // per-statement breakdown so the result panel can render one tab per
+    // statement (success entries carry `result`, errors carry `error`).
     const queryId = `${tab.id}-${Date.now()}`;
     const startTime = Date.now();
     updateQueryState(tab.id, { status: "running", queryId });
@@ -447,9 +406,8 @@ export function useQueryExecution({
     ).length;
     const allFailed = successCount === 0;
 
-    // Sprint 195 — multi-statement final transition delegated to a single
-    // intent action. allFailed → error (with joined message); otherwise
-    // completed with `lastResult` + per-statement breakdown.
+    // Final transition: `allFailed` → error (joined message); else
+    // completed with `lastResult` + the per-statement breakdown.
     const joinedErrors = statementResults
       .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
       .join("\n");
@@ -464,20 +422,14 @@ export function useQueryExecution({
       sql,
       executedAt: Date.now(),
       duration: Date.now() - startTime,
-      // History entry status reflects whether *any* statement failed —
-      // partial failure still surfaces a destructive marker in the
-      // history list so users can spot it without opening the tab.
+      // Partial failure still flags the entry as `error` so users can
+      // spot it in the history list without opening the tab.
       status: successCount === statements.length ? "success" : "error",
     });
-    // Sprint 132 — same hook as the single-statement path. Multi-statement
-    // input feeds the full SQL through the lexer, which already takes the
-    // last match (sprint contract — "마지막만"). So a script ending in
-    // `... ; \c admin` flips active_db to "admin" and verifies once.
+    // The lexer takes the last DB-mutation match in the full script, so a
+    // script ending in `...; \c admin` flips active_db once.
     dispatchDbMutationHint(tab.connectionId, tab.paradigm, sql);
-    // The original Sprint 25 callback intentionally excluded
-    // addHistoryEntry/updateQueryState from the dependency list so stale
-    // closure issues don't fire on every store subscription. Sprint 73
-    // reuses that contract.
+    // Excluding store actions from deps is deliberate — see hook header.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tab.id,

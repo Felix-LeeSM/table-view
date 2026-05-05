@@ -469,11 +469,9 @@ export default function QueryResultGrid({
 
   // Completed state
   if (queryState.status === "completed") {
-    // Sprint 100 — multi-statement runs (≥ 2 statements) split into one
-    // tab per statement. Single-statement runs (or any caller that omits
-    // `statements`) keep rendering the legacy single-result UI for full
-    // backward compat — no Tabs scaffolding is rendered, so existing
-    // tests that assert `queryByRole("tab") === null` still pass.
+    // Multi-statement runs render one tab per statement; single-statement
+    // (or callers that omit `statements`) keep the bare single-result UI
+    // — no Tabs scaffolding, so `queryByRole("tab") === null` holds.
     if (queryState.statements && queryState.statements.length >= 2) {
       return (
         <CompletedMultiResult

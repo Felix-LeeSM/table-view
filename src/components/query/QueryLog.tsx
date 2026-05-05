@@ -105,10 +105,9 @@ export default function QueryLog() {
               className="w-full justify-start gap-2 px-3 py-1 text-left font-normal rounded-none h-auto"
               onClick={() => handleEntryClick(entry.sql)}
             >
-              {/* Status dot — Sprint 180 (AC-180-03) widens the colour
-                  branches: cancelled queries paint a calm muted dot
-                  rather than the destructive red so the user can tell
-                  apart a true error from a self-aborted op at a glance. */}
+              {/* Cancelled queries paint a muted dot, not destructive
+                  red, so a self-abort is visually distinct from a real
+                  error. */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
                   entry.status === "success"
@@ -120,20 +119,17 @@ export default function QueryLog() {
                 title={entry.status}
                 data-status={entry.status}
               />
-              {/* SQL text — paradigm-aware syntax highlighting (Sprint 177).
-                  Mirrors the consumption pattern in `GlobalQueryLogPanel.tsx`
-                  and `QueryTab.tsx`: truncate first (preserves the existing
-                  80-char invariant), then route through the paradigm
-                  dispatcher so Mongo entries surface MQL operator coloring
-                  while RDB entries keep SQL keyword treatment. */}
+              {/* Truncate first (preserves the 80-char invariant), then
+                  route through the paradigm dispatcher so Mongo entries
+                  surface MQL operator coloring and RDB entries keep SQL
+                  keyword treatment. */}
               <QuerySyntax
                 className="flex-1 truncate text-foreground"
                 sql={truncateSql(entry.sql, 80)}
                 paradigm={entry.paradigm}
                 queryMode={entry.queryMode}
               />
-              {/* Source badge — Sprint 196 (AC-196-06). raw entries are
-                  suppressed inside the badge component. */}
+              {/* `raw` source is suppressed inside the badge component. */}
               <QueryHistorySourceBadge source={entry.source} />
               {/* Timestamp */}
               <span className="shrink-0 text-muted-foreground">

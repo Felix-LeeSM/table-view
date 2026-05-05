@@ -48,11 +48,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);
-  // Sprint 82 — resolve the active connection's dialect so the editor +
-  // autocomplete namespace can tailor keywords / identifier quoting. A
-  // missing connection (e.g. deleted mid-session) falls back to StandardSQL
-  // via `databaseTypeToSqlDialect(undefined)`; document paradigm tabs keep
-  // receiving the resolved dialect but ignore it inside `QueryEditor`.
+  // Active connection's dialect for editor keywords + identifier quoting.
+  // Missing connection (e.g. deleted mid-session) falls back to
+  // StandardSQL; document tabs receive the dialect but ignore it.
   const connections = useConnectionStore((s) => s.connections);
   const connection = useMemo(
     () => connections.find((c) => c.id === tab.connectionId),
@@ -62,20 +60,17 @@ export default function QueryTab({ tab }: QueryTabProps) {
     () => databaseTypeToSqlDialect(connection?.db_type),
     [connection?.db_type],
   );
-  // Sprint 139 — pipe `dbType` so the autocomplete namespace surfaces
+  // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
   // SQLite: PRAGMA / WITHOUT ROWID).
   const schemaNamespace = useSqlAutocomplete(tab.connectionId, {
     dialect: sqlDialect,
     dbType: connection?.db_type,
   });
-  // Sprint 83 — surface cached Mongo field names for autocomplete. The
-  // document store stores columns under `${connectionId}:${db}:${collection}`;
-  // we read the single slice relevant to this tab and map to a string array
-  // so the hook's memo key is stable across unrelated cache updates. RDB
-  // paradigm tabs compute `undefined` here and the hook receives a no-op
-  // extension set that remains unused because `QueryEditor` gates on
-  // `paradigm === "document"`.
+  // Cached Mongo field names for autocomplete. We project the single
+  // cache slice for this tab to a string array so the hook's memo key is
+  // stable against unrelated cache updates. RDB tabs compute `undefined`
+  // and the resulting no-op extension set is gated out by paradigm.
   const fieldsCache = useDocumentStore((s) => s.fieldsCache);
   const mongoFieldNames = useMemo(() => {
     if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
@@ -130,12 +125,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
         favorites={favorites}
       />
 
-      {/* Editor area — Sprint 139: route to the paradigm-specific editor.
-          The router lives here (not in a wrapper component) so the
-          paradigm → editor mapping is colocated with the dialect /
-          autocomplete wiring, and so structural separation between
-          paradigms is visible in the call site. `assertNever` guards
-          against future paradigm additions falling through silently. */}
+      {/* Paradigm router lives inline (not in a wrapper) so the
+          paradigm → editor mapping sits next to the dialect/autocomplete
+          wiring and is visible at the call site. `assertNever` guards
+          against silent fallthrough on future paradigms. */}
       <div
         className="min-h-0 overflow-hidden"
         style={{ flex: `0 0 ${editorPct}%` }}

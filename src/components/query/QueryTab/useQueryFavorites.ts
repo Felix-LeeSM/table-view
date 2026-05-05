@@ -13,14 +13,12 @@ import type { QueryTab } from "@stores/tabStore";
  *   - `toggle-favorites` window event listener (Cmd+Shift+F) — active
  *     tab 일 때만 panel 토글.
  *
- * Sprint 201 에서 entry 로부터 추출. 동작 0 변경.
- *
- * 외부 invariant:
- * - Save 와 Favorites popover 는 동시에 열릴 수 없음 — Toolbar 가 한
- *   쪽 열 때 다른 쪽 close 하는 책임. 본 hook 은 state setter 만 노출.
- * - Save handler 는 빈 이름 / 빈 SQL 을 silent no-op 으로 반환.
- * - `toggle-favorites` listener 는 active tab 만 처리 — 비활성 tab 의
- *   favorites panel 은 사용자가 클릭으로 직접 열어야 함.
+ * Invariants:
+ * - The Save and Favorites popovers can't both be open. The Toolbar
+ *   closes the other when one opens; this hook only exposes setters.
+ * - Save with empty name or empty SQL is a silent no-op.
+ * - `toggle-favorites` only fires on the active tab; inactive tabs
+ *   require a manual click.
  */
 
 export interface UseQueryFavoritesArgs {

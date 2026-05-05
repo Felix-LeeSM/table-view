@@ -18,18 +18,9 @@ import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import type { QueryMode } from "@stores/tabStore";
 
 /**
- * Sprint 139 — MongoDB / document-paradigm query editor.
- *
- * Extracted from the previous monolithic `QueryEditor` so the autocomplete
- * provider it registers is exclusively MQL-aware. The editor never imports
- * `useSqlAutocomplete` and never installs the SQL language extension —
- * cross-contamination between paradigms is structurally impossible.
- *
- * Receives the same minimal props the document branch of QueryEditor used to
- * receive: editor body (`sql`, `onSqlChange`), Mod-Enter execute callback
- * (`onExecute`), the QueryMode for aria-label disambiguation, and the
- * paradigm-derived MongoDB extensions (autocomplete override + operator
- * highlight) produced by `useMongoAutocomplete`.
+ * MongoDB / document-paradigm query editor. Imports only MQL-aware
+ * extensions — never the SQL language extension or `useSqlAutocomplete`,
+ * so cross-paradigm contamination is structurally impossible.
  */
 
 export interface MongoQueryEditorProps {
