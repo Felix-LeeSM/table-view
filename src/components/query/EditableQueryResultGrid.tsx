@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { Button } from "@components/ui/button";
 import type { QueryResult } from "@/types/query";
@@ -21,15 +21,11 @@ import {
   editKey,
   getInputTypeForColumn,
 } from "@components/datagrid/useDataGridEdit";
-import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
-import { executeQueryBatch } from "@lib/tauri";
-import { analyzeStatement } from "@lib/sql/sqlSafety";
+import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
-import { toast } from "@lib/toast";
 import PendingChangesTray from "./PendingChangesTray";
+import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
 
 export interface EditableQueryResultGridProps {
   result: QueryResult;
@@ -53,6 +49,11 @@ function formatCellDisplay(cell: unknown): string {
  * INSERT is intentionally unsupported here — there is no canonical "row
  * shape" for raw query results, so adding rows belongs in the structured
  * table view instead.
+ *
+ * Sprint 215 — All edit state, commit lifecycle, Safe Mode gate, history
+ * recording, and the Cmd+S listener live inside `useRawQueryGridEdit`.
+ * The component now owns only UI-local state (context menu / cell detail
+ * dialog), the production stripe selector, and JSX rendering.
  */
 export default function EditableQueryResultGrid({
   result,
@@ -60,35 +61,20 @@ export default function EditableQueryResultGrid({
   plan,
   onAfterCommit,
 }: EditableQueryResultGridProps) {
-  const [editingCell, setEditingCell] = useState<{
-    row: number;
-    col: number;
-  } | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [pendingEdits, setPendingEdits] = useState<Map<string, string>>(
-    new Map(),
-  );
-  const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
-    Set<string>
-  >(new Set());
-  const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
-  const [executing, setExecuting] = useState(false);
-  const [executeError, setExecuteError] = useState<string | null>(null);
-  // Warn-tier handoff: populated when warn mode + production +
-  // dangerous statement, consumed by `<ConfirmDangerousDialog>`.
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    reason: string;
-    sql: string;
-  } | null>(null);
+  const grid = useRawQueryGridEdit({
+    result,
+    connectionId,
+    plan,
+    onAfterCommit,
+  });
 
-  // Safe Mode gate. Environment is still selected separately for the
-  // production stripe banner below (UI hint, not part of the gate).
-  const safeModeGate = useSafeModeGate(connectionId);
+  // UI-only environment selector for the production stripe banner. The
+  // Safe Mode gate is wired through the hook above; this is purely a
+  // visual hint over the SQL preview header.
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -103,211 +89,6 @@ export default function EditableQueryResultGrid({
   } | null>(null);
 
   const rowKeyFn = useCallback((rowIdx: number) => `row-1-${rowIdx}`, []);
-
-  // Defense-in-depth: `analyzeResultEditability` already routes PK-less
-  // results to the read-only `<ResultTable>`, so this guard only fires if
-  // some future caller mounts us directly. Without it, `buildPkWhere`
-  // would emit `WHERE ;` and the DB would reject with a syntax error.
-  const noPk = plan.pkColumns.length === 0;
-
-  const hasPendingChanges =
-    pendingEdits.size > 0 || pendingDeletedRowKeys.size > 0;
-
-  const persistInflightEdit = useCallback(
-    (prev: Map<string, string>): Map<string, string> => {
-      if (!editingCell) return prev;
-      const key = editKey(editingCell.row, editingCell.col);
-      const original = result.rows[editingCell.row]?.[editingCell.col];
-      const originalStr = cellToEditString(original);
-      if (editValue === originalStr) {
-        if (!prev.has(key)) return prev;
-        const next = new Map(prev);
-        next.delete(key);
-        return next;
-      }
-      const next = new Map(prev);
-      next.set(key, editValue);
-      return next;
-    },
-    [editingCell, editValue, result.rows],
-  );
-
-  const startEdit = useCallback(
-    (rowIdx: number, colIdx: number) => {
-      if (noPk) return;
-      // Persist the previous in-flight edit (with the unchanged-skip rule)
-      // before opening a new editor.
-      setPendingEdits(persistInflightEdit);
-      const cell = result.rows[rowIdx]?.[colIdx];
-      const key = editKey(rowIdx, colIdx);
-      const pending = pendingEdits.get(key);
-      setEditingCell({ row: rowIdx, col: colIdx });
-      setEditValue(pending ?? cellToEditString(cell));
-    },
-    [noPk, pendingEdits, persistInflightEdit, result.rows],
-  );
-
-  const cancelEdit = useCallback(() => {
-    setEditingCell(null);
-    setEditValue("");
-  }, []);
-
-  const saveCurrentEdit = useCallback(() => {
-    setPendingEdits(persistInflightEdit);
-    setEditingCell(null);
-    setEditValue("");
-  }, [persistInflightEdit]);
-
-  const deleteRow = useCallback(
-    (rowIdx: number) => {
-      setPendingDeletedRowKeys((prev) => {
-        const next = new Set(prev);
-        next.add(rowKeyFn(rowIdx));
-        return next;
-      });
-    },
-    [rowKeyFn],
-  );
-
-  const handleCommit = useCallback(() => {
-    // Fold the in-flight edit (if any) into pendingEdits before previewing.
-    const merged = persistInflightEdit(pendingEdits);
-    const sqls = buildRawEditSql(
-      result.rows,
-      merged,
-      pendingDeletedRowKeys,
-      plan,
-    );
-    if (sqls.length === 0) return;
-    setPendingEdits(merged);
-    setEditingCell(null);
-    setEditValue("");
-    setSqlPreview(sqls);
-  }, [
-    pendingEdits,
-    pendingDeletedRowKeys,
-    plan,
-    result.rows,
-    persistInflightEdit,
-  ]);
-
-  const handleRevertEdit = useCallback((key: string) => {
-    setPendingEdits((prev) => {
-      if (!prev.has(key)) return prev;
-      const next = new Map(prev);
-      next.delete(key);
-      return next;
-    });
-  }, []);
-
-  const handleRevertDelete = useCallback((rowKey: string) => {
-    setPendingDeletedRowKeys((prev) => {
-      if (!prev.has(rowKey)) return prev;
-      const next = new Set(prev);
-      next.delete(rowKey);
-      return next;
-    });
-  }, []);
-
-  const handleDiscard = useCallback(() => {
-    setPendingEdits(new Map());
-    setPendingDeletedRowKeys(new Set());
-    setEditingCell(null);
-    setEditValue("");
-    setSqlPreview(null);
-    setExecuteError(null);
-  }, []);
-
-  // Extracted so the warn-tier `confirmDangerous` path reuses the same
-  // try/catch + cleanup without duplicating the body.
-  const runBatch = useCallback(
-    async (sqls: string[]) => {
-      setExecuting(true);
-      setExecuteError(null);
-      const startedAt = Date.now();
-      const joinedSql = sqls.join(";\n");
-      try {
-        await executeQueryBatch(connectionId, sqls, `raw-edit-${Date.now()}`);
-        setSqlPreview(null);
-        setPendingEdits(new Map());
-        setPendingDeletedRowKeys(new Set());
-        onAfterCommit?.();
-        addHistoryEntry({
-          sql: joinedSql,
-          executedAt: startedAt,
-          duration: Date.now() - startedAt,
-          status: "success",
-          connectionId,
-          paradigm: "rdb",
-          queryMode: "sql",
-          source: "grid-edit",
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setExecuteError(`Commit failed — all changes rolled back: ${message}`);
-        addHistoryEntry({
-          sql: joinedSql,
-          executedAt: startedAt,
-          duration: Date.now() - startedAt,
-          status: "error",
-          connectionId,
-          paradigm: "rdb",
-          queryMode: "sql",
-          source: "grid-edit",
-        });
-      } finally {
-        setExecuting(false);
-      }
-    },
-    [connectionId, onAfterCommit, addHistoryEntry],
-  );
-
-  const handleExecute = useCallback(async () => {
-    if (!sqlPreview) return;
-    // Run every preview statement through the Safe Mode gate.
-    // block → setExecuteError + toast; confirm → pendingConfirm (dialog
-    // handoff); allow → fall through.
-    for (const sql of sqlPreview) {
-      const analysis = analyzeStatement(sql);
-      const decision = safeModeGate.decide(analysis);
-      if (decision.action === "block") {
-        setExecuteError(decision.reason);
-        toast.error(decision.reason);
-        return;
-      }
-      if (decision.action === "confirm") {
-        setPendingConfirm({ reason: decision.reason, sql });
-        return;
-      }
-    }
-    await runBatch(sqlPreview);
-  }, [sqlPreview, safeModeGate, runBatch]);
-
-  const confirmDangerous = useCallback(async () => {
-    if (!pendingConfirm || !sqlPreview) return;
-    setPendingConfirm(null);
-    await runBatch(sqlPreview);
-  }, [pendingConfirm, sqlPreview, runBatch]);
-
-  const cancelDangerous = useCallback(() => {
-    if (!pendingConfirm) return;
-    const message =
-      "Safe Mode (warn): confirmation cancelled — no changes committed";
-    setExecuteError(message);
-    setPendingConfirm(null);
-    toast.info(message);
-  }, [pendingConfirm]);
-
-  // Cmd+S → commit. We listen on window so the global App-level dispatch
-  // (already wired up for Cmd+S) reaches us when this grid is on screen.
-  useEffect(() => {
-    const handler = () => {
-      if (!hasPendingChanges && !editingCell) return;
-      handleCommit();
-    };
-    window.addEventListener("commit-changes", handler);
-    return () => window.removeEventListener("commit-changes", handler);
-  }, [hasPendingChanges, editingCell, handleCommit]);
 
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
@@ -329,22 +110,22 @@ export default function EditableQueryResultGrid({
         {
           label: "Edit Cell",
           icon: <Pencil size={14} />,
-          disabled: noPk,
-          onClick: () => startEdit(contextMenu.rowIdx, contextMenu.colIdx),
+          disabled: grid.noPk,
+          onClick: () => grid.startEdit(contextMenu.rowIdx, contextMenu.colIdx),
         },
         {
           label: "Delete Row",
           icon: <Trash2 size={14} />,
           danger: true,
-          disabled: noPk,
-          onClick: () => deleteRow(contextMenu.rowIdx),
+          disabled: grid.noPk,
+          onClick: () => grid.deleteRow(contextMenu.rowIdx),
         },
       ]
     : [];
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {noPk && (
+      {grid.noPk && (
         <div
           role="status"
           className="border-b border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground"
@@ -353,18 +134,19 @@ export default function EditableQueryResultGrid({
         </div>
       )}
       {/* Edit toolbar — only visible when there are pending changes. */}
-      {hasPendingChanges && (
+      {grid.hasPendingChanges && (
         <div className="flex items-center justify-between border-b border-border bg-warning/10 px-3 py-1.5 text-xs">
           <span className="text-foreground">
-            {pendingEdits.size} edit{pendingEdits.size !== 1 ? "s" : ""},{" "}
-            {pendingDeletedRowKeys.size} delete
-            {pendingDeletedRowKeys.size !== 1 ? "s" : ""} pending
+            {grid.pendingEdits.size} edit
+            {grid.pendingEdits.size !== 1 ? "s" : ""},{" "}
+            {grid.pendingDeletedRowKeys.size} delete
+            {grid.pendingDeletedRowKeys.size !== 1 ? "s" : ""} pending
           </span>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="xs"
-              onClick={handleDiscard}
+              onClick={grid.handleDiscard}
               aria-label="Discard pending changes"
             >
               <X size={12} />
@@ -372,7 +154,7 @@ export default function EditableQueryResultGrid({
             </Button>
             <Button
               size="xs"
-              onClick={handleCommit}
+              onClick={grid.handleCommit}
               aria-label="Commit pending changes"
             >
               <Save size={12} />
@@ -384,11 +166,11 @@ export default function EditableQueryResultGrid({
 
       <PendingChangesTray
         result={result}
-        pendingEdits={pendingEdits}
-        pendingDeletedRowKeys={pendingDeletedRowKeys}
+        pendingEdits={grid.pendingEdits}
+        pendingDeletedRowKeys={grid.pendingDeletedRowKeys}
         plan={plan}
-        onRevertEdit={handleRevertEdit}
-        onRevertDelete={handleRevertDelete}
+        onRevertEdit={grid.handleRevertEdit}
+        onRevertDelete={grid.handleRevertDelete}
       />
 
       <div className="flex-1 overflow-auto">
@@ -426,7 +208,7 @@ export default function EditableQueryResultGrid({
           <tbody>
             {result.rows.map((row, rowIdx) => {
               const rk = rowKeyFn(rowIdx);
-              const isDeleted = pendingDeletedRowKeys.has(rk);
+              const isDeleted = grid.pendingDeletedRowKeys.has(rk);
               return (
                 <tr
                   key={rk}
@@ -438,12 +220,12 @@ export default function EditableQueryResultGrid({
                     const col = result.columns[colIdx]!;
                     const key = editKey(rowIdx, colIdx);
                     const isEditing =
-                      editingCell?.row === rowIdx &&
-                      editingCell?.col === colIdx;
-                    const hasPendingEdit = pendingEdits.has(key);
+                      grid.editingCell?.row === rowIdx &&
+                      grid.editingCell?.col === colIdx;
+                    const hasPendingEdit = grid.pendingEdits.has(key);
                     const cellStr = cellToEditString(cell);
                     const displayValue = hasPendingEdit
-                      ? pendingEdits.get(key)!
+                      ? grid.pendingEdits.get(key)!
                       : cellStr;
 
                     return (
@@ -458,10 +240,10 @@ export default function EditableQueryResultGrid({
                               : ""
                         }`}
                         title={formatCellDisplay(cell)}
-                        onDoubleClick={() => startEdit(rowIdx, colIdx)}
+                        onDoubleClick={() => grid.startEdit(rowIdx, colIdx)}
                         onClick={() => {
-                          if (editingCell && !isEditing) {
-                            saveCurrentEdit();
+                          if (grid.editingCell && !isEditing) {
+                            grid.saveCurrentEdit();
                           }
                         }}
                         onContextMenu={(e) => {
@@ -479,18 +261,18 @@ export default function EditableQueryResultGrid({
                           <input
                             type={getInputTypeForColumn(col.data_type)}
                             className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
-                            value={editValue}
+                            value={grid.editValue}
                             autoFocus
                             aria-label={`Editing ${col.name}`}
-                            onChange={(e) => setEditValue(e.target.value)}
+                            onChange={(e) => grid.setEditValue(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                saveCurrentEdit();
+                                grid.saveCurrentEdit();
                               } else if (e.key === "Escape") {
                                 e.stopPropagation();
-                                cancelEdit();
+                                grid.cancelEdit();
                               }
                             }}
                           />
@@ -544,11 +326,10 @@ export default function EditableQueryResultGrid({
 
       {/* SQL Preview modal — same shape as DataGrid's preview. */}
       <Dialog
-        open={!!sqlPreview}
+        open={!!grid.sqlPreview}
         onOpenChange={(open) => {
           if (!open) {
-            setSqlPreview(null);
-            setExecuteError(null);
+            grid.dismissPreview();
           }
         }}
       >
@@ -567,7 +348,7 @@ export default function EditableQueryResultGrid({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleExecute();
+                grid.handleExecute();
               }
             }}
           >
@@ -591,14 +372,14 @@ export default function EditableQueryResultGrid({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                onClick={() => setSqlPreview(null)}
+                onClick={grid.dismissPreview}
                 aria-label="Close SQL preview"
               >
                 <X size={14} />
               </Button>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {sqlPreview?.map((sql, i) => (
+              {grid.sqlPreview?.map((sql, i) => (
                 <pre
                   key={i}
                   className="mb-2 whitespace-pre-wrap break-all rounded bg-secondary p-2 text-xs text-secondary-foreground"
@@ -606,12 +387,12 @@ export default function EditableQueryResultGrid({
                   {sql}
                 </pre>
               ))}
-              {executeError && (
+              {grid.executeError && (
                 <div
                   role="alert"
                   className="mt-2 rounded bg-destructive/10 p-2 text-xs text-destructive"
                 >
-                  {executeError}
+                  {grid.executeError}
                 </div>
               )}
             </div>
@@ -619,8 +400,8 @@ export default function EditableQueryResultGrid({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setSqlPreview(null)}
-                disabled={executing}
+                onClick={grid.dismissPreview}
+                disabled={grid.executing}
               >
                 Cancel
               </Button>
@@ -628,25 +409,25 @@ export default function EditableQueryResultGrid({
                 autoFocus
                 size="sm"
                 className="bg-success hover:bg-success/90"
-                onClick={handleExecute}
+                onClick={grid.handleExecute}
                 aria-label="Execute SQL"
-                disabled={executing}
+                disabled={grid.executing}
               >
-                {executing ? "Executing…" : "Execute"}
+                {grid.executing ? "Executing…" : "Execute"}
               </Button>
             </DialogFooter>
           </div>
         </DialogContent>
       </Dialog>
-      {pendingConfirm && (
+      {grid.pendingConfirm && (
         <ConfirmDangerousDialog
           open={true}
-          reason={pendingConfirm.reason}
-          sqlPreview={pendingConfirm.sql}
+          reason={grid.pendingConfirm.reason}
+          sqlPreview={grid.pendingConfirm.sql}
           onConfirm={() => {
-            void confirmDangerous();
+            void grid.confirmDangerous();
           }}
-          onCancel={cancelDangerous}
+          onCancel={grid.cancelDangerous}
         />
       )}
     </div>
