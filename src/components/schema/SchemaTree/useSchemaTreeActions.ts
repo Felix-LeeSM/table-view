@@ -4,6 +4,7 @@ import { logger } from "@/lib/logger";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
 import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
 import type { ConfirmDialogState, RenameDialogState } from "./dialogs";
@@ -115,6 +116,11 @@ export function useSchemaTreeActions({
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  // Sprint 212 — MRU marking moved out of tabStore.addTab / addQueryTab into
+  // each caller. The 6 handlers below explicitly mark the connection used
+  // alongside the addTab / addQueryTab call so the EmptyState CTA / launcher
+  // Recent rail observe the same MRU shift the store action used to emit.
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
     new Set(),
@@ -176,8 +182,9 @@ export function useSchemaTreeActions({
         table: tableName,
         subView: "records",
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   /**
@@ -201,8 +208,9 @@ export function useSchemaTreeActions({
         subView: "records",
         permanent: true,
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   const handleOpenStructure = useCallback(
@@ -219,8 +227,9 @@ export function useSchemaTreeActions({
         table: tableName,
         subView: "structure",
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   const handleDropTable = useCallback(
@@ -345,8 +354,9 @@ export function useSchemaTreeActions({
         subView: "records",
         objectKind: "view",
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   const handleOpenViewStructure = useCallback(
@@ -364,8 +374,9 @@ export function useSchemaTreeActions({
         subView: "structure",
         objectKind: "view",
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   const handleFunctionClick = useCallback(
@@ -378,6 +389,7 @@ export function useSchemaTreeActions({
         }),
       );
       addQueryTab(connectionId);
+      markConnectionUsed(connectionId);
       // Load function source and put it in the newly created tab
       const latestTabs = useTabStore.getState().tabs;
       const newTab = latestTabs[latestTabs.length - 1];
@@ -390,7 +402,7 @@ export function useSchemaTreeActions({
         }
       }
     },
-    [connectionId, addQueryTab, updateQuerySql, functions],
+    [connectionId, addQueryTab, markConnectionUsed, updateQuerySql, functions],
   );
 
   const toggleCategory = useCallback(

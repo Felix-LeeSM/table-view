@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useTabStore } from "@stores/tabStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
   executeQuery,
   cancelQuery,
@@ -11,6 +12,7 @@ import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import type { QueryTab } from "@stores/tabStore";
 import type { FindBody } from "@/types/document";
+import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
 import {
   readDocumentContext,
   isRecord,
@@ -88,7 +90,46 @@ export function useQueryExecution({
   const completeMultiStatementQuery = useTabStore(
     (s) => s.completeMultiStatementQuery,
   );
-  const recordHistory = useTabStore((s) => s.recordHistory);
+  // Sprint 212 — cross-store coupling 제거. 사전에는 `useTabStore.recordHistory`
+  // action 안에서 tab 객체로부터 paradigm/queryMode/database/collection 을
+  // 자동 추출 + `useQueryHistoryStore.addHistoryEntry({...})` 를 호출했지만,
+  // store 행위에서 cross-store side effect 가 빠지면서 caller (이 hook) 가
+  // 동일 payload 모양을 직접 구성한다. `tab` 은 hook arg 로 보유 — store-side
+  // 와 동일한 데이터를 본다.
+  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  // 8 call site 가 동일 mood 의 payload 를 만들어 보낸다. closure 로 묶어
+  // 호출 사이트가 가변 필드 (sql / executedAt / duration / status) 만
+  // 책임지게. 사전 store-side 의미 (Sprint 195 + 196 default `source: "raw"`)
+  // 보존.
+  const recordHistory = useCallback(
+    (payload: {
+      sql: string;
+      executedAt: number;
+      duration: number;
+      status: QueryHistoryStatus;
+    }) => {
+      addHistoryEntry({
+        sql: payload.sql,
+        executedAt: payload.executedAt,
+        duration: payload.duration,
+        status: payload.status,
+        source: "raw",
+        connectionId: tab.connectionId,
+        paradigm: tab.paradigm,
+        queryMode: tab.queryMode,
+        database: tab.database,
+        collection: tab.collection,
+      });
+    },
+    [
+      addHistoryEntry,
+      tab.connectionId,
+      tab.paradigm,
+      tab.queryMode,
+      tab.database,
+      tab.collection,
+    ],
+  );
 
   // Sprint 188 — Mongo aggregate pipeline danger gate. The hook centralises
   // the strict / warn / off decision against the connection's environment;
@@ -135,7 +176,7 @@ export function useQueryExecution({
           query_type: "select",
         };
         completeQuery(tab.id, queryId, queryResult);
-        recordHistory(tab.id, {
+        recordHistory({
           sql: tab.sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
@@ -147,7 +188,7 @@ export function useQueryExecution({
           queryId,
           err instanceof Error ? err.message : String(err),
         );
-        recordHistory(tab.id, {
+        recordHistory({
           sql: tab.sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
@@ -292,7 +333,7 @@ export function useQueryExecution({
         };
 
         completeQuery(tab.id, queryId, queryResult);
-        recordHistory(tab.id, {
+        recordHistory({
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
@@ -304,7 +345,7 @@ export function useQueryExecution({
           queryId,
           err instanceof Error ? err.message : String(err),
         );
-        recordHistory(tab.id, {
+        recordHistory({
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
@@ -337,7 +378,7 @@ export function useQueryExecution({
         // Stale-response guard lives in the store action — late responses to
         // a superseded queryId no-op there.
         completeQuery(tab.id, queryId, result);
-        recordHistory(tab.id, {
+        recordHistory({
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
@@ -349,7 +390,7 @@ export function useQueryExecution({
           queryId,
           err instanceof Error ? err.message : String(err),
         );
-        recordHistory(tab.id, {
+        recordHistory({
           sql,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
@@ -419,7 +460,7 @@ export function useQueryExecution({
       joinedErrorMessage: joinedErrors,
     });
 
-    recordHistory(tab.id, {
+    recordHistory({
       sql,
       executedAt: Date.now(),
       duration: Date.now() - startTime,

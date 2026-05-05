@@ -2,6 +2,7 @@ import { useMemo, useRef } from "react";
 import type { QueryTab } from "@stores/tabStore";
 import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
@@ -44,6 +45,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const setQueryMode = useTabStore((s) => s.setQueryMode);
   const loadQueryIntoTab = useTabStore((s) => s.loadQueryIntoTab);
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);
   // Sprint 82 — resolve the active connection's dialect so the editor +
@@ -213,7 +215,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
       <QueryHistoryPanel
         entries={historyEntries}
-        onLoad={loadQueryIntoTab}
+        onLoad={(args) => {
+          loadQueryIntoTab(args);
+          markConnectionUsed(args.connectionId);
+        }}
         onClear={clearHistory}
       />
 

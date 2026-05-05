@@ -12,18 +12,15 @@
  * Entry retains: zustand `create()` + all actions, persist subscribe, IPC
  * bridge attach (workspace-only), `useActiveTab` selector, tracker init +
  * subscribe. 51 외부 caller import 경로 보존 (entry-pattern).
+ *
+ * Sprint 212 — cross-store coupling 제거. mru / query-history store 의 직접
+ * import 가 사라지고 MRU marking 책임은 16 caller 로, query history recording
+ * 책임은 `useQueryExecution.ts` 8 call site 로 이동. tabStore 는 tab list
+ * mutation 만 책임지며 store 간 의존이 단방향이 된다.
  */
 import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
-// 2026-05-05 — TODO(별도 sprint): tabStore가 mru/connection/queryHistory의
-// action을 직접 호출하는 cross-store 의존을 React layer hook 또는 호출
-// 사이트로 옮겨 본 import 들을 제거해야 한다. 호출 사이트가 분산되어 본
-// god-file 분해(Sprint 208)의 scope를 넘는다.
-/* eslint-disable no-restricted-imports */
-import { useMruStore } from "@stores/mruStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-/* eslint-enable no-restricted-imports */
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
@@ -37,9 +34,14 @@ import type {
   QueryMode,
 } from "./tabStore/types";
 // Sprint 208 — same-store sub-files (entry-pattern split). The
-// "store 파일끼리 import 금지" rule targets cross-store coupling; the entry
-// of a god-file split is the legitimate composition surface and exists
-// precisely so external callers see a single import path.
+// "store 파일끼리 import 금지" rule targets cross-store coupling, but the
+// `./*Store` glob also matches `./tabStore/persistence` because the rule
+// uses gitignore-style directory matching. The entry of a god-file split
+// is the legitimate composition surface and exists precisely so external
+// callers see a single import path. Sprint 212 removed the cross-store
+// imports above; this block stays because the same-store entry-pattern is
+// unavoidable without an eslint config change (out of scope per Sprint
+// 212 contract).
 /* eslint-disable no-restricted-imports */
 import {
   STORAGE_KEY,
@@ -87,10 +89,16 @@ export const useTabStore = create<TabState>((set, get) => ({
   addTab: (tab) => {
     tabCounter++;
     // Sprint 119 (#SHELL-1) — opening a tab against a connection is the
-    // strongest signal that the user is "actively working with" it, so we
-    // mark it as MRU. MainArea's EmptyState reads this to decide which
-    // connection the New Query CTA should default to.
-    useMruStore.getState().markConnectionUsed(tab.connectionId);
+    // strongest signal that the user is "actively working with" it, so MRU
+    // marking fires alongside this action. MainArea's EmptyState reads the
+    // MRU id to decide which connection the New Query CTA should default
+    // to.
+    //
+    // Sprint 212 — the MRU mark call has moved to the 11 `addTab` caller
+    // sites (SchemaTree handlers / DataGrid FK navigate /
+    // DocumentDatabaseTree collection open / App.tsx navigate-table event
+    // handler). The store no longer reaches into the MRU store so the
+    // dependency graph stays unidirectional.
     // Extract `permanent` before constructing the stored tab shape.
     // `permanent` is an instruction to addTab (should this tab be
     // persistent from birth?), not a field stored on the tab itself.
@@ -295,7 +303,13 @@ export const useTabStore = create<TabState>((set, get) => ({
     // Sprint 119 (#SHELL-1) — see comment in `addTab`. Query tab creation
     // is an equivalent MRU signal; both paths must mark or the EmptyState
     // would only update for table-tab opens.
-    useMruStore.getState().markConnectionUsed(connectionId);
+    //
+    // Sprint 212 — the MRU mark call moved to the 6 `addQueryTab` caller
+    // sites (Cmd+T global shortcut / Sidebar "+ Query" / MainArea EmptyState
+    // CTA / SchemaTree function-source / App.tsx quickopen-function event /
+    // QueryTab `<HistoryPanel onLoad>` wrapper that calls `loadQueryIntoTab`).
+    // `loadQueryIntoTab` itself stays MRU-neutral; its sole production caller
+    // (HistoryPanel restore) wraps the call with `markConnectionUsed`.
     const id = `query-${queryCounter}`;
     const title = `Query ${queryCounter}`;
     const paradigm: Paradigm = opts.paradigm ?? "rdb";
@@ -460,23 +474,6 @@ export const useTabStore = create<TabState>((set, get) => ({
         }),
       };
     }),
-
-  recordHistory: (tabId, payload) => {
-    const tab = get().tabs.find((t) => t.id === tabId);
-    if (!tab || tab.type !== "query") return;
-    useQueryHistoryStore.getState().addHistoryEntry({
-      sql: payload.sql,
-      executedAt: payload.executedAt,
-      duration: payload.duration,
-      status: payload.status,
-      source: payload.source ?? "raw",
-      connectionId: tab.connectionId,
-      paradigm: tab.paradigm,
-      queryMode: tab.queryMode,
-      database: tab.database,
-      collection: tab.collection,
-    });
-  },
 
   loadQueryIntoTab: (payload) => {
     const { connectionId, paradigm, queryMode, database, collection, sql } =

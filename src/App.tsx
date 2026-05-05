@@ -21,6 +21,12 @@ export default function App() {
     (s) => s.loadPersistedFavorites,
   );
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
+  // Sprint 212 — MRU marking moved out of tabStore.addTab / addQueryTab into
+  // each caller. The 3 App-level event/shortcut handlers below (Cmd+T global
+  // shortcut, navigate-table event, quickopen-function event) mark the
+  // connection used right after their tab open so the launcher Recent rail /
+  // EmptyState CTA observe the same MRU shift the store action used to emit.
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const activeTabId = useTabStore((s) => s.activeTabId);
   const tabs = useTabStore((s) => s.tabs);
@@ -86,12 +92,13 @@ export default function App() {
         const connectionId = activeTab?.connectionId ?? "";
         if (connectionId) {
           addQueryTab(connectionId);
+          markConnectionUsed(connectionId);
         }
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, tabs, addQueryTab]);
+  }, [activeTabId, tabs, addQueryTab, markConnectionUsed]);
 
   // Cmd+. / Ctrl+. — cancel running query
   useEffect(() => {
@@ -319,10 +326,11 @@ export default function App() {
         objectKind: objectKind ?? "table",
         permanent: true,
       });
+      markConnectionUsed(connectionId);
     };
     window.addEventListener("navigate-table", handler);
     return () => window.removeEventListener("navigate-table", handler);
-  }, [addTab]);
+  }, [addTab, markConnectionUsed]);
 
   // Quick Open function/procedure — open a query tab with the source pre-filled
   useEffect(() => {
@@ -335,6 +343,7 @@ export default function App() {
         }>
       ).detail;
       addQueryTab(connectionId);
+      markConnectionUsed(connectionId);
       // addQueryTab는 동기로 store에 push한 직후 새 tab id를 알아야
       // updateQuerySql을 부를 수 있는데, selector로 받은 `tabs`는 이번
       // 이벤트 루프 안에서 갱신되지 않는다 (React가 다음 commit에 새
@@ -349,7 +358,7 @@ export default function App() {
     };
     window.addEventListener("quickopen-function", handler);
     return () => window.removeEventListener("quickopen-function", handler);
-  }, [addQueryTab, updateQuerySql]);
+  }, [addQueryTab, markConnectionUsed, updateQuerySql]);
 
   // Sprint 154 — Phase 12 multi-window split is now fully wired. Top-level
   // page routing lives in `AppRouter.tsx`, which picks Launcher vs Workspace

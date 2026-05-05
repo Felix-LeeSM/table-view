@@ -129,6 +129,11 @@ function EmptyState() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const lastUsedConnectionId = useMruStore((s) => s.lastUsedConnectionId);
+  // Sprint 212 — MRU marking moved out of tabStore.addQueryTab into each
+  // caller. The CTA below explicitly marks `target.id` used right after the
+  // tab open so the same single-action observable transition (CTA click →
+  // new tab + MRU shift) is preserved.
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
 
   // Sprint 119 (#SHELL-1) — MRU-first policy with first-connected fallback.
@@ -162,7 +167,10 @@ function EmptyState() {
             variant="outline"
             size="sm"
             className="mt-1"
-            onClick={() => addQueryTab(target.id)}
+            onClick={() => {
+              addQueryTab(target.id);
+              markConnectionUsed(target.id);
+            }}
           >
             <Plus />
             New Query

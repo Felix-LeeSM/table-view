@@ -1,149 +1,33 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Database as DbIcon,
-  FileText,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
-import { toast } from "@/lib/toast";
-import { logger } from "@/lib/logger";
+import { useCallback } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@components/ui/context-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@components/ui/dialog";
-import { useConnectionStore } from "@stores/connectionStore";
-import { useDocumentStore } from "@stores/documentStore";
 import { useTabStore } from "@stores/tabStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useSafeModeGate } from "@hooks/useSafeModeGate";
-import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
-import { dropCollection } from "@lib/tauri";
+import { useMruStore } from "@stores/mruStore";
 import { cn } from "@lib/utils";
+import { useDocumentDatabaseTreeData } from "./DocumentDatabaseTree/useDocumentDatabaseTreeData";
+import { useDocumentDatabaseDrop } from "./DocumentDatabaseTree/useDocumentDatabaseDrop";
+import { CollectionRow, DatabaseRow } from "./DocumentDatabaseTree/rows";
+import { DropCollectionDialog } from "./DocumentDatabaseTree/dialogs";
 
 interface DocumentDatabaseTreeProps {
   connectionId: string;
 }
 
 /**
- * Sprint 66 — two-level tree for the document paradigm.
- *
- * Level 1: databases (listed by `list_mongo_databases`).
- * Level 2: collections (fetched on-demand by `list_mongo_collections` when a
- * database node is expanded for the first time).
- *
- * Double-clicking a collection opens a TableTab with `paradigm: "document"`
- * so the MainArea can route to the mongo read path. Single-click only
- * selects without opening a tab, matching the RDB tree convention.
- *
- * Sprint 129 — RDB-folder metaphor (Folder/FolderOpen) removed in favour of
- * a single `Database` icon per row. A client-side search input filters the
- * tree by database name OR collection name (collection match auto-expands
- * the parent database).
+ * Two-level tree for the document paradigm. Level 1: databases
+ * (`list_mongo_databases`). Level 2: collections (fetched on-demand on
+ * first expand).
  */
 export default function DocumentDatabaseTree({
   connectionId,
 }: DocumentDatabaseTreeProps) {
-  const databases = useDocumentStore((s) => s.databases[connectionId]);
-  const collectionsByDb = useDocumentStore((s) => s.collections);
-  const loadDatabases = useDocumentStore((s) => s.loadDatabases);
-  const loadCollections = useDocumentStore((s) => s.loadCollections);
   const addTab = useTabStore((s) => s.addTab);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-  const safeModeGate = useSafeModeGate(connectionId);
+  // MRU marking is the caller's responsibility — `addTab` no longer emits
+  // it implicitly, so each tab-open path here pairs the call.
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
-  // Sprint 137 (AC-S137-02) — track the connection's user-active Mongo
-  // database. The DbSwitcher writes this slot via `setActiveDb` after a
-  // successful `switch_active_db` dispatch, then calls
-  // `clearConnection(id)` on the document store. Without this dependency
-  // in the auto-load effect below, the tree's `autoLoadedRef` short-circuits
-  // the re-fetch and the user keeps seeing the previous DB's collections.
-  // Reading this directly from the store (rather than threading it through
-  // props) keeps the component's public API unchanged.
-  const activeDb = useConnectionStore((s) => {
-    const status = s.activeStatuses[connectionId];
-    return status?.type === "connected" ? (status.activeDb ?? null) : null;
-  });
-
-  const [expandedDbs, setExpandedDbs] = useState<Set<string>>(new Set());
-  const [loadingRoot, setLoadingRoot] = useState(false);
-  const [loadingDbs, setLoadingDbs] = useState<Set<string>>(new Set());
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  // Sprint 198 — Drop Collection confirm dialog. Mirrors SchemaTree's
-  // `handleDropTable` shape so the document branch surfaces an
-  // identically-styled destructive confirmation.
-  const [dropDialog, setDropDialog] = useState<{
-    database: string;
-    collection: string;
-  } | null>(null);
-  const [isDropping, setIsDropping] = useState(false);
-  // Sprint 137 — keys the auto-load guard on `(connectionId, activeDb)` so a
-  // DB swap (toolbar DbSwitcher) re-runs the database list fetch. Prior to
-  // S137 the guard only watched `connectionId`, which caused the
-  // 2026-04-27 stale-collection bug: the DbSwitcher cleared the document
-  // store cache but the tree's effect saw "same connection" and bailed,
-  // leaving the sidebar visually empty (or reverting to the previous DB
-  // depending on render order).
-  const autoLoadedRef = useRef<string | null>(null);
-
-  // Auto-load databases when the connection changes OR when the user-active
-  // DB swap (DbSwitcher) changes — the latter clears the document store
-  // cache, so the tree must re-fetch to repopulate the sidebar with the
-  // new DB's collections.
-  useEffect(() => {
-    const guardKey = `${connectionId}::${activeDb ?? ""}`;
-    if (autoLoadedRef.current === guardKey) return;
-    autoLoadedRef.current = guardKey;
-    setLoadingRoot(true);
-    loadDatabases(connectionId).finally(() => setLoadingRoot(false));
-  }, [connectionId, activeDb, loadDatabases]);
-
-  const handleRefresh = useCallback(() => {
-    setLoadingRoot(true);
-    loadDatabases(connectionId).finally(() => setLoadingRoot(false));
-  }, [connectionId, loadDatabases]);
-
-  const handleExpandDb = useCallback(
-    async (dbName: string) => {
-      const isExpanded = expandedDbs.has(dbName);
-      if (isExpanded) {
-        setExpandedDbs((prev) => {
-          const next = new Set(prev);
-          next.delete(dbName);
-          return next;
-        });
-        return;
-      }
-      setExpandedDbs((prev) => new Set(prev).add(dbName));
-      const key = `${connectionId}:${dbName}`;
-      if (!collectionsByDb[key]) {
-        setLoadingDbs((prev) => new Set(prev).add(dbName));
-        try {
-          await loadCollections(connectionId, dbName);
-        } finally {
-          setLoadingDbs((prev) => {
-            const next = new Set(prev);
-            next.delete(dbName);
-            return next;
-          });
-        }
-      }
-    },
-    [expandedDbs, connectionId, collectionsByDb, loadCollections],
-  );
+  const tree = useDocumentDatabaseTreeData(connectionId);
+  const drop = useDocumentDatabaseDrop(connectionId);
 
   const handleCollectionOpen = useCallback(
     (dbName: string, collectionName: string) => {
@@ -165,8 +49,9 @@ export default function DocumentDatabaseTree({
         subView: "records",
         paradigm: "document",
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   /**
@@ -190,139 +75,28 @@ export default function DocumentDatabaseTree({
         paradigm: "document",
         permanent: true,
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
-  // Sprint 198 — Drop Collection. Mirrors SchemaTree's `handleDropTable`:
-  // analyzeMongoOperation → safeModeGate.decide → confirm → invoke → history.
-  // Safe Mode classifies `dropCollection` as `danger` unconditionally; on
-  // production the gate either blocks (strict / off) or surfaces a confirm
-  // dialog (warn). On non-prod the gate auto-allows so the user only sees
-  // the destructive-confirm dialog below.
-  const handleConfirmDropCollection = useCallback(async () => {
-    if (!dropDialog) return;
-    const { database, collection } = dropDialog;
-    setIsDropping(true);
-    const recordedSql = `db.${collection}.drop()`;
-    const startedAt = Date.now();
-    try {
-      await dropCollection(connectionId, database, collection);
-      addHistoryEntry({
-        sql: recordedSql,
-        executedAt: startedAt,
-        duration: Date.now() - startedAt,
-        status: "success",
-        connectionId,
-        paradigm: "document",
-        queryMode: "find",
-        source: "mongo-op",
-      });
-      // Refresh the collection list under this database so the dropped
-      // entry disappears from the sidebar without a manual refresh.
-      await loadCollections(connectionId, database);
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to drop ${database}.${collection}: ${detail}`);
-      logger.error("[DocumentDatabaseTree] dropCollection:", err);
-      addHistoryEntry({
-        sql: recordedSql,
-        executedAt: startedAt,
-        duration: Date.now() - startedAt,
-        status: "error",
-        connectionId,
-        paradigm: "document",
-        queryMode: "find",
-        source: "mongo-op",
-      });
-    } finally {
-      setIsDropping(false);
-      setDropDialog(null);
-    }
-  }, [dropDialog, connectionId, addHistoryEntry, loadCollections]);
-
-  const handleDropCollectionRequest = useCallback(
-    (database: string, collection: string) => {
-      const decision = safeModeGate.decide(
-        analyzeMongoOperation({ kind: "dropCollection" }),
-      );
-      if (decision.action === "block") {
-        toast.error(decision.reason);
-        return;
-      }
-      // For both `confirm` (Safe Mode warn-prod) and `allow` (non-prod)
-      // we still want the destructive confirmation modal — surfacing the
-      // Safe Mode reason via the dialog body when present.
-      setDropDialog({ database, collection });
-    },
-    [safeModeGate],
-  );
-
-  const databaseList = useMemo(() => databases ?? [], [databases]);
-
-  // Sprint 129 — client-side filter. Empty query → show everything. A
-  // database matches when its own name matches OR any of its already-loaded
-  // collections match (in which case the database is auto-expanded for
-  // visibility). Match is case-insensitive substring; we never fetch as a
-  // side effect of typing.
-  const trimmedQuery = searchQuery.trim();
-  const lowerQuery = trimmedQuery.toLowerCase();
-  const isFiltering = trimmedQuery.length > 0;
-
-  const filteredDatabases = useMemo(() => {
-    if (!isFiltering) return databaseList;
-    return databaseList.filter((db) => {
-      if (db.name.toLowerCase().includes(lowerQuery)) return true;
-      const key = `${connectionId}:${db.name}`;
-      const collections = collectionsByDb[key] ?? [];
-      return collections.some((c) => c.name.toLowerCase().includes(lowerQuery));
-    });
-  }, [databaseList, isFiltering, lowerQuery, collectionsByDb, connectionId]);
-
-  // Auto-expand databases whose collection names match the active query so
-  // the matched collection is visible without an extra click. We use a ref
-  // to remember which databases were auto-expanded by search alone vs. by
-  // the user, so clearing the query collapses them while leaving the user's
-  // own expansion state intact.
-  const autoExpandedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!isFiltering) {
-      // Clearing the filter — collapse anything we auto-expanded so the
-      // tree returns to the user's last manual state.
-      if (autoExpandedRef.current.size > 0) {
-        const auto = autoExpandedRef.current;
-        setExpandedDbs((prev) => {
-          const next = new Set(prev);
-          for (const name of auto) next.delete(name);
-          return next;
-        });
-        autoExpandedRef.current = new Set();
-      }
-      return;
-    }
-    const toExpand: string[] = [];
-    for (const db of databaseList) {
-      const key = `${connectionId}:${db.name}`;
-      const collections = collectionsByDb[key] ?? [];
-      const hasCollectionMatch = collections.some((c) =>
-        c.name.toLowerCase().includes(lowerQuery),
-      );
-      if (hasCollectionMatch && !expandedDbs.has(db.name)) {
-        toExpand.push(db.name);
-      }
-    }
-    if (toExpand.length === 0) return;
-    setExpandedDbs((prev) => {
-      const next = new Set(prev);
-      for (const name of toExpand) next.add(name);
-      return next;
-    });
-    for (const name of toExpand) autoExpandedRef.current.add(name);
-    // We deliberately omit `expandedDbs` from deps to avoid an infinite
-    // loop after we add the auto-expanded entries; the next user toggle
-    // re-syncs naturally on the following render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFiltering, lowerQuery, databaseList, collectionsByDb, connectionId]);
+  const {
+    databases,
+    collectionsByDb,
+    loadingRoot,
+    loadingDbs,
+    expandedDbs,
+    selectedNodeId,
+    setSelectedNodeId,
+    handleRefresh,
+    handleExpandDb,
+    searchQuery,
+    setSearchQuery,
+    trimmedQuery,
+    lowerQuery,
+    isFiltering,
+    filteredDatabases,
+  } = tree;
 
   return (
     <div className="flex flex-col select-none">
@@ -367,7 +141,7 @@ export default function DocumentDatabaseTree({
         />
       </div>
 
-      {loadingRoot && databaseList.length === 0 && (
+      {loadingRoot && databases.length === 0 && (
         <div
           className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground"
           role="status"
@@ -377,14 +151,14 @@ export default function DocumentDatabaseTree({
         </div>
       )}
 
-      {!loadingRoot && databaseList.length === 0 && (
+      {!loadingRoot && databases.length === 0 && (
         <div className="px-3 py-2 text-xs italic text-muted-foreground">
           No databases visible to this connection
         </div>
       )}
 
       {!loadingRoot &&
-        databaseList.length > 0 &&
+        databases.length > 0 &&
         filteredDatabases.length === 0 && (
           <div
             className="px-3 py-2 text-xs italic text-muted-foreground"
@@ -417,39 +191,16 @@ export default function DocumentDatabaseTree({
 
         return (
           <div key={db.name}>
-            <button
-              type="button"
-              className={cn(
-                "flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted",
-                isDbSelected
-                  ? "bg-muted text-foreground"
-                  : "text-secondary-foreground",
-              )}
-              aria-expanded={isExpanded}
-              aria-label={`${db.name} database`}
-              onClick={() => {
+            <DatabaseRow
+              db={db}
+              isExpanded={isExpanded}
+              isLoading={isLoading}
+              isSelected={isDbSelected}
+              onToggle={() => {
                 setSelectedNodeId(dbNodeId);
                 handleExpandDb(db.name);
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedNodeId(dbNodeId);
-                  handleExpandDb(db.name);
-                }
-              }}
-            >
-              {isExpanded ? (
-                <ChevronDown size={12} className="shrink-0" />
-              ) : (
-                <ChevronRight size={12} className="shrink-0" />
-              )}
-              <DbIcon size={12} className="shrink-0 text-muted-foreground" />
-              <span className="truncate">{db.name}</span>
-              {isLoading && (
-                <Loader2 size={10} className="ml-auto animate-spin" />
-              )}
-            </button>
+            />
 
             {isExpanded && (
               <div>
@@ -466,63 +217,21 @@ export default function DocumentDatabaseTree({
                 ) : (
                   collections.map((coll) => {
                     const collNodeId = `coll:${db.name}:${coll.name}`;
-                    const isSelected = selectedNodeId === collNodeId;
                     return (
-                      <ContextMenu key={coll.name}>
-                        <ContextMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className={cn(
-                              "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-8 hover:bg-muted",
-                              isSelected
-                                ? "bg-primary/10 text-primary font-semibold"
-                                : "text-foreground",
-                            )}
-                            aria-label={`${coll.name} collection`}
-                            // Sprint 136 (AC-S136-03) — single-click opens a
-                            // preview tab on the collection (`addTab` defaults
-                            // new tabs to `isPreview: true`); double-click
-                            // promotes the preview tab to a persistent tab.
-                            // Same model as the relational tree (AC-S136-01/02)
-                            // so paradigm doesn't change the click semantics.
-                            onClick={() => {
-                              setSelectedNodeId(collNodeId);
-                              handleCollectionOpen(db.name, coll.name);
-                            }}
-                            onDoubleClick={() =>
-                              handleCollectionDoubleClick(db.name, coll.name)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                handleCollectionOpen(db.name, coll.name);
-                              }
-                            }}
-                          >
-                            <FileText
-                              size={12}
-                              className="shrink-0 text-muted-foreground"
-                            />
-                            <span className="truncate text-xs">
-                              {coll.name}
-                            </span>
-                            {coll.document_count != null && (
-                              <span className="ml-auto text-3xs text-muted-foreground">
-                                {coll.document_count.toLocaleString()}
-                              </span>
-                            )}
-                          </button>
-                        </ContextMenuTrigger>
-                        <ContextMenuContent>
-                          <ContextMenuItem
-                            danger
-                            onSelect={() =>
-                              handleDropCollectionRequest(db.name, coll.name)
-                            }
-                          >
-                            Drop Collection
-                          </ContextMenuItem>
-                        </ContextMenuContent>
-                      </ContextMenu>
+                      <CollectionRow
+                        key={coll.name}
+                        database={db.name}
+                        collection={coll}
+                        isSelected={selectedNodeId === collNodeId}
+                        onSelect={() => setSelectedNodeId(collNodeId)}
+                        onOpen={() => handleCollectionOpen(db.name, coll.name)}
+                        onDoubleOpen={() =>
+                          handleCollectionDoubleClick(db.name, coll.name)
+                        }
+                        onRequestDrop={() =>
+                          drop.requestDrop(db.name, coll.name)
+                        }
+                      />
                     );
                   })
                 )}
@@ -532,51 +241,12 @@ export default function DocumentDatabaseTree({
         );
       })}
 
-      {/* Sprint 198 — Drop Collection confirm dialog. Mirrors SchemaTree's
-          destructive Drop Table dialog so the document branch has a matching
-          UX. The Safe Mode gate already pre-classified upstream — this
-          dialog is the second-line "are you sure" the user actually clicks. */}
-      <Dialog
-        open={!!dropDialog}
-        onOpenChange={(open) => !open && setDropDialog(null)}
-      >
-        <DialogContent
-          className="w-80 bg-secondary p-4"
-          showCloseButton={false}
-        >
-          <div className="rounded-lg border border-border bg-secondary p-4 shadow-xl">
-            <DialogHeader>
-              <DialogTitle className="mb-2 text-sm font-semibold text-foreground">
-                Drop Collection
-              </DialogTitle>
-              <DialogDescription className="mb-4 text-sm text-secondary-foreground">
-                {dropDialog
-                  ? `Are you sure you want to drop "${dropDialog.database}.${dropDialog.collection}"? This action cannot be undone.`
-                  : ""}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDropDialog(null)}
-                disabled={isDropping}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleConfirmDropCollection}
-                disabled={isDropping}
-                aria-label="Drop Collection"
-              >
-                {isDropping ? "Dropping..." : "Drop Collection"}
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DropCollectionDialog
+        target={drop.dropDialog}
+        isDropping={drop.isDropping}
+        onConfirm={drop.confirmDrop}
+        onCancel={drop.cancelDrop}
+      />
     </div>
   );
 }

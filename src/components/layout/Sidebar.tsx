@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
 import { THEME_CATALOG } from "@lib/themeCatalog";
@@ -62,6 +63,11 @@ export default function Sidebar() {
   });
   const activeTabConnId = activeTab?.connectionId ?? null;
   const addQueryTab = useTabStore((s) => s.addQueryTab);
+  // Sprint 212 — MRU marking moved out of tabStore.addQueryTab into each
+  // caller. The "+ Query" button below explicitly marks the focused
+  // connection used so the launcher Recent rail / EmptyState CTA reflect
+  // the user's continued engagement with the connection.
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const themeId = useThemeStore((s) => s.themeId);
   const themeMode = useThemeStore((s) => s.mode);
@@ -170,6 +176,7 @@ export default function Sidebar() {
               onClick={() => {
                 if (selectedConnected && focusedConnId) {
                   addQueryTab(focusedConnId);
+                  markConnectionUsed(focusedConnId);
                 }
               }}
             >

@@ -3,6 +3,12 @@
  *
  * Extracted from the 1009-line `tabStore.ts` god file. Pure type module:
  * no runtime imports beyond type-only `@/types/...` and `@stores/...`.
+ *
+ * Sprint 212 — the legacy query-history wrapper signature was removed; the
+ * cross-store query-history type imports were retired alongside it. The
+ * `useQueryExecution.ts` 8 call sites now build the history payload
+ * directly so the tab store no longer participates in query history
+ * persistence.
  */
 import type { Paradigm } from "@/types/connection";
 import type {
@@ -11,10 +17,6 @@ import type {
   QueryStatementResult,
 } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
-import type {
-  QueryHistorySource,
-  QueryHistoryStatus,
-} from "@stores/queryHistoryStore";
 
 // ---------------------------------------------------------------------------
 // Tab types — discriminated union so consumers can narrow on `tab.type`
@@ -201,27 +203,6 @@ export interface TabState {
       lastResult: QueryResult | null;
       allFailed: boolean;
       joinedErrorMessage: string;
-    },
-  ) => void;
-  /**
-   * Sprint 195 — record a query history entry derived from a query tab.
-   * Auto-extracts `connectionId` / `paradigm` / `queryMode` / `database` /
-   * `collection` from the tab so callsites only carry the variable fields
-   * (sql / executedAt / duration / status). No-op on missing tab or
-   * non-query tab.
-   *
-   * Sprint 196 (FB-5b) — `source` widens the payload. Default `"raw"` so
-   * QueryTab callsites stay unchanged after the Sprint 195 refactor; other
-   * surfaces (grid commit, DDL editors, mongo-op) pass their own source.
-   */
-  recordHistory: (
-    tabId: string,
-    payload: {
-      sql: string;
-      executedAt: number;
-      duration: number;
-      status: QueryHistoryStatus;
-      source?: QueryHistorySource;
     },
   ) => void;
   /**

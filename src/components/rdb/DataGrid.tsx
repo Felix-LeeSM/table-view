@@ -3,6 +3,7 @@ import { ChevronRight, Loader2, X } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useMruStore } from "@stores/mruStore";
 import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 import { cancelQuery } from "@lib/tauri";
 import FilterBar from "@components/rdb/FilterBar";
@@ -44,6 +45,11 @@ export default function DataGrid({
   const queryTableData = useSchemaStore((s) => s.queryTableData);
   const addTab = useTabStore((s) => s.addTab);
   const updateTabSorts = useTabStore((s) => s.updateTabSorts);
+  // Sprint 212 — MRU marking moved out of tabStore.addTab into each caller.
+  // FK navigation opens a new persistent tab against (potentially) a different
+  // table on the same connection; we mark used so the launcher / EmptyState
+  // CTA reflect the user's continued engagement with this connection.
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   // Sprint 185 — environment color stripe on the SQL Preview Dialog header.
   const connectionEnvironment = useConnectionStore(
     (s) =>
@@ -318,8 +324,9 @@ export default function DataGrid({
           },
         ],
       });
+      markConnectionUsed(connectionId);
     },
-    [addTab, connectionId],
+    [addTab, markConnectionUsed, connectionId],
   );
 
   const handleApplyFilters = () => {
