@@ -512,6 +512,8 @@ pub async fn write_text_file_export(
 
     if let Err(ref e) = result {
         warn!(error = %e, "write_text_file_export failed");
+        // Best-effort partial-file cleanup; ignore remove error since the
+        // file may not have been created yet.
         let _ = std::fs::remove_file(&target_path);
     }
 
