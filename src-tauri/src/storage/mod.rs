@@ -5,7 +5,7 @@ use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// In-process lock to prevent TOCTOU race conditions between concurrent Tauri commands.
 /// Storage operations are all synchronous (blocking file I/O), so std::sync::Mutex is correct.
@@ -48,22 +48,90 @@ fn load_storage_raw() -> Result<StorageData, AppError> {
     }
 
     let content = fs::read_to_string(&path)?;
-    let data: StorageData = serde_json::from_str(&content)?;
+    let data: StorageData = match serde_json::from_str(&content) {
+        Ok(data) => data,
+        Err(parse_err) => {
+            // Corrupt JSON: a Serde error here would force the user to lose
+            // all stored connections. Quarantine the file and start clean
+            // so the user keeps a recoverable backup on disk and the app
+            // remains usable.
+            let backup = quarantine_corrupt_storage(&path)?;
+            warn!(
+                "connections.json failed to parse ({}); quarantined to {} and starting with empty storage",
+                parse_err,
+                backup.display()
+            );
+            let default = StorageData {
+                connections: vec![],
+                groups: vec![],
+            };
+            save_storage_raw(&default)?;
+            default
+        }
+    };
     debug!("Loaded {} connections (raw)", data.connections.len());
     Ok(data)
 }
 
+/// Move a corrupt storage file aside with a timestamped suffix so the user
+/// can inspect / recover it manually and the app can boot clean. Returns the
+/// quarantine path on success.
+fn quarantine_corrupt_storage(path: &std::path::Path) -> Result<PathBuf, AppError> {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let mut backup = path.to_path_buf();
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("connections.json");
+    backup.set_file_name(format!("{file_name}.corrupt-{ts}"));
+    fs::rename(path, &backup)?;
+    Ok(backup)
+}
+
 /// Save storage to disk WITHOUT re-encrypting passwords. Each connection's
 /// `password` field MUST already contain ciphertext (or be empty).
+///
+/// Atomic write: write into a sibling tempfile, fsync, then rename. A crash
+/// mid-write therefore never leaves a half-written connections.json.
+/// On Unix the 0600 mode is applied at create time so the data never lives
+/// in a world-readable file even momentarily.
 fn save_storage_raw(data: &StorageData) -> Result<(), AppError> {
     let path = storage_file_path()?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| AppError::Storage("Storage path has no parent directory".into()))?;
     let json = serde_json::to_string_pretty(data)?;
-    fs::write(&path, &json)?;
 
-    #[cfg(unix)]
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let tmp_path = parent.join(format!(
+        "connections.json.tmp.{}.{}",
+        std::process::id(),
+        nanos
+    ));
+
     {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+        let mut opts = fs::OpenOptions::new();
+        opts.create(true).truncate(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut f = opts.open(&tmp_path)?;
+        use std::io::Write;
+        f.write_all(json.as_bytes())?;
+        f.sync_all()?;
+    }
+
+    if let Err(e) = fs::rename(&tmp_path, &path) {
+        let _ = fs::remove_file(&tmp_path); // best-effort: leave no orphan
+        return Err(e.into());
     }
 
     debug!("Saved {} connections (raw)", data.connections.len());
@@ -731,6 +799,40 @@ mod tests {
 
         let loaded = load_storage().unwrap();
         assert_eq!(loaded.connections.len(), 1);
+
+        cleanup_test_env();
+    }
+
+    // C5 (audit 2026-05-05): corrupt JSON must not destroy user data.
+    // Quarantine the bad file with a timestamped suffix and start clean,
+    // so the user can recover manually instead of losing every saved
+    // connection.
+    #[test]
+    #[serial]
+    fn test_load_storage_quarantines_corrupt_file_and_returns_empty() {
+        let dir = setup_test_env();
+        let path = dir.path().join("connections.json");
+        fs::write(&path, b"{ this is not valid json }").unwrap();
+
+        let data = load_storage_redacted().unwrap();
+        assert!(
+            data.connections.is_empty(),
+            "should boot empty after corruption"
+        );
+        assert!(data.groups.is_empty());
+
+        // Quarantine artifact must exist with the expected prefix.
+        let entries: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert!(
+            entries
+                .iter()
+                .any(|n| n.starts_with("connections.json.corrupt-")),
+            "quarantined backup not found in {entries:?}"
+        );
 
         cleanup_test_env();
     }
