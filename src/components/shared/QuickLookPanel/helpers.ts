@@ -1,18 +1,11 @@
-// Sprint 211 — pure utilities + resize constants for QuickLook. No JSX
-// (so this stays a `.ts` file as the sprint contract verification check
-// requires). The per-cell renderers (`FieldRow`, `EditableValue`) live in
-// the sibling `FieldRow.tsx` because JSX cannot be parsed inside a `.ts`
-// file under the standard `@vitejs/plugin-react` loader. Both bodies
-// (`RdbQuickLookBody`, `DocumentQuickLookBody`) import the renderers from
-// `./FieldRow`, and `FieldRow` itself imports the helpers below.
-//
-// Behavior contract (verbatim from the pre-211 god file): `formatCellValue`
-// keeps its existing inline justification comments for the
-// `JSON.stringify` cycle and `JSON.parse` swallows. No new `catch {}`
-// introduced.
+// Pure utilities + resize constants for QuickLook. No JSX so this stays a
+// `.ts` file. The per-cell renderers (`FieldRow`, `EditableValue`) live in
+// the sibling `FieldRow.tsx`; both bodies (`RdbQuickLookBody`,
+// `DocumentQuickLookBody`) import the renderers from `./FieldRow`, and
+// `FieldRow` itself imports the helpers below.
 import type { ColumnInfo } from "@/types/schema";
 
-// ── Resize constants (Sprint 105 #QL-1) ──────────────────────────────
+// ── Resize constants ─────────────────────────────────────────────────
 
 export const MIN_HEIGHT = 120;
 export const MAX_HEIGHT = 600;
@@ -79,19 +72,19 @@ export function formatCellValue(value: unknown, col: ColumnInfo): string {
   return String(value);
 }
 
-// Sprint 194 — column is editable in QuickLook iff (a) editState available,
-// (b) not a primary key, (c) not a BLOB family. Generated/computed columns
-// fall through the same gate via the underlying hook's commit path.
+// Column is editable in QuickLook iff (a) editState available, (b) not a
+// primary key, (c) not a BLOB family. Generated/computed columns fall
+// through the same gate via the underlying hook's commit path.
 export function isEditableColumn(col: ColumnInfo): boolean {
   if (col.is_primary_key) return false;
   if (isBlobColumn(col.data_type)) return false;
   return true;
 }
 
-// Sprint 194 — does the selected row have any pending change? Pending edits
-// carry the row idx as a `${rowIdx}-${colIdx}` prefix; pendingDeletedRowKeys
-// uses a page-aware row key the panel does not have, so we only check the
-// edit map for V1. New-row inserts are addressed via separate dedicated UI.
+// Does the selected row have any pending change? Pending edits carry the
+// row idx as a `${rowIdx}-${colIdx}` prefix; pendingDeletedRowKeys uses a
+// page-aware row key the panel does not have, so we only check the edit
+// map. New-row inserts are addressed via separate dedicated UI.
 export function selectedRowIsDirty(
   selectedRowIdx: number | null,
   pendingEdits: Map<string, string | null>,

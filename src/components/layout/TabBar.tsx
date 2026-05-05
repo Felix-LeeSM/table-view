@@ -16,11 +16,10 @@ export default function TabBar() {
   const dirtyTabIds = useTabStore((s) => s.dirtyTabIds);
   const connections = useConnectionStore((s) => s.connections);
 
-  // Sprint 97 — pending close confirmation. When the user attempts to
-  // close a dirty tab via the close button or middle-click we stash the
-  // tab here and surface ConfirmDialog; the actual `removeTab` only runs
-  // on `onConfirm`. `onCancel` simply clears the pending state (the close
-  // is rejected).
+  // Pending close confirmation. When the user attempts to close a dirty
+  // tab via the close button or middle-click we stash the tab here and
+  // surface ConfirmDialog; the actual `removeTab` only runs on `onConfirm`.
+  // `onCancel` clears the pending state (the close is rejected).
   const [pendingClose, setPendingClose] = useState<Tab | null>(null);
 
   const requestCloseTab = (tab: Tab) => {
@@ -97,12 +96,11 @@ export default function TabBar() {
             }
             aria-selected={tab.id === activeTabId}
             tabIndex={tab.id === activeTabId ? 0 : -1}
-            // Sprint 77 — Compact tab metrics. `py-1 text-sm` keeps the
-            // row ≤ 32px (≈20px line-height + 8px vertical padding + 1px
-            // bottom border) while leaving the close button (`size-6` =
-            // 24px) inside a comfortable hit target. `text-xs` would
-            // have tightened things further but dropped the close button
-            // below the ADR 0008 accessibility floor.
+            // Compact tab metrics. `py-1 text-sm` keeps the row ≤ 32px
+            // (≈20px line-height + 8px padding + 1px border) while leaving
+            // the close button (`size-6` = 24px) inside a comfortable hit
+            // target. `text-xs` would tighten things further but drop the
+            // close button below the ADR 0008 accessibility floor.
             className={`group relative flex items-center gap-1.5 border-r border-border pl-3 pr-3 py-1 text-sm cursor-pointer select-none transition-opacity ${
               tab.id === activeTabId
                 ? "bg-background text-foreground border-b-2 border-b-primary"
@@ -264,10 +262,10 @@ export default function TabBar() {
         ))}
       </div>
 
-      {/* Sprint 97 — dirty close gate. Mounted only while a close attempt
-          on a dirty tab is pending; `onConfirm` discards the unsaved diff
-          by removing the tab (the grid's pending state is local to the
-          tab and disappears with it), `onCancel` aborts the close. */}
+      {/* Dirty-close gate. Mounted only while a close attempt on a dirty
+          tab is pending; `onConfirm` discards the unsaved diff by removing
+          the tab (grid pending state is tab-local and dies with it),
+          `onCancel` aborts the close. */}
       {pendingClose && (
         <ConfirmDialog
           title="Discard unsaved changes?"

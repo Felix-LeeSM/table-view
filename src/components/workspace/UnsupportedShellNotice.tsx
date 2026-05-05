@@ -2,10 +2,9 @@ import { KeyRound, SearchCode } from "lucide-react";
 
 export interface UnsupportedShellNoticeProps {
   /**
-   * The paradigm whose adapter has not been implemented yet. Sprint 126
-   * onboards `kv` and `search` placeholders so new paradigms surface in
-   * the sidebar at the same level of polish as the empty / connecting
-   * states. Phase 9 (S136 / S137) will replace each with a real shell.
+   * The paradigm whose adapter has not been implemented yet. `kv` and
+   * `search` placeholders surface in the sidebar at the same level of
+   * polish as the empty / connecting states.
    */
   paradigm: "kv" | "search";
 }
@@ -22,18 +21,16 @@ const PARADIGM_ARIA: Record<UnsupportedShellNoticeProps["paradigm"], string> = {
 };
 
 /**
- * Sprint 126 — placeholder sidebar for paradigms without a dedicated
- * shell yet. Visual structure mirrors the existing `SchemaPanel` empty
- * states (centered icon + heading + body copy on a `select-none` flex
- * column) so the swap between supported and unsupported paradigms is
- * not jarring.
+ * Placeholder sidebar for paradigms without a dedicated shell yet. Visual
+ * structure mirrors the existing `SchemaPanel` empty states (centered icon
+ * + heading + body copy on a `select-none` flex column) so the swap
+ * between supported and unsupported paradigms is not jarring.
  *
  * Accessibility:
- * - `role="status"` so screen readers announce the message politely
- *   when the user opens an unsupported connection.
- * - `aria-label` is spelled out per-paradigm
- *   (e.g. `"Key-value workspace placeholder"`) so e2e selectors and
- *   assistive tech can address the notice unambiguously.
+ * - `role="status"` so screen readers announce the message politely when
+ *   the user opens an unsupported connection.
+ * - `aria-label` is spelled out per-paradigm so e2e selectors and assistive
+ *   tech can address the notice unambiguously.
  */
 export default function UnsupportedShellNotice({
   paradigm,

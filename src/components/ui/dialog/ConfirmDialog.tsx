@@ -9,19 +9,13 @@ import {
 import { Button } from "@components/ui/button";
 
 // ---------------------------------------------------------------------------
-// Sprint-96 Layer 2 — `ConfirmDialog` preset
+// `ConfirmDialog` preset (Layer 2 of the dialog 2-layer system; see
+// `docs/dialog-conventions.md`).
 //
-// Generalised version of the original `src/components/shared/ConfirmDialog`.
-// API is preserved verbatim (title / message / confirmLabel / danger /
-// loading / onConfirm / onCancel) so the existing `@components/shared/...`
-// import path keeps working as a thin re-export.
-//
-// Dialog 2-Layer rules (see `docs/dialog-conventions.md`):
-//   - This preset uses Layer-1 primitives only — `<AlertDialog*>` from
-//     `src/components/ui/alert-dialog.tsx`. It does not reach into Radix
-//     directly and does not hand-roll close-button DOM.
-//   - Tone forwarding: `danger=true` maps to the destructive border token
-//     via `<AlertDialogContent tone="destructive">` (sprint-95 AC-05).
+// Uses Layer-1 primitives only — `<AlertDialog*>` from
+// `src/components/ui/alert-dialog.tsx`. It does not reach into Radix
+// directly and does not hand-roll close-button DOM. `danger=true` forwards
+// to `<AlertDialogContent tone="destructive">`.
 // ---------------------------------------------------------------------------
 
 export interface ConfirmDialogProps {

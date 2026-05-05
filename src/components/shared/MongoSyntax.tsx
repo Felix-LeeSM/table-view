@@ -9,9 +9,9 @@ interface MongoSyntaxProps {
 
 /**
  * Token-kind → Tailwind class map. Operator tokens include the literal
- * `cm-mql-operator` class so the Sprint 83 CodeMirror decoration and the
- * Sprint 85 history preview share a single CSS target — theming the
- * operator colour in one place updates both surfaces.
+ * `cm-mql-operator` class so the CodeMirror decoration and the history
+ * preview share a single CSS target — theming the operator colour in one
+ * place updates both surfaces.
  */
 const TOKEN_CLASS: Record<MongoTokenKind, string> = {
   string: "text-syntax-string",

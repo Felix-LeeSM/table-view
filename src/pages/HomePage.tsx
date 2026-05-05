@@ -92,27 +92,26 @@ export default function HomePage() {
   // schema-tree mount happens because Workspace's Sidebar reads the same
   // focusedConnId we set on select.
   //
-  // Sprint 134 — when the user double-clicks a *different* connection from
-  // Home while another is currently focused, the swap must update
-  // `focusedConnId` even when the new connection was already connected via
-  // a previous session/context-menu Connect. ConnectionItem's
-  // `handleDoubleClick` calls `connectToDatabase` for the not-yet-connected
-  // path, so we don't have to duplicate that here — but `setFocusedConn`
-  // must run unconditionally so the Workspace Sidebar/Toolbar re-render
-  // around the new connection. (This was the root cause of the toolbar
-  // ConnectionSwitcher's "swap doesn't happen" bug per the lesson.)
-  // Sprint 157 — guard against rapid re-entry so that double-clicks
-  // don't trigger multiple showWindow calls in parallel.
+  // When the user double-clicks a *different* connection from Home while
+  // another is currently focused, the swap must update `focusedConnId`
+  // even when the new connection was already connected via a previous
+  // session / context-menu Connect. ConnectionItem's `handleDoubleClick`
+  // calls `connectToDatabase` for the not-yet-connected path; the
+  // `setFocusedConn` here must run unconditionally so the Workspace
+  // Sidebar/Toolbar re-render around the new connection.
+  //
+  // The `activatingRef` guard prevents rapid re-entry so double-clicks
+  // don't trigger multiple `showWindow` calls in parallel.
   const activatingRef = useRef(false);
 
   const handleActivate = useCallback(
     (id: string) => {
       if (activatingRef.current) return; // guard against rapid re-entry
 
-      // Sprint 148 (AC-142-2) — when the user activates a connection that
-      // differs from any open workspace tab's owner, close those stale
-      // tabs so the new workspace doesn't inherit cross-connection state.
-      // Same-connection reactivation keeps existing tabs untouched.
+      // When the user activates a connection that differs from any open
+      // workspace tab's owner, close those stale tabs so the new workspace
+      // doesn't inherit cross-connection state. Same-connection
+      // reactivation keeps existing tabs untouched.
       const staleConnIds = new Set(
         tabs.filter((t) => t.connectionId !== id).map((t) => t.connectionId),
       );
@@ -121,12 +120,11 @@ export default function HomePage() {
       }
       setFocusedConn(id);
       activatingRef.current = true;
-      // Sprint 154 — wire activation to real `WebviewWindow` lifecycle.
-      // Order: workspace.show() → workspace.setFocus() → launcher.hide().
-      // The order matters: `show` then `setFocus` ensures the workspace
-      // takes input focus the moment it becomes visible; `launcher.hide()`
-      // happens last so a `workspace.show()` rejection leaves the launcher
-      // on screen for retry (locked by AC-154-01 error path).
+      // Activation order: workspace.show() → workspace.setFocus() →
+      // launcher.hide(). The order matters: `show` then `setFocus` ensures
+      // the workspace takes input focus the moment it becomes visible;
+      // `launcher.hide()` happens last so a `workspace.show()` rejection
+      // leaves the launcher on screen for retry.
       void (async () => {
         try {
           await showWindow("workspace");
@@ -215,8 +213,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Body — connection list. Sprint 125 leaves the layout single-column
-          intentionally; sprints 127+ may split this into a wider canvas. */}
+      {/* Body — connection list. Single-column layout intentionally. */}
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-1 flex-col overflow-auto">
           <ConnectionList
@@ -227,7 +224,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Recent — MRU connection list (Sprint 167). */}
+      {/* Recent — MRU connection list. */}
       <div
         className="border-t border-border px-3 py-2"
         data-testid="home-recent"

@@ -1,8 +1,8 @@
 import type { QueryHistorySource } from "@stores/queryHistoryStore";
 
-// Sprint 196 (AC-196-06) — small badge that surfaces non-`raw` history
-// sources. `raw` (the default for editor-driven queries) is suppressed to
-// keep the row visually quiet — only commits / DDL / Mongo ops light up.
+// Small badge that surfaces non-`raw` history sources. `raw` (the default
+// for editor-driven queries) is suppressed to keep the row visually quiet
+// — only commits / DDL / Mongo ops light up.
 
 interface SourceMeta {
   label: string;

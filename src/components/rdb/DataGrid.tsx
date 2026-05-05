@@ -45,21 +45,20 @@ export default function DataGrid({
   const queryTableData = useSchemaStore((s) => s.queryTableData);
   const addTab = useTabStore((s) => s.addTab);
   const updateTabSorts = useTabStore((s) => s.updateTabSorts);
-  // Sprint 212 — MRU marking moved out of tabStore.addTab into each caller.
-  // FK navigation opens a new persistent tab against (potentially) a different
-  // table on the same connection; we mark used so the launcher / EmptyState
-  // CTA reflect the user's continued engagement with this connection.
+  // MRU marking lives on each caller (not inside tabStore.addTab). FK
+  // navigation opens a new persistent tab against (potentially) a
+  // different table on the same connection; we mark used so the launcher
+  // / EmptyState CTA reflect engagement with this connection.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
-  // Sprint 185 — environment color stripe on the SQL Preview Dialog header.
+  // Environment color stripe on the SQL Preview Dialog header.
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  // Sprint 76: sort state lives on the active tab so it survives tab
-  // switches (this component unmounts/remounts when the user navigates
-  // away and back). Reading `tab.sorts` makes the tab the single source
-  // of truth; `setSorts` delegates to the store action so sibling tabs
-  // are never touched.
+  // Sort state lives on the active tab so it survives tab switches (this
+  // component unmounts/remounts when the user navigates away and back).
+  // `tab.sorts` is the single source of truth; `setSorts` delegates to the
+  // store action so sibling tabs are never touched.
   const activeTabSorts = useTabStore((s) => {
     const tab = s.tabs.find((t) => t.id === s.activeTabId);
     if (!tab || tab.type !== "table") return undefined;
@@ -162,13 +161,11 @@ export default function DataGrid({
   }, [connectionId, table, schema]);
 
   const fetchIdRef = useRef(0);
-  // Sprint 180 — query id for the in-flight `query_table_data` call so
-  // the shared Cancel button can route through `cancel_query`. The
-  // backend `query_table_data` accepts an optional query_id (Sprint 180
-  // command extension); when present, the command registers the token
-  // before dispatching the SQL and removes it on settle. The frontend
-  // also bumps `fetchIdRef` on cancel so the backend's eventual reply
-  // (if it races past the cancel) is dropped.
+  // Query id for the in-flight `query_table_data` call so the shared
+  // Cancel button can route through `cancel_query`. The backend command
+  // registers the token before dispatching the SQL and removes it on
+  // settle. The frontend also bumps `fetchIdRef` on cancel so the
+  // backend's eventual reply (if it races past the cancel) is dropped.
   const queryIdRef = useRef<string | null>(null);
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current;
@@ -217,10 +214,10 @@ export default function DataGrid({
     queryTableData,
   ]);
 
-  // Sprint 180 (AC-180-02 / AC-180-05) — Cancel handler for the rdb
-  // DataGrid. Bumps `fetchIdRef` so the in-flight resolve is dropped,
-  // clears `loading` synchronously (overlay disappears within one
-  // frame), and best-effort cancels the backend driver handle.
+  // Cancel handler for the rdb DataGrid. Bumps `fetchIdRef` so the
+  // in-flight resolve is dropped, clears `loading` synchronously (overlay
+  // disappears within one frame), and best-effort cancels the backend
+  // driver handle.
   const handleCancelRefetch = useCallback(() => {
     fetchIdRef.current++;
     setLoading(false);
@@ -346,10 +343,10 @@ export default function DataGrid({
     setPage(1);
   };
 
-  // Sprint 99 — full clear used by the empty-state Clear filter affordance.
-  // We must clear BOTH the structured (filters/appliedFilters) and the raw
-  // (rawSql/appliedRawSql) tracks; otherwise either an unapplied raw SQL
-  // would slip back in on the next Apply, or vice versa.
+  // Full clear used by the empty-state Clear filter affordance. Must clear
+  // BOTH the structured (filters/appliedFilters) and the raw
+  // (rawSql/appliedRawSql) tracks; otherwise an unapplied raw SQL would
+  // slip back in on the next Apply (or vice versa).
   const handleClearAllFiltersFromEmptyState = useCallback(() => {
     setFilters([]);
     setAppliedFilters([]);
@@ -572,9 +569,9 @@ export default function DataGrid({
                   </pre>
                 );
               })}
-              {/* Sprint 93 — commit failure banner. Renders inside the modal
-                  so the modal stays open after a failed executeQuery and the
-                  user sees which statement failed + DB message + count. */}
+              {/* Commit-failure banner. Renders inside the modal so it
+                  stays open after a failed executeQuery and the user sees
+                  which statement failed + DB message + count. */}
               {editState.commitError && (
                 <div
                   role="alert"

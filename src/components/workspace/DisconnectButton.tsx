@@ -6,31 +6,22 @@ import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { toast } from "@lib/toast";
 
 /**
- * Sprint 134 — DisconnectButton.
- *
  * Workspace-toolbar control that drops the focused connection's adapter
- * pool. Closes the gap left by sprints 127–133 where Workspace had
- * exactly zero in-app affordance for "stop talking to this database"
- * (the only paths were the sidebar context menu, which the lesson
- * 2026-04-27-workspace-toolbar-ux-gaps flagged as undiscoverable, and
- * quitting the app).
+ * pool.
  *
  * Behaviour:
  *   - Disabled when no connection is focused, when the focused
  *     connection is not in the `connected` variant, or while the
  *     button is mid-flight (a second click during disconnect could
  *     race the store update).
- *   - On click: invokes `disconnectFromDatabase(focusedConnId)`, with
- *     a try/catch that surfaces the failure as a toast and re-enables
- *     the button so the user can retry. The store keeps the connection
- *     in `connected` on failure (the Tauri call rejected before the
- *     adapter pool was torn down).
- *   - Loading state shows a spinner instead of the unplug icon, and
- *     the aria-label flips to "Disconnecting…" so screen readers
- *     announce the in-flight state.
- *
- * Visual: ghost variant + icon-xs to match the DbSwitcher sibling
- * control in `WorkspaceToolbar` (Sprint 135 removed `SchemaSwitcher`).
+ *   - On click: invokes `disconnectFromDatabase(focusedConnId)` with a
+ *     try/catch that surfaces the failure as a toast and re-enables the
+ *     button so the user can retry. The store keeps the connection in
+ *     `connected` on failure (the Tauri call rejected before the adapter
+ *     pool was torn down).
+ *   - Loading state shows a spinner instead of the unplug icon, and the
+ *     aria-label flips to "Disconnecting…" so screen readers announce
+ *     the in-flight state.
  */
 export interface DisconnectButtonProps {
   /** Override for tests — defaults to "Disconnect". */
@@ -64,10 +55,9 @@ export default function DisconnectButton({
     try {
       await disconnectFromDatabase(focusedConnId);
     } catch (e) {
-      // Sprint 134 — disconnect failure path. The store does not
-      // catch this rejection itself (it propagates the Tauri error so
-      // callers can react), so we toast here. The button re-enables
-      // automatically via the `finally` below.
+      // The store propagates the Tauri rejection so callers can react;
+      // the toast here is the user-facing surface. The button re-enables
+      // automatically via `finally` below.
       toast.error(
         `Failed to disconnect${focusedConn ? ` from "${focusedConn.name}"` : ""}: ${String(e)}`,
       );

@@ -11,19 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Sprint-96 Layer 2 — `TabsDialog` preset
-//
-// Renders a title + a `<Tabs>` group inside a Layer-1 `<DialogContent>`.
-// The preset owns the standard list+trigger boilerplate; callers only pass
-// the `tabs` array (each entry has its own `label`, optional `triggerNode`
-// for icons, and a `content` ReactNode). Optional `controlled` props let
-// the caller drive the active tab from outside (e.g. `initialTab="import"`
-// in `ImportExportDialog`).
-//
-// Layer rules:
-//   - Uses Layer-1 `<Dialog*>` + the existing `<Tabs>` primitive only.
-//   - Does not wrap or re-style the tab triggers; callers can pass a
-//     `triggerClassName` if they want the existing toggle-style look.
+// `TabsDialog` preset (Layer 2). Title + a `<Tabs>` group inside a Layer-1
+// `<DialogContent>`. Preset owns the list+trigger boilerplate; callers pass
+// the `tabs` array (label / optional `triggerNode` / `content`). Optional
+// controlled props let callers drive the active tab from outside.
 // ---------------------------------------------------------------------------
 
 export interface TabsDialogTab {

@@ -4,28 +4,23 @@ import SqlSyntax from "@components/shared/SqlSyntax";
 import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 
 /**
- * Sprint 93 — surfaced commit failure passed through from `useDataGridEdit`'s
- * `commitError` state. The dialog renders this in a destructive banner with a
- * `role="alert"` slot so screen readers announce the failure when it appears.
+ * Surfaced commit failure passed through from `useDataGridEdit`'s
+ * `commitError` state. Rendered in a destructive banner with `role="alert"`
+ * so screen readers announce the failure.
  *
  * Distinct from {@link SqlPreviewDialogProps.error}, which is used for SQL
  * preview *generation* failures (e.g. structure-editor schema mismatches).
- * `commitError` represents an *execution* failure: the SQL was generated and
+ * `commitError` represents an *execution* failure: SQL was generated and
  * confirmed by the user, but the database rejected one of the statements.
  *
  * Fields mirror `useDataGridEdit.CommitError`:
- * - `statementIndex` is 0-indexed; the dialog renders "failed at: K" with K =
- *   `statementIndex + 1` so the label matches what the user counts visually.
- * - `statementCount` is the total batch size — combined with `statementIndex`
- *   it produces the "executed: N, failed at: K" line.
- * - `sql` is the raw SQL of the failing statement, shown verbatim so the user
- *   can correlate to the preview body.
+ * - `statementIndex` is 0-indexed; the dialog renders "failed at: K" with
+ *   K = `statementIndex + 1` so the label matches what the user counts.
+ * - `statementCount` is the total batch size — combined with
+ *   `statementIndex` it produces the "executed: N, failed at: K" line.
+ * - `sql` is the raw SQL of the failing statement, shown verbatim so the
+ *   user can correlate to the preview body.
  * - `message` is the DB-reported error.
- *
- * Sprint 96: migrated to the `PreviewDialog` preset. The preset's
- * `commitError` prop preserves the sprint-93 destructive banner contract
- * (role="alert", aria-live="assertive", "executed: N, failed at: K of M",
- * raw failed SQL) verbatim.
  */
 export interface SqlPreviewCommitError {
   statementIndex: number;
@@ -39,23 +34,22 @@ export interface SqlPreviewDialogProps {
   loading: boolean;
   error: string | null;
   /**
-   * Sprint 93 — optional commit-time failure surfaced after `executeQuery`
-   * rejects. When present, the dialog stays open and displays a destructive
-   * banner with the failed statement, DB message, and "executed: N, failed
-   * at: K" partial-failure count.
+   * Optional commit-time failure surfaced after `executeQuery` rejects.
+   * When present, the dialog stays open and displays a destructive banner
+   * with the failed statement, DB message, and "executed: N, failed at: K"
+   * partial-failure count.
    */
   commitError?: SqlPreviewCommitError | null;
   /**
-   * Sprint 187 — optional environment tag for the connection backing this
-   * commit. When set, a 1px-h color stripe matching the DataGrid +
-   * EditableQueryResultGrid pattern (Sprint 185) renders above the dialog
-   * header. `null` keeps the dialog visually unchanged for paradigm /
-   * surface variants that do not plumb an environment.
+   * Optional environment tag for the connection backing this commit. When
+   * set, a 1px-h color stripe renders above the dialog header. `null`
+   * keeps the dialog visually unchanged for paradigm / surface variants
+   * that don't plumb an environment.
    *
-   * Typed as `string | null` so the editors can plumb
-   * `connection.environment` (which is loosely typed in the store) without
-   * casting; the runtime guard `environment in ENVIRONMENT_META` narrows
-   * to `EnvironmentTag` before lookup.
+   * Typed as `string | null` so editors can plumb `connection.environment`
+   * (loosely typed in the store) without casting; the runtime guard
+   * `environment in ENVIRONMENT_META` narrows to `EnvironmentTag` before
+   * lookup.
    */
   environment?: string | null;
   onConfirm: () => void;

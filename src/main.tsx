@@ -16,21 +16,20 @@ import "./index.css";
 // Boot sequence: theme → session → hydrate stores → render.
 // Each step depends on the previous one, so we await in order.
 async function boot() {
-  // sprint-173 — set document.title synchronously *before* React mounts.
-  // `AppRouter`'s useEffect also sets it, but useEffect runs after first
-  // paint, and on Xvfb cold-boot React's first paint can take 10+ seconds.
-  // webdriver's `getTitle()` reads `document.title`, so without this the
-  // e2e helper `switchToWorkspaceWindow` (which polls getTitle to identify
-  // which window it landed on) wastes those 10s matching the stale HTML
-  // default "Table View" on the workspace handle.
+  // Set `document.title` synchronously *before* React mounts. `AppRouter`'s
+  // useEffect also sets it, but useEffect runs after first paint, and on
+  // Xvfb cold-boot React's first paint can take 10+ seconds. webdriver's
+  // `getTitle()` reads `document.title`, so without this the e2e helper
+  // `switchToWorkspaceWindow` (which polls getTitle to identify which
+  // window it landed on) wastes those 10s matching the stale default
+  // "Table View" on the workspace handle.
   const label = getCurrentWindowLabel();
   document.title =
     label === "workspace" ? "Table View — Workspace" : "Table View";
 
-  // sprint-175 — boot-time instrumentation T0 anchor. Recorded *after* the
-  // synchronous `document.title` assignment (Sprint 173 invariant) but
-  // *before* any other boot work, so every later milestone delta is
-  // measured from the same point.
+  // Boot-time instrumentation T0 anchor. Recorded *after* the
+  // synchronous `document.title` assignment but *before* any other boot
+  // work, so every later milestone delta is measured from the same point.
   markT0();
 
   bootTheme();
@@ -48,7 +47,7 @@ async function boot() {
   useConnectionStore.getState().hydrateFromSession();
   markBootMilestone("connectionStore:hydrated");
 
-  // Sprint 154 — register the launcher's `tauri://close-requested` listener.
+  // Register the launcher's `tauri://close-requested` listener.
   // Fire-and-forget: if it rejects the app still works via system-tray / Cmd+Q.
   void bootWindowLifecycle().catch((e) => {
     logger.warn(
@@ -64,21 +63,20 @@ async function boot() {
     </React.StrictMode>,
   );
 
-  // sprint-175 — schedule the structured one-line boot summary. Two paths
-  // race; first one wins, the other is a no-op (idempotent in
-  // `logBootSummary`):
+  // Schedule the structured one-line boot summary. Two paths race; first
+  // wins, the other is a no-op (idempotent in `logBootSummary`):
   //
   //   1. Auto-trigger from `markBootMilestone("app:effects-fired")` — the
-  //      terminal milestone fired from `App.tsx` / `LauncherShell` mount-
-  //      effect, AFTER React commits and runs `useLayoutEffect` /
+  //      terminal milestone fired from `App.tsx` / `LauncherShell`
+  //      mount-effect, AFTER React commits and runs `useLayoutEffect` /
   //      `useEffect`. Happy path.
   //   2. 5s fallback timeout from `scheduleBootSummary` — guarantees the
   //      summary still prints if the mount-effect chain breaks (with
   //      `<missing>` markers for whatever didn't fire).
   //
-  // Why not log here synchronously? `react:first-paint` (useLayoutEffect)
-  // and `app:effects-fired` (useEffect) run AFTER `render()` returns, so
-  // a synchronous call would always render those two as `<missing>`.
+  // Synchronous logging here would always mark `react:first-paint` and
+  // `app:effects-fired` as `<missing>` because they run AFTER `render()`
+  // returns.
   scheduleBootSummary();
 }
 

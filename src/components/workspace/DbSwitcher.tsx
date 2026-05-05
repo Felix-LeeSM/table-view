@@ -22,22 +22,18 @@ import type { DatabaseInfo } from "@/types/document";
 import type { Paradigm } from "@/types/connection";
 
 /**
- * Sprint 127 — read-only DB display in the workspace toolbar.
- *
- * Sprint 128 promoted this into a click-to-fetch picker for `rdb` /
- * `document` paradigms when the active tab's connection is **connected**.
- * Sprint 130 wires the real PG sub-pool swap: a click on a list entry
- * dispatches `switch_active_db(connection_id, db_name)`, then
+ * DB switcher in the workspace toolbar. For `rdb` / `document` paradigms on
+ * a connected tab it's a click-to-fetch picker; clicking an entry dispatches
+ * `switch_active_db(connection_id, db_name)`, then:
  *   1. updates `connectionStore.activeStatuses[id].activeDb`
- *   2. clears the schema cache for the connection (sidebar re-loads
- *      against the new DB)
+ *   2. clears the schema cache for the connection (sidebar re-loads against
+ *      the new DB)
  *   3. closes the popover
  *   4. surfaces a success toast
- * On failure (Document paradigm = `Unsupported` until S131; PG sub-pool
- * open failure) we keep the popover open so the error chip is visible
- * and surface a toast.
+ * On failure (Document `Unsupported`, PG sub-pool open error) the popover
+ * stays open so the error chip stays visible alongside the toast.
  *
- * Other paradigms (`search`, `kv`) and disconnected tabs keep the S127
+ * Other paradigms (`search`, `kv`) and disconnected tabs render the
  * read-only chrome — `aria-disabled="true"`, not in keyboard tab order.
  *
  * Resolution rules for the trigger label:
@@ -51,11 +47,9 @@ import type { Paradigm } from "@/types/connection";
  *   - Active tab but no value     → "(default)"
  */
 /**
- * Sprint 141 (AC-141-4) — paradigm- and state-aware tooltip copy for the
- * read-only fallback. The previous static literal "Switching DBs lands in
- * sprint 130" leaked an internal milestone name into the user surface and
- * was the exact text the 2026-04-27 user feedback flagged. Each branch
- * here surfaces the *user-visible* reason the switcher is non-interactive.
+ * Paradigm- and state-aware tooltip copy for the read-only fallback. Each
+ * branch surfaces the *user-visible* reason the switcher is non-interactive
+ * (no internal milestone references in user-facing copy).
  */
 function readOnlyTooltipCopy(args: {
   hasActiveTab: boolean;
@@ -98,7 +92,7 @@ export default function DbSwitcher() {
   const paradigm = activeConn?.paradigm ?? null;
   const supportsSwitching = paradigm === "rdb" || paradigm === "document";
   const enabled = supportsSwitching && isConnected;
-  // Sprint 130 — RDB connections expose the active sub-pool via
+  // RDB connections expose the active sub-pool via
   // `activeStatuses[id].activeDb`. We pick that as the primary label
   // source so the chip updates immediately after a successful switch.
   const activeDb = status?.type === "connected" ? status.activeDb : undefined;
@@ -108,9 +102,9 @@ export default function DbSwitcher() {
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // Track the last `(connectionId, paradigm)` pair we fetched against so a
-  // tab swap to a different connection invalidates the cached list (the
-  // contract forbids LRU caching but stale rendering across connections is
-  // a UX bug — Sprint 130 introduces a proper LRU layer).
+  // tab swap to a different connection invalidates the cached list (we do
+  // not LRU-cache the list, but stale rendering across connections is a
+  // UX bug).
   const lastFetchKeyRef = useRef<string | null>(null);
 
   // Reset the popover state whenever the active tab swaps to a different
@@ -158,10 +152,10 @@ export default function DbSwitcher() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setErrorMessage(message);
-      // Sprint 128 — design bar requires a non-silent failure surface so
-      // the user can see *why* the switcher didn't open. The inline error
-      // chip below renders the same message; the toast is a redundant
-      // surface for users who clicked outside before reading the popover.
+      // Non-silent failure surface so the user can see *why* the switcher
+      // didn't open. The inline error chip below renders the same message;
+      // the toast is a redundant surface for users who clicked outside
+      // before reading the popover.
       toast.error(`Failed to list databases: ${message}`);
     } finally {
       setLoading(false);
@@ -173,8 +167,7 @@ export default function DbSwitcher() {
       if (!enabled) return;
       setOpen(next);
       if (next) {
-        // Click marks the start of a fresh fetch — Sprint 128's contract
-        // explicitly bans an LRU cache, so every popover open re-fetches.
+        // Every popover open re-fetches — list is not LRU-cached.
         void fetchList();
       }
     },
@@ -183,14 +176,13 @@ export default function DbSwitcher() {
 
   const handleSelect = useCallback(
     async (dbName: string) => {
-      // Sprint 130 — real switch dispatch. Successful path:
+      // Successful path:
       //   1. backend swaps the active sub-pool (PG)
       //   2. `setActiveDb` flips the trigger label
       //   3. `clearForConnection` drops the schema cache so the sidebar
       //      reloads against the new DB
       //   4. close popover + success toast
-      // Failure path (Document paradigm until S131, or PG pool-open
-      // error): leave the popover open so the inline error chip can
+      // Failure path: leave the popover open so the inline error chip can
       // render alongside the toast — the user may want to re-try a
       // different db without losing the list.
       if (!activeConn) return;
@@ -205,13 +197,11 @@ export default function DbSwitcher() {
       try {
         await switchActiveDb(activeConn.id, dbName);
         setActiveDb(activeConn.id, dbName);
-        // Sprint 131 — paradigm-aware cache clear. RDB sidebar reads
-        // through `schemaStore`; document sidebar reads through
-        // `documentStore`. Calling the wrong store would either no-op
-        // (rdb path on a Mongo connection leaves the collections cache
-        // intact, masking the DB swap) or wipe unrelated state, so we
-        // branch on the active connection's paradigm rather than try to
-        // clear both unconditionally. Search/Kv don't reach this branch
+        // Paradigm-aware cache clear. RDB sidebar reads through
+        // `schemaStore`; document sidebar reads through `documentStore`.
+        // Calling the wrong store would either no-op (rdb path on a Mongo
+        // connection leaves the collections cache intact, masking the DB
+        // swap) or wipe unrelated state. Search/Kv don't reach this branch
         // because the trigger is `aria-disabled` for those paradigms
         // (see `enabled` check at the top of the component).
         if (paradigm === "rdb") {
@@ -237,13 +227,12 @@ export default function DbSwitcher() {
   );
 
   // Read-only fallback — Search/Kv paradigms, no connection, or
-  // disconnected tab. Preserves the S127 chrome verbatim so the toolbar
-  // does not shift footprint between sprints.
+  // disconnected tab. Preserves chrome footprint so the toolbar doesn't
+  // shift when paradigm/state changes.
   if (!enabled) {
-    // Sprint 141 (AC-141-3, AC-141-4) — paradigm/state-aware copy via
-    // Radix Tooltip only. The native HTML `title` attribute is removed to
-    // fix the "stuck tooltip" bug — Radix dismisses on hover-out, the
-    // browser's native bubble does not.
+    // Paradigm/state-aware copy via Radix Tooltip only — the native HTML
+    // `title` attribute is omitted to avoid the "stuck tooltip" bug
+    // (Radix dismisses on hover-out, native bubble does not).
     const tooltipCopy = readOnlyTooltipCopy({
       hasActiveTab: !!activeTab,
       paradigm,
@@ -347,9 +336,8 @@ export default function DbSwitcher() {
                   role="option"
                   aria-selected={db.name === label}
                   data-active={db.name === label || undefined}
-                  // Sprint 130 — real swap dispatch. Pin autofocus on the
-                  // first row so keyboard users can hit Enter immediately
-                  // on open.
+                  // Pin autofocus on the first row so keyboard users can
+                  // hit Enter immediately on open.
                   autoFocus={idx === 0}
                   onClick={() => {
                     void handleSelect(db.name);

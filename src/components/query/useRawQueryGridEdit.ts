@@ -12,9 +12,8 @@ import { toast } from "@lib/toast";
 import type { QueryResult } from "@/types/query";
 
 /**
- * Sprint 215 (P8 first step) — Raw-query result grid edit state machine
- * + commit lifecycle hook. Owns 8 responsibilities lifted from
- * `EditableQueryResultGrid.tsx` (formerly 654 lines):
+ * Raw-query result grid edit state machine + commit lifecycle hook. 8
+ * responsibilities live here:
  *   1. PK-based cell-edit state machine (`editingCell` / `editValue` /
  *      `pendingEdits` Map / `pendingDeletedRowKeys` Set / unchanged-skip).
  *   2. `noPk` guard (defense-in-depth start-edit + context-menu + banner).

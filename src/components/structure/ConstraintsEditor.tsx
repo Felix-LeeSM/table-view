@@ -341,10 +341,10 @@ export default function ConstraintsEditor({
   const [showAddConstraintModal, setShowAddConstraintModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
-  // Sprint 214 — preview SQL state, Safe Mode gate, history record + commit
-  // closure live in `useDdlPreviewExecution`. `showPreviewModal` stays
-  // editor-local so `handleDropConstraint` can mount the dialog before the
-  // preview fetch resolves (preserving the loading state UX).
+  // Preview SQL state, Safe Mode gate, history record + commit closure
+  // live in `useDdlPreviewExecution`. `showPreviewModal` stays editor-local
+  // so `handleDropConstraint` can mount the dialog before the preview
+  // fetch resolves (preserving the loading state UX).
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
@@ -542,7 +542,7 @@ export default function ConstraintsEditor({
         />
       )}
 
-      {/* Sprint 187 — warn-tier type-to-confirm dialog. */}
+      {/* Warn-tier type-to-confirm dialog. */}
       {ddl.pendingConfirm && (
         <ConfirmDangerousDialog
           open

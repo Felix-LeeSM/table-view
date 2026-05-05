@@ -3,31 +3,22 @@ import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import { isEditableTarget } from "@/lib/keyboard/isEditableTarget";
 
 // ---------------------------------------------------------------------------
-// Sprint-103 — Global keyboard shortcut cheatsheet.
+// Global keyboard shortcut cheatsheet — discoverability surface for every
+// global shortcut wired up in `App.tsx`. Opens on `?` (Shift+/) or
+// Cmd+/ / Ctrl+/. Owns its own `open` state and registers a global
+// `keydown` listener so `App.tsx` only mounts `<ShortcutCheatsheet />` once.
 //
-// Discoverability surface for every global shortcut wired up in `App.tsx`.
-// Opens on `?` (Shift+/) or Cmd+/ / Ctrl+/. The component owns its own
-// `open` state and registers a global `keydown` listener so callers
-// (`App.tsx`) only need to mount `<ShortcutCheatsheet />` once.
+// Key handling:
+//   - `?` (Shift+/) → open. Suppressed when focus is inside an
+//     INPUT/TEXTAREA/SELECT/contenteditable element so the user can still
+//     type "?" into a SQL editor or search box.
+//   - Cmd+/ / Ctrl+/ → open unconditionally. Modifier combos cannot be
+//     produced by typing characters into a text field.
+//   - Esc / outside-click → handled by the underlying `Dialog` primitive.
 //
-// Key handling rules (mirrors the contract):
-//   - `?`        Shift+/ → open. Suppressed when focus is inside an
-//                INPUT/TEXTAREA/SELECT/contenteditable element so the user
-//                can still type "?" into a SQL editor or a search box
-//                without the cheatsheet hijacking the keystroke.
-//   - Cmd+/      / Ctrl+/ → open unconditionally. The modifier combination
-//                cannot be produced by typing characters into a text field,
-//                so guarding it would only hide the affordance.
-//   - Esc / outside-click → handled by the underlying `Dialog` primitive
-//                (`PreviewDialog` does not need a custom close handler
-//                beyond `onCancel`).
-//
-// The cheatsheet is read-only: we use `PreviewDialog` *without* `onConfirm`
-// so the footer disappears and the absolute X button is the only confirm
-// affordance, matching `CellDetailDialog`'s pattern.
-//
-// Key labels (e.g. `Cmd+W`) are intentionally not branched per platform
-// for now — see Sprint Contract "Out of Scope".
+// Read-only: `PreviewDialog` *without* `onConfirm` so the footer
+// disappears and the absolute X button is the only confirm affordance.
+// Key labels are not branched per platform.
 // ---------------------------------------------------------------------------
 
 interface ShortcutItem {
@@ -49,7 +40,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { label: "Close tab", keys: ["Cmd+W"] },
       { label: "New query tab", keys: ["Cmd+T"] },
       { label: "Reopen last closed tab", keys: ["Cmd+Shift+T"] },
-      // Sprint 133 — Cmd+1..9 jumps to the N-th workspace tab.
+      // Cmd+1..9 jumps to the N-th workspace tab.
       { label: "Switch to tab 1–9", keys: ["Cmd+1", "…", "Cmd+9"] },
     ],
   },
@@ -67,16 +58,13 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { label: "Quick open", keys: ["Cmd+P"] },
       { label: "Refresh", keys: ["Cmd+R", "F5"] },
       { label: "Cancel running query", keys: ["Cmd+."] },
-      // Sprint 134 — the Sprint 133 `Open connection switcher` (Cmd+K)
-      // entry was removed alongside the `<ConnectionSwitcher>` component
-      // itself. Connection swap is now Home → double-click only.
+      // Connection swap is Home → double-click only — no Cmd+K shortcut.
     ],
   },
   {
     label: "Panels",
     items: [
-      // Sprint 133 — Cmd+, toggles the Home / Workspace screens (replaces
-      // the dead `open-settings` event from sprint 33).
+      // Cmd+, toggles the Home / Workspace screens.
       { label: "Toggle Home/Workspace", keys: ["Cmd+,"] },
       { label: "Toggle favorites", keys: ["Cmd+Shift+F"] },
       { label: "Toggle global query log", keys: ["Cmd+Shift+C"] },

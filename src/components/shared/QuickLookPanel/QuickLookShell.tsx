@@ -1,23 +1,21 @@
-// Sprint 211 — `QuickLookShell` is the presentational outer chrome shared
-// by both paradigm bodies (`RdbQuickLookBody`, `DocumentQuickLookBody`):
+// Presentational outer chrome shared by both paradigm bodies
+// (`RdbQuickLookBody`, `DocumentQuickLookBody`):
 //
-//   * the panel container (`role="region"` + configurable `aria-label`,
+//   * panel container (`role="region"` + configurable `aria-label`,
 //     `border-t border-border bg-background`, `style={{ height }}`),
-//   * the keyboard-accessible resize handle (`role="separator"`,
-//     `tabIndex=0`, `aria-orientation="horizontal"`,
-//     `aria-valuemin={120}` / `aria-valuemax={600}` / `aria-valuenow={height}`,
-//     `aria-label="Resize Quick Look panel"`, `GripHorizontal` icon, the
-//     `cursor-row-resize` styling, `hover:bg-muted` and
-//     `focus-visible:outline-1 focus-visible:outline-ring` interactions),
-//   * the header bar (title node + the inline `HeaderControls` chrome:
-//     dirty pill + Edit toggle + Close button),
-//   * a children slot for the body content.
+//   * keyboard-accessible resize handle (`role="separator"`, `tabIndex=0`,
+//     `aria-orientation="horizontal"`, `aria-valuemin={120}` /
+//     `aria-valuemax={600}` / `aria-valuenow={height}`,
+//     `aria-label="Resize Quick Look panel"`, `GripHorizontal` icon,
+//     `cursor-row-resize`, `hover:bg-muted`,
+//     `focus-visible:outline-1 focus-visible:outline-ring`),
+//   * header bar (title node + inline `HeaderControls`: dirty pill + Edit
+//     toggle + Close button),
+//   * children slot for the body content.
 //
-// The shell holds NO paradigm-specific decisions: it does not branch on RDB
-// vs document, does not own `editState`, and does not own `height`. The
-// caller (the entry component or a body) passes those in. The pre-211 god
-// file rendered the resize handle in two places (with and without
-// `dark:bg-muted/20`); this shell unifies them via the optional
+// The shell holds NO paradigm-specific decisions: no RDB-vs-document
+// branching, no ownership of `editState` or `height`. Resize handle styling
+// is unified across paradigms via the optional
 // `resizeHandleClassName` prop so the document body can preserve its
 // existing `dark:bg-muted/20` variant byte-for-byte.
 import { X, GripHorizontal, Pencil, PencilOff } from "lucide-react";

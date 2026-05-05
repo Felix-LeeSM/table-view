@@ -38,18 +38,13 @@ function readWidth(): number {
 }
 
 /**
- * Workspace Sidebar (sprint 125+).
- *
- * Sprint 125 removed the legacy connections-mode branch (and the
- * `SidebarModeToggle` mount it depended on); connection management now lives
- * on the dedicated `HomePage`. This component is now exclusively the
- * schema/work surface column shown on `WorkspacePage`.
+ * Workspace Sidebar — schema/work surface column shown on `WorkspacePage`.
+ * Connection management lives on the dedicated `HomePage`.
  *
  * The `connection-added` window event still flips focus to the newly-saved
  * connection so a user who creates a new connection while inside the
  * workspace (via Cmd+N) sees that connection's schema tree on the next
- * Open. The mode-toggling fallback that the legacy Sidebar performed is
- * unnecessary now that there is no second mode.
+ * Open.
  */
 export default function Sidebar() {
   const [showNewDialog, setShowNewDialog] = useState(false);
@@ -63,10 +58,10 @@ export default function Sidebar() {
   });
   const activeTabConnId = activeTab?.connectionId ?? null;
   const addQueryTab = useTabStore((s) => s.addQueryTab);
-  // Sprint 212 — MRU marking moved out of tabStore.addQueryTab into each
-  // caller. The "+ Query" button below explicitly marks the focused
-  // connection used so the launcher Recent rail / EmptyState CTA reflect
-  // the user's continued engagement with the connection.
+  // MRU marking lives on each caller (not inside tabStore.addQueryTab) —
+  // the "+ Query" button explicitly marks the focused connection used so
+  // the launcher Recent rail / EmptyState CTA reflect the user's continued
+  // engagement with the connection.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const themeId = useThemeStore((s) => s.themeId);
@@ -133,10 +128,8 @@ export default function Sidebar() {
     return () => window.removeEventListener("new-connection", handler);
   }, []);
 
-  // The legacy `connection-added` flip-to-connections-mode behaviour was
-  // removed in sprint 125; new-connection creation is now done from
-  // HomePage. The `connections` effect above takes care of focus healing
-  // when the new connection lands in the store.
+  // New-connection creation happens on HomePage; the `connections` effect
+  // above heals focus when the new connection lands in the store.
 
   const selectedConnected =
     !!focusedConnId && activeStatuses[focusedConnId]?.type === "connected";
@@ -186,10 +179,9 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Body — paradigm-aware sidebar slot (sprint 126). The
-            connections-mode branch was removed in sprint 125 (now lives on
-            HomePage). `WorkspaceSidebar` resolves the driving connection
-            with active-tab priority and falls back to `focusedConnId`. */}
+        {/* Body — paradigm-aware sidebar slot. `WorkspaceSidebar` resolves
+            the driving connection with active-tab priority and falls back
+            to `focusedConnId`. */}
         <div className="flex flex-1 flex-col overflow-auto">
           <WorkspaceSidebar selectedId={focusedConnId} />
         </div>

@@ -1,31 +1,14 @@
-// Sprint 211 — `QuickLookPanel` entry. The pre-211 868-line god file owned
-// seven concerns (RDB body + document body + per-cell formatting + per-cell
-// edit rendering + resize shell + dirty-pill + close/edit/resize header
-// chrome). Sprint 211 split that into:
+// `QuickLookPanel` entry — owns cross-paradigm state (panel `height`,
+// `editing` toggle, `firstSelectedId` derivation), builds the shared
+// resize handlers, and dispatches on the `mode` discriminator. Body /
+// chrome / per-cell rendering live in `./QuickLookPanel/*`.
 //
-//   * this thin entry — owns cross-paradigm state (panel `height`,
-//     `editing` toggle, the `firstSelectedId` derivation), builds the
-//     shared resize handlers, and dispatches on the `mode` discriminator;
-//   * `./QuickLookPanel/QuickLookShell` — presentational chrome
-//     (region wrapper, resize handle, header bar, body slot);
-//   * `./QuickLookPanel/RdbQuickLookBody` — RDB body (column FieldRow list
-//     + BLOB viewer wiring + out-of-bounds null return);
-//   * `./QuickLookPanel/DocumentQuickLookBody` — document body
-//     (read-only BSON tree + edit FieldRows + multi-select suffix);
-//   * `./QuickLookPanel/helpers` — pure helpers + per-cell renderers
-//     (`FieldRow`, `EditableValue`) + the four resize constants.
-//
-// External invariants preserved verbatim:
-// - Default export is the React component, importable from
-//   the same `@components/shared/QuickLookPanel` barrel as before.
+// External invariants:
+// - Default export is the React component, importable from the same
+//   `@components/shared/QuickLookPanel` barrel as before.
 // - Three named props types (`QuickLookPanelProps`,
-//   `QuickLookPanelRdbProps`, `QuickLookPanelDocumentProps`) remain
-//   exported from this entry file.
-// - Both importers (`src/components/rdb/DataGrid.tsx`,
-//   `src/components/document/DocumentDataGrid.tsx`) keep their import
-//   paths byte-for-byte unchanged.
-// - The 980-line `QuickLookPanel.test.tsx` regression guard is not
-//   modified; every assertion it makes continues to pass.
+//   `QuickLookPanelRdbProps`, `QuickLookPanelDocumentProps`) are exported
+//   from this entry file.
 import { useState, useCallback, useMemo } from "react";
 import type { TableData } from "@/types/schema";
 import type { DataGridEditState } from "@components/datagrid/useDataGridEdit";
@@ -47,11 +30,10 @@ import {
  * paradigm-aware call-site opts in with `mode: "document"` and supplies
  * `rawDocuments` plus `database`/`collection` labels.
  *
- * Sprint 194 — Optional `editState` enables in-panel editing. When present,
- * the header surfaces an Edit toggle and per-column cells become editable
- * (RDB) or the BSON tree swaps to per-field FieldRows (document). When
- * absent the panel stays fully read-only — existing read-only call-sites
- * are unaffected.
+ * Optional `editState` enables in-panel editing. When present, the header
+ * surfaces an Edit toggle and per-column cells become editable (RDB) or
+ * the BSON tree swaps to per-field FieldRows (document). When absent the
+ * panel stays fully read-only.
  */
 export interface QuickLookPanelRdbProps {
   mode?: "rdb";
@@ -71,9 +53,8 @@ export interface QuickLookPanelDocumentProps {
   collection: string;
   onClose: () => void;
   /**
-   * Sprint 194 — Required when `editState` is provided so document edit mode
-   * can render FieldRows over the synthesized columns. The existing read-only
-   * call-site can omit it.
+   * Required when `editState` is provided so document edit mode can render
+   * FieldRows over the synthesized columns. Read-only call-sites can omit it.
    */
   data?: TableData;
   editState?: DataGridEditState;

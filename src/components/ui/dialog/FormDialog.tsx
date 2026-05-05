@@ -15,21 +15,13 @@ import { Button } from "@components/ui/button";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Sprint-96 Layer 2 — `FormDialog` preset
+// `FormDialog` preset (Layer 2). Wraps the title + body + submit/cancel
+// footer pattern — caller only supplies form fields via `children`.
 //
-// Wraps the title + body + submit/cancel footer pattern. Owns the
-// boilerplate (header layout, footer button order, optional feedback slot)
-// so the call-site only supplies the form fields via `children`.
-//
-// Layer rules:
-//   - Uses Layer-1 primitives (`<Dialog*>`, `<DialogFeedback>`) only.
-//   - Forwards `tone` / `headerLayout` to the primitives so callers don't
-//     hand-roll className overrides.
-//
-// `feedback` lets the caller surface async outcomes (e.g. server validation
-// after submit) inside a stable, always-mounted slot. When omitted the slot
-// is not rendered at all — so simple forms with inline `role="alert"`
-// elements (like `GroupDialog`'s name validation) keep their own layout.
+// `feedback` surfaces async outcomes (e.g. server validation after submit)
+// inside a stable, always-mounted slot. When omitted, the slot is not
+// rendered, so simple forms with inline `role="alert"` elements
+// (e.g. `GroupDialog`'s name validation) keep their own layout.
 // ---------------------------------------------------------------------------
 
 export interface FormDialogFeedback {
@@ -101,8 +93,8 @@ export default function FormDialog({
         tone={tone}
       >
         <DialogHeader
-          // The default `column` layout matches sprint-95's stacked title +
-          // description shape used by every form dialog today.
+          // Default `column` matches the stacked title + description shape
+          // used by every form dialog today.
           layout={headerLayout}
         >
           <DialogTitle className="text-sm font-semibold text-foreground">

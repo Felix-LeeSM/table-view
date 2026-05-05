@@ -15,19 +15,15 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Sprint 94 — global toast container.
- *
- * Mounted once at the App root (see `src/App.tsx`). The container is
- * intentionally **outside** any modal portal so a toast surfaced from inside a
- * Radix dialog (e.g. the SQL Preview modal's commit-failed banner) survives
- * the dialog being closed (Acceptance Criterion AC-03).
+ * Global toast container. Mounted once at the App root, intentionally
+ * **outside** any modal portal so a toast surfaced from inside a Radix dialog
+ * (e.g. SQL Preview commit-failed banner) survives the dialog being closed.
  *
  * Each toast renders with:
  *   - `role="status"` (success/info, polite) or `role="alert"` (error/warning,
  *     assertive). See `roleForVariant` in `src/lib/toast.ts`.
  *   - A dismiss button with an explicit `aria-label="Dismiss notification"`.
- *   - Esc key handler that dismisses the most-recently-pushed toast (LIFO),
- *     matching common toast-library affordances.
+ *   - Esc key handler that dismisses the most-recently-pushed toast (LIFO).
  *
  * Auto-dismiss timers live inside `<ToastItem>` so each toast carries its own
  * lifecycle — pushing a new toast does not reset existing timers.

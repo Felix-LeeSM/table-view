@@ -21,24 +21,20 @@ export interface WorkspaceSidebarProps {
 }
 
 /**
- * Sprint 126 — paradigm-aware sidebar slot.
- *
- * Replaces the paradigm `if/else` previously baked into `SchemaPanel`
- * with a 4-way switch driven by `pickSidebar(paradigm)`. The "driving
- * connection" is resolved with active-tab priority:
+ * Paradigm-aware sidebar slot. 4-way switch driven by
+ * `pickSidebar(paradigm)`. The "driving connection" is resolved with
+ * active-tab priority:
  *
  *   1. If a tab is active and its `connectionId` resolves to a known
  *      connection, that connection wins. Switching tabs across paradigms
  *      (rdb ↔ mongo) the sidebar shell tracks the active document, not
- *      the historically "selected" connection in the connection store.
- *      Sprint 127+ multi-paradigm coexistence depends on this priority.
- *   2. Otherwise the prop `selectedId` (i.e. the focused connection) is
- *      used as a fallback so users who haven't opened a tab yet still
- *      see their focused connection's tree.
+ *      the "selected" connection in the connection store. Multi-paradigm
+ *      coexistence depends on this priority.
+ *   2. Otherwise the `selectedId` prop (focused connection) is used so
+ *      users who haven't opened a tab yet still see their focused
+ *      connection's tree.
  *
- * Empty / connecting / error cards are also owned here — the messages
- * and icons are byte-for-byte identical to the previous `SchemaPanel`
- * states so the pure visual contract is preserved.
+ * Empty / connecting / error cards are owned here.
  */
 export default function WorkspaceSidebar({
   selectedId,

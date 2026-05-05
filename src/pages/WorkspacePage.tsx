@@ -26,7 +26,7 @@ import {
  * `[← Connections]` button stacked above the sidebar so the user can swap
  * back to the launcher without losing tab state.
  *
- * Sprint 154 wires the lifecycle to real Tauri windows:
+ * Lifecycle:
  *
  *   - `handleBackToConnections` (toolbar back button) hides the workspace
  *     window then shows the launcher window. The connection pool is
@@ -34,9 +34,9 @@ import {
  *     launcher must be instant.
  *
  *   - The `tauri://close-requested` listener treats the OS-level close
- *     as identical to Back (AC-154-05): hide workspace + show launcher,
- *     no disconnect. The default close behaviour (which would actually
- *     close the window) is prevented by the `onCloseRequested` seam.
+ *     as identical to Back: hide workspace + show launcher, no disconnect.
+ *     The default close behaviour (which would actually close the window)
+ *     is prevented by the `onCloseRequested` seam.
  *
  * Disconnect (which DOES tear down the pool) is owned by the
  * `DisconnectButton` in `WorkspaceToolbar` and is intentionally NOT a
@@ -119,10 +119,10 @@ export default function WorkspacePage() {
             <span className="text-xs">Connections</span>
           </Button>
 
-          {/* Sprint 161 — Workspace-level theme toggle. Mirrors the
+          {/* Workspace-level theme toggle. Mirrors the
               Popover+ThemePicker pattern from Sidebar.tsx so users can
-              change theme from the header without scrolling to the sidebar
-              footer. */}
+              change theme from the header without scrolling to the
+              sidebar footer. */}
           <Popover>
             <PopoverTrigger asChild>
               <Button

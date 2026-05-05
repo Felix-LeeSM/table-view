@@ -45,10 +45,10 @@ function DialogOverlay({
   );
 }
 
-// Sprint-95 Layer 1: tone variants. Default keeps the existing shadcn neutral
-// border/background; destructive/warning swap the outer border to the
-// corresponding semantic token so confirm-style dialogs read as "danger" or
-// "caution" without forcing each call site to hand-roll colour classes.
+// Tone variants. Default keeps the shadcn neutral border/background;
+// destructive/warning swap the outer border to the corresponding semantic
+// token so confirm-style dialogs read as "danger" or "caution" without
+// forcing each call site to hand-roll colour classes.
 export type DialogTone = "default" | "destructive" | "warning";
 
 const dialogToneClasses: Record<DialogTone, string> = {
@@ -95,10 +95,10 @@ function DialogContent({
   );
 }
 
-// Sprint-95 Layer 1: explicit `layout` prop. `row` (default) keeps sprint-91's
-// title + close-on-the-same-row contract. `column` opt-in lets callers stack a
-// title above a description (the legacy shadcn header arrangement) without
-// rewriting className boilerplate.
+// Explicit `layout` prop. `row` (default) keeps the title + close-on-the-
+// same-row contract. `column` opt-in lets callers stack a title above a
+// description (the legacy shadcn header arrangement) without rewriting
+// className boilerplate.
 export type DialogHeaderLayout = "row" | "column";
 
 const dialogHeaderLayoutClasses: Record<DialogHeaderLayout, string> = {
@@ -111,12 +111,10 @@ function DialogHeader({
   layout = "row",
   ...props
 }: React.ComponentProps<"div"> & { layout?: DialogHeaderLayout }) {
-  // Sprint 91: row-based default. The header is always title + (optional) close
-  // button on the same row, so the X aligns with the title's vertical centre
-  // and never wraps below it. `min-w-0` lets long titles flex-shrink so a
-  // `truncate` on the title can take effect; sprint-95 introduces the explicit
-  // `layout` prop so callers needing a stacked title+description can opt in
-  // without overriding className.
+  // Row-based default keeps the header as title + (optional) close button on
+  // the same row, so the X aligns with the title's vertical centre and never
+  // wraps below it. `min-w-0` lets long titles flex-shrink so a `truncate` on
+  // the title can take effect.
   return (
     <div
       data-slot="dialog-header"
@@ -162,9 +160,9 @@ function DialogTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>) {
-  // Sprint 91: `min-w-0` lets the title shrink inside a flex-row header so a
-  // `truncate` class on a long title actually takes effect (without it, flex
-  // children default to min-content sizing).
+  // `min-w-0` lets the title shrink inside a flex-row header so a `truncate`
+  // class on a long title actually takes effect (without it, flex children
+  // default to min-content sizing).
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
@@ -188,24 +186,19 @@ function DialogDescription({
 }
 
 // ---------------------------------------------------------------------------
-// Sprint-95 Layer 1: DialogFeedback
-//
-// Generalises the sprint-92 ConnectionDialog test-feedback pattern: a single,
-// always-mounted slot that reserves a minimum height so the dialog doesn't
-// jump when content appears, and renders one of four states without ever
-// unmounting the outer container.
+// DialogFeedback — single always-mounted slot that reserves a minimum height
+// so the dialog doesn't jump when content appears, and renders one of four
+// states without ever unmounting the outer container.
 //
 // Stable identity contract:
 //   - The outer wrapper is mounted on every render regardless of state.
-//   - Only the inner content varies with `state`. This is what the
-//     sprint-92 `expectNodeStable` assertion relies on — selecting the
-//     wrapper by `[data-slot]` and asserting the same node is returned
-//     across state transitions.
+//   - Only the inner content varies with `state`. Tests that pin the
+//     wrapper by `[data-slot]` and assert the same node across state
+//     transitions rely on this.
 //
 // Slot-name override:
 //   - `slotName` lets callers (e.g. ConnectionDialog) keep a legacy
-//     `data-slot="test-feedback"` selector working through the migration.
-//     Without this knob, the sprint-92 test would no longer find the slot.
+//     `data-slot="test-feedback"` selector working through migrations.
 // ---------------------------------------------------------------------------
 
 export type DialogFeedbackState = "idle" | "loading" | "success" | "error";
@@ -219,8 +212,8 @@ export interface DialogFeedbackProps extends Omit<
   loadingText?: string;
   /**
    * Override the `data-slot` value on the wrapper. Defaults to
-   * `"dialog-feedback"`. Used by ConnectionDialog to preserve the
-   * sprint-92 `data-slot="test-feedback"` selector contract.
+   * `"dialog-feedback"`. Used by ConnectionDialog to preserve a legacy
+   * `data-slot="test-feedback"` selector contract.
    */
   slotName?: string;
 }

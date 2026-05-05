@@ -1,12 +1,9 @@
-// Sprint 211 — `RdbQuickLookBody` is the RDB-paradigm body of QuickLook:
-// header title (`Row Details — schema.table` with the multi-select suffix),
-// the per-column `FieldRow` list iterated over `data.columns`, and the
-// `BlobViewerDialog` wiring (local `{data, columnName} | null` mirrored
-// from the pre-211 god file). Returns `null` when the selected row index
-// is out of bounds or selection is empty so the existing
-// "renders nothing when out of bounds / empty" tests continue to pass.
+// RDB-paradigm body of QuickLook: header title
+// (`Row Details — schema.table` with multi-select suffix), per-column
+// `FieldRow` list, and `BlobViewerDialog` wiring. Returns `null` when the
+// selected row index is out of bounds or selection is empty.
 //
-// External invariants preserved verbatim:
+// External invariants:
 // - Region `aria-label` = `"Row Details"`.
 // - Close button `aria-label` = `"Close row details"`.
 // - Multi-select suffix = `({n} selected, showing first)` when

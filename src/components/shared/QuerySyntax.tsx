@@ -25,11 +25,10 @@ interface QuerySyntaxProps {
 }
 
 /**
- * Paradigm-aware syntax preview wrapper. Sprint 85 introduces this
- * dispatcher so history viewers (in-tab rows and the global log) can
- * colour Mongo entries as JSON + MQL operators while keeping RDB
- * entries on the existing SQL tokeniser. The component is render-only
- * — it does not read from or write to any store.
+ * Paradigm-aware syntax preview wrapper. History viewers (in-tab rows and
+ * the global log) colour Mongo entries as JSON + MQL operators while
+ * keeping RDB entries on the SQL tokeniser. Render-only — does not read
+ * from or write to any store.
  */
 export default function QuerySyntax({
   sql,

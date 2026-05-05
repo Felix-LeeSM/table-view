@@ -415,7 +415,7 @@ export interface BsonTreeViewerProps {
 }
 
 /**
- * Read-only recursive tree viewer for BSON documents (Sprint 70).
+ * Read-only recursive tree viewer for BSON documents.
  *
  * - Root is always expanded; depth ≥ 2 nodes are collapsed by default.
  * - Canonical extended JSON wrapper objects render as scalar badges

@@ -12,27 +12,17 @@ import { Button } from "@components/ui/button";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Sprint-96 Layer 2 — `PreviewDialog` preset
+// `PreviewDialog` preset (Layer 2). Title + read-only preview body +
+// optional confirm/cancel footer. Used for SQL/MQL/Cell/Blob viewers.
+// Caller passes the formatted body via `preview` or `children`.
 //
-// Title + read-only preview body + optional confirm/cancel footer. Wraps
-// the SQL/MQL/Cell/Blob viewer pattern. The preset deliberately does NOT
-// own the rendering of the preview body itself — callers pass either the
-// already-formatted ReactNode via `preview` or arbitrary `children`. This
-// keeps it usable for: SQL preview (`<pre>` of generated DDL), MQL preview
-// (lines of `db.coll.x()`), CellDetailDialog (formatted text + char count
-// row), and read-only viewers in general.
+// `commitError` (structured) renders the destructive banner with
+// `role="alert"` + `aria-live="assertive"` + the
+// "executed: N, failed at: K of M" line + raw failed SQL.
 //
-// Sprint-93 commit-error preservation:
-//   - `commitError` is a structured prop (see `SqlPreviewCommitError`) that
-//     renders the destructive banner with `role="alert"` +
-//     `aria-live="assertive"` + the "executed: N, failed at: K of M" line +
-//     raw failed SQL. The contract from sprint-93 is preserved verbatim so
-//     the regression tests for that banner keep working without changes.
-//
-// Footer:
-//   - When `onConfirm` is supplied the footer renders confirm + cancel
-//     buttons. Otherwise (pure read-only viewer) the footer is omitted and
-//     the absolute X button is the only dismiss affordance.
+// When `onConfirm` is supplied the footer renders confirm + cancel buttons.
+// Otherwise (pure read-only viewer) the footer is omitted and the absolute
+// X button is the only dismiss affordance.
 // ---------------------------------------------------------------------------
 
 export interface PreviewDialogCommitError {
@@ -54,7 +44,7 @@ export interface PreviewDialogProps {
   /** Generation-time error (e.g. SQL builder failure). Plain text banner. */
   error?: string | null;
   /**
-   * Sprint-93 commit-time error. Distinct from `error`: this represents an
+   * Commit-time error. Distinct from `error`: this represents an
    * `executeQuery` rejection AFTER user confirm. Renders the destructive
    * banner with the partial-failure count + raw failing SQL.
    */
@@ -76,11 +66,11 @@ export interface PreviewDialogProps {
   /** Optional aria-label for the confirm button. */
   confirmAriaLabel?: string;
   /**
-   * Sprint 187 — optional decoration rendered above the dialog header.
-   * Used by `SqlPreviewDialog` (structure surface) to surface a tiny
-   * environment color stripe so production-tagged commits read at a glance
-   * matching the DataGrid + EditableQueryResultGrid stripe pattern from
-   * Sprint 185. Default `null` keeps every existing caller untouched.
+   * Optional decoration rendered above the dialog header. Used by
+   * `SqlPreviewDialog` (structure surface) to surface a tiny environment
+   * color stripe so production-tagged commits read at a glance, matching
+   * the DataGrid + EditableQueryResultGrid stripe pattern. Default `null`
+   * keeps existing callers untouched.
    */
   headerStripe?: ReactNode;
 }
@@ -137,9 +127,8 @@ export default function PreviewDialog({
           ) : null}
 
           {commitError ? (
-            // Sprint-93 contract preserved verbatim. The wrapping classes,
-            // `role`, `aria-live`, and `data-testid` are reused by existing
-            // regression tests.
+            // Wrapping classes, `role`, `aria-live`, and `data-testid` are
+            // load-bearing — regression tests pin to this exact structure.
             <div
               role="alert"
               aria-live="assertive"

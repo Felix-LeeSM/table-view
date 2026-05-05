@@ -6,13 +6,11 @@ export interface RdbSidebarProps {
 }
 
 /**
- * Sprint 126 — paradigm-specific sidebar for relational connections.
- *
- * Today this is a thin wrapper around the existing {@link SchemaTree}
- * (the RDB schema browser). The wrapper exists so paradigm slot consumers
- * (`<WorkspaceSidebar>`) can route by paradigm without knowing the
- * concrete tree component. Future RDB-only chrome (toolbar, filters)
- * lands here without leaking into the document path.
+ * Paradigm-specific sidebar for relational connections — thin wrapper
+ * around {@link SchemaTree}. Exists so paradigm slot consumers
+ * (`<WorkspaceSidebar>`) can route by paradigm without knowing the concrete
+ * tree component. Future RDB-only chrome (toolbar, filters) lands here
+ * without leaking into the document path.
  */
 export default function RdbSidebar({ connectionId }: RdbSidebarProps) {
   return <SchemaTree connectionId={connectionId} />;

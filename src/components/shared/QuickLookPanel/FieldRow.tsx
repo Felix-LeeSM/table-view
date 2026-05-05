@@ -1,11 +1,9 @@
-// Sprint 211 — `FieldRow` + `EditableValue`: per-cell renderers shared by
-// QuickLook's RDB and document bodies. Lives in a `.tsx` sibling to
-// `helpers.ts` because JSX cannot be parsed inside a `.ts` file under the
-// standard `@vitejs/plugin-react` loader. The colocation requirement from
-// the sprint spec is satisfied by keeping these renderers immediately
-// next to `helpers.ts` in the same `QuickLookPanel/` sub-directory.
+// `FieldRow` + `EditableValue`: per-cell renderers shared by QuickLook's
+// RDB and document bodies. Lives in a `.tsx` sibling to `helpers.ts`
+// because JSX cannot be parsed inside a `.ts` file under
+// `@vitejs/plugin-react`.
 //
-// Behavior contract (verbatim from the pre-211 god file):
+// Behavior contract:
 // - Read-only path renders one of: NULL pill / boolean badge / BLOB button
 //   / `<pre>` (object/json-string) / read-only `<textarea>` (large text)
 //   / `<span>` (plain).
@@ -14,10 +12,9 @@
 // - Esc reverts the local draft string without dispatching.
 // - Plain `Enter` saves on input; on textarea plain `Enter` is a newline
 //   and `Cmd/Ctrl+Enter` saves.
-// - `Set NULL` button dispatches `handleStartEdit → setEditValue(null) →
+// - `Set NULL` dispatches `handleStartEdit → setEditValue(null) →
 //   saveCurrentEdit` and clears the local draft to "".
-// - PK / BLOB / `_id` cells emit a `(read-only)` marker when the panel is
-//   editing.
+// - PK / BLOB / `_id` cells emit a `(read-only)` marker when editing.
 import { useCallback, useMemo, useState } from "react";
 import { Binary } from "lucide-react";
 import { Button } from "@components/ui/button";

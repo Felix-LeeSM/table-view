@@ -254,11 +254,11 @@ export default function IndexesEditor({
   const [showCreateIndexModal, setShowCreateIndexModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
-  // Sprint 214 — preview SQL state, Safe Mode gate, history record + commit
-  // closure all live in `useDdlPreviewExecution`. `showPreviewModal` stays
-  // editor-local because the dialog mount also gates around `handleDropIndex`
-  // (which transitions through preview-fetch loading independently of the
-  // modal trigger flow).
+  // Preview SQL state, Safe Mode gate, history record + commit closure all
+  // live in `useDdlPreviewExecution`. `showPreviewModal` stays editor-local
+  // because the dialog mount also gates around `handleDropIndex` (which
+  // transitions through preview-fetch loading independently of the modal
+  // trigger flow).
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
@@ -472,7 +472,7 @@ export default function IndexesEditor({
         />
       )}
 
-      {/* Sprint 187 — warn-tier type-to-confirm dialog. */}
+      {/* Warn-tier type-to-confirm dialog. */}
       {ddl.pendingConfirm && (
         <ConfirmDangerousDialog
           open

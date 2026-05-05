@@ -1,9 +1,9 @@
-// Sprint 211 — `DocumentQuickLookBody` is the document-paradigm body of
-// QuickLook: namespace title (`Document Details — database.collection`
-// with the multi-select suffix), and the dual-mode body (read-only BSON
-// tree vs. edit-mode FieldRows over the synthesized columns).
+// Document-paradigm body of QuickLook: namespace title
+// (`Document Details — database.collection` with multi-select suffix), and
+// the dual-mode body (read-only BSON tree vs. edit-mode FieldRows over the
+// synthesized columns).
 //
-// External invariants preserved verbatim:
+// External invariants:
 // - Region `aria-label` = `"Document Details"`.
 // - Close button `aria-label` = `"Close document details"`.
 // - Multi-select suffix = `({n} selected, showing first)` when
@@ -11,11 +11,10 @@
 // - Out-of-bounds / empty `rawDocuments` produces the BSON empty state
 //   (`/No document selected/i`) without unmounting the panel.
 // - In edit mode `_id` / PK / BLOB columns stay read-only via the shared
-//   `isEditableColumn` gate (housed in `helpers.ts`); document mode has no
-//   BLOB columns in V1, so `onBlobView` is a no-op.
-// - Read-only-tree vs. edit-FieldRows toggle: FieldRows render iff
-//   `editing && editState && data` are all present; otherwise the BSON
-//   tree stays mounted.
+//   `isEditableColumn` gate (in `helpers.ts`); document mode has no BLOB
+//   columns, so `onBlobView` is a no-op.
+// - FieldRows render iff `editing && editState && data` are all present;
+//   otherwise the BSON tree stays mounted.
 import { useMemo } from "react";
 import type { MouseEvent, KeyboardEvent } from "react";
 import type { TableData } from "@/types/schema";

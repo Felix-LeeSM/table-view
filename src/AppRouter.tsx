@@ -42,29 +42,25 @@ function useMenuNewConnectionBridge() {
 }
 
 /**
- * AppRouter — Sprint 150 boot-time label dispatcher (Phase 12).
+ * AppRouter — boot-time label dispatcher.
  *
  * Reads the current `WebviewWindow.label` once at mount and picks the
  * appropriate top-level shell:
  *   - `launcher`  → `LauncherPage` (connection management, 720×560)
- *   - `workspace` → existing workspace shell (sidebar + tabs, 1280×800)
+ *   - `workspace` → workspace shell (sidebar + tabs, 1280×800)
  *   - anything else (including `null` when the Tauri seam isn't available)
  *     → defensive fallback to `LauncherPage` with a single `console.warn`.
  *
- * Cross-window state sync (Sprint 151+) and real lifecycle wiring
- * (Sprint 154) are deliberately out of scope here. `App` is still mounted
- * under the workspace branch so all keyboard-shortcut wiring keeps working
- * untouched — the only thing this sprint takes away from `App` is its
- * top-level page selection (which the launcher window has no need for).
- * Sprint 155 retired the legacy `appShell` store entirely.
+ * `App` is mounted under the workspace branch so all keyboard-shortcut
+ * wiring / portal mounts that live there keep working untouched.
  */
 export default function AppRouter() {
   const label = getCurrentWindowLabel();
 
-  // sprint-175 — `react:first-paint` milestone. `useLayoutEffect` fires
-  // synchronously after React's first commit (after layout, before browser
-  // paint), which matches the contract's "first commit" semantic. The ref
-  // guard prevents StrictMode's double-invoke (and any subsequent re-render)
+  // `react:first-paint` boot-tracing milestone. `useLayoutEffect` fires
+  // synchronously after React's first commit (after layout, before
+  // browser paint), matching the "first commit" semantic. The ref guard
+  // prevents StrictMode's double-invoke (and any subsequent re-render)
   // from emitting the mark more than once.
   const firstPaintMarkedRef = useRef(false);
   useLayoutEffect(() => {
@@ -73,13 +69,13 @@ export default function AppRouter() {
     markBootMilestone("react:first-paint");
   }, []);
 
-  // sprint-173 — keep `document.title` in sync with the Tauri window
-  // decoration title. webdriver's `getTitle()` reports `document.title`
-  // (the webview's HTML `<title>`), NOT the OS window title from
+  // Keep `document.title` in sync with the Tauri window decoration
+  // title. webdriver's `getTitle()` reports `document.title` (the
+  // webview's HTML `<title>`), NOT the OS window title from
   // `tauri.conf.json`. Both windows load the same `index.html`, so
-  // without this they'd both report "Table View" and `_helpers.ts:
-  // switchToWorkspaceWindow` could not distinguish them. Aligning the
-  // two titles also fixes the dock/taskbar/alt-tab labels in prod.
+  // without this they'd both report "Table View" and the e2e helper
+  // `switchToWorkspaceWindow` couldn't distinguish them. Aligning the two
+  // titles also fixes the dock/taskbar/alt-tab labels in prod.
   useEffect(() => {
     document.title =
       label === "workspace" ? "Table View — Workspace" : "Table View";
@@ -110,11 +106,9 @@ export default function AppRouter() {
 }
 
 /**
- * Launcher chrome: connection bootstrap + LauncherPage. The launcher window
- * is the only place where the connection list / groups / favorites must
- * load on boot, so we initialize those stores here. (Sprint 152 will move
- * these into a cross-window bridge so the workspace window observes the
- * same state without re-loading.)
+ * Launcher chrome: connection bootstrap + LauncherPage. The launcher
+ * window is the only place where the connection list / groups / favorites
+ * load on boot, so those stores are initialized here.
  */
 function LauncherShell() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -133,9 +127,9 @@ function LauncherShell() {
     initEventListeners();
     loadPersistedFavorites();
     loadPersistedMru();
-    // sprint-175 — emit `app:effects-fired` once the launcher's five IPC
-    // dispatches have been kicked off. This is the launcher-side anchor for
-    // the end-to-end `T0 → app:effects-fired` row in baseline.md.
+    // Emit the `app:effects-fired` boot-tracing milestone once the
+    // launcher's five IPC dispatches have been kicked off. Launcher-side
+    // anchor for the end-to-end `T0 → app:effects-fired` measurement row.
     markBootMilestone("app:effects-fired");
   }, [
     loadConnections,

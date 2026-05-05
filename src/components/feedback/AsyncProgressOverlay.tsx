@@ -30,24 +30,16 @@ export interface AsyncProgressOverlayProps {
 }
 
 /**
- * Sprint 180 — shared async progress + Cancel overlay.
+ * Shared async progress + Cancel overlay. Materialises after the host's
+ * threshold gate flips `visible` to `true`.
  *
- * Materialises after the host's threshold gate flips `visible` to
- * `true`. Carries the four pointer-event handlers (mouseDown / click /
- * doubleClick / contextMenu) preserving Sprint 176 hardening so a
+ * Carries four pointer-event handlers (mouseDown / click / doubleClick /
+ * contextMenu) that call `preventDefault()` + `stopPropagation()` so a
  * mid-flight refetch can't be hijacked into selecting a row, opening
  * cell-edit mode, or firing the context menu. The Cancel button's own
- * onClick handler still receives the gesture because React's synthetic
+ * onClick still receives the gesture because React's synthetic
  * stopPropagation only prevents bubbling beyond the overlay, not from
  * children up to the overlay's own listeners.
- *
- * AC anchors:
- *  - AC-180-01: visible-after-threshold rendering controlled by host.
- *  - AC-180-02: `onCancel` invoked exactly once per click.
- *  - AC-180-06: `data-testid="async-cancel"` + accessible name "Cancel"
- *    + tabIndex defaulting to 0 (native `<button>` semantics).
- *  - Sprint 176 invariant: pointer events on the overlay region call
- *    `e.preventDefault()` + `e.stopPropagation()`.
  */
 export default function AsyncProgressOverlay({
   visible,

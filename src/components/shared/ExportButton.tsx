@@ -36,7 +36,7 @@ export interface ExportButtonProps {
   getRows: () => Promise<unknown[][]> | unknown[][];
   /** Formats that should appear disabled (with tooltip explaining why). */
   disabledFormats?: ExportFormat[];
-  /** Optional cancel-token id forwarded to the Sprint 180 registry. */
+  /** Optional cancel-token id forwarded to the query-token registry. */
   exportId?: string | null;
   className?: string;
 }

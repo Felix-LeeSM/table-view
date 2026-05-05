@@ -50,10 +50,10 @@ function formatCellDisplay(cell: unknown): string {
  * shape" for raw query results, so adding rows belongs in the structured
  * table view instead.
  *
- * Sprint 215 — All edit state, commit lifecycle, Safe Mode gate, history
- * recording, and the Cmd+S listener live inside `useRawQueryGridEdit`.
- * The component now owns only UI-local state (context menu / cell detail
- * dialog), the production stripe selector, and JSX rendering.
+ * All edit state, commit lifecycle, Safe Mode gate, history recording,
+ * and the Cmd+S listener live inside `useRawQueryGridEdit`. The component
+ * owns only UI-local state (context menu / cell detail dialog), the
+ * production stripe selector, and JSX rendering.
  */
 export default function EditableQueryResultGrid({
   result,

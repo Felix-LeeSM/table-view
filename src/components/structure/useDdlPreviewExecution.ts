@@ -4,20 +4,15 @@ import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 
 /**
- * Sprint 214 (P7) — Shared DDL preview/execute lifecycle for the
- * Structure-surface editors (ColumnsEditor / IndexesEditor /
- * ConstraintsEditor).
- *
- * Before this hook each editor maintained four parallel pieces of state
- * (`previewSql` / `previewLoading` / `previewError` / `pendingConfirm`),
- * a `pendingExecuteRef`, and a copy/paste of the same lifecycle:
+ * Shared DDL preview/execute lifecycle for the Structure-surface editors
+ * (ColumnsEditor / IndexesEditor / ConstraintsEditor). Lifecycle:
  *
  *   1. fetch preview SQL via a Tauri `*_preview_only=true` call.
  *   2. on Execute, split `previewSql` on `";"`, walk each statement
- *      through `analyzeStatement` + `useSafeModeGate.decide`, and
- *      branch on the strict / warn / safe verdict.
- *   3. warn-tier surfaces a `ConfirmDangerousDialog`; the user types
- *      the analyzer reason and the same commit closure runs.
+ *      through `analyzeStatement` + `useSafeModeGate.decide`, and branch
+ *      on strict / warn / safe.
+ *   3. warn-tier surfaces a `ConfirmDangerousDialog`; the user types the
+ *      analyzer reason and the same commit closure runs.
  *   4. commit (`*_preview_only=false`) records a
  *      `useQueryHistoryStore.addHistoryEntry` entry tagged
  *      `source: "ddl-structure"`, then triggers `onRefresh()`.
@@ -25,22 +20,14 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
  *      `"Safe Mode (warn): confirmation cancelled — no changes
  *      committed"` via `previewError` (no toast).
  *
- * The hook owns step 1's `setPreviewSql`, step 2's `;`-split + decide
- * loop, step 3's `pendingConfirm` state + warn-tier transitions, step
- * 4's history payload (`paradigm: "rdb"` / `queryMode: "sql"` /
- * `source: "ddl-structure"` are hardcoded — every Structure-surface
- * apply is RDB SQL DDL), and step 5's verbatim cancel message.
+ * The hook does NOT reach into `@lib/tauri`. Each editor owns its domain
+ * payload (e.g. `alterTable(buildAlterRequest(false))`) and passes
+ * preview/commit calls to `loadPreview` as closures. That keeps the hook
+ * free of DDL command request shapes and preserves the editor-specific
+ * `pendingExecuteRef` pattern without leaking it across the commit
+ * boundary.
  *
- * The hook does NOT reach into `@lib/tauri`. Each editor owns its
- * domain payload (e.g. `alterTable(buildAlterRequest(false))`) and
- * passes the preview/commit calls to `loadPreview` as closures. That
- * keeps the hook free of every DDL command's request shape and
- * preserves the editor-specific `pendingExecuteRef` pattern without
- * leaking it across the four-way commit boundary.
- *
- * The hook is intentionally not exported outside the
- * `src/components/structure/` directory — Sprint 214 contract pins
- * it as an internal DRY utility, not a project-wide hook.
+ * Internal to `src/components/structure/`; not a project-wide hook.
  */
 
 export interface DdlPreviewPendingConfirm {
@@ -190,9 +177,9 @@ export function useDdlPreviewExecution({
 
   const attemptExecute = useCallback(async () => {
     if (!pendingExecuteRef.current) return;
-    // Sprint 189 parity — `;`-split + analyseStatement + decide loop. A
-    // batch with any DROP COLUMN / DROP CONSTRAINT / DROP INDEX trips
-    // the gate even when sibling statements are safe ADDs.
+    // `;`-split + analyseStatement + decide loop. A batch with any
+    // DROP COLUMN / DROP CONSTRAINT / DROP INDEX trips the gate even
+    // when sibling statements are safe ADDs.
     const statements = previewSql
       .split(";")
       .map((s) => s.trim())

@@ -320,10 +320,10 @@ interface ColumnsEditorProps {
   /** Called after a successful execute to trigger data refresh */
   onRefresh: () => Promise<void>;
   /**
-   * Sprint 179 — paradigm-aware button + empty-state copy. Defaults to
-   * `"rdb"` so existing callers (StructurePanel without an explicit
-   * paradigm) see the legacy English vocabulary unchanged. Mongo callers
-   * pass `"document"` to render "Add Field" / "No fields found".
+   * Paradigm-aware button + empty-state copy. Defaults to `"rdb"` so
+   * existing callers (StructurePanel without an explicit paradigm) see
+   * the RDB vocabulary unchanged. Mongo callers pass `"document"` to
+   * render "Add Field" / "No fields found".
    */
   paradigm?: Paradigm;
 }
@@ -336,14 +336,13 @@ export default function ColumnsEditor({
   onRefresh,
   paradigm,
 }: ColumnsEditorProps) {
-  // Sprint 179 (AC-179-04) — `getParadigmVocabulary` enforces the
-  // `undefined → rdb` fallback in one place; component just looks up.
+  // `getParadigmVocabulary` enforces the `undefined → rdb` fallback in
+  // one place; component just looks up.
   const vocab = getParadigmVocabulary(paradigm);
-  // Sprint 179 — accessibility-name preserves the sentence-case form the
-  // legacy RDB tests assert (`"Add column"` lowercase 'c'). The visible
-  // button text uses the dictionary's title-case form (`"Add Column"`).
-  // For document paradigm this yields aria-label "Add field" + visible
-  // "Add Field"; AC-179-02 asserts both.
+  // Accessibility-name preserves sentence-case (`"Add column"` lowercase
+  // 'c'); visible button text uses the dictionary's title-case form
+  // (`"Add Column"`). Document paradigm yields aria-label "Add field" +
+  // visible "Add Field".
   const ariaAddUnit = `Add ${vocab.unit.toLowerCase()}`;
   // Column editing state
   const [editingColumn, setEditingColumn] = useState<string | null>(null);
@@ -474,9 +473,9 @@ export default function ColumnsEditor({
   const handleReviewSql = async () => {
     if (pendingCount === 0) return;
     setShowSqlModal(true);
-    // Sprint 214 — preview fetch + commit closure registration both flow
-    // through the shared hook. The closure factory bakes in the editor's
-    // domain cleanup (pendingChanges / drafts / drops / inline editing /
+    // Preview fetch + commit closure registration both flow through the
+    // shared hook. The closure factory bakes in the editor's domain
+    // cleanup (pendingChanges / drafts / drops / inline editing /
     // showSqlModal) so the hook stays free of structure-specific state.
     await ddl.loadPreview(
       () => tauri.alterTable(buildAlterRequest(true)),
@@ -492,9 +491,9 @@ export default function ColumnsEditor({
   };
 
   const handleCancelPending = () => {
-    // Sprint 214 — domain reset stays in the editor; lifecycle reset
-    // delegates to the hook so `previewSql` / `previewError` /
-    // `pendingConfirm` / commit closure all clear together.
+    // Domain reset stays in the editor; lifecycle reset delegates to the
+    // hook so `previewSql` / `previewError` / `pendingConfirm` / commit
+    // closure all clear together.
     ddl.cancelPreview();
     setPendingChanges([]);
     setDroppedColumns(new Set());
@@ -677,8 +676,8 @@ export default function ColumnsEditor({
         />
       )}
 
-      {/* Sprint 187 — warn-tier confirmation. Mounted as a sibling so it
-          stacks above the SQL preview dialog. */}
+      {/* Warn-tier confirmation. Mounted as a sibling so it stacks above
+          the SQL preview dialog. */}
       {ddl.pendingConfirm && (
         <ConfirmDangerousDialog
           open

@@ -3,22 +3,16 @@ import { Button } from "@components/ui/button";
 import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
 
 /**
- * Sprint 185 — Safe Mode toggle.
- * Sprint 186 — extended to a 3-way cycle (strict → warn → off → strict).
- *
- * Workspace-toolbar control that flips `useSafeModeStore.mode`. The strict
- * → warn step prevents a single click from silently disabling the production
+ * Safe Mode toggle — workspace-toolbar control that cycles
+ * `useSafeModeStore.mode` (strict → warn → off → strict). The strict → warn
+ * step prevents a single click from silently disabling the production
  * guard; warn opens a type-to-confirm dialog at commit time instead of
  * blocking outright (see `ConfirmDangerousDialog`).
  *
- * Post-Sprint-187 hotfix — visuals: drop the hard-coded hex border in
- * favour of icon-shape-only differentiation (ShieldCheck / ShieldAlert /
- * ShieldOff already carry distinct silhouettes). The verbose mode-by-mode
- * description lives in the native `title` tooltip — same surface as every
- * other workspace-toolbar button (DisconnectButton, HistoryButton) so the
- * affordance is uniform. The HoverCard prototype was reverted because it
- * fired alongside the title attribute and Info-icon variants would have
- * collided with the parent button's tooltip on hover.
+ * Visuals use icon-shape-only differentiation (ShieldCheck / ShieldAlert /
+ * ShieldOff carry distinct silhouettes). Verbose mode-by-mode description
+ * lives in the native `title` tooltip — uniform with every other
+ * workspace-toolbar button.
  */
 const MODE_META: Record<
   SafeMode,

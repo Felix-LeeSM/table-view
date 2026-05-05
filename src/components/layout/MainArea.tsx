@@ -21,18 +21,17 @@ interface TableTabProps {
 }
 
 function TableTabView({ tab, onSubViewChange }: TableTabProps) {
-  // Sprint 66: document-paradigm tabs bypass the Records/Structure sub-tabs
-  // for the P0 milestone. Structure inspection for collections is tracked
-  // by Sprint 67 (schema inference panel) and deliberately omitted here.
-  // Sprint 120: paradigm dispatch wrapped in an exhaustive switch so adding
-  // a new variant to the `Paradigm` union surfaces a TypeScript error here.
+  // Document-paradigm tabs bypass the Records/Structure sub-tabs (no
+  // collection-structure inspector yet). Paradigm dispatch is wrapped in an
+  // exhaustive switch so adding a new variant to the `Paradigm` union
+  // surfaces a TypeScript error here.
   const paradigm: Paradigm = tab.paradigm ?? "rdb";
 
   switch (paradigm) {
     case "document":
-      // Sprint 129 — prefer the dedicated `database` / `collection` fields,
-      // fall back to the legacy `schema` / `table` aliasing for safety in
-      // case a persisted tab predates the migration in `loadPersistedTabs`.
+      // Prefer the dedicated `database` / `collection` fields; fall back to
+      // legacy `schema` / `table` aliasing for persisted tabs that predate
+      // the migration in `loadPersistedTabs`.
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
           <DocumentDataGrid
@@ -129,18 +128,16 @@ function EmptyState() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const lastUsedConnectionId = useMruStore((s) => s.lastUsedConnectionId);
-  // Sprint 212 — MRU marking moved out of tabStore.addQueryTab into each
-  // caller. The CTA below explicitly marks `target.id` used right after the
-  // tab open so the same single-action observable transition (CTA click →
-  // new tab + MRU shift) is preserved.
+  // MRU marking lives on each caller (not inside tabStore.addQueryTab) so
+  // the CTA's single-action observable transition (click → new tab + MRU
+  // shift) is preserved.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
 
-  // Sprint 119 (#SHELL-1) — MRU-first policy with first-connected fallback.
-  // The MRU id is null on first run (or after a reset), and stale-MRU (the
-  // previously-used connection is currently disconnected) also falls back
-  // to first-connected so the CTA never points at a connection the user
-  // can't actually query.
+  // MRU-first policy with first-connected fallback. The MRU id is null on
+  // first run (or after a reset); stale-MRU (the previously-used connection
+  // is currently disconnected) also falls back to first-connected so the
+  // CTA never points at a connection the user can't actually query.
   const mruConnection =
     lastUsedConnectionId !== null
       ? connections.find(
@@ -210,13 +207,12 @@ export default function MainArea() {
         {activeTab?.type === "table" &&
         (activeTab.table ?? activeTab.collection) &&
         (activeTab.schema ?? activeTab.database) ? (
-          // Sprint 142 (AC-147-4) — keying by `activeTab.id` forces React
-          // to unmount the previous tab's grid and mount a fresh instance
-          // when the user swaps active tabs. Without this, the same
-          // `useDataGridEdit` hook instance survives the prop change and
-          // its locally-held `pendingEdits` Map leaks across tabs, which
-          // is what made the dirty marker flip onto the newly focused
-          // tab in the original bug report.
+          // Keying by `activeTab.id` forces React to unmount the previous
+          // tab's grid and mount a fresh instance when the user swaps tabs.
+          // Without this the same `useDataGridEdit` hook instance survives
+          // the prop change and its locally-held `pendingEdits` Map leaks
+          // across tabs — making the dirty marker flip onto the newly
+          // focused tab.
           <TableTabView
             key={activeTab.id}
             tab={activeTab}

@@ -6,13 +6,11 @@ export interface DocumentSidebarProps {
 }
 
 /**
- * Sprint 126 — paradigm-specific sidebar for document connections
- * (currently MongoDB).
- *
- * Symmetrical to {@link RdbSidebar}: a thin wrapper that lets the
- * paradigm slot resolve to a concrete tree component without taking a
- * direct dependency on `DocumentDatabaseTree`. Future document-only
- * controls (database picker, collection search) belong here.
+ * Paradigm-specific sidebar for document connections (currently MongoDB).
+ * Symmetrical to {@link RdbSidebar}: thin wrapper that lets the paradigm
+ * slot resolve to a concrete tree component without a direct dependency on
+ * `DocumentDatabaseTree`. Future document-only controls (database picker,
+ * collection search) belong here.
  */
 export default function DocumentSidebar({
   connectionId,

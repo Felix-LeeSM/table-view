@@ -21,12 +21,11 @@ import { useQueryEvents } from "./QueryTab/useQueryEvents";
 import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
 
 /**
- * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. Sprint
- * 201 에서 1040-line 단일 파일을 entry + 6 sub-file 로 분해 —
+ * `QueryTab` — RDB / Document paradigm 의 단일 query tab shell. 책임은
  * `QueryTab/{queryHelpers, useQueryExecution, useQueryEvents,
- * useQueryFavorites, Toolbar, HistoryPanel}` 가 책임을 나눠 가짐. 본
- * entry 는 imports + props interface + paradigm 파생 + 4 hook 호출 +
- * return JSX shell 로 압축.
+ * useQueryFavorites, Toolbar, HistoryPanel}` 로 분산. 본 entry 는
+ * imports + props interface + paradigm 파생 + 4 hook 호출 + return JSX
+ * shell.
  *
  * 외부 invariant:
  * - `<QueryTab tab={...} />` props (`QueryTabProps`) 시그니처 byte-for-byte

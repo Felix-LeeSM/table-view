@@ -4,9 +4,9 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { cn } from "@/lib/utils";
 import type { DialogTone } from "@/components/ui/dialog";
 
-// Sprint-95 Layer 1: AlertDialogContent re-exposes the same tone tokens as
-// DialogContent so destructive/warning confirm dialogs (e.g. ConfirmDialog)
-// can apply a single semantic prop instead of hand-rolling colour overrides.
+// AlertDialogContent re-exposes the same tone tokens as DialogContent so
+// destructive/warning confirm dialogs (e.g. ConfirmDialog) can apply a single
+// semantic prop instead of hand-rolling colour overrides.
 const alertDialogToneClasses: Record<DialogTone, string> = {
   default: "border-border",
   destructive: "border-destructive",
