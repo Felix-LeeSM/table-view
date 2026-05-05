@@ -9,25 +9,16 @@ import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
 
 /**
- * Sprint 210 — `useMongoBulkOps` extracts the Mongo bulk-write decision
- * flow (Sprint 198) from `DocumentDataGrid`:
- *
- *   - encapsulates the Safe Mode gate (`safeModeGate.decide(analyzeMongoOperation(...))`)
+ * Mongo bulk-write decision flow for `DocumentDataGrid`. Owns:
+ *   - Safe Mode gate (`analyzeMongoOperation` → `safeModeGate.decide`)
  *     for both `deleteMany` and `updateMany`,
- *   - parses + validates the `updateMany` JSON patch (rejects empty / non-object /
- *     array / `_id`-bearing patches with the existing inline error copy),
- *   - dispatches `invokeDeleteMany(connectionId, database, collection, activeFilter)` /
- *     `invokeUpdateMany(connectionId, database, collection, activeFilter, patch)`,
- *   - emits the same success/error toasts (`Deleted/Updated {N} document(s)` /
- *     `Failed to delete: {detail}` / inline alert for update),
- *   - records the matching `addHistoryEntry` payload in the same order as
- *     before (`source: "mongo-op"`, `paradigm: "document"`, `queryMode: "find"`),
- *   - triggers `fetchData` after a successful write to repaint the grid.
+ *   - the `updateMany` JSON patch parser (rejects non-object / array /
+ *     `_id`-bearing patches with inline error copy),
+ *   - `invokeDeleteMany` / `invokeUpdateMany` dispatch + toast + history,
+ *   - dialog open flags and per-dialog loading flags.
  *
- * The hook owns dialog open flags + per-dialog loading flags so the entry
- * file only wires presentational dialog components. No JSX, no Tauri calls
- * outside the two `invoke*` helpers, no store mutations beyond
- * `addHistoryEntry`.
+ * No JSX. No Tauri calls outside the two `invoke*` helpers. No store
+ * mutations beyond `addHistoryEntry`.
  */
 
 export interface UseMongoBulkOpsParams {
@@ -68,9 +59,9 @@ export function useMongoBulkOps({
 }: UseMongoBulkOpsParams): UseMongoBulkOpsResult {
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
 
-  // Sprint 198 — bulk-write dialogs. Both share the current `activeFilter`
-  // as their target predicate; an empty filter ⇒ "whole collection" which
-  // the Safe Mode gate classifies as `danger`.
+  // Both dialogs share the current `activeFilter` as their predicate; an
+  // empty filter ⇒ "whole collection", which the Safe Mode gate classifies
+  // as `danger`.
   const [deleteManyDialogOpen, setDeleteManyDialogOpen] = useState(false);
   const [deleteManyLoading, setDeleteManyLoading] = useState(false);
   const [updateManyDialogOpen, setUpdateManyDialogOpen] = useState(false);
@@ -78,9 +69,8 @@ export function useMongoBulkOps({
   const [updatePatchInput, setUpdatePatchInput] = useState("");
   const [updateManyError, setUpdateManyError] = useState<string | null>(null);
 
-  // Sprint 198 — Delete matching. Uses the current `activeFilter` as the
-  // predicate. Safe Mode gate runs before opening the dialog so the user
-  // never sees a confirm modal that's about to be blocked anyway.
+  // Safe Mode gate runs before opening the dialog so the user never sees
+  // a confirm modal that's about to be blocked anyway.
   const handleDeleteManyClick = useCallback(() => {
     const decision = safeModeGate.decide(
       analyzeMongoOperation({ kind: "deleteMany", filter: activeFilter }),
@@ -146,8 +136,8 @@ export function useMongoBulkOps({
     addHistoryEntry,
   ]);
 
-  // Sprint 198 — Update matching. Opens patch-input dialog; Safe Mode gate
-  // runs again on submit (filter-state could change between open + submit).
+  // Re-runs the Safe Mode gate on submit too — filter state can change
+  // between dialog open and submit.
   const handleUpdateManyClick = useCallback(() => {
     const decision = safeModeGate.decide(
       analyzeMongoOperation({

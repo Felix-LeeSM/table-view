@@ -132,9 +132,8 @@ const NUMERIC_RE = /^-?(?:\d+\.?\d*|\.\d+)$/;
  * - time: `"10:00"` / `"10:00:00"` → quoted.
  * - uuid: 36-char canonical form → quoted.
  * - textual: O'Brien → `'O''Brien'`.
- * - unknown family: legacy escape path (quoted + single-quote escape). Keeps
- *   the pre-Sprint-75 behaviour for any type the classifier doesn't know about
- *   (e.g. `money`, `bytea` — Sprint 75 does not tackle those).
+ * - unknown family: legacy escape path (quoted + single-quote escape) for
+ *   types the classifier doesn't know yet (`money`, `bytea`, ...).
  */
 export function coerceToSqlLiteral(
   value: string | null,
@@ -293,29 +292,20 @@ export interface GenerateSqlOptions {
 }
 
 /**
- * Generate SQL statements for pending cell edits, row deletions, and new row inserts.
+ * Generate SQL statements for pending cell edits, row deletions, and new
+ * row inserts.
  *
- * UPDATE path (Sprint 75):
- * - Each pending edit is coerced to a SQL literal via `coerceToSqlLiteral`
- *   using the column's declared `data_type`. Successes emit `UPDATE … SET col = <literal>`;
- *   failures are skipped AND reported via `options.onCoerceError`.
- * - This is the single source of truth for UPDATE emission — the SQL preview
- *   modal and the commit-shortcut path both call through here, so the preview
- *   the user sees is exactly what will be sent to the server.
+ * UPDATE: each pending edit runs through `coerceToSqlLiteral` keyed by
+ * the column's `data_type`. Successes emit `UPDATE … SET col = <literal>`;
+ * failures are skipped and reported via `options.onCoerceError`. The
+ * preview modal and the commit-shortcut path both call this function so
+ * what the user previews is exactly what's sent to the server.
  *
- * INSERT path (Sprint 75, attempt 2):
- * - Each new-row cell is normalized via `normalizeNewRowCell` then routed
- *   through `coerceToSqlLiteral` with the column's `data_type`. When every
- *   cell in a row coerces successfully, a single `INSERT` statement is
- *   emitted. When any cell fails, the row's INSERT is **skipped entirely**
- *   (no partially-valid INSERT emission) and each failing cell reports its
- *   own `onCoerceError` entry keyed `new-${newRowIdx}-${colIdx}`.
- * - Invariant 3 (SQL preview = commit payload) is preserved because the
- *   preview now uses the exact same code path as the commit; the user never
- *   sees a preview row that wouldn't execute, nor gets executed rows the
- *   preview hid.
- *
- * DELETE path is unchanged by Sprint 75.
+ * INSERT: every new-row cell is normalized then coerced. A row emits a
+ * single INSERT only when *all* of its cells coerce — partially-valid
+ * rows are dropped (no half-INSERT) and each failing cell reports its
+ * own `onCoerceError` entry keyed `new-${newRowIdx}-${colIdx}`. This
+ * keeps preview = commit-payload invariant intact.
  */
 /**
  * One emitted SQL statement paired with the originating pending-edit key. The
@@ -340,10 +330,10 @@ export interface GeneratedSqlStatement {
 }
 
 /**
- * Sprint 93 — statement-keyed counterpart of {@link generateSql}. Same pure
- * generation logic, but each statement is paired with the pending-edit key it
- * came from so `handleExecuteCommit` can map an `executeQuery` rejection back
- * to the failing cell. Existing callers of `generateSql` are untouched.
+ * Statement-keyed counterpart of {@link generateSql}. Same pure
+ * generation logic, but each emitted statement is paired with its
+ * pending-edit key so `handleExecuteCommit` can route an `executeQuery`
+ * rejection back to the failing cell.
  */
 export function generateSqlWithKeys(
   data: TableData,

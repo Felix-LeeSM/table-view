@@ -2,22 +2,12 @@ import { Loader2, Play } from "lucide-react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 
 /**
- * Sprint 87 — MQL preview modal for the document paradigm.
+ * MQL preview modal for the document paradigm. Mirrors the RDB SQL
+ * preview dialog but adds Mongo-specific semantics (per-row `errors`,
+ * disabled Execute when no commands are generated). Consumes the
+ * `MqlPreview` shape from `src/lib/mongo/mqlGenerator.ts`.
  *
- * Mirrors the RDB SQL preview dialog (`SqlPreviewDialog`) but is scoped to
- * the document grid so MongoDB-specific preview semantics (per-row `errors`,
- * disabled Execute when no commands are generated) have a dedicated
- * surface. Consumes the `MqlPreview` shape produced by
- * `src/lib/mongo/mqlGenerator.ts` (Sprint 86): callers pass `previewLines`
- * and `errors` as flat lists plus `onExecute` / `onCancel` handlers.
- *
- * Keyboard:
- * - Enter (outside inputs) → Execute.
- * - Esc → Cancel (Radix Dialog handles via `onOpenChange`).
- *
- * Sprint 96: migrated to the `PreviewDialog` preset. The Enter-to-execute
- * affordance is preserved by keeping a `keydown` handler on the preview
- * body itself (the preset doesn't own keyboard shortcuts).
+ * Keyboard: Enter (outside inputs) → Execute; Esc → Cancel.
  */
 export interface MqlPreviewError {
   row: number;
@@ -61,9 +51,8 @@ export default function MqlPreviewModal({
         <div
           className="flex flex-col gap-3"
           onKeyDown={(e) => {
-            // Enter triggers Execute unless focus is inside a text input/area
-            // or Execute is currently disabled. Mirrors the RDB preview
-            // modal's Enter=Execute affordance.
+            // Enter → Execute, unless focus is inside a text input/area or the
+            // button is disabled.
             if (e.key !== "Enter" || e.shiftKey) return;
             const target = e.target as HTMLElement | null;
             const tag = target?.tagName;

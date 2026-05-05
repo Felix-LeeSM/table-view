@@ -33,11 +33,9 @@ function renderCellText(data: unknown): string {
 /**
  * Detail viewer for a single cell. Useful when the truncated grid value
  * makes long text or nested JSON impossible to read in place. Read-only;
- * users can copy the value to the clipboard with one click.
- *
- * Sprint 96: migrated to the `PreviewDialog` preset (read-only viewer
- * pattern — no confirm footer; the absolute X is the only dismiss
- * affordance).
+ * users can copy the value to the clipboard with one click. Built on the
+ * `PreviewDialog` preset (no confirm footer; absolute X is the only
+ * dismiss affordance).
  */
 export default function CellDetailDialog({
   open,

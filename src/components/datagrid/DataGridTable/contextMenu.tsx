@@ -33,10 +33,7 @@ import { cellToEditValue } from "../useDataGridEdit";
  *     Cell · Set to NULL · Delete Row · Duplicate Row · separator · Copy
  *     as Plain Text · JSON · CSV · SQL Insert.
  *
- * Sprint 200 에서 entry 로부터 추출. 메뉴 항목 / 라벨 / 핸들러 동작 0
- * 변경.
- *
- * 외부 invariant:
+ * Invariants:
  * - 빈 그리드 (`data.rows.length === 0`) 에서는 우클릭 무시 — 메뉴 자체가
  *   안 떠야 함. `DataGridTable.context-menu.test.tsx` 가 이 동작을 고정.
  * - "Set to NULL" 은 `onStartEdit(row, col, null)` + `onSetEditNull()`

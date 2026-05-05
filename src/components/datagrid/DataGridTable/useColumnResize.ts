@@ -2,27 +2,18 @@ import { useCallback, useRef } from "react";
 import { MIN_COL_WIDTH, calcDefaultColWidth } from "./columnUtils";
 
 /**
- * `DataGridTable` column-resize hook.
+ * Column-resize hook for `DataGridTable`. Owns the mousedown → drag →
+ * mouseup cycle. During drag, mutates `table/th/td` width styles
+ * directly for immediate feedback; on mouseup, pushes the final width
+ * into the store via `onColumnWidthsChange`.
  *
- * 책임: column header 의 resize handle mousedown → drag → mouseup 사이클을
- * 캡슐화. drag 중에는 직접 DOM mutation 으로 즉시 시각 피드백 (table /
- * th / td 의 width style), drag 끝에 `onColumnWidthsChange` 로 store
- * 동기화. 한 번에 한 컬럼만 resize — 두 번째 resize 가 시작되면 첫
- * resize 의 final width 부터 계산 시작.
- *
- * Sprint 200 에서 entry 로부터 추출. 동작 0 변경.
- *
- * 외부 invariant:
- * - mouseup 시 document 에서 mousemove / mouseup listener 제거 + body
- *   cursor / userSelect 복원. cleanup 누락 시 drag 후에도 cursor 가
- *   "col-resize" 로 박혀 회귀.
- * - drag 중 DOM mutation 은 의도적 — `useState` 기반 store update 를
- *   매 mousemove 마다 호출하면 React reconciliation 비용이 너무 큼.
- *   final width 만 store 에 push 하는 패턴은 Sprint 200 분해 이전부터
- *   동결.
- * - `columnWidths[colName]` 우선, 없으면 DOM 측정, 그래도 없으면
- *   `calcDefaultColWidth` fallback. 두 번째 resize 가 첫 resize 결과를
- *   계승하기 위함.
+ * Invariants:
+ * - mouseup must remove listeners and restore body cursor/userSelect,
+ *   else the cursor stays stuck on "col-resize".
+ * - Per-frame DOM mutation (vs setState) is intentional — `useState`
+ *   on every mousemove triggers full React reconciliation per frame.
+ * - Initial width prefers `columnWidths[colName]`, then DOM measurement,
+ *   then `calcDefaultColWidth`, so consecutive resizes compound.
  */
 
 export interface UseColumnResizeArgs {

@@ -74,8 +74,8 @@ function tryDecodeText(bytes: Uint8Array): string | null {
 }
 
 /**
- * Sprint 96: migrated to the `TabsDialog` preset. The hex/text panes own
- * their bodies; the preset owns the title + tab list + dialog shell.
+ * Built on the `TabsDialog` preset: the hex/text panes own their
+ * bodies, the preset owns the title + tab list + dialog shell.
  */
 export default function BlobViewerDialog({
   open,

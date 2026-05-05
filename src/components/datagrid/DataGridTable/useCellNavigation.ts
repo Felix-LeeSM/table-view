@@ -11,9 +11,7 @@ import { editKey, cellToEditValue } from "../useDataGridEdit";
  * commit 하고 멈춤. 시각 (visual) 순서는 `order` 가 결정 — 사용자가
  * 보는 순서대로 next/prev 가 해석됨.
  *
- * Sprint 200 에서 entry 로부터 추출. 동작/시그니처 변경 0.
- *
- * 외부 invariant:
+ * Invariants:
  * - `onStartEdit(row, col, value)` 의 `value` 는 pending edit 이 있으면
  *   그 값, 없으면 `cellToEditValue(cell)`. 본 hook 이 값 결정 책임을
  *   짊어짐 — 호출자가 미리 `onSaveCurrentEdit` 을 부를 필요 없음

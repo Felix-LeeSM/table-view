@@ -11,8 +11,8 @@ export interface CollectionReadOnlyBannerProps {
 }
 
 /**
- * Sprint 101 — non-dismissible beta/limitation banner shown at the top of
- * MongoDB collection grids.
+ * Non-dismissible beta/limitation banner at the top of MongoDB
+ * collection grids.
  *
  * Renders as a sticky `role="status"` strip with `aria-live="polite"` so
  * screen readers announce it once on mount. There is intentionally no close

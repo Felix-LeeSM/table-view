@@ -5,32 +5,18 @@ import type { ColumnInfo, TableData } from "@/types/schema";
 import type { DocumentQueryResult } from "@/types/document";
 
 /**
- * Sprint 210 — `useDocumentGridData` extracts the read-flow plumbing for
- * `DocumentDataGrid`:
+ * Read-flow plumbing for `DocumentDataGrid`. Owns the `runFind`
+ * dispatch with current pagination + `activeFilter`, the loading/error
+ * state, the `fetchIdRef` stale-response guard, and the `queryIdRef`
+ * the threshold-overlay Cancel button routes through `cancel_query`.
+ * Projects `DocumentQueryResult` to a `TableData`-shaped surface so
+ * `useDataGridEdit` consumes it unchanged.
  *
- *   - dispatches `useDocumentStore.runFind` with the current pagination
- *     (skip / limit) and `activeFilter` body,
- *   - owns the `loading` / `error` state,
- *   - owns the `fetchIdRef` stale-response guard so concurrent / cancelled
- *     fetches drop their late-arriving result,
- *   - owns the `queryIdRef` in-flight tracking that the threshold-overlay
- *     Cancel button forwards to `cancel_query`, and
- *   - exposes a `data: TableData | null` projection of the
- *     `DocumentQueryResult` so `useDataGridEdit` (which speaks `TableData`)
- *     can consume it unchanged.
- *
- * Behaviour invariants (preserved from the Sprint 87 / 180 / 198 entry):
- *   - `fetchIdRef` is bumped synchronously on cancel, so `loading` flips
- *     to `false` within one frame regardless of whether the backend has
- *     settled. Late-arriving fetch resolves whose `fetchId` no longer
- *     matches `fetchIdRef.current` are dropped before any `setLoading` /
- *     `setError` write — see `AC-180-05-DocumentDataGrid`.
- *   - `cancelQuery` is best-effort: failures are intentionally swallowed
- *     because the frontend already settled into a consistent state. The
- *     justification is documented inline (catch-policy compliance).
- *   - the projection key (`${connectionId}:${database}:${collection}`) is
- *     identical to the entry's previous inline read so `queryResults`
- *     hydration tests continue to pass.
+ * Invariants:
+ *   - `fetchIdRef` is bumped synchronously on cancel; late resolves
+ *     whose `fetchId` no longer matches drop their writes.
+ *   - `cancelQuery` is best-effort — the frontend already settled
+ *     into a consistent state by the time we call it.
  */
 
 export interface UseDocumentGridDataParams {

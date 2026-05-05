@@ -10,11 +10,9 @@ import {
 import { cn } from "@lib/utils";
 
 /**
- * Sprint 210 — presentational `Update matching documents` dialog extracted
- * from `DocumentDataGrid` (Sprint 198 origin). The component is stateless:
- * the parent owns `open`, the patch input string, the parse/`_id`/server
- * error string, and the loading flag. Wording / placeholder / aria-labels
- * mirror the pre-Sprint-210 entry JSX byte-for-byte.
+ * Presentational `Update matching documents` dialog. Stateless: the
+ * parent owns `open`, the patch input string, parse/`_id`/server error,
+ * and the loading flag.
  */
 
 export interface DocumentBulkUpdateDialogProps {

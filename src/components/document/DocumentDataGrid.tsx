@@ -35,30 +35,23 @@ interface DocumentDataGridProps {
 }
 
 /**
- * Sprint 87 — editable grid for the document paradigm.
+ * Editable grid for the document paradigm. Same workflow as the SQL
+ * grid (double-click → edit → Commit → preview → Execute) backed by the
+ * MQL generator + Tauri insert/update/delete commands.
  *
- * Sprint 66 shipped the read-only fetch + render skeleton; Sprint 71 added
- * single-row selection + Cmd+L Quick Look. Sprint 87 layers inline editing +
- * pending visualisation + MQL preview + Add Document modal on top so the
- * full SQL grid workflow (double-click → edit → Commit → preview → Execute)
- * is available for MongoDB collections.
+ * Sentinel cells (`"{...}"` / `"[N items]"`) stay read-only — the MQL
+ * generator rejects sentinel edits server-side, and `onDoubleClick`
+ * short-circuits so the user doesn't see an editor that will fail.
  *
- * Sentinel cells (`"{...}"` / `"[N items]"`) remain read-only — the MQL
- * generator rejects sentinel edits server-side, and the UI short-circuits
- * `onDoubleClick` so the user doesn't see an editor that will later fail.
+ * Toolbar Add opens {@link AddDocumentModal} and dispatches a single
+ * `insertDocument`; the positional `handleAddRow` is unused because
+ * one-shot inserts fit MongoDB's idiom better than cell-by-cell editing
+ * of a schemaless row.
  *
- * Toolbar Add opens {@link AddDocumentModal}, which parses a JSON object and
- * dispatches a single `insertDocument` call directly (option (a) from the
- * sprint brief). The positional `handleAddRow` path is not used — one-shot
- * document inserts match MongoDB's idiom better than cell-by-cell editing a
- * schemaless row.
- *
- * Sprint 210 — entry-pattern split. The fetch / cancel / pagination /
- * stale-guard pipeline lives in `DocumentDataGrid/useDocumentGridData`,
- * the Mongo bulk-write decision flow lives in
- * `DocumentDataGrid/useMongoBulkOps`, and the two confirm dialogs are
- * presentational components under `DocumentDataGrid/`. This entry only
- * wires them and renders the toolbar / grid / modal shell.
+ * Fetch/cancel/pagination/stale-guard pipeline lives in
+ * `DocumentDataGrid/useDocumentGridData`; bulk-write decision flow in
+ * `useMongoBulkOps`; confirm dialogs in the sibling components. This
+ * entry only wires them.
  */
 export default function DocumentDataGrid({
   connectionId,
@@ -134,10 +127,8 @@ export default function DocumentDataGrid({
     ? Math.max(1, Math.ceil(data.total_count / pageSize))
     : 1;
 
-  // Sprint 180 (AC-180-01) — threshold gate for the shared overlay. The
-  // overlay only paints after `loading` has been continuously true for
-  // 1s; sub-second refetches resolve before this flips and never paint
-  // the overlay at all. See `useDelayedFlag` for the timer ownership.
+  // The overlay only paints after `loading` has been continuously true
+  // for 1s — sub-second refetches resolve before this flips.
   const overlayVisible = useDelayedFlag(loading, 1000);
 
   const showQuickLookMounted =
@@ -176,9 +167,8 @@ export default function DocumentDataGrid({
     async (record: Record<string, unknown>) => {
       setAddLoading(true);
       setAddError(null);
-      // Sprint 196 (FB-5b) — Mongo single-document insert. Synthesise a
-      // user-readable mql line for the history row (mirrors the per-document
-      // MQL preview format used in `mqlGenerator`).
+      // Synthesise a user-readable MQL line for the history row,
+      // matching the per-document format from `mqlGenerator`.
       const startedAt = Date.now();
       const recordedSql = `db.${collection}.insertOne(${JSON.stringify(record)})`;
       try {
@@ -368,17 +358,10 @@ export default function DocumentDataGrid({
 
       {data && (
         <div className="relative flex-1 overflow-auto">
-          {/* Sprint 180 — Doherty + Goal-Gradient async UX. The shared
-              `AsyncProgressOverlay` materialises only after `loading`
-              has been continuously true for 1s (`useDelayedFlag`), so
-              sub-second refetches no longer flicker an overlay. The
-              overlay still preserves the Sprint 176 pointer-event
-              hardening (mouseDown / click / doubleClick / contextMenu
-              all `preventDefault + stopPropagation`) — that logic is
-              now internal to `AsyncProgressOverlay`. The Cancel button
-              fires `handleCancelRefetch`, which clears `loading`
-              synchronously (AC-180-02) and best-effort cancels the
-              backend driver handle (AC-180-04 / AC-180-05). */}
+          {/* `AsyncProgressOverlay` paints only after `loading` has
+              been continuously true for 1s and internally hardens
+              against pointer-event leaks. Cancel clears loading
+              synchronously and best-effort cancels the backend driver. */}
           <AsyncProgressOverlay
             visible={overlayVisible}
             onCancel={handleCancelRefetch}

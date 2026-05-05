@@ -9,13 +9,9 @@ import {
 } from "@components/ui/dialog";
 
 /**
- * Sprint 210 — presentational `Delete matching documents` confirm dialog
- * extracted from `DocumentDataGrid` (Sprint 198 origin). The component is
- * stateless: open/close ownership, the active filter predicate, the
- * pending-delete loading flag, and the confirm callback are all supplied
- * by the parent via props. The wording / classes / aria-labels are
- * identical to the inline JSX in the pre-Sprint-210 entry — see the
- * regression tests for behavioural lock-in.
+ * Presentational `Delete matching documents` confirm dialog. Stateless:
+ * the parent owns open/close, the active filter predicate, the loading
+ * flag, and the confirm callback.
  */
 
 export interface DocumentBulkDeleteDialogProps {

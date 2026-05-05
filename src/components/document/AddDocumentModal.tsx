@@ -16,39 +16,32 @@ import { useMongoAutocomplete } from "@/hooks/useMongoAutocomplete";
 import { useDocumentStore } from "@stores/documentStore";
 
 /**
- * Sprint 87 — Add Document modal for the document paradigm.
- *
- * Lightweight JSON editor for inserting a single document. The editor parses
- * the text on submit, validates it as a non-array object, and forwards the
- * result to `onSubmit`. Wire-format serialisation is deferred to the caller
- * (which knows the connection + namespace); this component only owns the
- * JSON round-trip.
+ * Lightweight JSON editor for inserting a single document. Parses on
+ * submit, validates a non-array object, forwards to `onSubmit`. Wire
+ * serialisation lives in the caller; this component only owns the JSON
+ * round-trip.
  *
  * - Valid input: a JSON object → `onSubmit(parsed)`.
- * - Invalid JSON, empty input, or non-object JSON: local `parseError` shown
- *   above the footer. `onSubmit` is NOT called.
- * - `error` prop lets the parent surface errors from the async insert call
- *   (e.g. a Mongo server rejection) without re-rendering the whole tree.
- * - Esc / Cancel closes via `onCancel`; Radix handles the Esc key.
+ * - Invalid/empty/non-object: local `parseError` above the footer;
+ *   `onSubmit` is NOT called.
+ * - `error` prop surfaces parent errors (e.g. Mongo server rejection).
+ * - Esc / Cancel close via `onCancel`.
  *
- * Sprint 96: migrated to the `FormDialog` preset.
- *
- * Sprint 121: textarea replaced with CodeMirror 6 + JSON language +
- * `useMongoAutocomplete({ queryMode: "find", fieldNames })`. When the modal
- * is given a connection/database/collection triple, field names from the
- * document store's `fieldsCache` surface as completions at JSON key
- * positions, mirroring the QueryEditor experience for document tabs.
+ * Built on the `FormDialog` preset. The editor is CodeMirror 6 + JSON
+ * + `useMongoAutocomplete({ queryMode: "find", fieldNames })`; passing
+ * a connection/database/collection triple surfaces field-name
+ * completions from `fieldsCache` at JSON key positions, mirroring the
+ * QueryEditor.
  */
 export interface AddDocumentModalProps {
   onSubmit: (record: Record<string, unknown>) => void | Promise<void>;
   onCancel: () => void;
   loading?: boolean;
   error?: string | null;
-  /** Sprint 121 — connection scope for field-name autocomplete. */
+  /** Connection/database/collection scope for autocomplete. All three
+   *  required together to surface field-name completions. */
   connectionId?: string;
-  /** Sprint 121 — database scope for field-name autocomplete. */
   database?: string;
-  /** Sprint 121 — collection scope for field-name autocomplete. */
   collection?: string;
 }
 

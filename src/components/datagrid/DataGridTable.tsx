@@ -23,25 +23,16 @@ import HeaderRow from "./DataGridTable/HeaderRow";
 import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
 
 /**
- * `DataGridTable` — RDB 테이블 데이터의 단일-그리드 표시 + inline 편집
- * shell. Sprint 200 에서 1071-line 단일 파일을 entry + 6 sub-file 로
- * 분해 — `DataGridTable/{columnUtils,useCellNavigation,useColumnResize,
- * contextMenu,DataRow,HeaderRow}` 가 책임을 나눠 가짐. 본 entry 는
- * imports + props interface + state/refs + virtualizer wiring + ctx
- * 빌드 + return JSX shell 로 압축.
+ * RDB table grid + inline edit shell. The sub-files
+ * (`DataGridTable/{columnUtils,useCellNavigation,useColumnResize,
+ * contextMenu,DataRow,HeaderRow}`) split out helpers, hooks, context
+ * menu, and the two row renderers; this entry holds the imports,
+ * props, state, virtualizer wiring, and JSX shell.
  *
- * 외부 invariant:
- * - `<DataGridTable>` props (`DataGridTableProps`) 시그니처 byte-for-byte
- *   동결 — `src/components/rdb/DataGrid.tsx` 가 직접 import.
- * - `parseFkReference` named export 위치 동결 — 외부 test
- *   (`DataGridTable.parseFkReference.test.ts`) 가 entry 에서 import.
- *   `./DataGridTable/columnUtils` 로부터 re-export.
+ * The `parseFkReference` re-export below is consumed by an external
+ * contract test that imports it from this entry — keep the path stable.
  */
 
-// Sprint 89 — entry 가 sub-file 의 named symbol 을 외부 caller 에게
-// 그대로 노출 하는 re-export. wire format `"<schema>.<table>(<column>)"`
-// 의 contract test (`DataGridTable.parseFkReference.test.ts`) 가 본 path
-// 를 import 하므로 위치 동결 필수.
 export { parseFkReference } from "./DataGridTable/columnUtils";
 
 export interface DataGridTableProps {
@@ -54,11 +45,8 @@ export interface DataGridTableProps {
   editValue: string | null;
   pendingEdits: Map<string, string | null>;
   /**
-   * Sprint 75 — per-cell coercion errors keyed by `"rowIdx-colIdx"`. When the
-   * active editing cell has an entry, an inline validation hint is rendered
-   * beneath the editor. Optional to keep the prop surface backwards-compatible
-   * with existing callers that haven't adopted the error map yet; defaults to
-   * an empty map internally.
+   * Per-cell coercion errors keyed by `"rowIdx-colIdx"`. When the active
+   * editing cell has an entry, an inline hint renders beneath the editor.
    */
   pendingEditErrors?: Map<string, string>;
   selectedRowIds: Set<number>;
@@ -68,30 +56,20 @@ export interface DataGridTableProps {
   schema: string;
   table: string;
   /**
-   * Sprint 99 — number of currently active filters (structured + raw SQL).
-   * Drives the empty-state branch:
-   *   - `> 0` → "0 rows match current filter" + Clear filter button
-   *   - `=== 0` (default) → "Table is empty"
-   * The component itself does not interpret the value beyond `> 0`; the
-   * parent (DataGrid) computes it from `appliedRawSql` + `appliedFilters`.
+   * Active filter count (structured + raw SQL). `> 0` paints the
+   * "0 rows match" branch with a Clear button; `=== 0` paints
+   * "Table is empty". The grid itself only checks `> 0`.
    */
   activeFilterCount?: number;
   /**
-   * Sprint 99 — invoked when the user clicks the Clear filter button in the
-   * filtered-empty branch. Parent must clear `filters`, `appliedFilters`,
-   * `rawSql`, and `appliedRawSql` so the next fetch returns the unfiltered
-   * dataset.
+   * Called by the Clear filter button in the filtered-empty branch.
+   * Parent must clear `filters`/`appliedFilters`/`rawSql`/`appliedRawSql`.
    */
   onClearFilters?: () => void;
   /**
-   * Sprint 180 (AC-180-02) — invoked when the user clicks the Cancel
-   * button on the threshold-gated overlay. Parent aborts the in-flight
-   * `query_table_data` op, clears `loading`, and reverts to the
-   * pre-fetch dataset (refetch case) or empty (initial-fetch case).
-   * Optional to keep the prop surface backwards-compatible with
-   * legacy callers that don't yet wire cancel; the overlay only
-   * renders when `loading` is true AND the threshold has elapsed,
-   * so omitting the prop simply makes the Cancel button a no-op.
+   * Called by the threshold-gated overlay's Cancel button. Parent
+   * aborts the in-flight `query_table_data`, clears loading, and
+   * reverts to the pre-fetch dataset.
    */
   onCancelRefetch?: () => void;
   onSetEditValue: (v: string | null) => void;
@@ -220,13 +198,8 @@ export default function DataGridTable({
     });
   }, []);
 
-  /**
-   * Sprint-114 — once the dataset crosses `VIRTUALIZE_THRESHOLD` rows we let
-   * `useVirtualizer` decide which rows enter the DOM. Counting includes
-   * `pendingNewRows` because they share the tbody scroll surface; the
-   * threshold is conservative so small queries (≤ 200) keep the eager
-   * render path that the existing DataGrid tests assert against.
-   */
+  // Pending new rows share the tbody scroll surface, so they count
+  // toward the virtualization threshold.
   const totalBodyRowCount = data.rows.length + pendingNewRows.length;
   const shouldVirtualize = totalBodyRowCount > VIRTUALIZE_THRESHOLD;
 
@@ -258,18 +231,13 @@ export default function DataGridTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.executed_query, sorts, shouldVirtualize]);
 
-  // Sprint 180 (AC-180-01) — threshold gate. The overlay only paints
-  // after `loading` has been continuously true for 1s, so sub-second
-  // refetches never flicker. Sprint 176 hardening (4 pointer-event
-  // handlers) lives inside `AsyncProgressOverlay` itself. The Cancel
-  // callback is wired up by the host (DataGrid) which aborts the
-  // in-flight `query_table_data` Tauri command and clears `loading`.
+  // The overlay only paints after `loading` has been continuously true
+  // for 1s, so sub-second refetches don't flicker.
   const overlayVisible = useDelayedFlag(loading, 1000);
 
-  // Sprint 200 — DataRow ctx 묶음. `useMemo` 는 reconciliation cost 보다
-  // 의도 표현 — DataRow 컴포넌트는 ctx 를 prop 으로 받아 매 렌더 새
-  // 객체 reference 가 들어가도 동작은 동일 (memo 안 씀). 단, ctx 의
-  // identity 가 고정되면 향후 React.memo 적용 시 재렌더 최소화 가능.
+  // The `useMemo` here is for ctx identity stability rather than
+  // reconciliation cost — `DataRow` doesn't memoize today, but stable
+  // ctx lets a future `React.memo` pass cut re-renders cleanly.
   const rowCtx: DataGridRowContext = useMemo(
     () => ({
       data,
@@ -343,14 +311,11 @@ export default function DataGridTable({
         <tbody>
           {shouldVirtualize
             ? (() => {
-                // Sprint-114 — virtualized branch. The virtualizer reports a
-                // total scroll height (`getTotalSize()`) and a window of
-                // visible items; we pad before/after with two spacer rows so
-                // the table preserves its full height + the rendered slice
-                // sits at the correct vertical offset. We can't use
-                // `position: absolute` directly on `<tr>` (table layout
-                // model fights it), and `transform` on `<tbody>` would
-                // reposition every row instead of leaving spacers.
+                // Two `aria-hidden` spacer rows before/after the windowed
+                // slice preserve the table's total scroll height. We can't
+                // `position: absolute` a `<tr>` (table layout fights it),
+                // and `transform`-ing the `<tbody>` would move every row
+                // instead of leaving spacers — hence spacer rows.
                 const virtualItems = rowVirtualizer.getVirtualItems();
                 const totalSize = rowVirtualizer.getTotalSize();
                 const paddingTop = virtualItems.length
@@ -403,10 +368,9 @@ export default function DataGridTable({
                 className="px-3 py-4 text-center text-xs text-muted-foreground"
               >
                 {activeFilterCount > 0 ? (
-                  // Sprint 99 — filtered empty state. The Clear filter button
-                  // is co-located with the message so users don't have to
-                  // scroll back to the FilterBar to recover from a
-                  // mis-typed filter that happens to match zero rows.
+                  // The Clear button sits next to the message so a user
+                  // who matched zero rows doesn't have to scroll back to
+                  // the FilterBar to recover.
                   <div className="flex flex-col items-center justify-center gap-2">
                     <span>0 rows match current filter</span>
                     <Button

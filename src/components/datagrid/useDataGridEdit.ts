@@ -203,39 +203,26 @@ export interface UseDataGridEditParams {
   page: number;
   fetchData: () => void;
   /**
-   * Data paradigm of the grid. `"rdb"` (default) keeps the SQL edit path.
-   * `"document"` (Sprint 86) routes `handleCommit` / `handleExecuteCommit`
-   * through the MQL generator + Tauri mutate wrappers so a Mongo collection
-   * grid can propose insert/update/delete operations with the same pending
-   * state the RDB grid uses. `search` / `kv` are not yet wired to this hook.
-   *
-   * For the document paradigm the hook treats the `schema` argument as the
-   * MongoDB database name and `table` as the collection name — the two
-   * coordinates that `insertDocument` / `updateDocument` / `deleteDocument`
-   * need. Sprint 87 will pass these explicitly; Sprint 86 only consumes the
-   * existing argument shape so the RDB callers do not break.
+   * Data paradigm. `rdb` (default) takes the SQL edit path; `document`
+   * routes `handleCommit` / `handleExecuteCommit` through the MQL
+   * generator + Tauri mutate wrappers so Mongo collections share the
+   * same pending state. For `document`, `schema` is the database name
+   * and `table` the collection name. `search` / `kv` aren't wired yet.
    */
   paradigm?: "rdb" | "document" | "search" | "kv";
 }
 
 /**
- * Sprint 93 — surfaced commit failure for the SQL preview modal. Populated by
- * `handleExecuteCommit` when an `executeQuery` call rejects. `null` means the
- * last commit succeeded (or no commit has run yet).
+ * Surfaced commit failure for the SQL preview modal. Populated by
+ * `handleExecuteCommit` on `executeQuery` rejection; `null` means the
+ * last commit succeeded (or none has run).
  *
- * Fields:
- * - `statementIndex`: 0-indexed position of the failing statement in
- *   `sqlPreview`. The UI converts this to a 1-indexed "failed at: K" label
- *   so non-developers don't trip on 0-vs-1 indexing.
- * - `statementCount`: total statements in the batch — used to show
- *   "executed: N, failed at: K" so partial-failure context is preserved.
- * - `sql`: raw SQL text of the failing statement so the user can see exactly
- *   what was sent to the DB.
- * - `message`: DB-reported error message (or fallback string when the reject
- *   value isn't an Error/string).
- * - `failedKey`: optional pendingEdits key for the failing statement. When
- *   present, the cell is also flagged in `pendingEditErrors` so an inline
- *   hint appears next to the offending cell.
+ * - `statementIndex`: 0-indexed position of the failing statement; the
+ *   UI re-bases to 1 so users don't see 0-indexed labels.
+ * - `statementCount`: batch size — preserves partial-failure context.
+ * - `sql` / `message`: failing statement and its DB-reported error.
+ * - `failedKey`: optional `pendingEdits` key. When present, the cell is
+ *   also flagged in `pendingEditErrors` for an inline hint.
  */
 export interface CommitError {
   statementIndex: number;
@@ -258,12 +245,9 @@ export interface DataGridEditState {
   pendingDeletedRowKeys: Set<string>;
 
   /**
-   * Sprint 75 — per-cell validation errors produced when a pending edit's
-   * value could not be coerced to its column's data type at commit time.
-   * Keyed by the same `"rowIdx-colIdx"` shape as {@link pendingEdits} so the
-   * UI can look up the error for the active cell in O(1). Cleared entry-by-
-   * entry when the user edits the cell, and wholesale on a successful commit
-   * or `handleDiscard`.
+   * Per-cell coercion errors keyed by `"rowIdx-colIdx"` (matching
+   * {@link pendingEdits}) so cell lookup is O(1). Cleared entry-by-entry
+   * on edit, wholesale on successful commit or discard.
    */
   pendingEditErrors: Map<string, string>;
 
@@ -272,21 +256,18 @@ export interface DataGridEditState {
   setSqlPreview: (v: string[] | null) => void;
 
   /**
-   * Sprint 93 — surfaced commit failure. Set when `handleExecuteCommit`'s
-   * `executeQuery` loop rejects so the SQL preview modal can keep showing
-   * the batch and overlay the failed-statement banner. Cleared by
-   * `setCommitError(null)` (the user dismissing the banner) or by a fresh
-   * `handleCommit` (re-opening the preview with a new batch).
+   * Surfaced commit failure. Set on `executeQuery` rejection so the
+   * preview modal keeps the batch visible while overlaying the
+   * failed-statement banner. Cleared on dismiss or on a fresh
+   * `handleCommit`.
    */
   commitError: CommitError | null;
   setCommitError: (v: CommitError | null) => void;
 
   /**
-   * MQL preview for the document paradigm (Sprint 86). Populated by
-   * `handleCommit` when `paradigm === "document"` and consumed by
-   * `handleExecuteCommit` to dispatch insert/update/delete Tauri commands.
-   * Null for the RDB paradigm. Sprint 87 will render this in the
-   * generalised preview modal alongside `sqlPreview.previewLines`.
+   * MQL preview for the document paradigm. Populated by `handleCommit`
+   * when `paradigm === "document"` and consumed by `handleExecuteCommit`
+   * to dispatch insert/update/delete. `null` for RDB.
    */
   mqlPreview: MqlPreview | null;
   setMqlPreview: (v: MqlPreview | null) => void;
@@ -302,13 +283,12 @@ export interface DataGridEditState {
   hasPendingChanges: boolean;
 
   /**
-   * Sprint 98 — short-lived flag flipped on at the entry of every commit
-   * attempt (Cmd+S `commit-changes` listener and toolbar `handleCommit`),
-   * cleared once the SQL/MQL preview opens, the validation-only no-op resolves,
-   * or a 400ms safety timeout fires. Consumers (e.g. {@link DataGridToolbar})
-   * use this to render a spinner + `aria-busy` state on the Commit button so
-   * Cmd+S provides visible feedback in ≤ 200ms — well before the SQL Preview
-   * modal mounts.
+   * Short-lived flag flipped on at the entry of every commit attempt
+   * (Cmd+S listener and toolbar `handleCommit`), cleared when the
+   * preview opens, the validation no-op resolves, or a 400ms safety
+   * timeout fires. Consumers use it to surface a spinner + aria-busy
+   * before the preview modal mounts so Cmd+S has visible feedback in
+   * ≤200ms.
    */
   isCommitFlashing: boolean;
 
@@ -328,19 +308,18 @@ export interface DataGridEditState {
   handleCommit: () => void;
   handleExecuteCommit: () => Promise<void>;
   /**
-   * Sprint 186 — warn-tier Safe Mode handoff. Set when an RDB commit on a
-   * production-tagged connection is intercepted by warn mode; the consumer
-   * surfaces a `<ConfirmDangerousDialog>`. `null` means no pending warn
-   * confirmation.
+   * Warn-tier Safe Mode handoff. Populated when an RDB commit on a
+   * production-tagged connection trips warn mode; the consumer surfaces
+   * `<ConfirmDangerousDialog>`. `null` means no pending confirmation.
    */
   pendingConfirm: {
     reason: string;
     sql: string;
     statementIndex: number;
   } | null;
-  /** Sprint 186 — user confirmed the warn dialog; bypass the warn gate and run the batch. */
+  /** User confirmed: bypass the warn gate and run the batch. */
   confirmDangerous: () => Promise<void>;
-  /** Sprint 186 — user cancelled the warn dialog; surface a warn-tier commitError. */
+  /** User cancelled: surface a warn-tier `commitError`. */
   cancelDangerous: () => void;
   handleDiscard: () => void;
   handleAddRow: () => void;
@@ -359,8 +338,8 @@ export function useDataGridEdit({
 }: UseDataGridEditParams): DataGridEditState {
   const activeTabId = useTabStore((s) => s.activeTabId);
   const promoteTab = useTabStore((s) => s.promoteTab);
-  // Sprint 97 — surface dirty state to the store so TabBar can render a
-  // dirty dot + gate close-on-dirty without coupling to grid internals.
+  // Surface dirty state to the store so TabBar can render the dirty dot
+  // + gate close-on-dirty without coupling to grid internals.
   const setTabDirty = useTabStore((s) => s.setTabDirty);
 
   // Cell editing state
@@ -372,9 +351,8 @@ export function useDataGridEdit({
   const [pendingEdits, setPendingEdits] = useState<Map<string, string | null>>(
     new Map(),
   );
-  // Sprint 75 — per-cell coercion-error map. Populated during commit when a
-  // pending edit fails `coerceToSqlLiteral`; cleared entry-by-entry when the
-  // user modifies the cell via `setEditValue`/`setEditNull`.
+  // Per-cell coercion errors populated at commit time when an edit
+  // fails `coerceToSqlLiteral`. Entries clear as the user re-edits.
   const [pendingEditErrors, setPendingEditErrors] = useState<
     Map<string, string>
   >(new Map());
@@ -383,8 +361,8 @@ export function useDataGridEdit({
     Set<string>
   >(new Set());
 
-  // Sprint 193 (AC-193-02) — multi-row selection 책임을
-  // `useDataGridSelection` sub-hook 으로 위임. paradigm-agnostic.
+  // Multi-row selection lives in `useDataGridSelection` so the facade
+  // stays paradigm-agnostic.
   const {
     selectedRowIds,
     anchorRowIdx,
@@ -393,25 +371,22 @@ export function useDataGridEdit({
     clearSelection,
   } = useDataGridSelection();
 
-  // Reset selection when page changes — facade 에 남는 effect (hook 은
-  // page 개념을 모르므로 escape hatch 호출).
+  // Reset selection on page change. The selection hook is page-agnostic
+  // by design, so this stays in the facade.
   useEffect(() => {
     clearSelection();
   }, [page, clearSelection]);
 
-  // Sprint 193 (AC-193-01) — commit flash 책임을 `useCommitFlash` sub-hook
-  // 로 위임. Sprint 98 의 Cmd+S 즉시 시각 피드백 + 400ms 안전망 + unmount
-  // drain 동작은 hook 안에 보존. 본 facade 는 terminal-signal watcher
-  // (preview / commitError 전이 시 즉시 clear) 만 보유한다.
+  // Commit-flash lifecycle (Cmd+S immediate feedback + 400ms safety
+  // net + unmount drain) lives in `useCommitFlash`. The facade only
+  // watches for terminal signals (preview / commitError) below.
   const { isCommitFlashing, beginCommitFlash, clearCommitFlash } =
     useCommitFlash();
 
-  // Sprint 193 (AC-193-03) — preview / commit / Safe Mode handoff 를 한
-  // sub-hook 으로 위임. RDB SQL preview ↔ Mongo MQL preview paradigm 분기,
-  // executeQueryBatch / dispatchMqlCommand executor, useSafeModeGate
-  // consume, warn-tier confirm/cancel, commitError 라이프사이클이 hook
-  // 내부로 이동. facade 는 cleanup 콜백 (`clearAllPending`) 과 cell editing /
-  // pending state 만 협력 인자로 전달.
+  // Preview / commit / Safe Mode handoff lives in
+  // `useDataGridPreviewCommit`: paradigm dispatch, executor, gate
+  // consumer, confirm/cancel, and commitError lifecycle. The facade
+  // only forwards a cleanup callback and the cell/pending state.
   const clearAllPending = useCallback(() => {
     setPendingEdits(new Map());
     setPendingEditErrors(new Map());
@@ -511,19 +486,10 @@ export function useDataGridEdit({
     clearActiveEditorError();
   }, [clearActiveEditorError]);
 
-  // Sprint 193 (AC-193-02) — handleSelectRow 는 useDataGridSelection 에서.
-
   const handleStartEdit = useCallback(
     (rowIdx: number, colIdx: number, currentValue: string | null) => {
-      // Sprint 86: the document paradigm now participates in editing. Earlier
-      // sprints returned a no-op here because write support was not wired;
-      // Sprint 86 introduces the MQL generator + dispatch branch (see
-      // `handleCommit` / `handleExecuteCommit` below) so `editingCell` +
-      // `editValue` are set for every paradigm. Sprint 87 will hide
-      // sentinel/composite cells at the UI layer — the generator already
-      // guards against committing a sentinel edit.
-
-      // Save any existing edit first — but skip pending when value unchanged
+      // Save the existing edit first — `applyEditOrClear` skips the
+      // pending entry when the value is unchanged.
       if (editingCell) {
         const key = editKey(editingCell.row, editingCell.col);
         const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
@@ -540,10 +506,9 @@ export function useDataGridEdit({
     [editingCell, editValue, data, activeTabId, promoteTab],
   );
 
-  // Sprint 193 (AC-193-03) — handleCommit / handleExecuteCommit /
-  // dispatchMqlCommand / runRdbBatch / confirmDangerous / cancelDangerous 는
-  // useDataGridPreviewCommit 에서. 본 facade 는 그 hook 의 return 만 묶어서
-  // 외부로 노출.
+  // The handlers (handleCommit / handleExecuteCommit / dispatchMqlCommand
+  // / runRdbBatch / confirm- / cancelDangerous) live in
+  // `useDataGridPreviewCommit`; the facade just forwards them.
 
   const handleDiscard = useCallback(() => {
     clearAllPending();

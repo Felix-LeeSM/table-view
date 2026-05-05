@@ -31,23 +31,17 @@ import {
 } from "@lib/mongo/mqlFilterBuilder";
 
 /**
- * Sprint 122 — Mongo collection filter bar.
- *
- * Mirrors the RDB `FilterBar` UX (open/close, mode toggle, Apply/Clear)
- * but emits a Mongo MQL filter document instead of a SQL `WHERE` clause.
+ * Mongo collection filter bar. Mirrors the RDB `FilterBar` UX but emits
+ * an MQL filter document instead of SQL `WHERE`.
  *
  * Two modes share a single `onApply(filter)` exit:
- * - **Structured**: column + operator + value rows; the builder converts
- *   the rows into an MQL document via `buildMqlFilter`. Eight operators
- *   are supported in v1 (see {@link MqlOperator}).
- * - **Raw MQL**: a CodeMirror JSON editor with `useMongoAutocomplete`
- *   wired up so users get field-name + `$`-operator completions just
- *   like the QueryEditor and AddDocumentModal.
+ * - Structured: rows of column + operator + value; `buildMqlFilter`
+ *   compiles them into an MQL document.
+ * - Raw MQL: CodeMirror JSON editor with `useMongoAutocomplete` for
+ *   field-name + `$`-operator completions.
  *
- * Mode swap is intentionally lossy in only one direction:
- * - Structured → Raw prefills the raw editor with the structured filter.
- * - Raw → Structured shows a "Manual edit required" notice; we don't
- *   try to parse arbitrary user JSON back into rows in v1.
+ * Structured → Raw prefills the raw editor with the structured filter;
+ * Raw → Structured is intentionally not parsed back (manual rebuild).
  */
 export interface DocumentFilterBarProps {
   /** Field names surfaced to the structured column dropdown + raw AC. */
@@ -417,9 +411,8 @@ function RawMqlEditor({
     [],
   );
 
-  // One-time editor build keyed on the container element. Mirrors the
-  // pattern used by `AddDocumentModal` (Sprint 121): callback ref + state
-  // dodges the Radix portal mount race seen with `useRef`.
+  // One-time editor build keyed on the container element. The callback-ref +
+  // state pattern dodges the Radix portal mount race that breaks `useRef`.
   useEffect(() => {
     if (!containerEl) return;
     const state = EditorState.create({

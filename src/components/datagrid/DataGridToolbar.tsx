@@ -25,15 +25,10 @@ import {
 
 const PAGE_SIZE_OPTIONS = [100, 300, 500, 1000];
 
-// Sprint 179 — toolbar default labels are sourced from the RDB paradigm
-// dictionary entry instead of inline literals so the dictionary remains
-// the single source of truth. The toolbar still accepts label-prop
-// overrides (the document grid spreads DOCUMENT_LABELS), so callers that
-// already pass values keep their behavior. The literal strings here
-// ("rows", "Add row", "Delete row", "Duplicate row") match the legacy
-// defaults — the dictionary's rdb entry uses title-case schema vocabulary
-// ("Rows", "Add Column"), so we hand-roll the toolbar tone the same way
-// document.ts does for the document paradigm.
+// Toolbar defaults source from the paradigm dictionary so the dictionary
+// stays the single source of truth, but we lowercase here because the
+// dictionary's `rdb` entry is title-cased for schema-tree vocabulary
+// while the toolbar tone is sentence-case.
 const RDB_TOOLBAR_LABELS = {
   rowCountLabel: PARADIGM_VOCABULARY.rdb.records.toLowerCase(),
   addRowLabel: `Add ${PARADIGM_VOCABULARY.rdb.record.toLowerCase()}`,
@@ -54,12 +49,10 @@ export interface DataGridToolbarProps {
   showQuickLook: boolean;
   hasPendingChanges: boolean;
   /**
-   * Sprint 98 — short-lived flash flag from `useDataGridEdit`. When `true`,
-   * the Commit button swaps its `Check` icon for a spinning `Loader2` and
-   * advertises `aria-busy="true"` + `data-committing="true"` so screen
-   * readers + DOM-driven tests can observe the immediate Cmd+S feedback
-   * before the SQL Preview modal mounts. Defaults to `false` so existing
-   * callers that don't pass the prop keep their current rendering.
+   * Short-lived flash from `useDataGridEdit`. When `true`, Commit swaps
+   * its Check icon for a spinning Loader2 and advertises `aria-busy` +
+   * `data-committing` so AT and DOM-driven tests observe the immediate
+   * Cmd+S feedback before the SQL Preview modal mounts.
    */
   isCommitFlashing?: boolean;
   pendingEditsSize: number;
@@ -67,27 +60,20 @@ export interface DataGridToolbarProps {
   pendingDeletedRowKeysSize: number;
   selectedRowIdsCount: number;
   /**
-   * Sprint 118 (#PAR-2) — optional wording overrides so the document
-   * paradigm grid can render `"documents"` / `"Add document"` etc.
-   * Defaults preserve RDB wording so existing RDB tests stay green
-   * without touching the toolbar from the call site.
+   * Wording overrides — the document grid passes "documents" / "Add
+   * document" etc. RDB callers can omit and pick up the RDB defaults.
    */
   rowCountLabel?: string;
   addRowLabel?: string;
   deleteRowLabel?: string;
   duplicateRowLabel?: string;
-  /**
-   * Sprint 182 — optional slot for the toolbar's right-side action group.
-   * Used to host the Sprint 181 ExportButton inline with the other ghost
-   * icon buttons instead of in a dedicated `border-b` row above the toolbar
-   * (which clashed visually with the rest of the row's tone).
-   */
+  /** Right-side slot — typically hosts the ExportButton inline. */
   exportSlot?: React.ReactNode;
   /**
-   * Sprint 198 — optional slot for paradigm-specific bulk-write actions.
-   * The document grid hosts "Delete matching" / "Update matching" here,
-   * driven by the current `activeFilter`. RDB grids leave this empty —
-   * RDB bulk DELETE / UPDATE is the user's job to write in the SQL editor.
+   * Paradigm-specific bulk-write slot. Document grids host
+   * "Delete matching" / "Update matching" here driven by `activeFilter`.
+   * RDB grids leave this empty — bulk DML is the user's job in the SQL
+   * editor.
    */
   bulkOpsSlot?: React.ReactNode;
   onSetPage: (page: number) => void;
@@ -170,15 +156,10 @@ export default function DataGridToolbar({
                   onClick={onCommit}
                   aria-label="Commit changes"
                   title="Commit changes"
-                  // Sprint 98 — surface the flash state to AT + tests. We
-                  // intentionally do NOT set `disabled` here: the button is
-                  // sync-only, so the click handler returns immediately, and
-                  // existing tests (commit-shortcut, multi-select, paradigm)
-                  // assume the button stays enabled while pending changes
-                  // exist. Disabling on flash would either need a follow-up
-                  // sprint to update those tests or bake in a 400ms gap
-                  // where the user can't click — both worse than the status
-                  // quo for the AC-04 invariant.
+                  // Surface the flash to AT + tests via aria-busy /
+                  // data-committing only. We do NOT set `disabled` —
+                  // the click handler is sync, so disabling would just
+                  // bake in a ~400ms window where the user can't click.
                   aria-busy={isCommitFlashing || undefined}
                   data-committing={isCommitFlashing ? "true" : undefined}
                 >

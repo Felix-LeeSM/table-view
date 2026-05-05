@@ -1,54 +1,35 @@
 /**
- * Pure helpers + constants for `DataGridTable`.
+ * Pure helpers + constants for `DataGridTable`. Zero React/store
+ * imports so any sub-file can depend on it.
  *
- * 책임: column width 계산 / FK reference 파싱 / BLOB 컬럼 판별 + 가상화
- * 임계값 같은 상수. React import 0, store import 0 — 어떤 sub-file 도
- * 의존할 수 있도록 유지. Sprint 200 (`DataGridTable.tsx` 1071-line god
- * file 분해) 에서 entry 로부터 추출.
- *
- * 외부 invariant:
- * - `parseFkReference` 의 wire format 은 `"<schema>.<table>(<column>)"`
- *   (Sprint 89 / #FK-1) — Rust 측 `format_fk_reference`
- *   (`src-tauri/src/db/postgres.rs`) 와 짝. 두 사이드는
- *   `tests/fixtures/fk_reference_samples.json` 으로 lock-step.
- * - `parseFkReference` named export 는 `DataGridTable.tsx` (entry) 에서
- *   re-export 되어 있으며 이는 외부 test (`DataGridTable.parseFkReference.test.ts`)
- *   가 의존하는 contract — re-export path 변경 금지.
+ * `parseFkReference`'s wire format `"<schema>.<table>(<column>)"` is
+ * paired with the Rust `format_fk_reference` (db/postgres.rs); the two
+ * sides stay in lock-step via `tests/fixtures/fk_reference_samples.json`.
+ * `parseFkReference` is re-exported from `DataGridTable.tsx` because
+ * external tests depend on that path — don't move it.
  */
 
 export const MIN_COL_WIDTH = 60;
 
 /**
- * Sprint-114 (#PERF-1, #GRID-3) — page sizes above this threshold switch the
- * tbody render path to a `@tanstack/react-virtual` viewport. Below it we
- * keep the eager render so the existing DataGrid tests (which use small
- * fixtures) continue to assert against full DOM output without spacers.
+ * Above this row count, `<tbody>` is rendered through
+ * `@tanstack/react-virtual`. Below it we keep the eager render so
+ * existing DataGrid tests (small fixtures) assert against full DOM.
  */
 export const VIRTUALIZE_THRESHOLD = 200;
 
 /**
- * Sprint-114 — single-source row height for the virtualizer. The body cells
- * use `px-3 py-1 text-xs` which renders ~28-32px in the table; we estimate
- * 32px to include the `border-b` and stay slightly conservative so overscan
- * doesn't clip when row content varies. `react-virtual` measures actual DOM
- * heights as rows render, so the estimate only governs initial layout.
+ * Estimated body-row height for the virtualizer. Body cells render
+ * ~28-32px; 32px is slightly conservative so overscan doesn't clip when
+ * content varies. `react-virtual` measures actual DOM after first paint,
+ * so this only governs initial layout.
  */
 export const ROW_HEIGHT_ESTIMATE = 32;
 
 /**
- * Parse a foreign-key reference string of the form
- * `"<schema>.<table>(<column>)"` (the canonical contract aligned by
- * sprint-89 / #FK-1) into its three components.
- *
- * Returns `null` when the input does not match the expected shape — for
- * example bare `"<table>.<column>"` strings (the pre-sprint-89 backend
- * shape) or empty input.
- *
- * Exported so that both the production `DataGridTable` render path and the
- * vitest contract tests (`DataGridTable.parseFkReference.test.ts`) consume
- * exactly one implementation. The Rust counterpart is
- * `format_fk_reference` in `src-tauri/src/db/postgres.rs` and the two
- * sides are kept in lock-step via `tests/fixtures/fk_reference_samples.json`.
+ * Parse `"<schema>.<table>(<column>)"`. Returns `null` on the legacy
+ * bare-`"<table>.<column>"` shape or empty input. The production grid
+ * and the contract test both consume this single implementation.
  */
 export function parseFkReference(
   ref: string,
