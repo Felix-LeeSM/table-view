@@ -870,9 +870,10 @@ describe("DataGrid", () => {
 
     renderDataGrid();
 
-    // Wait for the first call to start
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+    // Wait for the first call to start (audit M19 — replaced setTimeout(0)
+    // race-pattern with explicit "first call dispatched" signal).
+    await waitFor(() => {
+      expect(mockQueryTableData).toHaveBeenCalledTimes(1);
     });
 
     // Dispatch refresh-data to trigger a second fetchData while first is pending
