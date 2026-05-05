@@ -373,11 +373,7 @@ impl PostgresAdapter {
         let columns = self.get_table_columns_inner(&pool, table, schema).await?;
 
         // Build safe query — table/schema are validated identifiers
-        let qualified_table = format!(
-            "\"{}\".\"{}\"",
-            schema.replace('"', "\"\""),
-            table.replace('"', "\"\"")
-        );
+        let qualified_table = qualified_table(schema, table);
 
         // Validate raw_where if provided
         let raw_where_trimmed = raw_where.map(|rw| rw.trim()).filter(|rw| !rw.is_empty());

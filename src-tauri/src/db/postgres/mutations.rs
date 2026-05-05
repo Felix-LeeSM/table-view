@@ -80,11 +80,7 @@ impl PostgresAdapter {
             )));
         }
 
-        let qualified = format!(
-            "\"{}\".\"{}\"",
-            schema.replace('"', "\"\""),
-            table.replace('"', "\"\"")
-        );
+        let qualified = qualified_table(schema, table);
         let sql = format!("DROP TABLE {}", qualified);
         sqlx::query(&sql)
             .execute(&pool)
@@ -125,12 +121,8 @@ impl PostgresAdapter {
 
         let pool = self.active_pool().await?;
 
-        let qualified_old = format!(
-            "\"{}\".\"{}\"",
-            schema.replace('"', "\"\""),
-            table.replace('"', "\"\"")
-        );
-        let quoted_new = format!("\"{}\"", trimmed.replace('"', "\"\""));
+        let qualified_old = qualified_table(schema, table);
+        let quoted_new = quote_identifier(trimmed);
         let sql = format!("ALTER TABLE {} RENAME TO {}", qualified_old, quoted_new);
         sqlx::query(&sql)
             .execute(&pool)
