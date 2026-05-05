@@ -118,13 +118,14 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 | 3 | **212** ✓ | refactor | P3 (tabStore cross-store) | `tabStore` entry 의 `useMruStore` / `useQueryHistoryStore` 직접 import 제거 — 15 caller migration. evaluator 7.5/10. (commit `ccd8809`) |
 | — | (사용자) | refactor | ~~P4 (tauri.ts)~~ | 688-line tauri.ts → 6 도메인 + barrel. (사용자 commit `879b003`) |
 | — | (사용자) | refactor | P5 step 1 | `db/mod.rs` (1425→551) + `export.rs` (1425→879) tests block sibling 파일 hoist. (사용자 commit `a60074d`) |
-| 4 | 213 | refactor | P5 step 2 | `db/mod.rs` (551) trait/DTO 분리 + `commands/export.rs` (879) writer 분리. |
-| 5 | 214 | refactor | P6 (ConnectionDialog) | `useConnectionDraftForm` / `useConnectionUrlImport` hook 추출 + body / footer 분리. |
-| 6 | 215 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook + 3 editor (columns/indexes/constraints) 적용. |
-| 7 | 216 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유. |
-| 8 | **217** ✓ | refactor | P9 (DocumentDatabaseTree) | `DocumentDatabaseTree.tsx` (582) → entry 263 + 4 sub-file. **Sprint 212 와 동일 commit (사전 처리 통합)**. evaluator 8/10. (commit `ccd8809`) |
-| 9 | 218 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. |
-| 10 | 219 | refactor | P11 (mega tests) | 1,900–2,900 라인 mega test 5건 axis 별 split. |
+| — | (사용자) | refactor | ~~P5 step 2a~~ | `db/mod.rs` (551) trait/DTO 분리. (사용자 commit `4e65a50`) |
+| — | (사용자) | refactor | ~~P5 step 2b~~ | `commands/export.rs` (879) writer 분리. (사용자 commit `d2d3cf9`) |
+| 4 | **213** ✓ | refactor | P6 (ConnectionDialog) | `ConnectionDialog.tsx` (829) → entry 310 + 5 sub-file (sanitize / draftForm / urlImport / Body / Footer). 행동 변경 0, evaluator 9/10. (commit `6dee525`) |
+| 5 | 214 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook + 3 editor (columns/indexes/constraints) 적용. |
+| 6 | 215 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유. |
+| 7 | **217** ✓ | refactor | P9 (DocumentDatabaseTree) | `DocumentDatabaseTree.tsx` (582) → entry 263 + 4 sub-file. **Sprint 212 와 동일 commit (사전 처리 통합)**. evaluator 8/10. (commit `ccd8809`) |
+| 8 | 216 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. |
+| 9 | 218 | refactor | P11 (mega tests) | 1,900–2,900 라인 mega test 5건 axis 별 split. |
 
 본 cycle 종료 시 [`refactoring-candidates.md`](refactoring-candidates.md) retire
 — 이전 cycle 의 `CODE_SMELLS.md` 처리와 동일.
