@@ -56,15 +56,9 @@ export function useDocumentGridData({
   const [error, setError] = useState<string | null>(null);
 
   const fetchIdRef = useRef(0);
-  // Sprint 180 — track the in-flight `find_documents` query id so the
-  // shared Cancel button can route through `cancel_query`. Mongo runs
-  // its find / aggregate on a `tokio::select!` shape that observes the
-  // registered token (Sprint 180 backend extension); the Tauri command
-  // accepts an optional query_id and registers the token before
-  // dispatching the driver call. When the user clicks Cancel we
-  // (a) call `cancel_query(queryId)` for backend-side abort and
-  // (b) clear `loading` immediately so the overlay drops within one
-  // frame without waiting for the driver to settle (AC-180-02).
+  // In-flight `find_documents` query id. Cancel calls (a) `cancel_query`
+  // for the backend-side abort and (b) clear `loading` synchronously so
+  // the overlay drops within one frame even before the driver settles.
   const queryIdRef = useRef<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -96,13 +90,10 @@ export function useDocumentGridData({
     activeFilterCount,
   ]);
 
-  // Sprint 180 — Cancel handler for the threshold overlay. Bumps
-  // `fetchIdRef` so the in-flight resolve is treated as stale (its
-  // result is dropped) and clears `loading` synchronously so the
-  // overlay disappears within one frame even if the backend hasn't
-  // yet observed the cancel token. The best-effort `cancel_query` call
-  // tells the backend to drop its driver-side handle; we swallow the
-  // result because the user-visible state is already consistent.
+  // Cancel handler for the threshold overlay. Bumps `fetchIdRef` so the
+  // in-flight resolve is treated as stale, clears `loading` synchronously,
+  // and best-effort calls `cancel_query` (UI is already consistent if the
+  // backend doesn't observe it).
   const handleCancelRefetch = useCallback(() => {
     fetchIdRef.current++;
     setLoading(false);

@@ -4,10 +4,9 @@ import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import type { SafeMode } from "@/lib/safeMode";
 
-// Sprint 189 (D-4) — `SafeMode` type lives in `src/lib/safeMode.ts` so the
-// pure decision matrix (`decideSafeModeAction`) can reference it without
-// pulling a store dep into the lib layer. Re-exported here for backward
-// compat with existing `import { SafeMode } from "@stores/safeModeStore"`.
+// `SafeMode` type lives in `src/lib/safeMode.ts` so the pure decision
+// matrix can reference it without dragging a store dep into the lib
+// layer. Re-exported here for the existing import path.
 export type { SafeMode };
 
 export interface SafeModeState {
@@ -18,9 +17,8 @@ export interface SafeModeState {
 
 export const SAFE_MODE_STORAGE_KEY = "view-table.safeMode";
 
-// Sprint 186 — toggle order strict → warn → off → strict.
-// Going strict→off in one click would silently disable the production
-// guard; the warn step forces the user past an intermediate state.
+// Toggle order strict → warn → off → strict. The warn step is mandatory:
+// going strict→off in one click would silently disable the guard.
 const NEXT_MODE: Record<SafeMode, SafeMode> = {
   strict: "warn",
   warn: "off",
@@ -43,9 +41,8 @@ export const useSafeModeStore = create<SafeModeState>()(
 );
 
 /**
- * Sprint 185 — cross-window broadcast allowlist for safe-mode store.
- * Only `mode` is sync-safe. Functions (`setMode`, `toggle`) are local
- * actions and must never be broadcast.
+ * Cross-window broadcast allowlist. Only `mode` is sync-safe; the
+ * action functions are local and must never be broadcast.
  */
 export const SYNCED_KEYS: ReadonlyArray<keyof SafeModeState> = [
   "mode",

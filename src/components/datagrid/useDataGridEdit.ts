@@ -512,8 +512,8 @@ export function useDataGridEdit({
 
   const handleDiscard = useCallback(() => {
     clearAllPending();
-    // Sprint 86 / 93 / 186 — preview / commitError / pendingConfirm 4개를
-    // resetPreviewState 한 번으로 처리. discard 가 새 commit 의 baseline.
+    // Discard is the baseline for the next commit cycle — also reset
+    // preview / commitError / pendingConfirm in one call.
     resetPreviewState();
   }, [clearAllPending, resetPreviewState]);
 
@@ -556,19 +556,15 @@ export function useDataGridEdit({
     pendingEdits.size > 0 ||
     pendingNewRows.length > 0 ||
     pendingDeletedRowKeys.size > 0 ||
-    // Sprint 86 — the document paradigm parks its dispatch payload in
-    // `mqlPreview` until the user confirms the preview modal. Treat an
-    // open preview with pending commands as "changes still pending" so
-    // the commit button / Cmd+S shortcut stay enabled.
+    // The document paradigm parks its dispatch payload in `mqlPreview`
+    // until the user confirms — treat an open preview with pending
+    // commands as still-pending so commit / Cmd+S stay enabled.
     (mqlPreview !== null && mqlPreview.commands.length > 0);
 
-  // Sprint 97 — publish the active tab's dirty state to the tabStore. We
-  // narrow the dirty signal to the three pending diff fields the contract
-  // calls out (`pendingEdits`, `pendingNewRows`, `pendingDeletedRowKeys`)
-  // so an open MQL preview alone does NOT mark the tab dirty — the modal
-  // itself acts as the user's commit affordance for that branch. On unmount
-  // (tab switch) we clear the marker so a stale entry can't survive the
-  // grid teardown.
+  // Publish the active tab's dirty state to the tabStore. The dirty signal
+  // is narrowed to the three pending diff fields — an open MQL preview
+  // alone does not mark the tab dirty, since the modal is its own commit
+  // affordance. Cleared on unmount so a stale marker can't outlive the grid.
   useEffect(() => {
     if (!activeTabId) return;
     const isDirty =
@@ -592,16 +588,14 @@ export function useDataGridEdit({
   // existing. Otherwise the dispatch is silently ignored (idempotent).
   useEffect(() => {
     const handler = () => {
-      // Sprint 98 — dirty 0 path. The user pressed Cmd+S with nothing pending;
-      // the previous behaviour (silent no-op) was inscrutable, so we surface a
-      // toast indicator. We deliberately skip flashing here — the toast itself
-      // is the user-facing feedback and a brief spinner on top would be noise.
+      // Cmd+S with nothing pending → toast instead of a silent no-op (the
+      // silent path was inscrutable). No flash — the toast is the feedback.
       if (!hasPendingChanges) {
         toast.info("No changes to commit");
         return;
       }
-      // Sprint 98 — flip the flash flag at the entry of the event handler so
-      // the spinner shows BEFORE handleCommit (which also flips the flag —
+      // Flip the flash flag at the entry of the event handler so the spinner
+      // shows BEFORE handleCommit (which also flips the flag —
       // the duplicate flip is intentionally idempotent and just resets the
       // 400ms safety timer).
       beginCommitFlash();

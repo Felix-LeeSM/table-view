@@ -9,7 +9,7 @@ import type {
 import * as tauri from "@lib/tauri";
 
 /**
- * Zustand store backing the document paradigm (Sprint 66 P0 read path).
+ * Zustand store backing the document paradigm read path.
  *
  * Mirrors the `schemaStore` keying convention:
  *   - `databases` is keyed by `connectionId`.

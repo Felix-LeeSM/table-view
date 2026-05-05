@@ -3,43 +3,25 @@ import type { Paradigm } from "@/types/connection";
 import type { QueryMode } from "@stores/tabStore";
 
 /**
- * Sprint 84 — persist paradigm metadata alongside every executed query.
- *
- * The `paradigm` / `queryMode` fields are declared **required** so consumers
- * can read them without optional-chaining, but `addHistoryEntry` accepts the
- * payload with those fields optional and defaults them to `"rdb"` / `"sql"`
- * inside the store. This keeps legacy call sites and any future persisted
- * (pre-Sprint 84) entries safe: the store normalises at the write boundary,
- * and selectors in `filteredGlobalLog` defensively normalise again on read
- * in case the store was seeded directly with legacy shapes (e.g. via
- * `set({entries: [...]})` in tests or, later, via a localStorage migration
- * layer).
- */
-/**
- * Sprint 180 (AC-180-03) — `"cancelled"` widens the status union so a
- * user-aborted query records distinctly from success/error. Existing
- * `"success" | "error"` callers continue to compile because the new
- * union is a strict superset; the rendering branches in QueryLog /
- * GlobalQueryLogPanel surface a calm muted treatment for the new
- * variant per the spec Visual Direction ("calm secondary, not
- * destructive").
+ * `"cancelled"` widens the status so a user-aborted query records
+ * distinctly from success/error. The QueryLog / GlobalQueryLogPanel
+ * render branches surface a calm muted treatment for it.
  */
 export type QueryHistoryStatus = "success" | "error" | "cancelled";
 
 /**
- * Sprint 196 (FB-5b) — origin of the recorded query/operation. Lets the
- * UI distinguish a raw query the user typed from a generated SQL emitted
- * by another surface (grid commit, DDL editor, mongo-specific op). Legacy
- * entries (pre-Sprint 196) lack this field and are normalised to `"raw"`.
+ * Origin of the recorded query/operation. Lets the UI distinguish a raw
+ * query the user typed from generated SQL emitted by another surface.
  *
- * - `raw`            — user-typed SQL / MQL ran from the QueryTab editor.
- * - `grid-edit`      — DataGrid pending-edit commit (RDB executeQueryBatch
- *                     or Mongo dispatchMqlCommand loop) + EditableQueryResultGrid
- *                     inline edits on raw query results.
- * - `ddl-structure`  — StructurePanel editors (Columns / Indexes /
- *                     Constraints) + SchemaTree drop-table context menu.
- * - `mongo-op`       — Mongo-specific direct operations that bypass the
- *                     grid pending pipeline (e.g. Add Document modal).
+ * - `raw`            — user-typed SQL / MQL from the QueryTab editor.
+ * - `grid-edit`      — DataGrid pending-edit commit (RDB batch / Mongo
+ *                     dispatchMqlCommand) + EditableQueryResultGrid edits.
+ * - `ddl-structure`  — StructurePanel editors + SchemaTree drop-table.
+ * - `mongo-op`       — Mongo-specific direct ops that bypass the grid
+ *                     pending pipeline (e.g. Add Document modal).
+ *
+ * Optional on the type because legacy fixtures and persisted entries
+ * may lack the field; the write/read paths normalise to `"raw"`.
  */
 export type QueryHistorySource =
   | "raw"
@@ -63,12 +45,10 @@ export interface QueryHistoryEntry {
   /** MongoDB collection name when the entry originated from a document paradigm tab. */
   collection?: string;
   /**
-   * Sprint 196 (FB-5b) — origin of the entry. Optional on the type so legacy
-   * fixtures / persisted entries (pre-Sprint 196) keep compiling. Stored
-   * shape via `addHistoryEntry` is always populated to `"raw"` (default)
-   * when the caller omits it. Read sites should default with `?? "raw"` for
-   * defensive normalisation when reading directly from the raw `entries`
-   * array (bypassing `filteredGlobalLog`).
+   * Origin of the entry. Optional on the type for legacy compatibility;
+   * `addHistoryEntry` always populates to `"raw"` when the caller omits
+   * it. Direct readers of `entries` (bypassing `filteredGlobalLog`)
+   * should default with `?? "raw"` defensively.
    */
   source?: QueryHistorySource;
 }
@@ -76,9 +56,9 @@ export interface QueryHistoryEntry {
 const MAX_GLOBAL_LOG = 500;
 
 /**
- * Payload shape accepted by `addHistoryEntry`. Paradigm / queryMode are
- * optional on the payload and defaulted inside the store so Sprint 83-era
- * callers (which don't yet pass paradigm metadata) continue to compile.
+ * Payload shape accepted by `addHistoryEntry`. `paradigm` / `queryMode`
+ * are optional on input and defaulted inside the store so legacy call
+ * sites (without paradigm metadata) continue to compile.
  */
 type AddHistoryEntryPayload = Omit<
   QueryHistoryEntry,
@@ -107,18 +87,14 @@ interface QueryHistoryState {
 let historyCounter = 0;
 
 /**
- * Normalise a single entry to the current shape. Legacy entries may be
- * seeded directly into the store (tests, future persisted migration) without
- * the paradigm / queryMode fields — we fill them with the pre-Sprint 84
- * defaults (`"rdb"` / `"sql"`) so downstream consumers can treat the fields
- * as required.
+ * Normalise a single entry to the current shape. Legacy entries (tests,
+ * future persisted migration) may lack `paradigm` / `queryMode` /
+ * `source`; default them to `"rdb"` / `"sql"` / `"raw"` so downstream
+ * consumers can treat the fields as required.
  */
 function normaliseEntry(entry: QueryHistoryEntry): QueryHistoryEntry {
   const paradigm: Paradigm = entry.paradigm ?? "rdb";
   const queryMode: QueryMode = entry.queryMode ?? "sql";
-  // Sprint 196 — `source` is required on the current shape but legacy
-  // persisted entries / entries seeded directly via `set({entries:...})` in
-  // tests may lack it. Default to `"raw"` to stay safe.
   const source: QueryHistorySource = entry.source ?? "raw";
   if (entry.paradigm && entry.queryMode && entry.source) return entry;
   return { ...entry, paradigm, queryMode, source };

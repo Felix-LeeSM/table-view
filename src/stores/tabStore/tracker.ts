@@ -1,22 +1,14 @@
 /**
- * Sprint 208 — per-connection "last active tab" tracker.
+ * Per-connection "last active tab" tracker. Powers the
+ * connection-swap fallback chain (last active tab → first tab → new
+ * query tab) used by Quick Open and similar surfaces.
  *
- * Extracted from the 1009-line `tabStore.ts` god file. Originally
- * introduced in Sprint 127 for the (now-removed in S134) `<ConnectionSwitcher>`
- * graceful-fallback chain (last active tab → first tab → new query tab).
- * The tracker is kept because the same fallback chain is still useful for
- * future connection-swap surfaces (Quick Open scoped jumps, etc.) and
- * removing it now would force a re-introduction.
+ * Deliberately a module-scoped `Map`, not a zustand slice — the value
+ * is session-only and must not persist, and keeping it off the public
+ * store API stops external code from depending on it.
  *
- * Implementation note: this is deliberately a module-scoped `Map`, **not**
- * a zustand-persisted slice. The contract for sprint 127 explicitly
- * forbids persisting the value (it is "last active in this session" only),
- * and a plain Map keeps the public store API of `useTabStore` unchanged.
- *
- * To avoid a circular dependency with the entry `tabStore` module (which
- * imports `recordActiveTab` from this file to wire the subscriber), the
- * tracker accepts a `tabsAccessor` injection at init time — the entry
- * passes `() => useTabStore.getState().tabs`.
+ * Init takes a `tabsAccessor` callback to dodge the circular dep that
+ * would otherwise form between this file and the `tabStore` entry.
  */
 import type { Tab } from "./types";
 

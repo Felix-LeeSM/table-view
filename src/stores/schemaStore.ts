@@ -77,8 +77,8 @@ interface SchemaState {
     sql: string,
     queryId: string,
   ) => Promise<QueryResult>;
-  // Sprint 183 — batch variant that runs all statements inside a single
-  // BEGIN/COMMIT transaction. All-or-nothing.
+  // Batch variant that runs all statements inside a single BEGIN/COMMIT
+  // transaction. All-or-nothing.
   executeQueryBatch: (
     connectionId: string,
     statements: string[],
@@ -92,22 +92,17 @@ interface SchemaState {
   ) => Promise<void>;
   clearSchema: (connectionId: string) => void;
   /**
-   * Sprint 130 — drop every cached schema/table/view/function/column
-   * entry for `connectionId` so the sidebar re-fetches against whatever
-   * database the active sub-pool is now pointed at. Called after a
-   * successful `switchActiveDb` dispatch from `<DbSwitcher>`. Same
-   * semantics as `clearSchema` but kept as a separate name so the call
-   * site reads "we're switching DBs" instead of "we're disconnecting"
-   * — the two callers can diverge in Phase 9 (e.g. partial cache
-   * eviction) without touching disconnect-side code.
+   * Drop every cached schema/table/view/function/column entry for
+   * `connectionId`. Same semantics as `clearSchema` but the separate
+   * name lets callers communicate "DB switched" vs "disconnected" so
+   * the two paths can diverge later without churn.
    */
   clearForConnection: (connectionId: string) => void;
   /**
-   * Sprint 191 (AC-191-01) — drop the cached `tables` / `views` /
-   * `functions` entries for a single (connectionId, schemaName) pair so
-   * the next `loadTables` / `loadViews` / `loadFunctions` call hits the
-   * backend. Replaces the SchemaTree-side direct `useSchemaStore.setState`
-   * mutation that was leaking cache-shape knowledge into the UI layer.
+   * Drop cached `tables` / `views` / `functions` for one
+   * (connectionId, schemaName) pair so the next list-call hits the
+   * backend. Encapsulates cache-shape knowledge that would otherwise
+   * leak into UI-side `setState` calls.
    */
   evictSchemaForName: (connectionId: string, schemaName: string) => void;
   prefetchSchemaColumns: (
@@ -117,10 +112,9 @@ interface SchemaState {
 }
 
 /**
- * Internal helper — drops every cache entry keyed by `connectionId` from
- * the schema store state. Used by both `clearSchema` (legacy callers,
- * disconnect path) and `clearForConnection` (Sprint 130 — DB switch path)
- * so the cache eviction stays single-sourced.
+ * Drop every cache entry keyed by `connectionId`. Single-sourced so
+ * `clearSchema` (disconnect path) and `clearForConnection` (DB switch)
+ * can't drift in eviction behaviour.
  */
 function clearConnectionEntries(
   state: Pick<
@@ -331,10 +325,8 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   },
 
   clearForConnection: (connectionId) => {
-    // Sprint 130 — alias kept separate from `clearSchema` so callers
-    // and tests can communicate intent ("DB switched"). The mutation
-    // body is identical today; we keep both wired through the same
-    // helper to avoid behavioural drift.
+    // Identical body to `clearSchema` today; the two names stay separate
+    // so callers can communicate intent ("DB switched" vs "disconnected").
     set((state) => clearConnectionEntries(state, connectionId));
   },
 

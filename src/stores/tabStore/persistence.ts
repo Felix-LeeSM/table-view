@@ -1,17 +1,14 @@
 /**
- * Sprint 208 — `tabStore` persistence helpers + cross-store db lookup.
- *
- * Extracted from the 1009-line `tabStore.ts` god file. Owns:
+ * `tabStore` persistence helpers + cross-store db lookup.
  *   - `STORAGE_KEY` + raw `persistTabs` write + 200ms debounced wrapper.
- *   - `migrateLoadedTabs` — Sprint 73/76/129 schema migrations applied at
- *     load time so downstream consumers always see normalized tabs.
- *   - `resolveActiveDb` — `connectionStore` lookup for the active sub-pool
- *     database (used by `addTab` / `addQueryTab` autofill paths).
+ *   - `migrateLoadedTabs` — schema migrations applied at load time so
+ *     downstream consumers always see normalized tabs.
+ *   - `resolveActiveDb` — `connectionStore` lookup for the active
+ *     sub-pool database (used by `addTab` / `addQueryTab` autofill).
  *
- * `useConnectionStore` cross-store import is preserved with the existing
- * `eslint-disable no-restricted-imports` exemption — Sprint 196 lint rule
- * scope. Removing the cross-store dependency is a separate sprint
- * candidate (see the in-tabStore TODO at the entry module).
+ * The `useConnectionStore` cross-store import keeps its
+ * `no-restricted-imports` exemption — removing the dependency is out of
+ * scope here.
  */
 import type { Paradigm } from "@/types/connection";
 /* eslint-disable no-restricted-imports */
@@ -42,16 +39,10 @@ export function debouncePersist(tabs: Tab[], activeTabId: string | null): void {
 }
 
 /**
- * Sprint 130 — resolve the active database for `connectionId`.
- *
- * Reads `connectionStore.activeStatuses[id].activeDb` first (set by
- * `setActiveDb` after a successful `switchActiveDb` dispatch), falling back
- * to the connection's stored default `database` when there is no live
- * `activeDb` yet (e.g. tab opened before the user switched DBs at all).
- *
- * Returns `undefined` when the connection isn't in the store — opening a
- * tab against an unknown id is a programmer error, but we don't want to
- * crash the tab creation path.
+ * Resolve the active database for `connectionId`. Prefers the live
+ * `activeDb` set by `switchActiveDb`; falls back to the connection's
+ * stored default `database`. Returns `undefined` when the connection is
+ * unknown rather than throwing — keeps the tab creation path crash-free.
  */
 export function resolveActiveDb(connectionId: string): string | undefined {
   const conn = useConnectionStore.getState();
@@ -63,22 +54,18 @@ export function resolveActiveDb(connectionId: string): string | undefined {
 }
 
 /**
- * Sprint 73 / 76 / 129 schema migrations applied at load time so downstream
- * consumers always see normalized tabs:
+ * Schema migrations applied at load time so downstream consumers always
+ * see normalized tabs:
+ *   - Legacy `QueryTab` defaults `paradigm` to `"rdb"` and `queryMode`
+ *     to `"sql"` — every legacy tab targeted SQL on RDB.
+ *   - Legacy `TableTab` defaults `sorts` to `[]` so consumers can drop
+ *     the `undefined` guard.
+ *   - Legacy document tabs stored Mongo db/collection in `schema`/
+ *     `table`; backfill the dedicated `database`/`collection` fields
+ *     when missing (idempotent — keeps existing values).
  *
- *   - Sprint 73: legacy `QueryTab`s lacked `paradigm`/`queryMode` fields.
- *     Default to `"rdb"` + `"sql"` (matches user expectations — every
- *     legacy tab targeted SQL on RDB).
- *   - Sprint 76: legacy `TableTab`s lacked `sorts`. Default to `[]` so
- *     `DataGrid` / `DataGridTable` / `fetchData` consumers can drop the
- *     `undefined` guard.
- *   - Sprint 129: document tabs persisted before this sprint stored the
- *     MongoDB database/collection in `schema`/`table` (RDB aliasing).
- *     Backfill the new dedicated `database`/`collection` fields when
- *     missing. Idempotent — keeps existing values.
- *
- * Also resets every `QueryTab.queryState` to `idle` since running queries
- * cannot be resumed across reloads.
+ * Also resets every `QueryTab.queryState` to `idle` since in-flight
+ * queries can't be resumed across reloads.
  */
 export function migrateLoadedTabs(rawTabs: Tab[]): Tab[] {
   return rawTabs.map((t) => {

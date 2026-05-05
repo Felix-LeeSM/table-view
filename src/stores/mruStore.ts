@@ -3,32 +3,27 @@ import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 
 /**
- * Sprint 166 — MRU entry representing a single recently-used connection.
- *
- * `lastUsed` is a `Date.now()` epoch ms timestamp so the launcher's "Recent"
- * rail can render relative-time labels ("2 min ago") without querying the
+ * MRU entry. `lastUsed` is a `Date.now()` epoch ms so the launcher's
+ * "Recent" rail can render relative-time labels without querying the
  * connection store.
  */
 export interface MruEntry {
   connectionId: string;
-  lastUsed: number; // Date.now() timestamp
+  lastUsed: number;
 }
 
 /**
- * Sprint 119 (#SHELL-1) — MRU (most-recently-used) connection store.
+ * Most-recently-used connection store. Tracks the connections the user
+ * most recently engaged with (signal: `addTab` / `addQueryTab` callers).
+ * Consumed by `MainArea`'s EmptyState so the New Query CTA defaults to
+ * the connection the user actually cares about.
  *
- * Tracks the connections the user most recently engaged with (signal:
- * `addTab` / `addQueryTab` from `tabStore`). Consumed by `MainArea`'s
- * EmptyState so the New Query CTA defaults to the connection the user
- * actually cares about, not just the first one in the list.
+ * Holds an ordered list of up to 5 entries. `lastUsedConnectionId` is a
+ * derived view of `recentConnections[0]` kept for backward compat.
  *
- * Sprint 166 — expanded from a single `lastUsedConnectionId` to an ordered
- * list of up to 5 entries (`recentConnections`). The legacy field is kept as
- * a derived read for backward compatibility.
- *
- * Persistence follows the same hand-rolled localStorage pattern as
- * `favoritesStore` — no zustand persist middleware, so the codebase has a
- * single, predictable persistence shape.
+ * Hand-rolled localStorage persistence (no zustand persist middleware) so
+ * the codebase shares a single predictable persistence shape with
+ * `favoritesStore`.
  */
 
 const STORAGE_KEY = "table-view-mru";
@@ -44,15 +39,12 @@ function persistMruList(entries: MruEntry[]): void {
 }
 
 /**
- * Load persisted MRU entries from localStorage.
+ * Load persisted MRU entries. Handles two formats:
+ *  1. New: JSON array of `MruEntry` objects.
+ *  2. Legacy: a plain connection-id string written via `setItem(key, id)`.
  *
- * Sprint 166 — handles two formats:
- *  1. New format: JSON array of `MruEntry` objects.
- *  2. Legacy format (Sprint 119): a plain connection-id string.
- *
- * Migration is transparent — if the stored value is a plain string, it is
- * converted to a single-element list with `lastUsed: Date.now()`. The next
- * write persists the new format, completing the migration.
+ * Migration is transparent — a plain string becomes a single-entry list
+ * with `lastUsed: Date.now()`, and the next write persists the new shape.
  */
 function loadPersistedMruList(): MruEntry[] {
   if (typeof window === "undefined") return [];
@@ -64,15 +56,15 @@ function loadPersistedMruList(): MruEntry[] {
       if (Array.isArray(parsed)) {
         return parsed.slice(0, MAX_ENTRIES);
       }
-      // Legacy format (Sprint 119): JSON-quoted string (e.g. `"c1"`).
+      // Legacy format: JSON-quoted string (e.g. `"c1"`).
       if (typeof parsed === "string" && parsed.length > 0) {
         return [{ connectionId: parsed, lastUsed: Date.now() }];
       }
       return [];
     } catch {
-      // Legacy format (Sprint 119): unquoted plain string (e.g. `c1`).
-      // `JSON.parse("c1")` throws because bare identifiers are not valid
-      // JSON — the old store wrote the id verbatim via `setItem(key, id)`.
+      // Legacy format: unquoted plain string. `JSON.parse("c1")` throws
+      // because bare identifiers aren't valid JSON — the old store wrote
+      // the id verbatim via `setItem(key, id)`.
       if (raw.length > 0) {
         return [{ connectionId: raw, lastUsed: Date.now() }];
       }
@@ -93,22 +85,9 @@ interface MruState {
 }
 
 /**
- * Sprint 166 — cross-window broadcast allowlist.
- *
- * Why `lastUsedConnectionId` is synced:
- *  - The launcher's "Recent" rail and the workspace's EmptyState CTA both
- *    read this value to highlight / default-target the connection the user
- *    most recently engaged with. Without sync, opening a tab in the
- *    workspace would leave the launcher's rail stale (and vice versa).
- *  - The value is a plain `string | null` — JSON-stable and free of
- *    secrets (it's just a connection id, not a credential).
- *
- * Why `recentConnections` is synced (Sprint 166):
- *  - The launcher's recent-connections list should reflect actions taken in
- *    any window. Without sync, opening a tab in the workspace would not
- *    surface that connection in the launcher's "Recent" section.
- *  - The value is a JSON array of `{ connectionId, lastUsed }` —
- *    JSON-serializable and free of secrets.
+ * Cross-window broadcast allowlist. Both keys must stay in sync between
+ * launcher and workspace so a tab opened in either window updates the
+ * other's "Recent" rail. Both shapes are JSON-stable and free of secrets.
  */
 export const SYNCED_KEYS: ReadonlyArray<keyof MruState> = [
   "lastUsedConnectionId",
@@ -149,16 +128,10 @@ export const useMruStore = create<MruState>((set) => ({
 }));
 
 /**
- * Sprint 153 — opt the MRU store into the Sprint 151 bridge so launcher
- * and workspace observe the same `lastUsedConnectionId`. Attached ONCE
- * at module load (mirrors `connectionStore`'s pattern). Symmetric: both
- * windows attach unconditionally — either side may mark a connection
- * used and the other should see the result.
- *
- * `originId` falls back to `"unknown"` when the Tauri window label is
- * unavailable (vitest jsdom). Sprint 152 evaluator advisory #1 — using
- * `"unknown"` instead of `"test"` keeps the loop guard distinct between
- * any future stores that share a fallback in the same process.
+ * Symmetric attach — both launcher and workspace listen and broadcast
+ * (either side may mark a connection used). `originId` falls back to
+ * `"unknown"` rather than `"test"` so the loop guard stays distinct from
+ * any future stores that share the fallback in the same process.
  */
 void attachZustandIpcBridge<MruState>(useMruStore, {
   channel: "mru-sync",

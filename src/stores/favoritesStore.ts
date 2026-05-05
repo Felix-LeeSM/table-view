@@ -63,18 +63,9 @@ interface FavoritesState {
 }
 
 /**
- * Sprint 153 — cross-window broadcast allowlist for the favorites store.
- *
- * Why `favorites` is synced:
- *  - User-curated query collection — must converge across launcher and
- *    workspace so adding a favorite in one window appears in the other
- *    without a manual reload.
- *  - Plain JSON-serializable: array of `FavoriteQuery` objects with only
- *    string/number/null fields.
- *  - Free of secrets: the SQL body may reference connection ids but
- *    carries no credentials.
- *
- * No keys are excluded — the store has a single piece of shared state.
+ * Cross-window broadcast allowlist. Only `favorites` is shared so a
+ * favorite added in either window converges the other. Plain JSON; the
+ * SQL body may reference connection ids but carries no credentials.
  */
 export const SYNCED_KEYS: ReadonlyArray<keyof FavoritesState> = [
   "favorites",
@@ -148,12 +139,9 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
 }));
 
 /**
- * Sprint 153 — opt the favorites store into the Sprint 151 bridge so
- * launcher and workspace observe the same `favorites` array. Symmetric:
- * adding/removing/updating a favorite from either window converges the
- * other. Persistence to localStorage is window-local (each window writes
- * its own `table-view-favorites` entry on every state change), which is
- * fine — both copies converge to the same content.
+ * Symmetric attach. Persistence to localStorage is window-local (each
+ * window writes its own entry on every change) — both copies converge
+ * to the same content via the bridge.
  */
 void attachZustandIpcBridge<FavoritesState>(useFavoritesStore, {
   channel: "favorites-sync",

@@ -45,12 +45,10 @@ interface ConnectionState {
   /** Hydrate focusedConnId + activeStatuses from session-scoped localStorage. */
   hydrateFromSession: () => void;
   /**
-   * Sprint 130 — record the active database for the connection. The action
-   * is a no-op when the connection isn't currently in the `connected`
-   * variant: an `activeDb` only makes sense alongside a live adapter pool.
-   * UI callers (DbSwitcher) call this on a successful `switchActiveDb`
-   * dispatch so the trigger label updates immediately and any tab that
-   * reads `activeDb` next reflects the new context.
+   * Record the active database for the connection. No-op when the
+   * connection isn't in the `connected` variant — `activeDb` only makes
+   * sense alongside a live adapter pool. Callers (DbSwitcher) invoke
+   * this on a successful `switchActiveDb` dispatch.
    */
   setActiveDb: (id: string, dbName: string) => void;
   addGroup: (group: ConnectionGroup) => Promise<ConnectionGroup>;
@@ -76,40 +74,19 @@ function pickFallbackFocus(
 }
 
 /**
- * Sprint 152 — cross-window broadcast allowlist.
+ * Cross-window broadcast allowlist. Widening this list is a deliberate
+ * audit step — regression-locked in the store's test so secrets can't be
+ * silently broadcast.
  *
- * Top-level keys of {@link ConnectionState} that the launcher and workspace
- * windows MUST share via {@link attachZustandIpcBridge} on the
- * `"connection-sync"` channel. New keys default to "window-local"; widening
- * this list is a deliberate audit step (regression-locked in
- * `connectionStore.test.ts` so a future contributor cannot silently
- * broadcast a sensitive field).
+ *  - `connections`, `groups` — durable, user-visible state both windows
+ *    render. Backend redacts passwords via `has_password: boolean`
+ *    before populating `connections`, so the synced array is secret-free.
+ *  - `activeStatuses` — workspace owns the live pool; launcher reads it
+ *    so it never offers to connect what the workspace already owns.
+ *  - `focusedConnId` — drives which connection the workspace operates on;
+ *    a launcher double-click must focus the workspace's view too.
  *
- * Why these four:
- *  - `connections` — the durable connection list. Both windows render it
- *    (launcher in the gallery, workspace in the sidebar / DbSwitcher).
- *  - `groups` — same rationale as `connections`; mirrors the user-visible
- *    group tree across both surfaces.
- *  - `activeStatuses` — load-bearing for AC-141-3. The workspace owns the
- *    backend pool ("connected" branch); the launcher needs to read this so
- *    it never offers to "connect" a connection the workspace already owns.
- *  - `focusedConnId` — drives which connection the workspace's schema tree
- *    and "+ Query" button operate on. Without sync, double-click on the
- *    launcher would not focus the workspace's view of the same connection.
- *
- * Why other keys are EXCLUDED:
- *  - `loading` — transient, in-flight indicator for `loadConnections()`. A
- *    workspace render-while-launcher-is-loading would otherwise see a
- *    spurious spinner. Window-local UX flag.
- *  - `error` — last-error string for THIS window's `loadConnections /
- *    loadGroups`. Cross-window broadcast would replay another window's
- *    error in this one's UI. Window-local.
- *  - Connection passwords live INSIDE `connections[i]` — the backend
- *    redacts them via `has_password: boolean` before they reach the store
- *    (see `ConnectionConfig` type), so the synced `connections` array is
- *    already password-free. The exclusion of `loading` / `error` here is
- *    the secondary line; the primary "no secrets on the wire" defense is
- *    the backend's redaction.
+ * Excluded: `loading` / `error` are window-local UX flags.
  */
 export const SYNCED_KEYS: ReadonlyArray<keyof ConnectionState> = [
   "connections",
@@ -150,9 +127,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set((state) => ({
       connections: [...state.connections, saved],
     }));
-    // Sprint 94 — surface CRUD success so the user has confirmation that the
-    // dialog "Save" actually persisted. AC-04. The toast lives outside the
-    // dialog portal so it survives `onClose()`.
+    // Toast lives outside the dialog portal so it survives `onClose()`.
     toast.success(`Connection "${saved.name}" added.`);
     return saved;
   },
@@ -164,7 +139,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         c.id === saved.id ? saved : c,
       ),
     }));
-    // Sprint 94 — AC-04: connection-update success toast.
     toast.success(`Connection "${saved.name}" updated.`);
   },
 
@@ -193,7 +167,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         focusedConnId: newFocused,
       };
     });
-    // Sprint 94 — AC-04: connection-remove success toast.
     toast.success(
       removed ? `Connection "${removed.name}" removed.` : "Connection removed.",
     );
@@ -340,30 +313,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 }));
 
 /**
- * Sprint 152 — opt the connection store into the Sprint 151 bridge so
- * launcher and workspace observe the same `connections` / `groups` /
- * `activeStatuses` / `focusedConnId`. Attached ONCE at module load (not
- * lazily) so both windows' runtimes auto-attach symmetrically — a lazy
- * attach risks one window starting attached and the other not.
- *
- * `originId` derives from the live Tauri window label so the bridge's
- * loop guard works deterministically across the two real windows. In
- * vitest jsdom there is no Tauri runtime, so `getCurrentWindowLabel()`
- * returns `null`; we fall back to `"test"` so unit tests still attach a
- * deterministic id (each test file's `vi.mock("@lib/window-label")` can
- * override this for cross-window scenarios).
- *
- * The dispose function is intentionally not retained — the bridge lives
- * for the lifetime of the renderer process. Tests that need a clean slate
- * reset the store via `useConnectionStore.setState({...})` (see
- * `connectionStore.test.ts beforeEach`).
- *
- * The returned Promise is not awaited because a synchronous module-load
- * site cannot await; outbound emits work correctly without it (the store
- * subscription is synchronous), and inbound events that arrive before
- * `listen` settles are simply not yet observable — the launcher and
- * workspace both go through this same race window, so net behavior
- * converges on the next mutation.
+ * Symmetric module-load attach. Both windows attach unconditionally so
+ * neither starts unattached. `originId` falls back to `"test"` under
+ * vitest (jsdom has no Tauri window label); tests override per-file via
+ * `vi.mock("@lib/window-label")`. The dispose handle is intentionally
+ * unretained — the bridge lives the renderer's lifetime.
  */
 void attachZustandIpcBridge<ConnectionState>(useConnectionStore, {
   channel: "connection-sync",

@@ -1,22 +1,16 @@
 /**
- * Sprint 208 — `tabStore` entry. 1009-line god file 를 4-way split.
- *
- * Sub-files:
+ * `tabStore` entry. Composes three sub-files:
  *   - `tabStore/types.ts` — Tab union types + `TabState` interface.
- *   - `tabStore/persistence.ts` — STORAGE_KEY + persist helpers + Sprint
- *     73/76/129 migrations + `resolveActiveDb` cross-store lookup.
- *   - `tabStore/tracker.ts` — per-connection last-active-tab tracker
- *     (`initTracker` injection + `recordActiveTab` /
- *     `getLastActiveTabIdForConnection` / `__resetLastActiveTabsForTests`).
+ *   - `tabStore/persistence.ts` — STORAGE_KEY, persist helpers,
+ *     migrations, and the `resolveActiveDb` cross-store lookup.
+ *   - `tabStore/tracker.ts` — per-connection last-active-tab tracker.
  *
- * Entry retains: zustand `create()` + all actions, persist subscribe, IPC
- * bridge attach (workspace-only), `useActiveTab` selector, tracker init +
- * subscribe. 51 외부 caller import 경로 보존 (entry-pattern).
+ * Entry retains: zustand `create()` + all actions, persist subscribe,
+ * IPC bridge attach (workspace-only), `useActiveTab` selector, tracker
+ * init + subscribe.
  *
- * Sprint 212 — cross-store coupling 제거. mru / query-history store 의 직접
- * import 가 사라지고 MRU marking 책임은 16 caller 로, query history recording
- * 책임은 `useQueryExecution.ts` 8 call site 로 이동. tabStore 는 tab list
- * mutation 만 책임지며 store 간 의존이 단방향이 된다.
+ * Cross-store coupling is intentionally one-way: this store owns tab list
+ * mutation only; MRU marking and query-history recording are caller-side.
  */
 import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
@@ -33,15 +27,10 @@ import type {
   TabObjectKind,
   QueryMode,
 } from "./tabStore/types";
-// Sprint 208 — same-store sub-files (entry-pattern split). The
-// "store 파일끼리 import 금지" rule targets cross-store coupling, but the
-// `./*Store` glob also matches `./tabStore/persistence` because the rule
-// uses gitignore-style directory matching. The entry of a god-file split
-// is the legitimate composition surface and exists precisely so external
-// callers see a single import path. Sprint 212 removed the cross-store
-// imports above; this block stays because the same-store entry-pattern is
-// unavoidable without an eslint config change (out of scope per Sprint
-// 212 contract).
+// Same-store sub-files. The `./*Store` glob in `no-restricted-imports`
+// matches `./tabStore/persistence` because the rule uses directory-style
+// matching, but the entry-pattern is the legitimate composition point —
+// external callers still import only from `@stores/tabStore`.
 /* eslint-disable no-restricted-imports */
 import {
   STORAGE_KEY,
@@ -88,26 +77,13 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   addTab: (tab) => {
     tabCounter++;
-    // Sprint 119 (#SHELL-1) — opening a tab against a connection is the
-    // strongest signal that the user is "actively working with" it, so MRU
-    // marking fires alongside this action. MainArea's EmptyState reads the
-    // MRU id to decide which connection the New Query CTA should default
-    // to.
-    //
-    // Sprint 212 — the MRU mark call has moved to the 11 `addTab` caller
-    // sites (SchemaTree handlers / DataGrid FK navigate /
-    // DocumentDatabaseTree collection open / App.tsx navigate-table event
-    // handler). The store no longer reaches into the MRU store so the
-    // dependency graph stays unidirectional.
-    // Extract `permanent` before constructing the stored tab shape.
-    // `permanent` is an instruction to addTab (should this tab be
-    // persistent from birth?), not a field stored on the tab itself.
+    // `permanent` is an instruction to addTab, not a field stored on the
+    // tab itself, so strip it before constructing the stored shape.
     const { permanent, ...tabFields } = tab;
-    // Sprint 130 — autofill `database` for new RDB tabs from the active
-    // sub-pool selection. Document tabs already carry their own
-    // `database` (set by callers that know the Mongo db name); we leave
-    // those untouched. We do NOT migrate legacy persisted RDB tabs —
-    // only fresh tabs created via this code path get the autofill.
+    // Autofill `database` for new RDB tabs from the active sub-pool.
+    // Document tabs carry their own `database` (set by callers that know
+    // the Mongo db name); leave those untouched. Legacy persisted RDB
+    // tabs are not migrated — only fresh tabs get the autofill.
     const isRdbTab = (tabFields.paradigm ?? "rdb") === "rdb";
     const tabWithDb: Omit<TableTab, "id" | "isPreview"> =
       isRdbTab && tabFields.database === undefined
@@ -179,9 +155,8 @@ export const useTabStore = create<TabState>((set, get) => ({
       const newHistory = tabToRemove
         ? [tabToRemove, ...state.closedTabHistory].slice(0, 20)
         : state.closedTabHistory;
-      // Sprint 97 — drop the dirty marker when a tab is closed so a stale
-      // entry can never linger after the tab disappears. Only allocate a
-      // new Set when the entry was actually present.
+      // Drop the dirty marker so it can't linger after the tab is gone.
+      // Only allocate a new Set when the entry was actually present.
       const dirtyTabIds = state.dirtyTabIds.has(id)
         ? (() => {
             const next = new Set(state.dirtyTabIds);
@@ -300,29 +275,17 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   addQueryTab: (connectionId, opts = {}) => {
     queryCounter++;
-    // Sprint 119 (#SHELL-1) — see comment in `addTab`. Query tab creation
-    // is an equivalent MRU signal; both paths must mark or the EmptyState
-    // would only update for table-tab opens.
-    //
-    // Sprint 212 — the MRU mark call moved to the 6 `addQueryTab` caller
-    // sites (Cmd+T global shortcut / Sidebar "+ Query" / MainArea EmptyState
-    // CTA / SchemaTree function-source / App.tsx quickopen-function event /
-    // QueryTab `<HistoryPanel onLoad>` wrapper that calls `loadQueryIntoTab`).
-    // `loadQueryIntoTab` itself stays MRU-neutral; its sole production caller
-    // (HistoryPanel restore) wraps the call with `markConnectionUsed`.
     const id = `query-${queryCounter}`;
     const title = `Query ${queryCounter}`;
     const paradigm: Paradigm = opts.paradigm ?? "rdb";
-    // RDB tabs force "sql"; document tabs default to "find" when omitted so
-    // users land on the simpler of the two Mongo modes by default.
+    // RDB tabs force "sql"; document tabs default to "find" so users land
+    // on the simpler of the two Mongo modes.
     const queryMode: QueryMode =
       paradigm === "rdb" ? "sql" : (opts.queryMode ?? "find");
-    // Sprint 130 — autofill `database` for new RDB query tabs. Caller may
-    // explicitly pass `opts.database` (notably for paradigm-aware history
-    // restore that carries the original db); we only synthesise from
-    // activeStatuses when the caller didn't supply one. Document
-    // paradigm tabs keep their existing `opts.database` semantics (the
-    // Mongo db the user picked in the switcher).
+    // Autofill `database` for new RDB query tabs only when the caller
+    // didn't supply one (e.g. paradigm-aware history restore carries its
+    // own db). Document tabs keep `opts.database` as-is (the Mongo db
+    // the user picked in the switcher).
     const database =
       paradigm === "rdb" && opts.database === undefined
         ? resolveActiveDb(connectionId)
@@ -518,11 +481,10 @@ export const useTabStore = create<TabState>((set, get) => ({
     }
 
     // Same paradigm + same connection — stamp the payload onto the active
-    // tab. Per the Sprint 84 execution brief, `database` / `collection`
-    // on the tab are intentionally preserved: the user's current context
-    // (e.g. a Mongo tab focused on a specific collection) should not be
-    // overwritten by the entry's originally-executed collection, which may
-    // differ. Only the editor contents (sql + queryMode) change.
+    // tab. `database` / `collection` are intentionally preserved: the
+    // user's current context (e.g. a Mongo tab focused on a collection)
+    // must not be overwritten by the entry's originally-executed
+    // collection, which may differ. Only sql + queryMode change.
     const targetId = activeTab.id;
     get().updateQuerySql(targetId, sql);
     get().setQueryMode(targetId, queryMode);
@@ -568,7 +530,7 @@ useTabStore.subscribe((state) => {
 });
 
 // ---------------------------------------------------------------------------
-// Last-active-tab tracker wiring (Sprint 127)
+// Last-active-tab tracker wiring
 // ---------------------------------------------------------------------------
 
 initTracker(() => useTabStore.getState().tabs);
@@ -582,29 +544,16 @@ useTabStore.subscribe((state) => {
 });
 
 // ---------------------------------------------------------------------------
-// IPC bridge (Sprint 153)
+// IPC bridge
 // ---------------------------------------------------------------------------
 
 /**
- * Sprint 153 — cross-window broadcast allowlist for the tab store.
- *
- * Why these keys:
- *  - `tabs` — the workspace tab list. Must be identical across workspace
- *    instances so reopening the workspace window doesn't clobber state.
- *    Plain JSON-serializable (TableTab / QueryTab unions of primitives,
- *    arrays, optional records).
- *  - `activeTabId` — the focused tab's id (`string | null`). Required so
- *    the workspace surfaces the same active tab on either side.
- *
- * Why other keys are EXCLUDED:
- *  - `closedTabHistory` — window-local "reopen-last-closed" stack. A user
- *    closing a tab in one window should not surface that tab in another
- *    window's reopen history; that would conflate two timelines.
- *  - `dirtyTabIds` — Set instance, not JSON-serializable. The grid
- *    publisher effect re-marks dirty tabs locally as the user types, so
- *    the value always reflects the local edit buffer; broadcasting it
- *    would be both technically lossy (Set → empty object on the wire)
- *    and semantically wrong (other window's edits aren't this window's).
+ * Cross-window broadcast allowlist. Only `tabs` + `activeTabId` are
+ * synchronized across workspace instances:
+ *  - `closedTabHistory` is window-local — reopen stacks shouldn't blend
+ *    across timelines.
+ *  - `dirtyTabIds` is a `Set` (not JSON-serializable) and reflects the
+ *    local edit buffer; broadcasting would be both lossy and incorrect.
  */
 export const SYNCED_KEYS: ReadonlyArray<keyof TabState> = [
   "tabs",
@@ -612,24 +561,11 @@ export const SYNCED_KEYS: ReadonlyArray<keyof TabState> = [
 ] as const;
 
 /**
- * Sprint 153 — opt the tab store into the Sprint 151 bridge with
- * **workspace-only** semantics. Two reasons we use an attach guard
- * (`getCurrentWindowLabel() === "workspace"`) rather than relying solely
- * on the bridge's loop guard:
- *
- *  1. **No leak into the launcher.** The launcher renders connection
- *     management UI, never the tab bar. If the launcher attached the
- *     bridge, every workspace tab mutation would write into the
- *     launcher's `tabs` field. That has no UI consequence today but is
- *     wasted memory and would surface the moment someone reads
- *     `useTabStore` from a launcher component.
- *
- *  2. **Explicit semantics.** Sprint 154's real-window lifecycle hands
- *     ownership of "tabs" to the workspace exclusively. Encoding that
- *     in the attach point makes the contract reviewable in this file
- *     instead of requiring grep-coverage of every `useTabStore` caller.
- *
- * Sprint 151 bridge primitive: `src/lib/zustand-ipc-bridge.ts`.
+ * Workspace-only attach guard. The launcher renders connection-management
+ * UI, never the tab bar; gating on `getCurrentWindowLabel() === "workspace"`
+ * keeps tab mutations from accumulating in the launcher's mirror, and
+ * encodes "tabs ownership = workspace" at the attach site rather than at
+ * every `useTabStore` caller.
  */
 if (getCurrentWindowLabel() === "workspace") {
   void attachZustandIpcBridge<TabState>(useTabStore, {
@@ -642,19 +578,14 @@ if (getCurrentWindowLabel() === "workspace") {
 }
 
 // ---------------------------------------------------------------------------
-// Selector helpers (Sprint 127)
+// Selector helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Sprint 127 — selector hook returning the currently-active tab object (or
- * `null` when no tab is focused). The lookup runs against `tabs` +
- * `activeTabId` inside the selector so subscribers re-render whenever the
- * active tab changes or the active tab's own fields (paradigm, schema,
- * database, connectionId, …) update — i.e. the toolbar labels stay in sync
- * with the tab without requiring an extra `useEffect`.
- *
- * Returning `null` (rather than `undefined`) keeps the consumer-side
- * narrowing simple (`if (activeTab === null) …`).
+ * Currently-active tab object (or `null` when no tab is focused). The
+ * lookup happens inside the selector so subscribers re-render whenever
+ * either `activeTabId` or the active tab's own fields update — toolbars
+ * stay in sync without an extra `useEffect`.
  */
 export function useActiveTab(): Tab | null {
   return useTabStore((state) => {
