@@ -48,9 +48,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: node_modules/.vite
-          key: vite-${{ hashFiles('vite.config.ts', 'tsconfig.json') }}-${{ hashFiles('src/**/*.ts', 'src/**/*.tsx') }}
+          # Key on config + lockfile only; src 파일 해시는 거의 매 커밋
+          # 변경되어 cache miss 가 거의 100% 였음 (audit m6, 2026-05-05).
+          # restore-keys 로 부분 일치도 허용 → 전혀 다른 src 변경에서도
+          # cache reuse 가능.
+          key: vite-${{ hashFiles('vite.config.ts', 'tsconfig.json', 'package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
-            vite-${{ hashFiles('vite.config.ts', 'tsconfig.json') }}-
+            vite-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
