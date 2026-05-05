@@ -8,43 +8,31 @@ import {
 } from "lucide-react";
 
 /**
- * Sprint 199 — pure helper module extracted from `SchemaTree.tsx` (Sprint 197
- * mongodb.rs entry-pattern 답습 — `SchemaTree.tsx` 가 entry 로 남고 본 파일은
- * 하위 sub-module). React import 0 / store import 0 — 순수 함수 + types
- * 만 export 한다.
- *
- * 책임:
- *   * `getVisibleRows` — schema/category/item nested state 를 flat
- *     `VisibleRow[]` 로 펼친다 (Sprint 115 virtualization 입력).
- *   * `rowCountLabel` / `rowCountText` — DBMS-aware 행수 라벨 (Sprint 143).
- *   * `nodeIdToString` — `NodeId` discriminated union 의 stable string key.
- *   * `CATEGORIES` / `DEFAULT_EXPANDED` / 관련 types — `rows.tsx` /
- *     `useSchemaTreeActions.ts` / `SchemaTree.tsx` 가 import.
+ * Pure helper module for `SchemaTree`. No React or store imports — only
+ * functions + types consumed by `rows.tsx` / `useSchemaTreeActions.ts` /
+ * `SchemaTree.tsx`:
+ *   - `getVisibleRows` flattens nested expansion state to the
+ *     virtualizer's flat row list.
+ *   - `rowCountLabel` / `rowCountText` produce the DBMS-aware row-count
+ *     label and visible text.
+ *   - `nodeIdToString` returns a stable string key for the `NodeId`
+ *     discriminated union.
  */
 
 /**
- * Sprint 137 (AC-S137-03) — DBMS-aware label for the row-count cell in the
- * sidebar. The number rendered next to a table name is an *estimate* on
- * every DBMS we currently support — pulling from `pg_class.reltuples` for
- * PostgreSQL and `information_schema.tables.TABLE_ROWS` for MySQL. SQLite
- * is the lone DBMS where the schema fetch reports an exact COUNT(*),
- * because SQLite has no estimate-only catalog and the file-local COUNT(*)
- * is fast enough at our scale. The same number was rendered without
- * a label prior to S137, which the 2026-04-27 user check found
- * misleading — users assumed it was an exact COUNT(*).
- *
- * Returns the user-facing description text. Both `aria-label` (screen
- * readers) and `title` (native hover tooltip) read from this string so
- * keyboard / mouse / a11y users get the same answer.
+ * DBMS-aware label for the sidebar row-count cell. PG/MySQL report
+ * estimates (`pg_class.reltuples`, `information_schema.tables.TABLE_ROWS`);
+ * SQLite reports an exact COUNT(*) since it has no estimate catalog and
+ * the file-local count is fast enough. Both `aria-label` (screen readers)
+ * and `title` (hover tooltip) read this string.
  */
 export function rowCountLabel(
   dbType: string | undefined,
   rowCount: number | null | undefined,
 ): string {
-  // Sprint 143 (AC-148-2) — SQLite has no estimate catalog and PG/MySQL
-  // can return null when ANALYZE hasn't run yet. In both cases we render
-  // `?` and the long-form copy must reflect that the value isn't known
-  // yet (rather than falsely promising an exact count or estimate).
+  // SQLite reports the exact count synchronously, but `rowCount` may be
+  // null on PG/MySQL when ANALYZE hasn't run yet. Avoid promising a
+  // count we don't have.
   if (dbType === "sqlite" || rowCount == null) {
     return "Exact row count not yet fetched";
   }
@@ -58,13 +46,10 @@ export function rowCountLabel(
 }
 
 /**
- * Sprint 143 (AC-148-1, AC-148-2) — visible row-count text:
- * - `?` when the value is unknown (SQLite always; PG/MySQL when null)
- * - `~12,345` for PG/MySQL non-null estimates (tilde flags it as an
- *   estimate at a glance)
- *
- * The lazy exact-count fetch (AC-148-3, deferred) will eventually
- * replace `~N` / `?` with a bare `N` once the cache hit lands.
+ * Visible row-count text:
+ *   - `?` when unknown (SQLite always; PG/MySQL when null)
+ *   - `~12,345` for PG/MySQL estimates — the tilde flags "estimate" at a
+ *     glance so the user can tell it apart from an exact count.
  */
 export function rowCountText(
   dbType: string | undefined,
@@ -129,37 +114,29 @@ export function nodeIdToString(id: NodeId): string {
 export const DEFAULT_EXPANDED = new Set<CategoryKey>(["tables"]);
 
 /**
- * Sprint-115 (#PERF-2, #TREE-4) — when the flattened "visible rows" list grows
- * past this threshold we hand `<tbody>` rendering off to `useVirtualizer` so
- * the DOM only carries a viewport-sized slice of rows. Below the threshold we
- * keep the eager nested layout, which means the 100 existing SchemaTree tests
- * (whose fixtures are all well under 200 rows) continue to assert against full
- * DOM output without virtualization spacers and with zero behavioral drift.
+ * Above this row count, `<tbody>` rendering is handed off to
+ * `useVirtualizer`. Below it we keep the eager nested layout so the
+ * existing tests (fixtures under 200 rows) assert against full DOM
+ * without virtualization spacers.
  */
 export const VIRTUALIZE_THRESHOLD = 200;
 
 /**
- * Sprint-115 — estimated row height for the virtualizer. Schema, category, and
- * item rows all use compact text (`text-2xs` / `text-xs` with `py-0.5` / `py-1`)
- * which renders ~22-26px. We round up to 26 to keep overscan slightly
- * conservative; `react-virtual` measures actual DOM after first paint, so the
- * estimate only governs initial layout.
+ * Estimated row height for the virtualizer. Schema/category/item rows
+ * render ~22-26px; we round up to 26 for slightly conservative overscan.
+ * `react-virtual` measures actual DOM after first paint, so this only
+ * governs initial layout.
  */
 export const ROW_HEIGHT_ESTIMATE = 26;
 
 /**
- * Sprint-115 — flat row representation produced by `getVisibleRows`. Each row
- * carries enough information for the virtualizer path to render the schema /
- * category / item cell variant without re-walking the original nested data.
- *
- * `kind === "schema-separator"` represents the thin divider line that the
- * eager path renders between sibling schemas; the virtualized path needs the
- * same hairline so the DOM stays visually consistent across the threshold.
- *
- * `kind === "loading"` and `kind === "empty"` and `kind === "search"` cover
- * the placeholder rows the eager path renders inside expanded categories so
- * the virtualizer can still hand the user the same affordances (filter input,
- * "No tables" message, loading spinner) when the dataset is huge.
+ * Flat row representation produced by `getVisibleRows`. Each variant
+ * carries enough information for the virtualizer path to render the same
+ * cell as the eager-nested path:
+ *   - `schema-separator` — hairline divider between sibling schemas.
+ *   - `loading` / `empty` / `search` — placeholder rows (spinner, "no
+ *     tables" copy, filter input) so virtualized datasets still surface
+ *     the affordances the eager path provides.
  */
 export type VisibleRow =
   | { kind: "schema-separator"; key: string }
@@ -225,12 +202,11 @@ export interface BuildVisibleRowsArgs {
 }
 
 /**
- * Sprint-115 — flatten the currently-expanded portion of the schema tree into
- * a single list so `useVirtualizer` can window over it. The order here mirrors
- * the visual order of the eager nested render exactly: separator (between
- * sibling schemas) → schema row → categories → category rows → search input
- * → item rows / empty placeholder. Tests assert against this ordering when
- * the virtualized path is active.
+ * Flatten the currently-expanded portion of the schema tree so
+ * `useVirtualizer` can window over it. Order mirrors the eager nested
+ * render exactly — separator → schema row → categories → search input →
+ * items / empty — and tests assert against that ordering when the
+ * virtualized path is active.
  */
 export function getVisibleRows({
   schemas,

@@ -16,10 +16,9 @@ interface StructurePanelProps {
   table: string;
   schema: string;
   /**
-   * Sprint 179 — paradigm-aware tab labels and empty-state copy. Defaults
-   * to `"rdb"` so existing RDB callers see the legacy English vocabulary
-   * unchanged. Mongo callers can pass `"document"` to render
-   * "Fields" / "Add Field" / "No fields found".
+   * Paradigm-aware tab labels and empty-state copy. Defaults to `rdb`
+   * (Columns/Constraints/...); pass `document` for Mongo
+   * (Fields/Add Field/...).
    */
   paradigm?: Paradigm;
 }
@@ -32,8 +31,6 @@ export default function StructurePanel({
   schema,
   paradigm,
 }: StructurePanelProps) {
-  // Sprint 179 (AC-179-04) — `getParadigmVocabulary` enforces the
-  // `undefined → rdb` fallback in one place; component just looks up.
   const vocab = getParadigmVocabulary(paradigm);
   const [activeSubTab, setActiveSubTab] = useState<SubTab>("columns");
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
@@ -41,24 +38,18 @@ export default function StructurePanel({
   const [constraints, setConstraints] = useState<ConstraintInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // sprint-176 (AC-176-03 / RISK-035) — first-render flash gate. Each sub-tab
-  // tracks whether its initial fetch has settled. Until that flips true the
-  // editor branch (which renders "No columns/indexes/constraints found"
-  // when its array is empty) is suppressed, so the user never sees a fake
-  // empty-state during the time window between mount and the first fetch
-  // resolving. The flag is per-tab so flipping tabs gates the new tab's
-  // first fetch as well, not just the overall first fetch.
+  // Per-tab "has the first fetch settled" gate. Without this, an editor
+  // with an empty array would briefly paint a misleading "No columns
+  // found" between mount and the first fetch resolving.
   const [hasFetchedColumns, setHasFetchedColumns] = useState(false);
   const [hasFetchedIndexes, setHasFetchedIndexes] = useState(false);
   const [hasFetchedConstraints, setHasFetchedConstraints] = useState(false);
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const getTableIndexes = useSchemaStore((s) => s.getTableIndexes);
   const getTableConstraints = useSchemaStore((s) => s.getTableConstraints);
-  // Sprint 180 — fetchId guard so a Cancel-then-retry can drop the
-  // stale resolve without overwriting the new state. Schema fetches
-  // don't have a tab-store-backed query id (unlike `executeQuery`),
-  // but the in-flight `query_id` is plumbed through the Tauri command
-  // so the Cancel button can route to `cancel_query` at the backend.
+  // fetchId guards against stale resolves overwriting state after a
+  // Cancel-then-retry. The in-flight `query_id` is plumbed through the
+  // Tauri command so the Cancel button can drive `cancel_query`.
   const fetchIdRef = useRef(0);
   const queryIdRef = useRef<string | null>(null);
 
@@ -86,11 +77,8 @@ export default function StructurePanel({
     } catch (e) {
       if (fetchIdRef.current !== fetchId) return;
       setError(String(e));
-      // Sprint-176 — even on rejection mark the tab as fetched. The error
-      // banner takes over the visible space and the editor branch stays
-      // hidden because the gate below also checks `!error`. We still flip
-      // hasFetched so a subsequent retry that succeeds with an empty list
-      // can reach the empty-state copy.
+      // Mark the tab as fetched even on failure so a subsequent retry
+      // that succeeds with an empty list can reach the empty-state copy.
       if (activeSubTab === "columns") setHasFetchedColumns(true);
       else if (activeSubTab === "indexes") setHasFetchedIndexes(true);
       else setHasFetchedConstraints(true);
@@ -109,10 +97,8 @@ export default function StructurePanel({
     getTableConstraints,
   ]);
 
-  // Sprint 180 (AC-180-02 / AC-180-05) — Cancel handler for the schema
-  // structure fetch. Bumps `fetchIdRef` so the in-flight resolve is
-  // treated as stale, clears `loading` synchronously, and best-effort
-  // cancels the backend driver handle.
+  // Bump `fetchIdRef` so the in-flight resolve is treated as stale,
+  // clear `loading` synchronously, and best-effort cancel the backend.
   const handleCancelStructureFetch = useCallback(() => {
     fetchIdRef.current++;
     setLoading(false);
@@ -125,7 +111,8 @@ export default function StructurePanel({
     }
   }, []);
 
-  // Sprint 180 (AC-180-01) — threshold gate for the shared overlay.
+  // Threshold gate for the shared overlay — only paints after `loading`
+  // has been continuously true for 1s.
   const overlayVisible = useDelayedFlag(loading, 1000);
 
   // Listen for context-aware refresh events (Cmd+R / F5)
@@ -139,11 +126,9 @@ export default function StructurePanel({
     fetchData();
   }, [fetchData]);
 
-  // Sprint 179 — `key: "columns"` stays a stable identifier (it backs the
-  // `activeSubTab` state and never appears in the DOM as user-visible
-  // text); only the `label` value flows through the paradigm dictionary.
-  // "Indexes" and "Constraints" stay paradigm-fixed for now: structural
-  // concepts that have no Mongo / kv equivalent in the current scope.
+  // `key` is the stable internal identifier; only `label` flows through
+  // the paradigm dictionary. Indexes/Constraints stay paradigm-fixed —
+  // no Mongo/kv equivalent in scope yet.
   const subTabs: { key: SubTab; label: string }[] = [
     { key: "columns", label: vocab.units },
     { key: "indexes", label: "Indexes" },
@@ -180,13 +165,9 @@ export default function StructurePanel({
         </div>
       )}
 
-      {/* Loading — Sprint 180. Wrapped in a positioned container so the
-          shared `AsyncProgressOverlay` (which uses `absolute inset-0`)
-          has a relative ancestor to anchor against. The overlay only
-          paints after `loading` has been continuously true for 1s
-          (`useDelayedFlag`); for sub-second fetches this region stays
-          empty and the user proceeds straight to the editor branch
-          when the fetch resolves. */}
+      {/* The positioned wrapper anchors `AsyncProgressOverlay`'s
+          `absolute inset-0`. Sub-second fetches never paint the overlay
+          (see `useDelayedFlag`) so this region usually stays empty. */}
       {loading && (
         <div
           data-testid="structure-loading-region"
@@ -200,14 +181,9 @@ export default function StructurePanel({
         </div>
       )}
 
-      {/* Editors — outside the tab bar.
-          Sprint-176 (AC-176-03 / RISK-035): each editor is gated behind its
-          own `hasFetched*` flag so the empty-state copy ("No columns
-          found" / "No indexes found" / "No constraints found") cannot
-          paint before the first fetch on that tab settles. Without this
-          gate a slow-resolving fetch would briefly render the editor with
-          an empty array and the user would see a misleading "no data"
-          message before the actual data arrives. */}
+      {/* Editors live outside the tab bar. Each is gated on its
+          `hasFetched*` flag so a slow first fetch can't briefly paint
+          the "No X found" empty state with an empty array. */}
       {!loading &&
         !error &&
         activeSubTab === "columns" &&

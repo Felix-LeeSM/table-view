@@ -19,17 +19,10 @@ import {
 } from "./rows";
 
 /**
- * Sprint 199 — eager nested vs virtualized 분기. 두 분기 모두 `rows.tsx`
- * 의 leaf renderer 만 호출 → threshold 위/아래 cell DOM 동등 (Sprint 115
- * 회귀 가드).
- *
- * eager 분기는 wrapping `<div>` 3 종 (per-schema, per-category,
- * function/procedure overflow-cap) 을 byte-for-byte 보존 — pre-split
- * SchemaTree.tsx (lines 1384-1999) 의 SchemaTree.test.tsx 100+ 케이스가
- * 그 wrapping 에 의존.
- *
- * SQLite (`flat` shape) 는 category cascade 를 skip 하고 table 만 단일
- * 레벨로 렌더 — `renderItemRow(row, ctx, true)` 의 flat=true 모드.
+ * Eager-nested vs virtualized branch dispatch. Both call into
+ * `rows.tsx`'s leaf renderer so the cell DOM stays identical above and
+ * below the virtualization threshold. SQLite (`flat` shape) skips the
+ * category cascade and renders tables at a single level.
  */
 
 interface SchemaTreeBodyProps {
@@ -61,7 +54,6 @@ function VirtualizedBranch({
   rowVirtualizer,
   ctx,
 }: SchemaTreeBodyProps) {
-  // Sprint-115 — virtualizer reports total scroll height + windowed items.
   // Top/bottom `aria-hidden` spacers preserve scroll height while only
   // the windowed rows live in the DOM.
   const virtualItems: VirtualItem[] = rowVirtualizer.getVirtualItems();
@@ -123,9 +115,10 @@ function SchemaSection(props: SchemaSectionProps) {
     ctx,
   } = props;
 
+  // MySQL/SQLite hide the schema row but still need it implicitly
+  // expanded so categories/tables render under the sidebar root.
   const isExpanded =
-    treeShape === "with-schema" ? expandedSchemas.has(schema.name) : true; // Sprint 135 — MySQL/SQLite 의 schema row 는 hidden 이지만
-  // 내부적으로는 implicit "open" 으로 categories/tables 가 표시.
+    treeShape === "with-schema" ? expandedSchemas.has(schema.name) : true;
   const tableKey = `${connectionId}:${schema.name}`;
   const schemaTables: TableInfo[] = tables[tableKey] ?? [];
   const isLoadingTables = loadingTables.has(schema.name);
@@ -335,9 +328,8 @@ function CategorySection({
       )}
 
       {catExpanded && (
-        // Sprint 136 (AC-S136-05) — function/procedure 카테고리는
-        // `max-h-[50vh] overflow-y-auto` 로 cap. 다른 카테고리 / schema
-        // row 가 viewport 밖으로 밀리지 않도록.
+        // Cap function/procedure lists at half the viewport so a schema
+        // with hundreds of routines doesn't push other categories out.
         <div
           className={
             cat.key === "functions" || cat.key === "procedures"

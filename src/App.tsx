@@ -21,11 +21,8 @@ export default function App() {
     (s) => s.loadPersistedFavorites,
   );
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
-  // Sprint 212 — MRU marking moved out of tabStore.addTab / addQueryTab into
-  // each caller. The 3 App-level event/shortcut handlers below (Cmd+T global
-  // shortcut, navigate-table event, quickopen-function event) mark the
-  // connection used right after their tab open so the launcher Recent rail /
-  // EmptyState CTA observe the same MRU shift the store action used to emit.
+  // MRU marking is the caller's responsibility — `addTab`/`addQueryTab` no
+  // longer emit it implicitly, so the three handlers below pair the call.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const activeTabId = useTabStore((s) => s.activeTabId);
@@ -45,9 +42,8 @@ export default function App() {
     initEventListeners();
     loadPersistedFavorites();
     loadPersistedMru();
-    // sprint-175 — emit `app:effects-fired` once the workspace's five IPC
-    // dispatches have been kicked off. This is the workspace-side anchor
-    // for the end-to-end `T0 → app:effects-fired` row in baseline.md.
+    // Workspace-side anchor for cold-boot tracing — fires after the five
+    // IPC dispatches above have been kicked off (not awaited).
     markBootMilestone("app:effects-fired");
   }, [
     loadConnections,
@@ -57,16 +53,12 @@ export default function App() {
     loadPersistedMru,
   ]);
 
-  // Cmd+W / Ctrl+W closes the active tab (does NOT close the app).
-  //
-  // We deliberately do NOT call `isEditableTarget` here, unlike every other
-  // global shortcut: on macOS, Tauri/wry's WebView falls through to the
-  // native Close-Window action whenever our handler returns without
-  // calling `preventDefault`. After running a query, focus is typically
-  // inside the SQL editor (Monaco / CodeMirror, both `contenteditable`)
-  // or the result grid — so the editable-target guard would skip our
-  // handler and the OS would close the entire window instead of the tab.
-  // Cmd+W has no in-editor meaning to preserve, so always intercept it.
+  // Cmd+W / Ctrl+W closes the active tab (NOT the app). Unlike every other
+  // global shortcut we intentionally do NOT skip on `isEditableTarget`:
+  // Tauri/wry on macOS falls through to the native Close-Window action
+  // whenever the handler doesn't `preventDefault`, and the editor or grid
+  // (both `contenteditable`) holds focus most of the time. Cmd+W has no
+  // in-editor meaning to preserve, so always intercept.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
@@ -130,9 +122,6 @@ export default function App() {
   // Cmd+N / Ctrl+N — new connection
   // Cmd+S / Ctrl+S — commit changes
   // Cmd+P / Ctrl+P — quick open
-  // Sprint 154: Cmd+, no longer toggles Home/Workspace — Phase 12's real
-  // window split moved that distinction into Tauri windows. The chord is
-  // intentionally a no-op until a future sprint reclaims it.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -156,13 +145,8 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Sprint 133 — Cmd+1..9 / Ctrl+1..9: switch the active workspace tab to
-  // the N-th tab (1-indexed). Sprint 154 — `App` is now mounted ONLY under
-  // the workspace window (per `AppRouter.tsx`), so the previous `screen`
-  // gate is redundant; the chord is naturally a no-op in the launcher
-  // window because `App` doesn't run there. Out-of-range indices and
-  // editable-target focus still short-circuit. Numpad digit keys
-  // (`Numpad1`..) are intentionally NOT matched — only top-row digits.
+  // Cmd+1..9 / Ctrl+1..9 — switch to the N-th workspace tab (1-indexed).
+  // Top-row digits only; `Numpad1`.. are intentionally NOT matched.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -179,12 +163,6 @@ export default function App() {
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [tabs, setActiveTab]);
-
-  // Sprint 134 — the Sprint 133 Cmd+K handler that dispatched
-  // `open-connection-switcher` was removed alongside the
-  // `<ConnectionSwitcher>` component itself. Connection swap is now a
-  // single path: Home → double-click. Cmd+K is intentionally a no-op
-  // until a future sprint reclaims the chord.
 
   // Cmd+R / Ctrl+R / F5 — context-aware refresh
   useEffect(() => {
@@ -283,9 +261,8 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Sprint 162 — Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode
-  // (dark → light → system → dark). Registered at the App level so the
-  // shortcut works in both launcher and workspace windows.
+  // Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode
+  // (dark → light → system → dark).
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key === "L") {
@@ -344,11 +321,9 @@ export default function App() {
       ).detail;
       addQueryTab(connectionId);
       markConnectionUsed(connectionId);
-      // addQueryTab는 동기로 store에 push한 직후 새 tab id를 알아야
-      // updateQuerySql을 부를 수 있는데, selector로 받은 `tabs`는 이번
-      // 이벤트 루프 안에서 갱신되지 않는다 (React가 다음 commit에 새
-      // snapshot을 push). 한 번만 fresh snapshot을 읽기 위해 store
-      // getState를 직접 호출한다.
+      // The selector-bound `tabs` snapshot doesn't include the just-added
+      // tab until React's next commit, but we need its id to seed the SQL
+      // body. Read the store directly for this one call.
       // eslint-disable-next-line no-restricted-syntax
       const latestTabs = useTabStore.getState().tabs;
       const newTab = latestTabs[latestTabs.length - 1];
@@ -360,15 +335,6 @@ export default function App() {
     return () => window.removeEventListener("quickopen-function", handler);
   }, [addQueryTab, markConnectionUsed, updateQuerySql]);
 
-  // Sprint 154 — Phase 12 multi-window split is now fully wired. Top-level
-  // page routing lives in `AppRouter.tsx`, which picks Launcher vs Workspace
-  // based on the current Tauri `WebviewWindow.label`. `App` is mounted ONLY
-  // under the workspace branch, so `WorkspacePage` is the unconditional
-  // mount here. The previous app-shell screen field has been removed
-  // — "which screen am I on" is implied by the Tauri window label, and
-  // window lifecycle is wired through `@lib/window-controls` (Activate /
-  // Back / Disconnect / Close — see `window-transitions.test.tsx`).
-
   return (
     <ErrorBoundary>
       <div className="flex h-screen w-screen overflow-hidden bg-background">
@@ -376,10 +342,9 @@ export default function App() {
         <QuickOpen />
         <ShortcutCheatsheet />
         <QueryLog />
-        {/* Sprint 94 — global toaster. Mounted at the App root (NOT inside any
-            Radix dialog portal) so a toast surfaced from inside a modal
-            survives the modal being closed. See AC-03 in
-            docs/sprints/sprint-94/contract.md. */}
+        {/* Mounted at the App root, NOT inside a Radix dialog portal — a
+            toast surfaced from inside a modal must survive the modal
+            being closed. */}
         <Toaster />
       </div>
     </ErrorBoundary>

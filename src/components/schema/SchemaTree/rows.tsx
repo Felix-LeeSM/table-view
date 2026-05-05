@@ -32,17 +32,12 @@ import {
 } from "./treeRows";
 
 /**
- * Sprint 199 — leaf row renderers extracted from `SchemaTree.tsx` body.
- * `<SchemaTreeBody>` (eager nested + virtualized 양쪽) 가 호출 → 두 path
- * 가 같은 cell DOM 을 내는 회귀 가드.
- *
- * `renderItemRow` 는 일반 (pl-10, view/function 분기 포함) 과 flat-shape
- * (SQLite, pl-3, table only) 두 모드를 `flat` flag 로 분기. flat 분기는
- * pre-split 의 SchemaTree.tsx flat branch (lines 1485-1576) 와 byte-for-
- * byte 동등.
- *
- * `ctx` (SchemaTreeRowsContext) 가 entry 의 `useSchemaTreeActions()`
- * 결과 + `dbType` 묶음 — store hook 직접 호출 X (테스트 mock 단순화).
+ * Leaf row renderers consumed by both `SchemaTreeBody` paths
+ * (eager-nested and virtualized) so they emit the same cell DOM.
+ * `renderItemRow` branches on `flat` for SQLite (pl-3, tables only) vs.
+ * the default (pl-10, view/function variants). `ctx`
+ * (`SchemaTreeRowsContext`) bundles the entry's `useSchemaTreeActions()`
+ * result plus `dbType` — these components never read stores directly.
  */
 
 export interface SchemaTreeRowsContext {
@@ -231,10 +226,8 @@ export function renderItemRow(
     else ctx.handleTableClick(item.name, row.schemaName);
   };
 
-  // Sprint 136 — double-click promotes the preview tab to a persistent
-  // tab (AC-S136-02). Only meaningful for table rows; views/functions
-  // either spawn dedicated tabs (views) or query tabs (functions) which
-  // do not participate in the table-preview slot.
+  // Double-click promotes the preview tab to persistent. Only meaningful
+  // for tables — views/functions don't participate in the preview slot.
   const handleDoubleClick = () => {
     if (isTableItem) ctx.handleTableDoubleClick(item.name, row.schemaName);
   };

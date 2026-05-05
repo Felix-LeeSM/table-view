@@ -10,12 +10,9 @@ import {
 } from "@components/ui/dialog";
 
 /**
- * Sprint 199 — destructive / rename modal pair extracted from
- * `SchemaTree.tsx`. State (open / loading / input value / error) lives in
- * `useSchemaTreeActions` and is threaded through props so these components
- * stay presentational. JSX 는 pre-split SchemaTree.tsx 의 두 Dialog block
- * 과 byte-for-byte 동등 — 회귀 가드 (testid / aria-label / 텍스트) 모두
- * 보존.
+ * Drop-table confirmation and rename modals for `SchemaTree`. State
+ * (open/loading/input/error) lives in `useSchemaTreeActions` and is
+ * threaded through props so both components stay presentational.
  */
 
 /** Confirmation dialog state — exported so the hook + entry component share. */

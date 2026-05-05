@@ -36,14 +36,12 @@ export default function DocumentDatabaseTree({
         title: `${dbName}.${collectionName}`,
         connectionId,
         closable: true,
-        // Sprint 129 — primary fields for the document paradigm. Downstream
-        // consumers (MainArea, future S130/S131 store wires) read these.
+        // `database`/`collection` are the primary fields for new readers;
+        // `schema`/`table` are written for backwards-compat with persisted
+        // document tabs from before the paradigm split (`loadPersistedTabs`
+        // migrates them).
         database: dbName,
         collection: collectionName,
-        // Legacy RDB-aliased fields. Persisted document tabs from sprint
-        // <129 used these and `loadPersistedTabs` migrates them; we keep
-        // writing them here for backwards-compat with any reader still on
-        // the old field. New read sites must prefer `database`/`collection`.
         schema: dbName,
         table: collectionName,
         subView: "records",
@@ -54,12 +52,6 @@ export default function DocumentDatabaseTree({
     [addTab, markConnectionUsed, connectionId],
   );
 
-  /**
-   * Double-click on a collection opens it as a persistent tab directly via
-   * `addTab({ permanent: true })`. This replaces the old two-step
-   * addTab+promoteTab pattern so the lifecycle is managed entirely within
-   * the store.
-   */
   const handleCollectionDoubleClick = useCallback(
     (dbName: string, collectionName: string) => {
       addTab({
@@ -174,10 +166,8 @@ export default function DocumentDatabaseTree({
         const isLoading = loadingDbs.has(db.name);
         const key = `${connectionId}:${db.name}`;
         const allCollections = collectionsByDb[key] ?? [];
-        // Filter collections by the same query so a db that matched only
-        // because of a collection sub-match shows just the matching ones.
-        // When the search matches the database name itself we still show
-        // all of its collections so the user has the full picture.
+        // If the query matched the DB name, show every collection. If it
+        // only matched some collection names, narrow the list to those.
         const dbNameMatches =
           !isFiltering || db.name.toLowerCase().includes(lowerQuery);
         const collections =

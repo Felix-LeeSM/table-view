@@ -33,21 +33,12 @@ import {
 import { useSchemaTreeActions } from "./SchemaTree/useSchemaTreeActions";
 
 /**
- * Sprint 199 — entry shell. Pre-split (1-2105 lines) 의 4 책임 (helper /
- * action / row render / dialog) 을 sub-file 4개 로 분리한 뒤 남은 thin
- * shell. 본 파일에 남는 것은:
- *   1. import / props
- *   2. cross-slice state (connection name / dbType / treeShape /
- *      activeSchema·activeTable / migration export hook 결과)
- *   3. virtualizer wiring (`useVirtualizer` + scroll container ref)
- *   4. effect 3개 (refresh-schema 리스너, active-tab → schema 자동 펼침,
- *      schemas load 시 전체 자동 펼침)
- *   5. return JSX shell — 헤더 (Schemas 라벨 + Export Popover + Refresh
- *      버튼) + `<SchemaTreeBody>` + 두 dialog
- *
- * `useSchemaTreeActions` 가 12 handler + dialog state + 트리 UI state
- * (expandedSchemas / selectedNodeId / tableSearch / ...) 를 모두 제공
- * 하므로 entry 는 dispatch 만 한다.
+ * Entry shell for the relational schema tree. Owns cross-slice state
+ * (connection name / dbType / treeShape / active tab pointers /
+ * migration export), virtualizer wiring, three effects (refresh-schema
+ * listener, active-tab → schema auto-expand, schemas-loaded auto-expand),
+ * and the JSX shell (header + body + dialogs). `useSchemaTreeActions`
+ * supplies the 12 handlers and the tree's UI state.
  */
 
 interface SchemaTreeProps {
@@ -56,14 +47,13 @@ interface SchemaTreeProps {
 
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const actions = useSchemaTreeActions({ connectionId });
-  // useEffect 의존성을 좁히기 위해 자주 쓰이는 필드를 destructure.
-  // (action 객체 전체를 dep 으로 넣으면 매 렌더마다 effect 가 다시
-  // 실행돼 setExpandedSchemas 가 매번 모든 schema 를 펼쳐 collapse
-  // 동작이 즉시 되감기 — Sprint 199 회귀.)
+  // Destructure the fields effects depend on. Using the whole `actions`
+  // object as a dep would re-run effects every render and the
+  // schemas-loaded auto-expand below would immediately undo any user
+  // collapse.
   const { schemas, setExpandedSchemas, refreshConnection } = actions;
 
-  // 트리 본문 렌더에 필요한 read-only selector. write 는 hook 안에서만
-  // 발생 (Sprint 196 store-coupling 정책 준수).
+  // Read-only selectors for tree body rendering; writes live in the hook.
   const tables = useSchemaStore((s) => s.tables);
   const views = useSchemaStore((s) => s.views);
   const functions = useSchemaStore((s) => s.functions);
@@ -71,11 +61,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
   );
-  // Sprint 135 — DBMS-shape-aware tree depth. Driven off `db_type` because
-  // `paradigm` is always `"rdb"` for the three relational DBMSes we
-  // currently ship (PG / MySQL / SQLite); the shape difference is *within*
-  // the rdb paradigm. Defaults to `"with-schema"` (PG) when the connection
-  // hasn't loaded yet so the initial paint matches the most explicit shape.
+  // DBMS-shape-aware tree depth. Driven off `db_type` because the shape
+  // difference (with-schema / no-schema / flat) is *within* the rdb
+  // paradigm. Defaults to `with-schema` (PG) on first render so the
+  // initial paint matches the most explicit shape.
   const dbType = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.db_type,
   );
@@ -83,8 +72,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     ? resolveRdbTreeShape(dbType)
     : "with-schema";
 
-  // Sprint 192 (AC-192-04) — RDB schema 단위 migration export. Mongo /
-  // Redis 연결에서는 메뉴를 hide. dbType 미정 (load 전) 도 hide.
+  // RDB schema-level migration export. Hidden on Mongo/Redis and when
+  // dbType hasn't loaded yet.
   const isRdbConnection =
     dbType === "postgresql" || dbType === "mysql" || dbType === "sqlite";
   const {
@@ -101,7 +90,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const activeSchema = activeTab?.type === "table" ? activeTab.schema : null;
   const activeTable = activeTab?.type === "table" ? activeTab.table : null;
 
-  // Sprint 191 (AC-191-04) — refresh-schema (Cmd+R / F5) listener.
+  // refresh-schema (Cmd+R / F5) listener.
   useEffect(() => {
     const handler = () => refreshConnection();
     window.addEventListener("refresh-schema", handler);
@@ -120,17 +109,11 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     }
   }, [activeSchema, setExpandedSchemas]);
 
-  // Sprint 135 — for `no-schema` (MySQL) and `flat` (SQLite) shapes the
-  // schema row is hidden, but every backend-returned schema must still
-  // be expanded behind the scenes so `loadTables` fires and the table
-  // list appears under the sidebar root.
-  //
-  // Sprint 144 (AC-145-1) — extend the same auto-expand to `with-schema`
-  // (PostgreSQL) so users with multiple custom schemas don't have to
-  // click every chevron individually. The user-facing effect: every PG
-  // schema paints expanded on first load. Per the AC-145-1 toggle
-  // contract, `handleExpandSchema` still collapses on click; the auto-
-  // expand only seeds the *initial* state.
+  // Auto-expand every loaded schema regardless of shape. For
+  // `no-schema`/`flat` the schema row is hidden but expansion is what
+  // triggers `loadTables`; for `with-schema` (PG) it spares users from
+  // clicking every chevron on first load. This only seeds the initial
+  // state — `handleExpandSchema` still collapses on click.
   useEffect(() => {
     if (schemas.length === 0) return;
     setExpandedSchemas((prev) => {
@@ -146,12 +129,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     });
   }, [treeShape, schemas, setExpandedSchemas]);
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Sprint-115 — virtualization plumbing. The flat visible-rows list is
-  // computed unconditionally (single array walk over already-derived
-  // state) so the threshold check is one comparison and the virtualized
-  // branch indexes the same data the eager branch reads.
-  // ──────────────────────────────────────────────────────────────────────
+  // The flat visible-rows list is computed unconditionally — a single
+  // walk over already-derived state — so the threshold check is one
+  // comparison and the virtualized/eager branches index the same data.
   const visibleRows = getVisibleRows({
     schemas: actions.schemas,
     expandedSchemas: actions.expandedSchemas,
@@ -167,11 +147,9 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     tableSearch: actions.tableSearch,
   });
 
-  // Sprint 135 — only the `with-schema` shape can fan out far enough to
-  // need virtualization (PG: schemas × categories × items). MySQL/SQLite
-  // shapes cap at table count which is bounded by the user's database
-  // contents and rarely crosses the threshold; gating the virtualizer
-  // keeps the simpler shapes on the eager path.
+  // Only `with-schema` fans out far enough to need virtualization
+  // (schemas × categories × items). Flat/no-schema rarely cross the
+  // threshold, so they stay on the eager path.
   const shouldVirtualize =
     treeShape === "with-schema" && visibleRows.length > VIRTUALIZE_THRESHOLD;
 
@@ -216,11 +194,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           Schemas
         </span>
         <div className="flex items-center gap-0.5">
-          {/* Sprint 192 (AC-192-04) — RDB export 진입점. 헤더 Popover 안
-              에서 3 모드 (DDL / DML / Full) × 2 단위 (single schema / all
-              schemas) 노출. icon 옆 native title 로 의미 명시.
-              MySQL/SQLite adapter 가 Phase 9 placeholder 라 현재 실제 동작
-              은 PG only — UI 는 paradigm === rdb 면 노출. */}
+          {/* RDB export Popover — three modes (DDL / DML / Full) ×
+              two scopes (single schema / all schemas). MySQL/SQLite
+              adapters are still placeholders, so the actual export only
+              succeeds on PG today, but the UI surfaces for any rdb. */}
           {isRdbConnection && actions.schemas.length > 0 && (
             <Popover>
               <PopoverTrigger asChild>

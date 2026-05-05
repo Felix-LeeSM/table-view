@@ -10,25 +10,14 @@ import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
 import type { ConfirmDialogState, RenameDialogState } from "./dialogs";
 
 /**
- * Sprint 199 — handlers + dialog state extracted from `SchemaTree.tsx`.
+ * Handlers + dialog state for `SchemaTree`. Bundles the 12 action
+ * handlers (drop / rename / open structure / open data / refresh schema /
+ * function source / ...) with ConfirmDialog and RenameDialog state and
+ * the relevant store subscriptions, so the entry component just
+ * dispatches.
  *
- * 12 handler (drop / rename / open structure / open data / refresh schema /
- * function source 등) + ConfirmDialog / RenameDialog state + 관련 store
- * selector subscription 을 한 hook 으로 묶어 entry 컴포넌트가 단순 dispatch
- * 만 하도록.
- *
- * Sprint 196 (FB-5b) 의 store-coupling 정책 답습 — `useQueryHistoryStore.
- * getState()` 직접 호출 금지, selector subscription 으로 `addHistoryEntry`
- * 가져옴. handler 안에서 closure 로 호출.
- *
- * pre-split 와 동일한 동작:
- *   * `handleDropTable` 가 confirm dialog 를 열고 confirm 시 SQL synthesise
- *     + history entry 등재 + `dropTable` invoke + 실패 시 toast 노출.
- *   * `handleStartRename` / `handleConfirmRename` 가 RenameDialog flow 처리
- *     (정규식 검증 + 실패 시 toast).
- *   * `handleTableClick` / `handleTableDoubleClick` / `handleOpenStructure`
- *     / `handleViewClick` / `handleOpenViewStructure` / `handleFunctionClick`
- *     이 `addTab` / `addQueryTab` 으로 라우팅.
+ * Stores are read via selector subscription, never `getState()`, so the
+ * hook stays test-mockable.
  */
 
 interface UseSchemaTreeActionsArgs {
@@ -94,10 +83,8 @@ export interface SchemaTreeActions {
 export function useSchemaTreeActions({
   connectionId,
 }: UseSchemaTreeActionsArgs): SchemaTreeActions {
-  // Sprint 191 (AC-191-02) — 데이터 레이어 (load / refresh / prefetch +
-  // loading state) 는 useSchemaCache 가 담당. 컴포넌트는 트리 UI state
-  // (expanded / selected / search / dialog) 와 사용자 액션 (drop /
-  // rename / open) 만 보유.
+  // Data layer (load / refresh / prefetch + loading state) is delegated
+  // to `useSchemaCache`; this hook only owns tree UI state and actions.
   const {
     schemas,
     loadingSchemas,
@@ -107,8 +94,8 @@ export function useSchemaTreeActions({
     expandSchema: loadExpandedSchema,
   } = useSchemaCache(connectionId);
 
-  // 트리 렌더링에 필요한 캐시 read-only selector. write 는 모두 hook
-  // 또는 dropTable / renameTable 액션을 통해 일어난다.
+  // Read-only selectors for tree rendering. All writes go through the
+  // hook itself or the dropTable / renameTable store actions below.
   const functions = useSchemaStore((s) => s.functions);
   const dropTable = useSchemaStore((s) => s.dropTable);
   const renameTableAction = useSchemaStore((s) => s.renameTable);
@@ -116,10 +103,8 @@ export function useSchemaTreeActions({
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-  // Sprint 212 — MRU marking moved out of tabStore.addTab / addQueryTab into
-  // each caller. The 6 handlers below explicitly mark the connection used
-  // alongside the addTab / addQueryTab call so the EmptyState CTA / launcher
-  // Recent rail observe the same MRU shift the store action used to emit.
+  // MRU marking is the caller's responsibility; the 6 handlers below
+  // pair their `addTab` / `addQueryTab` call with `markConnectionUsed`.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
@@ -160,13 +145,11 @@ export function useSchemaTreeActions({
   const handleRefreshSchema = refreshSchema;
 
   /**
-   * Sprint 136 (AC-S136-01) — single-click on a table row opens the table in
-   * a *preview* tab. `addTab` already creates the new tab with
-   * `isPreview: true` and swaps an existing same-connection preview slot
-   * onto the new target, so opening another row reuses the same tab slot
-   * (no tab accumulation). Clicking the same row again is idempotent
-   * (AC-S136-04) because `addTab` early-returns when an exact-match tab
-   * already exists.
+   * Single-click opens a *preview* tab. `addTab` defaults new tabs to
+   * `isPreview: true` and swaps the same-connection preview slot onto
+   * the new target, so opening another row reuses the slot rather than
+   * piling up tabs. Clicking the same row again is idempotent because
+   * `addTab` early-returns on exact-match.
    */
   const handleTableClick = useCallback(
     (tableName: string, schemaName: string) => {
@@ -187,12 +170,6 @@ export function useSchemaTreeActions({
     [addTab, markConnectionUsed, connectionId],
   );
 
-  /**
-   * Double-click on a table row opens the table as a persistent tab
-   * directly via `addTab({ permanent: true })`. This replaces the old
-   * two-step addTab+promoteTab pattern so the lifecycle is managed
-   * entirely within the store.
-   */
   const handleTableDoubleClick = useCallback(
     (tableName: string, schemaName: string) => {
       setSelectedNodeId(
@@ -241,9 +218,8 @@ export function useSchemaTreeActions({
         danger: true,
         onConfirm: () => {
           setIsOperating(true);
-          // Sprint 196 (FB-5b) — DDL fire point. Synthesise a user-readable
-          // SQL string for the history row (real DROP statement is generated
-          // server-side by `tauri.dropTable`, not surfaced here).
+          // Synthesise a user-readable SQL string for the history row.
+          // The real DROP runs server-side via `tauri.dropTable`.
           const startedAt = Date.now();
           const recordedSql = `DROP TABLE "${schemaName}"."${tableName}"`;
           dropTable(connectionId, tableName, schemaName)
@@ -260,10 +236,8 @@ export function useSchemaTreeActions({
               });
             })
             .catch((err) => {
-              // Sprint 191 (AC-191-03) — surface drop failures via toast +
-              // dev console instead of silent swallow. The dialog still
-              // closes so the user isn't trapped, but they get a visible
-              // signal that nothing was dropped.
+              // Surface failures via toast + dev console; dialog still
+              // closes so the user isn't trapped.
               const detail = err instanceof Error ? err.message : String(err);
               toast.error(
                 `Failed to drop ${schemaName}.${tableName}: ${detail}`,
@@ -326,7 +300,6 @@ export function useSchemaTreeActions({
       newName,
     )
       .catch((err) => {
-        // Sprint 191 (AC-191-03) — see dropTable rationale.
         const detail = err instanceof Error ? err.message : String(err);
         toast.error(
           `Failed to rename ${renameDialog.schemaName}.${renameDialog.tableName}: ${detail}`,

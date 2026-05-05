@@ -99,9 +99,8 @@ export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
     );
   }
 
-  // Sprint 66: document-paradigm connections (MongoDB) branch to the
-  // dedicated databases/collections tree instead of the RDB SchemaTree so
-  // the sidebar always shows the idioms of the underlying store.
+  // Document connections (MongoDB) branch to the databases/collections
+  // tree instead of the RDB SchemaTree.
   const isDocument = selected.paradigm === "document";
 
   return (

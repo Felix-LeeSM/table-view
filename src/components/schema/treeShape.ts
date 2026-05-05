@@ -1,29 +1,19 @@
 import type { DatabaseType } from "@/types/connection";
 
 /**
- * Sprint 135 — DBMS-shape-aware sidebar tree depth.
+ * DBMS-shape-aware sidebar tree depth. `SchemaTree` renders one of three
+ * shapes depending on whether the DBMS exposes a real `schema` layer:
  *
- * The relational sidebar tree (`SchemaTree`) renders one of three shapes
- * depending on whether the underlying DBMS exposes a real `schema` layer
- * between database and table:
+ *   - `with-schema` — PostgreSQL: `database → schema → table`. The
+ *     schema row is interactive (expand/collapse, refresh).
+ *   - `no-schema`   — MySQL/MariaDB: schema row suppressed (MySQL
+ *     conflates schema with database) but categories and items still
+ *     render under each backend-returned schema.
+ *   - `flat`        — SQLite: file *is* the database, so just one level
+ *     of tables under the sidebar root.
  *
- *   - `"with-schema"` — PostgreSQL (and future MSSQL): `database → schema
- *     → table`. The schema row is interactive (expand / collapse,
- *     refresh) and tables are nested two levels deep.
- *   - `"no-schema"`   — MySQL / MariaDB: the schema row is suppressed
- *     because MySQL conflates "schema" with "database". Categories
- *     (Tables / Views / …) and their items render directly under the
- *     sidebar root, but each schema returned by the backend is still
- *     auto-expanded so existing data flows (`loadTables` etc.) work
- *     unchanged.
- *   - `"flat"`        — SQLite: the file *is* the database, so neither a
- *     schema row nor category headers are needed. We render the table
- *     list directly under the sidebar root (1-level).
- *
- * MongoDB / Redis don't reach this path — `pickSidebar` routes them to
- * `DocumentDatabaseTree` / `UnsupportedShellNotice`. They are excluded
- * from the union so a future regression that mounts SchemaTree against
- * a non-relational connection surfaces here.
+ * MongoDB/Redis route elsewhere via `pickSidebar` and are deliberately
+ * excluded from the union.
  */
 export type RdbTreeShape = "with-schema" | "no-schema" | "flat";
 
@@ -32,14 +22,9 @@ export type RelationalDatabaseType = "postgresql" | "mysql" | "sqlite";
 
 /**
  * Resolve the tree shape for a given relational `DatabaseType`. Falls
- * back to `"with-schema"` for unknown values rather than throwing —
- * `SchemaTree` is only mounted under the `rdb` paradigm so an unknown
- * value here implies a future relational backend that hasn't been
- * mapped yet, and the safest default is the most explicit shape (PG).
- *
- * Non-relational `db_type`s (`mongodb`, `redis`) are routed elsewhere by
- * `pickSidebar`; passing one in is a programming error and falls
- * through to the `"with-schema"` default for safety.
+ * back to `with-schema` (PG) on unmapped values rather than throwing —
+ * Mongo/Redis route elsewhere, and a future relational backend should
+ * paint as the most explicit shape until it's mapped explicitly.
  */
 export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
   switch (dbType) {
@@ -51,11 +36,6 @@ export function resolveRdbTreeShape(dbType: DatabaseType): RdbTreeShape {
       return "flat";
     case "mongodb":
     case "redis":
-      // Non-relational paradigms route to a different sidebar — but
-      // until S138 introduces a stricter type-narrowing at the
-      // `RdbSidebar` boundary, defaulting to `"with-schema"` keeps the
-      // existing PG behaviour without throwing if a Mongo/Redis
-      // connection somehow reached SchemaTree.
       return "with-schema";
   }
 }
