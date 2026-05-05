@@ -59,6 +59,7 @@ function formatCellValue(value: unknown, col: ColumnInfo): string {
     try {
       return JSON.stringify(value, null, 2);
     } catch {
+      // Value has cycles — fall back to String().
       return String(value);
     }
   }
@@ -68,6 +69,7 @@ function formatCellValue(value: unknown, col: ColumnInfo): string {
       const parsed = JSON.parse(value as string);
       return JSON.stringify(parsed, null, 2);
     } catch {
+      // String didn't parse as JSON — render verbatim.
       return String(value);
     }
   }

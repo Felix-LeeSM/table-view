@@ -39,6 +39,7 @@ function loadPersistedFavorites(): FavoriteQuery[] {
     if (!raw) return [];
     return JSON.parse(raw) as FavoriteQuery[];
   } catch {
+    // localStorage entry corrupted or unavailable — start fresh.
     return [];
   }
 }

@@ -23,6 +23,7 @@ function renderCellText(data: unknown): string {
     try {
       return JSON.stringify(data, null, 2);
     } catch {
+      // Object has cycles or non-serializable members — fall back to String().
       return String(data);
     }
   }

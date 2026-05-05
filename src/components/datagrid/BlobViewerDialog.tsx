@@ -68,6 +68,7 @@ function tryDecodeText(bytes: Uint8Array): string | null {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     return decoder.decode(bytes);
   } catch {
+    // Bytes are not valid UTF-8 — caller renders only the hex pane.
     return null;
   }
 }

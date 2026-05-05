@@ -40,6 +40,7 @@ function canonicalStringify(value: unknown): string {
   try {
     return JSON.stringify(value);
   } catch {
+    // Value has cycles — fall back to String() so the tree still renders.
     return String(value);
   }
 }
@@ -137,6 +138,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
+    // Clipboard permission denied or unavailable — caller surfaces a toast.
     return false;
   }
 }

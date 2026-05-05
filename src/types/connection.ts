@@ -243,6 +243,7 @@ export function parseConnectionUrl(
       paradigm: paradigmOf(dbType),
     };
   } catch {
+    // Input is not a parseable URL — caller will try other connection-string forms.
     return null;
   }
 }

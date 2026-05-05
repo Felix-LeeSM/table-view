@@ -31,6 +31,7 @@ function readWidth(): number {
     if (!Number.isFinite(n)) return DEFAULT_WIDTH;
     return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, n));
   } catch {
+    // localStorage unavailable — fall back to the default sidebar width.
     return DEFAULT_WIDTH;
   }
 }

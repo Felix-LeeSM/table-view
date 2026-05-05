@@ -88,8 +88,8 @@ sequencing** — 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후�
 | 3 | **201** ✓ | refactor | §1-1 (frontend god file #3)    | `QueryTab.tsx` (1040) → entry + 6 sub-file. (commit `c0ab92e`) |
 | 4 | **202** ✓ | refactor | §1-2 (backend god file #1)     | `db/postgres.rs` (3803) → entry + 4 sub-file. mongodb.rs 패턴 답습. (commit `370c4ee`) |
 | 5 | **203** ✓ | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. type narrowing only. (commit `5a3a693`) |
-| 6 | **204** ✓ | refactor | §5 (console 정책)              | `src/lib/logger.ts` 신규 + DEV-only gate. console.* 13곳 → `logger.*`. `bootInstrumentation:187` 1곳 의도적 유지. |
-| 7 | 205 | refactor | §4 (catch 정책)                 | `catch {}` audit (~40곳) — silent vs DEV-log 분류 + 필요 시 logger 추가. |
+| 6 | **204** ✓ | refactor | §5 (console 정책)              | `src/lib/logger.ts` 신규 + DEV-only gate. console.* 13곳 → `logger.*`. `bootInstrumentation:187` 1곳 의도적 유지. (commit `3dead90`) |
+| 7 | **205** ✓ | refactor | §4 (catch 정책)                 | silent `catch {}` 37곳 audit + 주석 누락 13곳 보강. DEV-log 필요 case 0건. localStorage helper 통일은 후속 candidate. |
 | 8 | 206 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
 | 9 | 207 | refactor | §7 (Rust prod expect)            | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |
 | 10 | 208 | refactor | §1-1 (frontend god file #4)     | `tabStore.ts` (1002) 분해 — store concerns 분리. |

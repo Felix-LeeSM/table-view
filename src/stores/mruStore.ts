@@ -79,6 +79,7 @@ function loadPersistedMruList(): MruEntry[] {
       return [];
     }
   } catch {
+    // localStorage unavailable (SSR / private mode) — start with empty list.
     return [];
   }
 }

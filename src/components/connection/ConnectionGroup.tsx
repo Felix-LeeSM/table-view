@@ -43,6 +43,7 @@ function loadCollapsedState(): Record<string, boolean> {
     const raw = localStorage.getItem(COLLAPSE_KEY);
     return raw ? JSON.parse(raw) : {};
   } catch {
+    // localStorage unavailable or value corrupted — start with no collapse state.
     return {};
   }
 }

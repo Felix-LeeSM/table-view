@@ -44,6 +44,7 @@ export function getCurrentWindowLabel(): string | null {
     }
     return null;
   } catch {
+    // Tauri runtime unavailable (vitest jsdom) — caller falls back to launcher.
     return null;
   }
 }

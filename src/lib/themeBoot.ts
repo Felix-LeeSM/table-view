@@ -57,6 +57,7 @@ export function readStoredState(): ThemeState {
     const mode = isThemeMode(candidate.mode) ? candidate.mode : "system";
     return { themeId, mode };
   } catch {
+    // localStorage unavailable or stored value malformed — fall back to defaults.
     return { ...DEFAULT_STATE };
   }
 }
