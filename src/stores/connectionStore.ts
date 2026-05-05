@@ -16,46 +16,6 @@ import {
   readConnectionSession,
 } from "@lib/session-storage";
 
-/**
- * Sprint 143 (AC-148-4) — persist the user's `activeDb` pick across a
- * close/reopen cycle. Keyed by connection id so two connections never
- * share state. The hand-rolled localStorage path mirrors `mruStore` /
- * `favoritesStore` for consistency (no zustand-persist middleware).
- */
-const ACTIVE_DB_PREFIX = "tableview:activeDb:";
-
-function activeDbKey(id: string): string {
-  return `${ACTIVE_DB_PREFIX}${id}`;
-}
-
-function persistActiveDb(id: string, dbName: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(activeDbKey(id), dbName);
-  } catch {
-    // localStorage may be unavailable (SSR, quota exceeded, private mode).
-  }
-}
-
-function loadPersistedActiveDb(id: string): string | undefined {
-  if (typeof window === "undefined") return undefined;
-  try {
-    const raw = window.localStorage.getItem(activeDbKey(id));
-    return raw && raw.length > 0 ? raw : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function clearPersistedActiveDb(id: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(activeDbKey(id));
-  } catch {
-    // ignore
-  }
-}
-
 interface ConnectionState {
   connections: ConnectionConfig[];
   groups: ConnectionGroup[];
@@ -253,25 +213,15 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       await tauri.connectToDatabase(id);
       set((state) => {
-        // Sprint 130 — seed the new `connected.activeDb` field with the
-        // connection's default database so the DbSwitcher trigger label
-        // and any newly-opened RDB tab pick it up immediately. If the
-        // connection has no `database` (unusual — frontend draft
-        // validation prevents it), we omit the field rather than write
-        // an empty string.
-        //
-        // Sprint 143 (AC-148-4) — a previously-persisted activeDb (from
-        // a prior session's DbSwitcher pick) wins over the connection's
-        // default `database`. Mongo users in particular expect the DB
-        // they last switched to in the workspace to come back on
-        // reopen; pre-S143 it silently reverted to `connection.database`.
+        // Seed `activeDb` from `connection.database` (the backend just
+        // opened a pool against that DB). Omit the field when the
+        // connection has no default database so the DbSwitcher renders
+        // "(default)" rather than an empty string.
         const conn = state.connections.find((c) => c.id === id);
-        const persisted = loadPersistedActiveDb(id);
         const activeDb =
-          persisted ??
-          (conn?.database && conn.database.length > 0
+          conn?.database && conn.database.length > 0
             ? conn.database
-            : undefined);
+            : undefined;
         return {
           activeStatuses: {
             ...state.activeStatuses,
@@ -296,9 +246,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   disconnectFromDatabase: async (id) => {
     await tauri.disconnectFromDatabase(id);
-    // Sprint 143 (AC-148-4) — clear the persisted activeDb so a deleted
-    // or forgotten connection doesn't leave a dangling localStorage key.
-    clearPersistedActiveDb(id);
     set((state) => ({
       activeStatuses: {
         ...state.activeStatuses,
@@ -337,11 +284,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       if (current?.type !== "connected") {
         return {};
       }
-      // Sprint 143 (AC-148-4) — persist the new selection so it survives
-      // a close/reopen cycle. Persistence is deliberately scoped to the
-      // `connected` branch above; we never write while the connection is
-      // disconnected or erroring (those branches are early-returned).
-      persistActiveDb(id, dbName);
       return {
         activeStatuses: {
           ...state.activeStatuses,

@@ -1,6 +1,7 @@
 import { Database, MousePointerClick, Plug } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import DocumentDatabaseTree from "./DocumentDatabaseTree";
 import SchemaTree from "./SchemaTree";
 
@@ -20,7 +21,7 @@ interface SchemaPanelProps {
 export default function SchemaPanel({ selectedId }: SchemaPanelProps) {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const connectToDatabase = useConnectionStore((s) => s.connectToDatabase);
+  const { connect: connectToDatabase } = useConnectionLifecycle();
 
   if (connections.length === 0) {
     return (

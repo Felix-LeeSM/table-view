@@ -3,6 +3,7 @@ import { Database, MousePointerClick, Plug } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { assertNever } from "@lib/paradigm";
 import DocumentSidebar from "./DocumentSidebar";
 import RdbSidebar from "./RdbSidebar";
@@ -44,7 +45,7 @@ export default function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const connectToDatabase = useConnectionStore((s) => s.connectToDatabase);
+  const { connect: connectToDatabase } = useConnectionLifecycle();
   const activeTabConnId = useTabStore((s) => {
     const id = s.activeTabId;
     if (!id) return null;

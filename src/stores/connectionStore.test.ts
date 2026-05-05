@@ -95,18 +95,6 @@ describe("connectionStore", () => {
       loading: false,
       error: null,
     });
-    // Sprint 143 (AC-148-4) — wipe persisted activeDb keys so a single
-    // test never leaks `tableview:activeDb:*` into the next case.
-    try {
-      const keys: string[] = [];
-      for (let i = 0; i < window.localStorage.length; i++) {
-        const k = window.localStorage.key(i);
-        if (k && k.startsWith("tableview:activeDb:")) keys.push(k);
-      }
-      for (const k of keys) window.localStorage.removeItem(k);
-    } catch {
-      // ignore
-    }
     vi.clearAllMocks();
     mockPersistFocusedConnId.mockClear();
     mockPersistActiveStatuses.mockClear();
@@ -733,94 +721,55 @@ describe("connectionStore", () => {
     expect(useConnectionStore.getState().activeStatuses).toEqual({});
   });
 
-  // -- Sprint 143 (AC-148-4) — Mongo activeDb persistence --
+  // -- AC-148-4 retire (2026-05-05) — close/reopen 시 activeDb를 default로 reset.
   //
-  // The user picks a DB in the workspace's DbSwitcher and expects that
-  // choice to survive close/reopen — see feedback #12 (2026-04-27). Pre-
-  // sprint-143 the selection lived only in the connected variant of the
-  // in-memory `activeStatuses` and reverted to `connection.database` on
-  // reconnect. Now `setActiveDb` writes a `tableview:activeDb:{id}` key
-  // and `connectToDatabase` prefers that persisted value when present.
+  // Sprint 143가 도입한 `tableview:activeDb:*` localStorage persist는 사용자가
+  // workspace를 닫았다가 다시 열면 DbSwitcher 라벨만 마지막 선택을 유지하지만
+  // backend sub-pool은 재연결로 default DB로 reset되어 source 간 불일치를 만들었다.
+  // 사용자 결정으로 persist 폐기 → 모든 source가 default DB로 일관 reset.
+  // 회귀 테스트: prior session의 localStorage 값이 있어도 활용하지 않아야 한다.
 
-  it("setActiveDb persists the selection to localStorage under tableview:activeDb:{id} (AC-148-4)", () => {
+  it("connectToDatabase ignores any prior tableview:activeDb:* localStorage entry and uses connection.database", async () => {
+    // 2026-05-05 — Sprint 143 (AC-148-4) retire 회귀. 마이그레이션 안 된
+    // 사용자 환경에 stale key가 남아 있어도 새 정책은 항상 conn.database 사용.
+    window.localStorage.setItem("tableview:activeDb:m1", "admin");
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "m1",
+          name: "MongoCluster",
+          db_type: "mongodb",
+          host: "localhost",
+          port: 27017,
+          user: "mongo",
+          database: "test",
+          group_id: null,
+          color: null,
+          has_password: false,
+          paradigm: "document",
+        },
+      ],
+      activeStatuses: {},
+    });
+    try {
+      await useConnectionStore.getState().connectToDatabase("m1");
+      const status = useConnectionStore.getState().activeStatuses["m1"];
+      expect(status?.type).toBe("connected");
+      if (status?.type === "connected") {
+        expect(status.activeDb).toBe("test");
+      }
+    } finally {
+      window.localStorage.removeItem("tableview:activeDb:m1");
+    }
+  });
+
+  it("setActiveDb does not write to localStorage", () => {
+    // 2026-05-05 — Sprint 143 (AC-148-4) retire 회귀. setActiveDb는 in-memory
+    // store만 갱신해야 하며 localStorage에 어떤 key도 만들지 않아야 한다.
     useConnectionStore.setState({
       activeStatuses: { m1: { type: "connected", activeDb: "test" } },
     });
     useConnectionStore.getState().setActiveDb("m1", "admin");
-    expect(window.localStorage.getItem("tableview:activeDb:m1")).toBe("admin");
-  });
-
-  it("setActiveDb does NOT persist when the connection is not in connected state (AC-148-4)", () => {
-    useConnectionStore.setState({
-      activeStatuses: { m1: { type: "disconnected" } },
-    });
-    useConnectionStore.getState().setActiveDb("m1", "admin");
-    expect(window.localStorage.getItem("tableview:activeDb:m1")).toBeNull();
-  });
-
-  it("connectToDatabase restores activeDb from localStorage when a persisted value exists (AC-148-4)", async () => {
-    // Simulate a prior session having persisted `admin` for connection m1.
-    window.localStorage.setItem("tableview:activeDb:m1", "admin");
-    useConnectionStore.setState({
-      connections: [
-        {
-          id: "m1",
-          name: "MongoCluster",
-          db_type: "mongodb",
-          host: "localhost",
-          port: 27017,
-          user: "mongo",
-          database: "test",
-          group_id: null,
-          color: null,
-          has_password: false,
-          paradigm: "document",
-        },
-      ],
-      activeStatuses: {},
-    });
-    await useConnectionStore.getState().connectToDatabase("m1");
-    const status = useConnectionStore.getState().activeStatuses["m1"];
-    expect(status?.type).toBe("connected");
-    if (status?.type === "connected") {
-      // The persisted value wins over `connection.database` ("test").
-      expect(status.activeDb).toBe("admin");
-    }
-  });
-
-  it("connectToDatabase falls back to connection.database when no persisted value exists (AC-148-4)", async () => {
-    useConnectionStore.setState({
-      connections: [
-        {
-          id: "m1",
-          name: "MongoCluster",
-          db_type: "mongodb",
-          host: "localhost",
-          port: 27017,
-          user: "mongo",
-          database: "test",
-          group_id: null,
-          color: null,
-          has_password: false,
-          paradigm: "document",
-        },
-      ],
-      activeStatuses: {},
-    });
-    await useConnectionStore.getState().connectToDatabase("m1");
-    const status = useConnectionStore.getState().activeStatuses["m1"];
-    expect(status?.type).toBe("connected");
-    if (status?.type === "connected") {
-      expect(status.activeDb).toBe("test");
-    }
-  });
-
-  it("disconnectFromDatabase clears the persisted activeDb entry (AC-148-4)", async () => {
-    window.localStorage.setItem("tableview:activeDb:m1", "admin");
-    useConnectionStore.setState({
-      activeStatuses: { m1: { type: "connected", activeDb: "admin" } },
-    });
-    await useConnectionStore.getState().disconnectFromDatabase("m1");
     expect(window.localStorage.getItem("tableview:activeDb:m1")).toBeNull();
   });
 

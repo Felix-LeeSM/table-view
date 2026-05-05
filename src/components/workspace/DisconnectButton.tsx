@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, Unplug } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { toast } from "@lib/toast";
 
 /**
@@ -41,9 +42,7 @@ export default function DisconnectButton({
 }: DisconnectButtonProps = {}) {
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const disconnectFromDatabase = useConnectionStore(
-    (s) => s.disconnectFromDatabase,
-  );
+  const { disconnect: disconnectFromDatabase } = useConnectionLifecycle();
   const connections = useConnectionStore((s) => s.connections);
 
   const [busy, setBusy] = useState(false);

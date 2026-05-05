@@ -1,0 +1,73 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+
+// 2026-05-05 — AC-148-4 retire sprint. connect/disconnect 시 schema/document
+// cache가 함께 invalidate되어야 재진입 화면에서 stale schema가 "초기 DB"로
+// 잘못 노출되지 않는다 (plan: connections-window-connection-nifty-meerkat.md).
+// Hook은 store action 호출 직후 같은 connectionId로 두 cache clear를 부른다.
+
+const mockConnect = vi.fn(() => Promise.resolve());
+const mockDisconnect = vi.fn(() => Promise.resolve());
+const mockClearSchema = vi.fn();
+const mockClearDocument = vi.fn();
+
+vi.mock("@stores/connectionStore", () => ({
+  useConnectionStore: (selector: (s: unknown) => unknown) =>
+    selector({
+      connectToDatabase: mockConnect,
+      disconnectFromDatabase: mockDisconnect,
+    }),
+}));
+
+vi.mock("@stores/schemaStore", () => ({
+  useSchemaStore: (selector: (s: unknown) => unknown) =>
+    selector({ clearForConnection: mockClearSchema }),
+}));
+
+vi.mock("@stores/documentStore", () => ({
+  useDocumentStore: (selector: (s: unknown) => unknown) =>
+    selector({ clearConnection: mockClearDocument }),
+}));
+
+import { useConnectionLifecycle } from "./useConnectionLifecycle";
+
+describe("useConnectionLifecycle", () => {
+  beforeEach(() => {
+    mockConnect.mockClear();
+    mockDisconnect.mockClear();
+    mockClearSchema.mockClear();
+    mockClearDocument.mockClear();
+  });
+
+  it("connect: backend connect 성공 후 두 cache를 같은 id로 clear한다", async () => {
+    const { result } = renderHook(() => useConnectionLifecycle());
+    await act(async () => {
+      await result.current.connect("c1");
+    });
+    expect(mockConnect).toHaveBeenCalledWith("c1");
+    expect(mockClearSchema).toHaveBeenCalledWith("c1");
+    expect(mockClearDocument).toHaveBeenCalledWith("c1");
+  });
+
+  it("disconnect: backend disconnect 성공 후 두 cache를 같은 id로 clear한다", async () => {
+    const { result } = renderHook(() => useConnectionLifecycle());
+    await act(async () => {
+      await result.current.disconnect("c1");
+    });
+    expect(mockDisconnect).toHaveBeenCalledWith("c1");
+    expect(mockClearSchema).toHaveBeenCalledWith("c1");
+    expect(mockClearDocument).toHaveBeenCalledWith("c1");
+  });
+
+  it("connect: backend가 reject하면 cache clear를 부르지 않는다", async () => {
+    // stale state 보존이 안전 — 실패한 connect는 backend pool도 안 만들었으므로
+    // 새로 fetch할 source 자체가 없다. 기존 cache가 사용자에게 남는 게 옳다.
+    mockConnect.mockRejectedValueOnce(new Error("boom"));
+    const { result } = renderHook(() => useConnectionLifecycle());
+    await act(async () => {
+      await expect(result.current.connect("c1")).rejects.toThrow("boom");
+    });
+    expect(mockClearSchema).not.toHaveBeenCalled();
+    expect(mockClearDocument).not.toHaveBeenCalled();
+  });
+});

@@ -7,6 +7,7 @@ import type {
 import { Button } from "@components/ui/button";
 import { ENVIRONMENT_META } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -103,10 +104,8 @@ export default function ConnectionItem({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const connectToDatabase = useConnectionStore((s) => s.connectToDatabase);
-  const disconnectFromDatabase = useConnectionStore(
-    (s) => s.disconnectFromDatabase,
-  );
+  const { connect: connectToDatabase, disconnect: disconnectFromDatabase } =
+    useConnectionLifecycle();
   const removeConnection = useConnectionStore((s) => s.removeConnection);
   const groups = useConnectionStore((s) => s.groups);
   const moveConnectionToGroup = useConnectionStore(
