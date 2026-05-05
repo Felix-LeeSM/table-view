@@ -21,7 +21,7 @@ fn window_by_label<R: Runtime>(
     label: &str,
 ) -> Result<tauri::WebviewWindow<R>, AppError> {
     app.get_webview_window(label)
-        .ok_or_else(|| AppError::NotFound(format!("window '{label}' not found")))
+        .ok_or_else(|| AppError::Window(format!("window '{label}' not found")))
 }
 
 /// Build the launcher `WebviewWindow` from hardcoded defaults that mirror
@@ -47,7 +47,7 @@ fn build_launcher_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError>
         .disable_drag_drop_handler()
         .build()
         .map(|_| ())
-        .map_err(|e| AppError::Connection(format!("launcher build failed: {e}")))
+        .map_err(|e| AppError::Window(format!("launcher build failed: {e}")))
 }
 
 /// Sprint 175 Sprint 2 iteration 2 — build the workspace `WebviewWindow`
@@ -84,7 +84,7 @@ fn build_workspace_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError
     .disable_drag_drop_handler()
     .build()
     .map(|_| ())
-    .map_err(|e| AppError::Connection(format!("workspace build failed: {e}")))
+    .map_err(|e| AppError::Window(format!("workspace build failed: {e}")))
 }
 
 /// Show the launcher window. Idempotent — calling on an already-visible
@@ -103,7 +103,7 @@ pub async fn launcher_show<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError
     }
     window_by_label(&app, "launcher")?
         .show()
-        .map_err(|e| AppError::Connection(format!("launcher.show failed: {e}")))
+        .map_err(|e| AppError::Window(format!("launcher.show failed: {e}")))
 }
 
 /// Hide the launcher window (does not close it — re-showing must be
@@ -112,7 +112,7 @@ pub async fn launcher_show<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError
 pub async fn launcher_hide<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     window_by_label(&app, "launcher")?
         .hide()
-        .map_err(|e| AppError::Connection(format!("launcher.hide failed: {e}")))
+        .map_err(|e| AppError::Window(format!("launcher.hide failed: {e}")))
 }
 
 /// Focus the launcher window. Used after `launcher_show()` to ensure the
@@ -121,7 +121,7 @@ pub async fn launcher_hide<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError
 pub async fn launcher_focus<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     window_by_label(&app, "launcher")?
         .set_focus()
-        .map_err(|e| AppError::Connection(format!("launcher.focus failed: {e}")))
+        .map_err(|e| AppError::Window(format!("launcher.focus failed: {e}")))
 }
 
 /// Show the workspace window. The window is **lazy-built** (Sprint 175
@@ -138,7 +138,7 @@ pub async fn workspace_show<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErro
     }
     window_by_label(&app, "workspace")?
         .show()
-        .map_err(|e| AppError::Connection(format!("workspace.show failed: {e}")))
+        .map_err(|e| AppError::Window(format!("workspace.show failed: {e}")))
 }
 
 /// Hide the workspace window. Used by Sprint 154's "Back to connections"
@@ -147,7 +147,7 @@ pub async fn workspace_show<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErro
 pub async fn workspace_hide<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     window_by_label(&app, "workspace")?
         .hide()
-        .map_err(|e| AppError::Connection(format!("workspace.hide failed: {e}")))
+        .map_err(|e| AppError::Window(format!("workspace.hide failed: {e}")))
 }
 
 /// Focus the workspace window. Called immediately after `workspace_show()`
@@ -156,7 +156,7 @@ pub async fn workspace_hide<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErro
 pub async fn workspace_focus<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     window_by_label(&app, "workspace")?
         .set_focus()
-        .map_err(|e| AppError::Connection(format!("workspace.focus failed: {e}")))
+        .map_err(|e| AppError::Window(format!("workspace.focus failed: {e}")))
 }
 
 /// Ensure the workspace window exists. If it has not yet been constructed
@@ -232,17 +232,17 @@ mod tests {
     }
 
     #[test]
-    fn window_by_label_returns_not_found_for_missing_label() {
+    fn window_by_label_returns_window_error_for_missing_label() {
         let app = make_app_with_windows();
         let result = window_by_label(app.handle(), "ghost-label");
         match result {
-            Err(AppError::NotFound(msg)) => {
+            Err(AppError::Window(msg)) => {
                 assert!(
                     msg.contains("ghost-label"),
-                    "NotFound message should embed the missing label, got {msg:?}"
+                    "Window message should embed the missing label, got {msg:?}"
                 );
             }
-            other => panic!("Expected AppError::NotFound, got {other:?}"),
+            other => panic!("Expected AppError::Window, got {other:?}"),
         }
     }
 

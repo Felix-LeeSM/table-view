@@ -23,6 +23,9 @@ pub enum AppError {
     #[error("Unsupported operation: {0}")]
     Unsupported(String),
 
+    #[error("Window error: {0}")]
+    Window(String),
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -74,6 +77,10 @@ mod tests {
         assert_eq!(
             AppError::Unsupported("mysql".into()).to_string(),
             "Unsupported operation: mysql"
+        );
+        assert_eq!(
+            AppError::Window("launcher build failed".into()).to_string(),
+            "Window error: launcher build failed"
         );
     }
 
