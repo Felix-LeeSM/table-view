@@ -12,6 +12,7 @@ import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import { markBootMilestone } from "@lib/perf/bootInstrumentation";
+import { logger } from "@lib/logger";
 import App from "./App";
 
 /**
@@ -96,7 +97,7 @@ export default function AppRouter() {
     // (so debug builds notice) and land the user on the launcher — that
     // is the safer default because the launcher's connection list is the
     // entry surface for every workflow.
-    console.warn(
+    logger.warn(
       `[AppRouter] unknown window label ${JSON.stringify(label)} — falling back to launcher`,
     );
     route = "launcher";

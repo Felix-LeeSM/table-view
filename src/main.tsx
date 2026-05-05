@@ -10,6 +10,7 @@ import {
   markT0,
   scheduleBootSummary,
 } from "@lib/perf/bootInstrumentation";
+import { logger } from "@lib/logger";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
@@ -50,7 +51,7 @@ async function boot() {
   // Sprint 154 — register the launcher's `tauri://close-requested` listener.
   // Fire-and-forget: if it rejects the app still works via system-tray / Cmd+Q.
   void bootWindowLifecycle().catch((e) => {
-    console.warn(
+    logger.warn(
       "[main] bootWindowLifecycle failed:",
       e instanceof Error ? e.message : e,
     );
@@ -82,5 +83,5 @@ async function boot() {
 }
 
 boot().catch((e) => {
-  console.error("[main] boot failed:", e);
+  logger.error("[main] boot failed:", e);
 });

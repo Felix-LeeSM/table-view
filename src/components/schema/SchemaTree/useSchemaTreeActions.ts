@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type RefObject } from "react";
 import { toast } from "@/lib/toast";
+import { logger } from "@/lib/logger";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
@@ -258,9 +259,7 @@ export function useSchemaTreeActions({
               toast.error(
                 `Failed to drop ${schemaName}.${tableName}: ${detail}`,
               );
-              if (import.meta.env.DEV) {
-                console.error("[SchemaTree] dropTable:", err);
-              }
+              logger.error("[SchemaTree] dropTable:", err);
               addHistoryEntry({
                 sql: recordedSql,
                 executedAt: startedAt,
@@ -323,9 +322,7 @@ export function useSchemaTreeActions({
         toast.error(
           `Failed to rename ${renameDialog.schemaName}.${renameDialog.tableName}: ${detail}`,
         );
-        if (import.meta.env.DEV) {
-          console.error("[SchemaTree] renameTable:", err);
-        }
+        logger.error("[SchemaTree] renameTable:", err);
       })
       .finally(() => {
         setIsOperating(false);

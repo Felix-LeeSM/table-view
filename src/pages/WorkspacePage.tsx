@@ -11,6 +11,7 @@ import {
 import ThemePicker from "@components/theme/ThemePicker";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
+import { logger } from "@lib/logger";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import {
   hideWindow,
@@ -62,7 +63,7 @@ export default function WorkspacePage() {
       await hideWindow("workspace");
       await showWindow("launcher");
     } catch (e) {
-      console.warn(
+      logger.warn(
         "[workspace-back] window transition failed:",
         e instanceof Error ? e.message : e,
       );

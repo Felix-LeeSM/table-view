@@ -22,6 +22,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { logger } from "./logger";
 
 /**
  * The two known window labels declared in `tauri.conf.json` `app.windows[]`.
@@ -41,7 +42,7 @@ async function resolveWindow(
     const win = await mod.WebviewWindow.getByLabel(label);
     return win ?? null;
   } catch (e) {
-    console.warn(
+    logger.warn(
       `[window-controls] resolveWindow(${label}) failed:`,
       e instanceof Error ? e.message : e,
     );
@@ -165,7 +166,7 @@ export async function onCurrentWindowCloseRequested(
       void handler();
     });
   } catch (e) {
-    console.warn(
+    logger.warn(
       "[window-controls] onCurrentWindowCloseRequested failed:",
       e instanceof Error ? e.message : e,
     );

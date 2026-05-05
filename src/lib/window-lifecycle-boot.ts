@@ -25,6 +25,7 @@ import {
 } from "@lib/window-controls";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import type { UnlistenFn } from "@tauri-apps/api/event";
+import { logger } from "./logger";
 
 /**
  * Register the launcher's `tauri://close-requested` listener so closing the
@@ -49,7 +50,7 @@ export async function registerLauncherCloseHandler(): Promise<UnlistenFn> {
       // Best-effort: even if hide rejects (e.g. workspace was already
       // closed by an earlier failure), we still want the exit to land.
       // The catch is intentionally narrow — log + continue.
-      console.warn(
+      logger.warn(
         "[launcher-close] workspace.hide() failed before exit:",
         e instanceof Error ? e.message : e,
       );

@@ -87,12 +87,13 @@ sequencing** — 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후�
 | 2 | **200** ✓ | refactor | §1-1 (frontend god file #2)    | `DataGridTable.tsx` (1071) → entry + 6 sub-file. (commit `3b2b5b4`) |
 | 3 | **201** ✓ | refactor | §1-1 (frontend god file #3)    | `QueryTab.tsx` (1040) → entry + 6 sub-file. (commit `c0ab92e`) |
 | 4 | **202** ✓ | refactor | §1-2 (backend god file #1)     | `db/postgres.rs` (3803) → entry + 4 sub-file. mongodb.rs 패턴 답습. (commit `370c4ee`) |
-| 5 | **203** ✓ | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. type narrowing only. |
-| 6 | 204 | refactor | §4–5 (catch + console 정책)      | logger 중앙화 + DEV-only gate 정책. |
-| 7 | 205 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
-| 8 | 206 | refactor | §7 (Rust prod expect)            | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |
-| 9 | 207 | refactor | §1-1 (frontend god file #4)      | `tabStore.ts` (1002) 분해 — store concerns 분리. |
-| 10 | 208 | refactor | §1-2 (backend god file #2)      | `commands/connection.rs` (1710) 분할 — postgres.rs 패턴 답습. |
+| 5 | **203** ✓ | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. type narrowing only. (commit `5a3a693`) |
+| 6 | **204** ✓ | refactor | §5 (console 정책)              | `src/lib/logger.ts` 신규 + DEV-only gate. console.* 13곳 → `logger.*`. `bootInstrumentation:187` 1곳 의도적 유지. |
+| 7 | 205 | refactor | §4 (catch 정책)                 | `catch {}` audit (~40곳) — silent vs DEV-log 분류 + 필요 시 logger 추가. |
+| 8 | 206 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
+| 9 | 207 | refactor | §7 (Rust prod expect)            | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |
+| 10 | 208 | refactor | §1-1 (frontend god file #4)     | `tabStore.ts` (1002) 분해 — store concerns 분리. |
+| 11 | 209 | refactor | §1-2 (backend god file #2)     | `commands/connection.rs` (1710) 분할 — postgres.rs 패턴 답습. |
 
 본 sequencing 의 목적은 [`/CODE_SMELLS.md`](../CODE_SMELLS.md) 의 7
 카테고리를 본 cycle 안에서 모두 소진하는 것. Sprint 199–208 모두

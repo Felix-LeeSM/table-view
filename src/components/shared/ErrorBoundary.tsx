@@ -1,6 +1,7 @@
 import { Component } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { Button } from "@components/ui/button";
+import { logger } from "@lib/logger";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -25,7 +26,7 @@ export default class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    logger.error("ErrorBoundary caught an error:", error, errorInfo);
   }
 
   handleReload = () => {

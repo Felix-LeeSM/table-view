@@ -15,6 +15,7 @@ import { THEME_CATALOG } from "@lib/themeCatalog";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { showWindow, hideWindow, focusWindow } from "@lib/window-controls";
+import { logger } from "@lib/logger";
 import { toast } from "@lib/toast";
 import { Button } from "@components/ui/button";
 import {
@@ -145,7 +146,7 @@ export default function HomePage() {
           // workspace at this point, so a focus/hide failure is logged
           // but does not surface a toast (would be misleading — the
           // primary action succeeded).
-          console.warn(
+          logger.warn(
             "[home-activate] post-show cleanup failed:",
             e instanceof Error ? e.message : e,
           );

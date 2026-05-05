@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { toast } from "@/lib/toast";
+import { logger } from "@/lib/logger";
 import type { SchemaInfo } from "@/types/schema";
 
 /**
@@ -24,11 +25,9 @@ import type { SchemaInfo } from "@/types/schema";
 
 const EMPTY_SCHEMAS: SchemaInfo[] = [];
 
-/** Best-effort dev-mode console logging for failed schema fetches. */
+/** Best-effort dev-mode logging for failed schema fetches (Sprint 204). */
 function logSchemaError(label: string, err: unknown): void {
-  if (import.meta.env.DEV) {
-    console.error(`[useSchemaCache] ${label}:`, err);
-  }
+  logger.error(`[useSchemaCache] ${label}:`, err);
 }
 
 export interface UseSchemaCacheReturn {

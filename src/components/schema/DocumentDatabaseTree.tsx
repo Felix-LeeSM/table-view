@@ -8,6 +8,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "@/lib/toast";
+import { logger } from "@/lib/logger";
 import { Button } from "@components/ui/button";
 import {
   ContextMenu,
@@ -223,9 +224,7 @@ export default function DocumentDatabaseTree({
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to drop ${database}.${collection}: ${detail}`);
-      if (import.meta.env.DEV) {
-        console.error("[DocumentDatabaseTree] dropCollection:", err);
-      }
+      logger.error("[DocumentDatabaseTree] dropCollection:", err);
       addHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
