@@ -135,14 +135,21 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
                 presence_count.insert(k.clone(), 0);
                 has_null.insert(k.clone(), false);
             }
-            *presence_count.get_mut(k).expect("inserted above") += 1;
+            // The `if !contains_key` block above synchronizes all four
+            // HashMaps, so these `get_mut` calls are guaranteed `Some` —
+            // we still pattern-match defensively to avoid panicking on an
+            // invariant break.
+            if let Some(c) = presence_count.get_mut(k) {
+                *c += 1;
+            }
             match v {
                 Bson::Null => {
                     has_null.insert(k.clone(), true);
                 }
                 _ => {
-                    let by_type = type_counts.get_mut(k).expect("inserted above");
-                    *by_type.entry(bson_type_name(v)).or_insert(0) += 1;
+                    if let Some(by_type) = type_counts.get_mut(k) {
+                        *by_type.entry(bson_type_name(v)).or_insert(0) += 1;
+                    }
                 }
             }
         }

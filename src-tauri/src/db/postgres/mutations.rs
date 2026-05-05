@@ -24,7 +24,11 @@ fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
         return Err(AppError::Validation(format!("{} must not be empty", label)));
     }
     let mut chars = trimmed.chars();
-    let first = chars.next().expect("checked non-empty");
+    let Some(first) = chars.next() else {
+        // Unreachable: `is_empty()` above guarantees a leading char.
+        // Surface Validation rather than panic on invariant break.
+        return Err(AppError::Validation(format!("{} must not be empty", label)));
+    };
     if !first.is_ascii_alphabetic() && first != '_' {
         return Err(AppError::Validation(format!(
             "{} must start with a letter or underscore",

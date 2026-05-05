@@ -275,9 +275,14 @@ pub fn run() {
     // closes, so the original `.run(context)` is preserved there.
     #[cfg(target_os = "macos")]
     {
-        let app = builder
-            .build(context)
-            .expect("error while building tauri application");
+        let app = match builder.build(context) {
+            Ok(app) => app,
+            Err(e) => {
+                tracing::error!(target: "boot", "failed to build Tauri application: {e}");
+                eprintln!("[table-view] Failed to start: {e}");
+                std::process::exit(1);
+            }
+        };
 
         app.run(|handle, event| {
             if let tauri::RunEvent::Reopen {
@@ -302,9 +307,11 @@ pub fn run() {
     }
 
     #[cfg(not(target_os = "macos"))]
-    builder
-        .run(context)
-        .expect("error while running tauri application");
+    if let Err(e) = builder.run(context) {
+        tracing::error!(target: "boot", "failed to run Tauri application: {e}");
+        eprintln!("[table-view] Failed to run: {e}");
+        std::process::exit(1);
+    }
 }
 
 /// macOS native menu installer (2026-05-01).
