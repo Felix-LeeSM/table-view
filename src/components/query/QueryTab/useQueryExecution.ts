@@ -17,6 +17,7 @@ import {
   isRecordArray,
   dispatchDbMutationHint,
 } from "./queryHelpers";
+import { logger } from "@lib/logger";
 
 /**
  * `QueryTab` 의 query execution + mongo aggregate danger gate 캡슐화.
@@ -35,9 +36,10 @@ import {
  *   - `pendingMongoConfirm` state — pipeline + reason 보존 (dialog 가
  *     열려 있는 동안).
  *
- * Sprint 201 에서 entry 로부터 추출. 동작 0 변경. CODE_SMELLS §2 (deps
- * 억제 1곳) + §4 (`catch {}` 1곳, cancelQuery swallow) 그대로 보존 —
- * 본 sprint 정리 X (Sprint 206/207 후보).
+ * Sprint 201 에서 entry 로부터 추출. 동작 0 변경. deps 억제 (Sprint 25
+ * 정책 — keyboard shortcut layer ref staleness 회피) 1곳 보존.
+ * cancelQuery 의 빈 catch 는 dev-only logger.warn 으로 대체 — race vs
+ * 진짜 backend regression 구분 가능.
  *
  * 외부 invariant:
  * - Sprint 132 raw-query DB-change detection ("verify 실패 ≠ query 실패")
@@ -175,8 +177,13 @@ export function useQueryExecution({
     if (tab.queryState.status === "running") {
       try {
         await cancelQuery(tab.queryState.queryId);
-      } catch {
-        // Query may have already completed
+      } catch (err) {
+        // Most cancel failures are benign races: the query finished between
+        // the user clicking Cancel and the IPC dispatch (backend returns
+        // NotFound for an unregistered token). Surface via dev logger so a
+        // genuine IPC/backend regression isn't silent — store-side
+        // stale-response guards already handle state transition.
+        logger.warn("cancelQuery failed (likely already completed):", err);
       }
       return;
     }
