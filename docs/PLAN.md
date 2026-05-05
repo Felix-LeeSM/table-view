@@ -91,8 +91,8 @@ sequencing** — 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후�
 | 6 | **204** ✓ | refactor | §5 (console 정책)              | `src/lib/logger.ts` 신규 + DEV-only gate. console.* 13곳 → `logger.*`. `bootInstrumentation:187` 1곳 의도적 유지. (commit `3dead90`) |
 | 7 | **205** ✓ | refactor | §4 (catch 정책)                 | silent `catch {}` 37곳 audit + 주석 누락 13곳 보강. DEV-log 필요 case 0건. localStorage helper 통일은 후속 candidate. (commit `3cfe92a`) |
 | 8 | **206** ✓ | refactor | §6 (테스트 skip)                | e2e skip 16 → 2. placeholder 11 제거 + 파일 2개 삭제. outline 은 archive 보존. 잔존 2건 = env-conditional 정당. (commit `a7ab8df`) |
-| 9 | **207** ✓ | refactor | §7 (Rust prod expect)            | prod `.expect` 5곳 → match + tracing + exit(1) (lib.rs 2곳) / let-else / if-let 디펜시브 (invariant 3곳). |
-| 10 | 208 | refactor | §1-1 (frontend god file #4)     | `tabStore.ts` (1002) 분해 — store concerns 분리. |
+| 9 | **207** ✓ | refactor | §7 (Rust prod expect)            | prod `.expect` 5곳 → match + tracing + exit(1) (lib.rs 2곳) / let-else / if-let 디펜시브 (invariant 3곳). (commit `f969601`) |
+| 10 | **208** ✓ | refactor | §1-1 (frontend god file #4)     | `tabStore.ts` (1009) → entry + 3 sub-file (types/persistence/tracker). 51 외부 importer 경로 보존, 행동 변경 0. |
 | 11 | 209 | refactor | §1-2 (backend god file #2)     | `commands/connection.rs` (1710) 분할 — postgres.rs 패턴 답습. |
 
 본 sequencing 의 목적은 [`/CODE_SMELLS.md`](../CODE_SMELLS.md) 의 7
