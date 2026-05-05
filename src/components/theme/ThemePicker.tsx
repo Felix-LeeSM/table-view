@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useThemeStore } from "@stores/themeStore";
 import {
@@ -29,12 +29,14 @@ export default function ThemePicker() {
   }, [previewId, themeId, mode]);
 
   // If the picker unmounts mid-preview (e.g. dropdown closes while hovering),
-  // snap the DOM back to the persisted theme. Reads the live store so we
-  // don't restore to a stale mount-time snapshot.
+  // snap the DOM back to the persisted theme. Ref mirrors the latest selector
+  // value so the unmount cleanup reads the most recent commit instead of
+  // closing over a stale mount-time snapshot.
+  const themeRef = useRef({ themeId, mode });
+  themeRef.current = { themeId, mode };
   useEffect(() => {
     return () => {
-      const state = useThemeStore.getState();
-      applyTheme(state.themeId, state.mode);
+      applyTheme(themeRef.current.themeId, themeRef.current.mode);
     };
   }, []);
 

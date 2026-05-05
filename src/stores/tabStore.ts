@@ -6,9 +6,15 @@ import type {
   QueryStatementResult,
 } from "@/types/query";
 import type { FilterCondition, SortInfo } from "@/types/schema";
+// 2026-05-05 — TODO(별도 sprint): tabStore가 mru/connection/queryHistory의
+// action을 직접 호출하는 cross-store 의존(line 32, 335, 540, 709)을 React
+// layer hook 또는 호출 사이트로 옮겨 본 import 4건을 제거해야 한다. 호출
+// 사이트가 분산되어 본 sprint(activeDb persist 폐기)의 scope를 넘는다.
+/* eslint-disable no-restricted-imports */
 import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+/* eslint-enable no-restricted-imports */
 import type {
   QueryHistorySource,
   QueryHistoryStatus,

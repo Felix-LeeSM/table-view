@@ -124,10 +124,8 @@ export default function ConnectionItem({
 
   const handleDoubleClick = async () => {
     if (!isConnected && !isConnecting) {
-      await connectToDatabase(connection.id);
-      const status =
-        useConnectionStore.getState().activeStatuses[connection.id];
-      if (status?.type === "connected") {
+      const ok = await connectToDatabase(connection.id);
+      if (ok) {
         onActivate?.(connection.id);
       }
     } else if (isConnected) {

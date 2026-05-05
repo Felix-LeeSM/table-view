@@ -22,6 +22,17 @@ export default function App() {
   );
   const loadPersistedMru = useMruStore((s) => s.loadPersistedMru);
 
+  const activeTabId = useTabStore((s) => s.activeTabId);
+  const tabs = useTabStore((s) => s.tabs);
+  const removeTab = useTabStore((s) => s.removeTab);
+  const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const setActiveTab = useTabStore((s) => s.setActiveTab);
+  const reopenLastClosedTab = useTabStore((s) => s.reopenLastClosedTab);
+  const addTab = useTabStore((s) => s.addTab);
+  const updateQuerySql = useTabStore((s) => s.updateQuerySql);
+  const themeMode = useThemeStore((s) => s.mode);
+  const setThemeMode = useThemeStore((s) => s.setMode);
+
   useEffect(() => {
     loadConnections();
     loadGroups();
@@ -54,15 +65,14 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
         e.preventDefault();
-        const activeTabId = useTabStore.getState().activeTabId;
         if (activeTabId) {
-          useTabStore.getState().removeTab(activeTabId);
+          removeTab(activeTabId);
         }
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [activeTabId, removeTab]);
 
   // Cmd+T / Ctrl+T — new query tab
   useEffect(() => {
@@ -70,19 +80,18 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === "t") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        const { activeTabId, tabs } = useTabStore.getState();
         const activeTab = activeTabId
           ? tabs.find((t) => t.id === activeTabId)
           : null;
         const connectionId = activeTab?.connectionId ?? "";
         if (connectionId) {
-          useTabStore.getState().addQueryTab(connectionId);
+          addQueryTab(connectionId);
         }
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [activeTabId, tabs, addQueryTab]);
 
   // Cmd+. / Ctrl+. — cancel running query
   useEffect(() => {
@@ -90,7 +99,6 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === ".") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        const { activeTabId, tabs } = useTabStore.getState();
         const activeTab = activeTabId
           ? tabs.find((t) => t.id === activeTabId)
           : null;
@@ -110,7 +118,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [activeTabId, tabs]);
 
   // Cmd+N / Ctrl+N — new connection
   // Cmd+S / Ctrl+S — commit changes
@@ -156,7 +164,6 @@ export default function App() {
       if (digit < "1" || digit > "9") return;
       if (isEditableTarget(e.target)) return;
       const index = Number(digit) - 1;
-      const { tabs, setActiveTab } = useTabStore.getState();
       const tab = tabs[index];
       if (!tab) return;
       e.preventDefault();
@@ -164,7 +171,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [tabs, setActiveTab]);
 
   // Sprint 134 — the Sprint 133 Cmd+K handler that dispatched
   // `open-connection-switcher` was removed alongside the
@@ -184,7 +191,6 @@ export default function App() {
 
       e.preventDefault();
 
-      const { activeTabId, tabs } = useTabStore.getState();
       const activeTab = activeTabId
         ? tabs.find((t) => t.id === activeTabId)
         : null;
@@ -203,7 +209,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [activeTabId, tabs]);
 
   // Cmd+I / Ctrl+I — format SQL
   useEffect(() => {
@@ -237,12 +243,12 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        useTabStore.getState().reopenLastClosedTab();
+        reopenLastClosedTab();
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [reopenLastClosedTab]);
 
   // Cmd+Shift+F / Ctrl+Shift+F — toggle favorites panel
   useEffect(() => {
@@ -277,15 +283,18 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.shiftKey && (e.metaKey || e.ctrlKey) && e.key === "L") {
         e.preventDefault();
-        const { mode, setMode } = useThemeStore.getState();
         const nextMode =
-          mode === "dark" ? "light" : mode === "light" ? "system" : "dark";
-        setMode(nextMode);
+          themeMode === "dark"
+            ? "light"
+            : themeMode === "light"
+              ? "system"
+              : "dark";
+        setThemeMode(nextMode);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [themeMode, setThemeMode]);
 
   // Navigate-table event — open a table or view tab from Quick Open
   useEffect(() => {
@@ -299,7 +308,7 @@ export default function App() {
         }>
       ).detail;
       const { connectionId, schema, table, objectKind } = detail;
-      useTabStore.getState().addTab({
+      addTab({
         type: "table",
         connectionId,
         schema,
@@ -313,7 +322,7 @@ export default function App() {
     };
     window.addEventListener("navigate-table", handler);
     return () => window.removeEventListener("navigate-table", handler);
-  }, []);
+  }, [addTab]);
 
   // Quick Open function/procedure — open a query tab with the source pre-filled
   useEffect(() => {
@@ -325,17 +334,22 @@ export default function App() {
           title: string;
         }>
       ).detail;
-      const tabStore = useTabStore.getState();
-      tabStore.addQueryTab(connectionId);
+      addQueryTab(connectionId);
+      // addQueryTab는 동기로 store에 push한 직후 새 tab id를 알아야
+      // updateQuerySql을 부를 수 있는데, selector로 받은 `tabs`는 이번
+      // 이벤트 루프 안에서 갱신되지 않는다 (React가 다음 commit에 새
+      // snapshot을 push). 한 번만 fresh snapshot을 읽기 위해 store
+      // getState를 직접 호출한다.
+      // eslint-disable-next-line no-restricted-syntax
       const latestTabs = useTabStore.getState().tabs;
       const newTab = latestTabs[latestTabs.length - 1];
       if (newTab && newTab.type === "query" && source) {
-        tabStore.updateQuerySql(newTab.id, source);
+        updateQuerySql(newTab.id, source);
       }
     };
     window.addEventListener("quickopen-function", handler);
     return () => window.removeEventListener("quickopen-function", handler);
-  }, []);
+  }, [addQueryTab, updateQuerySql]);
 
   // Sprint 154 — Phase 12 multi-window split is now fully wired. Top-level
   // page routing lives in `AppRouter.tsx`, which picks Launcher vs Workspace

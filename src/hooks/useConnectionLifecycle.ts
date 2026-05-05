@@ -17,10 +17,15 @@ export function useConnectionLifecycle() {
   const clearDocument = useDocumentStore((s) => s.clearConnection);
 
   const connect = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       await storeConnect(id);
       clearSchema(id);
       clearDocument(id);
+      // connectionStore action은 throw 대신 status를 error 변형에 기록하므로
+      // 호출자가 await 결과로는 성공 여부를 알 수 없다. hook(외부 layer)에서
+      // fresh status를 한 번 읽어 boolean으로 환산해 호출자에게 알린다.
+      const status = useConnectionStore.getState().activeStatuses[id];
+      return status?.type === "connected";
     },
     [storeConnect, clearSchema, clearDocument],
   );

@@ -68,6 +68,9 @@ export default function DataGrid({
     (updater: SortInfo[] | ((prev: SortInfo[]) => SortInfo[])) => {
       // Read the live sort value off the store rather than closing over the
       // render-time `sorts` so two synchronous updates compose correctly.
+      // selector closure는 같은 render cycle에 stale 값을 가지므로 functional
+      // setter로 store action 시그니처를 바꾸기 전까지 getState로 fresh read.
+      // eslint-disable-next-line no-restricted-syntax -- 두 동기 setSorts 호출 합성 위해 fresh read 필요
       const state = useTabStore.getState();
       const tabId = state.activeTabId;
       if (!tabId) return;

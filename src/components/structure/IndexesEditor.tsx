@@ -269,6 +269,7 @@ export default function IndexesEditor({
   );
   const safeModeGate = useSafeModeGate(connectionId);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
@@ -432,7 +433,6 @@ export default function IndexesEditor({
 
   const handleOpenCreateIndex = async () => {
     if (columns.length === 0) {
-      const { getTableColumns } = useSchemaStore.getState();
       const cols = await getTableColumns(connectionId, table, schema);
       onColumnsChange(cols);
     }

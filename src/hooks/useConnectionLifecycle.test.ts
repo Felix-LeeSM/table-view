@@ -6,17 +6,34 @@ import { renderHook, act } from "@testing-library/react";
 // 잘못 노출되지 않는다 (plan: connections-window-connection-nifty-meerkat.md).
 // Hook은 store action 호출 직후 같은 connectionId로 두 cache clear를 부른다.
 
-const mockConnect = vi.fn(() => Promise.resolve());
-const mockDisconnect = vi.fn(() => Promise.resolve());
-const mockClearSchema = vi.fn();
-const mockClearDocument = vi.fn();
+const {
+  mockConnect,
+  mockDisconnect,
+  mockClearSchema,
+  mockClearDocument,
+  mockGetState,
+} = vi.hoisted(() => ({
+  mockConnect: vi.fn(() => Promise.resolve()),
+  mockDisconnect: vi.fn(() => Promise.resolve()),
+  mockClearSchema: vi.fn(),
+  mockClearDocument: vi.fn(),
+  mockGetState: vi.fn(() => ({
+    activeStatuses: { c1: { type: "connected" } } as Record<
+      string,
+      { type: string }
+    >,
+  })),
+}));
 
 vi.mock("@stores/connectionStore", () => ({
-  useConnectionStore: (selector: (s: unknown) => unknown) =>
-    selector({
-      connectToDatabase: mockConnect,
-      disconnectFromDatabase: mockDisconnect,
-    }),
+  useConnectionStore: Object.assign(
+    (selector: (s: unknown) => unknown) =>
+      selector({
+        connectToDatabase: mockConnect,
+        disconnectFromDatabase: mockDisconnect,
+      }),
+    { getState: mockGetState },
+  ),
 }));
 
 vi.mock("@stores/schemaStore", () => ({
@@ -37,16 +54,36 @@ describe("useConnectionLifecycle", () => {
     mockDisconnect.mockClear();
     mockClearSchema.mockClear();
     mockClearDocument.mockClear();
+    mockGetState.mockReturnValue({
+      activeStatuses: { c1: { type: "connected" } },
+    });
   });
 
-  it("connect: backend connect 성공 후 두 cache를 같은 id로 clear한다", async () => {
+  it("connect: backend connect 성공 후 두 cache를 같은 id로 clear하고 true를 반환한다", async () => {
     const { result } = renderHook(() => useConnectionLifecycle());
+    let returned: boolean | undefined;
     await act(async () => {
-      await result.current.connect("c1");
+      returned = await result.current.connect("c1");
     });
     expect(mockConnect).toHaveBeenCalledWith("c1");
     expect(mockClearSchema).toHaveBeenCalledWith("c1");
     expect(mockClearDocument).toHaveBeenCalledWith("c1");
+    expect(returned).toBe(true);
+  });
+
+  it("connect: backend가 error status를 기록하면 false를 반환한다", async () => {
+    // 2026-05-05 — connectionStore.connectToDatabase는 throw 대신 status를
+    // error 변형에 기록한다. 호출자가 await만으로는 성공 여부를 알 수 없어
+    // hook이 fresh status를 읽어 boolean으로 환산한다.
+    mockGetState.mockReturnValue({
+      activeStatuses: { c1: { type: "error" } },
+    });
+    const { result } = renderHook(() => useConnectionLifecycle());
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.connect("c1");
+    });
+    expect(returned).toBe(false);
   });
 
   it("disconnect: backend disconnect 성공 후 두 cache를 같은 id로 clear한다", async () => {

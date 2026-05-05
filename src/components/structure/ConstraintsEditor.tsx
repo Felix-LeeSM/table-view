@@ -25,6 +25,7 @@ import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
@@ -355,6 +356,7 @@ export default function ConstraintsEditor({
   );
   const safeModeGate = useSafeModeGate(connectionId);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
@@ -517,8 +519,6 @@ export default function ConstraintsEditor({
 
   const handleOpenAddConstraint = async () => {
     if (columns.length === 0) {
-      const { useSchemaStore } = await import("@stores/schemaStore");
-      const { getTableColumns } = useSchemaStore.getState();
       const cols = await getTableColumns(connectionId, table, schema);
       onColumnsChange(cols);
     }

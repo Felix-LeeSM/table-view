@@ -60,6 +60,8 @@ export default function HomePage() {
 
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
+  const tabs = useTabStore((s) => s.tabs);
+  const clearTabsForConnection = useTabStore((s) => s.clearTabsForConnection);
 
   const themeId = useThemeStore((s) => s.themeId);
   const themeMode = useThemeStore((s) => s.mode);
@@ -110,14 +112,11 @@ export default function HomePage() {
       // differs from any open workspace tab's owner, close those stale
       // tabs so the new workspace doesn't inherit cross-connection state.
       // Same-connection reactivation keeps existing tabs untouched.
-      const tabState = useTabStore.getState();
       const staleConnIds = new Set(
-        tabState.tabs
-          .filter((t) => t.connectionId !== id)
-          .map((t) => t.connectionId),
+        tabs.filter((t) => t.connectionId !== id).map((t) => t.connectionId),
       );
       for (const cid of staleConnIds) {
-        tabState.clearTabsForConnection(cid);
+        clearTabsForConnection(cid);
       }
       setFocusedConn(id);
       activatingRef.current = true;
@@ -153,7 +152,7 @@ export default function HomePage() {
         }
       })();
     },
-    [setFocusedConn],
+    [setFocusedConn, tabs, clearTabsForConnection],
   );
 
   const activeEntry =

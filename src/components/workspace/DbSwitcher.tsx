@@ -79,6 +79,8 @@ export default function DbSwitcher() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const setActiveDb = useConnectionStore((s) => s.setActiveDb);
+  const clearSchemaForConnection = useSchemaStore((s) => s.clearForConnection);
+  const clearDocumentConnection = useDocumentStore((s) => s.clearConnection);
   // When no active tab is open, fall back to the focused connection so the
   // switcher shows the database name immediately after opening the workspace
   // (before any table/collection is clicked).
@@ -213,9 +215,9 @@ export default function DbSwitcher() {
         // because the trigger is `aria-disabled` for those paradigms
         // (see `enabled` check at the top of the component).
         if (paradigm === "rdb") {
-          useSchemaStore.getState().clearForConnection(activeConn.id);
+          clearSchemaForConnection(activeConn.id);
         } else if (paradigm === "document") {
-          useDocumentStore.getState().clearConnection(activeConn.id);
+          clearDocumentConnection(activeConn.id);
         }
         setOpen(false);
         toast.success(`Switched to "${dbName}".`);
@@ -224,7 +226,14 @@ export default function DbSwitcher() {
         toast.error(`Failed to switch DB: ${message}`);
       }
     },
-    [activeConn, activeDb, paradigm, setActiveDb],
+    [
+      activeConn,
+      activeDb,
+      paradigm,
+      setActiveDb,
+      clearSchemaForConnection,
+      clearDocumentConnection,
+    ],
   );
 
   // Read-only fallback — Search/Kv paradigms, no connection, or
