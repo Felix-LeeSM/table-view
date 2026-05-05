@@ -335,7 +335,7 @@ clause and the master-spec edge case "DBMS-aware form db_type 전환".
 - Contract: `docs/sprints/sprint-138/contract.md`
 - Execution brief: `docs/sprints/sprint-138/execution-brief.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10 — S138 section)
-- Origin lesson: `memory/lessons/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Origin lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - S134 baseline: `docs/sprints/sprint-134/handoff.md`
 - S135 baseline: `docs/sprints/sprint-135/handoff.md`
 - S136 baseline: `docs/sprints/sprint-136/handoff.md`

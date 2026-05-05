@@ -66,4 +66,4 @@ This sprint closes AC-141-3 — when the user clicks "Back to connections" in th
 - AC-142 invariants: `src/__tests__/connection-sot.ac142.test.tsx`
 - Window label resolver: `src/lib/window-label.ts`
 - Conventions: `memory/conventions/memory.md`
-- Skip-zero gate: `memory/lessons/2026-04-27-phase-end-skip-accountability-gate/memory.md`
+- Skip-zero gate: `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`

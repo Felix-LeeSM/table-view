@@ -209,5 +209,5 @@ production code imports `ConnectionSwitcher`, no production code renders
 - Contract: `docs/sprints/sprint-134/contract.md`
 - Spec: `docs/sprints/sprint-134/spec.md`
 - Execution brief: `docs/sprints/sprint-134/execution-brief.md`
-- Origin lesson: `memory/lessons/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Origin lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Phase 9 baseline (what S134 unwinds): `docs/sprints/sprint-133/handoff.md`

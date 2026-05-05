@@ -63,7 +63,7 @@ Sprint 127–133에서 toolbar에 ConnectionSwitcher를 도입했지만 실제 �
 
 - Contract: `docs/sprints/sprint-134/contract.md`
 - Master spec: `docs/sprints/sprint-134/spec.md`
-- Lesson trigger: `memory/lessons/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Lesson trigger: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Phase 9 baseline: `docs/sprints/sprint-133/handoff.md`
 - Relevant files (read first):
   - `src/components/workspace/ConnectionSwitcher.tsx`

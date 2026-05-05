@@ -59,7 +59,7 @@ Sidebar 클릭 의미를 paradigm 무관하게 통일한다 — single-click = p
 - Contract: `docs/sprints/sprint-136/contract.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10)
 - S134, S135 baseline: `docs/sprints/sprint-134/handoff.md`, `docs/sprints/sprint-135/handoff.md`
-- Lesson: `memory/lessons/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - Relevant files (read first):
   - `src/components/schema/SchemaTree.tsx` + `.test.tsx`
   - `src/components/schema/DocumentDatabaseTree.tsx` + `.test.tsx`

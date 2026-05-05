@@ -373,7 +373,7 @@ See the table at the top of this handoff. Gates 1–7 all pass.
 - Contract: `docs/sprints/sprint-137/contract.md`
 - Execution brief: `docs/sprints/sprint-137/execution-brief.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10 — S137 section)
-- Origin lesson: `memory/lessons/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Origin lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - S131 Mongo `use_db` baseline: `docs/sprints/sprint-131/handoff.md`
 - S132 raw-query DB-change baseline: `docs/sprints/sprint-132/handoff.md`
 - S134 baseline: `docs/sprints/sprint-134/handoff.md`

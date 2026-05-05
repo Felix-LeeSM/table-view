@@ -56,7 +56,7 @@ S131에서 Mongo `use_db` 가 들어왔지만, sidebar의 `list_collections` 가
 
 - Contract: `docs/sprints/sprint-137/contract.md`
 - Master spec: `docs/sprints/sprint-134/spec.md` (Phase 10)
-- Lesson: `memory/lessons/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
+- Lesson: `memory/lessons/workspace-shell/2026-04-27-workspace-toolbar-ux-gaps/memory.md`
 - S131 Mongo use_db: `docs/sprints/sprint-131/handoff.md` (참고)
 - S132 raw-query DB-change: `docs/sprints/sprint-132/handoff.md`
 - Relevant files (read first):

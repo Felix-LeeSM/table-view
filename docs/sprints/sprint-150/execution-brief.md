@@ -65,4 +65,4 @@ Phase 11 ended with ADR 0011's single-window stub and 5 deferred `it.todo()` inv
 - Existing baseline test: `src/__tests__/window-lifecycle.ac141.test.tsx`
 - Conventions: `memory/conventions/memory.md`
 - Architecture: `memory/architecture/memory.md`
-- Skip-zero gate (lesson): `memory/lessons/2026-04-27-phase-end-skip-accountability-gate/memory.md`
+- Skip-zero gate (lesson): `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md`

@@ -68,7 +68,7 @@ Every dimension ≥ 7; every AC has evidence; every verification check passes.
 
 ## Caveats / Residual Risk (non-blocking)
 
-- **Scope drift (low)**: `memory/lessons/memory.md` and the new `memory/lessons/2026-04-24-parallel-agent-commit-isolation/` directory are present in the working tree but were not declared in the Sprint 85 WRITE scope. They are not in the forbidden list and add a single lesson entry, so they do not fail the invariants, but they should ideally live on a separate commit/branch. Worth flagging to the orchestrator so the Sprint 85 commit isolates only the feature diff.
+- **Scope drift (low)**: `memory/lessons/memory.md` and the new `memory/lessons/agent-and-git/2026-04-24-parallel-agent-commit-isolation/` directory are present in the working tree but were not declared in the Sprint 85 WRITE scope. They are not in the forbidden list and add a single lesson entry, so they do not fail the invariants, but they should ideally live on a separate commit/branch. Worth flagging to the orchestrator so the Sprint 85 commit isolates only the feature diff.
 - **Expected degradation (as documented)**: Truncated MQL previews (80-char slice) can cut an operator mid-token; the tokeniser then sees a partial string and demotes it to `kind === "string"` (no `cm-mql-operator`). Explicitly accepted in the Execution Brief residual-risk section.
 - **Forward-compat stub**: `queryMode` is currently unused inside `QuerySyntax` (only threaded through). A linter running no-unused-vars at the parameter level does not flag it because destructuring keeps it inside the props shape. Keep an eye on it if a stricter rule is added later.
 
@@ -77,7 +77,7 @@ Every dimension ≥ 7; every AC has evidence; every verification check passes.
 None blocking. Two minor items that would tighten the sprint artefact:
 
 1. **Scope hygiene** — The `memory/lessons/*` additions ride on the same working tree. Before the orchestrator commits Sprint 85, verify the Sprint 85 commit only touches the declared WRITE files and rehome the lesson into a separate commit.
-   - Current: `git diff --stat HEAD` shows `memory/lessons/memory.md | 1 +` and an untracked `memory/lessons/2026-04-24-parallel-agent-commit-isolation/` directory.
+   - Current: `git diff --stat HEAD` shows `memory/lessons/memory.md | 1 +` and an untracked `memory/lessons/agent-and-git/2026-04-24-parallel-agent-commit-isolation/` directory.
    - Expected: Sprint 85 commit diff contains only the contract's WRITE set.
    - Suggestion: Stage exactly the WRITE scope (`src/lib/mongoTokenize.ts`, `src/lib/mongoTokenize.test.ts`, `src/components/shared/MongoSyntax.tsx`, `src/components/shared/MongoSyntax.test.tsx`, `src/components/shared/QuerySyntax.tsx`, `src/components/shared/QuerySyntax.test.tsx`, `src/components/query/QueryTab.tsx`, `src/components/query/QueryTab.test.tsx`, `src/components/query/GlobalQueryLogPanel.tsx`, `src/components/query/GlobalQueryLogPanel.test.tsx`, `docs/sprints/sprint-85/*`) for the Sprint 85 commit and land the memory lesson in a follow-up commit.
 
