@@ -243,7 +243,7 @@ export function createMongoCompletionSource(
 function classifyPosition(context: CompletionContext): PositionKind {
   const { state, pos } = context;
   const tree = syntaxTree(state);
-  const node = tree.resolveInner(pos, -1) as unknown as MinimalSyntaxNode;
+  const node: MinimalSyntaxNode = tree.resolveInner(pos, -1);
 
   // Cursor inside a String literal → value position (JSON strings can live
   // as object values or array items, both handled identically by MQL).
@@ -325,7 +325,7 @@ function closestObjectIsInArray(
   tree: ReturnType<typeof syntaxTree>,
   pos: number,
 ): boolean {
-  const node = tree.resolveInner(pos, -1) as unknown as MinimalSyntaxNode;
+  const node: MinimalSyntaxNode = tree.resolveInner(pos, -1);
   for (let cur: MinimalSyntaxNode | null = node; cur; cur = cur.parent) {
     if (cur.name === "Object") {
       const parent = cur.parent;

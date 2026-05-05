@@ -86,8 +86,8 @@ sequencing** — 진입 sprint 시 contract 로 옮겨 ADR / AC 세분화. 후�
 | 1 | **199** ✓ | refactor | §1-1 (frontend god file #1) | `SchemaTree.tsx` (2105) → entry + `SchemaTree/{rows,actions,dialogs}.tsx`. (commit `19ee81f`) |
 | 2 | **200** ✓ | refactor | §1-1 (frontend god file #2)    | `DataGridTable.tsx` (1071) → entry + 6 sub-file. (commit `3b2b5b4`) |
 | 3 | **201** ✓ | refactor | §1-1 (frontend god file #3)    | `QueryTab.tsx` (1040) → entry + 6 sub-file. (commit `c0ab92e`) |
-| 4 | **202** ✓ | refactor | §1-2 (backend god file #1)     | `db/postgres.rs` (3803) → entry + 4 sub-file. mongodb.rs 패턴 답습. |
-| 5 | 203 | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. 짧은 sprint. |
+| 4 | **202** ✓ | refactor | §1-2 (backend god file #1)     | `db/postgres.rs` (3803) → entry + 4 sub-file. mongodb.rs 패턴 답습. (commit `370c4ee`) |
+| 5 | **203** ✓ | refactor | §3 (`any` / `as unknown as`)     | `useSqlAutocomplete.ts` 7곳 + `mongoAutocomplete.ts` 2곳. type narrowing only. |
 | 6 | 204 | refactor | §4–5 (catch + console 정책)      | logger 중앙화 + DEV-only gate 정책. |
 | 7 | 205 | refactor | §6 (테스트 skip)                 | e2e 14곳 점검 — placeholder vs env-skip 분류. |
 | 8 | 206 | refactor | §7 (Rust prod expect)            | `lib.rs` 2곳 + invariant `expect` 3곳 — 정책 결정 후 처리. |

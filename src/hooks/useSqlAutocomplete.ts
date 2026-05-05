@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
+import type { Completion } from "@codemirror/autocomplete";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { DatabaseType } from "@/types/connection";
 import { keywords as PG_KEYWORDS } from "@/lib/completion/pg";
@@ -154,8 +155,7 @@ export function useSqlAutocomplete(
   const { tableColumns, dialect, dbType } = opts;
 
   return useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ns: Record<string, any> = {};
+    const ns: Record<string, SQLNamespace> = {};
 
     // SQL functions and keywords. Both are wrapped in `{ self, children }`
     // so CodeMirror's `nameCompletion` does NOT auto-quote them: its
@@ -163,8 +163,10 @@ export function useSqlAutocomplete(
     // dialect's identifier quote (`"SELECT"` for PG / SQLite). Keywords
     // and functions are reserved tokens, not identifiers — quoting them
     // turns `SELECT` into a string literal at parse time.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const reservedToken = (label: string, type: string): any => ({
+    const reservedToken = (
+      label: string,
+      type: string,
+    ): { self: Completion; children: SQLNamespace } => ({
       self: { label, type, apply: label },
       children: {},
     });
@@ -187,8 +189,10 @@ export function useSqlAutocomplete(
 
     // Build a lookup of cached columns for *this* connection, indexed by
     // both unqualified table name and schema-qualified name.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cachedColumnsByName: Record<string, Record<string, any>> = {};
+    const cachedColumnsByName: Record<
+      string,
+      Record<string, SQLNamespace>
+    > = {};
     const prefix = `${connectionId}:`;
     for (const [key, columns] of Object.entries(columnsCache)) {
       if (!key.startsWith(prefix)) continue;
@@ -197,8 +201,7 @@ export function useSqlAutocomplete(
       if (sepIdx === -1) continue;
       const schemaName = rest.slice(0, sepIdx);
       const tableName = rest.slice(sepIdx + 1);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const colNs: Record<string, any> = {};
+      const colNs: Record<string, SQLNamespace> = {};
       for (const c of columns) colNs[c.name] = {};
       cachedColumnsByName[tableName] = colNs;
       cachedColumnsByName[`${schemaName}.${tableName}`] = colNs;
@@ -209,11 +212,9 @@ export function useSqlAutocomplete(
     const pickColumns = (
       objectName: string,
       qualifiedName: string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ): Record<string, any> => {
+    ): Record<string, SQLNamespace> => {
       if (tableColumns && tableColumns[objectName]) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const colNs: Record<string, any> = {};
+        const colNs: Record<string, SQLNamespace> = {};
         for (const c of tableColumns[objectName]!) colNs[c] = {};
         return colNs;
       }
@@ -231,8 +232,7 @@ export function useSqlAutocomplete(
     const quoteChar = quoteCharForDialect(dialect);
     const addQuotedAlias = (
       bareName: string,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      colNs: Record<string, any>,
+      colNs: Record<string, SQLNamespace>,
     ) => {
       if (!dialect) return;
       if (!identifierNeedsQuoting(bareName)) return;
