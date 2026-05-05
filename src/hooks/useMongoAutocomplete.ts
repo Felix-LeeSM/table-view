@@ -21,14 +21,11 @@ export interface UseMongoAutocompleteOptions {
 }
 
 /**
- * React hook that assembles the MQL-aware autocomplete + operator highlight
- * extensions for a document paradigm query tab. Sprint 83 wires this into
- * `QueryEditor` so document tabs receive the same quality-of-life boost
- * Sprint 82 delivered to SQL tabs.
- *
- * The returned array is stable across renders with matching
- * `(queryMode, fieldNames)` identity — consumers can pass it directly to
- * CodeMirror's Compartment without additional memoisation.
+ * Assembles the MQL-aware autocomplete + operator highlight extensions
+ * for a document-paradigm query tab. The returned array is stable across
+ * renders with matching `(queryMode, fieldNames)` identity, so callers
+ * can pass it straight into a CodeMirror Compartment without extra
+ * memoisation.
  */
 export function useMongoAutocomplete(
   opts: UseMongoAutocompleteOptions,

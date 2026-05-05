@@ -1,10 +1,7 @@
-// AC-144-1, AC-144-2, AC-144-5 — Mongo completion module.
-//
-// Imports ONLY `prefixMatch` from `./shared` per contract. The CodeMirror
-// MQL completion source (operator/stage/accumulator-aware) is re-exported
-// from the existing `mongoAutocomplete.ts` so the editor's wiring is
-// unchanged. The new `dbMethodCandidates` + `createDbMethodCompletionSource`
-// surface the `db.<method>` candidate set required by AC-144-5.
+// Mongo completion module. The CodeMirror MQL completion source
+// (operator/stage/accumulator-aware) is re-exported from
+// `mongoAutocomplete.ts`. `dbMethodCandidates` +
+// `createDbMethodCompletionSource` surface the `db.<method>` candidate set.
 
 import { prefixMatch } from "./shared";
 import {
@@ -21,9 +18,8 @@ export interface MongoMethodCandidate {
 
 /**
  * Collection-method candidates surfaced after `db.` in a Mongo query buffer.
- * The list is intentionally a small, well-known subset — Sprint 145 only
- * requires `find`, `aggregate`, `insertOne` per AC-144-5; others are
- * included so the popup is useful without bloating the candidate set.
+ * Intentionally a small, well-known subset — popup useful without bloating
+ * the candidate set.
  */
 export const dbMethodCandidates: readonly MongoMethodCandidate[] = [
   { label: "find", type: "function" },

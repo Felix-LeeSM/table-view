@@ -1,32 +1,19 @@
-// AC-192-03 / AC-192-05 — Sprint 192. RDB schema/database export hook.
-//
-// 통합 export 의 thin orchestrator — 3 가지 include 모드를 한 시그니처로
-// 다룬다:
+// RDB schema/database export hook. Thin orchestrator over three include
+// modes:
 //   - "ddl"  : schema definition only (CREATE TABLE / INDEX / FK)
 //   - "dml"  : data only (INSERT … VALUES)
-//   - "both" : DDL + data (full dump)
+//   - "both" : DDL + data
 //
-// 단위:
-//   - `exportSchema(connId, schema, include)`     : single schema
-//   - `exportDatabase(connId, schemas[], include)`: all schemas of a connection
+// `exportSchema` operates on a single schema; `exportDatabase` loops
+// over every schema in a connection.
 //
-// DDL 합성은 lib pure (`generateMigrationDDL`) — TS 가 schemaStore 의
-// metadata 로 합성. DML row stream 은 Rust (`export_schema_dump`) 가
-// PG cursor + INSERT formatting 으로 처리. 본 hook 은:
-//   1. connection → dialect 매핑 (RDB only)
-//   2. schemaStore 에서 metadata 수집 (cache miss 시 force load)
-//   3. include 에 따라 invoke 분기:
-//      - "ddl"  → generateMigrationDDL → writeTextFileExport
-//      - "dml"  → exportSchemaDump (ddl_header="")
-//      - "both" → generateMigrationDDL → exportSchemaDump (ddl_header=DDL)
-//   4. save() dialog → silent return on cancel
-//   5. toast success/failure
+// DDL synthesis lives in the pure `generateMigrationDDL`; DML row
+// streaming runs in Rust (`export_schema_dump`). This hook handles
+// connection→dialect mapping, schemaStore metadata gathering, the
+// invoke branch, the save() dialog (silent on cancel), and toasts.
 //
-// MySQL/SQLite adapter 는 Phase 9 placeholder 이므로 현재 실제 동작은
-// PostgreSQL only — backend 의 `RdbAdapter::stream_table_rows` default
-// 가 `Unsupported` 라 자동 reject 된다.
-//
-// date 2026-05-02.
+// Currently PostgreSQL-only at the data path — `RdbAdapter::stream_table_rows`
+// rejects MySQL/SQLite as `Unsupported`.
 import { useCallback, useState } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { useSchemaStore } from "@stores/schemaStore";

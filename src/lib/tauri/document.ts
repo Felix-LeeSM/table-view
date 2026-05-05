@@ -1,8 +1,8 @@
-// ── Document paradigm (Sprint 66) ──────────────────────────────────────────
-// Each wrapper is a thin JSON passthrough to the matching Rust command. The
-// backend enforces paradigm via `ActiveAdapter::as_document()`, so calling
-// these against an RDB connection surfaces `AppError::Unsupported` rather
-// than silently returning empty results.
+// ── Document paradigm ──────────────────────────────────────────────────────
+// Thin JSON passthroughs to the matching Rust commands. The backend
+// enforces paradigm via `ActiveAdapter::as_document()`, so calling these
+// against an RDB connection surfaces `AppError::Unsupported` rather than
+// silently returning empty results.
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
@@ -67,8 +67,8 @@ export async function findDocuments(
 
 /**
  * Execute a MongoDB aggregation pipeline and return the flattened
- * DataGrid-ready result. The backend (Sprint 72) expects `pipeline` as a
- * JSON array of stages, each serialisable into `bson::Document`.
+ * DataGrid-ready result. The backend expects `pipeline` as a JSON array
+ * of stages, each serialisable into `bson::Document`.
  */
 export async function aggregateDocuments(
   connectionId: string,
@@ -84,12 +84,11 @@ export async function aggregateDocuments(
   });
 }
 
-// ── Document paradigm — mutate (Sprint 86) ─────────────────────────────────
-// Wrappers for the Sprint 80 backend `insert_document` / `update_document` /
-// `delete_document` Tauri commands. Payloads use the `DocumentId` tagged
-// union from `@/types/documentMutate`, whose shape matches Rust's default
-// serde encoding (`{"ObjectId": "<hex>"}`, `{"String": "<s>"}`, etc.) so no
-// translation layer is needed between TS and the Tauri bridge.
+// ── Document paradigm — mutate ─────────────────────────────────────────────
+// Wrappers for the `insert_document` / `update_document` / `delete_document`
+// commands. Payloads use the `DocumentId` tagged union from
+// `@/types/documentMutate`, whose shape matches Rust's default serde
+// encoding (`{"ObjectId": "<hex>"}`, …) so no translation layer is needed.
 
 /**
  * Insert a single document into `collection`. When the document carries an
@@ -152,16 +151,15 @@ export async function deleteDocument(
   });
 }
 
-// ── Document paradigm — bulk-write (Sprint 198) ────────────────────────────
-// Sprint 197 의 mutations.rs 위에 얹은 3 신규 command 의 frontend shim.
-// 각 caller (SchemaTree drop / DocumentDataGrid toolbar) 는 invoke 직전
-// `analyzeMongoOperation(...)` → `useSafeModeGate.decide(...)` 으로 위험
-// 분류를 통과시킨다. 본 shim 자체는 gate 책임 없음 — 단순 invoke wrapper.
+// ── Document paradigm — bulk-write ─────────────────────────────────────────
+// Plain invoke wrappers. The Safe Mode gate runs at each call site
+// (SchemaTree drop / DocumentDataGrid toolbar) before invoke, so this
+// layer has no gate responsibility.
 
 /**
- * Sprint 198 — bulk-delete every document matching `filter`. Returns the
- * driver's `deleted_count` so the UI can surface a "N row(s) deleted" toast.
- * Empty filter (`{}`) is allowed at this layer; Safe Mode classifier gates.
+ * Bulk-delete every document matching `filter`. Returns the driver's
+ * `deleted_count` so the UI can surface "N row(s) deleted". Empty filter
+ * (`{}`) is allowed here; the Safe Mode classifier gates upstream.
  */
 export async function deleteMany(
   connectionId: string,
@@ -178,9 +176,9 @@ export async function deleteMany(
 }
 
 /**
- * Sprint 198 — bulk-apply `{ $set: patch }` to every document matching
- * `filter`. Returns the driver's `modified_count`. Backend rejects `_id` in
- * `patch` (identity mutation) — same contract as `updateDocument`.
+ * Bulk-apply `{ $set: patch }` to every document matching `filter`.
+ * Returns the driver's `modified_count`. Backend rejects `_id` in
+ * `patch` — same contract as `updateDocument`.
  */
 export async function updateMany(
   connectionId: string,
@@ -199,8 +197,8 @@ export async function updateMany(
 }
 
 /**
- * Sprint 198 — drop the entire collection. Mongo parallel of RDB
- * `dropTable`; Safe Mode classifier always tags this as `danger`.
+ * Drop the entire collection. Mongo parallel of RDB `dropTable`;
+ * Safe Mode classifier always tags this as `danger`.
  */
 export async function dropCollection(
   connectionId: string,

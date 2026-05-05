@@ -5,14 +5,9 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 import { decideSafeModeAction, type SafeModeDecision } from "@/lib/safeMode";
 
 /**
- * Sprint 188 — paradigm-agnostic Safe Mode gate.
- * Sprint 189 (D-4) — decision matrix moved to `decideSafeModeAction`
- * (`src/lib/safeMode.ts`); this hook is now pure store wiring.
- *
- * Consumed by:
- * - Mongo aggregate (Sprint 188 — QueryTab)
- * - RDB 5 sites (Sprint 189 — useDataGridEdit, EditableQueryResultGrid,
- *   ColumnsEditor, IndexesEditor, ConstraintsEditor)
+ * Paradigm-agnostic Safe Mode gate. Pure store wiring around
+ * `decideSafeModeAction` (`src/lib/safeMode.ts`); both Mongo aggregate
+ * and the RDB grid / DDL editors share the same decision matrix.
  */
 export type { SafeModeDecision };
 

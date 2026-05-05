@@ -9,16 +9,14 @@ export type StatementKind =
   | "ddl-truncate"
   | "ddl-alter-drop"
   | "ddl-other"
-  // Sprint 188 — Mongo aggregate-pipeline analyser shares this union so the
-  // `useSafeModeGate` decision matrix is paradigm-agnostic. The mongo-*
-  // variants only originate from `analyzeMongoPipeline`, never from
-  // `analyzeStatement` (SQL).
+  // Mongo variants share this union so `useSafeModeGate` is
+  // paradigm-agnostic. They originate from `analyzeMongoPipeline` /
+  // `analyzeMongoOperation`, never from `analyzeStatement` (SQL).
+  // `*-all` (empty filter) is danger; `*-many` (non-empty filter) is safe;
+  // `mongo-drop` is unconditionally danger.
   | "mongo-out"
   | "mongo-merge"
   | "mongo-other"
-  // Sprint 198 — bulk-write operation analyser variants (`analyzeMongoOperation`).
-  // `*-all` (empty filter) is danger; `*-many` (non-empty filter) is safe;
-  // `mongo-drop` is unconditionally danger.
   | "mongo-drop"
   | "mongo-delete-all"
   | "mongo-delete-many"
@@ -89,9 +87,9 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     return { kind: "ddl-truncate", severity: "danger", reasons: ["TRUNCATE"] };
   }
 
-  // Sprint 187 — `ALTER TABLE … DROP COLUMN/CONSTRAINT` is destructive enough
-  // (column + data loss / FK invalidation) that the structure-surface gate
-  // needs to flag it for the production warn / strict tier.
+  // `ALTER TABLE … DROP COLUMN/CONSTRAINT` is destructive enough
+  // (column + data loss / FK invalidation) that the structure-surface
+  // gate must flag it for the production warn / strict tier.
   if (/^ALTER\s+TABLE\b/.test(upper)) {
     const dropMatch = upper.match(/\bDROP\s+(COLUMN|CONSTRAINT)\b/);
     if (dropMatch) {

@@ -5,17 +5,16 @@ import { logger } from "@/lib/logger";
 import type { SchemaInfo } from "@/types/schema";
 
 /**
- * Sprint 191 (AC-191-02) — SchemaTree 의 데이터 레이어 hook. 1963 줄 god
- * component 에서 schema/table/view/function 로딩과 캐시 무효화 책임을
- * 분리해 UI 가 순수 트리 렌더링에 집중할 수 있게 한다.
+ * SchemaTree 의 데이터 레이어 hook. schema/table/view/function 로딩과 캐시
+ * 무효화를 담당해 컴포넌트는 순수 트리 렌더링에 집중한다.
  *
  * 책임:
  * - mount 시 자동 `loadSchemas` + 모든 schema 의 `loadTables` /
- *   `prefetchSchemaColumns` (기존 SchemaTree:495-512 동작 그대로).
+ *   `prefetchSchemaColumns`.
  * - schema 한 개 단위 lazy expand (`expandSchema`) — 캐시 미존재 시에만
  *   load.
  * - 전체 / 단일 schema refresh (`refreshConnection`, `refreshSchema`).
- * - silent failure 9건을 toast.error + dev console 로 일원화 (smell §5).
+ * - silent failure 를 toast.error + dev console 로 일원화.
  *
  * 책임 외:
  * - 트리 UI state (expanded / selected / search) 는 컴포넌트가 보유.
@@ -25,7 +24,7 @@ import type { SchemaInfo } from "@/types/schema";
 
 const EMPTY_SCHEMAS: SchemaInfo[] = [];
 
-/** Best-effort dev-mode logging for failed schema fetches (Sprint 204). */
+/** Best-effort dev-mode logging for failed schema fetches. */
 function logSchemaError(label: string, err: unknown): void {
   logger.error(`[useSchemaCache] ${label}:`, err);
 }

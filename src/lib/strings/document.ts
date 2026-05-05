@@ -9,36 +9,24 @@
 import { PARADIGM_VOCABULARY } from "./paradigm-vocabulary";
 
 /**
- * Banner copy shown above MongoDB collection grids.
- *
- * Sprint 87 already shipped cell-level editing + Add Document for collections,
- * so the original Sprint 101 spec text ("Read-only — editing not yet supported")
- * is no longer accurate. The current scope gap is schema/DDL operations
- * (create collection, drop, indexes, validators), so the banner reflects that.
+ * Banner copy shown above MongoDB collection grids. Cell-level editing
+ * and Add Document already ship; the remaining gap is schema/DDL ops
+ * (create collection, drop, indexes, validators) — the banner reflects
+ * that.
  */
 export const COLLECTION_READONLY_BANNER_TEXT =
   "Beta — schema and DDL operations are not yet supported.";
 
 /**
  * Document-paradigm wording overrides for the shared `DataGridToolbar`.
+ * Document callers spread `DOCUMENT_LABELS` to swap user-visible
+ * strings; the toolbar itself stays paradigm-agnostic.
  *
- * Sprint 118 (#PAR-2) — `DataGridToolbar` is mounted by both the RDB grid
- * (`DataGrid`) and the document grid (`DocumentDataGrid`). The toolbar's
- * default props keep RDB wording (`"rows"`, `"Add row"`, …) so existing
- * RDB tests stay green; document callers spread `DOCUMENT_LABELS` to swap
- * the user-visible strings without touching paradigm-coupling code in the
- * toolbar itself.
- *
- * Sprint 179 — the constant is now derived from `PARADIGM_VOCABULARY` so
- * the dictionary is the single source of truth. The literal output strings
- * are preserved exactly (lower-cased `"documents"` for the inline count
- * label, sentence-case `"Add document"` / `"Delete document"` /
- * `"Duplicate document"` for the action buttons) — the dictionary's
- * `document` entry uses the title-case schema vocabulary
- * (`"Documents"`, `"Add Field"`), which is intentionally distinct from the
- * toolbar action copy. Hand-rolling these four strings here (rather than
- * reusing the dictionary's `addUnit` / `records` directly) keeps the
- * existing RDB-vs-document toolbar tone parity intact.
+ * Derived from `PARADIGM_VOCABULARY` so the dictionary is the single
+ * source of truth, but the toolbar copy uses lowercase `"documents"` /
+ * sentence-case `"Add document"` rather than the title-case
+ * (`"Documents"`, `"Add Field"`) the dictionary reserves for the
+ * schema tree. The two registers are intentionally distinct.
  */
 const docVocab = PARADIGM_VOCABULARY.document;
 export const DOCUMENT_LABELS = {

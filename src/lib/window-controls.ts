@@ -1,23 +1,17 @@
 /**
- * Sprint 154 — thin testable seam over Tauri's window lifecycle commands.
+ * Thin testable seam over Tauri's window lifecycle. Show / hide / focus
+ * / exit route through Rust commands rather than JS `getByLabel` +
+ * `win.show()` — `getByLabel` returns `null` for windows the Rust side
+ * knows about, which made the workspace fail to appear. Rust's
+ * `app.get_webview_window()` is the canonical registry.
  *
- * All show / hide / focus / exit operations route through Rust-side Tauri
- * commands (`workspace_show`, `launcher_hide`, etc.) instead of the JS
- * `getByLabel` + `win.show()` pattern. The JS `getByLabel` API proved
- * unreliable — it could return `null` for windows that the Rust side knew
- * about, causing the workspace to never appear. Using Rust commands directly
- * eliminates that disconnect because `app.get_webview_window()` on the Rust
- * side is the canonical window registry.
+ * Workspace-show falls back to `workspace_ensure` when the window was
+ * destroyed; that path rebuilds via `WebviewWindowBuilder::from_config`
+ * before retrying.
  *
- * The workspace show path has a special fallback: if `workspace_show` fails
- * (window was destroyed), it invokes `workspace_ensure` which recreates the
- * window from `tauri.conf.json` config via `WebviewWindowBuilder::from_config`,
- * then retries the show.
- *
- * `onCloseRequested`, `closeWindow`, and `onCurrentWindowCloseRequested`
- * still use `resolveWindow` (which calls `getByLabel`) because they need a
- * window handle for event registration — but these are called from within the
- * window itself where `getByLabel` is reliable.
+ * `onCloseRequested` / `closeWindow` / `onCurrentWindowCloseRequested`
+ * still use `resolveWindow` (`getByLabel`) — they're called from within
+ * the window itself, where the API is reliable.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -98,10 +92,9 @@ export async function focusWindow(label: WindowLabel): Promise<void> {
 }
 
 /**
- * Close `label`'s window outright. Sprint 154 doesn't currently use this —
- * the close paths route through `exitApp()` (launcher) and `hideWindow`
- * (workspace) — but it's exposed for completeness so future sprints don't
- * have to widen the seam in a hot patch.
+ * Close `label`'s window outright. Currently unused at runtime — close
+ * paths go through `exitApp()` (launcher) and `hideWindow` (workspace)
+ * — but exposed so the seam doesn't need a hot patch later.
  */
 export async function closeWindow(label: WindowLabel): Promise<void> {
   const win = await resolveWindow(label);
@@ -152,9 +145,8 @@ export async function onCloseRequested(
 
 /**
  * Re-export for callers that need to scope listeners to "the current
- * window" without hardcoding a label. Sprint 154 currently scopes by
- * explicit label (launcher.tsx vs workspace.tsx), so this is a thin
- * convenience.
+ * window" without hardcoding a label. Most callers scope by explicit
+ * label (launcher.tsx vs workspace.tsx), so this is a thin convenience.
  */
 export async function onCurrentWindowCloseRequested(
   handler: () => void | Promise<void>,

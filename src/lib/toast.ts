@@ -1,24 +1,11 @@
 /**
- * Sprint 94 — global toast API.
+ * Global toast API. Self-implemented Zustand-backed queue — kept in `src/lib`
+ * (not `src/stores`) because callers reach for `toast.success(...)` the way
+ * they reach for `cn(...)`.
  *
- * Self-implemented (no `sonner` / `react-hot-toast`) so we don't pull a new
- * dependency for what is essentially a Zustand-backed queue. The store lives
- * in `src/lib` (not `src/stores`) because callers reach for `toast.success(...)`
- * the way they reach for `cn(...)` — it's a thin façade, not a domain store.
- *
- * Usage from anywhere in the app shell:
- *   ```ts
- *   import { toast } from "@/lib/toast";
- *   toast.success("Connection saved");
- *   toast.error("Commit failed: relation does not exist");
- *   const id = toast.info("Working...");
- *   toast.dismiss(id);
- *   ```
- *
- * The toast container (see `src/components/ui/toaster.tsx`) subscribes to this
- * store and renders the queue. The container is mounted once at the App root
- * — outside any modal portal — so a toast surfaced from inside a Radix dialog
- * survives the dialog being closed (Acceptance Criterion AC-03).
+ * The toaster container (`src/components/ui/toaster.tsx`) is mounted once at
+ * the App root — outside any modal portal — so a toast surfaced from inside
+ * a Radix dialog survives the dialog being closed.
  */
 import { create } from "zustand";
 

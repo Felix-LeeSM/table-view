@@ -1,21 +1,11 @@
 /**
- * Sprint 150 — current `WebviewWindow.label` resolver.
- *
- * Wraps `getCurrentWebviewWindow()` from `@tauri-apps/api/webviewWindow` so
- * the React entrypoint can route the boot mount by which Tauri window is
- * loading the bundle (`launcher` vs `workspace`). Inside vitest there is no
- * Tauri runtime, so the resolver swallows the call-time failure and
- * returns `null`; tests `vi.mock('@lib/window-label')` to drive the routing
- * branches deterministically.
- *
- * Scope (Sprint 150 only):
- *  - boot-time read at mount.
- *  - no event listeners — Sprint 154 wires real lifecycle.
- *  - no caching — `AppRouter` reads once.
- *
- * Returning `null` (instead of throwing) keeps the router branch defensive:
- * if the seam ever fails in production, the user still lands on the
- * launcher with a `console.warn` rather than a white screen.
+ * Current `WebviewWindow.label` resolver. The React entrypoint reads
+ * this once at mount to route by window (`launcher` vs `workspace`).
+ * Returns `null` (rather than throwing) when the Tauri runtime is
+ * absent (vitest jsdom) or the call fails for any reason — the router
+ * treats `null` as "fall back to launcher" so the seam can't produce a
+ * white screen in production. Tests `vi.mock('@lib/window-label')` to
+ * drive the routing branches.
  */
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 

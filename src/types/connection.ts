@@ -7,9 +7,8 @@ export type DatabaseType =
 
 /**
  * Broad paradigm classification mirrored from the backend. Each
- * `DatabaseType` maps to exactly one paradigm. Sprint 64 introduced the tag;
- * Sprint 65 tightens consumption so the UI can branch on paradigm (e.g.
- * mongo → document tree placeholder) without falling back to the raw
+ * `DatabaseType` maps to exactly one paradigm so the UI can branch on
+ * paradigm (e.g. mongo → document tree) without re-inspecting the raw
  * `db_type` string.
  */
 export type Paradigm = "rdb" | "document" | "search" | "kv";
@@ -36,17 +35,15 @@ export interface ConnectionConfig {
   /** Whether a password is currently stored on disk for this connection. */
   has_password: boolean;
   /**
-   * Paradigm tag derived from `db_type` on the backend. Sprint 65 promotes
-   * this from optional to **required** — the backend now emits a typed
-   * `Paradigm` enum on every response (no `#[serde(default)]` fallback), so
-   * consumers can rely on it being present instead of falling back to
-   * `paradigmOf(conn.db_type)` for undefined safety.
+   * Paradigm tag derived from `db_type` on the backend. Required —
+   * the backend always emits a typed `Paradigm` enum, so consumers
+   * can rely on it being present.
    */
   paradigm: Paradigm;
-  // ── MongoDB-specific optional fields (Sprint 65). ────────────────────
-  // All three are serialised by the backend only when the user fills them
-  // in, and the frontend treats them as optional so non-mongo connections
-  // type-check without boilerplate.
+  // ── MongoDB-specific optional fields ──────────────────────────────
+  // Serialised by the backend only when the user fills them in; the
+  // frontend treats them as optional so non-mongo connections type-check
+  // without boilerplate.
   /** MongoDB auth source (`authSource`). */
   auth_source?: string | null;
   /** MongoDB replica set name. */
@@ -77,14 +74,10 @@ export interface ConnectionGroup {
   collapsed: boolean;
 }
 
-/// Adjacently-tagged discriminated union matching Rust's serde serialization:
-/// - { type: "connected", activeDb?: string }
-/// - { type: "disconnected" }
-/// - { type: "error", message: "..." }
-///
-/// Sprint 130 — `connected` carries an optional `activeDb` tracking the
-/// currently active database (PG sub-pool key). The DbSwitcher trigger label
-/// reads this field and falls back to `connection.database` when absent.
+/// Adjacently-tagged discriminated union matching Rust's serde
+/// serialization. The `connected` variant carries an optional `activeDb`
+/// (PG sub-pool key); DbSwitcher reads it for the trigger label and
+/// falls back to `connection.database` when absent.
 export type ConnectionStatus =
   | { type: "connected"; activeDb?: string }
   | { type: "connecting" }
@@ -100,21 +93,18 @@ export const DATABASE_DEFAULTS: Record<DatabaseType, number> = {
 };
 
 /**
- * Sprint 138 (#4 — DBMS-aware connection form): Per-DBMS defaults that the
- * form sub-components use when the user newly picks that DBMS or switches
- * `db_type`. Older callers still read the port-only `DATABASE_DEFAULTS`
- * map; this richer map adds default `user` and `database` so the dialog no
- * longer hard-codes `user="postgres"` for every DBMS.
+ * Per-DBMS defaults seeded into the form when the user picks or switches
+ * `db_type`. Adds `user` + `database` defaults on top of
+ * `DATABASE_DEFAULTS`, so the dialog no longer hard-codes
+ * `user="postgres"` for every DBMS.
  *
  * - `postgresql`: classic super-user/db pair.
- * - `mysql`: standard root user, empty default DB (user usually picks
- *   their app DB).
- * - `sqlite`: file-based — no user, no default DB; the form replaces
- *   host/port/user/password with a file path field.
- * - `mongodb`: optional auth — empty user/db; defaults are filled later
- *   by the user.
- * - `redis`: ACL is optional, default DB index `"0"` (Redis numeric DB
- *   indices live in `database` as a string for ConnectionConfig parity).
+ * - `mysql`: standard root user, empty default DB.
+ * - `sqlite`: file-based; the form swaps host/port/user/password for a
+ *   file path field.
+ * - `mongodb`: optional auth — empty user/db.
+ * - `redis`: ACL optional, default DB index `"0"` (kept as string for
+ *   ConnectionConfig parity).
  */
 export interface ConnectionDefaultFields {
   port: number;
@@ -194,9 +184,9 @@ export function parseConnectionUrl(
 ): Partial<ConnectionDraft> | null {
   try {
     const parsed = new URL(url);
-    // Sprint 138 — SQLite uses a file path, not a URL. We accept either
-    // `sqlite:/absolute/path.db` (URL.parse succeeds) or fall through to
-    // the catch branch where `parseSqliteFilePath` handles plain paths.
+    // SQLite uses a file path, not a URL. Accept `sqlite:/absolute/path.db`
+    // here; plain paths fall through to `parseSqliteFilePath` via the
+    // catch branch.
     if (parsed.protocol === "sqlite:") {
       const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
       return {
@@ -209,13 +199,11 @@ export function parseConnectionUrl(
         paradigm: paradigmOf("sqlite"),
       };
     }
-    // Sprint 178 — scheme map covers the eight URL schemes the dialog
-    // recognises. `postgres` is a legacy shorthand for `postgresql`,
-    // `mongodb+srv` is the SRV-record transport variant of `mongodb`
-    // (frontend treats them identically; backend resolves SRV at connect
-    // time), and `mariadb` is wire-compatible with MySQL so it routes
-    // through the existing MySQL adapter. These are URL-scheme aliases —
-    // they do NOT introduce new `DatabaseType` variants.
+    // URL-scheme aliases. `postgres` is legacy shorthand for `postgresql`,
+    // `mongodb+srv` is the SRV-record variant (backend resolves SRV at
+    // connect time), and `mariadb` is wire-compatible with MySQL so it
+    // routes through the same adapter. None introduce new `DatabaseType`
+    // variants.
     const dbTypeMap: Record<string, DatabaseType> = {
       postgresql: "postgresql",
       postgres: "postgresql",
@@ -227,11 +215,10 @@ export function parseConnectionUrl(
     };
     const dbType = dbTypeMap[parsed.protocol.replace(":", "")];
     if (!dbType) return null;
-    // Sprint 178 (AC-178-04) — a URL whose host part is empty (e.g.
-    // `postgres://`, `mysql://@`, `mongodb+srv://`) is malformed enough
-    // that we cannot infer a connection target. Returning `null` lets the
-    // form-mode paste handler treat it as "no recognised paste" and leave
-    // the host field unchanged (silent best-effort, no alert).
+    // Empty host (`postgres://`, `mysql://@`, `mongodb+srv://`) is too
+    // malformed to infer a target. Returning `null` lets the paste
+    // handler treat it as "no recognised paste" and leave the form
+    // unchanged (silent best-effort, no alert).
     if (!parsed.hostname) return null;
     return {
       db_type: dbType,
@@ -249,10 +236,9 @@ export function parseConnectionUrl(
 }
 
 /**
- * Sprint 138 — SQLite "URL parsing" fallback. SQLite has no URL form;
- * treat the raw input as a file path. Accepts non-empty strings; trims
- * whitespace. Returns `null` for empty/whitespace-only input so the
- * caller can surface a validation error.
+ * SQLite has no URL form — treat the raw input as a file path. Trims
+ * whitespace; returns `null` for empty/whitespace-only input so the
+ * caller can raise a validation error.
  */
 export function parseSqliteFilePath(
   raw: string,

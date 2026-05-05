@@ -1,21 +1,14 @@
-// AC-192-01 — RDB schema 의 모든 테이블에 대한 migration DDL (CREATE
-// TABLE / CREATE INDEX / ALTER TABLE ADD CONSTRAINT FOREIGN KEY) 을
-// 한 string 으로 합성하는 lib pure 함수. 외부 도구 (`pg_dump` /
-// `mysqldump`) 를 거치지 않고 schemaStore 가 이미 보유한 metadata
-// (ColumnInfo / IndexInfo / ConstraintInfo) 만으로 직접 조립.
+// Pure helper that builds migration DDL (CREATE TABLE / CREATE INDEX /
+// ALTER TABLE ADD CONSTRAINT FOREIGN KEY) for every table in an RDB
+// schema. No `pg_dump` / `mysqldump` — assembles directly from the
+// metadata schemaStore already holds.
 //
-// 책임 경계 (D-2): 본 모듈은 React / IPC / IO 를 모르는 순수 함수
-// 만 export. 호출자 (useMigrationExport hook) 가 metadata 수집과
-// dialog / Tauri 호출을 담당.
+// Pure module: no React / IPC / IO. The caller (`useMigrationExport`)
+// handles metadata collection, the save dialog, and Tauri dispatch.
 //
-// 본 lib 의 한계 (Sprint 192 OOS):
-//  - views / functions / sequences / generated columns 미지원.
-//  - column.data_type 은 backend 에서 받은 dialect-native 문자열을
-//    그대로 emit — normalisation 시도 안 함.
-//  - DEFAULT 값도 raw — `now()` 같은 함수 호출이나 JSON literal 도
-//    backend 가 준 그대로 사용.
-//
-// date 2026-05-02.
+// Out of scope: views, functions, sequences, generated columns. The
+// `column.data_type` and DEFAULT values are emitted verbatim from the
+// backend — no normalisation.
 import type { ColumnInfo, IndexInfo, ConstraintInfo } from "@/types/schema";
 
 export type DdlDialect = "postgresql" | "mysql" | "sqlite";
@@ -156,12 +149,12 @@ function formatColumnLine(
   col: ColumnInfo,
   inlinePrimaryKey: boolean,
 ): string {
-  // Sprint 192 — PG `nextval('xxx'::regclass)` default 는 BIGSERIAL/SERIAL/
-  // SMALLSERIAL 의 syntactic sugar 로 정규화한다. 이렇게 하면 import 시
-  // CREATE SEQUENCE 가 자동 emit 되고 sequence 이름 규칙
-  // (`<table>_<col>_seq`) 도 PG default 와 일치. NOT NULL 도 SERIAL 에
-  // 내장이므로 제거. row 가 INSERT 된 후 sequence next 값을 reset 하는
-  // setval 줄은 dump 끝에 별도 emit (`buildSequenceResets`).
+  // Normalise PG `nextval('xxx'::regclass)` defaults to
+  // BIGSERIAL/SERIAL/SMALLSERIAL syntactic sugar. On import this auto-
+  // emits CREATE SEQUENCE and matches PG's default sequence-name rule
+  // (`<table>_<col>_seq`). NOT NULL is implicit in SERIAL so it's
+  // dropped here; the post-INSERT setval lines are emitted separately
+  // by `buildSequenceResets`.
   if (dialect === "postgresql") {
     const serialType = mapPgNextvalToSerial(col);
     if (serialType !== null) {
@@ -208,11 +201,11 @@ function mapPgNextvalToSerial(col: ColumnInfo): string | null {
 }
 
 /**
- * Sprint 192 — DML import 후 sequence next value 를 row 의 max 로 reset.
- * BIGSERIAL 정규화로 sequence 자체는 자동 생성되지만 nextval 은 1 로
- * 시작 — INSERT row 의 PK 값이 1 이상이면 후속 INSERT 가 충돌한다.
- * `pg_get_serial_sequence` + `setval` 조합은 idempotent (빈 테이블이면
- * COALESCE(NULL, 1) → 1).
+ * After a DML import, reset every sequence to `MAX(pk) + 1`. The
+ * BIGSERIAL normalisation auto-creates sequences but they restart at 1,
+ * so a subsequent INSERT collides when imported rows already have PKs.
+ * `pg_get_serial_sequence` + `setval` is idempotent — on an empty table
+ * it collapses to `COALESCE(NULL, 1) → 1`.
  */
 export function buildSequenceResets(
   dialect: DdlDialect,

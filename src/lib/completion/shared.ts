@@ -1,13 +1,11 @@
-// AC-144-1, AC-144-2 — shared façade for the per-DBMS completion modules.
-//
-// Sprint 145 splits the autocomplete engine by DBMS. The truly DBMS-agnostic
+// Shared façade for the per-DBMS completion modules. The truly DBMS-agnostic
 // helpers (tokenizer, statement splitter, FROM-context parser, identifier
 // quoting, prefix matching) live here so each per-DBMS module can import
 // only what it needs without pulling in the SQL keyword sets.
 //
-// `sqlTokenize.ts` and `sqlUtils.ts` remain on disk as the underlying
-// implementation; this file re-exports from them so `lib/completion/*` can
-// be the single import surface for callers migrated in the same PR.
+// `sqlTokenize.ts` and `sqlUtils.ts` remain the underlying implementation;
+// this file re-exports from them so `lib/completion/*` is the single import
+// surface for completion callers.
 
 import {
   tokenizeSql,

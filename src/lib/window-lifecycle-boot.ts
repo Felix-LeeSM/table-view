@@ -1,20 +1,14 @@
 /**
- * Sprint 154 — boot-time launcher close handler registration.
+ * Boot-time launcher close handler. Only the launcher window owns "close
+ * = exit the whole app" — closing the workspace is a `Back to
+ * connections` recovery handled in `WorkspacePage`'s effect. Living
+ * here keeps `main.tsx` thin and gives the unit test a stable import.
  *
- * `main.tsx` runs once per Tauri window and only the launcher window owns
- * the "close = exit the whole app" semantics — closing the workspace is a
- * `Back to connections` recovery (handled in `WorkspacePage`'s effect). To
- * keep `main.tsx` thin and to give the unit test a stable import target,
- * the registration logic lives here.
+ * Returns the `UnlistenFn` so callers can opt into teardown later (HMR
+ * etc.); not currently used.
  *
- * The function is idempotent at the module-call level (calling it twice
- * registers two listeners — Tauri tolerates that, but `main.tsx` only calls
- * it once per boot). Returns the `UnlistenFn` so callers can opt into
- * teardown if they ever wire HMR — Sprint 154 doesn't need it.
- *
- * Test seam: `vi.mock('@lib/window-lifecycle-boot')` is NOT the test path;
- * tests `vi.mock('@lib/window-controls')` instead and exercise this module
- * for real, asserting the seam call shape.
+ * Tests `vi.mock('@lib/window-controls')` and exercise this module for
+ * real, asserting the seam call shape.
  */
 import {
   exitApp,
@@ -36,11 +30,10 @@ import { logger } from "./logger";
  *      hidden — Tauri's `hide()` is idempotent on already-hidden windows.
  *   2. Calls `app_exit` via the seam so the entire process tears down.
  *
- * Sprint 154 contract pins point (1) — the workspace must NOT be visible
- * during exit. The hide-then-exit ordering is asserted in the AC-154-04
- * test via `showWindowMock.not.toHaveBeenCalledWith('workspace')` plus the
- * implicit fact that `hideWindow` is the only window seam the handler
- * touches.
+ * Hide-then-exit ordering is required: the workspace must not be
+ * visible during exit. The unit test asserts this via
+ * `showWindowMock.not.toHaveBeenCalledWith('workspace')` plus the fact
+ * that `hideWindow` is the only window seam the handler touches.
  */
 export async function registerLauncherCloseHandler(): Promise<UnlistenFn> {
   return onCloseRequested("launcher" as WindowLabel, async () => {

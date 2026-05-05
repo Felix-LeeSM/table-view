@@ -1,18 +1,10 @@
-// ---------------------------------------------------------------------------
-// Sprint-104 — Shared focus guard for global keyboard shortcuts.
-//
-// Returns `true` when the supplied event target is an editable surface
-// (INPUT/TEXTAREA/SELECT or any element with `contenteditable`). Global
-// shortcut handlers in `App.tsx` use this to short-circuit their `keydown`
-// callbacks so the keystroke is preserved as a regular character entry
+// Shared focus guard for global keyboard shortcuts. Returns `true` when the
+// event target is an editable surface (INPUT/TEXTAREA/SELECT or any element
+// with `contenteditable`). Global shortcut handlers short-circuit their
+// `keydown` callbacks so the keystroke stays a regular character entry
 // (e.g. typing "w" inside a SQL editor must not close the active tab).
 //
-// Centralising this policy in one helper means new shortcuts are
-// automatically protected as soon as their handler calls
-// `isEditableTarget(e.target)` — see Sprint Contract AC-01..06.
-//
-// This file is a pure utility — no React imports.
-// ---------------------------------------------------------------------------
+// Pure utility — no React imports.
 
 /**
  * Returns true when `target` is a text-entry element where keystrokes

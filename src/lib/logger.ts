@@ -1,13 +1,11 @@
 /**
- * Sprint 204 — DEV-only console wrapper. Centralizes the
- * `import.meta.env.DEV` gate so production builds emit no console noise
- * and the project has one fan-out point for future telemetry / native log
- * channels.
+ * DEV-only console wrapper. Centralises the `import.meta.env.DEV` gate
+ * so production builds emit no console noise and there's a single
+ * fan-out point for future telemetry / native log channels.
  *
- * Migrated from 13 ad-hoc `console.*` call sites (CODE_SMELLS §5). The one
- * deliberate exception — `src/lib/perf/bootInstrumentation.ts:187` — keeps
- * its direct `console.info` because Sprint 175 pinned that single
- * production line as a structured boot-summary invariant.
+ * The boot-summary line in `src/lib/perf/bootInstrumentation.ts` is the
+ * one deliberate exception — that single `console.info` is a
+ * production-kept structured-diagnostics contract.
  */
 
 export interface Logger {

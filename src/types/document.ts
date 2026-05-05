@@ -1,5 +1,5 @@
 /**
- * Document paradigm — wire types for the Tauri bridge (Sprint 66).
+ * Document paradigm — wire types for the Tauri bridge.
  *
  * These mirror the Rust shapes defined in `commands/document/*` and
  * `db/mod.rs`. Shape naming stays paradigm-neutral (`DatabaseInfo`,
@@ -64,11 +64,11 @@ export interface FindBody {
 }
 
 /**
- * Request body for `aggregate_documents` (Sprint 72 backend, Sprint 73
- * frontend). The backend expects a JSON array of stages; each element is
- * passed through to `bson::Document` via serde. This type exists so call
- * sites can spell the shape once (`AggregateBody["pipeline"]`) rather than
- * re-typing the `Record<string, unknown>[]` at every boundary.
+ * Request body for `aggregate_documents`. The backend expects a JSON array
+ * of stages; each element is passed through to `bson::Document` via serde.
+ * This type exists so call sites can spell the shape once
+ * (`AggregateBody["pipeline"]`) rather than re-typing the
+ * `Record<string, unknown>[]` at every boundary.
  */
 export interface AggregateBody {
   pipeline: Record<string, unknown>[];
@@ -77,7 +77,7 @@ export interface AggregateBody {
 /**
  * The flattened result shape consumed by the DataGrid. `rows` carry
  * already-sentinelised cell values; `raw_documents` preserve the original
- * document so the Quick Look panel (Sprint 67+) can render the full tree.
+ * document so the Quick Look panel can render the full tree.
  */
 export interface DocumentQueryResult {
   columns: DocumentColumn[];

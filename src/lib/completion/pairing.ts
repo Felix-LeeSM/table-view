@@ -99,6 +99,6 @@ export function selectCompletionModule(
     throw new CompletionPairingError(paradigm, dbType);
   }
 
-  // No "kv" / "search" completion modules in Sprint 145 — explicit throw.
+  // No "kv" / "search" completion module yet — explicit throw.
   throw new CompletionPairingError(paradigm, dbType);
 }

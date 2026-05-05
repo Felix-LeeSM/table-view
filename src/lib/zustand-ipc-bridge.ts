@@ -1,5 +1,5 @@
 /**
- * Zustand-over-Tauri-events bridge — Sprint 151.
+ * Zustand-over-Tauri-events bridge.
  *
  * Generic primitive for synchronising a Zustand store across two (or more)
  * Tauri windows. A state mutation in one window is broadcast on a stable

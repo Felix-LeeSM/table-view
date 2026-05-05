@@ -1,18 +1,12 @@
-// AC-193-03 — preview / commit / Safe Mode handoff 책임을 useDataGridEdit
-// 에서 분리한 sub-hook. paradigm 분기 (RDB SQL preview ↔ Mongo MQL
-// preview) + executeQueryBatch / dispatchMqlCommand executor + Safe
-// Mode gate (`useSafeModeGate`) consume + warn-tier confirmDangerous /
-// cancelDangerous + commitError 라이프사이클을 한 책임으로 묶는다.
+// Sub-hook for the preview / commit / Safe Mode handoff. Owns paradigm
+// branching (RDB SQL preview ↔ Mongo MQL preview), the
+// executeQueryBatch / dispatchMqlCommand executors, the
+// `useSafeModeGate` consumer, and the warn-tier confirmDangerous /
+// cancelDangerous + commitError lifecycle.
 //
-// hook 내부에서 zustand stores (schemaStore.executeQueryBatch /
-// useSafeModeGate(connectionId)) 를 직접 consume — facade 가 같은 의존
-// 성을 두 번 wiring 할 필요가 없게 함. 외부로는 cell editing / pending
-// state 와 cleanup 만 협력 인자로 받는다.
-//
-// 본 hook 의 신규 단위 테스트는 0건 — 기존 12 test files / 118 cases
-// (useDataGridEdit.*.test.ts) 가 paradigm 분기 + Safe Mode + commitError
-// 의 cross-cutting 회귀 가드로 충분하다 (Sprint 193 contract AC-193-03).
-// date 2026-05-02.
+// The hook consumes its zustand deps directly (schemaStore +
+// useSafeModeGate); the facade wires only cell editing / pending state
+// and the cleanup callback so deps aren't doubly-wired.
 import { useCallback, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
@@ -60,29 +54,30 @@ export interface UseDataGridPreviewCommitParams {
     React.SetStateAction<Map<string, string>>
   >;
   /**
-   * Sprint 98 commit flash 진입 helper. handleCommit 의 토대 분기
-   * 진입 직후 호출 — 본 hook 이 useCommitFlash 를 직접 import 하지
-   * 않는다 (facade 가 두 hook 을 묶어 동일 toolbar 가시화 동작 유지).
+   * Commit-flash entry helper, called immediately on every handleCommit
+   * branch. The hook intentionally doesn't import `useCommitFlash` —
+   * the facade composes both hooks so toolbar visualisation stays in
+   * one place.
    */
   beginCommitFlash: () => void;
 }
 
 export interface HandleCommitOverrides {
   /**
-   * Cmd+S 단축키가 in-flight cell editor 를 보유한 채로 호출될 때 사용.
-   * facade 의 handler 가 editValue 를 pendingEdits 에 미리 merge 한 map 을
-   * 직접 전달 — useState 비동기 batch 를 우회해 같은 tick 에 정확한
-   * pending 으로 SQL 생성을 한다.
+   * Used when Cmd+S fires with an in-flight cell editor. The facade
+   * pre-merges editValue into pendingEdits and passes the resulting
+   * map directly so SQL generation sees the active edit on the same
+   * tick — bypasses React's async setState batching.
    */
   pendingEditsOverride?: Map<string, string | null>;
 }
 
 export interface HandleCommitResult {
   /**
-   * RDB SQL preview 가 열렸거나 MQL preview 가 set 됐는지 여부. facade 의
-   * commit-changes handler 가 in-flight cell 을 dismiss 할지 결정 —
-   * 검증 실패로 preview 가 안 열린 경우 사용자가 cell 안에서 값을
-   * 고칠 수 있게 editor 를 유지.
+   * `true` when an SQL or MQL preview opened. Drives the facade's
+   * decision to dismiss the in-flight cell editor — when validation
+   * fails and the preview never opens, the editor must stay so the
+   * user can fix the value in place.
    */
   opened: boolean;
 }
@@ -104,8 +99,8 @@ export interface UseDataGridPreviewCommitReturn {
   confirmDangerous: () => Promise<void>;
   cancelDangerous: () => void;
   /**
-   * facade 의 handleDiscard 가 호출 — preview / statements / commitError /
-   * pendingConfirm 4개 state 를 한 번에 reset. paradigm 무관 모두 비움.
+   * Called by the facade's discard path. Clears preview / statements /
+   * commitError / pendingConfirm in one shot, paradigm-agnostic.
    */
   resetPreviewState: () => void;
 }
@@ -131,13 +126,12 @@ export function useDataGridPreviewCommit(
 
   const executeQueryBatch = useSchemaStore((s) => s.executeQueryBatch);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-  // Sprint 189 (AC-189-01) — Safe Mode gate. RDB / Mongo / DDL editors
-  // 가 같은 decision matrix (`decideSafeModeAction`) 를 공유.
+  // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);
 
   const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
-  // Sprint 93 — keyed statements (sqlPreview 와 lockstep). handleExecute
-  // Commit 이 실패 statementIndex 를 pending edit cell key 로 매핑.
+  // Keyed statements (lockstep with `sqlPreview`). `handleExecuteCommit`
+  // maps a failing `statementIndex` back to the pending-edit cell key.
   const [sqlPreviewStatements, setSqlPreviewStatements] = useState<
     GeneratedSqlStatement[] | null
   >(null);
@@ -147,13 +141,12 @@ export function useDataGridPreviewCommit(
     sql: string;
     statementIndex: number;
   } | null>(null);
-  // Sprint 86 — paradigm-document MQL preview state. RDB grid 에서는 항상
-  // null 이며 hasPendingChanges 의 OR 조건에 참여한다.
+  // Document-paradigm MQL preview. Always null on RDB grids; participates
+  // in the `hasPendingChanges` OR.
   const [mqlPreview, setMqlPreview] = useState<MqlPreview | null>(null);
 
-  // Sprint 93 — wrapped setter exposed to consumers. preview modal dismiss
-  // 시 (`null`) keyed statements 와 commitError 도 함께 비워 다음 open
-  // 이 깨끗하게 시작.
+  // Wrapped setter — clearing the preview also clears keyed statements
+  // and commitError so the next open starts fresh.
   const setSqlPreviewExposed = useCallback((v: string[] | null) => {
     setSqlPreview(v);
     if (v === null) {
@@ -165,8 +158,9 @@ export function useDataGridPreviewCommit(
   const handleCommit = useCallback(
     (overrides?: HandleCommitOverrides): HandleCommitResult => {
       if (!data) return { opened: false };
-      // Sprint 98 — flash 진입. 토대 분기 (document early-return / no-op
-      // RDB) 도 spinner 가 stick 되지 않도록 400ms safety 가 보호.
+      // Always begin the flash; the 400ms safety guard caps it for the
+      // document early-return / no-op RDB branches that never resolve a
+      // commit.
       beginCommitFlash();
       const effectivePendingEdits =
         overrides?.pendingEditsOverride ?? pendingEdits;
@@ -198,8 +192,8 @@ export function useDataGridPreviewCommit(
           pendingDeletedRowKeys,
           pendingNewRows: insertRecords,
         });
-        // MQL path 는 row-level errors 를 preview 자체에 기록 — facade 의
-        // pendingEditErrors 는 RDB 경로 전용이므로 여기서 reset.
+        // The MQL path records row-level errors on the preview itself;
+        // the RDB-only `pendingEditErrors` map must be reset here.
         setPendingEditErrors(new Map());
         if (preview.commands.length === 0) return { opened: false };
         setMqlPreview(preview);
@@ -277,8 +271,8 @@ export function useDataGridPreviewCommit(
     [connectionId],
   );
 
-  // Sprint 186 — runRdbBatch 는 try/catch + cleanup 를 한 곳에 두기 위해
-  // handleExecuteCommit / confirmDangerous 가 공유.
+  // Shared by `handleExecuteCommit` and `confirmDangerous` so try/catch
+  // + cleanup live in one place.
   const runRdbBatch = useCallback(
     async (statements: GeneratedSqlStatement[], statementCount: number) => {
       const startedAt = Date.now();
@@ -297,9 +291,8 @@ export function useDataGridPreviewCommit(
         toast.success(
           `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
         );
-        // Sprint 196 (FB-5b) — record grid commit. Mongo commits flow
-        // through `handleExecuteCommit`'s document branch and record there;
-        // RDB commits land here.
+        // RDB grid-commit history. Mongo commits record from the
+        // document branch in `handleExecuteCommit`.
         addHistoryEntry({
           sql: joinedSql,
           executedAt: startedAt,
@@ -364,10 +357,8 @@ export function useDataGridPreviewCommit(
       if (!mqlPreview || mqlPreview.commands.length === 0) return;
       const docCount = mqlPreview.commands.length;
       const startedAt = Date.now();
-      // Sprint 196 (FB-5b) — collapse the per-command preview lines into a
-      // single SQL/MQL string for the history row. `mqlPreview.previewLines`
-      // contains the human-readable per-command rendering used in the
-      // preview modal.
+      // History row needs a single string; collapse the human-readable
+      // per-command preview lines.
       const joinedMql = mqlPreview.previewLines.join("\n");
       try {
         for (const cmd of mqlPreview.commands) {
@@ -395,9 +386,8 @@ export function useDataGridPreviewCommit(
           source: "grid-edit",
         });
       } catch (err) {
-        // Sprint 94 — MQL branch 의 catch 는 commitError 까지 wiring 되지
-        // 않았으나 toast 로 surface 해 catch-audit (sprint-88) 의 빈
-        // catch 금지 규칙을 만족.
+        // The MQL branch surfaces the failure via toast — `commitError`
+        // is RDB-only — so the user still sees what went wrong.
         const message =
           err instanceof Error
             ? err.message
@@ -424,9 +414,8 @@ export function useDataGridPreviewCommit(
     const statements: GeneratedSqlStatement[] =
       sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
     const statementCount = statements.length;
-    // Sprint 189 (AC-189-01) — per-statement Safe Mode gate. block →
-    // commitError 로 surface, confirm → pendingConfirm 으로 warn-tier
-    // dialog 띄움.
+    // Per-statement Safe Mode gate: block → `commitError`,
+    // confirm → `pendingConfirm` (warn-tier dialog).
     for (let i = 0; i < statements.length; i++) {
       const stmt = statements[i];
       if (!stmt) continue;
@@ -469,10 +458,9 @@ export function useDataGridPreviewCommit(
     table,
   ]);
 
-  // Sprint 186 — warn-tier handoff. confirmDangerous 는 현재 sqlPreview /
-  // statements 로부터 batch 재구성 후 무조건 실행. cancelDangerous 는
-  // commitError 를 warn-tier 메시지로 set 해 사용자가 왜 아무 일도
-  // 안 일어났는지 알 수 있게 한다.
+  // Warn-tier handoff. `confirmDangerous` rebuilds the batch from the
+  // current preview and runs unconditionally; `cancelDangerous` sets a
+  // warn-tier `commitError` so the user knows why nothing happened.
   const confirmDangerous = useCallback(async () => {
     if (!pendingConfirm) return;
     setPendingConfirm(null);

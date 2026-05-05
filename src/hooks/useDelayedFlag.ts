@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * Sprint 180 — Doherty + Goal-Gradient async UX threshold gate.
+ * Doherty + Goal-Gradient async UX threshold gate.
  *
  * Returns `true` only after `active` has been continuously `true` for
  * `delay` ms; flips back to `false` synchronously when `active` becomes
@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
  *
  * Implementation notes:
  *  - The internal `setTimeout` is reset every time `active` toggles, so
- *    rapid on/off cycles never accumulate stale timers (AC-180-01).
+ *    rapid on/off cycles never accumulate stale timers.
  *  - The cleanup closure clears the timeout when `active` becomes
  *    `false`, when `delay` changes, or when the host unmounts; this
  *    prevents a delayed-fire-after-unmount React warning.

@@ -1,20 +1,17 @@
 /**
- * Sprint 122 — Pure builder that converts a list of structured filter
- * conditions into a MongoDB MQL filter document. Used by the document
- * paradigm's `DocumentFilterBar` to keep the Structured tab decoupled from
- * the editor and the data grid.
+ * Pure builder that converts structured filter conditions into a
+ * MongoDB MQL filter document. Used by `DocumentFilterBar` so the
+ * Structured tab stays decoupled from the editor + data grid.
  *
- * Scope (v1):
+ * Scope:
  * - Flat field paths only (no nested `a.b.c`).
- * - Eight operators: `$eq` `$ne` `$gt` `$lt` `$gte` `$lte` `$regex`
- *   `$exists`. Composite operators (`$or`, `$and`, `$in`, `$elemMatch`)
- *   are deferred to a follow-up sprint.
- * - Numeric coercion is best-effort: a value parses as a number when
- *   `Number(raw)` is finite (and the input is not whitespace-only —
- *   `Number("  ") === 0` would otherwise silently coerce blank cells);
- *   otherwise it stays a string.
- * - `$exists` accepts `"true"` / `"false"` (case-insensitive) → boolean.
- * - Empty conditions list → `{}` (no-op filter).
+ * - Operators: `$eq`, `$ne`, `$gt`, `$lt`, `$gte`, `$lte`, `$regex`,
+ *   `$exists`. Composite operators are not yet supported.
+ * - Numeric coercion is best-effort. A whitespace-only string is NOT
+ *   coerced — `Number("  ") === 0` would otherwise silently turn blank
+ *   cells into zero.
+ * - `$exists` accepts case-insensitive `"true"` / `"false"` → boolean.
+ * - Empty conditions → `{}` (no-op filter).
  */
 
 export type MqlOperator =

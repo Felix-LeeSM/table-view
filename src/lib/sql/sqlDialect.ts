@@ -17,9 +17,9 @@ import type { DatabaseType } from "@/types/connection";
  *   a tab whose connection was deleted — silent fallback is intentional so the
  *   editor never throws on a missing connection reference).
  *
- * Sprint 82 surfaces dialect-specific keyword highlighting + autocomplete
- * candidates on RDB query tabs. Document-paradigm tabs still receive this
- * value but ignore it — their editor swaps to the JSON language extension.
+ * Drives dialect-specific keyword highlighting + autocomplete on RDB
+ * query tabs. Document-paradigm tabs ignore the value — their editor
+ * swaps to the JSON language extension.
  */
 export function databaseTypeToSqlDialect(
   dbType: DatabaseType | undefined,
@@ -32,11 +32,9 @@ export function databaseTypeToSqlDialect(
     case "sqlite":
       return SQLite;
     default:
-      // MongoDB, Redis, undefined (deleted connection reference), or future
-      // DatabaseType variants we haven't mapped yet fall back to the generic
-      // standard dialect. MariaSQL / MSSQL / Oracle are out of Sprint 82 scope
-      // (see docs/sprints/sprint-82/contract.md) and will map here too until a
-      // future sprint explicitly wires them.
+      // MongoDB, Redis, undefined (deleted connection reference), and
+      // unmapped DatabaseType variants fall back to the generic standard
+      // dialect.
       return StandardSQL;
   }
 }

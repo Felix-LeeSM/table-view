@@ -2,13 +2,10 @@ import type { DatabaseType } from "@/types/connection";
 import { assertNever } from "@/lib/paradigm";
 
 /**
- * Sprint 139 — Per-dialect SQL keyword sets.
- *
- * The SQL editor previously surfaced a paradigm-blind keyword list, which
- * meant Postgres-only keywords (`RETURNING`, `ILIKE`) showed up in MySQL
- * tabs and vice versa. This module returns the keywords appropriate for a
- * single `DatabaseType` so `useSqlAutocomplete` can swap the candidate set
- * whenever the active connection's `db_type` changes.
+ * Per-dialect SQL keyword sets. Returns the keywords appropriate for a
+ * single `DatabaseType` so `useSqlAutocomplete` can swap candidates as
+ * the active connection's `db_type` changes — without that, Postgres-
+ * only keywords (`RETURNING`, `ILIKE`) would surface on MySQL tabs.
  *
  * Non-RDB DatabaseTypes (`mongodb`, `redis`) return an empty list because
  * `SqlQueryEditor` is only mounted for RDB-paradigm tabs. The empty branch

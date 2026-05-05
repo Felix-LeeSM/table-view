@@ -1,21 +1,12 @@
 /**
- * Sprint 128 — paradigm-neutral database list wrapper.
+ * Paradigm-neutral database list wrapper. Thin Tauri bridge for the
+ * unified `list_databases(connection_id)` command. Returns:
+ *   - PG: every non-template entry from `pg_database`
+ *   - Mongo: every database visible to the user
+ *   - Search / Kv: empty list (the backend returns rather than throws)
  *
- * Thin Tauri bridge for the unified `list_databases(connection_id)` command
- * (`src-tauri/src/commands/meta.rs`). Returns the list of databases the
- * connected adapter exposes:
- *   - PG  → every non-template entry from `pg_database`
- *   - Mongo → every database visible to the user
- *   - Search/Kv → empty list (graceful — the backend doesn't throw)
- *
- * The wire shape mirrors `DatabaseInfo { name }` already emitted by the
- * Mongo-specific `list_mongo_databases`, so the frontend can keep using
- * `@/types/document::DatabaseInfo` for both code paths during the Sprint 128
- * → Sprint 130 migration window.
- *
- * Lives under `src/lib/api/` (sprint contract) so the new entry point doesn't
- * inflate the existing `src/lib/tauri.ts` barrel before Phase 9 paradigm
- * commands force a broader split.
+ * Reuses `DatabaseInfo` from `@/types/document` since the wire shape
+ * matches what `list_mongo_databases` already emits.
  */
 import { invoke } from "@tauri-apps/api/core";
 import type { DatabaseInfo } from "@/types/document";

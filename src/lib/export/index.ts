@@ -23,7 +23,7 @@ export interface RunExportArgs {
   context: ExportContext;
   headers: string[];
   rows: unknown[][];
-  /** Optional id for cooperative cancellation via the Sprint 180 registry. */
+  /** Optional id for cooperative cancellation via the query-token registry. */
   exportId?: string | null;
   /** Injected for tests so file-name timestamps stay deterministic. */
   now?: Date;

@@ -1,11 +1,10 @@
 /**
- * Sprint 132 — raw-query DB-change detection.
+ * Raw-query DB-change detection.
  *
- * `extractDbMutation(sql, dialect)` walks the input once to mask comments
- * and string literals, splits on top-level `;`, then matches each
- * dialect-specific "switch DB / schema / index" pattern. Returns the LAST
- * matching hint (sprint contract specifies last-match-wins for multi-statement
- * input). Returns `null` when no statement matches the requested dialect.
+ * `extractDbMutation(sql, dialect)` masks comments + string literals,
+ * splits on top-level `;`, then matches each dialect's "switch DB /
+ * schema / index" pattern. Last match wins for multi-statement input;
+ * returns `null` when nothing matches.
  *
  * The masking pass replaces the *content* of comments / strings with spaces
  * so character offsets remain valid for downstream consumers and so a literal

@@ -26,13 +26,9 @@ interface MinimalSyntaxNode {
 }
 
 /**
- * MongoDB MQL vocabulary — pure module, no React / Zustand dependencies.
- *
- * Sprint 83 surfaces these lists to the document paradigm query editor so
- * users see the same autocomplete quality as SQL tabs. The lists are
- * intentionally conservative — only operators/stages/accumulators the
- * Sprint 83 contract enumerates are included so the candidate set is
- * deterministic and testable. Future sprints can extend these arrays.
+ * MongoDB MQL vocabulary — pure module, no React / Zustand deps. Lists
+ * are intentionally conservative; the candidate set stays deterministic
+ * and testable, and can be extended as needs surface.
  */
 
 /**
@@ -146,9 +142,9 @@ export interface MongoCompletionOptions {
 }
 
 /**
- * Classification of the JSON context around the cursor. Sprint 83 uses a
- * deliberately simple heuristic — see `classifyPosition` — rather than a
- * full scope analysis. The contract permits this level of imprecision.
+ * Classification of the JSON context around the cursor. Uses a
+ * deliberately simple heuristic in `classifyPosition` — full scope
+ * analysis isn't required for the autocomplete quality target.
  */
 type PositionKind =
   | "stage-key" // top-level object key inside a pipeline array (aggregate mode)
@@ -233,12 +229,11 @@ export function createMongoCompletionSource(
  *    `accumulator-or-filter-key`.
  *
  * Imprecision this accepts on purpose:
- *  - `$lookup`'s nested `pipeline: [...]` isn't rewalked — inner stages are
- *    reported as nested keys (accumulator-or-filter-key) rather than
- *    stage-keys. Good enough for Sprint 83; a future refinement can track
- *    `$lookup`/`$facet` recursion.
- *  - Positions inside string values return `unknown` (the string body has
- *    no `:` / `,` right before the cursor).
+ *  - `$lookup`'s nested `pipeline: [...]` isn't rewalked — inner stages
+ *    surface as nested keys rather than stage-keys. A future refinement
+ *    can track `$lookup` / `$facet` recursion.
+ *  - Positions inside string values return `unknown` (no `:` / `,`
+ *    immediately before the cursor).
  */
 function classifyPosition(context: CompletionContext): PositionKind {
   const { state, pos } = context;

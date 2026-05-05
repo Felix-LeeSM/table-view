@@ -1,38 +1,26 @@
 /**
- * MongoDB Query Language (MQL) preview + command generator (Sprint 86).
+ * MongoDB Query Language (MQL) preview + command generator. Mirrors
+ * `sqlGenerator.ts` for the document paradigm: consumes the same
+ * pending-diff shape (cell edits, deleted rows, new rows) and produces:
  *
- * Mirrors `sqlGenerator.ts` for the document paradigm. Consumes the same
- * "pending diff" shape the DataGrid accumulates for the RDB paradigm — cell
- * edits, deleted rows, and newly-added rows — and produces three outputs:
+ * 1. `previewLines` — `string[]` for the preview modal, ordered
+ *    insert → update → delete.
+ * 2. `commands` — `MqlCommand[]` ready to dispatch to
+ *    `insertDocument` / `updateDocument` / `deleteDocument`. Index `i`
+ *    matches `previewLines[i]`.
+ * 3. `errors` — per-row generation failures. An errored row is skipped
+ *    in both arrays; valid rows in the same batch still emit entries.
  *
- * 1. `previewLines` — a `string[]` suitable for a `QueryPreviewModal` (Sprint
- *    87) rendering `db.<collection>.(insertOne|updateOne|deleteOne)(…)` text,
- *    ordered insert → update → delete so a user reading the preview sees
- *    inserts before any subsequent mutation on the same document.
- * 2. `commands` — a 1:1 `MqlCommand[]` payload array ready to dispatch to
- *    `insertDocument` / `updateDocument` / `deleteDocument` Tauri wrappers
- *    (see `src/lib/tauri.ts`). Index `i` of `commands` corresponds to line
- *    `i` of `previewLines`.
- * 3. `errors` — per-row generation failures that the commit flow can surface
- *    in the UI. A row that generated an error is **skipped** in both
- *    `previewLines` and `commands`; valid rows in the same batch still
- *    produce preview/command entries.
- *
- * Policy (Phase 6 plan F):
- * - Updates always wrap the per-row patch in a single `$set` operator. Dot-
- *   path / nested-field editing is a future phase; Sprint 86 only emits
- *   top-level field edits.
- * - The generator refuses to include `_id` in a `$set` patch — Sprint 80's
- *   backend rejects the same case, and guarding here keeps the preview
- *   honest (the user never sees a statement that would fail server-side).
- * - Sentinel cells (`"{...}"` for nested documents, `"[N items]"` for nested
- *   arrays) are not editable — a pending edit against one surfaces a
- *   `sentinel-edit` error and drops the row.
- * - Rows whose `_id` cannot be lifted into a `DocumentId` (missing, null,
- *   composite) surface a `missing-id` error and drop the row.
- * - Sprint 87 consumes this module's output. Sprint 86 does not wire the
- *   generator into any component — it exists behind the `useDataGridEdit`
- *   hook's document paradigm branch only.
+ * Policy:
+ * - Updates wrap the per-row patch in a single `$set`. Top-level fields
+ *   only — dot-path / nested-field editing is out of scope.
+ * - `_id` in a `$set` patch is rejected here (the backend rejects it
+ *   too); the preview never shows an unexecutable statement.
+ * - Sentinel cells (`"{...}"` for documents, `"[N items]"` for arrays)
+ *   are not editable — a pending edit on one drops the row with a
+ *   `sentinel-edit` error.
+ * - Rows whose `_id` can't be lifted into a `DocumentId` (missing,
+ *   null, composite) drop with a `missing-id` error.
  */
 
 import {
@@ -62,10 +50,9 @@ export interface MqlGenerateInput {
   /** Page number of the current view — used to decode `"row-{page}-{idx}"`
    *  delete keys. Mirrors `useDataGridEdit.rowKeyFn`. */
   page: number;
-  /** `"{rowIdx}-{colIdx}"` → raw edited cell value (string | null for RDB-
-   *  shaped edits, or `unknown` for document edits coming from richer
-   *  editors — Sprint 87). We accept the widest type here so the future
-   *  richer editors do not require a new generator. */
+  /** `"{rowIdx}-{colIdx}"` → raw edited cell value. Accepts `unknown`
+   *  rather than `string | null` so richer editors don't force a new
+   *  generator. */
   pendingEdits: Map<string, unknown>;
   /** `"row-{page}-{rowIdx}"` — same encoding as the RDB path. */
   pendingDeletedRowKeys: Set<string>;
@@ -75,7 +62,7 @@ export interface MqlGenerateInput {
   pendingNewRows: Record<string, unknown>[];
 }
 
-/** A single MQL command ready to dispatch to the Sprint 80 Tauri wrappers. */
+/** A single MQL command ready to dispatch to the Tauri wrappers. */
 export type MqlCommand =
   | {
       kind: "insertOne";
@@ -232,8 +219,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
 
     // Sentinel-edit guard: any cell whose value is the document/array
     // sentinel is not editable. Each offending cell reports its own error
-    // and the row is dropped entirely (Sprint 86 does not emit a partial
-    // patch — the user must discard the sentinel edit first).
+    // and the row is dropped entirely — partial patches aren't emitted,
+    // so the user must discard the sentinel edit first.
     let sentinelBlocked = false;
     for (const { column, value } of cells) {
       if (isDocumentSentinel(value)) {
@@ -243,9 +230,8 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     }
     if (sentinelBlocked) return;
 
-    // `_id`-in-patch guard: the Sprint 80 backend rejects a patch document
-    // with a top-level `_id` key; matching the behaviour here keeps the
-    // preview honest.
+    // `_id`-in-patch guard: the backend rejects patch documents with a
+    // top-level `_id`; matching the behaviour here keeps the preview honest.
     const idInPatch = cells.find((c) => c.column === "_id");
     if (idInPatch) {
       errors.push({ kind: "id-in-patch", rowIdx, column: "_id" });

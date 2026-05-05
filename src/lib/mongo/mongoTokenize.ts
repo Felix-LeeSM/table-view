@@ -16,10 +16,9 @@ export interface MongoToken {
 }
 
 /**
- * Operator lookup set. Sprint 83 surfaces the canonical list via
- * `MONGO_ALL_OPERATORS`; we mirror it into a `Set` here so every token
- * classification is O(1). Sprint 85 consumes the exact same list to keep
- * the editor decoration and the history preview visually consistent.
+ * Operator lookup set mirrored from `MONGO_ALL_OPERATORS` so token
+ * classification is O(1). Same list powers the editor decoration and
+ * the history preview, so they stay visually consistent.
  */
 const OPERATOR_SET: ReadonlySet<string> = new Set<string>(MONGO_ALL_OPERATORS);
 

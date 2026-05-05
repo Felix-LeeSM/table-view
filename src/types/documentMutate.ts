@@ -1,11 +1,10 @@
 /**
- * Document paradigm — frontend mutate wire types (Sprint 86).
+ * Document paradigm — frontend mutate wire types.
  *
- * These mirror the Rust `DocumentId` enum defined at
- * `src-tauri/src/db/mod.rs:62-67` and the mutate Tauri commands introduced in
- * Sprint 80 (`src-tauri/src/commands/document/mutate.rs`). The Rust enum uses
- * the default `#[derive(Serialize, Deserialize)]` with no tag attribute, so
- * serde produces an **externally tagged** JSON encoding:
+ * These mirror the Rust `DocumentId` enum (`src-tauri/src/db/mod.rs`) and the
+ * mutate Tauri commands (`src-tauri/src/commands/document/mutate.rs`). The
+ * Rust enum uses the default `#[derive(Serialize, Deserialize)]` with no tag
+ * attribute, so serde produces an **externally tagged** JSON encoding:
  *
  * - `DocumentId::ObjectId("507f…")` → `{"ObjectId": "507f…"}`
  * - `DocumentId::String("key")`      → `{"String": "key"}`
@@ -88,9 +87,8 @@ export function parseObjectIdLiteral(value: unknown): DocumentId | null {
  * Returns `null` when `_id` is absent, nullish, or a shape the helper does
  * not know how to promote to a typed variant (the caller should treat this
  * as a `missing-id` error). Composite `_id` values (documents, arrays, BSON
- * binaries, etc.) intentionally fall through — Sprint 86 scope does not
- * support editing those rows, and the generator surfaces a `missing-id`
- * error for them.
+ * binaries, etc.) intentionally fall through — editing those rows is not
+ * supported, and the generator surfaces a `missing-id` error for them.
  */
 export function documentIdFromRow(
   row: Record<string, unknown>,
@@ -130,8 +128,8 @@ function escapeDoubleQuoted(value: string): string {
  * - `String`   → `"<escaped>"`
  * - `Number`   → `<n>` (unquoted)
  * - `Raw`      → `JSON.stringify(value)` (compact) — the preview is a best-
- *   effort display only; Sprint 86 does not attempt to reverse-engineer
- *   composite BSON back into mongosh syntax.
+ *   effort display only; we do not reverse-engineer composite BSON back
+ *   into mongosh syntax.
  */
 export function formatDocumentIdForMql(id: DocumentId): string {
   if ("ObjectId" in id) return `ObjectId("${id.ObjectId}")`;

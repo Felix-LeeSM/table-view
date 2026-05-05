@@ -32,8 +32,8 @@ export interface QueryResult {
 /**
  * Result of a single statement inside a multi-statement execution.
  *
- * Sprint 100 — when the user runs a script with `>= 2` statements we keep
- * a per-statement breakdown so the result panel can show one tab per
+ * When the user runs a script with `>= 2` statements we keep a
+ * per-statement breakdown so the result panel can show one tab per
  * statement (verb / rows / ms / pass-fail). Single-statement runs do NOT
  * produce this array; consumers must check for `statements` presence
  * before branching.
@@ -55,12 +55,12 @@ export interface QueryStatementResult {
 /**
  * Lifecycle state of a query tab's SQL execution.
  *
- * `completed.statements` is OPTIONAL (Sprint 100): single-statement
- * executions leave it `undefined` and the existing `result` field carries
- * the only result. Multi-statement executions populate `statements` with
- * one entry per statement (success or error); `result` then mirrors the
- * LAST SUCCESSFUL statement's result so single-result fallbacks (history,
- * grid collapse) keep working unchanged.
+ * `completed.statements` is OPTIONAL: single-statement executions leave it
+ * `undefined` and the existing `result` field carries the only result.
+ * Multi-statement executions populate `statements` with one entry per
+ * statement (success or error); `result` then mirrors the LAST SUCCESSFUL
+ * statement's result so single-result fallbacks (history, grid collapse)
+ * keep working unchanged.
  *
  * If a multi-statement run fails for *every* statement, the state collapses
  * to `{ status: "error" }` instead — same as single-statement failure.

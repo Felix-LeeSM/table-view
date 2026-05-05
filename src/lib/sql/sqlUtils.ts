@@ -110,7 +110,7 @@ export function splitSqlStatements(sql: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// SQL Formatting (Sprint 40)
+// SQL Formatting
 // ---------------------------------------------------------------------------
 
 /** Keywords that should be uppercased. */
@@ -349,7 +349,7 @@ export function formatSql(sql: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// SQL Uglify (Sprint 53) — collapse SQL to single line
+// SQL Uglify — collapse SQL to single line
 // ---------------------------------------------------------------------------
 
 /**

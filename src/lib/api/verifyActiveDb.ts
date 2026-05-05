@@ -1,18 +1,13 @@
 /**
- * Sprint 132 — read the backend's view of the active database.
+ * Read the backend's view of the active database. Thin Tauri bridge for
+ * `verify_active_db(connection_id)`. Used by `QueryTab` after a raw
+ * query that triggered an optimistic `setActiveDb` (e.g. PG `\c foo`)
+ * to confirm the pool actually flipped — a mismatch surfaces a warn
+ * toast and reverts the store.
  *
- * Thin Tauri bridge for the `verify_active_db(connection_id)` command
- * (`src-tauri/src/commands/meta.rs`). Used by `QueryTab` immediately after
- * a raw query that triggered an optimistic `setActiveDb` (e.g. PG `\c foo`)
- * to confirm the backend's pool actually flipped. A mismatch between the
- * optimistic value and the verified value triggers a `toast.warn` + revert.
- *
- * Returns the empty string when the paradigm has a notion of "current DB"
- * but the adapter is unset (Mongo with no default). The frontend treats
- * the empty string as "could not verify" and skips the mismatch toast.
- *
- * Mirrors the `switchActiveDb` thin-wrapper pattern so frontend dispatch
- * stays paradigm-agnostic — callers don't branch on PG vs Mongo here.
+ * Returns `""` when the adapter has no current DB (Mongo with no
+ * default); the frontend treats `""` as "could not verify" and skips
+ * the mismatch toast.
  */
 import { invoke } from "@tauri-apps/api/core";
 

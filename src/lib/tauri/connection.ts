@@ -127,12 +127,12 @@ export async function exportConnectionsEncrypted(
 }
 
 /**
- * Sprint 140 — encrypted import. Accepts either an `EncryptedEnvelope` JSON
- * (auto-detected via `kdf` + `ciphertext` fields) or a plain `ExportPayload`
- * JSON. When the payload is an envelope, `masterPassword` is required and
- * a wrong password surfaces the canonical message
- * `Incorrect master password — the file could not be decrypted`. For
- * plain JSON the password is ignored.
+ * Encrypted import. Accepts either an `EncryptedEnvelope` JSON (auto-detected
+ * via `kdf` + `ciphertext` fields) or a plain `ExportPayload` JSON. When the
+ * payload is an envelope, `masterPassword` is required and a wrong password
+ * surfaces the canonical message
+ * `Incorrect master password — the file could not be decrypted`. For plain
+ * JSON the password is ignored.
  */
 export async function importConnectionsEncrypted(
   payload: string,

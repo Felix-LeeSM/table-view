@@ -1,14 +1,8 @@
 /**
- * Sprint 130 — paradigm-aware "switch active database" wrapper.
- *
- * Thin Tauri bridge for the `switch_active_db(connection_id, db_name)` command
- * (`src-tauri/src/commands/meta.rs`). PG swaps the active sub-pool to
- * `dbName`; SQLite/MySQL/Search/Kv currently surface `AppError::Unsupported`
- * via the trait default, and Document paradigm is intentionally `Unsupported`
- * until Sprint 131 lands `use_db`.
- *
- * Mirrors the `listDatabases` thin-wrapper pattern — keeps a single point of
- * call so future paradigm dispatch changes (Phase 9) only touch one file.
+ * Paradigm-aware "switch active database" wrapper. Thin Tauri bridge
+ * for `switch_active_db(connection_id, db_name)`. PG swaps the active
+ * sub-pool; SQLite / MySQL / Search / Kv / Document currently surface
+ * `AppError::Unsupported` via the trait default.
  */
 import { invoke } from "@tauri-apps/api/core";
 

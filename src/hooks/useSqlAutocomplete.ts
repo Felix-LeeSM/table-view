@@ -8,10 +8,8 @@ import { keywords as MYSQL_KEYWORDS } from "@/lib/completion/mysql";
 import { keywords as SQLITE_KEYWORDS } from "@/lib/completion/sqlite";
 
 /**
- * Sprint 145 — resolve the dialect-specific keyword list via the new
- * per-DBMS completion modules. Behaves identically to the previous
- * `getKeywordsForDialect` helper for RDB types and returns an empty list
- * for non-RDB types (the SQL editor never mounts for them).
+ * Resolve the dialect-specific keyword list. Returns `[]` for non-RDB
+ * types — the SQL editor never mounts for them.
  */
 function keywordsForDbType(dbType: DatabaseType): readonly string[] {
   switch (dbType) {
@@ -60,28 +58,24 @@ export interface UseSqlAutocompleteOptions {
   /** Explicit test-only override: `table → column names`. */
   tableColumns?: TableColumnOverrides;
   /**
-   * Sprint 82 — the SQL dialect of the active connection. The hook uses it to
-   * decide how to apply mixed-case identifiers (backticks for MySQL,
-   * double-quotes for Postgres / SQLite). When omitted the hook behaves
-   * identically to pre-Sprint-82 callers.
+   * SQL dialect of the active connection. Drives quoting for mixed-case
+   * identifiers (backticks for MySQL, double-quotes for Postgres /
+   * SQLite). Optional — without it, only the bare label is emitted.
    */
   dialect?: SQLDialect;
   /**
-   * Sprint 139 — the connection's `db_type`. When supplied the hook surfaces
-   * dialect-specific SQL keywords (e.g. `RETURNING` / `ILIKE` for PG,
-   * `AUTO_INCREMENT` / `REPLACE INTO` for MySQL, `PRAGMA` / `WITHOUT ROWID`
-   * for SQLite). When omitted the namespace skips the keyword list entirely
-   * so pre-Sprint-139 callers see no behavioural change.
+   * Connection `db_type`. When supplied, surfaces dialect-specific SQL
+   * keywords (e.g. `RETURNING` for PG, `AUTO_INCREMENT` for MySQL,
+   * `PRAGMA` for SQLite). Without it the keyword list is skipped.
    */
   dbType?: DatabaseType;
 }
 
 /**
- * Backwards-compatible second-argument shape. Pre-Sprint-82 callers passed a
- * plain `Record<string, string[]>` override; Sprint 82 widens this to either
- * the same record (detected via `Array.isArray` of any value) or a structured
- * `UseSqlAutocompleteOptions` object. This keeps existing tests and call
- * sites working without touching them.
+ * Backwards-compatible second-argument shape. Legacy callers passed a
+ * plain `Record<string, string[]>` override; the structured options
+ * object is the modern shape. Disambiguation runs via `Array.isArray`
+ * on the values so both call sites stay supported.
  */
 type AutocompleteArg = TableColumnOverrides | UseSqlAutocompleteOptions;
 
@@ -98,9 +92,7 @@ function normalizeOptions(
   if (looksLikeLegacyRecord) {
     return { tableColumns: arg as TableColumnOverrides };
   }
-  // Empty record is treated as "no overrides" under the options shape. An
-  // empty record from tests (`{}`) reaches this branch and returns `{}`,
-  // which is exactly the pre-Sprint-82 behaviour.
+  // An empty record (`{}`) lands here as "no overrides".
   return arg as UseSqlAutocompleteOptions;
 }
 
@@ -133,16 +125,13 @@ function identifierNeedsQuoting(name: string): boolean {
  * `tableColumns` override is still accepted for tests or callers that wish to
  * inject explicit values.
  *
- * Sprint 82 extends the hook to accept a SQL dialect hint. When a mixed-case
- * identifier is present (e.g. `"Users"`), the hook emits an extra completion
- * candidate whose `apply` string is quoted with the dialect's quote character
- * (`` `Users` `` for MySQL, `"Users"` for Postgres / SQLite) so the inserted
- * identifier round-trips through the server intact.
+ * When a SQL dialect is supplied, mixed-case identifiers (e.g. `"Users"`)
+ * also get a quoted completion candidate so the inserted identifier
+ * round-trips through case-sensitive catalogs intact.
  *
  * @param connectionId The active connection identifier.
- * @param arg Either a legacy `Record<string, string[]>` override (kept for
- *            backwards-compatibility with pre-Sprint-82 callers) or the
- *            structured `UseSqlAutocompleteOptions` shape.
+ * @param arg Either a legacy `Record<string, string[]>` override or
+ *            the structured `UseSqlAutocompleteOptions` shape.
  */
 export function useSqlAutocomplete(
   connectionId: string,
@@ -175,10 +164,8 @@ export function useSqlAutocomplete(
       ns[fn] = reservedToken(fn, "function");
     }
 
-    // Sprint 139 — surface dialect-specific SQL keywords as top-level
-    // namespace entries so the autocomplete popup offers them alongside
-    // tables / views / functions. Pre-Sprint-139 callers (no dbType)
-    // skip this branch and see no behavioural change.
+    // Surface dialect-specific SQL keywords alongside tables / views /
+    // functions. Skipped when no dbType is supplied.
     if (dbType !== undefined) {
       for (const kw of keywordsForDbType(dbType)) {
         // Avoid clobbering an existing entry (e.g. `SELECT` would never
@@ -225,10 +212,8 @@ export function useSqlAutocomplete(
       );
     };
 
-    // Sprint 82 — when a dialect is supplied, emit an additional quoted-
-    // identifier candidate for every mixed-case table/view name so the
-    // autocomplete popup surfaces both the bare label (which breaks at the
-    // server for case-sensitive catalogs) and the dialect-quoted label.
+    // For mixed-case names, emit a dialect-quoted alias alongside the
+    // bare label — the bare form breaks against case-sensitive catalogs.
     const quoteChar = quoteCharForDialect(dialect);
     const addQuotedAlias = (
       bareName: string,

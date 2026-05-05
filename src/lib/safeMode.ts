@@ -1,25 +1,18 @@
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 
 /**
- * Sprint 189 (D-4) — paradigm-agnostic Safe Mode decision matrix as a pure
- * function. Extracted from `useSafeModeGate` so the matrix can be unit-tested
- * without `renderHook` + store mutations, and reused outside of React if
- * needed (e.g. preview-only audits).
- *
- * Sprint 190 (FB-1b) — Hard auto policy. `production` connections cannot
- * disable Safe Mode by toggling the toolbar to "off"; `off` is treated as
- * `strict` for production. Off remains effective on local / testing /
- * development / staging — the global toggle still serves non-production
- * workflows.
+ * Paradigm-agnostic Safe Mode decision matrix as a pure function.
+ * Production connections cannot disable Safe Mode by toggling "off" —
+ * `off` collapses to `strict` for production but stays effective on
+ * local / testing / development / staging.
  *
  * Decision rules:
  *
- *   analysis.severity === "safe"     →  allow
- *   environment !== "production"     →  allow  (null / missing connection ⇒
- *                                              treated as non-production)
- *   mode === "warn" + danger (prod)  →  confirm (reason verbatim)
+ *   analysis.severity === "safe"      →  allow
+ *   environment !== "production"      →  allow  (null ⇒ non-production)
+ *   mode === "warn" + danger (prod)   →  confirm (reason verbatim)
  *   mode === "strict" + danger (prod) →  block  (toolbar-override copy)
- *   mode === "off" + danger (prod)   →  block  (prod-auto copy — Sprint 190)
+ *   mode === "off" + danger (prod)    →  block  (prod-auto copy)
  */
 export type SafeMode = "strict" | "warn" | "off";
 
@@ -40,9 +33,9 @@ export function decideSafeModeAction(
     return { action: "confirm", reason: primary };
   }
   if (mode === "off") {
-    // Sprint 190 (AC-190-02) — prod-auto. The toolbar "off" toggle is a
-    // no-op on production connections, so we surface a different override
-    // path (change the connection environment tag) than the strict copy.
+    // The toolbar "off" toggle is a no-op on production. Surface a
+    // different override path (change the connection environment tag)
+    // so the user knows the toolbar won't help here.
     return {
       action: "block",
       reason: `Safe Mode blocked: ${primary} (production environment forces Safe Mode — change connection environment tag to override)`,
