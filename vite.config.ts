@@ -38,6 +38,14 @@ export default defineConfig(async () => ({
     },
   },
   clearScreen: false,
+  build: {
+    // Tauri desktop bundle 은 사용자 머신에 dist/ 자체를 패키징하지
+    // 않지만, sourcemap 을 켜두면 Sentry-like 원격 telemetry 가
+    // 활성화될 때 stack trace 를 풀 수 있다. 현재는 telemetry 없으므로
+    // false. 추후 활성화 시 본 옵션을 "hidden" 으로 (별도 업로드용
+    // map 만 생성).
+    sourcemap: false,
+  },
   server: {
     port: 1420,
     strictPort: true,
