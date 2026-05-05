@@ -100,6 +100,34 @@ backlog 진입. Sprint 199–209 종료 시 시한부 docs `CODE_SMELLS.md` reti
 안에서 모두 소진하는 것이었다. Sprint 199–209 모두 refactor; cycle 종료
 (2026-05-05) 후 feature backlog (Phase 13 / 21 / 22 등) 진입.
 
+### 리팩토링 sequencing (Sprint 210–..., post-209 cycle)
+
+Sprint 209 종료 직후 wide-net 재스캔 결과 ([`refactoring-candidates.md`](refactoring-candidates.md),
+시한부) 를 입력값으로 새 cycle. 11개 P1–P11 후보 (DocumentDataGrid /
+QuickLookPanel / tabStore cross-store 잔재 / tauri.ts barrel / Rust DB·export
+modules / ConnectionDialog / Structure editors / Raw-query edit grid /
+DocumentDatabaseTree / stores side-effects / mega tests). **이전 cycle 의
+refactor 연속 패턴 답습**: 카테고리 모두 처리 후 feature backlog 진입.
+**본 표는 candidate sequencing** — 진입 sprint 시 contract 로 옮겨 ADR /
+AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
+
+| # | Sprint | 종류 | 입력 (candidates) | 내용 |
+|---|--------|------|-------------------|------|
+| 1 | 210 | refactor | P1 (DocumentDataGrid) | `DocumentDataGrid.tsx` → `useDocumentGridData` / `useMongoBulkOps` hook + bulk dialog 분리. |
+| 2 | 211 | refactor | P2 (QuickLookPanel) | `QuickLookShell` 분리 + RDB / Document body 분리 + helpers 이동. |
+| 3 | 212 | refactor | P3 (tabStore cross-store) | `tabStore` entry 의 `useMruStore` / `useQueryHistoryStore` 직접 import 제거 — caller hook 으로 이동. |
+| 4 | 213 | refactor | P4 (tauri.ts) | `src/lib/tauri/{connection,schema,query,document,export}.ts` 분리 + `tauri.ts` barrel 보존. |
+| 5 | 214 | refactor | P5 (Rust DB·export) | `db/mod.rs` → traits / types / test_support 분리 + `commands/export.rs` writer 분리. |
+| 6 | 215 | refactor | P6 (ConnectionDialog) | `useConnectionDraftForm` / `useConnectionUrlImport` hook 추출 + body / footer 분리. |
+| 7 | 216 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook 추출 + 3 editor (columns/indexes/constraints) 적용. |
+| 8 | 217 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유. |
+| 9 | 218 | refactor | P9 (DocumentDatabaseTree) | `useDocumentTreeData` / `useDocumentTreeActions` + `DocumentTreeRows` 분리. |
+| 10 | 219 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. |
+| 11 | 220 | refactor | P11 (mega tests) | 1,900–2,900 라인 mega test 5건 axis 별 split. |
+
+본 cycle 종료 시 [`refactoring-candidates.md`](refactoring-candidates.md) retire
+— 이전 cycle 의 `CODE_SMELLS.md` 처리와 동일.
+
 ## 문서 목차
 
 | 문서 | 설명 |
