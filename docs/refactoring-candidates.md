@@ -237,7 +237,7 @@ sanitization, full dialog layout을 한 component에서 처리한다.
 
 ### Validation
 
-- `pnpm vitest run src/components/connection/ConnectionDialog.test.tsx src/components/connection/ConnectionDialog.sprint178.test.tsx`
+- `pnpm vitest run src/components/connection/ConnectionDialog.test.tsx src/components/connection/ConnectionDialog.urlInput.test.tsx`
 - 수동 확인: 새 연결, 기존 연결 수정, password keep/clear/set, host field URL paste,
   URL mode parse, custom port DBMS change confirmation.
 

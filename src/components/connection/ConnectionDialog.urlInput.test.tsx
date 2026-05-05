@@ -11,13 +11,13 @@ import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 
 // ---------------------------------------------------------------------------
-// Sprint 178 — Postel's Law for ConnectionDialog form-mode input.
+// ConnectionDialog — URL-form input handling (Postel's Law).
 //
-// All AC-178-0X scenarios live here so the file is searchable for the
-// sprint id and so the existing ConnectionDialog.test.tsx (which is
-// already 1300+ lines) doesn't need to be re-read on every revision.
+// Split from ConnectionDialog.test.tsx (1300+ lines) by domain: URL
+// paste/blur detection is its own surface. AC-178-0X IDs reference the
+// originating sprint-178 spec.
 //
-// Mechanism notes (per findings.md):
+// Mechanism notes:
 //   * Detection trigger:    onPaste on the form wrapper (delegated). A
 //                           change-event trigger would fire mid-typing
 //                           when a user types a host like
