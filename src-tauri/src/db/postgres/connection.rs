@@ -146,12 +146,18 @@ impl PostgresAdapter {
         // stored config has its credentials but a placeholder `database`
         // (we'll always override it via `switch_active_db`) — we keep the
         // original DB name on the config for fallbacks.
+        //
+        // audit M5: clone outside the lock so we hold the mutex only long
+        // enough to do the four pointer-level inserts.
+        let stored_config = config.clone();
+        let db_name_for_pools = config.database.clone();
+        let db_name_for_lru = config.database.clone();
+        let db_name_for_current = config.database.clone();
         let mut guard = self.inner.lock().await;
-        let db_name = config.database.clone();
-        guard.config = Some(config.clone());
-        guard.pools.insert(db_name.clone(), pool);
-        guard.lru_order.push_back(db_name.clone());
-        guard.current_db = Some(db_name);
+        guard.config = Some(stored_config);
+        guard.pools.insert(db_name_for_pools, pool);
+        guard.lru_order.push_back(db_name_for_lru);
+        guard.current_db = Some(db_name_for_current);
         Ok(())
     }
 
