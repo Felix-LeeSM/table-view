@@ -121,7 +121,7 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 | — | (사용자) | refactor | ~~P5 step 2a~~ | `db/mod.rs` (551) trait/DTO 분리. (사용자 commit `4e65a50`) |
 | — | (사용자) | refactor | ~~P5 step 2b~~ | `commands/export.rs` (879) writer 분리. (사용자 commit `d2d3cf9`) |
 | 4 | **213** ✓ | refactor | P6 (ConnectionDialog) | `ConnectionDialog.tsx` (829) → entry 310 + 5 sub-file (sanitize / draftForm / urlImport / Body / Footer). 행동 변경 0, evaluator 9/10. (commit `6dee525`) |
-| 5 | 214 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook + 3 editor (columns/indexes/constraints) 적용. |
+| 5 | **214** ✓ | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook (245) + 3 editor (Cols 775→695 / Idx 579→489 / Cons 649→559) 적용. cross-component DRY, 행동 변경 0, evaluator 9.5/10. (commit `ef1b1f6`) |
 | 6 | 215 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유. |
 | 7 | **217** ✓ | refactor | P9 (DocumentDatabaseTree) | `DocumentDatabaseTree.tsx` (582) → entry 263 + 4 sub-file. **Sprint 212 와 동일 commit (사전 처리 통합)**. evaluator 8/10. (commit `ccd8809`) |
 | 8 | 216 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. |
