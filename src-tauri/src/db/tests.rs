@@ -1,9 +1,19 @@
 //! Unit tests for `db/mod.rs` — moved out of the inline `mod tests` block
-//! (Sprint P5 step 1, 2026-05-05) so production code in mod.rs is no
-//! longer ~60% buried under test scaffolding. `super::*` continues to
-//! pull in everything mod.rs exposes, so no test logic changes.
+//! (Sprint P5 step 1, commit a60074d) so production code in mod.rs is no
+//! longer ~60% buried under test scaffolding. Sprint 213 (P5 step 2) then
+//! split mod.rs into `types`/`traits`/`active`, so this file now imports
+//! the external (non-`crate::db::*`) types it needs explicitly — they
+//! were previously brought in by mod.rs's own `use` aliases via
+//! `super::*`, which is no longer the right shape.
 
 use super::*;
+use crate::error::AppError;
+use crate::models::{
+    AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
+    CreateIndexRequest, DatabaseType, DropConstraintRequest, DropIndexRequest, IndexInfo,
+    SchemaChangeResult, SchemaInfo, TableData, TableInfo,
+};
+use tokio_util::sync::CancellationToken;
 
 #[test]
 fn namespace_info_from_schema_info_preserves_name() {
