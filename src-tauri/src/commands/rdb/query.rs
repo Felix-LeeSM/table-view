@@ -6,12 +6,13 @@
 //! `AppError::Unsupported` before any concrete method is invoked.
 
 use tauri::State;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{FilterCondition, QueryResult, TableData};
+
+use super::{register_cancel_token, release_cancel_token};
 
 /// Validate query execution inputs.
 ///
@@ -69,16 +70,10 @@ pub async fn execute_query(
 
     validate_query_inputs(&sql, &connection_id)?;
 
-    // Create cancellation token for this query
-    let cancel_token = CancellationToken::new();
-    let child_token = cancel_token.clone();
-
-    // Store the token for potential cancellation before taking the
-    // connections lock, so cancel_query can run without contending.
-    {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.insert(query_id.clone(), cancel_token);
-    }
+    // Register the cancellation token via the shared rdb/mod helper so this
+    // command's lifecycle matches schema introspection commands (audit m14).
+    let cancel_handle = register_cancel_token(&state, Some(&query_id)).await;
+    let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
     // Execute the query through the enum dispatch. We hold the
     // `active_connections` lock for the duration of the query — the same
@@ -90,14 +85,13 @@ pub async fn execute_query(
         let active = connections
             .get(&connection_id)
             .ok_or_else(|| not_connected(&connection_id))?;
-        active.as_rdb()?.execute_sql(&sql, Some(&child_token)).await
+        active
+            .as_rdb()?
+            .execute_sql(&sql, child_token.as_ref())
+            .await
     };
 
-    // Clean up the token after execution (whether success or failure)
-    {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(&query_id);
-    }
+    release_cancel_token(&state, &cancel_handle).await;
 
     // Log execution time
     if let Ok(ref result) = result {
@@ -158,13 +152,8 @@ pub async fn execute_query_batch(
         }
     }
 
-    let cancel_token = CancellationToken::new();
-    let child_token = cancel_token.clone();
-
-    {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.insert(query_id.clone(), cancel_token);
-    }
+    let cancel_handle = register_cancel_token(&state, Some(&query_id)).await;
+    let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
     let result = {
         let connections = state.active_connections.lock().await;
@@ -173,14 +162,11 @@ pub async fn execute_query_batch(
             .ok_or_else(|| not_connected(&connection_id))?;
         active
             .as_rdb()?
-            .execute_sql_batch(&statements, Some(&child_token))
+            .execute_sql_batch(&statements, child_token.as_ref())
             .await
     };
 
-    {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(&query_id);
-    }
+    release_cancel_token(&state, &cancel_handle).await;
 
     match &result {
         Ok(results) => info!(
@@ -256,19 +242,9 @@ pub async fn query_table_data(
     query_id: Option<String>,
 ) -> Result<TableData, AppError> {
     // Hoist token registration outside the active_connections lock so
-    // `cancel_query` can flip the flag without contention. Mirrors the
-    // shape used by `execute_query` at lines 73-81 above.
-    let cancel_handle: Option<(String, CancellationToken)> = if let Some(qid) = query_id.as_ref() {
-        let token = CancellationToken::new();
-        let stored = token.clone();
-        {
-            let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(qid.clone(), stored);
-        }
-        Some((qid.clone(), token))
-    } else {
-        None
-    };
+    // `cancel_query` can flip the flag without contention. Shared helper
+    // mirrors the shape used by `execute_query` and `rdb/schema.rs`.
+    let cancel_handle = register_cancel_token(&state, query_id.as_deref()).await;
 
     let result = {
         let connections = state.active_connections.lock().await;
@@ -293,10 +269,7 @@ pub async fn query_table_data(
     // Always remove the token after the call completes (success, error,
     // or cancelled) so the registry stays clean for the next attempt
     // (AC-180-05 retry contract).
-    if let Some((qid, _)) = cancel_handle {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(&qid);
-    }
+    release_cancel_token(&state, &cancel_handle).await;
 
     result
 }

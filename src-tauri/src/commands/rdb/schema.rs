@@ -5,42 +5,11 @@
 //! `ActiveAdapter::as_rdb()?` so that non-RDB connections fail cleanly with
 //! `AppError::Unsupported` before any concrete method is invoked.
 
-use tokio_util::sync::CancellationToken;
-
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, FunctionInfo, SchemaInfo, TableInfo, ViewInfo};
 
-/// Sprint 180 (AC-180-04) — register an optional cancel-token for the
-/// duration of a schema-introspection call so the existing `cancel_query`
-/// command can abort the in-flight work via the shared `query_tokens`
-/// registry. Mirrors the pattern at `commands/rdb/query.rs:73-81`.
-async fn register_cancel_token(
-    state: &tauri::State<'_, AppState>,
-    query_id: &Option<String>,
-) -> Option<(String, CancellationToken)> {
-    if let Some(qid) = query_id.as_ref() {
-        let token = CancellationToken::new();
-        let stored = token.clone();
-        {
-            let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(qid.clone(), stored);
-        }
-        Some((qid.clone(), token))
-    } else {
-        None
-    }
-}
-
-async fn release_cancel_token(
-    state: &tauri::State<'_, AppState>,
-    cancel_handle: &Option<(String, CancellationToken)>,
-) {
-    if let Some((qid, _)) = cancel_handle {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(qid);
-    }
-}
+use super::{register_cancel_token, release_cancel_token};
 
 /// Lookup helper — returns `AppError::NotFound` when the id isn't connected.
 fn not_connected(connection_id: &str) -> AppError {
@@ -88,7 +57,7 @@ pub async fn get_table_columns(
     // pass a unique id and call `cancel_query(query_id)` to abort.
     query_id: Option<String>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
-    let cancel_handle = register_cancel_token(&state, &query_id).await;
+    let cancel_handle = register_cancel_token(&state, query_id.as_deref()).await;
 
     let result = {
         let connections = state.active_connections.lock().await;
@@ -127,7 +96,7 @@ pub async fn get_table_indexes(
     // Sprint 180 (AC-180-04): optional cancel-token id (see get_table_columns).
     query_id: Option<String>,
 ) -> Result<Vec<crate::models::IndexInfo>, AppError> {
-    let cancel_handle = register_cancel_token(&state, &query_id).await;
+    let cancel_handle = register_cancel_token(&state, query_id.as_deref()).await;
 
     let result = {
         let connections = state.active_connections.lock().await;
@@ -153,7 +122,7 @@ pub async fn get_table_constraints(
     // Sprint 180 (AC-180-04): optional cancel-token id (see get_table_columns).
     query_id: Option<String>,
 ) -> Result<Vec<crate::models::ConstraintInfo>, AppError> {
-    let cancel_handle = register_cancel_token(&state, &query_id).await;
+    let cancel_handle = register_cancel_token(&state, query_id.as_deref()).await;
 
     let result = {
         let connections = state.active_connections.lock().await;
