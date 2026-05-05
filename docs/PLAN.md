@@ -113,17 +113,18 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 
 | # | Sprint | 종류 | 입력 (candidates) | 내용 |
 |---|--------|------|-------------------|------|
-| 1 | **210** ✓ | refactor | P1 (DocumentDataGrid) | `DocumentDataGrid.tsx` (951) → entry 597 + 4 sub-file (`useDocumentGridData` / `useMongoBulkOps` / `DocumentBulkDeleteDialog` / `DocumentBulkUpdateDialog`). 행동 변경 0, evaluator 9/10. (commit `b9020fb`) |
-| 2 | **211** ✓ | refactor | P2 (QuickLookPanel) | `QuickLookPanel.tsx` (868) → entry 176 + 5 sub-file (`QuickLookShell` / `RdbQuickLookBody` / `DocumentQuickLookBody` / `helpers` / `FieldRow`). 행동 변경 0, evaluator 8.5/10. (commit `9e2091f`) |
-| 3 | 212 | refactor | P3 (tabStore cross-store) | `tabStore` entry 의 `useMruStore` / `useQueryHistoryStore` 직접 import 제거 — caller hook 으로 이동. |
-| 4 | 213 | refactor | P4 (tauri.ts) | `src/lib/tauri/{connection,schema,query,document,export}.ts` 분리 + `tauri.ts` barrel 보존. |
-| 5 | 214 | refactor | P5 (Rust DB·export) | `db/mod.rs` → traits / types / test_support 분리 + `commands/export.rs` writer 분리. |
-| 6 | 215 | refactor | P6 (ConnectionDialog) | `useConnectionDraftForm` / `useConnectionUrlImport` hook 추출 + body / footer 분리. |
-| 7 | 216 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook 추출 + 3 editor (columns/indexes/constraints) 적용. |
-| 8 | 217 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유. |
-| 9 | 218 | refactor | P9 (DocumentDatabaseTree) | `useDocumentTreeData` / `useDocumentTreeActions` + `DocumentTreeRows` 분리. |
-| 10 | 219 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. |
-| 11 | 220 | refactor | P11 (mega tests) | 1,900–2,900 라인 mega test 5건 axis 별 split. |
+| 1 | **210** ✓ | refactor | P1 (DocumentDataGrid) | `DocumentDataGrid.tsx` (951) → entry 597 + 4 sub-file. 행동 변경 0, evaluator 9/10. (commit `b9020fb`) |
+| 2 | **211** ✓ | refactor | P2 (QuickLookPanel) | `QuickLookPanel.tsx` (868) → entry 176 + 5 sub-file. 행동 변경 0, evaluator 8.5/10. (commit `9e2091f`) |
+| 3 | **212** ✓ | refactor | P3 (tabStore cross-store) | `tabStore` entry 의 `useMruStore` / `useQueryHistoryStore` 직접 import 제거 — 15 caller migration. evaluator 7.5/10. (commit `ccd8809`) |
+| — | (사용자) | refactor | ~~P4 (tauri.ts)~~ | 688-line tauri.ts → 6 도메인 + barrel. (사용자 commit `879b003`) |
+| — | (사용자) | refactor | P5 step 1 | `db/mod.rs` (1425→551) + `export.rs` (1425→879) tests block sibling 파일 hoist. (사용자 commit `a60074d`) |
+| 4 | 213 | refactor | P5 step 2 | `db/mod.rs` (551) trait/DTO 분리 + `commands/export.rs` (879) writer 분리. |
+| 5 | 214 | refactor | P6 (ConnectionDialog) | `useConnectionDraftForm` / `useConnectionUrlImport` hook 추출 + body / footer 분리. |
+| 6 | 215 | refactor | P7 (Structure editors) | `useDdlPreviewExecution` 공통 hook + 3 editor (columns/indexes/constraints) 적용. |
+| 7 | 216 | refactor | P8 (Raw-query edit grid) | `useRawQueryGridEdit` hook 추출 + commit runner 공유. |
+| 8 | **217** ✓ | refactor | P9 (DocumentDatabaseTree) | `DocumentDatabaseTree.tsx` (582) → entry 263 + 4 sub-file. **Sprint 212 와 동일 commit (사전 처리 통합)**. evaluator 8/10. (commit `ccd8809`) |
+| 9 | 218 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. |
+| 10 | 219 | refactor | P11 (mega tests) | 1,900–2,900 라인 mega test 5건 axis 별 split. |
 
 본 cycle 종료 시 [`refactoring-candidates.md`](refactoring-candidates.md) retire
 — 이전 cycle 의 `CODE_SMELLS.md` 처리와 동일.
