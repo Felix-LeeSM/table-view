@@ -132,18 +132,22 @@ export async function importConnections(json: string): Promise<ImportResult> {
 }
 
 /**
- * Sprint 140 — encrypted export. The backend wraps the plain `ExportPayload`
- * JSON in an `EncryptedEnvelope` (Argon2id KDF + AES-256-GCM AEAD) using
- * the supplied master password. Returns the envelope serialised as
- * pretty JSON. The backend rejects passwords shorter than 8 characters.
+ * Encrypted export. 2026-05-05 — backend는 12-word BIP39 mnemonic을 자동
+ * 생성하여 envelope과 함께 단일 응답으로 돌려준다. 사용자 입력 master
+ * password는 폐기 — 약한 password가 envelope 강도의 floor가 되는 시나리오
+ * 자체를 제거한다. 호출자는 `password`를 화면에 단 한 번 표시하고
+ * dialog 닫힐 때 메모리에서 지운다.
  */
+export interface EncryptedExportResult {
+  password: string;
+  json: string;
+}
+
 export async function exportConnectionsEncrypted(
   ids: string[],
-  masterPassword: string,
-): Promise<string> {
-  return invoke<string>("export_connections_encrypted", {
+): Promise<EncryptedExportResult> {
+  return invoke<EncryptedExportResult>("export_connections_encrypted", {
     ids,
-    masterPassword,
   });
 }
 

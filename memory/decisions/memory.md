@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-01
+updated: 2026-05-05
 ---
 
 # ADR 인덱스
@@ -27,6 +27,7 @@ updated: 2026-05-01
 | [0018](./0018-async-cancel-policy/memory.md) | Sprint 180 — 비동기 작업 1초 임계 + Cancel UX 단일화 | Accepted | 2026-04-30 | — |
 | [0019](./0019-e2e-pre-push-not-ci/memory.md) | E2E를 CI에서 제거하고 lefthook pre-push(host-native)로 이동 | Accepted | 2026-05-01 | 0015 |
 | [0020](./0020-e2e-pre-push-host-docker/memory.md) | ADR 0019 후속 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원) | Accepted | 2026-05-01 | — |
+| [0021](./0021-export-envelope-auto-mnemonic-no-ttl/memory.md) | Export envelope: 자동 생성 BIP39 mnemonic + Argon2id OWASP first profile, TTL/max_uses 미도입 | Accepted | 2026-05-05 | — |
 
 ## 역사 (Superseded / Deprecated)
 

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, Copy, Download, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, Download, Upload, AlertTriangle } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
@@ -17,8 +17,6 @@ interface ImportExportDialogProps {
   /** Optional initial tab. Defaults to "export". */
   initialTab?: "export" | "import";
 }
-
-const MASTER_PASSWORD_MIN_LEN = 8;
 /**
  * Sprint 140 — canonical message rendered inline when the user enters the
  * wrong master password. The backend emits the same string from
@@ -33,10 +31,16 @@ const INCORRECT_MASTER_PASSWORD_MESSAGE =
  * Sprint 96: migrated to the `TabsDialog` preset. The Export/Import panes
  * keep their bodies; the preset owns the title + tab list + dialog shell.
  *
- * Sprint 140: the Export pane now wraps the selection in a master-password
+ * Sprint 140: the Export pane wraps the selection in a master-password
  * envelope (Argon2id + AES-256-GCM) instead of emitting plain JSON; the
  * Import pane auto-detects envelope vs plain payload and surfaces the
  * shared "Incorrect master password" message on a wrong-password failure.
+ *
+ * 2026-05-05: Export pane는 사용자가 password를 직접 입력하지 않는다.
+ * backend가 BIP39 12-word mnemonic을 자동 생성해 envelope과 함께 돌려주고,
+ * 사용자는 받은 mnemonic을 비밀번호 매니저에 보관한 뒤 체크박스로 책임을
+ * 명시 인정해야 다음 단계 진행. dialog 닫히면 mnemonic은 React state에서
+ * 사라진다 (브라우저 메모리 위생은 best-effort).
  */
 export default function ImportExportDialog({
   onClose,
@@ -88,41 +92,49 @@ function ExportPanel() {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(connections.map((c) => c.id)),
   );
-  const [masterPassword, setMasterPassword] = useState("");
+  const [generatedPassword, setGeneratedPassword] = useState<string>("");
   const [json, setJson] = useState<string>("");
+  const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedTarget, setCopiedTarget] = useState<"password" | "json" | null>(
+    null,
+  );
   const [running, setRunning] = useState(false);
 
-  const passwordTooShort =
-    masterPassword.length > 0 &&
-    masterPassword.length < MASTER_PASSWORD_MIN_LEN;
-  const generateDisabled =
-    selected.size === 0 ||
-    masterPassword.length < MASTER_PASSWORD_MIN_LEN ||
-    running;
+  // Wipe the generated mnemonic when the panel unmounts (dialog close).
+  // Browser memory hygiene is best-effort — V8 may still hold the string
+  // until GC, but clearing the React state keeps it out of any future
+  // re-render snapshot or devtools inspection.
+  useEffect(() => {
+    return () => {
+      setGeneratedPassword("");
+      setJson("");
+      setAcknowledged(false);
+    };
+  }, []);
+
+  const generateDisabled = selected.size === 0 || running;
 
   const handleGenerate = async () => {
     setError(null);
+    setAcknowledged(false);
     setRunning(true);
     try {
-      const out = await exportConnectionsEncrypted(
-        Array.from(selected),
-        masterPassword,
-      );
-      setJson(out);
+      const result = await exportConnectionsEncrypted(Array.from(selected));
+      setGeneratedPassword(result.password);
+      setJson(result.json);
     } catch (e) {
       setError(extractErrorMessage(e));
     }
     setRunning(false);
   };
 
-  const handleCopy = () => {
+  const handleCopy = (text: string, target: "password" | "json") => {
     navigator.clipboard
-      .writeText(json)
+      .writeText(text)
       .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
+        setCopiedTarget(target);
+        window.setTimeout(() => setCopiedTarget(null), 1500);
       })
       .catch(() => {
         // Clipboard may be unavailable in some contexts (e.g. test env);
@@ -133,10 +145,10 @@ function ExportPanel() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Select connections to include and pick a master password. The export
-        file is encrypted with <strong>AES-256-GCM</strong> via an Argon2id key
-        derived from the password — passwords for individual connections are
-        never embedded, only the data needed to recreate them.
+        Select connections to include. A 12-word recovery phrase is generated
+        automatically and used to encrypt the export with{" "}
+        <strong>AES-256-GCM</strong> via an Argon2id key. Individual connection
+        passwords are never embedded — only the data needed to recreate them.
       </p>
 
       <SelectionTree
@@ -146,51 +158,23 @@ function ExportPanel() {
         onChange={setSelected}
       />
 
-      <MasterPasswordField
-        value={masterPassword}
-        onChange={setMasterPassword}
-        autoFocus
-        helpText="At least 8 characters. You will need it again to import the file on another machine."
-      />
-
-      <div className="flex items-center gap-2">
-        <Button
-          variant="default"
-          size="sm"
-          onClick={handleGenerate}
-          disabled={generateDisabled}
-        >
-          {running ? "Generating…" : "Generate encrypted JSON"}
-        </Button>
-        {json.length > 0 && (
+      {generatedPassword.length === 0 && (
+        <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
-            onClick={handleCopy}
-            aria-label="Copy export JSON to clipboard"
+            onClick={handleGenerate}
+            disabled={generateDisabled}
           >
-            {copied ? (
-              <>
-                <Check size={12} className="text-success" /> Copied
-              </>
-            ) : (
-              <>
-                <Copy size={12} /> Copy to clipboard
-              </>
-            )}
+            {running ? "Generating…" : "Generate encrypted export"}
           </Button>
-        )}
-        {selected.size === 0 && (
-          <span role="status" className="text-3xs text-muted-foreground">
-            Select at least one connection.
-          </span>
-        )}
-        {selected.size > 0 && passwordTooShort && (
-          <span role="status" className="text-3xs text-muted-foreground">
-            Password must be at least {MASTER_PASSWORD_MIN_LEN} characters.
-          </span>
-        )}
-      </div>
+          {selected.size === 0 && (
+            <span role="status" className="text-3xs text-muted-foreground">
+              Select at least one connection.
+            </span>
+          )}
+        </div>
+      )}
 
       {error && (
         <div
@@ -201,13 +185,109 @@ function ExportPanel() {
         </div>
       )}
 
+      {generatedPassword.length > 0 && (
+        <div className="space-y-3 rounded border border-warning/40 bg-warning/5 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              size={14}
+              className="mt-0.5 shrink-0 text-warning"
+              aria-hidden="true"
+            />
+            <div className="space-y-1 text-xs text-foreground">
+              <p className="font-medium">
+                Save this recovery phrase to your password manager now.
+              </p>
+              <p className="text-muted-foreground">
+                It is shown <strong>only once</strong>. Without it the export
+                file cannot be imported again — there is no recovery.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor="export-recovery-phrase"
+              className="block text-xs font-medium text-secondary-foreground"
+            >
+              Recovery phrase (12 words)
+            </label>
+            <div className="flex items-stretch gap-2">
+              <textarea
+                id="export-recovery-phrase"
+                className="h-16 flex-1 resize-none rounded border border-border bg-background p-2 font-mono text-xs text-foreground outline-none focus:border-primary"
+                value={generatedPassword}
+                readOnly
+                aria-label="Generated recovery phrase"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCopy(generatedPassword, "password")}
+                aria-label="Copy recovery phrase"
+                className="shrink-0"
+              >
+                {copiedTarget === "password" ? (
+                  <>
+                    <Check size={12} className="text-success" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={12} /> Copy
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              className="size-4"
+            />
+            I have saved the recovery phrase somewhere safe.
+          </label>
+        </div>
+      )}
+
       {json.length > 0 && (
-        <textarea
-          className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary"
-          value={json}
-          readOnly
-          aria-label="Generated export JSON"
-        />
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-secondary-foreground">
+              Encrypted export
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleCopy(json, "json")}
+              disabled={!acknowledged}
+              aria-label="Copy export JSON to clipboard"
+            >
+              {copiedTarget === "json" ? (
+                <>
+                  <Check size={12} className="text-success" /> Copied
+                </>
+              ) : (
+                <>
+                  <Copy size={12} /> Copy JSON
+                </>
+              )}
+            </Button>
+          </div>
+          <textarea
+            className="h-48 w-full resize-none rounded border border-border bg-background p-2 font-mono text-2xs text-foreground outline-none focus:border-primary disabled:opacity-50"
+            value={acknowledged ? json : ""}
+            placeholder={
+              acknowledged
+                ? undefined
+                : "Confirm you saved the recovery phrase to reveal the export."
+            }
+            readOnly
+            disabled={!acknowledged}
+            aria-label="Generated export JSON"
+          />
+        </div>
       )}
     </div>
   );
@@ -284,9 +364,15 @@ function ImportPanel({ onImported }: ImportPanelProps) {
       <MasterPasswordField
         value={masterPassword}
         onChange={setMasterPassword}
+        // 2026-05-05 — export는 BIP39 12-word mnemonic을 자동 생성한다.
+        // 사용자 정의 password는 더 이상 만들 수 없으므로 입력 단계에서
+        // 길이 검사도 무의미. 빈 값 vs 비어있지 않음만 본다.
+        minLength={0}
+        label="Recovery phrase"
+        placeholder="12-word phrase from the original export"
         helpText={
           isEnvelope
-            ? "Required to decrypt this envelope."
+            ? "Paste the 12-word recovery phrase shown when this file was exported."
             : "Only needed when the payload below is an encrypted envelope."
         }
       />

@@ -533,32 +533,34 @@ pub fn export_connections(ids: Vec<String>) -> Result<String, AppError> {
 
 // ---------------------------------------------------------------------------
 // Sprint 140 — encrypted export / import (master-password envelope)
+// 2026-05-05 — master password는 백엔드가 BIP39 12-word mnemonic으로
+// 자동 생성한다. 사용자 입력 password 시절 정책(MIN_LEN 등)은 폐기:
+// 자동 생성 = 약한 password 자체가 불가능하므로 프론트 검증 floor 불필요.
 // ---------------------------------------------------------------------------
 
-/// Minimum length the master password must satisfy to be accepted by the
-/// encrypted export path. Empty / shorter passwords are rejected at the
-/// command boundary so the KDF is never invoked with trivially-weak input.
-const MASTER_PASSWORD_MIN_LEN: usize = 8;
+/// Auto-generated mnemonic + serialized envelope JSON returned together by
+/// `export_connections_encrypted`. The caller must surface `password` to the
+/// user exactly once (mnemonic is the only way to import the file again) and
+/// persist `json` to disk.
+#[derive(serde::Serialize)]
+pub struct EncryptedExportResult {
+    pub password: String,
+    pub json: String,
+}
 
 /// Export the requested connections wrapped in a password-derived
-/// `EncryptedEnvelope`. The plaintext body is identical to the value
-/// `export_connections` would produce — `aead_encrypt_with_password` simply
-/// wraps it. Returns the envelope serialised as pretty JSON.
+/// `EncryptedEnvelope`. The master password is generated server-side as a
+/// 12-word BIP39 mnemonic (~128-bit entropy) and returned alongside the
+/// serialized envelope; the frontend is responsible for displaying the
+/// mnemonic to the user and clearing it from memory after the export
+/// dialog closes.
 #[tauri::command]
-pub fn export_connections_encrypted(
-    ids: Vec<String>,
-    master_password: String,
-) -> Result<String, AppError> {
-    if master_password.len() < MASTER_PASSWORD_MIN_LEN {
-        return Err(AppError::Validation(format!(
-            "Master password must be at least {} characters",
-            MASTER_PASSWORD_MIN_LEN
-        )));
-    }
-
+pub fn export_connections_encrypted(ids: Vec<String>) -> Result<EncryptedExportResult, AppError> {
+    let password = storage::crypto::generate_export_password()?;
     let plain_json = export_connections(ids)?;
-    let envelope = storage::crypto::aead_encrypt_with_password(&plain_json, &master_password)?;
-    serde_json::to_string_pretty(&envelope).map_err(AppError::from)
+    let envelope = storage::crypto::aead_encrypt_with_password(&plain_json, &password)?;
+    let json = serde_json::to_string_pretty(&envelope).map_err(AppError::from)?;
+    Ok(EncryptedExportResult { password, json })
 }
 
 /// Import connections from either an encrypted envelope or a plain
@@ -1544,22 +1546,25 @@ mod tests {
         c2.password = String::new();
         storage_save_conn(c2).unwrap();
 
-        let envelope_json = export_connections_encrypted(vec![], "open-sesame!".into()).unwrap();
+        let result = export_connections_encrypted(vec![]).unwrap();
+        // Auto-generated mnemonic must be a 12-word BIP39 phrase.
+        assert_eq!(result.password.split_whitespace().count(), 12);
         // Envelope shape sanity (locked schema)
-        assert!(envelope_json.contains("\"v\": 1"));
-        assert!(envelope_json.contains("\"kdf\": \"argon2id\""));
-        assert!(envelope_json.contains("\"alg\": \"aes-256-gcm\""));
-        assert!(envelope_json.contains("\"tag_attached\": true"));
+        assert!(result.json.contains("\"v\": 1"));
+        assert!(result.json.contains("\"kdf\": \"argon2id\""));
+        assert!(result.json.contains("\"alg\": \"aes-256-gcm\""));
+        assert!(result.json.contains("\"tag_attached\": true"));
         // Plaintext payload must not leak through ciphertext
-        assert!(!envelope_json.contains("DB1"));
-        assert!(!envelope_json.contains("DB2"));
+        assert!(!result.json.contains("DB1"));
+        assert!(!result.json.contains("DB2"));
 
-        // Reset storage and import via the encrypted path
+        // Reset storage and import via the encrypted path using the
+        // mnemonic the backend just emitted.
         storage::delete_connection("c1").unwrap();
         storage::delete_connection("c2").unwrap();
         storage::delete_group("g1").unwrap();
 
-        let r = import_connections_encrypted(envelope_json, "open-sesame!".into()).unwrap();
+        let r = import_connections_encrypted(result.json, result.password).unwrap();
         assert_eq!(r.imported.len(), 2);
 
         let stored = storage::load_storage_redacted().unwrap();
@@ -1570,25 +1575,19 @@ mod tests {
 
     #[test]
     #[serial]
-    fn test_export_connections_encrypted_rejects_short_password() {
+    fn test_export_connections_encrypted_emits_unique_mnemonic_per_call() {
+        // 자동 생성 = 호출마다 다른 mnemonic. 같은 connection 두 번 export
+        // 했을 때 두 envelope이 서로 풀리지 않아야 함 (각자 자기 mnemonic만).
         let _dir = setup_test_env();
+        storage_save_conn(sample_connection("c1", "DB1")).unwrap();
 
-        let err = export_connections_encrypted(vec![], "abc".into()).unwrap_err();
-        match err {
-            AppError::Validation(msg) => assert!(msg.contains("at least 8 characters")),
-            other => panic!("Expected Validation error, got: {:?}", other),
-        }
+        let r1 = export_connections_encrypted(vec![]).unwrap();
+        let r2 = export_connections_encrypted(vec![]).unwrap();
+        assert_ne!(r1.password, r2.password);
 
-        cleanup_test_env();
-    }
-
-    #[test]
-    #[serial]
-    fn test_export_connections_encrypted_rejects_empty_password() {
-        let _dir = setup_test_env();
-
-        let err = export_connections_encrypted(vec![], String::new()).unwrap_err();
-        assert!(matches!(err, AppError::Validation(_)));
+        // r1.json는 r2.password로 풀리면 안 됨.
+        let err = import_connections_encrypted(r1.json.clone(), r2.password.clone()).unwrap_err();
+        assert!(matches!(err, AppError::Encryption(_)));
 
         cleanup_test_env();
     }
@@ -1599,9 +1598,10 @@ mod tests {
         let _dir = setup_test_env();
 
         storage_save_conn(sample_connection("c1", "DB1")).unwrap();
-        let envelope_json = export_connections_encrypted(vec![], "real-pass-1".into()).unwrap();
+        let result = export_connections_encrypted(vec![]).unwrap();
 
-        let err = import_connections_encrypted(envelope_json, "wrong-pass-2".into()).unwrap_err();
+        let err = import_connections_encrypted(result.json, "wrong mnemonic words go here".into())
+            .unwrap_err();
         match err {
             AppError::Encryption(msg) => {
                 assert_eq!(msg, storage::crypto::INCORRECT_MASTER_PASSWORD_MESSAGE);
@@ -1667,12 +1667,12 @@ mod tests {
         let _dir = setup_test_env();
 
         storage_save_conn(sample_connection("c1", "DB1")).unwrap();
-        let envelope_json = export_connections_encrypted(vec![], "another-pass".into()).unwrap();
+        let result = export_connections_encrypted(vec![]).unwrap();
 
         // Re-clear storage and import — the decrypted body must still
         // carry schema_version=1 to be accepted by import_connections.
         storage::delete_connection("c1").unwrap();
-        let r = import_connections_encrypted(envelope_json, "another-pass".into()).unwrap();
+        let r = import_connections_encrypted(result.json, result.password).unwrap();
         assert_eq!(r.imported.len(), 1);
 
         cleanup_test_env();

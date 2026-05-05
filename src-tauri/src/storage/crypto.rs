@@ -3,23 +3,24 @@ use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{AeadCore, Aes256Gcm, Nonce};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use bip39::{Language, Mnemonic};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use zeroize::Zeroizing;
 
 use crate::error::AppError;
 
 const NONCE_SIZE: usize = 12;
 
-// Sprint 140 — Argon2id parameters for the password-derived envelope KDF.
-// The defaults are sized so a single derive completes well under a second on
-// the user's desktop while still pushing enough memory pressure to deter a
-// GPU brute-force attempt against an exported file. The exact tuple is
-// embedded in the envelope so future params can roll forward (or down on
-// constrained hardware) without breaking backward decrypt.
-const ENVELOPE_ARGON2_M_COST: u32 = 19_456; // ~19 MiB
-const ENVELOPE_ARGON2_T_COST: u32 = 2;
-const ENVELOPE_ARGON2_P_COST: u32 = 1;
+// 2026-05-05 — OWASP "first profile" Argon2id params (m=64MiB, t=3, p=4).
+// 이전 spec(m=19MiB/t=2/p=1, OWASP minimum)에서 상향. 사용자 1회 derive만
+// 필요한 export/import 흐름이라 ~1초 비용 무해. brute-force 비용은 메모리
+// hardness 기준 30~50배 증가. 옛 envelope은 envelope에 KDF 파라미터를 함께
+// 저장하므로 그대로 복호화 가능 — backward compat 마이그 없음.
+const ENVELOPE_ARGON2_M_COST: u32 = 65_536; // 64 MiB
+const ENVELOPE_ARGON2_T_COST: u32 = 3;
+const ENVELOPE_ARGON2_P_COST: u32 = 4;
 const ENVELOPE_SALT_SIZE: usize = 16;
 const ENVELOPE_KEY_SIZE: usize = 32;
 const ENVELOPE_VERSION: u8 = 1;
@@ -148,15 +149,28 @@ fn derive_envelope_key(
     m_cost: u32,
     t_cost: u32,
     p_cost: u32,
-) -> Result<[u8; ENVELOPE_KEY_SIZE], AppError> {
+) -> Result<Zeroizing<[u8; ENVELOPE_KEY_SIZE]>, AppError> {
     let params = Params::new(m_cost, t_cost, p_cost, Some(ENVELOPE_KEY_SIZE))
         .map_err(|e| AppError::Encryption(format!("Invalid Argon2 params: {}", e)))?;
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut out = [0u8; ENVELOPE_KEY_SIZE];
+    let mut out = Zeroizing::new([0u8; ENVELOPE_KEY_SIZE]);
     argon
-        .hash_password_into(password.as_bytes(), salt, &mut out)
+        .hash_password_into(password.as_bytes(), salt, out.as_mut())
         .map_err(|e| AppError::Encryption(format!("Key derivation failed: {}", e)))?;
     Ok(out)
+}
+
+/// 2026-05-05 — Generate a high-entropy export password as a BIP39 12-word
+/// mnemonic (~128 bits of entropy). Auto-generation replaces user-input
+/// passwords entirely so weak/short master passwords are no longer a floor on
+/// envelope strength. Returns the mnemonic phrase as a single
+/// space-separated string for direct rendering / clipboard copy.
+pub fn generate_export_password() -> Result<String, AppError> {
+    let mut entropy = [0u8; 16]; // 128 bits → 12-word mnemonic
+    OsRng.fill_bytes(&mut entropy);
+    let mnemonic = Mnemonic::from_entropy_in(Language::English, &entropy)
+        .map_err(|e| AppError::Encryption(format!("Mnemonic generation failed: {}", e)))?;
+    Ok(mnemonic.to_string())
 }
 
 /// AES-256-GCM encrypt `plaintext` under a key derived from `master_password`
@@ -178,8 +192,8 @@ pub fn aead_encrypt_with_password(
         ENVELOPE_ARGON2_P_COST,
     )?;
 
-    let cipher =
-        Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| AppError::Encryption(e.to_string()))?;
+    let cipher = Aes256Gcm::new_from_slice(key_bytes.as_ref())
+        .map_err(|e| AppError::Encryption(e.to_string()))?;
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
     let ciphertext = cipher
         .encrypt(&nonce, plaintext.as_bytes())
@@ -254,7 +268,7 @@ pub fn aead_decrypt_with_password(
     )
     .map_err(|_| AppError::Encryption(INCORRECT_MASTER_PASSWORD_MESSAGE.into()))?;
 
-    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+    let cipher = Aes256Gcm::new_from_slice(key_bytes.as_ref())
         .map_err(|_| AppError::Encryption(INCORRECT_MASTER_PASSWORD_MESSAGE.into()))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 
@@ -473,5 +487,49 @@ mod tests {
         let envelope = aead_encrypt_with_password(plaintext, "유니코드pw1!").unwrap();
         let decrypted = aead_decrypt_with_password(&envelope, "유니코드pw1!").unwrap();
         assert_eq!(decrypted, plaintext);
+    }
+
+    // -----------------------------------------------------------------
+    // 2026-05-05 — auto-generated export password (BIP39 mnemonic)
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn generated_export_password_is_12_english_words() {
+        let pw = generate_export_password().unwrap();
+        let words: Vec<&str> = pw.split_whitespace().collect();
+        assert_eq!(words.len(), 12, "expected 12-word mnemonic, got {pw:?}");
+        // Every token must round-trip through the BIP39 English wordlist.
+        let parsed = Mnemonic::parse_in(Language::English, &pw)
+            .expect("generated phrase must parse against BIP39 English wordlist");
+        assert_eq!(parsed.to_string(), pw);
+    }
+
+    #[test]
+    fn generated_export_password_changes_each_call() {
+        // 128-bit entropy → collision probability negligible across two calls.
+        let a = generate_export_password().unwrap();
+        let b = generate_export_password().unwrap();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn generated_export_password_round_trips_through_envelope() {
+        let pw = generate_export_password().unwrap();
+        let envelope = aead_encrypt_with_password("payload", &pw).unwrap();
+        // Same generated mnemonic decrypts; an unrelated mnemonic does not.
+        let decrypted = aead_decrypt_with_password(&envelope, &pw).unwrap();
+        assert_eq!(decrypted, "payload");
+        let other = generate_export_password().unwrap();
+        assert!(aead_decrypt_with_password(&envelope, &other).is_err());
+    }
+
+    #[test]
+    fn current_envelope_uses_owasp_first_profile_params() {
+        // The cost tuple is part of the shipped security baseline; bumping it
+        // requires conscious revision of this assertion.
+        let envelope = aead_encrypt_with_password("p", "pw1234567").unwrap();
+        assert_eq!(envelope.m_cost, 65_536);
+        assert_eq!(envelope.t_cost, 3);
+        assert_eq!(envelope.p_cost, 4);
     }
 }

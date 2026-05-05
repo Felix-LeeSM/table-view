@@ -10,6 +10,12 @@ import ImportExportDialog from "./ImportExportDialog";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
 
+// 2026-05-05 — Export pane는 backend가 자동 생성한 BIP39 mnemonic을
+// 단일 응답으로 받는다. Sprint 140 시절의 사용자 입력 password 흐름은
+// 폐기되었고, 본 suite는 자동 생성 + 1회 표시 + acknowledgement 강제
+// 흐름이 회귀되지 않도록 잠근다. Import는 받은 mnemonic을 그대로
+// 입력하므로 길이 검증을 강제하지 않는다.
+
 vi.mock("@lib/tauri", async () => {
   const actual =
     await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
@@ -56,13 +62,15 @@ function makeConn(id: string, hasPw = false): ConnectionConfig {
   };
 }
 
-/** Helper: type a value into a labelled input via fireEvent.change. */
 function typeInto(label: RegExp | string, value: string) {
   const input = screen.getByLabelText(label) as HTMLInputElement;
   fireEvent.change(input, { target: { value } });
 }
 
-const VALID_PW = "open-sesame!";
+const MNEMONIC =
+  "abandon ability able about above absent absorb abstract absurd abuse access accident";
+const ENCRYPTED_PAYLOAD =
+  '{"v":1,"kdf":"argon2id","salt":"AAAA","nonce":"AAAA","alg":"aes-256-gcm","ciphertext":"AAAA","tag_attached":true}';
 
 describe("ImportExportDialog", () => {
   describe("Export", () => {
@@ -79,17 +87,17 @@ describe("ImportExportDialog", () => {
       expect(screen.getByText(/select all \(2\)/i)).toBeInTheDocument();
       expect(screen.getByText("c1 DB")).toBeInTheDocument();
       expect(screen.getByText("c2 DB")).toBeInTheDocument();
-      // pw badge for c2
       expect(screen.getByText(/pw set/i)).toBeInTheDocument();
     });
 
-    it("calls exportConnectionsEncrypted with selected ids and master password and shows JSON", async () => {
+    it("calls exportConnectionsEncrypted with selected ids only and surfaces the auto-generated recovery phrase", async () => {
       const { exportConnectionsEncrypted } = await import("@lib/tauri");
-      const envelopeJson =
-        '{"v":1,"kdf":"argon2id","salt":"AAAA","nonce":"AAAA","alg":"aes-256-gcm","ciphertext":"AAAA","tag_attached":true}';
       (
         exportConnectionsEncrypted as ReturnType<typeof vi.fn>
-      ).mockResolvedValue(envelopeJson);
+      ).mockResolvedValue({
+        password: MNEMONIC,
+        json: ENCRYPTED_PAYLOAD,
+      });
 
       useConnectionStore.setState({
         connections: [makeConn("c1"), makeConn("c2")],
@@ -97,55 +105,74 @@ describe("ImportExportDialog", () => {
       render(<ImportExportDialog onClose={vi.fn()} />);
 
       await act(async () => {
-        typeInto(/^master password$/i, VALID_PW);
-      });
-
-      await act(async () => {
         fireEvent.click(
-          screen.getByRole("button", { name: /generate encrypted json/i }),
+          screen.getByRole("button", { name: /generate encrypted export/i }),
         );
       });
 
-      expect(exportConnectionsEncrypted).toHaveBeenCalledWith(
-        ["c1", "c2"],
-        VALID_PW,
-      );
-      expect(
-        screen.getByLabelText("Generated export JSON"),
-      ).toBeInTheDocument();
-      expect(
-        (screen.getByLabelText("Generated export JSON") as HTMLTextAreaElement)
-          .value,
-      ).toContain("kdf");
+      // Backend now receives ids only — no password argument.
+      expect(exportConnectionsEncrypted).toHaveBeenCalledWith(["c1", "c2"]);
+      // Recovery phrase appears verbatim in the read-only textarea.
+      const phraseField = screen.getByLabelText(
+        "Generated recovery phrase",
+      ) as HTMLTextAreaElement;
+      expect(phraseField.value).toBe(MNEMONIC);
     });
 
     it("Generate button is disabled when 0 connections are selected", async () => {
       useConnectionStore.setState({ connections: [makeConn("c1")] });
       render(<ImportExportDialog onClose={vi.fn()} />);
 
-      // Provide a valid password first so password length is not the blocker.
-      await act(async () => {
-        typeInto(/^master password$/i, VALID_PW);
-      });
-      // Uncheck the only connection via select-all
+      // Uncheck the only connection via select-all.
       await act(async () => {
         fireEvent.click(screen.getByRole("checkbox", { name: /select all/i }));
       });
       expect(
-        screen.getByRole("button", { name: /generate encrypted json/i }),
+        screen.getByRole("button", { name: /generate encrypted export/i }),
       ).toBeDisabled();
     });
 
-    it("Generate button is disabled when password is shorter than 8 characters", async () => {
+    it("hides the encrypted JSON textarea behind a 'I have saved the recovery phrase' acknowledgement", async () => {
+      const { exportConnectionsEncrypted } = await import("@lib/tauri");
+      (
+        exportConnectionsEncrypted as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        password: MNEMONIC,
+        json: ENCRYPTED_PAYLOAD,
+      });
+
       useConnectionStore.setState({ connections: [makeConn("c1")] });
       render(<ImportExportDialog onClose={vi.fn()} />);
 
       await act(async () => {
-        typeInto(/^master password$/i, "short");
+        fireEvent.click(
+          screen.getByRole("button", { name: /generate encrypted export/i }),
+        );
       });
-      expect(
-        screen.getByRole("button", { name: /generate encrypted json/i }),
-      ).toBeDisabled();
+
+      const ta = screen.getByLabelText(
+        "Generated export JSON",
+      ) as HTMLTextAreaElement;
+      // Until the user ticks the acknowledgement, the JSON is hidden and
+      // the copy button is disabled.
+      expect(ta).toBeDisabled();
+      expect(ta.value).toBe("");
+      const copyJsonBtn = screen.getByRole("button", {
+        name: /copy export json to clipboard/i,
+      });
+      expect(copyJsonBtn).toBeDisabled();
+
+      // Tick the acknowledgement — JSON becomes readable + copy enabled.
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("checkbox", {
+            name: /i have saved the recovery phrase/i,
+          }),
+        );
+      });
+      expect(ta).not.toBeDisabled();
+      expect(ta.value).toBe(ENCRYPTED_PAYLOAD);
+      expect(copyJsonBtn).not.toBeDisabled();
     });
 
     it("renders error alert when exportConnectionsEncrypted rejects", async () => {
@@ -158,45 +185,58 @@ describe("ImportExportDialog", () => {
       render(<ImportExportDialog onClose={vi.fn()} />);
 
       await act(async () => {
-        typeInto(/^master password$/i, VALID_PW);
-      });
-      await act(async () => {
         fireEvent.click(
-          screen.getByRole("button", { name: /generate encrypted json/i }),
+          screen.getByRole("button", { name: /generate encrypted export/i }),
         );
       });
 
       expect(screen.getByRole("alert")).toHaveTextContent(/backend exploded/i);
     });
 
-    it("Copy button writes the generated JSON to the clipboard", async () => {
+    it("Copy buttons write the recovery phrase and (after acknowledgement) the JSON to the clipboard", async () => {
       const { exportConnectionsEncrypted } = await import("@lib/tauri");
-      const expectedJson =
-        '{"v":1,"kdf":"argon2id","ciphertext":"abc","alg":"aes-256-gcm","salt":"a","nonce":"a","tag_attached":true}';
       (
         exportConnectionsEncrypted as ReturnType<typeof vi.fn>
-      ).mockResolvedValue(expectedJson);
+      ).mockResolvedValue({
+        password: MNEMONIC,
+        json: ENCRYPTED_PAYLOAD,
+      });
 
       useConnectionStore.setState({ connections: [makeConn("c1")] });
       render(<ImportExportDialog onClose={vi.fn()} />);
 
       await act(async () => {
-        typeInto(/^master password$/i, VALID_PW);
-      });
-      await act(async () => {
         fireEvent.click(
-          screen.getByRole("button", { name: /generate encrypted json/i }),
-        );
-      });
-      await act(async () => {
-        fireEvent.click(
-          screen.getByRole("button", { name: /copy export json/i }),
+          screen.getByRole("button", { name: /generate encrypted export/i }),
         );
       });
 
-      expect(writeText).toHaveBeenCalledWith(expectedJson);
+      // Recovery phrase copy works immediately.
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: /copy recovery phrase/i }),
+        );
+      });
+      expect(writeText).toHaveBeenCalledWith(MNEMONIC);
+
+      // JSON copy is gated on the acknowledgement.
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("checkbox", {
+            name: /i have saved the recovery phrase/i,
+          }),
+        );
+      });
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: /copy export json to clipboard/i,
+          }),
+        );
+      });
+      expect(writeText).toHaveBeenCalledWith(ENCRYPTED_PAYLOAD);
       await waitFor(() => {
-        expect(screen.getByText(/copied/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/copied/i).length).toBeGreaterThan(0);
       });
     });
   });
@@ -208,7 +248,7 @@ describe("ImportExportDialog", () => {
       expect(btn).toBeDisabled();
     });
 
-    it("envelope round-trip: encrypted payload + password → importConnectionsEncrypted", async () => {
+    it("envelope round-trip: encrypted payload + recovery phrase → importConnectionsEncrypted", async () => {
       const { importConnectionsEncrypted } = await import("@lib/tauri");
       (
         importConnectionsEncrypted as ReturnType<typeof vi.fn>
@@ -225,29 +265,26 @@ describe("ImportExportDialog", () => {
 
       render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
 
-      const envelopeJson =
-        '{"v":1,"kdf":"argon2id","alg":"aes-256-gcm","ciphertext":"AAAA","salt":"AA","nonce":"AA","tag_attached":true}';
       const ta = screen.getByLabelText(
         "Import JSON input",
       ) as HTMLTextAreaElement;
       await act(async () => {
-        fireEvent.change(ta, { target: { value: envelopeJson } });
+        fireEvent.change(ta, { target: { value: ENCRYPTED_PAYLOAD } });
       });
-      // The dialog should hint that an envelope was detected.
       expect(
         screen.getByText(/encrypted envelope detected/i),
       ).toBeInTheDocument();
 
       await act(async () => {
-        typeInto(/^master password$/i, VALID_PW);
+        typeInto(/^recovery phrase$/i, MNEMONIC);
       });
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
       });
 
       expect(importConnectionsEncrypted).toHaveBeenCalledWith(
-        envelopeJson,
-        VALID_PW,
+        ENCRYPTED_PAYLOAD,
+        MNEMONIC,
       );
       expect(loadConnections).toHaveBeenCalled();
       expect(loadGroups).toHaveBeenCalled();
@@ -275,7 +312,6 @@ describe("ImportExportDialog", () => {
       await act(async () => {
         fireEvent.change(ta, { target: { value: plainJson } });
       });
-      // No envelope hint should appear for plain JSON.
       expect(screen.queryByText(/encrypted envelope detected/i)).toBeNull();
 
       await act(async () => {
@@ -289,19 +325,17 @@ describe("ImportExportDialog", () => {
       });
     });
 
-    it("envelope without password shows inline 'master password required' error", async () => {
+    it("envelope without recovery phrase shows inline 'master password required' error", async () => {
       const { importConnectionsEncrypted } = await import("@lib/tauri");
       render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
 
-      const envelopeJson =
-        '{"v":1,"kdf":"argon2id","alg":"aes-256-gcm","ciphertext":"AAAA","salt":"AA","nonce":"AA","tag_attached":true}';
       const ta = screen.getByLabelText(
         "Import JSON input",
       ) as HTMLTextAreaElement;
       await act(async () => {
-        fireEvent.change(ta, { target: { value: envelopeJson } });
+        fireEvent.change(ta, { target: { value: ENCRYPTED_PAYLOAD } });
       });
-      // Leave master password empty
+      // Leave recovery phrase empty.
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
       });
@@ -312,9 +346,8 @@ describe("ImportExportDialog", () => {
       );
     });
 
-    it("wrong password surfaces the canonical 'Incorrect master password' inline error", async () => {
+    it("wrong recovery phrase surfaces the canonical 'Incorrect master password' inline error", async () => {
       const { importConnectionsEncrypted } = await import("@lib/tauri");
-      // Backend returns the variant-prefixed error string.
       (
         importConnectionsEncrypted as ReturnType<typeof vi.fn>
       ).mockRejectedValue(
@@ -323,16 +356,14 @@ describe("ImportExportDialog", () => {
 
       render(<ImportExportDialog onClose={vi.fn()} initialTab="import" />);
 
-      const envelopeJson =
-        '{"v":1,"kdf":"argon2id","alg":"aes-256-gcm","ciphertext":"AAAA","salt":"AA","nonce":"AA","tag_attached":true}';
       const ta = screen.getByLabelText(
         "Import JSON input",
       ) as HTMLTextAreaElement;
       await act(async () => {
-        fireEvent.change(ta, { target: { value: envelopeJson } });
+        fireEvent.change(ta, { target: { value: ENCRYPTED_PAYLOAD } });
       });
       await act(async () => {
-        typeInto(/^master password$/i, "wrong-pw-1");
+        typeInto(/^recovery phrase$/i, "wrong phrase here");
       });
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: /^import$/i }));

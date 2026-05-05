@@ -1,15 +1,16 @@
 /**
  * Sprint 147 — AC-149-* regression tests.
  *
- * Sprint 140 already shipped the SelectionTree + encrypted-only export pane;
- * this file locks the AC-149-* invariants so a future change that
+ * Sprint 140 shipped the SelectionTree + encrypted-only export pane;
+ * 2026-05-05 the master-password input was replaced by an auto-generated
+ * BIP39 mnemonic. This file locks the AC-149-* invariants so a future
+ * change that
  *   (1) re-introduces a plaintext "Generate JSON" button,
  *   (2) silently drops connections / groups from the selection envelope, or
  *   (3) strips password-bearing connections,
  * surfaces as an explicit test failure rather than passing the existing
- * ImportExportDialog.test.tsx suite.
- *
- * Each `it(...)` name embeds the AC label (AC-149-N) for grep-ability.
+ * ImportExportDialog.test.tsx suite. The test names retain the AC label
+ * (AC-149-N) for grep-ability even though the call signature changed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
@@ -65,13 +66,8 @@ function makeGroup(id: string, name: string): ConnectionGroup {
   return { id, name, color: null, collapsed: false };
 }
 
-function typeInto(label: RegExp | string, value: string) {
-  const input = screen.getByLabelText(label) as HTMLInputElement;
-  fireEvent.change(input, { target: { value } });
-}
-
-const VALID_PW = "open-sesame!";
-
+const MNEMONIC =
+  "abandon ability able about above absent absorb abstract absurd abuse access accident";
 const ENCRYPTED_PAYLOAD =
   '{"v":1,"kdf":"argon2id","salt":"AAAA","nonce":"AAAA","alg":"aes-256-gcm","ciphertext":"AAAA","tag_attached":true}';
 
@@ -79,9 +75,10 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
   it("AC-149-1: selecting exactly one connection sends a single-id array to exportConnectionsEncrypted", async () => {
     const { exportConnectionsEncrypted, exportConnections } =
       await import("@lib/tauri");
-    (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue(
-      ENCRYPTED_PAYLOAD,
-    );
+    (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue({
+      password: MNEMONIC,
+      json: ENCRYPTED_PAYLOAD,
+    });
 
     useConnectionStore.setState({
       connections: [makeConn("c1"), makeConn("c2"), makeConn("c3")],
@@ -97,30 +94,29 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     });
 
     await act(async () => {
-      typeInto(/^master password$/i, VALID_PW);
-    });
-    await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: /generate encrypted json/i }),
+        screen.getByRole("button", { name: /generate encrypted export/i }),
       );
     });
 
     expect(exportConnectionsEncrypted).toHaveBeenCalledTimes(1);
     const firstCall = (exportConnectionsEncrypted as ReturnType<typeof vi.fn>)
       .mock.calls[0]!;
-    const [ids, password] = firstCall;
+    const [ids] = firstCall;
     expect(ids).toEqual(["c2"]);
     expect(ids).toHaveLength(1);
-    expect(password).toBe(VALID_PW);
+    // 자동 생성으로 전환 — 백엔드는 password 인자를 받지 않는다.
+    expect(firstCall).toHaveLength(1);
     // Plaintext path must never be wired up.
     expect(exportConnections).not.toHaveBeenCalled();
   });
 
   it("AC-149-2: ticking a group header sends only that group's connection ids and counter reads 'N connections, 1 group selected'", async () => {
     const { exportConnectionsEncrypted } = await import("@lib/tauri");
-    (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue(
-      ENCRYPTED_PAYLOAD,
-    );
+    (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue({
+      password: MNEMONIC,
+      json: ENCRYPTED_PAYLOAD,
+    });
 
     useConnectionStore.setState({
       connections: [
@@ -145,11 +141,8 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     ).toBeInTheDocument();
 
     await act(async () => {
-      typeInto(/^master password$/i, VALID_PW);
-    });
-    await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: /generate encrypted json/i }),
+        screen.getByRole("button", { name: /generate encrypted export/i }),
       );
     });
 
@@ -179,8 +172,6 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
       fireEvent.click(screen.getByRole("checkbox", { name: /^a1 DB$/ }));
     });
 
-    // Counter reads "1 connection, 0 groups selected" — partial group
-    // never counts toward fully-selected groups.
     expect(
       screen.getByText(/1 connection, 0 groups selected/i),
     ).toBeInTheDocument();
@@ -194,9 +185,10 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
   it("AC-149-4: password-bearing connections are not stripped from the envelope ids and the legacy plaintext exportConnections is never called", async () => {
     const { exportConnectionsEncrypted, exportConnections } =
       await import("@lib/tauri");
-    (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue(
-      ENCRYPTED_PAYLOAD,
-    );
+    (exportConnectionsEncrypted as ReturnType<typeof vi.fn>).mockResolvedValue({
+      password: MNEMONIC,
+      json: ENCRYPTED_PAYLOAD,
+    });
 
     useConnectionStore.setState({
       // Mix has_password=true with has_password=false so a future "strip
@@ -209,13 +201,9 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     });
     render(<ImportExportDialog onClose={vi.fn()} />);
 
-    // Default selection already covers all three; just provide the password.
-    await act(async () => {
-      typeInto(/^master password$/i, VALID_PW);
-    });
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: /generate encrypted json/i }),
+        screen.getByRole("button", { name: /generate encrypted export/i }),
       );
     });
 
@@ -229,7 +217,7 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     expect(exportConnections).not.toHaveBeenCalled();
   });
 
-  it("AC-149-5: the dialog exposes only 'Generate encrypted JSON' — no plaintext 'Generate JSON' button or label is present", () => {
+  it("AC-149-5: the dialog exposes only encrypted-export surface — no plaintext 'Generate JSON' button is present", () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
     });
@@ -237,15 +225,14 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
 
     // The encrypted button is the only generator surface.
     expect(
-      screen.getByRole("button", { name: /generate encrypted json/i }),
+      screen.getByRole("button", { name: /generate encrypted export/i }),
     ).toBeInTheDocument();
 
     // No plaintext button (label without "encrypted").
     const buttons = screen.getAllByRole("button");
     for (const btn of buttons) {
       const name = btn.getAttribute("aria-label") ?? btn.textContent ?? "";
-      // Allow "Generate encrypted JSON" — reject any "Generate JSON" / "Generate Plain JSON" variants.
-      if (/generate\s+(plain\s+)?json\b/i.test(name)) {
+      if (/generate\s+(plain\s+)?(json|export)\b/i.test(name)) {
         expect(name.toLowerCase()).toContain("encrypted");
       }
     }
@@ -253,5 +240,6 @@ describe("ImportExportDialog — AC-149-* regression locks", () => {
     // And no stray standalone text node either.
     expect(screen.queryByText(/^generate json$/i)).toBeNull();
     expect(screen.queryByText(/^generate plain json$/i)).toBeNull();
+    expect(screen.queryByText(/^generate export$/i)).toBeNull();
   });
 });
