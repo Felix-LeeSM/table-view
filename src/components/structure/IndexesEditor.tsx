@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Loader2, Key, Shield, Plus, Trash2, X, Eye } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
@@ -20,10 +20,8 @@ import type { ColumnInfo, IndexInfo } from "@/types/schema";
 import * as tauri from "@lib/tauri";
 import { useSchemaStore } from "@stores/schemaStore";
 import SqlPreviewDialog from "./SqlPreviewDialog";
+import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { analyzeStatement } from "@/lib/sql/sqlSafety";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
@@ -254,26 +252,19 @@ export default function IndexesEditor({
   onRefresh,
 }: IndexesEditorProps) {
   const [showCreateIndexModal, setShowCreateIndexModal] = useState(false);
-  const [previewSql, setPreviewSql] = useState("");
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
-  // Sprint 189 (AC-189-04) — Safe Mode gate via shared hook. The DROP INDEX
-  // path is the dangerous one here; CREATE INDEX is analyzer-safe.
-  // `connectionEnvironment` stays for the production stripe banner.
+  // Sprint 214 — preview SQL state, Safe Mode gate, history record + commit
+  // closure all live in `useDdlPreviewExecution`. `showPreviewModal` stays
+  // editor-local because the dialog mount also gates around `handleDropIndex`
+  // (which transitions through preview-fetch loading independently of the
+  // modal trigger flow).
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  const safeModeGate = useSafeModeGate(connectionId);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  const ddl = useDdlPreviewExecution({ connectionId, onRefresh });
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    reason: string;
-    sql: string;
-  } | null>(null);
 
   // -------------------------------------------------------------------------
   // Create index handlers
@@ -285,114 +276,39 @@ export default function IndexesEditor({
     indexType: string;
     isUnique: boolean;
   }) => {
-    const result = await tauri.createIndex({
-      connection_id: connectionId,
-      schema,
-      table,
-      index_name: params.indexName,
-      columns: params.columns,
-      index_type: params.indexType,
-      is_unique: params.isUnique,
-      preview_only: true,
-    });
-    setPreviewSql(result.sql);
-    pendingExecuteRef.current = async () => {
-      await tauri.createIndex({
-        connection_id: connectionId,
-        schema,
-        table,
-        index_name: params.indexName,
-        columns: params.columns,
-        index_type: params.indexType,
-        is_unique: params.isUnique,
-        preview_only: false,
-      });
-    };
     setShowCreateIndexModal(false);
     setShowPreviewModal(true);
-  };
-
-  // Sprint 187 — pure commit body extracted so the warn confirm path can
-  // re-enter without duplicating cleanup. Mirrors ColumnsEditor.runAlter.
-  const runPendingExecute = async () => {
-    if (!pendingExecuteRef.current) return;
-    setPreviewLoading(true);
-    setPreviewError(null);
-    const startedAt = Date.now();
-    const recordedSql = previewSql;
-    try {
-      await pendingExecuteRef.current();
-      setShowPreviewModal(false);
-      pendingExecuteRef.current = null;
-      setPreviewSql("");
-      await onRefresh();
-      addHistoryEntry({
-        sql: recordedSql,
-        executedAt: startedAt,
-        duration: Date.now() - startedAt,
-        status: "success",
-        connectionId,
-        paradigm: "rdb",
-        queryMode: "sql",
-        source: "ddl-structure",
-      });
-    } catch (e) {
-      setPreviewError(String(e));
-      addHistoryEntry({
-        sql: recordedSql,
-        executedAt: startedAt,
-        duration: Date.now() - startedAt,
-        status: "error",
-        connectionId,
-        paradigm: "rdb",
-        queryMode: "sql",
-        source: "ddl-structure",
-      });
-    }
-    setPreviewLoading(false);
-  };
-
-  const handlePreviewConfirm = async () => {
-    if (!pendingExecuteRef.current) return;
-    // Sprint 189 (AC-189-04) — gate every sub-statement through the shared
-    // matrix. block → previewError; confirm → ConfirmDangerousDialog handoff.
-    const statements = previewSql
-      .split(";")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    for (const stmt of statements) {
-      const analysis = analyzeStatement(stmt);
-      const decision = safeModeGate.decide(analysis);
-      if (decision.action === "block") {
-        setPreviewError(decision.reason);
-        return;
-      }
-      if (decision.action === "confirm") {
-        setPendingConfirm({ reason: decision.reason, sql: stmt });
-        return;
-      }
-    }
-    await runPendingExecute();
-  };
-
-  const confirmDangerous = async () => {
-    setPendingConfirm(null);
-    await runPendingExecute();
-  };
-
-  const cancelDangerous = () => {
-    setPendingConfirm(null);
-    setPreviewError(
-      "Safe Mode (warn): confirmation cancelled — no changes committed",
+    await ddl.loadPreview(
+      () =>
+        tauri.createIndex({
+          connection_id: connectionId,
+          schema,
+          table,
+          index_name: params.indexName,
+          columns: params.columns,
+          index_type: params.indexType,
+          is_unique: params.isUnique,
+          preview_only: true,
+        }),
+      () => async () => {
+        await tauri.createIndex({
+          connection_id: connectionId,
+          schema,
+          table,
+          index_name: params.indexName,
+          columns: params.columns,
+          index_type: params.indexType,
+          is_unique: params.isUnique,
+          preview_only: false,
+        });
+        setShowPreviewModal(false);
+      },
     );
   };
 
   const handlePreviewCancel = () => {
     setShowPreviewModal(false);
-    pendingExecuteRef.current = null;
-    setPreviewSql("");
-    setPreviewError(null);
-    setPendingConfirm(null);
+    ddl.cancelPreview();
   };
 
   // -------------------------------------------------------------------------
@@ -400,31 +316,25 @@ export default function IndexesEditor({
   // -------------------------------------------------------------------------
 
   const handleDropIndex = async (indexName: string) => {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    try {
-      const result = await tauri.dropIndex({
-        connection_id: connectionId,
-        schema,
-        index_name: indexName,
-        preview_only: true,
-      });
-      setPreviewSql(result.sql);
-      pendingExecuteRef.current = async () => {
+    setShowPreviewModal(true);
+    await ddl.loadPreview(
+      () =>
+        tauri.dropIndex({
+          connection_id: connectionId,
+          schema,
+          index_name: indexName,
+          preview_only: true,
+        }),
+      () => async () => {
         await tauri.dropIndex({
           connection_id: connectionId,
           schema,
           index_name: indexName,
           preview_only: false,
         });
-      };
-      setShowPreviewModal(true);
-    } catch (e) {
-      setPreviewError(String(e));
-      setPreviewSql("");
-      setShowPreviewModal(true);
-    }
-    setPreviewLoading(false);
+        setShowPreviewModal(false);
+      },
+    );
   };
 
   // -------------------------------------------------------------------------
@@ -544,11 +454,11 @@ export default function IndexesEditor({
       {/* SQL Preview Modal */}
       {showPreviewModal && (
         <SqlPreviewDialog
-          sql={previewSql}
-          loading={previewLoading}
-          error={previewError}
+          sql={ddl.previewSql}
+          loading={ddl.previewLoading}
+          error={ddl.previewError}
           environment={connectionEnvironment}
-          onConfirm={handlePreviewConfirm}
+          onConfirm={ddl.attemptExecute}
           onCancel={handlePreviewCancel}
         />
       )}
@@ -563,15 +473,15 @@ export default function IndexesEditor({
       )}
 
       {/* Sprint 187 — warn-tier type-to-confirm dialog. */}
-      {pendingConfirm && (
+      {ddl.pendingConfirm && (
         <ConfirmDangerousDialog
           open
-          reason={pendingConfirm.reason}
-          sqlPreview={pendingConfirm.sql}
+          reason={ddl.pendingConfirm.reason}
+          sqlPreview={ddl.pendingConfirm.sql}
           onConfirm={() => {
-            void confirmDangerous();
+            void ddl.confirmDangerous();
           }}
-          onCancel={cancelDangerous}
+          onCancel={ddl.cancelDangerous}
         />
       )}
     </div>

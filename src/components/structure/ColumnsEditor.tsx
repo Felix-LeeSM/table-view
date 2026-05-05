@@ -5,11 +5,9 @@ import type { Paradigm } from "@/types/connection";
 import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import * as tauri from "@lib/tauri";
 import SqlPreviewDialog from "./SqlPreviewDialog";
+import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { analyzeStatement } from "@/lib/sql/sqlSafety";
-import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 
 // ---------------------------------------------------------------------------
@@ -355,25 +353,20 @@ export default function ColumnsEditor({
   const [newColumnDrafts, setNewColumnDrafts] = useState<NewColumnDraft[]>([]);
   const [droppedColumns, setDroppedColumns] = useState<Set<string>>(new Set());
 
-  // SQL preview modal state
+  // SQL preview modal state — `showSqlModal` stays editor-local because the
+  // Review SQL button + dialog mount are domain-specific (other editors
+  // mount the dialog directly off `previewSql`). The four lifecycle states
+  // (`previewSql` / `previewLoading` / `previewError` / `pendingConfirm`)
+  // and the `;`-split + decide loop now live in `useDdlPreviewExecution`.
   const [showSqlModal, setShowSqlModal] = useState(false);
-  const [previewSql, setPreviewSql] = useState("");
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
-  // Sprint 189 (AC-189-03) — Safe Mode gate via shared hook.
-  // `connectionEnvironment` is still selected separately for the
-  // production-tier color stripe banner (UI hint, not part of the matrix).
+  // `connectionEnvironment` stays for the production-tier color stripe
+  // banner (UI hint, separate from the Safe Mode decision matrix).
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
   );
-  const safeModeGate = useSafeModeGate(connectionId);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    reason: string;
-    sql: string;
-  } | null>(null);
+  const ddl = useDdlPreviewExecution({ connectionId, onRefresh });
 
   const pendingCount = pendingChanges.length;
 
@@ -481,106 +474,33 @@ export default function ColumnsEditor({
   const handleReviewSql = async () => {
     if (pendingCount === 0) return;
     setShowSqlModal(true);
-    setPreviewLoading(true);
-    setPreviewError(null);
-    setPreviewSql("");
-    try {
-      const result = await tauri.alterTable(buildAlterRequest(true));
-      setPreviewSql(result.sql);
-    } catch (e) {
-      setPreviewError(String(e));
-      setPreviewSql("");
-    }
-    setPreviewLoading(false);
-  };
-
-  // Sprint 187 — actual commit body extracted so `handleExecute` (initial
-  // path) and `confirmDangerous` (post type-to-confirm) can both invoke it
-  // without duplicating the cleanup + onRefresh sequence.
-  const runAlter = async () => {
-    setPreviewLoading(true);
-    setPreviewError(null);
-    const startedAt = Date.now();
-    const recordedSql = previewSql;
-    try {
-      await tauri.alterTable(buildAlterRequest(false));
-      setShowSqlModal(false);
-      setPendingChanges([]);
-      setDroppedColumns(new Set());
-      setNewColumnDrafts([]);
-      setEditingColumn(null);
-      // Refresh column data after successful execution
-      await onRefresh();
-      // Sprint 196 (FB-5b) — record DDL apply.
-      addHistoryEntry({
-        sql: recordedSql,
-        executedAt: startedAt,
-        duration: Date.now() - startedAt,
-        status: "success",
-        connectionId,
-        paradigm: "rdb",
-        queryMode: "sql",
-        source: "ddl-structure",
-      });
-    } catch (e) {
-      setPreviewError(String(e));
-      addHistoryEntry({
-        sql: recordedSql,
-        executedAt: startedAt,
-        duration: Date.now() - startedAt,
-        status: "error",
-        connectionId,
-        paradigm: "rdb",
-        queryMode: "sql",
-        source: "ddl-structure",
-      });
-    }
-    setPreviewLoading(false);
-  };
-
-  const handleExecute = async () => {
-    // Sprint 189 (AC-189-03) — gate every ALTER sub-statement through the
-    // shared decision matrix. Multi-statement previews are split on `;` so
-    // any DROP COLUMN / DROP CONSTRAINT inside the batch trips the gate
-    // even when siblings are safe ADDs.
-    const statements = previewSql
-      .split(";")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    for (const stmt of statements) {
-      const analysis = analyzeStatement(stmt);
-      const decision = safeModeGate.decide(analysis);
-      if (decision.action === "block") {
-        setPreviewError(decision.reason);
-        return;
-      }
-      if (decision.action === "confirm") {
-        setPendingConfirm({ reason: decision.reason, sql: stmt });
-        return;
-      }
-    }
-    await runAlter();
-  };
-
-  const confirmDangerous = async () => {
-    setPendingConfirm(null);
-    await runAlter();
-  };
-
-  const cancelDangerous = () => {
-    setPendingConfirm(null);
-    setPreviewError(
-      "Safe Mode (warn): confirmation cancelled — no changes committed",
+    // Sprint 214 — preview fetch + commit closure registration both flow
+    // through the shared hook. The closure factory bakes in the editor's
+    // domain cleanup (pendingChanges / drafts / drops / inline editing /
+    // showSqlModal) so the hook stays free of structure-specific state.
+    await ddl.loadPreview(
+      () => tauri.alterTable(buildAlterRequest(true)),
+      () => async () => {
+        await tauri.alterTable(buildAlterRequest(false));
+        setShowSqlModal(false);
+        setPendingChanges([]);
+        setDroppedColumns(new Set());
+        setNewColumnDrafts([]);
+        setEditingColumn(null);
+      },
     );
   };
 
   const handleCancelPending = () => {
+    // Sprint 214 — domain reset stays in the editor; lifecycle reset
+    // delegates to the hook so `previewSql` / `previewError` /
+    // `pendingConfirm` / commit closure all clear together.
+    ddl.cancelPreview();
     setPendingChanges([]);
     setDroppedColumns(new Set());
     setNewColumnDrafts([]);
     setEditingColumn(null);
     setShowSqlModal(false);
-    setPendingConfirm(null);
   };
 
   // -------------------------------------------------------------------------
@@ -748,26 +668,26 @@ export default function ColumnsEditor({
       {/* SQL Preview Modal */}
       {showSqlModal && (
         <SqlPreviewDialog
-          sql={previewSql}
-          loading={previewLoading}
-          error={previewError}
+          sql={ddl.previewSql}
+          loading={ddl.previewLoading}
+          error={ddl.previewError}
           environment={connectionEnvironment}
-          onConfirm={handleExecute}
+          onConfirm={ddl.attemptExecute}
           onCancel={handleCancelPending}
         />
       )}
 
       {/* Sprint 187 — warn-tier confirmation. Mounted as a sibling so it
           stacks above the SQL preview dialog. */}
-      {pendingConfirm && (
+      {ddl.pendingConfirm && (
         <ConfirmDangerousDialog
           open
-          reason={pendingConfirm.reason}
-          sqlPreview={pendingConfirm.sql}
+          reason={ddl.pendingConfirm.reason}
+          sqlPreview={ddl.pendingConfirm.sql}
           onConfirm={() => {
-            void confirmDangerous();
+            void ddl.confirmDangerous();
           }}
-          onCancel={cancelDangerous}
+          onCancel={ddl.cancelDangerous}
         />
       )}
     </div>
