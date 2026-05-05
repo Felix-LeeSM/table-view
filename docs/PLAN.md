@@ -114,7 +114,7 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 | # | Sprint | 종류 | 입력 (candidates) | 내용 |
 |---|--------|------|-------------------|------|
 | 1 | **210** ✓ | refactor | P1 (DocumentDataGrid) | `DocumentDataGrid.tsx` (951) → entry 597 + 4 sub-file (`useDocumentGridData` / `useMongoBulkOps` / `DocumentBulkDeleteDialog` / `DocumentBulkUpdateDialog`). 행동 변경 0, evaluator 9/10. (commit `b9020fb`) |
-| 2 | 211 | refactor | P2 (QuickLookPanel) | `QuickLookShell` 분리 + RDB / Document body 분리 + helpers 이동. |
+| 2 | **211** ✓ | refactor | P2 (QuickLookPanel) | `QuickLookPanel.tsx` (868) → entry 176 + 5 sub-file (`QuickLookShell` / `RdbQuickLookBody` / `DocumentQuickLookBody` / `helpers` / `FieldRow`). 행동 변경 0, evaluator 8.5/10. (commit `9e2091f`) |
 | 3 | 212 | refactor | P3 (tabStore cross-store) | `tabStore` entry 의 `useMruStore` / `useQueryHistoryStore` 직접 import 제거 — caller hook 으로 이동. |
 | 4 | 213 | refactor | P4 (tauri.ts) | `src/lib/tauri/{connection,schema,query,document,export}.ts` 분리 + `tauri.ts` barrel 보존. |
 | 5 | 214 | refactor | P5 (Rust DB·export) | `db/mod.rs` → traits / types / test_support 분리 + `commands/export.rs` writer 분리. |
