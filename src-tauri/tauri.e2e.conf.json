@@ -10,7 +10,8 @@
         "resizable": false,
         "maximizable": false,
         "center": true,
-        "visible": true
+        "visible": true,
+        "dragDropEnabled": false
       },
       {
         "label": "workspace",
@@ -22,7 +23,8 @@
         "resizable": true,
         "maximizable": true,
         "center": true,
-        "visible": true
+        "visible": true,
+        "dragDropEnabled": false
       }
     ]
   }

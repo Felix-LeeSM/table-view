@@ -1,7 +1,7 @@
 ---
 title: Lessons 인덱스
 type: index
-updated: 2026-04-30
+updated: 2026-05-05
 ---
 
 # Lessons 인덱스
@@ -24,6 +24,7 @@ updated: 2026-04-30
 - [2026-04-25 · Phase 종료 시 정적 UI evaluation → sprint 분해 워크플로우 (Phase 5 = 3.17/5, 41 이슈 → sprint-88~119)](2026-04-25-phase-end-ui-evaluation-workflow/memory.md)
 - [2026-04-30 · Cold-boot 측정은 tracing::info! phase markers + Tauri 2 setup/on_page_load hooks가 가장 가벼운 instrumentation](2026-04-30-cold-boot-tracing-instrumentation/memory.md)
 - [2026-04-30 · Tauri 2 다중 WKWebView spawn은 OS-level parallel — 한 윈도우 lazy화로는 wall-clock을 크게 못 줄인다](2026-04-30-wkwebview-spawn-os-parallel/memory.md)
+- [2026-05-05 · Tauri 2 drag-drop은 두 게이트를 동시에 통과해야 — OS handler 비활성 + 이벤트 버블링 차단](2026-05-05-tauri-drag-drop-os-intercept-and-bubble/memory.md)
 
 ## 형식
 

@@ -349,55 +349,6 @@ describe("ConnectionList", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Drop zone visual feedback (dragOver with active drag)
-  // -----------------------------------------------------------------------
-  it("activates drop zone styling on dragOver when a connection is being dragged", () => {
-    setStoreState({
-      connections: [makeConnection({ id: "c1", name: "DB" })],
-      groups: [],
-    });
-
-    _draggedConnectionId = "conn-2";
-
-    const { container } = render(<ConnectionList />);
-    const dropZone = container.firstElementChild as HTMLElement;
-
-    const classBefore = dropZone.className;
-
-    act(() => {
-      fireEvent.dragOver(dropZone, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-
-    // Class should change to include the accent background
-    expect(dropZone.className).not.toBe(classBefore);
-  });
-
-  it("does not activate drop zone when no connection is being dragged", () => {
-    setStoreState({
-      connections: [makeConnection({ id: "c1", name: "DB" })],
-      groups: [],
-    });
-
-    _draggedConnectionId = null;
-
-    const { container } = render(<ConnectionList />);
-    const dropZone = container.firstElementChild as HTMLElement;
-
-    const classBefore = dropZone.className;
-
-    act(() => {
-      fireEvent.dragOver(dropZone, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-
-    // draggedConnectionId is null, so class should not change
-    expect(dropZone.className).toBe(classBefore);
-  });
-
-  // -----------------------------------------------------------------------
   // Mixed: root connections + groups together
   // -----------------------------------------------------------------------
   it("renders both root connections and groups together", () => {
@@ -416,35 +367,6 @@ describe("ConnectionList", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Drag leave resets drop active state
-  // -----------------------------------------------------------------------
-  it("resets drop active state on dragLeave", () => {
-    setStoreState({
-      connections: [makeConnection({ id: "c1", name: "DB" })],
-      groups: [],
-    });
-
-    _draggedConnectionId = "conn-2";
-
-    const { container } = render(<ConnectionList />);
-    const dropZone = container.firstElementChild as HTMLElement;
-
-    // Activate via dragOver
-    act(() => {
-      fireEvent.dragOver(dropZone, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-    const activeClass = dropZone.className;
-
-    // dragLeave should reset
-    act(() => {
-      fireEvent.dragLeave(dropZone);
-    });
-    expect(dropZone.className).not.toBe(activeClass);
-  });
-
-  // -----------------------------------------------------------------------
   // select-none on root element
   // -----------------------------------------------------------------------
   it("has select-none class on root element to prevent text selection", () => {
@@ -457,52 +379,41 @@ describe("ConnectionList", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 78 AC-04 — explicit textual drop-target hint
+  // Accessibility: root drop zone has aria-label for screen readers
   // -----------------------------------------------------------------------
-  describe("Ungrouped drop hint", () => {
-    it("does not render the drop hint at rest (no active drag)", () => {
-      setStoreState({
-        connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
-        groups: [makeGroup({ id: "g1", name: "G" })],
-      });
+  it("root drop zone carries an aria-label for the ungrouped drop region", () => {
+    setStoreState({ connections: [], groups: [] });
+    const { container } = render(<ConnectionList />);
+    const dropZone = container.firstElementChild as HTMLElement;
+    expect(dropZone.getAttribute("aria-label")).toMatch(
+      /ungrouped connections drop area/i,
+    );
+  });
 
-      _draggedConnectionId = null;
-      render(<ConnectionList />);
-      expect(screen.queryByTestId("ungrouped-drop-hint")).toBeNull();
+  // -----------------------------------------------------------------------
+  // 2026-05-05 — drop visual indicators were removed per user request
+  // ("group에서 제거할 때 indicator가 남아있어"). The hint dialog and the
+  // dashed outline are no longer rendered at any point during the drag.
+  // Lock the absence so a future re-introduction is caught in unit tests.
+  // -----------------------------------------------------------------------
+  it("never renders an ungrouped-drop-hint dialog during a drag", () => {
+    setStoreState({
+      connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
+      groups: [makeGroup({ id: "g1", name: "G" })],
+    });
+    _draggedConnectionId = "c1";
+
+    const { container } = render(<ConnectionList />);
+    const dropZone = container.firstElementChild as HTMLElement;
+    act(() => {
+      fireEvent.dragOver(dropZone, {
+        dataTransfer: { dropEffect: "" },
+      });
     });
 
-    it("renders an explicit 'Drop here to remove from group' hint during drag-over", () => {
-      setStoreState({
-        connections: [makeConnection({ id: "c1", name: "DB", group_id: "g1" })],
-        groups: [makeGroup({ id: "g1", name: "G" })],
-      });
-
-      _draggedConnectionId = "c1";
-
-      const { container } = render(<ConnectionList />);
-      const dropZone = container.firstElementChild as HTMLElement;
-
-      act(() => {
-        fireEvent.dragOver(dropZone, {
-          dataTransfer: { dropEffect: "" },
-        });
-      });
-
-      const hint = screen.getByTestId("ungrouped-drop-hint");
-      expect(hint).toBeInTheDocument();
-      expect(hint.textContent).toMatch(/drop here to remove from group/i);
-      // AC-04: border adornment is part of the "explicit" affordance.
-      expect(hint.className).toMatch(/border/);
-    });
-
-    it("root drop zone carries an aria-label for ungrouped drop region", () => {
-      setStoreState({ connections: [], groups: [] });
-      const { container } = render(<ConnectionList />);
-      const dropZone = container.firstElementChild as HTMLElement;
-      expect(dropZone.getAttribute("aria-label")).toMatch(
-        /ungrouped connections drop area/i,
-      );
-    });
+    expect(screen.queryByTestId("ungrouped-drop-hint")).toBeNull();
+    expect(dropZone.className).not.toMatch(/outline-dashed/);
+    expect(dropZone.className).not.toMatch(/bg-primary\/5/);
   });
 
   describe("Selection forwarding", () => {

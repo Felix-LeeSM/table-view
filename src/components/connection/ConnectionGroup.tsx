@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type DragEvent } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -76,7 +76,6 @@ export default function ConnectionGroup({
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(group.name);
   const renameRef = useRef<HTMLInputElement>(null);
-  const [dropActive, setDropActive] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const removeGroup = useConnectionStore((s) => s.removeGroup);
@@ -106,115 +105,124 @@ export default function ConnectionGroup({
     saveCollapsedState(group.id, next);
   };
 
+  // Group-wide drop target: any drop within the group's padded visual area
+  // (header OR an expanded member row OR the surrounding padding) joins this
+  // group. Padding gives the user a more forgiving hit area without any
+  // visual indicator (per 2026-05-05 user request — "각 그룹의 영역을 넓히고
+  // indicator 제거"). `e.stopPropagation()` keeps the event from also firing
+  // ConnectionList's ungroup handler when both could handle the drop.
+  const handleGroupDragOver = (e: DragEvent) => {
+    if (!draggedConnectionId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleGroupDrop = async (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const connId = draggedConnectionId ?? e.dataTransfer.getData("text/plain");
+    if (connId) {
+      await moveConnectionToGroup(connId, group.id);
+    }
+  };
+
   return (
     <>
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <div
-            className={`flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted select-none ${
-              dropActive
-                ? "bg-primary/10 outline outline-1 outline-primary"
-                : ""
-            }`}
-            role="button"
-            tabIndex={0}
-            aria-expanded={!collapsed}
-            aria-label={`${group.name} group (${connections.length} connections)`}
-            onClick={toggleCollapsed}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                toggleCollapsed();
-              }
-            }}
-            onDragOver={(e) => {
-              if (draggedConnectionId) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDropActive(true);
-              }
-            }}
-            onDragLeave={() => setDropActive(false)}
-            onDrop={async (e) => {
-              e.preventDefault();
-              setDropActive(false);
-              const connId =
-                draggedConnectionId ?? e.dataTransfer.getData("text/plain");
-              if (connId) {
-                await moveConnectionToGroup(connId, group.id);
-              }
-            }}
-          >
-            {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-            {/* Color accent dot — Sprint 78. Legacy groups with color=null
-                fall back to a muted border-only dot so the column stays
-                balanced across the list. */}
-            <span
-              data-testid="group-color-accent"
-              aria-hidden="true"
-              className={`inline-block h-2 w-2 shrink-0 rounded-full border ${
-                group.color
-                  ? "border-transparent"
-                  : "border-border bg-transparent"
-              }`}
-              style={group.color ? { backgroundColor: group.color } : undefined}
-            />
-            {renaming ? (
-              <Input
-                ref={renameRef}
-                className="h-5 min-w-0 flex-1 border-primary bg-background px-1.5 py-0.5 text-xs text-foreground shadow-none focus-visible:ring-0"
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onBlur={handleRenameSubmit}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleRenameSubmit();
-                  if (e.key === "Escape") {
-                    setRenameValue(group.name);
-                    setRenaming(false);
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
+      <div
+        data-testid="connection-group-wrapper"
+        className="select-none py-1"
+        onDragOver={handleGroupDragOver}
+        onDrop={handleGroupDrop}
+      >
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div
+              className="flex cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              role="button"
+              tabIndex={0}
+              aria-expanded={!collapsed}
+              aria-label={`${group.name} group (${connections.length} connections)`}
+              onClick={toggleCollapsed}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleCollapsed();
+                }
+              }}
+            >
+              {collapsed ? (
+                <ChevronRight size={12} />
+              ) : (
+                <ChevronDown size={12} />
+              )}
+              {/* Color accent dot — Sprint 78. Legacy groups with color=null
+                  fall back to a muted border-only dot so the column stays
+                  balanced across the list. */}
+              <span
+                data-testid="group-color-accent"
+                aria-hidden="true"
+                className={`inline-block h-2 w-2 shrink-0 rounded-full border ${
+                  group.color
+                    ? "border-transparent"
+                    : "border-border bg-transparent"
+                }`}
+                style={
+                  group.color ? { backgroundColor: group.color } : undefined
+                }
               />
-            ) : (
-              <span className="truncate">{group.name}</span>
-            )}
-            <span className="ml-1 text-3xs">({connections.length})</span>
-            {dropActive && (
-              <span className="ml-4 text-3xs text-primary font-medium">
-                Move to {group.name}
-              </span>
-            )}
-          </div>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem
-            onClick={() => {
-              setRenameValue(group.name);
-              setRenaming(true);
-            }}
-          >
-            <Pencil size={14} /> Rename
-          </ContextMenuItem>
-          <ContextMenuItem onClick={() => setShowEditDialog(true)}>
-            <Palette size={14} /> Change Color
-          </ContextMenuItem>
-          <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
-            <Trash2 size={14} /> Delete Group
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+              {renaming ? (
+                <Input
+                  ref={renameRef}
+                  className="h-5 min-w-0 flex-1 border-primary bg-background px-1.5 py-0.5 text-xs text-foreground shadow-none focus-visible:ring-0"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={handleRenameSubmit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRenameSubmit();
+                    if (e.key === "Escape") {
+                      setRenameValue(group.name);
+                      setRenaming(false);
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="truncate">{group.name}</span>
+              )}
+              <span className="ml-1 text-3xs">({connections.length})</span>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem
+              onClick={() => {
+                setRenameValue(group.name);
+                setRenaming(true);
+              }}
+            >
+              <Pencil size={14} /> Rename
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => setShowEditDialog(true)}>
+              <Palette size={14} /> Change Color
+            </ContextMenuItem>
+            <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
+              <Trash2 size={14} /> Delete Group
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
 
-      {!collapsed &&
-        connections.map((conn) => (
-          <ConnectionItem
-            key={conn.id}
-            connection={conn}
-            selected={selectedId === conn.id}
-            onSelect={onSelect}
-            onActivate={onActivate}
-            inGroup
-          />
-        ))}
+        {!collapsed &&
+          connections.map((conn) => (
+            <ConnectionItem
+              key={conn.id}
+              connection={conn}
+              selected={selectedId === conn.id}
+              onSelect={onSelect}
+              onActivate={onActivate}
+              inGroup
+            />
+          ))}
+      </div>
 
       {showEditDialog && (
         <GroupDialog group={group} onClose={() => setShowEditDialog(false)} />

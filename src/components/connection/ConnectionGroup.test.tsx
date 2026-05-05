@@ -622,92 +622,6 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Drag over / drag leave visual feedback
-  // -----------------------------------------------------------------------
-  it("sets drop active styling on dragOver when draggedConnectionId is set", () => {
-    _draggedConnectionId = "conn-1";
-
-    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
-
-    const header = screen.getByRole("button");
-    const classBefore = header.className;
-
-    act(() => {
-      fireEvent.dragOver(header, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-
-    expect(header.className).not.toBe(classBefore);
-    expect(header.className).toContain("outline");
-  });
-
-  it("does not set drop active when no connection is being dragged", () => {
-    _draggedConnectionId = null;
-
-    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
-
-    const header = screen.getByRole("button");
-    const classBefore = header.className;
-
-    act(() => {
-      fireEvent.dragOver(header, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-
-    expect(header.className).toBe(classBefore);
-  });
-
-  it("resets drop active styling on dragLeave", () => {
-    _draggedConnectionId = "conn-1";
-
-    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
-
-    const header = screen.getByRole("button");
-
-    act(() => {
-      fireEvent.dragOver(header, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-    const activeClass = header.className;
-
-    act(() => {
-      fireEvent.dragLeave(header);
-    });
-    expect(header.className).not.toBe(activeClass);
-  });
-
-  it("resets drop active styling on drop", async () => {
-    _draggedConnectionId = "conn-1";
-
-    render(<ConnectionGroup group={makeGroup()} connections={[]} />);
-
-    const header = screen.getByRole("button");
-
-    act(() => {
-      fireEvent.dragOver(header, {
-        dataTransfer: { dropEffect: "" },
-      });
-    });
-
-    act(() => {
-      fireEvent.drop(header, {
-        dataTransfer: { getData: () => "" },
-      });
-    });
-
-    // After drop, the connection id exists so moveConnectionToGroup is called
-    await waitFor(() => {
-      expect(mockMoveConnectionToGroup).toHaveBeenCalled();
-    });
-
-    // dropActive should be false now (no outline class)
-    expect(header.className).not.toContain("outline");
-  });
-
-  // -----------------------------------------------------------------------
   // Keyboard: Enter and Space toggle collapse
   // -----------------------------------------------------------------------
   it("toggles collapse on Enter key", () => {
@@ -1209,51 +1123,73 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Phase 15 Sprint 164 — Drop hint text during drag-over
+  // 2026-05-05 — Drop target wraps header + members so any drop within the
+  // group's visible area joins this group. Without the wrapper, drops on
+  // members bubble to ConnectionList and ungroup the connection — bug
+  // reported during /diagnose where "group exit works but group entry
+  // doesn't" was an event-bubbling failure (see plan
+  // /Users/felix/.claude/plans/magical-enchanting-hejlsberg.md).
   // -----------------------------------------------------------------------
-  // Reason: Phase 15 AC-15-05 — drop 시 group 이름 포함 hint 텍스트 표시 (2026-04-28)
-  it("shows move-to-group hint text during drag over", () => {
-    _draggedConnectionId = "conn-1";
+  it("calls moveConnectionToGroup when drop lands on a group member, not the header", async () => {
+    _draggedConnectionId = "conn-42";
 
     render(
       <ConnectionGroup
-        group={makeGroup({ name: "Production" })}
-        connections={[]}
+        group={makeGroup({ collapsed: false })}
+        connections={[makeConnection({ id: "c1", name: "DB Alpha" })]}
       />,
     );
 
-    const header = screen.getByRole("button");
+    const member = screen.getByTestId("connection-item");
     act(() => {
-      fireEvent.dragOver(header, {
-        dataTransfer: { dropEffect: "" },
+      fireEvent.drop(member, {
+        dataTransfer: { getData: () => "" },
       });
     });
 
-    expect(screen.getByText("Move to Production")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockMoveConnectionToGroup).toHaveBeenCalledWith("conn-42", "g1");
+    });
   });
 
-  // Reason: Phase 15 AC-15-05 — drop 끝나면 hint 텍스트 사라짐 (2026-04-28)
-  it("hides move-to-group hint text after drag leave", () => {
-    _draggedConnectionId = "conn-1";
+  // Reason: 2026-05-05 — stopPropagation on the group drop handler prevents
+  // ConnectionList.onDrop (the ungroup target) from firing for the same
+  // event. Before this guard, dropping onto a group landed the connection
+  // in the root list because ConnectionList was the last drop handler in
+  // the bubble chain to fire.
+  it("does not bubble drop events to a parent drop listener", async () => {
+    _draggedConnectionId = "conn-42";
+    const parentDrop = vi.fn();
 
     render(
-      <ConnectionGroup
-        group={makeGroup({ name: "Production" })}
-        connections={[]}
-      />,
+      <div onDrop={parentDrop} data-testid="parent-list">
+        <ConnectionGroup group={makeGroup()} connections={[]} />
+      </div>,
     );
 
     const header = screen.getByRole("button");
     act(() => {
-      fireEvent.dragOver(header, {
-        dataTransfer: { dropEffect: "" },
+      fireEvent.drop(header, {
+        dataTransfer: { getData: () => "" },
       });
     });
-    expect(screen.getByText("Move to Production")).toBeInTheDocument();
 
-    act(() => {
-      fireEvent.dragLeave(header);
+    await waitFor(() => {
+      expect(mockMoveConnectionToGroup).toHaveBeenCalledWith("conn-42", "g1");
     });
-    expect(screen.queryByText("Move to Production")).not.toBeInTheDocument();
+    expect(parentDrop).not.toHaveBeenCalled();
+  });
+
+  // Reason: 2026-05-05 — wrapper has top/bottom padding so dropping into the
+  // gap above/below the visible header or member rows still hits the group.
+  // This is the "각 그룹의 영역을 넓혀줘" UX request — no visual indicator,
+  // just a more forgiving hit area.
+  it("renders the wrapper with vertical padding so the drop hit area extends beyond the header", () => {
+    const { container } = render(
+      <ConnectionGroup group={makeGroup()} connections={[makeConnection()]} />,
+    );
+
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(wrapper.className).toMatch(/\bpy-1\b/);
   });
 });
