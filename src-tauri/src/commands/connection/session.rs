@@ -23,6 +23,30 @@ pub(super) struct StatusChangeEvent {
     status: ConnectionStatus,
 }
 
+/// Emit `connection-status-changed` with warn-on-failure.
+///
+/// `app.emit` returning `Err` is almost always benign — it means no
+/// listener (e.g. the workspace window was closed before the keep-alive
+/// task noticed). The frontend repulls status on focus, so the missed
+/// event self-corrects. We log a `warn!` instead of swallowing silently
+/// so a true regression (serializer panic, IPC bus tear-down) is
+/// observable in the boot log rather than vanishing into a `let _`.
+fn emit_status_change(app: &tauri::AppHandle, conn_id: &str, status: ConnectionStatus) {
+    if let Err(e) = app.emit(
+        "connection-status-changed",
+        StatusChangeEvent {
+            id: conn_id.to_string(),
+            status,
+        },
+    ) {
+        warn!(
+            conn_id = %conn_id,
+            error = %e,
+            "Failed to emit connection-status-changed (likely no listener)"
+        );
+    }
+}
+
 /// Sprint 175 — captured once on the very first `get_session_id` call. The
 /// delta `rust:first-ipc - rust:entry` is the "Tauri startup overhead" line
 /// item in `docs/sprints/sprint-175/baseline.md`. `OnceLock::set` returns
@@ -92,13 +116,7 @@ pub(super) async fn keep_alive_loop(
             let mut status = state.connection_status.lock().await;
             status.insert(conn_id.clone(), error_status.clone());
         }
-        let _ = app.emit(
-            "connection-status-changed",
-            StatusChangeEvent {
-                id: conn_id.clone(),
-                status: error_status,
-            },
-        );
+        emit_status_change(&app, &conn_id, error_status);
 
         // Attempt reconnect with exponential backoff
         consecutive_failures += 1;
@@ -145,28 +163,18 @@ pub(super) async fn keep_alive_loop(
                     let mut status = state.connection_status.lock().await;
                     status.insert(conn_id.clone(), ConnectionStatus::Connected);
                 }
-                let _ = app.emit(
-                    "connection-status-changed",
-                    StatusChangeEvent {
-                        id: conn_id.clone(),
-                        status: ConnectionStatus::Connected,
-                    },
-                );
+                emit_status_change(&app, &conn_id, ConnectionStatus::Connected);
                 consecutive_failures = 0;
             }
             Err(e) => {
                 warn!(conn_id = %conn_id, error = %e, "Reconnection failed");
                 let err_status = ConnectionStatus::Error(format!("Reconnection failed: {}", e));
-                let state = app.state::<AppState>();
-                let mut status = state.connection_status.lock().await;
-                status.insert(conn_id.clone(), err_status.clone());
-                let _ = app.emit(
-                    "connection-status-changed",
-                    StatusChangeEvent {
-                        id: conn_id.clone(),
-                        status: err_status,
-                    },
-                );
+                {
+                    let state = app.state::<AppState>();
+                    let mut status = state.connection_status.lock().await;
+                    status.insert(conn_id.clone(), err_status.clone());
+                }
+                emit_status_change(&app, &conn_id, err_status);
             }
         }
     }
