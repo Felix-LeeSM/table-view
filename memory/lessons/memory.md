@@ -34,6 +34,7 @@ updated: 2026-05-06
 ## e2e — e2e regression 패턴
 
 - [2026-04-25 · UI 재설계는 e2e 셀렉터·동작 가정을 함께 갈아야 한다](e2e/2026-04-25-e2e-stale-after-ui-redesign/memory.md)
+- [2026-05-06 · e2e 복구는 invariant 변경 refactor sprint 의 prerequisite — vite v6 OOM + cross-window 검증 surface 한 겹뿐](e2e/2026-05-06-vite-oom-host-prereq-cross-window-invariant/memory.md)
 
 ## agent-and-git — agent harness / commit 정책
 
@@ -47,6 +48,7 @@ updated: 2026-05-06
 - [2026-04-25 · Phase 종료 시 정적 UI evaluation → sprint 분해 워크플로우 (Phase 5 = 3.17/5, 41 이슈 → sprint-88~119)](workflow/2026-04-25-phase-end-ui-evaluation-workflow/memory.md)
 - [2026-04-27 · 피드백은 스펙 합의 → TDD 순서로 처리한다](workflow/2026-04-27-feedback-spec-first-tdd/memory.md)
 - [2026-04-27 · Phase 종료 시 skip된 테스트는 0건 / 메모리 등록 / skip 메시지 컨텍스트 셋 중 하나여야 한다](workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md)
+- [2026-05-06 · architectural shift (Rust=server) 의 vitest mockability 트레이드오프 — 검증 surface 비교를 sprint planning 의 invariant 섹션에 명시](workflow/2026-05-06-architectural-shift-vitest-mockability-tradeoff/memory.md)
 
 ## 형식
 

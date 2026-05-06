@@ -55,3 +55,25 @@ simulation 한 겹뿐 — risk 가용 검증력에 비해 큼.
 - PLAN sequencing 표 deferred row 는 "사용자 hooks/lib 작업 안정 후 진입"
   같은 모호 trigger 보다 **prerequisite (e2e 복구) + architectural decision
   (Phase 28 spike)** 명시.
+
+# 검토된 architectural alternatives (모두 deferred / rejected)
+
+비대칭 자체를 없애려면 state model 을 webview-distributed 가 아닌 single
+source 로 바꿔야 함. 4 옵션 검토:
+
+1. **SharedWorker** — REJECTED. macOS WKWebView 에서 Apple 이 deprecated
+   취급. Chromium 계열만 stable. Tauri 2 macOS = WKWebView 강제이므로
+   non-starter.
+2. **localStorage + storage event broadcast** — DEFERRED. WKWebView storage
+   event 발사 안정성 (cross-tab 간 실시간 fan-out 보장) 미검증. spike
+   필요. e2e 복구 후 진입 가능.
+3. **Rust=server (Phase 28 후보)** — DEFERRED. Tauri 2 first-class 패턴.
+   Rust 가 store SoT, webview 는 read-only mirror. broadcast/persist 비
+   대칭 자체가 사라짐. 단점 = vitest mockability 손실 (밑 lesson 참조)
+   + e2e 가 유일 invariant 검증 surface 인데 dead.
+4. **session-key only Rust + 상태는 webview** — REJECTED. broadcast/persist
+   비대칭 그대로 + Rust 에 새 책임 추가 (key 발급/만료/rotation) 라
+   복잡도만 증가.
+
+선택 트리: e2e 살리기 → option 2 spike 또는 option 3 진입. e2e 죽은 상태
+유지 → 어느 option 도 진입 못함.
