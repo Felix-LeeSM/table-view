@@ -140,6 +140,18 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 패턴). 다음 cycle 진입 trigger: e2e 복구 sprint 완료 또는 새 wide-net
 스캔 결과.
 
+### Feature sequencing (Sprint 226–..., post-225 feature cycle)
+
+post-209 refactor cycle 종료 (commit `ad9c241` / `8812d39`) 후 feature
+backlog 진입. Phase 13/14/15/16/21/22/24/25/26/27 중 사용자 우선순위 +
+e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phase
+17–20 (MySQL/MariaDB/SQLite/Oracle) 보류 (2026-05-01).
+
+| # | Sprint | 종류 | Phase | 내용 |
+|---|--------|------|-------|------|
+| 1 | **226** ✓ | feature | Phase 27 sprint 1 | CREATE TABLE UI — backend `create_table` Tauri command (PG SQL builder + ANSI quoting + identifier validate + transactional execute / preview branch) + frontend `CreateTableDialog` modal (form + column-row repeater + PK multi-select) + `SchemaTree` schema-row context-menu "Create Table…" entry-point + `useDdlPreviewExecution` 재사용 (Sprint 214 freeze) + Safe Mode gate. cross-window invariant 0 / e2e 의존 0. evaluator 8.80/10 (correctness 9 / completeness 9 / reliability 8 / verification 9). Rust 11 unit + 1 integration test / vitest 12 + 3 = 15 new case / verification 4-set 통과. |
+| 2 | 227+ | feature | (TBD) | 후보: Phase 27 sprint 2 (DROP CASCADE preview + 의존 객체 영향 미리보기) / Phase 26 (Trigger Read+Write) / Phase 13 (PG preview tab parity, multi-window 파트는 e2e 복구 후) / Phase 14 (theme toggle) / Phase 16 (MRU). |
+
 ## 문서 목차
 
 | 문서 | 설명 |
@@ -175,7 +187,7 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 | 24 | Index Write UI | 계획 | [phase-24.md](phases/phase-24.md) |
 | 25 | Constraint Write UI | 계획 | [phase-25.md](phases/phase-25.md) |
 | 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |
-| 27 | Table / Column DDL UI | 계획 | [phase-27.md](phases/phase-27.md) |
+| 27 | Table / Column DDL UI | 진행 중 (Sprint 226 ✓ — CREATE TABLE) | [phase-27.md](phases/phase-27.md) |
 
 > Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가.
 

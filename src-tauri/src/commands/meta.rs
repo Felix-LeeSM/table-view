@@ -705,8 +705,9 @@ mod tests {
     async fn verify_dispatch_rdb_returns_current_database() {
         use crate::db::{NamespaceLabel, RdbAdapter};
         use crate::models::{
-            AlterTableRequest, ConstraintInfo, CreateIndexRequest, DropConstraintRequest,
-            DropIndexRequest, FilterCondition, IndexInfo, SchemaChangeResult, TableData,
+            AlterTableRequest, ConstraintInfo, CreateIndexRequest, CreateTableRequest,
+            DropConstraintRequest, DropIndexRequest, FilterCondition, IndexInfo,
+            SchemaChangeResult, TableData,
         };
 
         struct StubRdbAdapter;
@@ -799,6 +800,12 @@ mod tests {
             fn alter_table<'a>(
                 &'a self,
                 _req: &'a AlterTableRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn create_table<'a>(
+                &'a self,
+                _req: &'a CreateTableRequest,
             ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
                 Box::pin(async { Err(AppError::Unsupported("not used".into())) })
             }

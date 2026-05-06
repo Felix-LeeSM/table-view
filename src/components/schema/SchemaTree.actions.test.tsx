@@ -985,6 +985,153 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByLabelText("Refresh schemas")).toBeInTheDocument();
   });
 
+  // =========================================================================
+  // Sprint 226 (AC-226-05) — schema-row "Create Table…" entry-point
+  // =========================================================================
+  //
+  // Date: 2026-05-06.
+  //
+  // Why this case lives here:
+  // - AC-226-05 mandates that right-clicking a schema row exposes a
+  //   "Create Table…" item, that clicking it opens the modal pre-filled
+  //   with the schema name, and that on commit-success `refreshSchema`
+  //   is called exactly once. The modal body (form, preview, commit) is
+  //   covered by `CreateTableDialog.test.tsx`; this case only locks the
+  //   tree-side wiring + the post-commit refresh contract.
+  // - Mock: `@lib/tauri.createTable` mock returns the SQL on both
+  //   preview and commit. The hook's `runCommit` awaits `onRefresh`
+  //   (which is plumbed to `refreshSchema(schemaName)` from
+  //   `useSchemaCache`); we spy `refreshSchema` via the
+  //   `useSchemaStore` action override so the assertion is direct.
+  it("[AC-226-05] schema-row right-click surfaces 'Create Table…' menu item", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaRow = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.contextMenu(schemaRow, { clientX: 100, clientY: 200 });
+    });
+
+    expect(screen.getByText(/Create Table/)).toBeInTheDocument();
+  });
+
+  it("[AC-226-05] clicking 'Create Table…' opens dialog pre-filled with schema name", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaRow = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.contextMenu(schemaRow, { clientX: 100, clientY: 200 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Create Table/));
+    });
+
+    // Modal heading is rendered + the read-only Schema input shows the
+    // right-clicked schema name.
+    expect(screen.getByText("Create Table")).toBeInTheDocument();
+    const schemaInput = screen.getByLabelText(
+      "Schema name",
+    ) as HTMLInputElement;
+    expect(schemaInput.value).toBe("public");
+    expect(schemaInput.readOnly).toBe(true);
+  });
+
+  it("[AC-226-05] commit-success calls refreshSchema('public') exactly once", async () => {
+    // Sprint 226: prove the post-commit refresh contract.
+    // - Mock `@lib/tauri.createTable` so preview + commit succeed.
+    // - Spy on `useSchemaStore.loadTables` (the underlying call that
+    //   `useSchemaCache.refreshSchema` invokes for the schema's tables).
+    //   We set Safe Mode "off" so the gate passes through immediately.
+    const tauri = await import("@lib/tauri");
+    const createTableSpy = vi.spyOn(tauri, "createTable").mockResolvedValue({
+      sql: 'CREATE TABLE "public"."new_t" ("id" integer)',
+    });
+    const loadTablesSpy = vi.fn().mockResolvedValue(undefined);
+    const safeModeMod = await import("@stores/safeModeStore");
+    safeModeMod.useSafeModeStore.setState({ mode: "off" });
+
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+    // The shared helper preserves a default `loadTables` mock — override
+    // here so we can spy on the post-commit refresh path specifically.
+    useSchemaStore.setState({ loadTables: loadTablesSpy });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    const schemaRow = screen.getByLabelText("public schema");
+    await act(async () => {
+      fireEvent.contextMenu(schemaRow, { clientX: 100, clientY: 200 });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText(/Create Table/));
+    });
+
+    // Fill the form.
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Table name"), {
+        target: { value: "new_t" },
+      });
+      fireEvent.change(screen.getByLabelText("Column name"), {
+        target: { value: "id" },
+      });
+      fireEvent.change(screen.getByLabelText("Column data type"), {
+        target: { value: "integer" },
+      });
+    });
+
+    // Preview SQL — first call (preview_only: true).
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Preview SQL/i }));
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /Execute/i }),
+      ).toBeInTheDocument(),
+    );
+
+    // Reset loadTables spy *before* commit so we count only the
+    // post-commit refresh call (auto-expand on schema render also fires
+    // loadTables — pre-commit calls are unrelated to AC-226-05).
+    loadTablesSpy.mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
+    });
+
+    // Post-commit `refreshSchema("public")` resolves into
+    // `loadTables(connectionId, "public")`.
+    await waitFor(() => {
+      const callsForPublic = loadTablesSpy.mock.calls.filter(
+        (c) => c[0] === "conn1" && c[1] === "public",
+      );
+      expect(callsForPublic).toHaveLength(1);
+    });
+    // Commit-side createTable call (preview_only:false) ran exactly once.
+    const commitCalls = createTableSpy.mock.calls.filter(
+      (c) => (c[0] as { preview_only: boolean }).preview_only === false,
+    );
+    expect(commitCalls).toHaveLength(1);
+
+    createTableSpy.mockRestore();
+  });
+
   it("[AC-191-03-2] renameTable rejection surfaces toast error", async () => {
     const toastMod = await import("@/lib/toast");
     const errorSpy = vi

@@ -11,6 +11,7 @@ import {
   Columns3,
   Trash2,
   Pencil,
+  Plus,
   X,
   Search,
   RefreshCw,
@@ -56,6 +57,7 @@ export interface SchemaTreeRowsContext {
   handleViewClick: (viewName: string, schemaName: string) => void;
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
+  handleCreateTable: (schemaName: string) => void;
 }
 
 export function renderSchemaRow(
@@ -104,6 +106,10 @@ export function renderSchemaRow(
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
+        <ContextMenuItem onClick={() => ctx.handleCreateTable(row.schemaName)}>
+          <Plus size={14} />
+          Create Table…
+        </ContextMenuItem>
         <ContextMenuItem
           onClick={() => ctx.handleRefreshSchema(row.schemaName)}
         >

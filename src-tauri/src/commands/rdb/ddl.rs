@@ -8,8 +8,8 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, CreateIndexRequest, DropConstraintRequest,
-    DropIndexRequest, SchemaChangeResult,
+    AddConstraintRequest, AlterTableRequest, CreateIndexRequest, CreateTableRequest,
+    DropConstraintRequest, DropIndexRequest, SchemaChangeResult,
 };
 
 fn not_connected(connection_id: &str) -> AppError {
@@ -58,6 +58,18 @@ pub async fn alter_table(
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
     active.as_rdb()?.alter_table(&request).await
+}
+
+#[tauri::command]
+pub async fn create_table(
+    state: tauri::State<'_, AppState>,
+    request: CreateTableRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    active.as_rdb()?.create_table(&request).await
 }
 
 #[tauri::command]

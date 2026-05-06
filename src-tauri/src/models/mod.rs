@@ -8,8 +8,9 @@ pub use connection::{
 };
 pub use query::{QueryColumn, QueryResult, QueryType};
 pub use schema::{
-    AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
-    CreateIndexRequest, DropConstraintRequest, DropIndexRequest, SchemaChangeResult,
+    AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition, ConstraintDefinition,
+    CreateIndexRequest, CreateTableRequest, DropConstraintRequest, DropIndexRequest,
+    SchemaChangeResult,
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,

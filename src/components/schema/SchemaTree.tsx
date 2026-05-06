@@ -27,6 +27,7 @@ import {
 import { SchemaTreeBody } from "./SchemaTree/body";
 import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
 import {
+  CreateTableDialogSlot,
   DropTableConfirmDialog,
   RenameTableDialog,
 } from "./SchemaTree/dialogs";
@@ -178,6 +179,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleViewClick: actions.handleViewClick,
     handleOpenViewStructure: actions.handleOpenViewStructure,
     handleFunctionClick: actions.handleFunctionClick,
+    handleCreateTable: actions.handleCreateTable,
   };
 
   return (
@@ -386,6 +388,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         }}
         onConfirm={actions.handleConfirmRename}
         onCancel={() => actions.setRenameDialog(null)}
+      />
+
+      <CreateTableDialogSlot
+        connectionId={connectionId}
+        createTableDialog={actions.createTableDialog}
+        onClose={() => actions.setCreateTableDialog(null)}
+        onRefresh={async (schemaName) => {
+          actions.refreshSchema(schemaName);
+        }}
       />
     </div>
   );

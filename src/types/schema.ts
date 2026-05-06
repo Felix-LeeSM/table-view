@@ -189,6 +189,24 @@ export interface SchemaChangeResult {
   sql: string;
 }
 
+// ── Create Table types (Sprint 226) ────────────────────────────────────
+
+export interface ColumnDefinition {
+  name: string;
+  data_type: string;
+  nullable: boolean;
+  default_value: string | null;
+}
+
+export interface CreateTableRequest {
+  connection_id: string;
+  schema: string;
+  name: string;
+  columns: ColumnDefinition[];
+  primary_key?: string[] | null;
+  preview_only?: boolean;
+}
+
 export interface ViewInfo {
   name: string;
   schema: string;

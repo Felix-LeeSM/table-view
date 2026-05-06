@@ -11,7 +11,8 @@ use tracing::info;
 use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
-    CreateIndexRequest, DropConstraintRequest, DropIndexRequest, SchemaChangeResult,
+    CreateIndexRequest, CreateTableRequest, DropConstraintRequest, DropIndexRequest,
+    SchemaChangeResult,
 };
 
 use super::PostgresAdapter;
@@ -134,6 +135,119 @@ impl PostgresAdapter {
     }
 
     // ── Schema change operations ──────────────────────────────────────
+
+    /// CREATE TABLE — Sprint 226.
+    ///
+    /// Identifier validation reuses the same `validate_identifier` helper
+    /// that `alter_table` / `rename_table` (via `validate_identifier`)
+    /// already enforce: whitespace-trimmed, non-empty, leading
+    /// letter/underscore, alphanumeric + underscore body. SQL emission
+    /// follows the PG ANSI form
+    ///
+    ///   `CREATE TABLE "<schema>"."<name>" ("<col1>" <type1> [NOT NULL]
+    ///   [DEFAULT …], …, PRIMARY KEY ("<pkcol>", …))`
+    ///
+    /// `preview_only=true` returns the built SQL without touching the
+    /// database. `preview_only=false` runs the statement inside a
+    /// `BEGIN/COMMIT` transaction so a failure rolls back rather than
+    /// leaving a half-created object.
+    pub async fn create_table(
+        &self,
+        req: &CreateTableRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.name, "Table name")?;
+
+        if req.columns.is_empty() {
+            return Err(AppError::Validation(
+                "Table must have at least one column".into(),
+            ));
+        }
+
+        for col in &req.columns {
+            validate_identifier(&col.name, "Column name")?;
+            if col.data_type.trim().is_empty() {
+                return Err(AppError::Validation(format!(
+                    "Column '{}' must have a non-empty data type",
+                    col.name
+                )));
+            }
+        }
+
+        // PK columns must be drawn from the declared column list.
+        // Defending here mirrors the frontend pre-validation so a stale
+        // PK reference (e.g. user removed a column row after marking it
+        // PK) still gets rejected even if the modal were bypassed.
+        if let Some(pk_cols) = &req.primary_key {
+            for pk in pk_cols {
+                validate_identifier(pk, "Primary key column name")?;
+                if !req.columns.iter().any(|c| c.name == *pk) {
+                    return Err(AppError::Validation(format!(
+                        "Primary key column '{}' is not declared in the column list",
+                        pk
+                    )));
+                }
+            }
+        }
+
+        let qualified = qualified_table(&req.schema, &req.name);
+
+        let mut col_defs: Vec<String> = Vec::with_capacity(req.columns.len() + 1);
+        for col in &req.columns {
+            let mut def = format!("{} {}", quote_identifier(&col.name), col.data_type.trim());
+            if !col.nullable {
+                def.push_str(" NOT NULL");
+            }
+            if let Some(default) = &col.default_value {
+                let trimmed = default.trim();
+                if !trimmed.is_empty() {
+                    def.push_str(&format!(" DEFAULT {}", trimmed));
+                }
+            }
+            col_defs.push(def);
+        }
+
+        if let Some(pk_cols) = &req.primary_key {
+            if !pk_cols.is_empty() {
+                let quoted: Vec<String> = pk_cols.iter().map(|c| quote_identifier(c)).collect();
+                col_defs.push(format!("PRIMARY KEY ({})", quoted.join(", ")));
+            }
+        }
+
+        let sql = format!("CREATE TABLE {} ({})", qualified, col_defs.join(", "));
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let pool = self.active_pool().await?;
+
+        // Wrap the execute in BEGIN/COMMIT so a failure (e.g. table
+        // already exists, type-check rejection) leaves no partial state
+        // behind. CREATE TABLE itself is implicitly transactional in PG,
+        // but the explicit transaction matches the spec wording and
+        // future-proofs against follow-up sprints that add side effects
+        // (e.g. comments, indexes) inside the same call.
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            // Best-effort rollback. The original DB error is the
+            // user-facing failure; rollback errors are discarded so
+            // the message stays clean.
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!("Created table {}.{}", req.schema, req.name);
+        Ok(SchemaChangeResult { sql })
+    }
 
     /// ALTER TABLE: add, modify, or drop columns in batch.
     /// If `preview_only` is true, returns the generated SQL without executing.
@@ -460,8 +574,9 @@ mod tests {
     use super::*;
     use crate::db::postgres::PostgresAdapter;
     use crate::models::{
-        AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
-        CreateIndexRequest, DropConstraintRequest, DropIndexRequest,
+        AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
+        ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropConstraintRequest,
+        DropIndexRequest,
     };
 
     #[tokio::test]
@@ -1266,5 +1381,237 @@ mod tests {
         let result = adapter.drop_constraint(&req).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── create_table tests (Sprint 226) ───────────────────────────────
+
+    fn col(name: &str, ty: &str, nullable: bool, default: Option<&str>) -> ColumnDefinition {
+        ColumnDefinition {
+            name: name.to_string(),
+            data_type: ty.to_string(),
+            nullable,
+            default_value: default.map(|s| s.to_string()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_one_column_no_pk() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "events".to_string(),
+            columns: vec![col("id", "integer", true, None)],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."events" ("id" integer)"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_three_column_composite_pk_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "memberships".to_string(),
+            columns: vec![
+                col("user_id", "integer", false, None),
+                col("group_id", "integer", false, None),
+                col("joined_at", "timestamp", true, Some("now()")),
+            ],
+            primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        // Byte-equivalent canonical fixture (RFC-style determinism per
+        // spec Verification Hint #2). Any whitespace / quoting drift
+        // breaks this test.
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."memberships" ("user_id" integer NOT NULL, "group_id" integer NOT NULL, "joined_at" timestamp DEFAULT now(), PRIMARY KEY ("user_id", "group_id"))"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_not_null_with_default() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "audit_log".to_string(),
+            columns: vec![
+                col("id", "bigserial", false, None),
+                col("created_at", "timestamp", false, Some("now()")),
+            ],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."audit_log" ("id" bigserial NOT NULL, "created_at" timestamp NOT NULL DEFAULT now(), PRIMARY KEY ("id"))"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_empty_columns_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "noop".to_string(),
+            columns: vec![],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Table must have at least one column"),
+            "Expected empty-columns error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_pk_references_undeclared_column_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "stale_pk".to_string(),
+            columns: vec![col("id", "integer", false, None)],
+            primary_key: Some(vec!["nonexistent".to_string()]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("not declared"),
+            "Expected PK-undeclared error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_table_name_with_embedded_space_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "foo bar".to_string(),
+            columns: vec![col("id", "integer", false, None)],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        // Validator surfaces "alphanumeric characters and underscores"
+        // when an internal whitespace breaks the body charset rule.
+        assert!(
+            err.contains("alphanumeric") || err.contains("must start"),
+            "Expected identifier-validation error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_column_name_with_embedded_quote_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "tbl".to_string(),
+            columns: vec![col("bad\"col", "text", true, None)],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn create_table_empty_table_name_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "   ".to_string(),
+            columns: vec![col("id", "integer", false, None)],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("must not be empty"),
+            "Expected empty-name error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_empty_data_type_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "tbl".to_string(),
+            columns: vec![col("id", "   ", false, None)],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("non-empty data type"),
+            "Expected empty-type error, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_without_connection_fails_non_preview() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "users".to_string(),
+            columns: vec![col("id", "integer", false, None)],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: false,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_no_pk_field_omits_clause() {
+        // primary_key Some([]) should still omit the PRIMARY KEY clause —
+        // empty pk vector behaves the same as None.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "events".to_string(),
+            columns: vec![col("id", "integer", true, None)],
+            primary_key: Some(vec![]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."events" ("id" integer)"#
+        );
     }
 }

@@ -174,6 +174,34 @@ pub struct DropConstraintRequest {
     pub preview_only: bool,
 }
 
+/// Single column definition for `CREATE TABLE` (Sprint 226).
+///
+/// A new struct rather than reusing `ColumnChange::Add` because Create
+/// does not need the `Modify` / `Drop` enum variants and a flat shape
+/// keeps the request payload simpler for the `CreateTableDialog`. If
+/// `ColumnChange::Add` later diverges (e.g. ALTER-specific defaults),
+/// the two stay decoupled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColumnDefinition {
+    pub name: String,
+    pub data_type: String,
+    pub nullable: bool,
+    pub default_value: Option<String>,
+}
+
+/// Request payload for `CREATE TABLE` (Sprint 226).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateTableRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub name: String,
+    pub columns: Vec<ColumnDefinition>,
+    #[serde(default)]
+    pub primary_key: Option<Vec<String>>,
+    #[serde(default)]
+    pub preview_only: bool,
+}
+
 /// Result returned by schema change operations.
 /// When preview_only is true, `sql` contains the generated SQL.
 /// When preview_only is false, `sql` contains the executed SQL.

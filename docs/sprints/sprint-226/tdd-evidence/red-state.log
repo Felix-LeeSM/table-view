@@ -1,0 +1,117 @@
+Sprint 226 — TDD red-state evidence
+====================================
+
+Date: 2026-05-06.
+Generator: harness Phase 3.
+
+This log captures the ordered "red → green" sequence the contract requires
+(per `docs/PLAN.md:182-186`). The failing-then-passing transitions for each
+new test surface are recorded below.
+
+──────────────────────────────────────────────────────────────────────────
+1. Rust unit tests (cargo test create_table)
+──────────────────────────────────────────────────────────────────────────
+
+Pre-implementation expectation (red):
+
+  - `cargo test --manifest-path src-tauri/Cargo.toml create_table` would
+    have failed at COMPILE step because `CreateTableRequest`,
+    `ColumnDefinition`, `RdbAdapter::create_table`, and
+    `commands::rdb::ddl::create_table` did not yet exist.
+
+  - The 11 unit fixtures inside `src-tauri/src/db/postgres/mutations.rs`
+    (`create_table_preview_one_column_no_pk` …
+     `create_table_without_connection_fails_non_preview`) reference the
+    new types `CreateTableRequest` + `ColumnDefinition` and the new
+    inherent `PostgresAdapter::create_table` method — none compile until
+    the production code exists.
+
+Post-implementation actual (green):
+
+  $ cargo test --manifest-path src-tauri/Cargo.toml create_table 2>&1 | tail -5
+  test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 352 filtered out; finished in 0.00s
+  ... + integration test `tests/schema_integration::test_create_table_and_list` ok 1 passed.
+
+  Composite-PK fixture asserted byte-equivalent to:
+    CREATE TABLE "public"."memberships" ("user_id" integer NOT NULL, "group_id" integer NOT NULL, "joined_at" timestamp DEFAULT now(), PRIMARY KEY ("user_id", "group_id"))
+
+──────────────────────────────────────────────────────────────────────────
+2. Frontend unit tests (vitest CreateTableDialog.test.tsx)
+──────────────────────────────────────────────────────────────────────────
+
+Pre-implementation expectation (red):
+
+  - The test file imports `CreateTableDialog` from `./CreateTableDialog`
+    AND `tauri.createTable` from `@lib/tauri`. Without the production
+    files, `vitest` would report `ENOENT: no such file` for the
+    component import + `Property 'createTable' does not exist` for the
+    tauri import.
+
+  - Test cases like `"opens with exactly one empty column row"` rely on
+    the modal rendering a Schema input + a Column name input + a Column
+    data type input + a "Primary key" header. Before the JSX existed,
+    every `screen.getByLabelText(...)` would throw "Unable to find an
+    element ...".
+
+Post-implementation actual (green):
+
+  $ pnpm vitest run src/components/schema/CreateTableDialog.test.tsx 2>&1 | tail -5
+  Test Files  1 passed (1)
+       Tests  12 passed (12)
+    Start at  15:56:26
+    Duration  1.41s
+
+──────────────────────────────────────────────────────────────────────────
+3. Frontend entry-point tests (vitest SchemaTree.actions.test.tsx)
+──────────────────────────────────────────────────────────────────────────
+
+Pre-implementation expectation (red):
+
+  - The new `[AC-226-05]` cases right-click a schema row, expect
+    `screen.getByText(/Create Table/)` inside the context menu, and then
+    expect `screen.getByLabelText("Schema name")` after click. Before the
+    `rows.tsx` schema-row context menu shipped the "Create Table…" item,
+    `getByText(/Create Table/)` would throw "Unable to find an element
+    with the text matching /Create Table/".
+
+  - The third case (commit-success → loadTables call exactly once)
+    needs `useSchemaTreeActions.handleCreateTable` + the `dialogs.tsx`
+    mount slot + the SchemaTree.tsx wiring. Without those, the menu
+    click would no-op and the test's `loadTables` spy would never see
+    the post-commit call.
+
+Post-implementation actual (green):
+
+  $ pnpm vitest run src/components/schema/SchemaTree.actions.test.tsx 2>&1 | tail -5
+  Test Files  1 passed (1)
+       Tests  34 passed (34)
+    Start at  15:57:51
+    Duration  2.12s
+
+──────────────────────────────────────────────────────────────────────────
+4. Order of work (red→green transitions)
+──────────────────────────────────────────────────────────────────────────
+
+Sequence followed:
+  1. models/schema.rs   : added CreateTableRequest + ColumnDefinition.
+  2. db/traits.rs       : added create_table trait method (compile-fail until impl exists).
+  3. postgres/mutations.rs: implemented PG inherent + 11 unit tests.
+  4. db/postgres.rs     : added trait dispatch (impl RdbAdapter create_table).
+  5. db/tests.rs        : updated 2 stub adapters with create_table no-op.
+  6. commands/meta.rs   : updated 1 StubRdbAdapter with create_table no-op.
+  7. commands/rdb/ddl.rs: added Tauri command.
+  8. lib.rs             : registered handler in invoke_handler!.
+  9. types/schema.ts    : TS mirror.
+ 10. lib/tauri/ddl.ts   : tauri.createTable IPC wrapper.
+ 11. components/schema/CreateTableDialog.tsx: new modal.
+ 12. components/schema/CreateTableDialog.test.tsx: 12 vitest cases.
+ 13. SchemaTree/useSchemaTreeActions.ts: handleCreateTable + state.
+ 14. SchemaTree/dialogs.tsx: CreateTableDialogSlot mount.
+ 15. SchemaTree/rows.tsx: "Create Table…" context-menu item.
+ 16. SchemaTree.tsx: wire ctx + slot.
+ 17. SchemaTree.actions.test.tsx: 3 new entry-point cases.
+
+No `it.skip` / `describe.skip` / `it.todo` / `xit` / `it.only` introduced.
+No `eslint-disable*` lines added in production paths (the existing test
+fixture cast `as any` for `connections` predates this sprint and is
+unchanged).

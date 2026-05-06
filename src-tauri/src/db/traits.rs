@@ -12,8 +12,8 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
-    CreateIndexRequest, DatabaseType, DropConstraintRequest, DropIndexRequest, FilterCondition,
-    FunctionInfo, IndexInfo, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
+    FilterCondition, FunctionInfo, IndexInfo, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::types::{
@@ -168,6 +168,13 @@ pub trait RdbAdapter: DbAdapter {
     fn alter_table<'a>(
         &'a self,
         req: &'a AlterTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
+
+    /// Sprint 226 — `CREATE TABLE` with PG ANSI quoting + identifier
+    /// validation + preview/execute branches (transactional commit).
+    fn create_table<'a>(
+        &'a self,
+        req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn create_index<'a>(

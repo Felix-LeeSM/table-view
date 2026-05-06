@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
+import CreateTableDialog from "../CreateTableDialog";
 
 /**
  * Drop-table confirmation and rename modals for `SchemaTree`. State
@@ -76,6 +77,40 @@ export function DropTableConfirmDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Sprint 226 — `CreateTableDialog` mount slot. The dialog body owns its
+ * form state + lifecycle hook; this thin wrapper threads the SchemaTree
+ * `connectionId` + the selected schema name + the post-commit refresh
+ * callback. Mounted alongside `DropTableConfirmDialog` and
+ * `RenameTableDialog` so SchemaTree's JSX shell stays readable.
+ */
+interface CreateTableDialogSlotProps {
+  connectionId: string;
+  createTableDialog: { schemaName: string } | null;
+  onClose: () => void;
+  onRefresh: (schemaName: string) => Promise<void> | void;
+}
+
+export function CreateTableDialogSlot({
+  connectionId,
+  createTableDialog,
+  onClose,
+  onRefresh,
+}: CreateTableDialogSlotProps) {
+  if (!createTableDialog) return null;
+  return (
+    <CreateTableDialog
+      connectionId={connectionId}
+      schemaName={createTableDialog.schemaName}
+      open
+      onClose={onClose}
+      onRefresh={async () => {
+        await onRefresh(createTableDialog.schemaName);
+      }}
+    />
   );
 }
 

@@ -3,6 +3,7 @@ import type {
   AddConstraintRequest,
   AlterTableRequest,
   CreateIndexRequest,
+  CreateTableRequest,
   DropIndexRequest,
   DropConstraintRequest,
   SchemaChangeResult,
@@ -31,6 +32,12 @@ export async function alterTable(
   request: AlterTableRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("alter_table", { request });
+}
+
+export async function createTable(
+  request: CreateTableRequest,
+): Promise<SchemaChangeResult> {
+  return invoke<SchemaChangeResult>("create_table", { request });
 }
 
 export async function createIndex(

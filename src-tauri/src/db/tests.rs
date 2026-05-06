@@ -10,8 +10,8 @@ use super::*;
 use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
-    CreateIndexRequest, DatabaseType, DropConstraintRequest, DropIndexRequest, IndexInfo,
-    SchemaChangeResult, SchemaInfo, TableData, TableInfo,
+    CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
+    IndexInfo, SchemaChangeResult, SchemaInfo, TableData, TableInfo,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -321,6 +321,12 @@ impl RdbAdapter for FakeCancellableRdb {
     fn alter_table<'a>(
         &'a self,
         _req: &'a AlterTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn create_table<'a>(
+        &'a self,
+        _req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
@@ -790,6 +796,12 @@ impl RdbAdapter for FastFakeRdb {
     fn alter_table<'a>(
         &'a self,
         _req: &'a AlterTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn create_table<'a>(
+        &'a self,
+        _req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }

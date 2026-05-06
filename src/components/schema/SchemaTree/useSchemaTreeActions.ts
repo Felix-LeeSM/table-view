@@ -58,6 +58,10 @@ export interface SchemaTreeActions {
   setRenameError: (value: string | null) => void;
   isOperating: boolean;
   renameInputRef: RefObject<HTMLInputElement | null>;
+  // Sprint 226 — create-table modal state. Schema name pre-fills the
+  // read-only field; null state keeps the modal closed.
+  createTableDialog: { schemaName: string } | null;
+  setCreateTableDialog: (state: { schemaName: string } | null) => void;
 
   // Schema cache (loading / refresh)
   schemas: ReturnType<typeof useSchemaCache>["schemas"];
@@ -79,6 +83,10 @@ export interface SchemaTreeActions {
   handleViewClick: (viewName: string, schemaName: string) => void;
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
+  // Sprint 226 — opens `CreateTableDialog` pre-filled with the
+  // right-clicked schema name. Commit-success refreshes the schema's
+  // table list via `refreshSchema(schemaName)`.
+  handleCreateTable: (schemaName: string) => void;
 }
 
 export function useSchemaTreeActions({
@@ -131,6 +139,10 @@ export function useSchemaTreeActions({
   const [isOperating, setIsOperating] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
+  // Sprint 226 — Create Table modal state. Modal is closed when null.
+  const [createTableDialog, setCreateTableDialog] = useState<{
+    schemaName: string;
+  } | null>(null);
 
   const handleExpandSchema = useCallback(
     async (schemaName: string) => {
@@ -384,6 +396,15 @@ export function useSchemaTreeActions({
     [connectionId, addQueryTab, markConnectionUsed, updateQuerySql, functions],
   );
 
+  // Sprint 226 — schema-row context menu entry-point. Opens
+  // `CreateTableDialog` pre-filled with the right-clicked schema name.
+  // The modal owns the form state; commit-success calls `refreshSchema`
+  // (passed through `dialogs.tsx`) so the new table appears in the tree
+  // without manual reload.
+  const handleCreateTable = useCallback((schemaName: string) => {
+    setCreateTableDialog({ schemaName });
+  }, []);
+
   const toggleCategory = useCallback(
     (schemaName: string, categoryKey: CategoryKey) => {
       setExpandedCategories((prev) => {
@@ -442,6 +463,8 @@ export function useSchemaTreeActions({
     setRenameError,
     isOperating,
     renameInputRef,
+    createTableDialog,
+    setCreateTableDialog,
 
     // Schema cache
     schemas,
@@ -463,5 +486,6 @@ export function useSchemaTreeActions({
     handleViewClick,
     handleOpenViewStructure,
     handleFunctionClick,
+    handleCreateTable,
   };
 }
