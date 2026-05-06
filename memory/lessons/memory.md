@@ -13,6 +13,7 @@ updated: 2026-05-06
 - [2026-04-29 · Tauri hidden workspace의 boot-time hydration은 빈 데이터를 읽는다 — window focus에서 re-hydrate 해야 한다](boot-windows/2026-04-29-cross-window-boot-hydration-race/memory.md)
 - [2026-04-30 · Cold-boot 측정은 tracing::info! phase markers + Tauri 2 setup/on_page_load hooks가 가장 가벼운 instrumentation](boot-windows/2026-04-30-cold-boot-tracing-instrumentation/memory.md)
 - [2026-04-30 · Tauri 2 다중 WKWebView spawn은 OS-level parallel — 한 윈도우 lazy화로는 wall-clock을 크게 못 줄인다](boot-windows/2026-04-30-wkwebview-spawn-os-parallel/memory.md)
+- [2026-05-06 · webview-distributed state 의 broadcast/persist 비대칭 — store side-effect 추출은 origin ownership 분류 후 진입; e2e dead 시 invariant 변동 sprint deferred](boot-windows/2026-05-06-broadcast-persist-asymmetry-store-extraction-limit/memory.md)
 
 ## workspace-shell — toolbar / sidebar / tree 연결
 
