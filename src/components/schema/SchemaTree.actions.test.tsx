@@ -1132,6 +1132,63 @@ describe("SchemaTree — actions", () => {
     createTableSpy.mockRestore();
   });
 
+  // =========================================================================
+  // Sprint 226 polish — Tables 카테고리 헤더의 '+' 버튼 entry-point
+  // =========================================================================
+  //
+  // Date: 2026-05-06.
+  //
+  // 사용자 UX 피드백 (2026-05-06): schema row 우클릭만으로는 발견성 0.
+  // Tables 카테고리 헤더 옆 '+' (hover-affordance) 추가. schema row 우클릭
+  // entry-point 는 그대로 유지 (power-user shortcut).
+  //
+  // - '+' 버튼은 Tables 카테고리에만 (Views/Functions 는 별도 sprint 후보).
+  // - aria-label = "Create table in <schemaName>" — schema row 우클릭의
+  //   "Create Table…" item 과 동일한 dialog 를 연다.
+  it("Tables 카테고리 헤더의 '+' 버튼 click → CreateTableDialog 열림", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // schema 가 store 에 있으면 자동 expand → Tables row 즉시 등장
+    // (`SchemaTree.expand.test.tsx` AC-CAT-01 패턴 답습).
+    const plusButton = screen.getByLabelText("Create table in public");
+    await act(async () => {
+      fireEvent.click(plusButton);
+    });
+
+    // Modal 등장.
+    expect(screen.getByText("Create Table")).toBeInTheDocument();
+    const schemaInput = screen.getByLabelText(
+      "Schema name",
+    ) as HTMLInputElement;
+    expect(schemaInput.value).toBe("public");
+  });
+
+  it("Views/Functions 카테고리에는 '+' 버튼 없음 — Tables 한정", async () => {
+    setSchemaStoreState({
+      schemas: { conn1: [{ name: "public" }] },
+      tables: { "conn1:public": [] },
+    });
+
+    await act(async () => {
+      render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Tables / Views / Functions 카테고리 row 모두 노출.
+    expect(screen.getByLabelText("Tables in public")).toBeInTheDocument();
+    expect(screen.getByLabelText("Views in public")).toBeInTheDocument();
+
+    // '+' 버튼은 Tables 한정 — schema 당 1개.
+    const plusButtons = screen.queryAllByLabelText(/^Create table in /);
+    expect(plusButtons).toHaveLength(1);
+  });
+
   it("[AC-191-03-2] renameTable rejection surfaces toast error", async () => {
     const toastMod = await import("@/lib/toast");
     const errorSpy = vi

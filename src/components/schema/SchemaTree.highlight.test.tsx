@@ -167,7 +167,10 @@ describe("SchemaTree — highlight", () => {
       fireEvent.click(viewsCategory);
     });
 
-    expect(viewsCategory).toHaveClass("bg-muted");
+    // Sprint 226 polish (2026-05-06): selected highlight 가 button 자체가 아닌
+    // wrapper div 로 이동 (Tables 옆 '+' 버튼 + itemCount badge 가 button 밖
+    // sibling 으로 분리되면서 row 전체 hover/selected 색은 wrapper 가 담당).
+    expect(viewsCategory.parentElement).toHaveClass("bg-muted");
   });
 
   // AC-SEL-03: Clicking a table selects it (and deselects previous)
@@ -598,15 +601,20 @@ describe("SchemaTree — highlight", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Check count badges
-    const tablesCat = screen.getByLabelText("Tables in public");
-    const viewsCat = screen.getByLabelText("Views in public");
-    const functionsCat = screen.getByLabelText("Functions in public");
-    const proceduresCat = screen.getByLabelText("Procedures in public");
+    // Sprint 226 polish (2026-05-06): itemCount badge 가 button 밖
+    // sibling div 로 이동 — row 전체 (wrapper) textContent 검사.
+    const tablesRow = screen.getByLabelText("Tables in public").parentElement!;
+    const viewsRow = screen.getByLabelText("Views in public").parentElement!;
+    const functionsRow = screen.getByLabelText(
+      "Functions in public",
+    ).parentElement!;
+    const proceduresRow = screen.getByLabelText(
+      "Procedures in public",
+    ).parentElement!;
 
-    expect(tablesCat.textContent).toContain("1");
-    expect(viewsCat.textContent).toContain("2");
-    expect(functionsCat.textContent).toContain("1");
-    expect(proceduresCat.textContent).toContain("1");
+    expect(tablesRow.textContent).toContain("1");
+    expect(viewsRow.textContent).toContain("2");
+    expect(functionsRow.textContent).toContain("1");
+    expect(proceduresRow.textContent).toContain("1");
   });
 });

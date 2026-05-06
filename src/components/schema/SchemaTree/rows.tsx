@@ -126,37 +126,60 @@ export function renderCategoryRow(
   ctx: SchemaTreeRowsContext,
 ) {
   const cat = row.category;
+  const isTables = cat.key === "tables";
   return (
-    <button
-      type="button"
-      className={`flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 pl-6 text-2xs font-medium hover:bg-muted ${
-        row.isSelected
-          ? "bg-muted text-foreground"
-          : "text-secondary-foreground"
-      }`}
-      aria-expanded={row.isExpanded}
-      aria-label={`${cat.label} in ${row.schemaName}`}
-      onClick={() => ctx.toggleCategory(row.schemaName, cat.key)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          ctx.toggleCategory(row.schemaName, cat.key);
-        }
-      }}
+    <div
+      className={cn(
+        "flex w-full items-center hover:bg-muted",
+        row.isSelected && "bg-muted",
+      )}
     >
-      {row.isExpanded ? (
-        <ChevronDown size={11} className="shrink-0" />
-      ) : (
-        <ChevronRight size={11} className="shrink-0" />
-      )}
-      <cat.Icon size={12} className="shrink-0 text-muted-foreground" />
-      <span>{cat.label}</span>
-      {row.itemCount > 0 && (
-        <span className="ml-auto text-3xs text-muted-foreground">
-          {row.itemCount}
-        </span>
-      )}
-    </button>
+      <button
+        type="button"
+        className={cn(
+          "flex flex-1 cursor-pointer items-center gap-1.5 py-0.5 pr-1 pl-6 text-2xs font-medium",
+          row.isSelected ? "text-foreground" : "text-secondary-foreground",
+        )}
+        aria-expanded={row.isExpanded}
+        aria-label={`${cat.label} in ${row.schemaName}`}
+        onClick={() => ctx.toggleCategory(row.schemaName, cat.key)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            ctx.toggleCategory(row.schemaName, cat.key);
+          }
+        }}
+      >
+        {row.isExpanded ? (
+          <ChevronDown size={11} className="shrink-0" />
+        ) : (
+          <ChevronRight size={11} className="shrink-0" />
+        )}
+        <cat.Icon size={12} className="shrink-0 text-muted-foreground" />
+        <span>{cat.label}</span>
+      </button>
+      <div className="ml-auto flex shrink-0 items-center gap-1 pr-2">
+        {isTables && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              ctx.handleCreateTable(row.schemaName);
+            }}
+            className="inline-flex h-4 w-4 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            aria-label={`Create table in ${row.schemaName}`}
+            title="Create Table"
+          >
+            <Plus size={12} />
+          </button>
+        )}
+        {row.itemCount > 0 && (
+          <span className="text-3xs text-muted-foreground">
+            {row.itemCount}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
