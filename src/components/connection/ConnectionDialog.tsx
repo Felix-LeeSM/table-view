@@ -54,6 +54,7 @@ import type { ConnectionConfig, ConnectionDraft } from "@/types/connection";
 import { DATABASE_DEFAULTS } from "@/types/connection";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useConnectionMutations } from "@/hooks/useConnectionMutations";
 import { X } from "lucide-react";
 import {
   Dialog,
@@ -146,8 +147,7 @@ export default function ConnectionDialog({
       ? testResult.message
       : undefined;
 
-  const addConnection = useConnectionStore((s) => s.addConnection);
-  const updateConnection = useConnectionStore((s) => s.updateConnection);
+  const { addConnection, updateConnection } = useConnectionMutations();
   const testConnection = useConnectionStore((s) => s.testConnection);
 
   const handleTest = async () => {

@@ -8,6 +8,7 @@ import { Button } from "@components/ui/button";
 import { ENVIRONMENT_META } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
+import { useConnectionMutations } from "@/hooks/useConnectionMutations";
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -106,7 +107,7 @@ export default function ConnectionItem({
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { connect: connectToDatabase, disconnect: disconnectFromDatabase } =
     useConnectionLifecycle();
-  const removeConnection = useConnectionStore((s) => s.removeConnection);
+  const { removeConnection } = useConnectionMutations();
   const groups = useConnectionStore((s) => s.groups);
   const moveConnectionToGroup = useConnectionStore(
     (s) => s.moveConnectionToGroup,

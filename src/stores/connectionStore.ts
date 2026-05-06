@@ -7,7 +7,6 @@ import type {
   ConnectionStatus,
 } from "@/types/connection";
 import * as tauri from "@lib/tauri";
-import { toast } from "@lib/toast";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import {
@@ -127,8 +126,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set((state) => ({
       connections: [...state.connections, saved],
     }));
-    // Toast lives outside the dialog portal so it survives `onClose()`.
-    toast.success(`Connection "${saved.name}" added.`);
     return saved;
   },
 
@@ -139,14 +136,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         c.id === saved.id ? saved : c,
       ),
     }));
-    toast.success(`Connection "${saved.name}" updated.`);
   },
 
   removeConnection: async (id) => {
-    // Resolve the display name before mutating state so the toast can name
-    // the connection the user just removed (UX nicety — referring to "that
-    // connection" is unhelpful when the sidebar entry is already gone).
-    const removed = get().connections.find((c) => c.id === id);
     const statuses = get().activeStatuses;
     const status = statuses[id];
     if (status?.type === "connected") {
@@ -167,9 +159,6 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         focusedConnId: newFocused,
       };
     });
-    toast.success(
-      removed ? `Connection "${removed.name}" removed.` : "Connection removed.",
-    );
   },
 
   testConnection: async (draft, existingId = null) => {
