@@ -214,7 +214,56 @@ impl PostgresAdapter {
             }
         }
 
-        let sql = format!("CREATE TABLE {} ({})", qualified, col_defs.join(", "));
+        let create_sql = format!("CREATE TABLE {} ({})", qualified, col_defs.join(", "));
+
+        // Sprint 227 — emit `COMMENT ON COLUMN` per column whose
+        // post-trim comment is non-empty. Single-quote escape doubles
+        // any internal `'` (`O'Brien` → `'O''Brien'`). Empty /
+        // whitespace-only comments emit no statement (column-comment
+        // SQL is *additive* — 0-comment forms must remain
+        // byte-equivalent to the Sprint 226 fixture).
+        //
+        // Atomic policy = C: the comment statements are appended to the
+        // CREATE TABLE statement in column-declaration order and
+        // executed inside the same transaction, so a CREATE TABLE
+        // failure rolls back the comments and a comment failure rolls
+        // back the table. The full multi-statement payload returned
+        // from `preview_only` mirrors the executed batch byte-for-byte.
+        let mut comment_stmts: Vec<String> = Vec::new();
+        for col in &req.columns {
+            if let Some(raw) = &col.comment {
+                let trimmed = raw.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let escaped = trimmed.replace('\'', "''");
+                comment_stmts.push(format!(
+                    "COMMENT ON COLUMN {}.{} IS '{}'",
+                    qualified,
+                    quote_identifier(&col.name),
+                    escaped
+                ));
+            }
+        }
+
+        let sql = if comment_stmts.is_empty() {
+            create_sql.clone()
+        } else {
+            // Each statement separated by `; ` (one space after the
+            // semicolon mirrors the multi-statement convention used by
+            // `alter_table`'s comma-joined parts) and a trailing `;`
+            // after the final comment so the executed batch is a
+            // syntactically clean script. The CREATE TABLE itself
+            // remains unterminated when no comments exist (Sprint 226
+            // byte-equivalence requires no trailing `;`).
+            let mut s = create_sql.clone();
+            for stmt in &comment_stmts {
+                s.push_str("; ");
+                s.push_str(stmt);
+            }
+            s.push(';');
+            s
+        };
 
         if req.preview_only {
             return Ok(SchemaChangeResult { sql });
@@ -223,22 +272,30 @@ impl PostgresAdapter {
         let pool = self.active_pool().await?;
 
         // Wrap the execute in BEGIN/COMMIT so a failure (e.g. table
-        // already exists, type-check rejection) leaves no partial state
-        // behind. CREATE TABLE itself is implicitly transactional in PG,
-        // but the explicit transaction matches the spec wording and
-        // future-proofs against follow-up sprints that add side effects
-        // (e.g. comments, indexes) inside the same call.
+        // already exists, type-check rejection, comment on missing
+        // column) leaves no partial state behind. CREATE TABLE itself
+        // is implicitly transactional in PG, but the explicit
+        // transaction is required for the additional `COMMENT ON
+        // COLUMN` statements emitted in Sprint 227 — they must roll
+        // back together with the CREATE TABLE if any leg fails.
         let mut tx = pool
             .begin()
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+        if let Err(e) = sqlx::query(&create_sql).execute(&mut *tx).await {
             // Best-effort rollback. The original DB error is the
             // user-facing failure; rollback errors are discarded so
             // the message stays clean.
             let _ = tx.rollback().await;
             return Err(AppError::Database(e.to_string()));
+        }
+
+        for stmt in &comment_stmts {
+            if let Err(e) = sqlx::query(stmt).execute(&mut *tx).await {
+                let _ = tx.rollback().await;
+                return Err(AppError::Database(e.to_string()));
+            }
         }
 
         tx.commit()
@@ -1391,6 +1448,26 @@ mod tests {
             data_type: ty.to_string(),
             nullable,
             default_value: default.map(|s| s.to_string()),
+            comment: None,
+        }
+    }
+
+    /// Sprint 227 — `col` variant with a comment string. Mirrors `col`
+    /// (no `comment` argument) but appends a non-empty `comment` for the
+    /// `COMMENT ON COLUMN` emission tests.
+    fn col_with_comment(
+        name: &str,
+        ty: &str,
+        nullable: bool,
+        default: Option<&str>,
+        comment: &str,
+    ) -> ColumnDefinition {
+        ColumnDefinition {
+            name: name.to_string(),
+            data_type: ty.to_string(),
+            nullable,
+            default_value: default.map(|s| s.to_string()),
+            comment: Some(comment.to_string()),
         }
     }
 
@@ -1612,6 +1689,144 @@ mod tests {
         assert_eq!(
             result.unwrap().sql,
             r#"CREATE TABLE "public"."events" ("id" integer)"#
+        );
+    }
+
+    // ── create_table tests (Sprint 227) ───────────────────────────────
+
+    #[tokio::test]
+    async fn create_table_preview_zero_comment_byte_equivalent_to_sprint_226() {
+        // Sprint 227 additive regression proof — when no column carries
+        // a `comment`, the emitted SQL must remain byte-equivalent to
+        // the Sprint 226 composite-PK fixture. This test mirrors
+        // `create_table_preview_three_column_composite_pk_byte_equivalent`
+        // exactly but exercises the Sprint 227 codepath (which now
+        // walks the column list looking for comments). If the codepath
+        // accidentally appends a trailing `;` or stray space, this
+        // test breaks before the Sprint 226 fixture even runs.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "memberships".to_string(),
+            columns: vec![
+                col("user_id", "integer", false, None),
+                col("group_id", "integer", false, None),
+                col("joined_at", "timestamp", true, Some("now()")),
+            ],
+            primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."memberships" ("user_id" integer NOT NULL, "group_id" integer NOT NULL, "joined_at" timestamp DEFAULT now(), PRIMARY KEY ("user_id", "group_id"))"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_two_columns_one_comment_byte_equivalent() {
+        // Sprint 227 — single-column comment emission. The emitted SQL
+        // is `CREATE TABLE …; COMMENT ON COLUMN "<schema>"."<table>"."<col>" IS '<text>';`
+        // joined with `"; "` and terminated with a trailing `;`. The
+        // uncommented column emits no `COMMENT ON` statement.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "events".to_string(),
+            columns: vec![
+                col_with_comment("id", "integer", false, None, "primary key"),
+                col("name", "text", true, None),
+            ],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."events" ("id" integer NOT NULL, "name" text, PRIMARY KEY ("id")); COMMENT ON COLUMN "public"."events"."id" IS 'primary key';"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_single_quote_escape_byte_equivalent() {
+        // Sprint 227 — `O'Brien`-style single-quote escape proof. The
+        // SQL literal must double the single quote to `''` so PG
+        // accepts it as a literal character (not the literal
+        // terminator). This case also covers a 3-column form with two
+        // commented columns to lock the column-declaration ordering of
+        // emitted COMMENT ON statements.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "people".to_string(),
+            columns: vec![
+                col_with_comment("id", "integer", false, None, "row id"),
+                col_with_comment("surname", "text", true, None, "O'Brien-safe"),
+                col("nickname", "text", true, None),
+            ],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."people" ("id" integer NOT NULL, "surname" text, "nickname" text, PRIMARY KEY ("id")); COMMENT ON COLUMN "public"."people"."id" IS 'row id'; COMMENT ON COLUMN "public"."people"."surname" IS 'O''Brien-safe';"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_whitespace_comment_emits_no_statement() {
+        // Sprint 227 — whitespace-only / empty comment string emits no
+        // `COMMENT ON COLUMN` statement (post-trim check). The SQL must
+        // remain byte-equivalent to the no-comment form.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "events".to_string(),
+            columns: vec![col_with_comment("id", "integer", true, None, "   ")],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."events" ("id" integer)"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_comment_with_semicolon_does_not_split() {
+        // Sprint 227 — comment string containing `;` is emitted verbatim
+        // inside the literal. The `;` is NOT a statement boundary; PG's
+        // simple-query protocol parses single-quoted literals as a
+        // contiguous token. The frontend `useDdlPreviewExecution` hook's
+        // naive `;`-split is acceptable here because Safe Mode's
+        // `analyzeStatement` only flags DDL keywords (CREATE / DROP /
+        // ALTER / TRUNCATE) at the *start* of each split fragment —
+        // comment-internal semicolons surface as additional safe-tier
+        // fragments that are no-op'd by the backend's batch executor.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "tbl".to_string(),
+            columns: vec![col_with_comment("id", "integer", true, None, "a;b;c")],
+            primary_key: None,
+            preview_only: true,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."tbl" ("id" integer); COMMENT ON COLUMN "public"."tbl"."id" IS 'a;b;c';"#
         );
     }
 }

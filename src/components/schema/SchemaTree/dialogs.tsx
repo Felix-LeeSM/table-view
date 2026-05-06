@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useMemo, type RefObject } from "react";
 import { Button } from "@components/ui/button";
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
+import { useSchemaStore } from "@stores/schemaStore";
 import CreateTableDialog from "../CreateTableDialog";
 
 /**
@@ -100,11 +101,27 @@ export function CreateTableDialogSlot({
   onClose,
   onRefresh,
 }: CreateTableDialogSlotProps) {
+  // Sprint 227 — populate the modal's Target schema dropdown from the
+  // window-local schema store. The store key shape is
+  // `schemas[connectionId] = SchemaInfo[]`. When the slot mounts
+  // before the store has loaded (rare race), the prop is omitted and
+  // the modal falls back to the right-clicked schema name.
+  //
+  // Select the *raw* `SchemaInfo[]` reference directly so the Zustand
+  // selector returns a stable reference across renders (mapping
+  // inline would create a new array each render and trip
+  // `useSyncExternalStore`'s "Maximum update depth exceeded" guard).
+  const schemaInfos = useSchemaStore((s) => s.schemas[connectionId]);
+  const availableSchemaNames = useMemo(
+    () => (schemaInfos ?? []).map((info) => info.name),
+    [schemaInfos],
+  );
   if (!createTableDialog) return null;
   return (
     <CreateTableDialog
       connectionId={connectionId}
       schemaName={createTableDialog.schemaName}
+      availableSchemas={availableSchemaNames}
       open
       onClose={onClose}
       onRefresh={async () => {

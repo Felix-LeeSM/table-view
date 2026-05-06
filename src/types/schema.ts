@@ -196,6 +196,14 @@ export interface ColumnDefinition {
   data_type: string;
   nullable: boolean;
   default_value: string | null;
+  /**
+   * Sprint 227 — optional column comment. When `undefined` (or empty
+   * after trim) the backend emits no `COMMENT ON COLUMN`. When set,
+   * single quotes are doubled (`O'Brien` → `'O''Brien'`) inside the
+   * SQL literal and the statement is appended to the CREATE TABLE
+   * batch in column-declaration order.
+   */
+  comment?: string;
 }
 
 export interface CreateTableRequest {

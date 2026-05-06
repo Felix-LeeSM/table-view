@@ -1,0 +1,122 @@
+# Sprint 227 TDD red-state log
+
+Date: 2026-05-06.
+
+## Process
+
+Generator captured the red→green TDD trajectory by writing the
+backend Rust fixtures + frontend vitest cases first, then making the
+implementation changes pass. The intermediate "red" output below
+records the canonical failure modes that drove each implementation
+decision.
+
+## Phase 1 — Rust unit fixtures (RED)
+
+Goal: prove the COMMENT ON COLUMN emission contract before extending
+`create_table` to emit the new statements.
+
+After authoring the new fixtures (without modifying mutations.rs):
+
+    cargo test --manifest-path src-tauri/Cargo.toml create_table
+
+    test result: FAILED. 5 newly-added cases in
+    `db::postgres::mutations::tests::create_table_*` failed because
+    the SQL builder still produced the Sprint 226 single-statement
+    `CREATE TABLE` text without any `COMMENT ON COLUMN` suffix:
+
+      create_table_preview_two_columns_one_comment_byte_equivalent
+      create_table_preview_single_quote_escape_byte_equivalent
+      create_table_preview_whitespace_comment_emits_no_statement
+      create_table_preview_comment_with_semicolon_does_not_split
+      create_table_preview_zero_comment_byte_equivalent_to_sprint_226
+
+    The Sprint 226 fixture
+    `create_table_preview_three_column_composite_pk_byte_equivalent`
+    continued to PASS (regression-locked).
+
+After extending `create_table` to walk the column list and append
+`COMMENT ON COLUMN "<schema>"."<table>"."<col>" IS '<escaped>';` per
+non-empty comment, all 16 `create_table_*` cases passed (Sprint 226's
+11 + Sprint 227's 5).
+
+## Phase 2 — vitest CreateTableDialog suite (RED)
+
+Goal: prove the AC-227-01..08 surface (tabs / schema dropdown /
+combobox / comment input / inline preview pane / Keys tab PK / footer
+parity / Sprint 226 carry-over).
+
+Initial run after writing AC-227 cases against the Sprint 226 modal
+body (no changes):
+
+    pnpm vitest run src/components/schema/CreateTableDialog.test.tsx
+
+    Tests  ~10 failed (~13 passed). Failures included:
+      - `getAllByRole("tab")` length expected 4, got 0 (modal had no
+        Tabs primitive yet).
+      - `screen.getByRole("combobox", { name: "Target schema" })`
+        threw `Unable to find element` (no schema dropdown header).
+      - `within(columnsPanel).getByRole("combobox", { name: "Column
+        data type" })` threw (the type input was a plain `<input>`).
+      - `Column comment` aria-label not found.
+      - `Show DDL` button not found (footer still had `Preview SQL`).
+      - `previewPane.textContent` did not contain `COMMENT ON`
+        (modal-on-modal `SqlPreviewDialog` rendered text instead).
+      - Sprint 226 IPC sequence test failed because the new flow runs
+        through `Show DDL` → `Execute` (not `Preview SQL` → `Execute`).
+
+After redesigning `CreateTableDialog.tsx` (Tabs + Target schema
+dropdown + `CreateTableTypeCombobox` + comment input + inline
+collapsible preview pane + footer Cancel/Execute) and migrating
+Sprint 226 cases to tab-aware queries, all 23 cases passed.
+
+## Phase 3 — sibling editor freeze verification
+
+Goal: prove `ColumnsEditor` / `IndexesEditor` / `ConstraintsEditor` /
+`SqlPreviewDialog` test suites still pass with zero diff to the
+sibling source files.
+
+    pnpm vitest run src/components/structure/{ColumnsEditor,IndexesEditor,
+                                              ConstraintsEditor,SqlPreviewDialog}.test.tsx
+
+    Test Files  4 passed (4)
+    Tests  26 passed (26)
+
+    git diff --stat src/components/structure/SqlPreviewDialog.tsx
+    git diff --stat src/components/structure/useDdlPreviewExecution.ts
+        (zero changes)
+
+## Phase 4 — SchemaTree.actions entry-point regression
+
+Goal: keep AC-226-05 entry-point tests passing under the new tab-aware
+modal surface (mechanical query-selector adaptation only — no
+assertion text-string changes).
+
+Initial run after Phase 2 changes:
+
+    pnpm vitest run src/components/schema/SchemaTree.actions.test.tsx
+
+    Tests  3 failed | 33 passed (36).
+
+    Failures: AC-226-05 entry-point cases asserted the (now removed)
+    `getByLabelText("Schema name")` and `getByRole("button", {
+    name: /Preview SQL/i })`. The Sprint 227 modal no longer renders
+    those — it surfaces a `Target schema` Select trigger and a
+    `Show DDL` toggle button.
+
+Mechanical migration:
+  - `getByLabelText("Schema name")` →
+    `getByRole("combobox", { name: "Target schema" })` + textContent
+    contains assertion.
+  - `getByRole("button", { name: /Preview SQL/i })` →
+    `getByRole("button", { name: "Show DDL" })`.
+  - All other assertion text strings (`Create Table` heading,
+    Sprint 226 IPC sequence, `loadTables` post-commit refresh count)
+    preserved verbatim.
+
+After mechanical migration:
+
+    Tests  36 passed (36).
+
+## Phase 5 — Verification 4-set + clippy
+
+See findings.md for the full pass/fail matrix.

@@ -1039,14 +1039,15 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText(/Create Table/));
     });
 
-    // Modal heading is rendered + the read-only Schema input shows the
-    // right-clicked schema name.
+    // Modal heading is rendered + the Target schema dropdown shows
+    // the right-clicked schema name as the default selection
+    // (Sprint 227 mechanical migration: Sprint 226's read-only
+    // `Schema name` input became a `Target schema` Select primitive).
     expect(screen.getByText("Create Table")).toBeInTheDocument();
-    const schemaInput = screen.getByLabelText(
-      "Schema name",
-    ) as HTMLInputElement;
-    expect(schemaInput.value).toBe("public");
-    expect(schemaInput.readOnly).toBe(true);
+    const schemaTrigger = screen.getByRole("combobox", {
+      name: "Target schema",
+    });
+    expect(schemaTrigger.textContent).toContain("public");
   });
 
   it("[AC-226-05] commit-success calls refreshSchema('public') exactly once", async () => {
@@ -1083,7 +1084,10 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText(/Create Table/));
     });
 
-    // Fill the form.
+    // Fill the form. Sprint 227 mechanical migration: column-row
+    // inputs live inside the Columns tab panel; the Sprint 226
+    // text-string assertions (`"Table name"`, `"Column name"`,
+    // `"Column data type"`) are preserved verbatim.
     await act(async () => {
       fireEvent.change(screen.getByLabelText("Table name"), {
         target: { value: "new_t" },
@@ -1096,9 +1100,11 @@ describe("SchemaTree — actions", () => {
       });
     });
 
-    // Preview SQL — first call (preview_only: true).
+    // Preview SQL — first call (preview_only: true). Sprint 227:
+    // Sprint 226's "Preview SQL" button is replaced by the inline
+    // "Show DDL" toggle which fires the same `preview_only:true` IPC.
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /Preview SQL/i }));
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     });
     await waitFor(() =>
       expect(
@@ -1162,12 +1168,15 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(plusButton);
     });
 
-    // Modal 등장.
+    // Modal 등장. Sprint 227 mechanical migration: Sprint 226's
+    // read-only `Schema name` input became a `Target schema`
+    // Select primitive — assert the dropdown trigger surfaces the
+    // pre-filled schema as the default.
     expect(screen.getByText("Create Table")).toBeInTheDocument();
-    const schemaInput = screen.getByLabelText(
-      "Schema name",
-    ) as HTMLInputElement;
-    expect(schemaInput.value).toBe("public");
+    const schemaTrigger = screen.getByRole("combobox", {
+      name: "Target schema",
+    });
+    expect(schemaTrigger.textContent).toContain("public");
   });
 
   it("Views/Functions 카테고리에는 '+' 버튼 없음 — Tables 한정", async () => {

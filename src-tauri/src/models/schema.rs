@@ -181,12 +181,22 @@ pub struct DropConstraintRequest {
 /// keeps the request payload simpler for the `CreateTableDialog`. If
 /// `ColumnChange::Add` later diverges (e.g. ALTER-specific defaults),
 /// the two stay decoupled.
+///
+/// Sprint 227 adds optional `comment` (`#[serde(default)]` for
+/// back-compat with Sprint 226 callers that omit the field — those
+/// payloads deserialize to `None`). When `Some(...)` and the trimmed
+/// value is non-empty, the PG `create_table` impl emits a
+/// `COMMENT ON COLUMN "<schema>"."<table>"."<col>" IS '<escaped>';`
+/// statement inside the same transaction (atomic policy = C,
+/// partial-atomic).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ColumnDefinition {
     pub name: String,
     pub data_type: String,
     pub nullable: bool,
     pub default_value: Option<String>,
+    #[serde(default)]
+    pub comment: Option<String>,
 }
 
 /// Request payload for `CREATE TABLE` (Sprint 226).
