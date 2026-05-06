@@ -127,8 +127,9 @@ AC 세분화. 후속 항목은 발견에 따라 재배치 가능.
 | 8 | **216** ✓ | refactor | P11 step 1 (SchemaTree.test split) | `SchemaTree.test.tsx` (2891 / 104 cases) → 6 axis test (lifecycle 11 / expand 28 / refresh 6 / search 10 / actions 31 / highlight 18) + `__tests__/schemaTreeTestHelpers.ts` (51, 5 mock + 2 helper). entry 제거, 사전 5 axis + sub-file + sibling 모두 변경 0. evaluator 10/10. **사용자 의도 P10 → P11 swap**: 사용자 hooks/lib 작업 진행 중 P10 risk 회피. |
 | 9 | **218** ✓ | refactor | P11 step 2 (QueryTab.test split) | `QueryTab.test.tsx` (2308 / 80 cases) → 6 axis test (lifecycle 8 / toolbar 5 / execution 17 / history 16 / dialect 11 / document 23) + `__tests__/queryTabTestHelpers.ts` (12 named export = 5 mock + `mockEditorProps` + 3 fixture builder + 2 fixture constant + `resetQueryTabStores`). entry 제거. Sprint 188 nested describe 옵션 B 보존. evaluator 9/9/10/9. |
 | 10 | **220** ✓ | refactor | P11 step 3 (StructurePanel.test split) | `StructurePanel.test.tsx` (2156 / 84 cases) → 4 axis test (overview 28 / columns 26 / indexes 16 / constraints 14) + `__tests__/structurePanelTestHelpers.tsx` (9 named export = 3 mock + 3 fixture + 2 helper + 1 reset). entry 제거. Sprint 179 nested describe 옵션 B 보존. vi.mock factory 0 / vi.spyOn 5 helper 안 통합. evaluator 9/9/10/9. |
-| 11 | 221 | refactor | P11 step 4-5 | 잔여 mega test 2건 axis split — `tabStore.test.ts` (2234) / `DataGrid.test.tsx` (1906). |
-| 12 | 219 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. **사용자 hooks/lib 작업 안정 후 진입**. |
+| 11 | **221** ✓ | refactor | P11 step 4 (tabStore.test split) | `tabStore.test.ts` (2234 / 102 cases) → 6 axis test (lifecycle 7 / query 20 / preview 19 / persistence 13 / sort 19 / lifecycle-actions 24) + `__tests__/tabStoreTestHelpers.ts` (7 named export, payload-builder pattern). entry 제거. Sprint 195 doubly-nested describe 옵션 B 보존. vi.mock 0 / vi.spyOn 0 사전 동일. helper type-only import (lint rule 회피). evaluator 9/9/10/9. |
+| 12 | 222 | refactor | P11 step 5 | 잔여 mega test 1건 axis split — `DataGrid.test.tsx` (1906). |
+| 13 | 219 | refactor | P10 (stores side-effects) | connection / schema store 의 toast / session / IPC orchestration → use-case hook 점진 이동. **사용자 hooks/lib 작업 안정 후 진입**. |
 
 본 cycle 종료 시 [`refactoring-candidates.md`](refactoring-candidates.md) retire
 — 이전 cycle 의 `CODE_SMELLS.md` 처리와 동일.
