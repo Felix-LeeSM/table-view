@@ -3,8 +3,24 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspacePage from "./WorkspacePage";
 import { useTabStore } from "@stores/tabStore";
 import { useThemeStore } from "@stores/themeStore";
-import { useConnectionStore } from "@stores/connectionStore";
+import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 import * as windowControls from "@lib/window-controls";
+
+// Sprint 224 (P10 step 3a): the read-only `hydrateFromSession` body moved
+// from `connectionStore.ts` into `@hooks/useConnectionSessionHydration`,
+// and `useWindowFocusHydration` (the hook the workspace mounts) now calls
+// `hydrateConnectionSession()` directly. Wrap the real implementation in
+// a spy so the workspace's mount + focus call counts can still be
+// asserted byte-equivalent to the pre-extraction contract.
+vi.mock("@hooks/useConnectionSessionHydration", async () => {
+  const actual = await vi.importActual<
+    typeof import("@hooks/useConnectionSessionHydration")
+  >("@hooks/useConnectionSessionHydration");
+  return {
+    ...actual,
+    hydrateConnectionSession: vi.fn(actual.hydrateConnectionSession),
+  };
+});
 
 vi.mock("@components/layout/Sidebar", () => ({
   default: () => <div data-testid="sidebar-mock" />,
@@ -176,14 +192,14 @@ describe("WorkspacePage", () => {
   // window state sync race where the workspace's boot-time hydration reads
   // empty data because the launcher hasn't connected yet. (2026-04-29)
   it("calls hydrateFromSession on mount", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
+    spy.mockClear();
     render(<WorkspacePage />);
     expect(spy).toHaveBeenCalledTimes(1);
-    spy.mockRestore();
   });
 
   it("calls hydrateFromSession when the window gains focus", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
     render(<WorkspacePage />);
     spy.mockClear();
 
@@ -192,6 +208,5 @@ describe("WorkspacePage", () => {
     });
 
     expect(spy).toHaveBeenCalledTimes(1);
-    spy.mockRestore();
   });
 });

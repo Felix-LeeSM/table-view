@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 
 /**
  * Re-hydrate connection state from session-scoped localStorage on mount
@@ -27,7 +28,7 @@ export function useWindowFocusHydration(): void {
   useEffect(() => {
     const hydrate = () => {
       const prevConnId = useConnectionStore.getState().focusedConnId;
-      useConnectionStore.getState().hydrateFromSession();
+      hydrateConnectionSession();
       const newConnId = useConnectionStore.getState().focusedConnId;
 
       if (newConnId && newConnId !== prevConnId) {

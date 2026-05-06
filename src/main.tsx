@@ -42,9 +42,15 @@ async function boot() {
 
   // Hydrate connection state from session-scoped localStorage so the
   // workspace has correct focusedConnId + activeStatuses on first render.
-  const { useConnectionStore } = await import("@stores/connectionStore");
+  // The dynamic import preserves the boot-graph node ordering so the
+  // module-load `attachZustandIpcBridge` attach inside `connectionStore.ts`
+  // still runs before any caller observes the store. `hydrateConnectionSession`
+  // is a plain function — safe to call here outside the React tree.
+  await import("@stores/connectionStore");
   markBootMilestone("connectionStore:imported");
-  useConnectionStore.getState().hydrateFromSession();
+  const { hydrateConnectionSession } =
+    await import("@hooks/useConnectionSessionHydration");
+  hydrateConnectionSession();
   markBootMilestone("connectionStore:hydrated");
 
   // Register the launcher's `tauri://close-requested` listener.

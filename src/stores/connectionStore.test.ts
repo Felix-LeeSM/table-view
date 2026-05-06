@@ -947,40 +947,11 @@ describe("connectionStore", () => {
       expect((lastStatuses["c2"] as { type: string }).type).toBe("connected");
     });
 
-    it("hydrateFromSession restores focusedConnId and activeStatuses", () => {
-      mockReadConnectionSession.mockReturnValue({
-        focusedConnId: "c2",
-        activeStatuses: {
-          c1: { type: "connected", activeDb: "prod" },
-          c2: { type: "connected", activeDb: "dev" },
-        },
-      });
-
-      useConnectionStore.getState().hydrateFromSession();
-
-      const state = useConnectionStore.getState();
-      expect(state.focusedConnId).toBe("c2");
-      expect(state.activeStatuses["c1"]).toEqual({
-        type: "connected",
-        activeDb: "prod",
-      });
-      expect(state.activeStatuses["c2"]).toEqual({
-        type: "connected",
-        activeDb: "dev",
-      });
-    });
-
-    it("hydrateFromSession is a no-op when session is empty", () => {
-      mockReadConnectionSession.mockReturnValue({
-        focusedConnId: null,
-        activeStatuses: null,
-      });
-
-      useConnectionStore.getState().hydrateFromSession();
-
-      expect(useConnectionStore.getState().focusedConnId).toBeNull();
-      expect(useConnectionStore.getState().activeStatuses).toEqual({});
-    });
+    // Sprint 224 (P10 step 3a): the two hydrateFromSession session-
+    // restore / no-op cases migrated to
+    // `src/hooks/useConnectionSessionHydration.test.ts`. The store action
+    // remains as a thin proxy — see the module test for the byte-
+    // equivalent assertions under direct module-function call.
 
     it("connect failure does not persist activeStatuses to session", async () => {
       seedTwoConnections();

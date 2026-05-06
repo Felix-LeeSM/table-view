@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
 
-// Mock session-storage so hydrateFromSession's readConnectionSession
+// Mock session-storage so hydrateConnectionSession's readConnectionSession
 // dependency resolves without a real Tauri runtime.
 const mockReadConnectionSession = vi.fn(
   (): {
@@ -21,6 +22,20 @@ vi.mock("@lib/session-storage", () => ({
   persistActiveStatuses: vi.fn(),
   readConnectionSession: () => mockReadConnectionSession(),
 }));
+
+// Sprint 224 (P10 step 3a): the hook now calls `hydrateConnectionSession`
+// directly instead of `useConnectionStore.getState().hydrateFromSession()`.
+// We wrap the real implementation in a spy so call-count assertions still
+// work while the byte-equivalent store-mutation behaviour is preserved.
+vi.mock("@hooks/useConnectionSessionHydration", async () => {
+  const actual = await vi.importActual<
+    typeof import("./useConnectionSessionHydration")
+  >("./useConnectionSessionHydration");
+  return {
+    ...actual,
+    hydrateConnectionSession: vi.fn(actual.hydrateConnectionSession),
+  };
+});
 
 // Mock the IPC bridge and window-label so connectionStore module loads cleanly.
 vi.mock("@lib/zustand-ipc-bridge", () => ({
@@ -66,17 +81,17 @@ describe("useWindowFocusHydration", () => {
   // Reason: hydration on mount ensures the store has the latest session data
   // even if the IPC bridge event was missed while this window was hidden.
   it("calls hydrateFromSession on mount", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
+    spy.mockClear();
     const { unmount } = renderHook(() => useWindowFocusHydration());
     expect(spy).toHaveBeenCalledTimes(1);
-    spy.mockRestore();
     unmount();
   });
 
   // Reason: every focus event is a potential state-change signal from another
   // window; the hook must call hydrateFromSession each time without skipping.
   it("calls hydrateFromSession on each window focus event", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
     const { unmount } = renderHook(() => useWindowFocusHydration());
     spy.mockClear();
 
@@ -91,14 +106,13 @@ describe("useWindowFocusHydration", () => {
     });
 
     expect(spy).toHaveBeenCalledTimes(3);
-    spy.mockRestore();
     unmount();
   });
 
   // Reason: listener cleanup prevents stale hydration calls after the
   // component unmounts, avoiding memory leaks and phantom dispatches.
   it("removes the focus listener on unmount", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
     const { unmount } = renderHook(() => useWindowFocusHydration());
     spy.mockClear();
     unmount();
@@ -108,7 +122,6 @@ describe("useWindowFocusHydration", () => {
     });
 
     expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   // -- Edge cases --
@@ -116,7 +129,7 @@ describe("useWindowFocusHydration", () => {
   // Reason: rapid focus/blur bursts (e.g. Alt+Tab) should each trigger
   // hydration — no debounce. Each focus is a potential state-change signal.
   it("handles rapid consecutive focus events without skipping", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
     const { unmount } = renderHook(() => useWindowFocusHydration());
     spy.mockClear();
 
@@ -128,14 +141,13 @@ describe("useWindowFocusHydration", () => {
     }
 
     expect(spy).toHaveBeenCalledTimes(10);
-    spy.mockRestore();
     unmount();
   });
 
   // Reason: hydrateFromSession is idempotent — calling it when session data
   // hasn't changed should not cause observable side effects or extra renders.
   it("hydrateFromSession is called even when session data is unchanged (idempotent path)", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
     const { unmount } = renderHook(() => useWindowFocusHydration());
     spy.mockClear();
 
@@ -146,7 +158,6 @@ describe("useWindowFocusHydration", () => {
     });
 
     expect(spy).toHaveBeenCalledTimes(1);
-    spy.mockRestore();
     unmount();
   });
 
@@ -201,7 +212,8 @@ describe("useWindowFocusHydration", () => {
   // Reason: multiple hook instances (e.g. if two pages somehow both mount)
   // should each work independently without double-counting or interference.
   it("supports multiple independent hook instances", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
+    spy.mockClear();
     const { unmount: unmount1 } = renderHook(() => useWindowFocusHydration());
     const { unmount: unmount2 } = renderHook(() => useWindowFocusHydration());
 
@@ -217,12 +229,12 @@ describe("useWindowFocusHydration", () => {
 
     unmount1();
     unmount2();
-    spy.mockRestore();
   });
 
   // Reason: after unmount, a new mount should re-register and work correctly.
   it("re-registering after unmount works correctly", () => {
-    const spy = vi.spyOn(useConnectionStore.getState(), "hydrateFromSession");
+    const spy = hydrateConnectionSession as ReturnType<typeof vi.fn>;
+    spy.mockClear();
     const { unmount: unmount1 } = renderHook(() => useWindowFocusHydration());
     expect(spy).toHaveBeenCalledTimes(1);
     unmount1();
@@ -238,7 +250,6 @@ describe("useWindowFocusHydration", () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     unmount2();
-    spy.mockRestore();
   });
 
   // -- Connection switch: stale tab cleanup --

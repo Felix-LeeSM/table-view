@@ -12,10 +12,10 @@ import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   persistFocusedConnId,
   persistActiveStatuses,
-  readConnectionSession,
 } from "@lib/session-storage";
+import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 
-interface ConnectionState {
+export interface ConnectionState {
   connections: ConnectionConfig[];
   groups: ConnectionGroup[];
   activeStatuses: Record<string, ConnectionStatus>;
@@ -222,19 +222,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     persistFocusedConnId(id);
   },
 
-  hydrateFromSession: () => {
-    const session = readConnectionSession();
-    const patch: Partial<
-      Pick<ConnectionState, "focusedConnId" | "activeStatuses">
-    > = {};
-    if (session.focusedConnId) patch.focusedConnId = session.focusedConnId;
-    if (session.activeStatuses)
-      patch.activeStatuses = session.activeStatuses as Record<
-        string,
-        ConnectionStatus
-      >;
-    if (Object.keys(patch).length > 0) set(patch);
-  },
+  hydrateFromSession: () => hydrateConnectionSession(),
 
   setActiveDb: (id, dbName) =>
     set((state) => {
