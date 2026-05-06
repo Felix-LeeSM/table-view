@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Popover, PopoverAnchor, PopoverContent } from "@components/ui/popover";
-import { filterPostgresTypes } from "@/lib/sql/postgresTypes";
+import {
+  expandParametricDefault,
+  filterPostgresTypes,
+  PARAMETRIC_TYPE_DEFAULTS,
+} from "@/lib/sql/postgresTypes";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,16 +17,15 @@ import { cn } from "@/lib/utils";
  * fallback — typing `numeric(10,4)` and committing on blur forwards
  * the raw input verbatim to `onChange`.
  *
- * Design notes:
- * - Stays in `src/components/schema/` (no anticipatory abstraction) per
- *   Sprint 227 spec — the second consumer (ALTER-TABLE column-add)
- *   is not in scope yet.
- * - No coloring / pill rendering (deferred to Sprint 230 polish).
- * - The popover stays open while the user types; clicking a suggestion
- *   commits + closes; pressing Enter on a highlighted suggestion
- *   commits + closes; pressing Esc closes without committing; blur
- *   commits the current raw input verbatim (so free-text strings like
- *   `numeric(10,4)` survive).
+ * Sprint 227 hot-fix (2026-05-07):
+ * - chevron is now clickable (toggles popover, focuses input).
+ * - popover opens on focus / click *and* on a fresh first-render mount
+ *   into a focused row (mouse-click on the input still triggers it).
+ * - popover content uses radix collision-aware max-height so it never
+ *   gets clipped at the modal/viewport edge.
+ * - selecting a bare parametric type (`varchar`, `char`, `numeric`)
+ *   auto-expands to its canonical default (`varchar(255)` etc.) and
+ *   places the caret between the parens for fast editing.
  */
 
 export interface CreateTableTypeComboboxProps {
@@ -44,6 +47,10 @@ export default function CreateTableTypeCombobox({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Caret target set when committing a parametric default — applied in
+  // an effect after the value prop round-trips from the parent so the
+  // selection survives React's controlled-input re-render.
+  const pendingCaretRef = useRef<number | null>(null);
 
   const suggestions = useMemo(() => filterPostgresTypes(value), [value]);
 
@@ -56,19 +63,39 @@ export default function CreateTableTypeCombobox({
     }
   }, [highlight, suggestions.length]);
 
-  const commit = (next: string) => {
-    onChange(next);
+  // Apply pending caret position once the parent re-renders with the
+  // expanded value (e.g. `varchar` → `varchar(255)` lands the caret
+  // between the parens).
+  useEffect(() => {
+    if (pendingCaretRef.current !== null && inputRef.current) {
+      const caret = pendingCaretRef.current;
+      pendingCaretRef.current = null;
+      inputRef.current.focus();
+      inputRef.current.setSelectionRange(caret, caret);
+    }
+  }, [value]);
+
+  const commit = (raw: string) => {
+    const expanded = expandParametricDefault(raw);
+    if (expanded !== raw && raw in PARAMETRIC_TYPE_DEFAULTS) {
+      // Place caret between parens: "varchar(255)" → caret at index 8.
+      const parenIdx = expanded.indexOf("(");
+      pendingCaretRef.current = parenIdx >= 0 ? parenIdx + 1 : expanded.length;
+      // Keep popover open for a moment so the user sees the expansion;
+      // close on the next tick via setOpen(false) to avoid jarring UX.
+    }
+    onChange(expanded);
     setOpen(false);
     setHighlight(0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
+      e.preventDefault();
       if (!open) {
         setOpen(true);
         return;
       }
-      e.preventDefault();
       setHighlight((h) => Math.min(h + 1, Math.max(0, suggestions.length - 1)));
       return;
     }
@@ -94,7 +121,7 @@ export default function CreateTableTypeCombobox({
   };
 
   return (
-    <Popover open={open && suggestions.length > 0} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
         <div className={cn("relative flex", className)}>
           <input
@@ -108,6 +135,7 @@ export default function CreateTableTypeCombobox({
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
+            onClick={() => setOpen(true)}
             onBlur={() => {
               // Blur commits the raw input verbatim (free-text
               // fallback for `numeric(10,4)` etc.). The popover
@@ -124,52 +152,70 @@ export default function CreateTableTypeCombobox({
             placeholder={placeholder}
             role="combobox"
           />
-          <ChevronDown
-            className="pointer-events-none absolute right-1 top-1/2 size-3 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label="Show types"
+            // mousedown rather than click — fires before the input's
+            // blur so we can flip `open` without the blur stealing it.
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setOpen((o) => !o);
+              inputRef.current?.focus();
+            }}
+            className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <ChevronDown className="size-3" aria-hidden="true" />
+          </button>
         </div>
       </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        sideOffset={2}
-        className="w-(--radix-popover-trigger-width) max-h-48 overflow-auto p-1"
-        // Keep focus on the input so keyboard nav (↑/↓ Enter Esc)
-        // continues to drive the popover. Without this, opening the
-        // popover steals focus into the content body.
-        onOpenAutoFocus={(e) => e.preventDefault()}
-        onCloseAutoFocus={(e) => e.preventDefault()}
-      >
-        <ul
-          id="create-table-type-combobox-listbox"
-          role="listbox"
-          aria-label="PostgreSQL types"
-          className="flex flex-col gap-0.5"
+      {suggestions.length > 0 && (
+        <PopoverContent
+          align="start"
+          sideOffset={2}
+          // Radix exposes `--radix-popover-content-available-height`
+          // and `--radix-popover-trigger-width` automatically; we use
+          // them to clamp height to the room actually available
+          // (modal/viewport edge) so the list never clips.
+          className="z-[60] w-[var(--radix-popover-trigger-width)] overflow-auto p-1"
+          style={{ maxHeight: "var(--radix-popover-content-available-height)" }}
+          // Keep focus on the input so keyboard nav (↑/↓ Enter Esc)
+          // continues to drive the popover. Without this, opening the
+          // popover steals focus into the content body.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onCloseAutoFocus={(e) => e.preventDefault()}
         >
-          {suggestions.map((t, idx) => (
-            <li key={t}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={idx === highlight}
-                className={cn(
-                  "w-full cursor-pointer rounded px-2 py-1 text-left text-xs text-foreground hover:bg-muted",
-                  idx === highlight ? "bg-muted" : null,
-                )}
-                // Pointer down (instead of click) so the input doesn't
-                // blur-and-commit-then-clobber the click.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  commit(t);
-                }}
-                onMouseEnter={() => setHighlight(idx)}
-              >
-                {t}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
+          <ul
+            id="create-table-type-combobox-listbox"
+            role="listbox"
+            aria-label="PostgreSQL types"
+            className="flex flex-col gap-0.5"
+          >
+            {suggestions.map((t, idx) => (
+              <li key={t}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={idx === highlight}
+                  className={cn(
+                    "w-full cursor-pointer rounded px-2 py-1 text-left text-xs text-foreground hover:bg-muted",
+                    idx === highlight ? "bg-muted" : null,
+                  )}
+                  // Pointer down (instead of click) so the input doesn't
+                  // blur-and-commit-then-clobber the click.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    commit(t);
+                  }}
+                  onMouseEnter={() => setHighlight(idx)}
+                >
+                  {t}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </PopoverContent>
+      )}
     </Popover>
   );
 }

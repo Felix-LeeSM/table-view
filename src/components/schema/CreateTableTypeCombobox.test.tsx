@@ -139,4 +139,102 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     fireEvent.mouseDown(uuidOption);
     expect(spy).toHaveBeenLastCalledWith("uuid");
   });
+
+  // Sprint 227 hot-fix (2026-05-07): the combobox should open the
+  // suggestion list as soon as the user focuses the input, even with
+  // an empty value, so the user discovers the picker without having
+  // to know the ArrowDown / chevron-click affordance up front.
+  it("auto-opens the listbox on focus (empty value shows full canonical list)", async () => {
+    render(<ControlledHost />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    const listbox = await screen.findByRole("listbox", {
+      name: /PostgreSQL types/i,
+    });
+    const options = listbox.querySelectorAll('[role="option"]');
+    expect(options.length).toBeGreaterThanOrEqual(25);
+    // canonical entries surface verbatim
+    const labels = Array.from(options).map((o) => o.textContent ?? "");
+    expect(labels).toContain("uuid");
+    expect(labels).toContain("text");
+  });
+
+  // Sprint 227 hot-fix (2026-05-07): the chevron button must be
+  // clickable — it toggles the popover and re-focuses the input. The
+  // pre-fix combobox rendered a `pointer-events-none` chevron which
+  // was visually misleading.
+  it("clicking the chevron toggles the listbox (AC-227-03 follow-up)", async () => {
+    render(<ControlledHost />);
+    const chevron = screen.getByRole("button", { name: "Show types" });
+    fireEvent.mouseDown(chevron);
+    const listbox = await screen.findByRole("listbox", {
+      name: /PostgreSQL types/i,
+    });
+    expect(listbox).toBeInTheDocument();
+    fireEvent.mouseDown(chevron);
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+  });
+
+  // Sprint 227 hot-fix (2026-05-07): bare parametric types
+  // auto-expand to a canonical default — `varchar` → `varchar(255)`,
+  // `char` → `char(1)`, `numeric` → `numeric(10,2)` — so the user
+  // doesn't have to remember the parameter syntax. Free-text override
+  // still works (covered by the `numeric(10,4)` blur case).
+  it("selecting bare 'varchar' auto-expands to 'varchar(255)'", async () => {
+    const spy = vi.fn();
+    render(<ControlledHost onChangeSpy={spy} />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "varchar" } });
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    // Filter for "varchar" surfaces both `varchar` and `varchar(255)`.
+    // First match is the bare `varchar`; Enter commits and expands.
+    const bareOption = screen.getByRole("option", { name: "varchar" });
+    fireEvent.mouseDown(bareOption);
+    expect(spy).toHaveBeenLastCalledWith("varchar(255)");
+  });
+
+  it("selecting bare 'char' auto-expands to 'char(1)'", async () => {
+    const spy = vi.fn();
+    render(<ControlledHost onChangeSpy={spy} />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "char" } });
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    const bareOption = screen.getByRole("option", { name: "char" });
+    fireEvent.mouseDown(bareOption);
+    expect(spy).toHaveBeenLastCalledWith("char(1)");
+  });
+
+  it("selecting bare 'numeric' auto-expands to 'numeric(10,2)'", async () => {
+    const spy = vi.fn();
+    render(<ControlledHost onChangeSpy={spy} />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "numeric" } });
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    const bareOption = screen.getByRole("option", { name: "numeric" });
+    fireEvent.mouseDown(bareOption);
+    expect(spy).toHaveBeenLastCalledWith("numeric(10,2)");
+  });
+
+  it("selecting an already-parametric type ('varchar(255)') is idempotent", async () => {
+    const spy = vi.fn();
+    render(<ControlledHost onChangeSpy={spy} />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "varchar(2" } });
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    const fullOption = screen.getByRole("option", { name: "varchar(255)" });
+    fireEvent.mouseDown(fullOption);
+    expect(spy).toHaveBeenLastCalledWith("varchar(255)");
+  });
 });

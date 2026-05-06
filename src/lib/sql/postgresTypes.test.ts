@@ -10,7 +10,12 @@
 // - Pins the canonical-list cardinality at ≥ 25 entries (spec
 //   AC-227-03 lower bound).
 import { describe, it, expect } from "vitest";
-import { POSTGRES_COMMON_TYPES, filterPostgresTypes } from "./postgresTypes";
+import {
+  POSTGRES_COMMON_TYPES,
+  filterPostgresTypes,
+  expandParametricDefault,
+  PARAMETRIC_TYPE_DEFAULTS,
+} from "./postgresTypes";
 
 describe("postgresTypes", () => {
   it("ships at least 25 canonical entries (AC-227-03)", () => {
@@ -62,5 +67,36 @@ describe("postgresTypes", () => {
 
   it("returns an empty array for a query with no matches", () => {
     expect(filterPostgresTypes("zzz_no_match_zzz")).toEqual([]);
+  });
+
+  describe("expandParametricDefault (Sprint 227 hot-fix 2026-05-07)", () => {
+    it("expands bare 'varchar' to 'varchar(255)'", () => {
+      expect(expandParametricDefault("varchar")).toBe("varchar(255)");
+    });
+
+    it("expands bare 'char' to 'char(1)'", () => {
+      expect(expandParametricDefault("char")).toBe("char(1)");
+    });
+
+    it("expands bare 'numeric' to 'numeric(10,2)'", () => {
+      expect(expandParametricDefault("numeric")).toBe("numeric(10,2)");
+    });
+
+    it("is idempotent for already-parametric types", () => {
+      expect(expandParametricDefault("varchar(255)")).toBe("varchar(255)");
+      expect(expandParametricDefault("numeric(10,4)")).toBe("numeric(10,4)");
+    });
+
+    it("returns non-parametric types unchanged", () => {
+      for (const t of ["integer", "uuid", "jsonb", "boolean", "text"]) {
+        expect(expandParametricDefault(t)).toBe(t);
+      }
+    });
+
+    it("PARAMETRIC_TYPE_DEFAULTS keys are all in the canonical list", () => {
+      for (const k of Object.keys(PARAMETRIC_TYPE_DEFAULTS)) {
+        expect(POSTGRES_COMMON_TYPES).toContain(k);
+      }
+    });
   });
 });

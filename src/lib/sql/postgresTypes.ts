@@ -51,3 +51,23 @@ export function filterPostgresTypes(query: string): string[] {
   if (q.length === 0) return [...POSTGRES_COMMON_TYPES];
   return POSTGRES_COMMON_TYPES.filter((t) => t.toLowerCase().includes(q));
 }
+
+// Parametric type defaults — when the user picks a bare parametric
+// type from the suggestions list (e.g. `varchar`), the combobox auto-
+// expands it to the canonical default form so the user doesn't have to
+// remember the parameter syntax. Caret placement (between parens) is
+// the caller's job.
+export const PARAMETRIC_TYPE_DEFAULTS: Readonly<Record<string, string>> = {
+  varchar: "varchar(255)",
+  char: "char(1)",
+  numeric: "numeric(10,2)",
+};
+
+/**
+ * Returns the parametric expansion if `type` is a bare parametric type
+ * with a known default; otherwise returns `type` unchanged. Idempotent
+ * — `expandParametricDefault("varchar(255)")` returns the same string.
+ */
+export function expandParametricDefault(type: string): string {
+  return PARAMETRIC_TYPE_DEFAULTS[type] ?? type;
+}
