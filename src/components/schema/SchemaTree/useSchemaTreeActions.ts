@@ -6,6 +6,7 @@ import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
+import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
 import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
 import type { ConfirmDialogState, RenameDialogState } from "./dialogs";
 
@@ -97,8 +98,13 @@ export function useSchemaTreeActions({
   // Read-only selectors for tree rendering. All writes go through the
   // hook itself or the dropTable / renameTable store actions below.
   const functions = useSchemaStore((s) => s.functions);
-  const dropTable = useSchemaStore((s) => s.dropTable);
-  const renameTableAction = useSchemaStore((s) => s.renameTable);
+  // Sprint 223 (P10 step 2) — drop/rename now go through the use-case
+  // hook that owns the reload-then-fallback orchestration. The store
+  // actions themselves are thin Tauri-call wrappers; calling them
+  // directly via `useSchemaStore` selector here would skip the
+  // optimistic refresh.
+  const { dropTable, renameTable: renameTableAction } =
+    useSchemaTableMutations();
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);

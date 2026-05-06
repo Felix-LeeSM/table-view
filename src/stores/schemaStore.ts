@@ -264,28 +264,8 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     );
   },
 
-  dropTable: async (connectionId, table, schema) => {
-    await tauri.dropTable(connectionId, table, schema);
-    // Refresh the table list for this schema after dropping
-    const key = `${connectionId}:${schema}`;
-    try {
-      const tables = await tauri.listTables(connectionId, schema);
-      set((state) => ({
-        tables: { ...state.tables, [key]: tables },
-      }));
-    } catch {
-      // If refresh fails, remove the table from cache optimistically
-      set((state) => {
-        const current = state.tables[key] ?? [];
-        return {
-          tables: {
-            ...state.tables,
-            [key]: current.filter((t) => t.name !== table),
-          },
-        };
-      });
-    }
-  },
+  // Sprint 223 — reload+fallback moved to `useSchemaTableMutations`.
+  dropTable: (cid, table, schema) => tauri.dropTable(cid, table, schema),
 
   executeQuery: async (connectionId, sql, queryId) => {
     return tauri.executeQuery(connectionId, sql, queryId);
@@ -295,30 +275,8 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     return tauri.executeQueryBatch(connectionId, statements, queryId);
   },
 
-  renameTable: async (connectionId, table, schema, newName) => {
-    await tauri.renameTable(connectionId, table, schema, newName);
-    // Refresh the table list after renaming
-    const key = `${connectionId}:${schema}`;
-    try {
-      const tables = await tauri.listTables(connectionId, schema);
-      set((state) => ({
-        tables: { ...state.tables, [key]: tables },
-      }));
-    } catch {
-      // If refresh fails, update the table name optimistically
-      set((state) => {
-        const current = state.tables[key] ?? [];
-        return {
-          tables: {
-            ...state.tables,
-            [key]: current.map((t) =>
-              t.name === table ? { ...t, name: newName } : t,
-            ),
-          },
-        };
-      });
-    }
-  },
+  // Sprint 223 — see `dropTable` comment.
+  renameTable: (cid, t, s, n) => tauri.renameTable(cid, t, s, n),
 
   clearSchema: (connectionId) => {
     set((state) => clearConnectionEntries(state, connectionId));
