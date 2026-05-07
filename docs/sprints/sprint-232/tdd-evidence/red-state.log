@@ -1,0 +1,69 @@
+# Sprint 232 — TDD red state capture
+
+Date: 2026-05-07
+Command: `cargo test --manifest-path src-tauri/Cargo.toml --lib build_default_order_clause`
+Pre-implementation tests file: src-tauri/src/db/postgres/queries.rs (mod tests, Sprint 232 block).
+Helper not yet implemented at this point — the tests reference
+`build_default_order_clause` which does not exist in the source. Compile
+fails with E0425 (cannot find function in this scope), which is the
+deliberate RED signal: the contract for the new free function is
+fixed by the tests before the implementation is written.
+
+---
+
+```
+$ cargo test --manifest-path src-tauri/Cargo.toml --lib build_default_order_clause
+   Compiling table-view v0.1.0 (/Users/felix/Desktop/study/view-table/src-tauri)
+error[E0425]: cannot find function `build_default_order_clause` in this scope
+   --> src/db/postgres/queries.rs:858:20
+    |
+858 |         assert_eq!(build_default_order_clause(&cols), " ORDER BY \"id\" ASC");
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `build_default_order_clause` in this scope
+   --> src/db/postgres/queries.rs:872:13
+    |
+872 |             build_default_order_clause(&cols),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `build_default_order_clause` in this scope
+   --> src/db/postgres/queries.rs:883:20
+    |
+883 |         assert_eq!(build_default_order_clause(&cols), "");
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `build_default_order_clause` in this scope
+   --> src/db/postgres/queries.rs:894:13
+    |
+894 |             build_default_order_clause(&cols),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `build_default_order_clause` in this scope
+   --> src/db/postgres/queries.rs:911:20
+    |
+911 |         assert_eq!(build_default_order_clause(&cols), " ORDER BY \"id\" ASC");
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find function `build_default_order_clause` in this scope
+   --> src/db/postgres/queries.rs:919:20
+    |
+919 |         assert_eq!(build_default_order_clause(&cols), "");
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in this scope
+
+Some errors have detailed explanations: E0412, E0422, E0425.
+For more information about an error, try `rustc --explain E0412`.
+error: could not compile `table-view` (lib test) due to 11 previous errors
+```
+
+---
+
+The 6 missing-function errors map 1:1 to the 6 new test cases (one
+assertion per case). The remaining 5 errors (E0412 / E0422 / E0425
+referenced in the summary) are the test helpers' references to the
+helper symbol cascading through the call sites; they all resolve once
+`build_default_order_clause` is introduced.
+
+Next step: implement `build_default_order_clause` as a `pub(super) fn`
+in `queries.rs` and wire it into `query_table_data` so that the
+fallback emits when the user-supplied parsing path leaves
+`order_clause` empty. Re-run the same command for GREEN.

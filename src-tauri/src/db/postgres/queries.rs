@@ -13,11 +13,41 @@ use tracing::warn;
 
 use crate::error::AppError;
 use crate::models::{
-    FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
+    ColumnInfo, FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
 };
 
 use super::mutations::qualified_table;
 use super::PostgresAdapter;
+
+/// Sprint 232 — build a deterministic fallback `ORDER BY` clause from
+/// the table's primary-key columns when the caller supplies no explicit
+/// ordering. Returns `" ORDER BY \"<pk1>\" ASC[, \"<pk2>\" ASC …]"` when
+/// at least one column has `is_primary_key == true`, or an empty string
+/// otherwise (preserves the pre-Sprint-232 behavior for views and
+/// PK-less tables).
+///
+/// PK columns are emitted in the order they appear in `columns`, which
+/// the schema fetcher already sorts by `pg_attribute.attnum` (= declared
+/// order). Identifier double quotes are doubled per PG quoting rules,
+/// matching the convention in the user-supplied ORDER BY parser above.
+///
+/// Why a free function: the helper is unit-testable without a `PgPool`,
+/// and isolating the fallback shape here keeps `query_table_data`'s
+/// 200-line body legible. User-supplied `order_by` still takes
+/// precedence — the caller only invokes this helper when its own
+/// parsing yields zero valid parts.
+pub(super) fn build_default_order_clause(columns: &[ColumnInfo]) -> String {
+    let parts: Vec<String> = columns
+        .iter()
+        .filter(|c| c.is_primary_key)
+        .map(|c| format!("\"{}\" ASC", c.name.replace('"', "\"\"")))
+        .collect();
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" ORDER BY {}", parts.join(", "))
+    }
+}
 
 /// Best-effort `CLOSE <cursor_name>` for the streaming export path. Logs a
 /// warning on failure but does not propagate — at the call sites the rows
@@ -525,6 +555,15 @@ impl PostgresAdapter {
             }
         }
 
+        // Sprint 232 — when the user supplies no `order_by` (or the
+        // supplied string yields zero valid parts above), fall back to
+        // the table's PK columns in `ASC` order. This makes DataGrid
+        // refetches deterministic and keeps an UPDATEd row in its
+        // id-ordered slot instead of jumping to the heap tail.
+        if order_clause.is_empty() {
+            order_clause = build_default_order_clause(&columns);
+        }
+
         // `executed_query` is what the user sees in the grid's "Query" panel,
         // so it must be the user-facing SQL — not the `row_to_json(q)` wrapper
         // we use internally to coerce arbitrary PG types into a JSON string
@@ -804,5 +843,118 @@ mod tests {
     #[test]
     fn strip_trailing_terminator_only_semicolons_returns_empty() {
         assert_eq!(strip_trailing_terminator(";  ;  "), "");
+    }
+
+    // -------------------------------------------------------------------
+    // Sprint 232 — default ORDER BY by primary key.
+    // -------------------------------------------------------------------
+    //
+    // User report (2026-05-07): "기본적으로 id 기반으로 sorting 하게
+    // 해주고, update 했을 때 update 한 row 가 가장 밑으로 내려가는
+    // 버그 수정해줘". Root cause: `query_table_data` emitted no
+    // ORDER BY when the caller passed `order_by = None`, so PG returned
+    // rows in heap order — and an UPDATE moves a row to the heap tail
+    // (dead tuple + new tuple-at-tail). Fallback to PK-ordered ASC
+    // closes both complaints with a single SQL-builder change.
+    //
+    // The fixtures below pin `build_default_order_clause` invariants:
+    // empty → no clause, single PK → quoted ASC, composite PK →
+    // declared-order ASC chain, embedded `"` → PG identifier double-up.
+    // We test the helper directly (free function, no pool needed) so a
+    // future regression surfaces here before reaching the IPC surface.
+
+    fn col_pk(name: &str) -> ColumnInfo {
+        ColumnInfo {
+            name: name.to_string(),
+            data_type: "integer".to_string(),
+            nullable: false,
+            default_value: None,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: None,
+            comment: None,
+        }
+    }
+
+    fn col_plain(name: &str) -> ColumnInfo {
+        ColumnInfo {
+            name: name.to_string(),
+            data_type: "text".to_string(),
+            nullable: true,
+            default_value: None,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: None,
+            comment: None,
+        }
+    }
+
+    // [AC-232-01] — Single-PK fallback emits the canonical `id ASC`
+    // clause that the user expects. Date 2026-05-07.
+    #[test]
+    fn build_default_order_clause_single_pk() {
+        let cols = vec![col_pk("id"), col_plain("name"), col_plain("email")];
+        assert_eq!(build_default_order_clause(&cols), " ORDER BY \"id\" ASC");
+    }
+
+    // [AC-232-01] — Composite PK preserves declared order so a junction
+    // table (e.g. `tenant_user`) sorts by `tenant_id ASC, user_id ASC`.
+    // Date 2026-05-07.
+    #[test]
+    fn build_default_order_clause_composite_pk() {
+        let cols = vec![
+            col_pk("tenant_id"),
+            col_pk("user_id"),
+            col_plain("joined_at"),
+        ];
+        assert_eq!(
+            build_default_order_clause(&cols),
+            " ORDER BY \"tenant_id\" ASC, \"user_id\" ASC"
+        );
+    }
+
+    // [AC-232-03] — A table without a PK falls back to the empty string,
+    // which preserves the pre-Sprint-232 behavior (no ORDER BY emitted).
+    // Views and unlogged tables hit this path. Date 2026-05-07.
+    #[test]
+    fn build_default_order_clause_no_pk_returns_empty() {
+        let cols = vec![col_plain("a"), col_plain("b")];
+        assert_eq!(build_default_order_clause(&cols), "");
+    }
+
+    // [AC-232-04] — Embedded `"` in a PK identifier must be doubled per
+    // PG quoting rules so the generated SQL stays parseable. Mirrors the
+    // existing convention `replace('"', "\"\"")` in the user-supplied
+    // ORDER BY parsing path. Date 2026-05-07.
+    #[test]
+    fn build_default_order_clause_quotes_embedded_double_quote() {
+        let cols = vec![col_pk("we\"ird")];
+        assert_eq!(
+            build_default_order_clause(&cols),
+            " ORDER BY \"we\"\"ird\" ASC"
+        );
+    }
+
+    // [AC-232-05 회귀] — User-reported repro shape: a `users` table with
+    // a single `id` PK plus a couple of plain columns. Asserts that the
+    // helper emits exactly the clause that prevents the UPDATE-tail
+    // shift. Date 2026-05-07.
+    #[test]
+    fn build_default_order_clause_users_table_regression() {
+        let cols = vec![
+            col_pk("id"),
+            col_plain("name"),
+            col_plain("active"),
+            col_plain("updated_at"),
+        ];
+        assert_eq!(build_default_order_clause(&cols), " ORDER BY \"id\" ASC");
+    }
+
+    // [AC-232-01] — Empty `columns` slice is a degenerate input but must
+    // not panic. Returns empty string. Date 2026-05-07.
+    #[test]
+    fn build_default_order_clause_empty_columns_returns_empty() {
+        let cols: Vec<ColumnInfo> = Vec::new();
+        assert_eq!(build_default_order_clause(&cols), "");
     }
 }
