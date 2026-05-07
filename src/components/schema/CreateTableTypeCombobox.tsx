@@ -47,6 +47,7 @@ export default function CreateTableTypeCombobox({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const listboxRef = useRef<HTMLUListElement | null>(null);
   // Caret target set when committing a parametric default — applied in
   // an effect after the value prop round-trips from the parent so the
   // selection survives React's controlled-input re-render.
@@ -74,6 +75,19 @@ export default function CreateTableTypeCombobox({
       inputRef.current.setSelectionRange(caret, caret);
     }
   }, [value]);
+
+  // Keep the highlighted option in view when the user navigates with
+  // ↑/↓. Without this the popover scrolls only on hover, so keyboard
+  // users below the visible window stay invisible.
+  useEffect(() => {
+    if (!open) return;
+    const list = listboxRef.current;
+    if (!list) return;
+    const target = list.querySelector<HTMLElement>(
+      '[role="option"][aria-selected="true"]',
+    );
+    target?.scrollIntoView({ block: "nearest" });
+  }, [highlight, open]);
 
   const commit = (raw: string) => {
     const expanded = expandParametricDefault(raw);
@@ -174,14 +188,16 @@ export default function CreateTableTypeCombobox({
           align="start"
           side="bottom"
           sideOffset={2}
-          // Force-bottom placement (no flip) + a fixed max-height with
-          // internal scroll. Earlier Sprint 227 hot-fix used
-          // `--radix-popover-content-available-height` which let radix
-          // shrink the dropdown when the modal sat near the viewport
-          // edge — yielding a clipped, jumpy list. Fixed 240px + scroll
-          // is far less surprising and matches DataGrip behaviour.
+          // No flip, no auto-shrink — fixed 240px box with internal
+          // scroll. Sprint 227 hot-fix used radix's available-height
+          // var which jumped/clipped near the viewport edge. The
+          // current pass forces inline `maxHeight` + `overflow` so a
+          // tailwind cn-merge or hot-reload glitch can't strip the
+          // scroll behaviour. Caret-driven nav still works because the
+          // highlighted option is `scrollIntoView`-ed below.
           avoidCollisions={false}
-          className="z-[60] max-h-60 w-[var(--radix-popover-trigger-width)] overflow-y-auto p-1"
+          className="z-[60] w-[var(--radix-popover-trigger-width)] p-1"
+          style={{ maxHeight: 240, overflowY: "auto" }}
           // Keep focus on the input so keyboard nav (↑/↓ Enter Esc)
           // continues to drive the popover. Without this, opening the
           // popover steals focus into the content body.
@@ -189,6 +205,7 @@ export default function CreateTableTypeCombobox({
           onCloseAutoFocus={(e) => e.preventDefault()}
         >
           <ul
+            ref={listboxRef}
             id="create-table-type-combobox-listbox"
             role="listbox"
             aria-label="PostgreSQL types"
