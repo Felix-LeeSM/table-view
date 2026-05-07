@@ -46,6 +46,47 @@ export interface CreateTableTypeComboboxProps {
    * byte-equivalent.
    */
   typesSource?: readonly string[];
+  /**
+   * Sprint 234 — optional `display label → type_kind` lookup. When
+   * supplied, each option in the suggestion popover renders a small
+   * color dot prefix:
+   *   `"base"`     → no dot (default — wrapper omitted entirely)
+   *   `"enum"`     → blue dot   (`text-blue-500`)
+   *   `"domain"`   → green dot  (`text-green-500`)
+   *   `"range"`    → purple dot (`text-purple-500`)
+   *   `"composite"`→ orange dot (`text-orange-500`)
+   *   any other kind → no dot (graceful degrade — never throws)
+   *
+   * The accessible name (option text content) stays the verbatim type
+   * label — color dots are `<span aria-hidden>•</span>` so screen
+   * readers see only the type name. Lookup is case-sensitive on the
+   * display label string. When `typeKindMap` is omitted, the combobox
+   * renders identically to Sprint 230 (back-compat).
+   */
+  typeKindMap?: ReadonlyMap<string, string>;
+}
+
+/**
+ * Sprint 234 — map a `type_kind` string to the Tailwind color class for
+ * the option's color dot. Returns `null` for `"base"` and any unknown
+ * kind so the dot wrapper is omitted entirely (no DOM noise, no
+ * spurious icon for built-ins). The closed switch matches the four
+ * colored kinds enumerated in `PostgresTypeInfo` (Sprint 230); a future
+ * PG kind (e.g. multirange `'m'`) automatically degrades to no dot.
+ */
+function colorClassForTypeKind(kind: string | undefined): string | null {
+  switch (kind) {
+    case "enum":
+      return "text-blue-500";
+    case "domain":
+      return "text-green-500";
+    case "range":
+      return "text-purple-500";
+    case "composite":
+      return "text-orange-500";
+    default:
+      return null;
+  }
 }
 
 export default function CreateTableTypeCombobox({
@@ -55,6 +96,7 @@ export default function CreateTableTypeCombobox({
   placeholder = "varchar(255)",
   className,
   typesSource,
+  typeKindMap,
 }: CreateTableTypeComboboxProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -231,28 +273,44 @@ export default function CreateTableTypeCombobox({
             className="flex flex-col gap-0.5 p-1"
             style={{ maxHeight: 240, overflowY: "auto" }}
           >
-            {suggestions.map((t, idx) => (
-              <li key={t}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={idx === highlight}
-                  className={cn(
-                    "w-full cursor-pointer rounded px-2 py-1 text-left text-xs text-foreground hover:bg-muted",
-                    idx === highlight ? "bg-muted" : null,
-                  )}
-                  // Pointer down (instead of click) so the input doesn't
-                  // blur-and-commit-then-clobber the click.
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    commit(t);
-                  }}
-                  onMouseEnter={() => setHighlight(idx)}
-                >
-                  {t}
-                </button>
-              </li>
-            ))}
+            {suggestions.map((t, idx) => {
+              // Sprint 234 — color-dot prefix (only when typeKindMap is
+              // supplied AND the lookup yields a colored kind). The dot
+              // wrapper is omitted entirely for `"base"` / unknown
+              // kinds so screen readers see only the type name.
+              const dotColor = colorClassForTypeKind(typeKindMap?.get(t));
+              return (
+                <li key={t}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={idx === highlight}
+                    className={cn(
+                      "w-full cursor-pointer rounded px-2 py-1 text-left text-xs text-foreground hover:bg-muted",
+                      idx === highlight ? "bg-muted" : null,
+                    )}
+                    // Pointer down (instead of click) so the input doesn't
+                    // blur-and-commit-then-clobber the click.
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      commit(t);
+                    }}
+                    onMouseEnter={() => setHighlight(idx)}
+                  >
+                    {dotColor ? (
+                      <span
+                        aria-hidden="true"
+                        data-testid="type-kind-dot"
+                        className={cn("mr-1", dotColor)}
+                      >
+                        •
+                      </span>
+                    ) : null}
+                    {t}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </PopoverContent>
       )}

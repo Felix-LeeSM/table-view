@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -133,6 +133,15 @@ export interface ForeignKeysTabBodyProps {
   onRemoveUnique: (trackingId: string) => void;
   onUpdateUnique: (trackingId: string, updates: Partial<UniqueDraft>) => void;
   onToggleUniqueColumn: (trackingId: string, colName: string) => void;
+  /**
+   * Sprint 234 — three reorder callbacks (one per family). Same swap-
+   * in-place semantics as the column / index reorder. Boundary clicks
+   * are no-ops at the parent; the buttons render `disabled` here too
+   * for defense-in-depth.
+   */
+  onMoveFk: (trackingId: string, direction: -1 | 1) => void;
+  onMoveCheck: (trackingId: string, direction: -1 | 1) => void;
+  onMoveUnique: (trackingId: string, direction: -1 | 1) => void;
 }
 
 export default function ForeignKeysTabBody({
@@ -156,6 +165,9 @@ export default function ForeignKeysTabBody({
   onRemoveUnique,
   onUpdateUnique,
   onToggleUniqueColumn,
+  onMoveFk,
+  onMoveCheck,
+  onMoveUnique,
 }: ForeignKeysTabBodyProps) {
   return (
     <div className="space-y-4">
@@ -184,7 +196,7 @@ export default function ForeignKeysTabBody({
           </div>
         ) : (
           <div className="space-y-2">
-            {fks.map((fk) => {
+            {fks.map((fk, position) => {
               const refTables =
                 refTablesByKey[`${fk.ref_schema}`] ??
                 refTablesByKey[fk.ref_schema] ??
@@ -193,6 +205,9 @@ export default function ForeignKeysTabBody({
               const refCols = refColumnsByKey[refColsKey] ?? [];
               const refColsLoading =
                 fkRefColumnsLoadingByTrackingId[fk.trackingId] === true;
+              // Sprint 234 — boundary-disabled flags for ↑/↓.
+              const isFirst = position === 0;
+              const isLast = position === fks.length - 1;
               return (
                 <div
                   key={fk.trackingId}
@@ -216,7 +231,8 @@ export default function ForeignKeysTabBody({
                     >
                       {availableColumns.length === 0 ? (
                         <span className="text-xs italic text-muted-foreground">
-                          Add a column with a name to choose foreign key columns
+                          Add named columns in the Columns tab to use this
+                          picker.
                         </span>
                       ) : (
                         <div className="flex flex-wrap gap-2">
@@ -436,6 +452,27 @@ export default function ForeignKeysTabBody({
                       </div>
                     </div>
                   </div>
+                  {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onMoveFk(fk.trackingId, -1)}
+                    disabled={isFirst}
+                    aria-label="Move foreign key up"
+                    title="Move foreign key up"
+                  >
+                    <ArrowUp />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onMoveFk(fk.trackingId, 1)}
+                    disabled={isLast}
+                    aria-label="Move foreign key down"
+                    title="Move foreign key down"
+                  >
+                    <ArrowDown />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon-xs"
@@ -477,45 +514,71 @@ export default function ForeignKeysTabBody({
           </div>
         ) : (
           <div className="space-y-2">
-            {checks.map((c) => (
-              <div
-                key={c.trackingId}
-                className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
-              >
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <input
-                    className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                    value={c.name}
-                    onChange={(e) =>
-                      onUpdateCheck(c.trackingId, { name: e.target.value })
-                    }
-                    placeholder="chk_table_n"
-                    aria-label="Check name"
-                  />
-                  <input
-                    type="text"
-                    className="rounded border border-border bg-background px-2 py-1 text-xs font-mono text-foreground outline-none focus:border-primary"
-                    value={c.expression}
-                    onChange={(e) =>
-                      onUpdateCheck(c.trackingId, {
-                        expression: e.target.value,
-                      })
-                    }
-                    placeholder="age >= 0"
-                    aria-label="Check expression"
-                  />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => onRemoveCheck(c.trackingId)}
-                  aria-label="Remove check"
-                  title="Remove check"
+            {checks.map((c, position) => {
+              // Sprint 234 — ↑/↓ boundary flags.
+              const isFirst = position === 0;
+              const isLast = position === checks.length - 1;
+              return (
+                <div
+                  key={c.trackingId}
+                  className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
                 >
-                  <Minus />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <input
+                      className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                      value={c.name}
+                      onChange={(e) =>
+                        onUpdateCheck(c.trackingId, { name: e.target.value })
+                      }
+                      placeholder="chk_table_n"
+                      aria-label="Check name"
+                    />
+                    <input
+                      type="text"
+                      className="rounded border border-border bg-background px-2 py-1 text-xs font-mono text-foreground outline-none focus:border-primary"
+                      value={c.expression}
+                      onChange={(e) =>
+                        onUpdateCheck(c.trackingId, {
+                          expression: e.target.value,
+                        })
+                      }
+                      placeholder="age >= 0"
+                      aria-label="Check expression"
+                    />
+                  </div>
+                  {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onMoveCheck(c.trackingId, -1)}
+                    disabled={isFirst}
+                    aria-label="Move check up"
+                    title="Move check up"
+                  >
+                    <ArrowUp />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onMoveCheck(c.trackingId, 1)}
+                    disabled={isLast}
+                    aria-label="Move check down"
+                    title="Move check down"
+                  >
+                    <ArrowDown />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onRemoveCheck(c.trackingId)}
+                    aria-label="Remove check"
+                    title="Remove check"
+                  >
+                    <Minus />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -545,66 +608,93 @@ export default function ForeignKeysTabBody({
           </div>
         ) : (
           <div className="space-y-2">
-            {uniques.map((u) => (
-              <div
-                key={u.trackingId}
-                className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
-              >
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <input
-                    className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                    value={u.name}
-                    onChange={(e) =>
-                      onUpdateUnique(u.trackingId, { name: e.target.value })
-                    }
-                    placeholder="uq_table_columns"
-                    aria-label="Unique name"
-                  />
-                  <div
-                    className="rounded border border-border bg-background p-2"
-                    aria-label="Unique columns"
-                  >
-                    {availableColumns.length === 0 ? (
-                      <span className="text-xs italic text-muted-foreground">
-                        Add a column with a name to choose unique columns
-                      </span>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {availableColumns.map((colName) => {
-                          const checked = u.columns.includes(colName);
-                          return (
-                            <label
-                              key={colName}
-                              className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() =>
-                                  onToggleUniqueColumn(u.trackingId, colName)
-                                }
-                                className="rounded border-border"
-                                aria-label={`Unique column: ${colName}`}
-                              />
-                              {colName}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => onRemoveUnique(u.trackingId)}
-                  aria-label="Remove unique"
-                  title="Remove unique"
+            {uniques.map((u, position) => {
+              // Sprint 234 — ↑/↓ boundary flags.
+              const isFirst = position === 0;
+              const isLast = position === uniques.length - 1;
+              return (
+                <div
+                  key={u.trackingId}
+                  className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
                 >
-                  <Minus />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <input
+                      className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                      value={u.name}
+                      onChange={(e) =>
+                        onUpdateUnique(u.trackingId, { name: e.target.value })
+                      }
+                      placeholder="uq_table_columns"
+                      aria-label="Unique name"
+                    />
+                    <div
+                      className="rounded border border-border bg-background p-2"
+                      aria-label="Unique columns"
+                    >
+                      {availableColumns.length === 0 ? (
+                        <span className="text-xs italic text-muted-foreground">
+                          Add named columns in the Columns tab to use this
+                          picker.
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {availableColumns.map((colName) => {
+                            const checked = u.columns.includes(colName);
+                            return (
+                              <label
+                                key={colName}
+                                className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    onToggleUniqueColumn(u.trackingId, colName)
+                                  }
+                                  className="rounded border-border"
+                                  aria-label={`Unique column: ${colName}`}
+                                />
+                                {colName}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onMoveUnique(u.trackingId, -1)}
+                    disabled={isFirst}
+                    aria-label="Move unique up"
+                    title="Move unique up"
+                  >
+                    <ArrowUp />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onMoveUnique(u.trackingId, 1)}
+                    disabled={isLast}
+                    aria-label="Move unique down"
+                    title="Move unique down"
+                  >
+                    <ArrowDown />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onRemoveUnique(u.trackingId)}
+                    aria-label="Remove unique"
+                    title="Remove unique"
+                  >
+                    <Minus />
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

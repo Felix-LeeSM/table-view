@@ -33,6 +33,18 @@ import type { PostgresTypeInfo } from "@/types/schema";
 export interface UsePostgresTypesResult {
   /** Merged type list — canonical first, then non-duplicate live extras. */
   types: string[];
+  /**
+   * Sprint 234 — display label → `type_kind` lookup map. Keys are the
+   * same display labels surfaced in `types` (`pg_catalog.X` stripped to
+   * `X`; other schemas qualified as `<schema>.X`). Values are the raw
+   * `PostgresTypeInfo.type_kind` string from the live fetch (`"base"`
+   * / `"enum"` / `"domain"` / `"range"` / `"composite"`); canonical
+   * entries that have no live counterpart get `"base"`. The map is
+   * always non-null — empty during the very first render before the
+   * fetch resolves so consumers can call `.get(label)` without
+   * null-checking the map itself.
+   */
+  typesByName: Map<string, string>;
   /** True while a fetch is in flight (first mount or `reload()`). */
   loading: boolean;
   /** Non-null if the last fetch rejected; canonical fallback active. */
@@ -44,6 +56,13 @@ export interface UsePostgresTypesResult {
 interface CacheEntry {
   /** Resolved merged list (canonical + non-duplicate live extras). */
   types: string[] | null;
+  /**
+   * Sprint 234 — resolved display-label → `type_kind` map. Built by
+   * `mergeTypesByName`; canonical entries default to `"base"`, live
+   * entries reflect their `PostgresTypeInfo.type_kind`. `null` until
+   * the first fetch resolves (matches `types` semantics).
+   */
+  typesByName: Map<string, string> | null;
   /** Raw `PostgresTypeInfo[]` retained for future Sprint 231 type-coloring. */
   raw: PostgresTypeInfo[] | null;
   /** Sticky error string — surfaced to the consumer until next reload. */
@@ -116,6 +135,45 @@ function mergeTypes(live: PostgresTypeInfo[]): string[] {
 }
 
 /**
+ * Sprint 234 — companion to `mergeTypes`. Builds the display-label →
+ * `type_kind` lookup map.
+ *
+ * Rules:
+ * - Canonical entries (`POSTGRES_COMMON_TYPES`) seed the map with
+ *   `"base"`. They always win when a live entry shares the same label
+ *   (preserves familiar built-in coloring even if PG's `typtype`
+ *   somehow disagrees with the canonical assumption).
+ * - Live entries that produce a non-canonical label (`public.my_enum`,
+ *   `extensions.geometry`, …) record their raw `type_kind` from the
+ *   `PostgresTypeInfo`. Defensive-drop entries (empty name, `pg_toast`)
+ *   are filtered by `toLabel` returning `null`.
+ *
+ * Lookup is case-sensitive — same as `mergeTypes`'s dedup `Set`.
+ */
+function mergeTypesByName(live: PostgresTypeInfo[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const t of POSTGRES_COMMON_TYPES) out.set(t, "base");
+  for (const info of live) {
+    const label = toLabel(info);
+    if (label === null) continue;
+    if (out.has(label)) continue; // canonical wins (already "base")
+    out.set(label, info.type_kind);
+  }
+  return out;
+}
+
+/**
+ * Sprint 234 — fallback map used in the error path so consumers always
+ * observe a non-null `typesByName`. Mirrors the canonical-fallback
+ * shape from `mergeTypes`.
+ */
+function canonicalKindMap(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const t of POSTGRES_COMMON_TYPES) out.set(t, "base");
+  return out;
+}
+
+/**
  * Trigger a fresh fetch for `connectionId`. Stores the in-flight
  * Promise in the cache entry so concurrent calls share it. Resolves
  * once the cache entry is in its final state (success or error).
@@ -128,6 +186,7 @@ function fetchTypes(connectionId: string): Promise<void> {
 
   const entry: CacheEntry = existing ?? {
     types: null,
+    typesByName: null,
     raw: null,
     error: null,
     inFlight: null,
@@ -139,6 +198,7 @@ function fetchTypes(connectionId: string): Promise<void> {
       const live = await tauri.listPostgresTypes(connectionId);
       entry.raw = live;
       entry.types = mergeTypes(live);
+      entry.typesByName = mergeTypesByName(live);
       entry.error = null;
       entry.fetchedAt = Date.now();
     } catch (err) {
@@ -148,6 +208,7 @@ function fetchTypes(connectionId: string): Promise<void> {
       const message = err instanceof Error ? err.message : String(err);
       entry.raw = null;
       entry.types = [...POSTGRES_COMMON_TYPES];
+      entry.typesByName = canonicalKindMap();
       entry.error = message;
       entry.fetchedAt = Date.now();
     } finally {
@@ -213,10 +274,17 @@ export function usePostgresTypes(connectionId: string): UsePostgresTypesResult {
   // Read the latest cache state synchronously. If no entry yet (very
   // first render before the effect runs), surface the canonical list
   // + loading=true so the combobox is instantly usable.
+  //
+  // Sprint 234 — `typesByName` follows the same invariant as `types`:
+  // never null. Empty `Map` while the very first fetch is in flight so
+  // consumers can call `.get(label)` without null-checking. Once a
+  // fetch resolves it switches to the populated cache map (canonical
+  // entries seeded with `"base"` + live entries with their `type_kind`).
   const cached = cache.get(connectionId);
   if (!cached) {
     return {
       types: [...POSTGRES_COMMON_TYPES],
+      typesByName: new Map(),
       loading: true,
       error: null,
       reload,
@@ -229,6 +297,7 @@ export function usePostgresTypes(connectionId: string): UsePostgresTypesResult {
       // previous fetch resolved successfully, prefer that merged
       // list (refetch silently replaces); otherwise canonical.
       types: cached.types ?? [...POSTGRES_COMMON_TYPES],
+      typesByName: cached.typesByName ?? new Map(),
       loading: true,
       error: cached.error,
       reload,
@@ -236,6 +305,7 @@ export function usePostgresTypes(connectionId: string): UsePostgresTypesResult {
   }
   return {
     types: cached.types ?? [...POSTGRES_COMMON_TYPES],
+    typesByName: cached.typesByName ?? new Map(),
     loading: false,
     error: cached.error,
     reload,

@@ -223,6 +223,13 @@ pub struct CreateTableRequest {
     pub primary_key: Option<Vec<String>>,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 234 — table-level COMMENT ON TABLE statement, emitted
+    /// inside the same `create_table` transaction as the per-column
+    /// `COMMENT ON COLUMN` statements (atomic policy = C). When `None`
+    /// or `Some(empty-after-trim)`, no statement is emitted (Sprint
+    /// 226-233 callers stay byte-equivalent).
+    #[serde(default)]
+    pub table_comment: Option<String>,
 }
 
 /// Result returned by schema change operations.
@@ -692,6 +699,48 @@ mod tests {
         let json_no_def = serde_json::to_string(&info_no_def).unwrap();
         let deserialized_no_def: ViewInfo = serde_json::from_str(&json_no_def).unwrap();
         assert_eq!(deserialized_no_def.definition, None);
+    }
+
+    #[test]
+    fn create_table_request_table_comment_serde_roundtrip() {
+        // Sprint 234 — `table_comment: Option<String>` field round-trips
+        // with `#[serde(default)]` semantics:
+        // - `Some("user accounts")` — stays Some after roundtrip.
+        // - Payload that omits the field (Sprint 226-233 callers) — the
+        //   default `None` is filled in.
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "users".to_string(),
+            columns: vec![ColumnDefinition {
+                name: "id".to_string(),
+                data_type: "integer".to_string(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+            }],
+            primary_key: None,
+            preview_only: true,
+            table_comment: Some("user accounts".to_string()),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let deserialized: CreateTableRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            deserialized.table_comment,
+            Some("user accounts".to_string())
+        );
+
+        // Back-compat — payload omitting `table_comment` deserializes to
+        // None (Sprint 226-233 caller invariant).
+        let json_no_comment = r#"{
+            "connection_id": "conn1",
+            "schema": "public",
+            "name": "users",
+            "columns": [],
+            "preview_only": true
+        }"#;
+        let parsed: CreateTableRequest = serde_json::from_str(json_no_comment).unwrap();
+        assert!(parsed.table_comment.is_none());
     }
 
     #[test]

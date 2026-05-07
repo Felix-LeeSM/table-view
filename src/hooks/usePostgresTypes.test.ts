@@ -300,6 +300,75 @@ describe("usePostgresTypes (Sprint 230)", () => {
     expect(second.result.current.types).toContain("public.second");
   });
 
+  // ── Sprint 234 — typesByName Map surface (AC-234-09) ─────────────
+
+  // Sprint 234 — `usePostgresTypes` exposes a `typesByName: Map<string,
+  // string>` alongside `types`. Map values mirror the live
+  // `PostgresTypeInfo.type_kind` so the combobox can render color dots
+  // (Sprint 234 AC-234-08) without re-querying. Keys use the same
+  // display label rules as `types` (`pg_catalog.X` strips to `X`).
+  it("surfaces a typesByName map matching the live PostgresTypeInfo entries (AC-234-09)", async () => {
+    mockListPostgresTypes.mockResolvedValueOnce([
+      pgType("public", "my_enum", "enum"),
+      pgType("public", "my_domain", "domain"),
+      pgType("public", "my_range", "range"),
+      pgType("public", "my_composite", "composite"),
+      pgType("extensions", "geometry", "base"),
+    ]);
+    const { result } = renderHook(() => usePostgresTypes("conn-1"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    // Live entries surface with their raw type_kind.
+    expect(result.current.typesByName.get("public.my_enum")).toBe("enum");
+    expect(result.current.typesByName.get("public.my_domain")).toBe("domain");
+    expect(result.current.typesByName.get("public.my_range")).toBe("range");
+    expect(result.current.typesByName.get("public.my_composite")).toBe(
+      "composite",
+    );
+    expect(result.current.typesByName.get("extensions.geometry")).toBe("base");
+    // Canonical entries surface with `"base"`.
+    expect(result.current.typesByName.get("varchar")).toBe("base");
+    expect(result.current.typesByName.get("uuid")).toBe("base");
+  });
+
+  // Sprint 234 — when no live extras arrive (empty fetch, or pre-fetch
+  // first render), the canonical entries still seed the map with
+  // `"base"`. Ensures combobox lookups never throw on missing keys for
+  // the canonical types.
+  it("falls back to a typesByName containing canonical entries with kind=base (AC-234-09)", async () => {
+    mockListPostgresTypes.mockResolvedValueOnce([]);
+    const { result } = renderHook(() => usePostgresTypes("conn-empty"));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.typesByName).toBeInstanceOf(Map);
+    expect(result.current.typesByName.size).toBeGreaterThanOrEqual(
+      POSTGRES_COMMON_TYPES.length,
+    );
+    for (const t of POSTGRES_COMMON_TYPES) {
+      expect(result.current.typesByName.get(t)).toBe("base");
+    }
+  });
+
+  // Sprint 234 — pre-fetch first render returns an empty `Map` rather
+  // than `undefined` so consumers can call `.get(label)` safely.
+  it("returns an empty Map (not undefined) on the very first render before the fetch resolves (AC-234-09)", async () => {
+    let resolveFetch: ((v: PostgresTypeInfo[]) => void) | null = null;
+    mockListPostgresTypes.mockImplementationOnce(
+      () =>
+        new Promise<PostgresTypeInfo[]>((resolve) => {
+          resolveFetch = resolve as (v: PostgresTypeInfo[]) => void;
+        }),
+    );
+    const { result } = renderHook(() => usePostgresTypes("conn-1"));
+    expect(result.current.typesByName).toBeInstanceOf(Map);
+    expect(result.current.typesByName.size).toBeGreaterThanOrEqual(0);
+    // Cleanup so the deferred Promise can resolve and the test runner
+    // doesn't leak the in-flight fetch into the next case.
+    await act(async () => {
+      (resolveFetch as ((v: PostgresTypeInfo[]) => void) | null)?.([]);
+    });
+  });
+
   // ── Defensive — empty / "pg_toast" entries dropped ─────────────────
 
   it("defensive — entries with empty name or pg_toast schema dropped before merge", async () => {

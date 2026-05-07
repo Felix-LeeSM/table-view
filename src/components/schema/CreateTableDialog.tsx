@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, Minus, Plus } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Minus,
+  Plus,
+} from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Dialog, DialogContent, DialogFooter } from "@components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
@@ -196,6 +211,11 @@ export default function CreateTableDialog({
   onRefresh,
 }: CreateTableDialogProps) {
   const [tableName, setTableName] = useState("");
+  // Sprint 234 — table-level COMMENT ON TABLE input. Optional, default
+  // empty string. When non-empty (post-trim), plumbed into
+  // `buildRequest` as `table_comment`; when empty post-trim, plumbed as
+  // `null` so the Sprint 226-233 byte-equivalence invariant holds.
+  const [tableComment, setTableComment] = useState("");
   const [columns, setColumns] = useState<ColumnDraft[]>([newDraft()]);
   // Sprint 228 — indexes editor draft list. Default = empty array
   // (index editor is opt-in; 0 indexes is the canonical base state).
@@ -240,6 +260,9 @@ export default function CreateTableDialog({
 
   const resetForm = () => {
     setTableName("");
+    // Sprint 234 — reset the table-level COMMENT input so the modal
+    // starts fresh on next open.
+    setTableComment("");
     setColumns([newDraft()]);
     setIndexes([]);
     setFks([]);
@@ -299,6 +322,33 @@ export default function CreateTableDialog({
     invalidatePreview();
   };
 
+  // Sprint 234 — generic in-place swap helper for the row reorders.
+  // Returns the previous list reference unchanged when the move would
+  // be a no-op (target tracking id missing, or swap target out of
+  // bounds). Preserves React `trackingId`-keyed identity so the swapped
+  // rows reuse their existing component instances + DOM nodes.
+  function moveByTrackingId<T extends { trackingId: string }>(
+    list: T[],
+    trackingId: string,
+    direction: -1 | 1,
+  ): T[] {
+    const idx = list.findIndex((row) => row.trackingId === trackingId);
+    if (idx < 0) return list;
+    const swap = idx + direction;
+    if (swap < 0 || swap >= list.length) return list;
+    const next = [...list];
+    [next[idx], next[swap]] = [next[swap]!, next[idx]!];
+    return next;
+  }
+
+  // Sprint 234 — column reorder. Wraps `moveByTrackingId` + flips the
+  // preview-stale flag (cached SQL must invalidate because column
+  // declaration order is byte-significant in CREATE TABLE).
+  const handleMoveColumn = (trackingId: string, direction: -1 | 1) => {
+    setColumns((prev) => moveByTrackingId(prev, trackingId, direction));
+    invalidatePreview();
+  };
+
   // ── Sprint 228 — Indexes tab handlers ────────────────────────────
 
   const handleAddIndex = () => {
@@ -337,6 +387,12 @@ export default function CreateTableDialog({
     invalidatePreview();
   };
 
+  // Sprint 234 — index reorder (parent-owned, mirrors `handleMoveColumn`).
+  const handleMoveIndex = (trackingId: string, direction: -1 | 1) => {
+    setIndexes((prev) => moveByTrackingId(prev, trackingId, direction));
+    invalidatePreview();
+  };
+
   // ── Sprint 229 — Foreign Keys / CHECK / UNIQUE handlers ──────────
 
   const handleAddFk = () => {
@@ -360,7 +416,12 @@ export default function CreateTableDialog({
   // canonical-first + live-extras list (or canonical exactly while
   // the fetch is in flight / on error). Pass through as `typesSource`
   // to the per-row combobox so suggestions reflect the live PG state.
-  const { types: pgTypes } = usePostgresTypes(connectionId);
+  //
+  // Sprint 234 — also surface the `typesByName` Map so the combobox
+  // can render type-kind color dots per option (enum=blue,
+  // domain=green, range=purple, composite=orange; base=no dot).
+  const { types: pgTypes, typesByName: pgTypesByName } =
+    usePostgresTypes(connectionId);
 
   const handleUpdateFk = (
     trackingId: string,
@@ -500,6 +561,22 @@ export default function CreateTableDialog({
     invalidatePreview();
   };
 
+  // Sprint 234 — FK / CHECK / UNIQUE reorder handlers (parent-owned).
+  // Same swap-in-place semantics as columns/indexes; the body
+  // components carry the boundary `disabled` state via row position.
+  const handleMoveFk = (trackingId: string, direction: -1 | 1) => {
+    setFks((prev) => moveByTrackingId(prev, trackingId, direction));
+    invalidatePreview();
+  };
+  const handleMoveCheck = (trackingId: string, direction: -1 | 1) => {
+    setChecks((prev) => moveByTrackingId(prev, trackingId, direction));
+    invalidatePreview();
+  };
+  const handleMoveUnique = (trackingId: string, direction: -1 | 1) => {
+    setUniques((prev) => moveByTrackingId(prev, trackingId, direction));
+    invalidatePreview();
+  };
+
   // Invalidates the cached DDL preview. Called from every form-edit
   // pathway. When the inline pane is currently open it collapses back
   // to the "Show DDL" label so the next click re-fetches; the cached
@@ -522,6 +599,16 @@ export default function CreateTableDialog({
     invalidatePreview();
   };
 
+  // Sprint 234 — table-level COMMENT input handler. Mirrors the
+  // per-column comment input pattern (Sprint 227) — every keystroke
+  // invalidates the cached DDL preview because the SQL output includes
+  // a `COMMENT ON TABLE` statement when the trimmed comment is
+  // non-empty.
+  const handleTableCommentChange = (next: string) => {
+    setTableComment(next);
+    invalidatePreview();
+  };
+
   const buildRequest = (previewOnly: boolean) => {
     const pkColumns = columns
       .filter((c) => c.is_pk && c.name.trim().length > 0)
@@ -541,6 +628,10 @@ export default function CreateTableDialog({
         }
         return def;
       });
+    // Sprint 234 — table_comment is `null` when blank/whitespace-only
+    // so the Sprint 226-233 caller invariant holds (backend's
+    // `#[serde(default)]` deserialises both omitted and `null` to None).
+    const trimmedTableComment = tableComment.trim();
     return {
       connection_id: connectionId,
       schema: selectedSchema,
@@ -548,6 +639,8 @@ export default function CreateTableDialog({
       columns: columnDefs,
       primary_key: pkColumns.length > 0 ? pkColumns : null,
       preview_only: previewOnly,
+      table_comment:
+        trimmedTableComment.length > 0 ? trimmedTableComment : null,
     };
   };
 
@@ -849,15 +942,52 @@ export default function CreateTableDialog({
           showCloseButton={false}
         >
           <div className="rounded-lg bg-secondary shadow-xl">
+            {/* Sprint 234 — schema picker moved OUT of the header into
+                the body (above Table name input). Header is now just
+                title + sr-only description + close button. */}
             <CreateTableDialogHeader
               selectedSchema={selectedSchema}
-              schemaOptions={schemaOptions}
-              onSchemaChange={handleSchemaChange}
               onClose={handleCancel}
             />
 
             {/* Body */}
             <div className="space-y-3 px-4 py-3">
+              {/* Sprint 234 — Schema picker (moved out of the header).
+                  Renders ABOVE the Table name input so the layout reads
+                  top-to-bottom: schema → table name → table comment →
+                  tabs. Hidden when schemaOptions is empty (mirrors the
+                  prior header guard for MySQL/MariaDB capability). */}
+              {schemaOptions.length > 0 && (
+                <div>
+                  <label
+                    htmlFor="create-table-target-schema"
+                    className="mb-1 block text-xs font-medium text-secondary-foreground"
+                  >
+                    Target schema
+                  </label>
+                  <Select
+                    value={selectedSchema}
+                    onValueChange={handleSchemaChange}
+                  >
+                    <SelectTrigger
+                      id="create-table-target-schema"
+                      aria-label="Target schema"
+                      size="sm"
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="schema" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {schemaOptions.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Table name */}
               <div>
                 <label
@@ -877,23 +1007,65 @@ export default function CreateTableDialog({
                 />
               </div>
 
+              {/* Sprint 234 — Table comment (optional). Rendered between
+                  Table name and the Tabs block. Plumbs into
+                  `buildRequest.table_comment` (trimmed, null when blank). */}
+              <div>
+                <label
+                  htmlFor="create-table-comment"
+                  className="mb-1 block text-xs font-medium text-secondary-foreground"
+                >
+                  Table comment
+                </label>
+                <input
+                  id="create-table-comment"
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                  value={tableComment}
+                  onChange={(e) => handleTableCommentChange(e.target.value)}
+                  placeholder="comment (optional)"
+                  aria-label="Table comment"
+                />
+              </div>
+
               {/* Tabs */}
               <Tabs
                 value={activeTab}
                 onValueChange={(v) => setActiveTab(v as TabKey)}
               >
                 <TabsList className="w-full justify-start gap-0 rounded-none border-b border-border">
+                  {/* Sprint 234 — `(N)` count badges next to Keys /
+                      Indexes / Foreign Keys when their respective
+                      declared-list count > 0. The badge digits flow as
+                      plain text inside the trigger so screen readers
+                      pick them up as part of the tab's accessible name
+                      (e.g. "Keys (2)" — natural language). Hidden when
+                      count is 0 — no `(0)` noise. */}
                   <TabsTrigger value="columns" className="rounded-none">
                     Columns
                   </TabsTrigger>
                   <TabsTrigger value="keys" className="rounded-none">
                     Keys
+                    {declaredPk.length > 0 && (
+                      <span className="ml-1 text-3xs text-muted-foreground">
+                        ({declaredPk.length})
+                      </span>
+                    )}
                   </TabsTrigger>
                   <TabsTrigger value="indexes" className="rounded-none">
                     Indexes
+                    {declaredIndexesForChain.length > 0 && (
+                      <span className="ml-1 text-3xs text-muted-foreground">
+                        ({declaredIndexesForChain.length})
+                      </span>
+                    )}
                   </TabsTrigger>
                   <TabsTrigger value="foreign_keys" className="rounded-none">
                     Foreign Keys
+                    {declaredConstraintsForChain.length > 0 && (
+                      <span className="ml-1 text-3xs text-muted-foreground">
+                        ({declaredConstraintsForChain.length})
+                      </span>
+                    )}
                   </TabsTrigger>
                 </TabsList>
 
@@ -920,91 +1092,125 @@ export default function CreateTableDialog({
                       </Button>
                     </div>
                     <div className="space-y-1">
-                      {columns.map((col) => (
-                        <div
-                          key={col.trackingId}
-                          className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
-                        >
-                          <div className="flex flex-1 flex-col gap-1">
-                            <div className="flex gap-1.5">
-                              <input
-                                className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                                value={col.name}
-                                onChange={(e) =>
-                                  handleUpdateColumn(col.trackingId, {
-                                    name: e.target.value,
-                                  })
-                                }
-                                placeholder="column_name"
-                                aria-label="Column name"
-                              />
-                              <div className="flex-1">
-                                <CreateTableTypeCombobox
-                                  value={col.data_type}
-                                  typesSource={pgTypes}
-                                  onChange={(next) =>
-                                    handleUpdateColumn(col.trackingId, {
-                                      data_type: next,
-                                    })
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <label className="flex cursor-pointer items-center gap-1 text-xs text-foreground">
+                      {columns.map((col, position) => {
+                        // Sprint 234 — boundary flags for ↑/↓ reorder.
+                        const isFirst = position === 0;
+                        const isLast = position === columns.length - 1;
+                        return (
+                          <div
+                            key={col.trackingId}
+                            className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
+                          >
+                            <div className="flex flex-1 flex-col gap-1">
+                              <div className="flex gap-1.5">
                                 <input
-                                  type="checkbox"
-                                  checked={col.nullable}
+                                  className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                                  value={col.name}
                                   onChange={(e) =>
                                     handleUpdateColumn(col.trackingId, {
-                                      nullable: e.target.checked,
+                                      name: e.target.value,
                                     })
                                   }
-                                  className="rounded border-border"
-                                  aria-label="Column nullable"
+                                  placeholder="column_name"
+                                  aria-label="Column name"
                                 />
-                                Nullable
-                              </label>
+                                <div className="flex-1">
+                                  <CreateTableTypeCombobox
+                                    value={col.data_type}
+                                    typesSource={pgTypes}
+                                    typeKindMap={pgTypesByName}
+                                    onChange={(next) =>
+                                      handleUpdateColumn(col.trackingId, {
+                                        data_type: next,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <label className="flex cursor-pointer items-center gap-1 text-xs text-foreground">
+                                  <input
+                                    type="checkbox"
+                                    checked={col.nullable}
+                                    onChange={(e) =>
+                                      handleUpdateColumn(col.trackingId, {
+                                        nullable: e.target.checked,
+                                      })
+                                    }
+                                    className="rounded border-border"
+                                    aria-label="Column nullable"
+                                  />
+                                  Nullable
+                                </label>
+                                <input
+                                  className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                                  value={col.default_value}
+                                  onChange={(e) =>
+                                    handleUpdateColumn(col.trackingId, {
+                                      default_value: e.target.value,
+                                    })
+                                  }
+                                  placeholder="default value (optional)"
+                                  aria-label="Column default value"
+                                />
+                              </div>
                               <input
-                                className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                                value={col.default_value}
+                                className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                                value={col.comment}
                                 onChange={(e) =>
                                   handleUpdateColumn(col.trackingId, {
-                                    default_value: e.target.value,
+                                    comment: e.target.value,
                                   })
                                 }
-                                placeholder="default value (optional)"
-                                aria-label="Column default value"
+                                placeholder="comment (optional)"
+                                aria-label="Column comment"
                               />
                             </div>
-                            <input
-                              className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
-                              value={col.comment}
-                              onChange={(e) =>
-                                handleUpdateColumn(col.trackingId, {
-                                  comment: e.target.value,
-                                })
+                            {/* Sprint 234 — ↑ / ↓ reorder buttons (left
+                              of `−`). Boundary-disabled at top/bottom
+                              row; defense-in-depth handler in parent
+                              also no-ops on out-of-range swaps. */}
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() =>
+                                handleMoveColumn(col.trackingId, -1)
                               }
-                              placeholder="comment (optional)"
-                              aria-label="Column comment"
-                            />
+                              disabled={isFirst}
+                              aria-label="Move column up"
+                              title="Move column up"
+                            >
+                              <ArrowUp />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() =>
+                                handleMoveColumn(col.trackingId, 1)
+                              }
+                              disabled={isLast}
+                              aria-label="Move column down"
+                              title="Move column down"
+                            >
+                              <ArrowDown />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => handleRemoveColumn(col.trackingId)}
+                              disabled={columns.length <= 1}
+                              aria-label="Remove column"
+                              title={
+                                columns.length <= 1
+                                  ? "At least one column required"
+                                  : "Remove column"
+                              }
+                            >
+                              <Minus />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={() => handleRemoveColumn(col.trackingId)}
-                            disabled={columns.length <= 1}
-                            aria-label="Remove column"
-                            title={
-                              columns.length <= 1
-                                ? "At least one column required"
-                                : "Remove column"
-                            }
-                          >
-                            <Minus />
-                          </Button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </TabsContent>
@@ -1026,7 +1232,8 @@ export default function CreateTableDialog({
                     >
                       {validPkColumns.length === 0 ? (
                         <span className="text-xs italic text-muted-foreground">
-                          Add a column with a name to choose primary key columns
+                          Add named columns in the Columns tab to use this
+                          picker.
                         </span>
                       ) : (
                         validPkColumns.map((colName) => {
@@ -1075,6 +1282,7 @@ export default function CreateTableDialog({
                     onRemove={handleRemoveIndex}
                     onUpdate={handleUpdateIndex}
                     onToggleColumn={handleToggleIndexColumn}
+                    onMove={handleMoveIndex}
                   />
                 </TabsContent>
 
@@ -1108,6 +1316,9 @@ export default function CreateTableDialog({
                     onRemoveUnique={handleRemoveUnique}
                     onUpdateUnique={handleUpdateUnique}
                     onToggleUniqueColumn={handleToggleUniqueColumn}
+                    onMoveFk={handleMoveFk}
+                    onMoveCheck={handleMoveCheck}
+                    onMoveUnique={handleMoveUnique}
                   />
                 </TabsContent>
               </Tabs>

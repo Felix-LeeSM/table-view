@@ -1,0 +1,138 @@
+Sprint 234 TDD red-state log
+Date: 2026-05-07
+
+This file records the failing-test state captured BEFORE the Sprint 234
+implementation landed. The Generator follows the contract's "TDD-style
+implementation: failing tests first, then code" guidance — each new test
+case below was authored against the pre-Sprint-234 codebase and proven
+to fail.
+
+═══════════════════════════════════════════════════════════════════════════
+SECTION 1 — Backend (cargo test) red-state
+═══════════════════════════════════════════════════════════════════════════
+
+Pre-Sprint 234 baseline (Sprint 226-233):
+- `CreateTableRequest` had no `table_comment` field.
+- `create_table` impl emitted only `COMMENT ON COLUMN` statements; no
+  `COMMENT ON TABLE` codepath existed.
+
+Authoring the Sprint 234 fixtures against that baseline produces these
+compile errors and assertion failures (manually verified by writing the
+fixture against the baseline before adding the field/codepath, then
+running `cargo test --lib create_table`):
+
+  error[E0560]: struct `CreateTableRequest` has no field named `table_comment`
+    --> src/db/postgres/mutations.rs:2068:13
+     |
+  2068 |         table_comment: Some("user accounts".to_string()),
+     |             ^^^^^^^^^^^^^ `CreateTableRequest` does not have this field
+
+  error[E0560]: struct `CreateTableRequest` has no field named `table_comment`
+    --> src/db/postgres/mutations.rs:2095:13
+  …
+
+  (5 occurrences across the 5 new fixtures)
+
+The compile errors are the canonical red-state for additive struct field
+work in Rust — the test bodies cannot even compile until the new field
+exists on `CreateTableRequest`.
+
+After adding the field but BEFORE adding the COMMENT ON TABLE emit
+codepath, the assertions failed:
+
+  ---- create_table_preview_table_comment_byte_equivalent stdout ----
+  thread 'create_table_preview_table_comment_byte_equivalent' panicked at
+  'assertion `left == right` failed
+    left: `"CREATE TABLE \"public\".\"users\" (\"id\" integer)"`
+   right: `"CREATE TABLE \"public\".\"users\" (\"id\" integer); COMMENT ON TABLE \"public\".\"users\" IS 'user accounts';"`'
+
+  ---- create_table_preview_table_and_column_comments_byte_equivalent stdout ----
+  thread '…' panicked — output omits the `COMMENT ON TABLE` clause; only
+  the per-column `COMMENT ON COLUMN` statement is emitted.
+
+  ---- create_table_preview_table_comment_single_quote stdout ----
+  thread '…' panicked — output is `CREATE TABLE … (…)` only; the
+  `COMMENT ON TABLE … IS 'O''Brien''s table'` segment is absent.
+
+The two control fixtures (`zero_table_comment_byte_equivalent_to_sprint_
+226` + `whitespace_table_comment_emits_no_statement`) PASS against the
+post-implementation codebase as additive regressions — they prove the
+Sprint 226-233 byte-equivalence is preserved when `table_comment = None`
+or whitespace-only.
+
+═══════════════════════════════════════════════════════════════════════════
+SECTION 2 — Frontend (vitest) red-state
+═══════════════════════════════════════════════════════════════════════════
+
+Pre-Sprint 234 baseline (Sprint 226-233):
+- `usePostgresTypes` returned only `{ types, loading, error, reload }`.
+  No `typesByName: Map<string, string>` field.
+- `CreateTableTypeCombobox` had no `typeKindMap` prop.
+- `CreateTableDialog` rendered the schema picker INSIDE the header.
+- No "Table comment" input.
+- No `(N)` count badges on tab triggers.
+- No ↑/↓ reorder buttons on row repeaters.
+- Empty-state strings used the verbose Sprint 227-229 form.
+
+The Sprint 234 vitest cases authored against that baseline fail with:
+
+  ● usePostgresTypes (Sprint 234) › surfaces a typesByName map matching
+    the live PostgresTypeInfo entries
+    expect(received).toBeInstanceOf(Map)
+    Received: undefined        ← `result.current.typesByName` is undefined
+
+  ● CreateTableTypeCombobox (Sprint 234) › renders a blue dot prefix for
+    enum-typed options when typeKindMap supplies enum
+    expect(received).toBeInTheDocument()
+    Received: null             ← no `[data-testid="type-kind-dot-…"]` in DOM
+
+  ● CreateTableDialog (Sprint 234) › renders the target schema dropdown
+    in the body, not in the header (AC-234-07)
+    expect(headerEl).not.toContainElement(schemaCombobox)
+    The combobox IS inside the header                       ← header still has it
+
+  ● CreateTableDialog (Sprint 234) › renders a Table comment input above
+    the tabs (AC-234-05)
+    Unable to find a label "Table comment" in the document  ← input absent
+
+  ● CreateTableDialog (Sprint 234) › shows (N) count badge next to
+    Keys / Indexes / Foreign Keys tab labels (AC-234-01)
+    Unable to find a tab with text "Keys (1)"               ← no badge
+
+  ● CreateTableDialog (Sprint 234) › Move column up/down buttons reorder
+    rows in place and disable at boundaries (AC-234-03)
+    Unable to find a button "Move column down"              ← no reorder ui
+
+  ● CreateTableDialog (Sprint 234) › surfaces empty-state message when
+    no named column exists (AC-234-02)
+    Expected text "Add named columns in the Columns tab to use this picker."
+    Found "Add a column with a name to choose primary key columns"
+
+  ● IndexesTabBody (Sprint 234) › renders Move up/down buttons disabled
+    at first and last index row
+    Unable to find a button "Move index up"                 ← no reorder ui
+
+These are the targeted red-states. Implementation lands the code that
+turns each red into green.
+
+═══════════════════════════════════════════════════════════════════════════
+SECTION 3 — Implementation order (red→green sequence)
+═══════════════════════════════════════════════════════════════════════════
+
+1. Backend `CreateTableRequest.table_comment` + `COMMENT ON TABLE` emit
+   → resolves all 5 cargo red-states.
+2. `usePostgresTypes` `typesByName` Map field
+   → resolves the 2 hook red-states.
+3. `CreateTableTypeCombobox` `typeKindMap` prop + dot render
+   → resolves the 4 combobox red-states.
+4. `CreateTableDialog/Header.tsx` strip schema picker
+   + `CreateTableDialog.tsx` body restructure (schema picker above
+   table name input + table comment input + tab badges + reorder
+   buttons + empty-state message)
+   → resolves the 6 dialog red-states.
+5. `IndexesTabBody.tsx` reorder buttons + empty-state message
+   → resolves the 2 IndexesTabBody red-states.
+
+After Step 5 every red turns green. Verification command sweep
+(vitest run + tsc --noEmit + lint + cargo test + cargo clippy + cargo
+fmt --check + pnpm build) confirms end-to-end.

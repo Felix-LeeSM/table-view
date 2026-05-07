@@ -76,6 +76,12 @@ function defaultProps() {
     onRemoveUnique: vi.fn(),
     onUpdateUnique: vi.fn(),
     onToggleUniqueColumn: vi.fn(),
+    // Sprint 234 — reorder callbacks; default to no-op spies so the
+    // pre-Sprint-234 cases keep working without referencing the new
+    // family handlers.
+    onMoveFk: vi.fn(),
+    onMoveCheck: vi.fn(),
+    onMoveUnique: vi.fn(),
   };
 }
 

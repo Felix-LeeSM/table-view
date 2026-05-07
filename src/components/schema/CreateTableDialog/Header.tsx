@@ -5,42 +5,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@components/ui/select";
 
 /**
- * `CreateTableDialogHeader` — extracted 2026-05-07 per user feedback.
- * Mirrors the `ConnectionDialog` header pattern (single-row title + X
- * inside `DialogHeader` row layout) and adds a second row for the
- * target-schema dropdown. Pulled out of the parent so the title bar
- * isn't tangled with body / preview / footer JSX. Pure presentational
- * — schema list + selection + close handler all flow in as props.
+ * `CreateTableDialogHeader` — extracted 2026-05-07 (Sprint 227 redesign)
+ * and slimmed in Sprint 234 (Phase 27 sprint 9).
  *
- * Schema picker visibility: the picker only renders when there is at
- * least one schema in `schemaOptions`. (When MySQL/MariaDB land in
- * Phase 17+, those drivers will pass an empty list and the row
- * collapses naturally; no extra capability flag plumbing needed in
- * this file.)
+ * Sprint 234 change:
+ *   - The schema picker block (label + `<Select>`) was REMOVED from the
+ *     header per user feedback ("schema picker 위치는 header 말고 body
+ *     안 (table name 위)"). The picker now lives in
+ *     `CreateTableDialog.tsx` body, ABOVE the Table name input. The
+ *     header collapses back to a thin title bar — title +
+ *     `DialogDescription sr-only` + close `<X>` button only.
+ *
+ * The `selectedSchema` value is still used by the screen-reader-only
+ * `DialogDescription` so the modal's accessible description tells the
+ * user which schema the table will be created in.
  */
 export interface CreateTableDialogHeaderProps {
+  /** Drives the screen-reader-only description text. */
   selectedSchema: string;
-  schemaOptions: string[];
-  onSchemaChange: (next: string) => void;
   onClose: () => void;
 }
 
 export default function CreateTableDialogHeader({
   selectedSchema,
-  schemaOptions,
-  onSchemaChange,
   onClose,
 }: CreateTableDialogHeaderProps) {
-  const showSchemaPicker = schemaOptions.length > 0;
   return (
     <DialogHeader layout="column" className="border-b border-border px-4 py-3">
       <div className="flex items-center justify-between">
@@ -59,33 +50,6 @@ export default function CreateTableDialogHeader({
           <X />
         </Button>
       </div>
-      {showSchemaPicker && (
-        <div className="flex items-center gap-2">
-          <label
-            htmlFor="create-table-target-schema"
-            className="text-xs font-medium text-secondary-foreground"
-          >
-            Target schema
-          </label>
-          <Select value={selectedSchema} onValueChange={onSchemaChange}>
-            <SelectTrigger
-              id="create-table-target-schema"
-              aria-label="Target schema"
-              size="sm"
-              className="min-w-32"
-            >
-              <SelectValue placeholder="schema" />
-            </SelectTrigger>
-            <SelectContent>
-              {schemaOptions.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
     </DialogHeader>
   );
 }

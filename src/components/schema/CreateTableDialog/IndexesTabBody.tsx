@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Minus, Plus } from "lucide-react";
 import { Button } from "@components/ui/button";
 import {
   Select,
@@ -73,6 +73,13 @@ export interface IndexesTabBodyProps {
   onRemove: (trackingId: string) => void;
   onUpdate: (trackingId: string, updates: Partial<IndexDraft>) => void;
   onToggleColumn: (trackingId: string, colName: string) => void;
+  /**
+   * Sprint 234 — reorder callback. `direction = -1` moves the row up by
+   * one position; `+1` moves it down. Boundary clicks (top row up,
+   * bottom row down) are no-ops at the parent — buttons render
+   * `disabled` here too as defense-in-depth.
+   */
+  onMove: (trackingId: string, direction: -1 | 1) => void;
 }
 
 export default function IndexesTabBody({
@@ -83,6 +90,7 @@ export default function IndexesTabBody({
   onRemove,
   onUpdate,
   onToggleColumn,
+  onMove,
 }: IndexesTabBodyProps) {
   return (
     <div>
@@ -109,8 +117,14 @@ export default function IndexesTabBody({
         </div>
       ) : (
         <div className="space-y-2">
-          {indexes.map((idx) => {
+          {indexes.map((idx, position) => {
             const dedupe = isPkDuplicate(idx);
+            // Sprint 234 — boundary booleans for the ↑/↓ reorder
+            // buttons: the topmost row's ↑ is disabled, the bottommost
+            // row's ↓ is disabled. Defense-in-depth — the parent
+            // `onMove` handler also no-ops on boundary clicks.
+            const isFirst = position === 0;
+            const isLast = position === indexes.length - 1;
             return (
               <div
                 key={idx.trackingId}
@@ -171,7 +185,7 @@ export default function IndexesTabBody({
                   >
                     {availableColumns.length === 0 ? (
                       <span className="text-xs italic text-muted-foreground">
-                        Add a column with a name to choose index columns
+                        Add named columns in the Columns tab to use this picker.
                       </span>
                     ) : (
                       <div className="flex flex-wrap gap-2">
@@ -204,6 +218,27 @@ export default function IndexesTabBody({
                     </p>
                   )}
                 </div>
+                {/* Sprint 234 — ↑ / ↓ reorder buttons (left of `−`). */}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onMove(idx.trackingId, -1)}
+                  disabled={isFirst}
+                  aria-label="Move index up"
+                  title="Move index up"
+                >
+                  <ArrowUp />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onMove(idx.trackingId, 1)}
+                  disabled={isLast}
+                  aria-label="Move index down"
+                  title="Move index down"
+                >
+                  <ArrowDown />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon-xs"

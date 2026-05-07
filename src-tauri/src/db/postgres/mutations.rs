@@ -265,6 +265,18 @@ impl PostgresAdapter {
         // back the table. The full multi-statement payload returned
         // from `preview_only` mirrors the executed batch byte-for-byte.
         let mut comment_stmts: Vec<String> = Vec::new();
+        // Sprint 234 — table-level COMMENT ON TABLE statement, emitted
+        // FIRST so the chain order is `table comment → column comments`
+        // (Sprint 226-233 caller invariant: `table_comment = None` keeps
+        // the SQL byte-equivalent because no statement is appended).
+        // Single-quote escape mirrors the per-column comment rule below.
+        if let Some(raw) = &req.table_comment {
+            let trimmed = raw.trim();
+            if !trimmed.is_empty() {
+                let escaped = trimmed.replace('\'', "''");
+                comment_stmts.push(format!("COMMENT ON TABLE {} IS '{}'", qualified, escaped));
+            }
+        }
         for col in &req.columns {
             if let Some(raw) = &col.comment {
                 let trimmed = raw.trim();
@@ -1672,6 +1684,7 @@ mod tests {
             columns: vec![col("id", "integer", true, None)],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -1695,6 +1708,7 @@ mod tests {
             ],
             primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -1720,6 +1734,7 @@ mod tests {
             ],
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -1739,6 +1754,7 @@ mod tests {
             columns: vec![],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1759,6 +1775,7 @@ mod tests {
             columns: vec![col("id", "integer", false, None)],
             primary_key: Some(vec!["nonexistent".to_string()]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1779,6 +1796,7 @@ mod tests {
             columns: vec![col("id", "integer", false, None)],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1801,6 +1819,7 @@ mod tests {
             columns: vec![col("bad\"col", "text", true, None)],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1816,6 +1835,7 @@ mod tests {
             columns: vec![col("id", "integer", false, None)],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1836,6 +1856,7 @@ mod tests {
             columns: vec![col("id", "   ", false, None)],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1856,6 +1877,7 @@ mod tests {
             columns: vec![col("id", "integer", false, None)],
             primary_key: Some(vec!["id".to_string()]),
             preview_only: false,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -1874,6 +1896,7 @@ mod tests {
             columns: vec![col("id", "integer", true, None)],
             primary_key: Some(vec![]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
@@ -1907,6 +1930,7 @@ mod tests {
             ],
             primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -1933,6 +1957,7 @@ mod tests {
             ],
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -1962,6 +1987,7 @@ mod tests {
             ],
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -1984,6 +2010,7 @@ mod tests {
             columns: vec![col_with_comment("id", "integer", true, None, "   ")],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
@@ -2012,12 +2039,141 @@ mod tests {
             columns: vec![col_with_comment("id", "integer", true, None, "a;b;c")],
             primary_key: None,
             preview_only: true,
+            table_comment: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap().sql,
             r#"CREATE TABLE "public"."tbl" ("id" integer); COMMENT ON COLUMN "public"."tbl"."id" IS 'a;b;c';"#
+        );
+    }
+
+    // ── create_table tests (Sprint 234 — table_comment) ────────────────
+
+    #[tokio::test]
+    async fn create_table_preview_table_comment_byte_equivalent() {
+        // Sprint 234 — table-level COMMENT ON TABLE statement appended
+        // FIRST in the comment chain. With a single column and no
+        // per-column comment the emitted SQL is the canonical
+        // CREATE TABLE … followed by `; COMMENT ON TABLE …;` and the
+        // trailing semicolon (Sprint 227 multi-statement convention).
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "users".to_string(),
+            columns: vec![col("id", "integer", true, None)],
+            primary_key: None,
+            preview_only: true,
+            table_comment: Some("user accounts".to_string()),
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."users" ("id" integer); COMMENT ON TABLE "public"."users" IS 'user accounts';"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_table_and_column_comments_byte_equivalent() {
+        // Sprint 234 — when both a table comment and a per-column comment
+        // are supplied, the table-level COMMENT ON TABLE statement comes
+        // FIRST, then per-column COMMENT ON COLUMN in declared order.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "events".to_string(),
+            columns: vec![
+                col_with_comment("id", "integer", false, None, "primary key"),
+                col("name", "text", true, None),
+            ],
+            primary_key: Some(vec!["id".to_string()]),
+            preview_only: true,
+            table_comment: Some("event log".to_string()),
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."events" ("id" integer NOT NULL, "name" text, PRIMARY KEY ("id")); COMMENT ON TABLE "public"."events" IS 'event log'; COMMENT ON COLUMN "public"."events"."id" IS 'primary key';"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_table_comment_single_quote() {
+        // Sprint 234 — single-quote escape doubles internally to `''` so
+        // PG accepts the literal verbatim. Same rule as the per-column
+        // comment escape from Sprint 227.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "people".to_string(),
+            columns: vec![col("id", "integer", true, None)],
+            primary_key: None,
+            preview_only: true,
+            table_comment: Some("O'Brien's table".to_string()),
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."people" ("id" integer); COMMENT ON TABLE "public"."people" IS 'O''Brien''s table';"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_zero_table_comment_byte_equivalent_to_sprint_226() {
+        // Sprint 234 additive regression proof — when `table_comment` is
+        // None (Sprint 226-233 caller default), the emitted SQL must
+        // remain byte-equivalent to the Sprint 226 composite-PK fixture.
+        // Mirrors `create_table_preview_three_column_composite_pk_
+        // byte_equivalent` exactly but exercises the Sprint 234 codepath.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "memberships".to_string(),
+            columns: vec![
+                col("user_id", "integer", false, None),
+                col("group_id", "integer", false, None),
+                col("joined_at", "timestamp", true, Some("now()")),
+            ],
+            primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
+            preview_only: true,
+            table_comment: None,
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."memberships" ("user_id" integer NOT NULL, "group_id" integer NOT NULL, "joined_at" timestamp DEFAULT now(), PRIMARY KEY ("user_id", "group_id"))"#
+        );
+    }
+
+    #[tokio::test]
+    async fn create_table_preview_whitespace_table_comment_emits_no_statement() {
+        // Sprint 234 — whitespace-only `table_comment` emits NO COMMENT
+        // ON TABLE statement (post-trim guard). SQL stays byte-equivalent
+        // to the no-comment form.
+        let adapter = PostgresAdapter::new();
+        let req = CreateTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            name: "events".to_string(),
+            columns: vec![col("id", "integer", true, None)],
+            primary_key: None,
+            preview_only: true,
+            table_comment: Some("   ".to_string()),
+        };
+        let result = adapter.create_table(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            r#"CREATE TABLE "public"."events" ("id" integer)"#
         );
     }
 }

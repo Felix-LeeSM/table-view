@@ -342,3 +342,154 @@ describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
     expect(spy).toHaveBeenLastCalledWith("geometry");
   });
 });
+
+// Sprint 234 — `typeKindMap` color-dot rendering (Phase 27 sprint 9).
+//
+// Date: 2026-05-07.
+//
+// Why this block exists:
+// - Locks AC-234-08 (color dot per `type_kind`) — `enum` blue, `domain`
+//   green, `range` purple, `composite` orange. `base` and unknown kinds
+//   render NO dot (graceful degrade — never throw).
+// - Confirms back-compat: when `typeKindMap` is omitted, no dots render
+//   regardless of the suggestion list.
+
+describe("CreateTableTypeCombobox (Sprint 234 — typeKindMap color dots)", () => {
+  function ControlledHostWithKindMap({
+    typesSource,
+    typeKindMap,
+  }: {
+    typesSource?: string[];
+    typeKindMap?: Map<string, string>;
+  }) {
+    const [value, setValue] = useState("");
+    return (
+      <CreateTableTypeCombobox
+        value={value}
+        typesSource={typesSource}
+        typeKindMap={typeKindMap}
+        onChange={setValue}
+      />
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Sprint 234 AC-234-08 — enum kinds render a blue dot.
+  it("renders a blue dot prefix for enum-typed options when typeKindMap supplies enum (AC-234-08)", async () => {
+    const dynamic = ["public.my_enum", "uuid"];
+    const kindMap = new Map<string, string>([
+      ["public.my_enum", "enum"],
+      ["uuid", "base"],
+    ]);
+    render(
+      <ControlledHostWithKindMap typesSource={dynamic} typeKindMap={kindMap} />,
+    );
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+
+    const enumOption = await screen.findByRole("option", {
+      name: "public.my_enum",
+    });
+    const dot = enumOption.querySelector('[data-testid="type-kind-dot"]');
+    expect(dot).not.toBeNull();
+    expect(dot?.getAttribute("class")).toContain("text-blue-500");
+    // Accessible name stays the verbatim type label (no dot character
+    // injected because the span is `aria-hidden`).
+    expect(
+      enumOption.getAttribute("aria-label") ?? enumOption.textContent,
+    ).toContain("public.my_enum");
+  });
+
+  // Sprint 234 AC-234-08 — domain (green), range (purple), composite (orange).
+  it("renders a green dot for domain, purple for range, orange for composite (AC-234-08)", async () => {
+    const dynamic = ["public.my_domain", "public.my_range", "public.my_comp"];
+    const kindMap = new Map<string, string>([
+      ["public.my_domain", "domain"],
+      ["public.my_range", "range"],
+      ["public.my_comp", "composite"],
+    ]);
+    render(
+      <ControlledHostWithKindMap typesSource={dynamic} typeKindMap={kindMap} />,
+    );
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+
+    const domainOpt = await screen.findByRole("option", {
+      name: "public.my_domain",
+    });
+    expect(
+      domainOpt
+        .querySelector('[data-testid="type-kind-dot"]')
+        ?.getAttribute("class"),
+    ).toContain("text-green-500");
+
+    const rangeOpt = screen.getByRole("option", {
+      name: "public.my_range",
+    });
+    expect(
+      rangeOpt
+        .querySelector('[data-testid="type-kind-dot"]')
+        ?.getAttribute("class"),
+    ).toContain("text-purple-500");
+
+    const compOpt = screen.getByRole("option", {
+      name: "public.my_comp",
+    });
+    expect(
+      compOpt
+        .querySelector('[data-testid="type-kind-dot"]')
+        ?.getAttribute("class"),
+    ).toContain("text-orange-500");
+  });
+
+  // Sprint 234 AC-234-08 — `base` kind omits the dot (no DOM noise).
+  it("omits the dot for base-kind options (AC-234-08)", async () => {
+    const dynamic = ["uuid"];
+    const kindMap = new Map<string, string>([["uuid", "base"]]);
+    render(
+      <ControlledHostWithKindMap typesSource={dynamic} typeKindMap={kindMap} />,
+    );
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+
+    const opt = await screen.findByRole("option", { name: "uuid" });
+    expect(opt.querySelector('[data-testid="type-kind-dot"]')).toBeNull();
+  });
+
+  // Sprint 234 AC-234-08 — back-compat: omitting `typeKindMap` renders
+  // identically to Sprint 230 (no dots regardless of suggestion list).
+  it("omits the dot when typeKindMap is undefined (back-compat) (AC-234-08)", async () => {
+    const dynamic = ["public.my_enum", "uuid"];
+    render(<ControlledHostWithKindMap typesSource={dynamic} />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+
+    const enumOpt = await screen.findByRole("option", {
+      name: "public.my_enum",
+    });
+    expect(enumOpt.querySelector('[data-testid="type-kind-dot"]')).toBeNull();
+    const uuidOpt = screen.getByRole("option", { name: "uuid" });
+    expect(uuidOpt.querySelector('[data-testid="type-kind-dot"]')).toBeNull();
+  });
+
+  // Sprint 234 — unknown kind degrades gracefully (no throw, no dot).
+  it("unknown kind in typeKindMap renders no dot (graceful degrade) (AC-234-08)", async () => {
+    const dynamic = ["public.future_kind"];
+    const kindMap = new Map<string, string>([
+      ["public.future_kind", "multirange"], // hypothetical PG 17 kind
+    ]);
+    render(
+      <ControlledHostWithKindMap typesSource={dynamic} typeKindMap={kindMap} />,
+    );
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+
+    const opt = await screen.findByRole("option", {
+      name: "public.future_kind",
+    });
+    expect(opt.querySelector('[data-testid="type-kind-dot"]')).toBeNull();
+  });
+});
