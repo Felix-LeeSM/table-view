@@ -14,6 +14,7 @@ import { vi } from "vitest";
 import { useTabStore, type QueryTab as QueryTabType } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import { __resetDocumentStoreForTests } from "@stores/documentStore";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 import type { QueryResult } from "@/types/query";
@@ -146,6 +147,11 @@ export function resetQueryTabStores(): void {
   useTabStore.setState({ tabs: [], activeTabId: null });
   useQueryHistoryStore.setState({ entries: [] });
   useConnectionStore.setState({ connections: [] });
+  // Sprint 231 — reset Safe Mode mode so the persisted localStorage state
+  // (or a previous case's `setMode` mutation) cannot leak between tests.
+  // `strict` is the production default + matches existing fixture
+  // expectations for the (rare) tests that don't set it explicitly.
+  useSafeModeStore.setState({ mode: "strict" });
   mockExecuteQuery.mockReset();
   mockCancelQuery.mockReset();
   mockFindDocuments.mockReset();

@@ -9,6 +9,7 @@ import {
 } from "@lib/tauri";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
+import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import type { QueryTab } from "@stores/tabStore";
 import type { FindBody } from "@/types/document";
@@ -56,6 +57,20 @@ export interface QueryExecution {
   } | null;
   confirmMongoDangerous: () => Promise<void>;
   cancelMongoDangerous: () => void;
+  /**
+   * Sprint 231 — raw RDB warn-tier confirm payload. Mirrors
+   * `pendingMongoConfirm` (`pipeline` ↔ `statements`). One dialog covers
+   * the whole batch (per-statement individual approval is forbidden by
+   * AC-231-02): single-statement path stuffs `[sql]`, multi-statement
+   * path stuffs the full ordered list. `reason` is the FIRST dangerous
+   * statement's analyzer reason (matrix decided by `decideSafeModeAction`).
+   */
+  pendingRdbConfirm: {
+    statements: string[];
+    reason: string;
+  } | null;
+  confirmRdbDangerous: () => Promise<void>;
+  cancelRdbDangerous: () => void;
 }
 
 export function useQueryExecution({
@@ -103,13 +118,22 @@ export function useQueryExecution({
     ],
   );
 
-  // Mongo aggregate danger gate (strict / warn / off). While the
-  // warn-tier dialog is open, `pendingMongoConfirm` keeps the exact
-  // pipeline + reason so the re-dispatch on confirm runs the same
-  // stages the user typed.
-  const mongoGate = useSafeModeGate(tab.connectionId);
+  // Safe Mode danger gate (strict / warn / off). Wraps the paradigm-agnostic
+  // `decideSafeModeAction` matrix so the Mongo aggregate path AND the raw
+  // RDB single / multi-statement paths share one decision policy.
+  // While a warn-tier dialog is open, `pendingMongoConfirm` /
+  // `pendingRdbConfirm` retains the exact pipeline / statements + reason
+  // so the re-dispatch on confirm runs the same input the user typed.
+  const safeModeGate = useSafeModeGate(tab.connectionId);
   const [pendingMongoConfirm, setPendingMongoConfirm] = useState<{
     pipeline: Record<string, unknown>[];
+    reason: string;
+  } | null>(null);
+  // Sprint 231 — raw RDB warn-tier pending state. Mirrors
+  // `pendingMongoConfirm`. `null` until a dangerous statement is detected
+  // under `mode === "warn"` on a production connection.
+  const [pendingRdbConfirm, setPendingRdbConfirm] = useState<{
+    statements: string[];
     reason: string;
   } | null>(null);
 
@@ -180,6 +204,150 @@ export function useQueryExecution({
     setPendingMongoConfirm(null);
   }, []);
 
+  // Sprint 231 — single-statement RDB dispatch + book-keeping. Mirrors
+  // `runMongoAggregateNow`: extracted so the warn-tier confirm path can
+  // re-enter the same try/catch + recordHistory + DB-mutation hint flow
+  // without inline duplication.
+  const runRdbSingleNow = useCallback(
+    async (stmt: string) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const result = await executeQuery(tab.connectionId, stmt, queryId);
+        completeQuery(tab.id, queryId, result);
+        recordHistory({
+          sql: stmt,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: stmt,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+        });
+      }
+      // Run DB-change detection regardless of query success — `\c x` can
+      // surface as a PG syntax error yet still flip the active pool on
+      // the backend, so the optimistic update + verify is still useful.
+      dispatchDbMutationHint(tab.connectionId, tab.paradigm, stmt);
+    },
+    [
+      tab.id,
+      tab.connectionId,
+      tab.paradigm,
+      updateQueryState,
+      completeQuery,
+      failQuery,
+      recordHistory,
+    ],
+  );
+
+  // Sprint 231 — multi-statement RDB dispatch + per-statement breakdown.
+  // Mirrors the original inline loop in `handleExecute` but takes the
+  // pre-split `statements` (post-comment-strip) so the warn-tier confirm
+  // path executes the exact same batch the user typed.
+  const runRdbBatchNow = useCallback(
+    async (statements: string[], joinedSql: string) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+
+      let lastResult: import("@/types/query").QueryResult | null = null;
+      const statementResults: import("@/types/query").QueryStatementResult[] =
+        [];
+
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i]!;
+        const stmtQueryId = `${queryId}-${i}`;
+        const stmtStart = Date.now();
+        try {
+          const result = await executeQuery(
+            tab.connectionId,
+            stmt,
+            stmtQueryId,
+          );
+          lastResult = result;
+          statementResults.push({
+            sql: stmt,
+            status: "success",
+            result,
+            durationMs: Date.now() - stmtStart,
+          });
+        } catch (err) {
+          statementResults.push({
+            sql: stmt,
+            status: "error",
+            error: err instanceof Error ? err.message : String(err),
+            durationMs: Date.now() - stmtStart,
+          });
+        }
+      }
+
+      const successCount = statementResults.filter(
+        (s) => s.status === "success",
+      ).length;
+      const allFailed = successCount === 0;
+
+      const joinedErrors = statementResults
+        .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
+        .join("\n");
+      completeMultiStatementQuery(tab.id, queryId, {
+        statementResults,
+        lastResult,
+        allFailed,
+        joinedErrorMessage: joinedErrors,
+      });
+
+      recordHistory({
+        sql: joinedSql,
+        executedAt: Date.now(),
+        duration: Date.now() - startTime,
+        // Partial failure still flags the entry as `error` so users can
+        // spot it in the history list without opening the tab.
+        status: successCount === statements.length ? "success" : "error",
+      });
+      // The lexer takes the last DB-mutation match in the full script, so
+      // a script ending in `...; \c admin` flips active_db once.
+      dispatchDbMutationHint(tab.connectionId, tab.paradigm, joinedSql);
+    },
+    [
+      tab.id,
+      tab.connectionId,
+      tab.paradigm,
+      updateQueryState,
+      completeMultiStatementQuery,
+      recordHistory,
+    ],
+  );
+
+  // Sprint 231 — warn-tier confirm callback. Re-enters the same single /
+  // multi helper without the gate, so the user's input is dispatched
+  // verbatim. Multi-statement reuses `joinedSql` for history bookkeeping
+  // (matches the pre-fix recordHistory shape).
+  const confirmRdbDangerous = useCallback(async () => {
+    const pending = pendingRdbConfirm;
+    if (!pending) return;
+    setPendingRdbConfirm(null);
+    if (pending.statements.length === 1) {
+      await runRdbSingleNow(pending.statements[0]!);
+      return;
+    }
+    await runRdbBatchNow(pending.statements, pending.statements.join(";\n"));
+  }, [pendingRdbConfirm, runRdbSingleNow, runRdbBatchNow]);
+
+  const cancelRdbDangerous = useCallback(() => {
+    setPendingRdbConfirm(null);
+  }, []);
+
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
     if (!sql) return;
@@ -235,7 +403,7 @@ export function useQueryExecution({
           });
           return;
         }
-        const decision = mongoGate.decide(analyzeMongoPipeline(parsed));
+        const decision = safeModeGate.decide(analyzeMongoPipeline(parsed));
         if (decision.action === "block") {
           updateQueryState(tab.id, {
             status: "error",
@@ -331,104 +499,61 @@ export function useQueryExecution({
     });
     if (statements.length === 0) return;
 
-    // Single statement — use original behavior
-    if (statements.length === 1) {
-      const queryId = `${tab.id}-${Date.now()}`;
-      const startTime = Date.now();
-      updateQueryState(tab.id, { status: "running", queryId });
-
-      try {
-        const result = await executeQuery(tab.connectionId, sql, queryId);
-        // Stale-response guard lives in the store action — late responses to
-        // a superseded queryId no-op there.
-        completeQuery(tab.id, queryId, result);
-        recordHistory({
-          sql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "success",
-        });
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
-        recordHistory({
-          sql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "error",
-        });
+    // Sprint 231 — Safe Mode gate for raw RDB query path. Single pass
+    // analyzes every statement; the matrix decision priority is
+    // `block > confirm > allow`, and we record the first dangerous
+    // statement's reason so the dialog / error message stays concise.
+    // The gate runs BEFORE `updateQueryState({ status: "running" })`, so
+    // a block / confirm decision never strands the tab in `running`.
+    let worstAction: "allow" | "confirm" | "block" = "allow";
+    let worstReason = "";
+    for (const stmt of statements) {
+      const decision = safeModeGate.decide(analyzeStatement(stmt));
+      if (decision.action === "block") {
+        worstAction = "block";
+        worstReason = decision.reason;
+        break;
       }
-      // Run DB-change detection regardless of query success — `\c x` can
-      // surface as a PG syntax error yet still flip the active pool on
-      // the backend, so the optimistic update + verify is still useful.
-      dispatchDbMutationHint(tab.connectionId, tab.paradigm, sql);
+      if (decision.action === "confirm" && worstAction === "allow") {
+        worstAction = "confirm";
+        worstReason = decision.reason;
+      }
+    }
+    if (worstAction === "block") {
+      // History on block: status=error, duration=0. We do NOT call
+      // `dispatchDbMutationHint` because no SQL hit the backend.
+      updateQueryState(tab.id, { status: "error", error: worstReason });
+      recordHistory({
+        sql,
+        executedAt: Date.now(),
+        duration: 0,
+        status: "error",
+      });
+      return;
+    }
+    if (worstAction === "confirm") {
+      // One dialog per batch. The user types the reason verbatim once
+      // and the batch runs as a unit (per-statement individual approval
+      // is forbidden by AC-231-02).
+      setPendingRdbConfirm({ statements, reason: worstReason });
       return;
     }
 
-    // Multiple statements: execute sequentially and collect a
-    // per-statement breakdown so the result panel can render one tab per
-    // statement (success entries carry `result`, errors carry `error`).
-    const queryId = `${tab.id}-${Date.now()}`;
-    const startTime = Date.now();
-    updateQueryState(tab.id, { status: "running", queryId });
-
-    let lastResult: import("@/types/query").QueryResult | null = null;
-    const statementResults: import("@/types/query").QueryStatementResult[] = [];
-
-    for (let i = 0; i < statements.length; i++) {
-      const stmt = statements[i]!;
-      const stmtQueryId = `${queryId}-${i}`;
-      const stmtStart = Date.now();
-      try {
-        const result = await executeQuery(tab.connectionId, stmt, stmtQueryId);
-        lastResult = result;
-        statementResults.push({
-          sql: stmt,
-          status: "success",
-          result,
-          durationMs: Date.now() - stmtStart,
-        });
-      } catch (err) {
-        statementResults.push({
-          sql: stmt,
-          status: "error",
-          error: err instanceof Error ? err.message : String(err),
-          durationMs: Date.now() - stmtStart,
-        });
-      }
+    if (statements.length === 1) {
+      // Helper handles the running-state transition + book-keeping +
+      // DB-mutation hint dispatch. The single-statement branch passes
+      // `sql` (not `statements[0]`) for byte-equivalent history copy
+      // when the original input contained a trailing semicolon — the
+      // analyzer normalizes statements but history records the user's
+      // exact buffer.
+      await runRdbSingleNow(sql);
+      return;
     }
 
-    const successCount = statementResults.filter(
-      (s) => s.status === "success",
-    ).length;
-    const allFailed = successCount === 0;
-
-    // Final transition: `allFailed` → error (joined message); else
-    // completed with `lastResult` + the per-statement breakdown.
-    const joinedErrors = statementResults
-      .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
-      .join("\n");
-    completeMultiStatementQuery(tab.id, queryId, {
-      statementResults,
-      lastResult,
-      allFailed,
-      joinedErrorMessage: joinedErrors,
-    });
-
-    recordHistory({
-      sql,
-      executedAt: Date.now(),
-      duration: Date.now() - startTime,
-      // Partial failure still flags the entry as `error` so users can
-      // spot it in the history list without opening the tab.
-      status: successCount === statements.length ? "success" : "error",
-    });
-    // The lexer takes the last DB-mutation match in the full script, so a
-    // script ending in `...; \c admin` flips active_db once.
-    dispatchDbMutationHint(tab.connectionId, tab.paradigm, sql);
+    // Multi-statement: dispatch the same helper used by `confirmRdbDangerous`.
+    // `joinedSql` mirrors the user's exact buffer for history (Sprint
+    // 100 multi-statement history invariant).
+    await runRdbBatchNow(statements, sql);
     // Excluding store actions from deps is deliberate — see hook header.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -440,8 +565,10 @@ export function useQueryExecution({
     tab.queryMode,
     tab.database,
     tab.collection,
-    mongoGate,
+    safeModeGate,
     runMongoAggregateNow,
+    runRdbSingleNow,
+    runRdbBatchNow,
   ]);
 
   return {
@@ -449,5 +576,8 @@ export function useQueryExecution({
     pendingMongoConfirm,
     confirmMongoDangerous,
     cancelMongoDangerous,
+    pendingRdbConfirm,
+    confirmRdbDangerous,
+    cancelRdbDangerous,
   };
 }

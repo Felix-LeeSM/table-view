@@ -98,6 +98,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
     pendingMongoConfirm,
     confirmMongoDangerous,
     cancelMongoDangerous,
+    pendingRdbConfirm,
+    confirmRdbDangerous,
+    cancelRdbDangerous,
   } = useQueryExecution({ tab });
   const { editorRef, handleFormat } = useQueryEvents({ tab, updateQuerySql });
 
@@ -221,6 +224,22 @@ export default function QueryTab({ tab }: QueryTabProps) {
           sqlPreview={JSON.stringify(pendingMongoConfirm.pipeline, null, 2)}
           onConfirm={confirmMongoDangerous}
           onCancel={cancelMongoDangerous}
+        />
+      )}
+
+      {/* Sprint 231 — raw RDB warn-tier confirm dialog. Mirrors the Mongo
+          dialog above but joins the batch verbatim (`;\n`) so the user
+          sees every dangerous statement before approving. The
+          `<ConfirmDangerousDialog>` resets its typed buffer on each
+          re-mount (`useEffect` keyed on `open + reason`), so an earlier
+          pending state can't pre-enable Confirm. */}
+      {pendingRdbConfirm && (
+        <ConfirmDangerousDialog
+          open
+          reason={pendingRdbConfirm.reason}
+          sqlPreview={pendingRdbConfirm.statements.join(";\n")}
+          onConfirm={confirmRdbDangerous}
+          onCancel={cancelRdbDangerous}
         />
       )}
     </div>

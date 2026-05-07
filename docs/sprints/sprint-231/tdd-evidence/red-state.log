@@ -1,0 +1,405 @@
+
+ RUN  v4.1.3 /Users/felix/Desktop/study/view-table
+
+stderr | src/components/query/QueryTab.safe-mode.test.tsx
+forwardRef render functions accept exactly two parameters: props and ref. Did you forget to use the ref parameter?
+
+stderr | src/components/query/QueryTab.safe-mode.test.tsx
+forwardRef render functions accept exactly two parameters: props and ref. Did you forget to use the ref parameter?
+
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx (8 tests | 6 failed) 1064ms
+     × [AC-231-01a] production + strict + WHERE-less DELETE → block, executeQuery NOT called, queryState=error 28ms
+     × [AC-231-01b] production + warn + WHERE-less DELETE → confirm dialog, executeQuery NOT called 4ms
+     × [AC-231-01c] production + off + DROP TABLE → block (prod-auto override copy) 4ms
+     × [AC-231-02a] production + strict + multi (safe + dangerous) → block, executeQuery NOT called 4ms
+     × [AC-231-02b] production + warn + multi (UPDATE + DELETE) → confirm dialog; on confirm, executeQuery called twice in order 3ms
+     × [AC-231-03] cancel pendingRdbConfirm → dialog cleared, executeQuery NOT called, queryState NOT running 1007ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/query/QueryTab.safe-mode.test.tsx > QueryTab — Sprint 231 raw RDB Safe Mode gate > [AC-231-01a] production + strict + WHERE-less DELETE → block, executeQuery NOT called, queryState=error
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "conn1",
+      "DELETE FROM users",
+      "query-1-1778121885910",
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx:175:34
+    173|     });
+    174|
+    175|     expect(mockExecuteQuery).not.toHaveBeenCalled();
+       |                                  ^
+    176|     const state = useTabStore.getState();
+    177|     const updated = state.tabs.find((t) => t.id === "query-1");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/components/query/QueryTab.safe-mode.test.tsx > QueryTab — Sprint 231 raw RDB Safe Mode gate > [AC-231-01b] production + warn + WHERE-less DELETE → confirm dialog, executeQuery NOT called
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "conn1",
+      "DELETE FROM users",
+      "query-1-1778121885926",
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx:224:34
+    222|     });
+    223|
+    224|     expect(mockExecuteQuery).not.toHaveBeenCalled();
+       |                                  ^
+    225|     // Dialog rendered with the analyzer reason verbatim.
+    226|     await waitFor(() => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/components/query/QueryTab.safe-mode.test.tsx > QueryTab — Sprint 231 raw RDB Safe Mode gate > [AC-231-01c] production + off + DROP TABLE → block (prod-auto override copy)
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 1 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "conn1",
+      "DROP TABLE users",
+      "query-1-1778121885930",
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx:245:34
+    243|     });
+    244|
+    245|     expect(mockExecuteQuery).not.toHaveBeenCalled();
+       |                                  ^
+    246|     const updated = useTabStore
+    247|       .getState()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/components/query/QueryTab.safe-mode.test.tsx > QueryTab — Sprint 231 raw RDB Safe Mode gate > [AC-231-02a] production + strict + multi (safe + dangerous) → block, executeQuery NOT called
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 2 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "conn1",
+      "SELECT 1",
+      "query-1-1778121885938-0",
+    ]
+
+  2nd vi.fn() call:
+
+    Array [
+      "conn1",
+      "DELETE FROM users",
+      "query-1-1778121885938-1",
+    ]
+
+
+Number of calls: 2
+
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx:290:34
+    288|     });
+    289|
+    290|     expect(mockExecuteQuery).not.toHaveBeenCalled();
+       |                                  ^
+    291|     const updated = useTabStore
+    292|       .getState()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/components/query/QueryTab.safe-mode.test.tsx > QueryTab — Sprint 231 raw RDB Safe Mode gate > [AC-231-02b] production + warn + multi (UPDATE + DELETE) → confirm dialog; on confirm, executeQuery called twice in order
+AssertionError: expected "vi.fn()" to not be called at all, but actually been called 2 times
+
+Received:
+
+  1st vi.fn() call:
+
+    Array [
+      "conn1",
+      "UPDATE users SET active = 1 WHERE id = 1",
+      "query-1-1778121885943-0",
+    ]
+
+  2nd vi.fn() call:
+
+    Array [
+      "conn1",
+      "DELETE FROM logs",
+      "query-1-1778121885943-1",
+    ]
+
+
+Number of calls: 2
+
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx:313:34
+    311|     });
+    312|
+    313|     expect(mockExecuteQuery).not.toHaveBeenCalled();
+       |                                  ^
+    314|     // The reason text is the FIRST dangerous statement's reason —
+    315|     // here the UPDATE (with WHERE) is safe, so DELETE without WHERE w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/components/query/QueryTab.safe-mode.test.tsx > QueryTab — Sprint 231 raw RDB Safe Mode gate > [AC-231-03] cancel pendingRdbConfirm → dialog cleared, executeQuery NOT called, queryState NOT running
+TestingLibraryElementError: Unable to find role="button" and name "Cancel"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"flex flex-1 flex-col overflow-hidden"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 border-b border-border bg-secondary px-2 py-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Run query"[39m
+          [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3"[39m
+          [33mdata-size[39m=[32m"xs"[39m
+          [33mdata-slot[39m=[32m"button"[39m
+          [33mdata-variant[39m=[32m"ghost"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"lucide lucide-play text-success"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<polygon[39m
+              [33mpoints[39m=[32m"6 3 20 12 6 21 6 3"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mRun[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-3xs text-muted-foreground"[39m
+          [36m>[39m
+            [0m⌘⏎[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Format SQL"[39m
+          [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3"[39m
+          [33mdata-size[39m=[32m"xs"[39m
+          [33mdata-slot[39m=[32m"button"[39m
+          [33mdata-variant[39m=[32m"ghost"[39m
+          [33mtitle[39m=[32m"Format SQL (Cmd+I)"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"lucide lucide-paintbrush"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m14.622 17.897-10.68-2.913"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mFormat[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"ml-auto flex items-center gap-1 relative"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Save to favorites"[39m
+            [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3"[39m
+            [33mdata-size[39m=[32m"xs"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+            [33mdata-variant[39m=[32m"ghost"[39m
+            [33mtitle[39m=[32m"Save to favorites"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-star"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span>[39m
+              [0mSave[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Open favorites"[39m
+            [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"flex flex-1 flex-col overflow-hidden"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 border-b border-border bg-secondary px-2 py-1"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Run query"[39m
+          [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3"[39m
+          [33mdata-size[39m=[32m"xs"[39m
+          [33mdata-slot[39m=[32m"button"[39m
+          [33mdata-variant[39m=[32m"ghost"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"lucide lucide-play text-success"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<polygon[39m
+              [33mpoints[39m=[32m"6 3 20 12 6 21 6 3"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mRun[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-3xs text-muted-foreground"[39m
+          [36m>[39m
+            [0m⌘⏎[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33maria-label[39m=[32m"Format SQL"[39m
+          [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3"[39m
+          [33mdata-size[39m=[32m"xs"[39m
+          [33mdata-slot[39m=[32m"button"[39m
+          [33mdata-variant[39m=[32m"ghost"[39m
+          [33mtitle[39m=[32m"Format SQL (Cmd+I)"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"lucide lucide-paintbrush"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"24"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"24"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m14.622 17.897-10.68-2.913"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [36m<span>[39m
+            [0mFormat[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"ml-auto flex items-center gap-1 relative"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Save to favorites"[39m
+            [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3"[39m
+            [33mdata-size[39m=[32m"xs"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+            [33mdata-variant[39m=[32m"ghost"[39m
+            [33mtitle[39m=[32m"Save to favorites"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-star"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span>[39m
+              [0mSave[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Open favorites"[39m
+            [33mclass[39m=[32m"inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:...
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/components/query/QueryTab.safe-mode.test.tsx:370:36
+    368|
+    369|     // Dialog mounted.
+    370|     const cancelBtn = await screen.findByRole("button", { name: "Cance…
+       |                                    ^
+    371|
+    372|     await act(async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 2 passed (8)
+   Start at  11:44:45
+   Duration  1.83s (transform 137ms, setup 41ms, import 307ms, tests 1.06s, environment 350ms)
+
