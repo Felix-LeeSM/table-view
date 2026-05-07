@@ -4,6 +4,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@components/ui/popover";
 import {
   expandParametricDefault,
   filterPostgresTypes,
+  filterPostgresTypesAgainst,
   PARAMETRIC_TYPE_DEFAULTS,
 } from "@/lib/sql/postgresTypes";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,16 @@ export interface CreateTableTypeComboboxProps {
   ariaLabel?: string;
   placeholder?: string;
   className?: string;
+  /**
+   * Sprint 230 — optional dynamic type source. When supplied, the
+   * combobox filters from this list (typically the merged
+   * canonical + live PG types from `usePostgresTypes`); when omitted,
+   * the combobox falls back to the canonical
+   * `POSTGRES_COMMON_TYPES` list (Sprint 227 baseline). Default is
+   * `undefined` so existing tests / non-DB consumers stay
+   * byte-equivalent.
+   */
+  typesSource?: readonly string[];
 }
 
 export default function CreateTableTypeCombobox({
@@ -43,6 +54,7 @@ export default function CreateTableTypeCombobox({
   ariaLabel = "Column data type",
   placeholder = "varchar(255)",
   className,
+  typesSource,
 }: CreateTableTypeComboboxProps) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -53,7 +65,13 @@ export default function CreateTableTypeCombobox({
   // selection survives React's controlled-input re-render.
   const pendingCaretRef = useRef<number | null>(null);
 
-  const suggestions = useMemo(() => filterPostgresTypes(value), [value]);
+  const suggestions = useMemo(
+    () =>
+      typesSource
+        ? filterPostgresTypesAgainst(typesSource, value)
+        : filterPostgresTypes(value),
+    [typesSource, value],
+  );
 
   // Reset the highlighted suggestion when the filtered list shrinks
   // (e.g. the user typed a longer prefix). Without this the highlight

@@ -251,6 +251,25 @@ pub struct FunctionInfo {
     pub kind: String, // "function", "procedure", "aggregate", "window"
 }
 
+/// Sprint 230 — single Postgres type entry returned by
+/// `list_postgres_types(connection_id)`. Sourced from
+/// `pg_catalog.pg_type` joined with `pg_catalog.pg_namespace`.
+///
+/// The `type_kind` field maps the PG `pg_type.typtype` column through a
+/// closed whitelist:
+///   `'b'` → `"base"`     (built-in scalar / extension types)
+///   `'d'` → `"domain"`   (`CREATE DOMAIN`)
+///   `'e'` → `"enum"`     (`CREATE TYPE … AS ENUM`)
+///   `'r'` → `"range"`    (`CREATE TYPE … AS RANGE`)
+///   `'c'` → `"composite"` (`CREATE TYPE … AS (…)`; auto row types
+///                          are excluded by the SQL filter)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostgresTypeInfo {
+    pub schema: String,
+    pub name: String,
+    pub type_kind: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

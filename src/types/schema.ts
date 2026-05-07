@@ -245,3 +245,27 @@ export interface FunctionInfo {
   source: string | null;
   kind: string; // "function" | "procedure" | "aggregate" | "window"
 }
+
+/**
+ * Sprint 230 — single Postgres type entry returned by
+ * `tauri.listPostgresTypes(connectionId)`. The wire shape matches the
+ * Rust `PostgresTypeInfo` struct (snake_case `type_kind` mirrors serde
+ * default naming).
+ *
+ * `type_kind` is the `pg_type.typtype` whitelist:
+ *   `"base"`     — built-in scalar / extension types (`varchar`,
+ *                  `geometry`, …)
+ *   `"domain"`   — `CREATE DOMAIN`
+ *   `"enum"`     — `CREATE TYPE … AS ENUM`
+ *   `"range"`    — `CREATE TYPE … AS RANGE`
+ *   `"composite"` — `CREATE TYPE … AS (…)` (auto row types backing
+ *                  every CREATE TABLE are excluded by the SQL filter)
+ *
+ * Sprint 230 surfaces the field but does not consume it for coloring
+ * (deferred to Sprint 231 polish).
+ */
+export interface PostgresTypeInfo {
+  schema: string;
+  name: string;
+  type_kind: "base" | "domain" | "enum" | "range" | "composite";
+}

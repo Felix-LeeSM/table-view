@@ -158,6 +158,7 @@ pub fn run() {
         commands::rdb::schema::get_view_definition,
         commands::rdb::schema::get_view_columns,
         commands::rdb::schema::get_function_source,
+        commands::rdb::schema::list_postgres_types,
         commands::rdb::query::execute_query,
         commands::rdb::query::execute_query_batch,
         commands::rdb::query::cancel_query,

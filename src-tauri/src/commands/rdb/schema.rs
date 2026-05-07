@@ -7,7 +7,7 @@
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
-use crate::models::{ColumnInfo, FunctionInfo, SchemaInfo, TableInfo, ViewInfo};
+use crate::models::{ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, TableInfo, ViewInfo};
 
 use super::{register_cancel_token, release_cancel_token};
 
@@ -211,4 +211,25 @@ pub async fn get_function_source(
         .as_rdb()?
         .get_function_source(&schema, &function_name)
         .await
+}
+
+/// Sprint 230 — list every Postgres-style data type visible to the
+/// active connection (built-ins from `pg_catalog`, extension types
+/// like PostGIS `geometry`, user-defined enums / domains / ranges /
+/// composites). Read-only, no cancel-token (the call is small,
+/// expected < 100 ms in practice). Pattern matches `list_views` /
+/// `list_functions` (no `query_id` argument). Non-RDB connections
+/// (Mongo) and non-PG RDB adapters (MySQL/SQLite/Oracle, Phase 17+)
+/// fail cleanly via `as_rdb()?` + the trait's default
+/// `Unsupported` impl.
+#[tauri::command]
+pub async fn list_postgres_types(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<PostgresTypeInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&connection_id)
+        .ok_or_else(|| not_connected(&connection_id))?;
+    active.as_rdb()?.list_types().await
 }

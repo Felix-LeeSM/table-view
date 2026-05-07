@@ -48,7 +48,8 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
     CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    FilterCondition, FunctionInfo, IndexInfo, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaChangeResult, TableData,
+    TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -347,5 +348,14 @@ impl RdbAdapter for PostgresAdapter {
         function: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
         Box::pin(async move { self.get_function_source(namespace, function).await })
+    }
+
+    /// Sprint 230 — delegate to the inherent `list_types` so the trait
+    /// dispatcher can drive the new `list_postgres_types` Tauri command
+    /// without the command site having to downcast to `PostgresAdapter`.
+    fn list_types<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<PostgresTypeInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.list_types().await })
     }
 }

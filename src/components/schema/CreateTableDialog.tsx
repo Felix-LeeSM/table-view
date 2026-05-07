@@ -9,6 +9,7 @@ import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useFkReferencePicker } from "@hooks/useFkReferencePicker";
+import { usePostgresTypes } from "@hooks/usePostgresTypes";
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import CreateTableDialogHeader from "./CreateTableDialog/Header";
 import IndexesTabBody, {
@@ -355,6 +356,11 @@ export default function CreateTableDialog({
   };
 
   const fkPicker = useFkReferencePicker(connectionId);
+  // Sprint 230 — dynamic PG type list. Hook returns the merged
+  // canonical-first + live-extras list (or canonical exactly while
+  // the fetch is in flight / on error). Pass through as `typesSource`
+  // to the per-row combobox so suggestions reflect the live PG state.
+  const { types: pgTypes } = usePostgresTypes(connectionId);
 
   const handleUpdateFk = (
     trackingId: string,
@@ -935,6 +941,7 @@ export default function CreateTableDialog({
                               <div className="flex-1">
                                 <CreateTableTypeCombobox
                                   value={col.data_type}
+                                  typesSource={pgTypes}
                                   onChange={(next) =>
                                     handleUpdateColumn(col.trackingId, {
                                       data_type: next,

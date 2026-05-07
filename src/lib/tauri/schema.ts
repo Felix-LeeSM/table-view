@@ -4,6 +4,7 @@ import type {
   ConstraintInfo,
   FunctionInfo,
   IndexInfo,
+  PostgresTypeInfo,
   SchemaInfo,
   TableInfo,
   ViewInfo,
@@ -116,4 +117,25 @@ export async function getFunctionSource(
     schema,
     functionName,
   });
+}
+
+// ── Sprint 230 — dynamic Postgres type list ────────────────────────────
+
+/**
+ * Sprint 230 — list every Postgres-style data type visible to the
+ * connection (built-ins from `pg_catalog`, extension types like
+ * PostGIS `geometry`, user-defined enums / domains / ranges /
+ * composites). Read-only catalog query — same paradigm as
+ * `listSchemas` / `listTables`. The wrapper lives in `schema.ts`
+ * (NOT `ddl.ts` — that file is reserved for mutation wrappers like
+ * `createTable` / `addConstraint`).
+ *
+ * The returned shape is consumed by `usePostgresTypes` (which merges
+ * the live list with the canonical `POSTGRES_COMMON_TYPES` so the
+ * combobox stays usable when the call fails or resolves slowly).
+ */
+export async function listPostgresTypes(
+  connectionId: string,
+): Promise<PostgresTypeInfo[]> {
+  return invoke<PostgresTypeInfo[]>("list_postgres_types", { connectionId });
 }

@@ -1,0 +1,130 @@
+# Sprint 230 — TDD Red-State Evidence
+
+Date: 2026-05-07
+Profile: pre-implementation, all new test files captured failing.
+
+The Generator wrote the new vitest cases FIRST, ran them to observe
+red, then implemented backend + frontend code, then re-ran them to
+observe green. This log captures the RED state per the contract's
+"TDD red→green" requirement.
+
+## §1 — `src/hooks/usePostgresTypes.test.ts` — RED
+
+Initial run before any production code existed. The hook file
+(`src/hooks/usePostgresTypes.ts`) did not exist yet, so the import
+resolves to a vite error.
+
+```
+ ❯ src/hooks/usePostgresTypes.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/hooks/usePostgresTypes.test.ts [ src/hooks/usePostgresTypes.test.ts ]
+Error: Failed to resolve import "./usePostgresTypes" from "src/hooks/usePostgresTypes.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/felix/Desktop/study/view-table/src/hooks/usePostgresTypes.test.ts:36:0
+  6  |  }));
+  7  |  const __vi_import_0__ = await import("@testing-library/react");
+  8  |  const __vi_import_1__ = await import("./usePostgresTypes");
+     |                                       ^
+  9  |  const __vi_import_2__ = await import("@/lib/sql/postgresTypes");
+
+ Test Files  1 failed (1)
+      Tests  no tests
+```
+
+12 vitest cases authored before implementation:
+- mount triggers fetch + sets types to merged list on resolve (AC-230-05 a)
+- success merge preserves canonical order at the head + appends non-duplicate live entries (AC-230-05 b)
+- fetch error surfaces error + falls back to canonical + loading false (AC-230-05 c)
+- reload() refetches and updates cache (AC-230-05 d)
+- cache hit on second mount with same connectionId does not re-call the Tauri wrapper (AC-230-05 e)
+- display label rule — pg_catalog.X strips to X; <schema>.<name> for non-pg_catalog (AC-230-06)
+- empty result — merged list == canonical exactly
+- duplicate name — pg_catalog.varchar and canonical varchar yield single entry
+- stale connectionId — original conn1 Promise resolves last, no state mutation for conn2
+- concurrent mounts on same connectionId share one in-flight Promise (mock invoked once)
+- invalidatePostgresTypesCache(connectionId) — fresh fetch on next mount (AC-230-11)
+- defensive — entries with empty name or pg_toast schema dropped before merge
+
+## §2 — `src/components/schema/CreateTableTypeCombobox.test.tsx` Sprint 230 describe — RED
+
+4 new vitest cases authored under a fresh `describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)")` block. The combobox did not yet accept a `typesSource` prop, so the prop was silently ignored — the assertions that demanded a dynamic-source filter (e.g. `geometry` surfacing for query `geo`) failed because the canonical-list filter did not contain `geometry`.
+
+```
+ FAIL  src/components/schema/CreateTableTypeCombobox.test.tsx > CreateTableTypeCombobox (Sprint 230 — typesSource prop) > typesSource={...} filters the dynamic list (geo → geometry, varchar excluded)
+AssertionError: expected [] to contain "geometry"
+```
+
+4 cases authored before implementation:
+- typesSource={...} filters the dynamic list (geo → geometry, varchar excluded)
+- typesSource omitted — canonical list path is used (back-compat)
+- parametric default expansion intact when canonical bare 'varchar' is in the dynamic list (AC-230-09)
+- non-parametric dynamic entry (geometry) commits verbatim
+
+## §3 — `src/components/schema/CreateTableDialog.test.tsx` Sprint 230 describe — RED
+
+3 new vitest cases authored under a fresh `describe("Sprint 230 — CreateTableDialog wires dynamic PG type list")` block. The dialog did not yet invoke `usePostgresTypes`, so the cases that asserted `mockListPostgresTypes` was called rejected:
+
+```
+ FAIL  src/components/schema/CreateTableDialog.test.tsx > Sprint 230 — CreateTableDialog wires dynamic PG type list > dialog mount calls tauri.listPostgresTypes(connectionId) exactly once (AC-230-08)
+Error: expected "spy" to be called 1 times, but got 0 times
+```
+
+3 cases authored before implementation:
+- dialog mount calls tauri.listPostgresTypes(connectionId) exactly once (AC-230-08)
+- dialog merges live types into the column-type combobox suggestions (AC-230-08)
+- loading-canonical-first — combobox shows canonical entries instantly with no spinner (AC-230-10)
+
+## §4 — Backend RED (Rust)
+
+The new Tauri command (`list_postgres_types`) and the trait method
+(`RdbAdapter::list_types`) and the inherent method
+(`PostgresAdapter::list_types`) and the SQL constant
+(`LIST_TYPES_SQL`) and the unit test
+(`list_types_sql_matches_canonical_fixture`) were authored together
+in the same TDD cycle. Pre-implementation `cargo test list_types`
+filtered no matching tests; after authoring the unit test plus the
+const and the inherent method, the test passed green on first run
+because the const and the assertion fixture were written from the
+contract spec verbatim.
+
+```
+running 2 tests
+test db::postgres::schema::tests::list_types_sql_matches_canonical_fixture ... ok
+test db::postgres::schema::tests::list_types_without_connection_fails ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 373 filtered out; finished in 0.00s
+```
+
+## §5 — Green confirmation (post-implementation)
+
+```
+$ pnpm vitest run src/hooks/usePostgresTypes.test.ts
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+
+$ pnpm vitest run src/components/schema/CreateTableTypeCombobox.test.tsx
+ Test Files  1 passed (1)
+      Tests  16 passed (16)   # Sprint 227 baseline 12 + Sprint 230 +4
+
+$ pnpm vitest run src/components/schema/CreateTableDialog.test.tsx
+ Test Files  1 passed (1)
+      Tests  55 passed (55)   # Sprint 229 baseline 52 + Sprint 230 +3
+
+$ pnpm vitest run
+ Test Files  219 passed (219)
+      Tests  2838 passed (2838)   # Sprint 229 baseline 218 / 2819 → +1 file / +19 cases
+
+$ cargo test --manifest-path src-tauri/Cargo.toml list_types
+test db::postgres::schema::tests::list_types_sql_matches_canonical_fixture ... ok
+test db::postgres::schema::tests::list_types_without_connection_fails ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 373 filtered out
+
+$ cargo test --manifest-path src-tauri/Cargo.toml create_table create_index add_constraint
+create_table       — 16 passed; 0 failed (Sprint 226+227 fixtures byte-equivalent)
+create_index       — 11 passed; 0 failed (Sprint 228 fixtures byte-equivalent)
+add_constraint     — 12 passed; 0 failed (Sprint 229 fixtures byte-equivalent)
+```
+
+All 4-set + clippy pass. See `docs/sprints/sprint-230/handoff.md` for
+the full verification table.

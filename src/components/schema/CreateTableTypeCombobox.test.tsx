@@ -238,3 +238,107 @@ describe("CreateTableTypeCombobox (Sprint 227 — AC-227-03)", () => {
     expect(spy).toHaveBeenLastCalledWith("varchar(255)");
   });
 });
+
+describe("CreateTableTypeCombobox (Sprint 230 — typesSource prop)", () => {
+  function ControlledHostWithSource({
+    typesSource,
+    onChangeSpy,
+  }: {
+    typesSource?: string[];
+    onChangeSpy?: (next: string) => void;
+  }) {
+    const [value, setValue] = useState("");
+    return (
+      <CreateTableTypeCombobox
+        value={value}
+        typesSource={typesSource}
+        onChange={(next) => {
+          setValue(next);
+          onChangeSpy?.(next);
+        }}
+      />
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Sprint 230 — when `typesSource` is provided, the combobox filters
+  // the dynamic list rather than the canonical `POSTGRES_COMMON_TYPES`.
+  it("typesSource={...} filters the dynamic list (geo → geometry, varchar excluded)", async () => {
+    const dynamic = ["geometry", "public.my_enum", "varchar", "uuid"];
+    render(<ControlledHostWithSource typesSource={dynamic} />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "geo" } });
+
+    const listbox = await screen.findByRole("listbox", {
+      name: /PostgreSQL types/i,
+    });
+    const labels = Array.from(listbox.querySelectorAll('[role="option"]')).map(
+      (o) => o.textContent ?? "",
+    );
+    expect(labels).toContain("geometry");
+    expect(labels).not.toContain("varchar");
+    expect(labels).not.toContain("uuid");
+  });
+
+  // Sprint 230 — when `typesSource` is omitted (back-compat), the
+  // combobox falls back to the canonical list path.
+  it("typesSource omitted — canonical list path is used (back-compat)", async () => {
+    render(<ControlledHostWithSource />);
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "int" } });
+
+    const listbox = await screen.findByRole("listbox", {
+      name: /PostgreSQL types/i,
+    });
+    const labels = Array.from(listbox.querySelectorAll('[role="option"]')).map(
+      (o) => o.textContent ?? "",
+    );
+    for (const expected of ["integer", "bigint", "smallint", "interval"]) {
+      expect(labels).toContain(expected);
+    }
+  });
+
+  // Sprint 230 — `expandParametricDefault` parity with the dynamic
+  // list. Bare `varchar` MUST still expand to `varchar(255)` because
+  // canonical types are guaranteed-present in the merged head.
+  it("parametric default expansion intact when canonical bare 'varchar' is in the dynamic list (AC-230-09)", async () => {
+    const spy = vi.fn();
+    const dynamic = ["varchar", "varchar(255)", "geometry", "public.my_enum"];
+    render(
+      <ControlledHostWithSource typesSource={dynamic} onChangeSpy={spy} />,
+    );
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "var" } });
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    const bareOption = screen.getByRole("option", { name: "varchar" });
+    fireEvent.mouseDown(bareOption);
+    expect(spy).toHaveBeenLastCalledWith("varchar(255)");
+  });
+
+  // Sprint 230 — `geometry` is non-parametric in the dynamic list, so
+  // committing it forwards the value verbatim.
+  it("non-parametric dynamic entry (geometry) commits verbatim", async () => {
+    const spy = vi.fn();
+    const dynamic = ["geometry", "public.my_enum"];
+    render(
+      <ControlledHostWithSource typesSource={dynamic} onChangeSpy={spy} />,
+    );
+    const input = screen.getByRole("combobox", { name: "Column data type" });
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "geo" } });
+    await waitFor(() =>
+      expect(screen.getByRole("listbox")).toBeInTheDocument(),
+    );
+    const opt = screen.getByRole("option", { name: "geometry" });
+    fireEvent.mouseDown(opt);
+    expect(spy).toHaveBeenLastCalledWith("geometry");
+  });
+});

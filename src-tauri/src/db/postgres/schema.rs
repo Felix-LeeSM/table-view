@@ -10,11 +10,55 @@ use sqlx::PgPool;
 
 use crate::error::AppError;
 use crate::models::{
-    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, SchemaInfo, TableInfo, ViewInfo,
+    ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaInfo, TableInfo,
+    ViewInfo,
 };
 
 use super::connection::is_pg_database_permission_denied;
 use super::PostgresAdapter;
+
+/// Sprint 230 — canonical SQL emitted by `PostgresAdapter::list_types`.
+///
+/// Captured as a `pub(crate) const &str` so the runtime executes the
+/// same byte-string the unit test (`list_types_sql_matches_canonical_fixture`)
+/// asserts against. Any future tweak to the filter set must update both
+/// the const and the assertion together — drift is caught by `cargo
+/// test list_types`.
+///
+/// Filter set:
+/// - `typtype IN ('b','d','e','r','c')` — base / domain / enum / range
+///   / composite. Pseudo (`'p'`, e.g. `any`) and multirange (`'m'`)
+///   are intentionally excluded.
+/// - `typname NOT LIKE '\_%' ESCAPE '\'` — array element types
+///   (`_int4`, `_text`, etc.) are excluded; only the bare element
+///   name (`int4`, `text`) is surfaced via the base row.
+/// - `nspname NOT IN ('pg_toast')` — TOAST internal types are not
+///   user-selectable column types.
+/// - `NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.reltype = t.oid)`
+///   — auto row types backing every CREATE TABLE are excluded; only
+///   user-defined `CREATE TYPE … AS (…)` composites survive on the
+///   `'c'` arm.
+/// - `pg_catalog` namespace is kept in scope so built-ins (`varchar`,
+///   `int4`, `uuid`) appear; the frontend hook strips the
+///   `pg_catalog.` prefix when building the display label.
+pub(crate) const LIST_TYPES_SQL: &str = "SELECT n.nspname AS schema, t.typname AS name,
+       CASE t.typtype
+            WHEN 'b' THEN 'base'
+            WHEN 'd' THEN 'domain'
+            WHEN 'e' THEN 'enum'
+            WHEN 'r' THEN 'range'
+            WHEN 'c' THEN 'composite'
+       END AS type_kind
+  FROM pg_catalog.pg_type t
+  JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+ WHERE t.typtype IN ('b', 'd', 'e', 'r', 'c')
+   AND t.typname NOT LIKE '\\_%' ESCAPE '\\'
+   AND n.nspname NOT IN ('pg_toast')
+   AND NOT EXISTS (
+       SELECT 1 FROM pg_catalog.pg_class c
+        WHERE c.reltype = t.oid
+   )
+ ORDER BY n.nspname, t.typname";
 
 /// Serialize a foreign-key reference into the canonical
 /// `<schema>.<table>(<column>)` string consumed by the frontend
@@ -466,6 +510,39 @@ impl PostgresAdapter {
             .collect())
     }
 
+    /// Sprint 230 — list every Postgres type visible to the active
+    /// connection (built-ins from `pg_catalog`, extension types from
+    /// any other schema, user-defined enums / domains / ranges /
+    /// composites). The SQL string is captured in the module-level
+    /// [`LIST_TYPES_SQL`] const so the unit test
+    /// `list_types_sql_matches_canonical_fixture` asserts byte-for-byte
+    /// against the same string the runtime executes.
+    ///
+    /// Read-only — no cancel-token (the call is small, < 100 ms in
+    /// practice). Pattern matches `list_views` / `list_functions` (no
+    /// `query_id` argument).
+    pub async fn list_types(&self) -> Result<Vec<PostgresTypeInfo>, AppError> {
+        let pool = self.active_pool().await?;
+
+        let rows: Vec<(String, String, Option<String>)> = sqlx::query_as(LIST_TYPES_SQL)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(schema, name, type_kind)| PostgresTypeInfo {
+                schema,
+                name,
+                // Defensive — the SQL whitelist already restricts
+                // typtype to b/d/e/r/c so the CASE expression always
+                // returns Some(_); fall back to "base" if PG ever
+                // surprises us.
+                type_kind: type_kind.unwrap_or_else(|| "base".to_string()),
+            })
+            .collect())
+    }
+
     /// List all functions and procedures in the given schema.
     #[allow(clippy::type_complexity)]
     pub async fn list_functions(&self, schema: &str) -> Result<Vec<FunctionInfo>, AppError> {
@@ -802,6 +879,58 @@ mod tests {
             "Expected 'Not connected' error, got: {err_msg}"
         );
     }
+    // ── Sprint 230 — list_types SQL builder fixture ────────────────────
+
+    /// Asserts the runtime SQL string matches the canonical filter set
+    /// byte-for-byte. Any future tweak (new typtype, additional schema
+    /// exclusion, etc.) MUST update both `LIST_TYPES_SQL` and this
+    /// fixture together — drift is caught here.
+    #[test]
+    fn list_types_sql_matches_canonical_fixture() {
+        const EXPECTED: &str = "SELECT n.nspname AS schema, t.typname AS name,
+       CASE t.typtype
+            WHEN 'b' THEN 'base'
+            WHEN 'd' THEN 'domain'
+            WHEN 'e' THEN 'enum'
+            WHEN 'r' THEN 'range'
+            WHEN 'c' THEN 'composite'
+       END AS type_kind
+  FROM pg_catalog.pg_type t
+  JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+ WHERE t.typtype IN ('b', 'd', 'e', 'r', 'c')
+   AND t.typname NOT LIKE '\\_%' ESCAPE '\\'
+   AND n.nspname NOT IN ('pg_toast')
+   AND NOT EXISTS (
+       SELECT 1 FROM pg_catalog.pg_class c
+        WHERE c.reltype = t.oid
+   )
+ ORDER BY n.nspname, t.typname";
+        assert_eq!(LIST_TYPES_SQL, EXPECTED);
+        // Spot-check that the canonical filter substrings are present
+        // — if a future refactor reformats the const, these grep-style
+        // checks still surface a regression.
+        assert!(LIST_TYPES_SQL.contains("pg_catalog.pg_type t"));
+        assert!(LIST_TYPES_SQL.contains("pg_catalog.pg_namespace n ON n.oid = t.typnamespace"));
+        assert!(LIST_TYPES_SQL.contains("t.typtype IN ('b', 'd', 'e', 'r', 'c')"));
+        assert!(LIST_TYPES_SQL.contains("t.typname NOT LIKE '\\_%' ESCAPE '\\'"));
+        assert!(LIST_TYPES_SQL.contains("n.nspname NOT IN ('pg_toast')"));
+        assert!(LIST_TYPES_SQL.contains("NOT EXISTS"));
+        assert!(LIST_TYPES_SQL.contains("c.reltype = t.oid"));
+        assert!(LIST_TYPES_SQL.contains("ORDER BY n.nspname, t.typname"));
+    }
+
+    #[tokio::test]
+    async fn list_types_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        let result = adapter.list_types().await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
     #[test]
     fn format_fk_reference_matches_sprint_88_fixture() {
         // Round-trip every sample from the shared fixture so any future

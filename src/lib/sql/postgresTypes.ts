@@ -71,3 +71,21 @@ export const PARAMETRIC_TYPE_DEFAULTS: Readonly<Record<string, string>> = {
 export function expandParametricDefault(type: string): string {
   return PARAMETRIC_TYPE_DEFAULTS[type] ?? type;
 }
+
+/**
+ * Sprint 230 — case-insensitive substring filter against an arbitrary
+ * type list. Used by the combobox when a dynamic `typesSource` prop
+ * is supplied (the dialog merges canonical + live PG types via
+ * `usePostgresTypes`). Empty `query` returns the full list; matching
+ * mirrors `filterPostgresTypes` semantics (`includes`, not
+ * `startsWith`) so AC-227-03 behaviour is preserved verbatim against
+ * the dynamic list.
+ */
+export function filterPostgresTypesAgainst(
+  list: readonly string[],
+  query: string,
+): string[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [...list];
+  return list.filter((t) => t.toLowerCase().includes(q));
+}

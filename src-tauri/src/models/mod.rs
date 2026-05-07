@@ -14,5 +14,5 @@ pub use schema::{
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,
-    SchemaInfo, TableData, TableInfo, ViewInfo,
+    PostgresTypeInfo, SchemaInfo, TableData, TableInfo, ViewInfo,
 };

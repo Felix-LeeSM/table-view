@@ -13,7 +13,8 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
     CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    FilterCondition, FunctionInfo, IndexInfo, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaChangeResult, TableData,
+    TableInfo, ViewInfo,
 };
 
 use super::types::{
@@ -281,6 +282,20 @@ pub trait RdbAdapter: DbAdapter {
         namespace: &'a str,
         function: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>>;
+
+    /// Sprint 230 — list every Postgres-style data type visible to the
+    /// active connection. PG overrides to query
+    /// `pg_catalog.pg_type ⨝ pg_catalog.pg_namespace`; non-PG adapters
+    /// (MySQL/SQLite/Oracle, Phase 17+) inherit the default
+    /// `Unsupported` so they continue to compile without code changes
+    /// until their dialect-specific implementation lands.
+    fn list_types<'a>(&'a self) -> BoxFuture<'a, Result<Vec<PostgresTypeInfo>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not list types".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
