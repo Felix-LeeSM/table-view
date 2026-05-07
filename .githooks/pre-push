@@ -1,0 +1,20 @@
+#!/bin/sh
+# pre-push wrapper — git 는 인자로 (remote-name, remote-url) 을 넘기고 push 할
+# ref 정보를 stdin 으로 보낸다. `exec ... "$@"` 가 인자 전달, stdin 은 자식
+# 프로세스가 자동으로 상속하므로 따로 처리하지 않는다.
+
+set -e
+
+# mise shim fallback — pre-commit wrapper 의 주석 참조.
+if [ -d "$HOME/.local/share/mise/shims" ]; then
+  PATH="$HOME/.local/share/mise/shims:$PATH"
+  export PATH
+fi
+
+if ! command -v lefthook >/dev/null 2>&1; then
+  echo "ERROR: lefthook 이 PATH 에 없습니다." >&2
+  echo "       먼저 'bash scripts/setup.sh' 를 실행하세요." >&2
+  exit 1
+fi
+
+exec lefthook run pre-push "$@"

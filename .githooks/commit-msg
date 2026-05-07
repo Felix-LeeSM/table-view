@@ -1,0 +1,22 @@
+#!/bin/sh
+# commit-msg wrapper — git 가 인자로 commit message 가 저장된 임시파일 path 를
+# 넘긴다 (예: .git/COMMIT_EDITMSG). lefthook.yml 의 `{1}` placeholder 가 그 path
+# 로 치환되어 conventional-commit 검증이 동작.
+#
+# `"$@"` 를 빠뜨리면 lefthook 이 path 를 받지 못해 검증이 무력화되므로 필수.
+
+set -e
+
+# mise shim fallback — pre-commit wrapper 의 주석 참조.
+if [ -d "$HOME/.local/share/mise/shims" ]; then
+  PATH="$HOME/.local/share/mise/shims:$PATH"
+  export PATH
+fi
+
+if ! command -v lefthook >/dev/null 2>&1; then
+  echo "ERROR: lefthook 이 PATH 에 없습니다." >&2
+  echo "       먼저 'bash scripts/setup.sh' 를 실행하세요." >&2
+  exit 1
+fi
+
+exec lefthook run commit-msg "$@"

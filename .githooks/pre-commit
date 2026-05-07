@@ -1,0 +1,28 @@
+#!/bin/sh
+# Tracked git hook wrapper — `core.hooksPath = .githooks` 가 활성화되면 git 가
+# `.git/hooks/` 대신 이 스크립트를 직접 호출한다.
+#
+# 책임은 단 하나: lefthook 이 PATH 에 있는지 확인하고 위임. 없으면 명확하게
+# 실패시켜 setup.sh 를 안내한다. 부트스트랩 미실행 상태로 commit 이 슬그머니
+# 통과하는 silent-pass 회귀를 막기 위함.
+#
+# `"$@"` 는 git 가 hook 에 넘긴 인자(이 hook 은 인자 없음)와 stdin 을
+# 그대로 전달. 일관성을 위해 모든 wrapper 가 같은 패턴.
+
+set -e
+
+# mise shim fallback — 사용자가 IDE (VSCode 등) 에서 git commit 을 호출할 때
+# 부모 프로세스 PATH 에 mise activate 결과가 없을 수 있다. shims 디렉토리가
+# 존재하면 명시적으로 prepend 해서 PATH 동기화 비대칭을 흡수한다.
+if [ -d "$HOME/.local/share/mise/shims" ]; then
+  PATH="$HOME/.local/share/mise/shims:$PATH"
+  export PATH
+fi
+
+if ! command -v lefthook >/dev/null 2>&1; then
+  echo "ERROR: lefthook 이 PATH 에 없습니다." >&2
+  echo "       먼저 'bash scripts/setup.sh' 를 실행하세요." >&2
+  exit 1
+fi
+
+exec lefthook run pre-commit "$@"
