@@ -9,10 +9,10 @@
 use super::*;
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
-    CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, IndexInfo, RenameTableRequest, SchemaChangeResult, SchemaInfo, TableData,
-    TableInfo,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
+    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, IndexInfo, RenameTableRequest,
+    SchemaChangeResult, SchemaInfo, TableData, TableInfo,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -322,6 +322,20 @@ impl RdbAdapter for FakeCancellableRdb {
         &'a self,
         _req: &'a AlterTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn add_column<'a>(
+        &'a self,
+        _req: &'a AddColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 236 — request-shaped trait stub.
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn drop_column<'a>(
+        &'a self,
+        _req: &'a DropColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 236 — request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn create_table<'a>(
@@ -796,6 +810,20 @@ impl RdbAdapter for FastFakeRdb {
         &'a self,
         _req: &'a AlterTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn add_column<'a>(
+        &'a self,
+        _req: &'a AddColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 236 — request-shaped trait stub.
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn drop_column<'a>(
+        &'a self,
+        _req: &'a DropColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 236 — request-shaped trait stub.
         Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn create_table<'a>(

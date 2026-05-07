@@ -147,6 +147,8 @@ pub fn run() {
         commands::rdb::schema::get_table_constraints,
         commands::rdb::ddl::drop_table,
         commands::rdb::ddl::rename_table,
+        commands::rdb::ddl::add_column,
+        commands::rdb::ddl::drop_column,
         commands::rdb::ddl::alter_table,
         commands::rdb::ddl::create_table,
         commands::rdb::ddl::create_index,

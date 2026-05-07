@@ -249,6 +249,57 @@ pub struct DropTableRequest {
     pub preview_only: bool,
 }
 
+/// Request payload for `ADD COLUMN` (Sprint 236).
+///
+/// Mirrors the Sprint 235 `RenameTableRequest` / `DropTableRequest` shape
+/// (camelCase wire form) so the new `AddColumnDialog` can drive a
+/// preview/execute lifecycle through `useDdlPreviewExecution`. The
+/// `column` field reuses the Sprint 226 `ColumnDefinition` struct
+/// verbatim (`name`, `data_type`, `nullable`, `default_value`,
+/// optional `comment`) so the Sprint 226 frontend types stay byte-
+/// equivalent. `check_expression` is request-level (NOT inside
+/// `ColumnDefinition`) so the `CreateTableRequest` payload shape stays
+/// diff = 0; when `Some(...)` and the trimmed expression is non-empty,
+/// the SQL emitter appends `CHECK (<expr>)` after `DEFAULT` (free-text
+/// passthrough — no escaping, no syntax check, mirrors Sprint 229
+/// CHECK constraint contract).
+///
+/// `preview_only` (default `false`) toggles between SQL emission and
+/// `BEGIN/COMMIT` execution. `comment` on `ColumnDefinition` is
+/// silently ignored by `add_column` this sprint — Sprint 237 polish
+/// adds the `COMMENT ON COLUMN` chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddColumnRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub table: String,
+    pub column: ColumnDefinition,
+    #[serde(default)]
+    pub check_expression: Option<String>,
+    #[serde(default)]
+    pub preview_only: bool,
+}
+
+/// Request payload for `DROP COLUMN` (Sprint 236).
+///
+/// `cascade` opt-in (default `false` → PG's implicit RESTRICT, byte-
+/// equivalent emission omits the `RESTRICT` keyword — mirrors Sprint
+/// 235 `DropTableRequest` convention). No pre-existence check on the
+/// backend (let PG surface `column "X" does not exist` verbatim).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DropColumnRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub table: String,
+    pub column_name: String,
+    #[serde(default)]
+    pub cascade: bool,
+    #[serde(default)]
+    pub preview_only: bool,
+}
+
 /// Request payload for `CREATE TABLE` (Sprint 226).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTableRequest {
@@ -846,6 +897,109 @@ mod tests {
         // (default-flag invariant).
         let minimal = r#"{"connectionId":"c","schema":"s","table":"t"}"#;
         let parsed: DropTableRequest = serde_json::from_str(minimal).unwrap();
+        assert!(!parsed.cascade);
+        assert!(!parsed.preview_only);
+    }
+
+    // ── Sprint 236 — AddColumnRequest / DropColumnRequest serde ───────
+
+    #[test]
+    fn add_column_request_serde_camelcase_roundtrip() {
+        // Sprint 236 — wire form is camelCase. `checkExpression` is
+        // optional (`#[serde(default)]`); when `None` the field is
+        // emitted as `null` in the JSON body — both round-trip cleanly.
+        // `column` reuses the Sprint 226 `ColumnDefinition` struct so
+        // its inner field names stay snake_case (matching the
+        // Sprint 226 wire shape).
+        let req = AddColumnRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            column: ColumnDefinition {
+                name: "email".to_string(),
+                data_type: "varchar(255)".to_string(),
+                nullable: false,
+                default_value: Some("''".to_string()),
+                comment: None,
+            },
+            check_expression: Some("email LIKE '%@%'".to_string()),
+            preview_only: true,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(
+            json.contains("\"connectionId\":\"conn1\""),
+            "expected camelCase connectionId, got: {json}"
+        );
+        assert!(
+            json.contains("\"checkExpression\":\"email LIKE '%@%'\""),
+            "expected camelCase checkExpression, got: {json}"
+        );
+        assert!(json.contains("\"previewOnly\":true"));
+        let deserialized: AddColumnRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn1");
+        assert_eq!(deserialized.schema, "public");
+        assert_eq!(deserialized.table, "users");
+        assert_eq!(deserialized.column.name, "email");
+        assert_eq!(deserialized.column.data_type, "varchar(255)");
+        assert!(!deserialized.column.nullable);
+        assert_eq!(deserialized.column.default_value, Some("''".to_string()));
+        assert_eq!(
+            deserialized.check_expression,
+            Some("email LIKE '%@%'".to_string())
+        );
+        assert!(deserialized.preview_only);
+
+        // Back-compat — payload omitting `checkExpression` and
+        // `previewOnly` deserialises to None / false.
+        let minimal = r#"{
+            "connectionId":"c",
+            "schema":"s",
+            "table":"t",
+            "column":{
+                "name":"x",
+                "data_type":"int",
+                "nullable":true,
+                "default_value":null
+            }
+        }"#;
+        let parsed: AddColumnRequest = serde_json::from_str(minimal).unwrap();
+        assert!(parsed.check_expression.is_none());
+        assert!(!parsed.preview_only);
+    }
+
+    #[test]
+    fn drop_column_request_serde_camelcase_roundtrip() {
+        // Sprint 236 — `cascade` + `previewOnly` both
+        // `#[serde(default)]`-friendly. Wire form is camelCase, with
+        // `columnName` being the column to drop.
+        let req = DropColumnRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            column_name: "email".to_string(),
+            cascade: true,
+            preview_only: false,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"connectionId\":\"conn1\""));
+        assert!(
+            json.contains("\"columnName\":\"email\""),
+            "expected camelCase columnName, got: {json}"
+        );
+        assert!(json.contains("\"cascade\":true"));
+        assert!(json.contains("\"previewOnly\":false"));
+        let deserialized: DropColumnRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn1");
+        assert_eq!(deserialized.schema, "public");
+        assert_eq!(deserialized.table, "users");
+        assert_eq!(deserialized.column_name, "email");
+        assert!(deserialized.cascade);
+        assert!(!deserialized.preview_only);
+
+        // Back-compat — payload omitting `cascade` + `previewOnly`
+        // deserialises to false (Sprint 236 default-flag invariant).
+        let minimal = r#"{"connectionId":"c","schema":"s","table":"t","columnName":"col"}"#;
+        let parsed: DropColumnRequest = serde_json::from_str(minimal).unwrap();
         assert!(!parsed.cascade);
         assert!(!parsed.preview_only);
     }

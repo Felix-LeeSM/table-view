@@ -10,9 +10,9 @@ use tracing::info;
 
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
-    CreateIndexRequest, CreateTableRequest, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, RenameTableRequest, SchemaChangeResult,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
+    CreateIndexRequest, CreateTableRequest, DropColumnRequest, DropConstraintRequest,
+    DropIndexRequest, DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
 use super::PostgresAdapter;
@@ -221,6 +221,151 @@ impl PostgresAdapter {
             req.schema,
             req.table,
             req.new_name.trim()
+        );
+        Ok(SchemaChangeResult { sql })
+    }
+
+    /// Sprint 236 — request-shaped `ALTER TABLE … ADD COLUMN`.
+    ///
+    /// SQL emission shape:
+    ///
+    ///   `ALTER TABLE "<schema>"."<table>" ADD COLUMN "<name>" <type>
+    ///       [NOT NULL] [DEFAULT <expr>] [CHECK (<expr>)]`
+    ///
+    /// Single statement. Locked emission order. NOT NULL keyword
+    /// emitted iff `!req.column.nullable`. DEFAULT clause emitted iff
+    /// `req.column.default_value.is_some() && trim().is_non_empty()`
+    /// (mirrors `create_table`). CHECK clause emitted iff
+    /// `req.check_expression.is_some() && trim().is_non_empty()` —
+    /// free-text passthrough (no escaping, no syntax check).
+    ///
+    /// `ColumnDefinition.comment` flows through deserialization but is
+    /// silently ignored by the emitter — Sprint 237 polish adds the
+    /// `COMMENT ON COLUMN` chain (atomic policy = C, mirroring Sprint
+    /// 227 `create_table`).
+    ///
+    /// `req.preview_only=true` returns the built SQL without touching
+    /// the database. `req.preview_only=false` runs the statement inside
+    /// a `BEGIN/COMMIT` transaction (mirrors `rename_table` /
+    /// `drop_table` / `create_table`).
+    pub async fn add_column(&self, req: &AddColumnRequest) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+        validate_identifier(&req.column.name, "Column name")?;
+        if req.column.data_type.trim().is_empty() {
+            return Err(AppError::Validation(format!(
+                "Column '{}' must have a non-empty data type",
+                req.column.name
+            )));
+        }
+
+        let qualified = qualified_table(&req.schema, &req.table);
+        let mut col_def = format!(
+            "{} {}",
+            quote_identifier(&req.column.name),
+            req.column.data_type.trim()
+        );
+        if !req.column.nullable {
+            col_def.push_str(" NOT NULL");
+        }
+        if let Some(default) = &req.column.default_value {
+            let trimmed = default.trim();
+            if !trimmed.is_empty() {
+                col_def.push_str(&format!(" DEFAULT {}", trimmed));
+            }
+        }
+        if let Some(expr) = &req.check_expression {
+            let trimmed = expr.trim();
+            if !trimmed.is_empty() {
+                col_def.push_str(&format!(" CHECK ({})", trimmed));
+            }
+        }
+
+        let sql = format!("ALTER TABLE {} ADD COLUMN {}", qualified, col_def);
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let pool = self.active_pool().await?;
+
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!(
+            "Added column {} on {}.{}",
+            req.column.name, req.schema, req.table
+        );
+        Ok(SchemaChangeResult { sql })
+    }
+
+    /// Sprint 236 — request-shaped `ALTER TABLE … DROP COLUMN`.
+    ///
+    /// SQL emission:
+    ///   `req.cascade == false` → `ALTER TABLE "<schema>"."<table>"
+    ///       DROP COLUMN "<column_name>"`
+    ///   `req.cascade == true`  → `... DROP COLUMN "<column_name>" CASCADE`
+    ///
+    /// Note: NO `RESTRICT` keyword on the non-cascade branch — PG
+    /// defaults to RESTRICT and byte-equivalence with the implicit
+    /// form is locked by fixture (mirrors Sprint 235 `drop_table`).
+    ///
+    /// No pre-existence check — let PG surface its native `column
+    /// "X" of relation "Y" does not exist` error verbatim (mirrors
+    /// Sprint 235 drop pre-existence removal).
+    pub async fn drop_column(
+        &self,
+        req: &DropColumnRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+        validate_identifier(&req.column_name, "Column name")?;
+
+        let qualified = qualified_table(&req.schema, &req.table);
+        let quoted_col = quote_identifier(&req.column_name);
+        let sql = if req.cascade {
+            format!(
+                "ALTER TABLE {} DROP COLUMN {} CASCADE",
+                qualified, quoted_col
+            )
+        } else {
+            format!("ALTER TABLE {} DROP COLUMN {}", qualified, quoted_col)
+        };
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let pool = self.active_pool().await?;
+
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!(
+            "Dropped column {} from {}.{}",
+            req.column_name, req.schema, req.table
         );
         Ok(SchemaChangeResult { sql })
     }
@@ -752,9 +897,9 @@ mod tests {
     use super::*;
     use crate::db::postgres::PostgresAdapter;
     use crate::models::{
-        AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-        ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropConstraintRequest,
-        DropIndexRequest, DropTableRequest, RenameTableRequest,
+        AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
+        ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
+        DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
     };
 
     // ── drop_table / rename_table — Sprint 235 fixtures ──────────────
@@ -1027,6 +1172,380 @@ mod tests {
             err_msg.contains("must not be empty"),
             "Expected empty-name error, got: {err_msg}"
         );
+    }
+
+    // ── add_column / drop_column — Sprint 236 fixtures ────────────────
+    //
+    // Locks the byte-equivalent SQL emission for the new
+    // `add_column` / `drop_column` paths. Mirrors Sprint 235 fixture
+    // structure (request builder helpers + table-driven invalid-name
+    // rejections + preview-only-without-pool short circuit).
+
+    fn add_col_req(
+        schema: &str,
+        table: &str,
+        col: ColumnDefinition,
+        check_expression: Option<&str>,
+        preview_only: bool,
+    ) -> AddColumnRequest {
+        AddColumnRequest {
+            connection_id: "conn1".to_string(),
+            schema: schema.to_string(),
+            table: table.to_string(),
+            column: col,
+            check_expression: check_expression.map(|s| s.to_string()),
+            preview_only,
+        }
+    }
+
+    fn drop_col_req(
+        schema: &str,
+        table: &str,
+        column_name: &str,
+        cascade: bool,
+        preview_only: bool,
+    ) -> DropColumnRequest {
+        DropColumnRequest {
+            connection_id: "conn1".to_string(),
+            schema: schema.to_string(),
+            table: table.to_string(),
+            column_name: column_name.to_string(),
+            cascade,
+            preview_only,
+        }
+    }
+
+    fn coldef(
+        name: &str,
+        data_type: &str,
+        nullable: bool,
+        default_value: Option<&str>,
+    ) -> ColumnDefinition {
+        ColumnDefinition {
+            name: name.to_string(),
+            data_type: data_type.to_string(),
+            nullable,
+            default_value: default_value.map(|s| s.to_string()),
+            comment: None,
+        }
+    }
+
+    /// Sprint 236 — basic ADD COLUMN, nullable, no default, no check.
+    /// Locks the canonical preview output; any whitespace / quoting
+    /// drift trips this assertion before reaching the dialog.
+    #[tokio::test]
+    async fn add_column_preview_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("email", "varchar(255)", true, None),
+            None,
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" ADD COLUMN "email" varchar(255)"#
+        );
+    }
+
+    /// Sprint 236 — NOT NULL keyword emitted iff `!nullable`.
+    #[tokio::test]
+    async fn add_column_preview_with_not_null_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("email", "varchar(255)", false, None),
+            None,
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" ADD COLUMN "email" varchar(255) NOT NULL"#
+        );
+    }
+
+    /// Sprint 236 — DEFAULT clause emitted iff trimmed default is
+    /// non-empty (mirrors Sprint 226 `create_table` rule).
+    #[tokio::test]
+    async fn add_column_preview_with_default_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("created_at", "timestamptz", true, Some("now()")),
+            None,
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" ADD COLUMN "created_at" timestamptz DEFAULT now()"#
+        );
+    }
+
+    /// Sprint 236 — inline CHECK clause emitted iff trimmed
+    /// check_expression is non-empty. Free-text passthrough — verbatim
+    /// interpolation, no escaping.
+    #[tokio::test]
+    async fn add_column_preview_with_check_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("age", "int", true, None),
+            Some("age >= 0"),
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" ADD COLUMN "age" int CHECK (age >= 0)"#
+        );
+    }
+
+    /// Sprint 236 — locked emission order verified end-to-end:
+    /// `<name> <type> NOT NULL DEFAULT <expr> CHECK (<expr>)`.
+    #[tokio::test]
+    async fn add_column_preview_full_combo_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("age", "int", false, Some("0")),
+            Some("age >= 0"),
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" ADD COLUMN "age" int NOT NULL DEFAULT 0 CHECK (age >= 0)"#
+        );
+    }
+
+    /// Sprint 236 — preview branch returns SQL even without a live
+    /// pool. Confirms the `preview_only=true` short-circuit before
+    /// `active_pool().await?`.
+    #[tokio::test]
+    async fn add_column_preview_only_does_not_execute() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("email", "varchar(255)", true, None),
+            None,
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
+    }
+
+    /// Sprint 236 — table-driven rejection of invalid column names.
+    /// Embedded space / embedded `"` / leading digit / >63 bytes /
+    /// embedded NULL byte all surface `AppError::Validation`. Mirrors
+    /// the Sprint 235 `rename_table_invalid_new_name_rejected` shape.
+    #[tokio::test]
+    async fn add_column_invalid_column_name_rejected() {
+        let adapter = PostgresAdapter::new();
+
+        // Case 1 — embedded space.
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("bad name", "int", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded space");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 2 — embedded `"`.
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("bad\"name", "int", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded quote");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 3 — leading digit.
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("1bad", "int", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for leading digit");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 4 — length > 63 bytes.
+        let too_long = "a".repeat(64);
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef(&too_long, "int", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for >63 byte name");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 5 — embedded NULL byte.
+        let with_null = "bad\0name";
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef(with_null, "int", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded NULL byte");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 6 — empty post-trim.
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("   ", "int", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for empty post-trim name");
+        let err_msg = r.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must not be empty"),
+            "Expected empty-name error, got: {err_msg}"
+        );
+    }
+
+    /// Sprint 236 — empty `data_type.trim()` rejected with
+    /// `AppError::Validation`. Mirrors the Sprint 226 `create_table`
+    /// rule for column definitions.
+    #[tokio::test]
+    async fn add_column_empty_data_type_rejected() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("email", "   ", true, None),
+            None,
+            true,
+        );
+        let r = adapter.add_column(&req).await;
+        assert!(r.is_err(), "Expected Err for empty data_type");
+        let err_msg = r.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must have a non-empty data type"),
+            "Expected empty-data-type error, got: {err_msg}"
+        );
+    }
+
+    /// Sprint 236 — DEFAULT free-text passthrough (no auto-doubling).
+    /// Locks the user-responsible escaping decision: an embedded `'`
+    /// in the DEFAULT clause is forwarded verbatim to PG, which will
+    /// reject the SQL with a syntax error — the error surfaces in
+    /// `previewError` (mirrors Sprint 229 CHECK contract).
+    #[tokio::test]
+    async fn add_column_default_with_embedded_quote_passthrough() {
+        let adapter = PostgresAdapter::new();
+        let req = add_col_req(
+            "public",
+            "users",
+            coldef("name", "varchar(255)", true, Some("'O'Brien'")),
+            None,
+            true,
+        );
+        let result = adapter.add_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
+        // Verbatim — no auto-doubling, no escaping.
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" ADD COLUMN "name" varchar(255) DEFAULT 'O'Brien'"#
+        );
+    }
+
+    /// Sprint 236 — DROP COLUMN byte-equivalent (no CASCADE). Confirms
+    /// the implicit-RESTRICT form — no `RESTRICT` keyword in the
+    /// emitted SQL (mirrors Sprint 235 `drop_table` convention).
+    #[tokio::test]
+    async fn drop_column_preview_no_cascade_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = drop_col_req("public", "users", "email", false, true);
+        let result = adapter.drop_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" DROP COLUMN "email""#
+        );
+    }
+
+    /// Sprint 236 — DROP COLUMN … CASCADE byte-equivalent.
+    #[tokio::test]
+    async fn drop_column_preview_cascade_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = drop_col_req("public", "users", "email", true, true);
+        let result = adapter.drop_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" DROP COLUMN "email" CASCADE"#
+        );
+    }
+
+    /// Sprint 236 — preview branch returns SQL without a live pool.
+    #[tokio::test]
+    async fn drop_column_preview_only_does_not_execute() {
+        let adapter = PostgresAdapter::new();
+        let req = drop_col_req("public", "users", "email", false, true);
+        let result = adapter.drop_column(&req).await;
+        assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
+    }
+
+    /// Sprint 236 — invalid column-name rejection (defense-in-depth
+    /// against any caller that bypassed the frontend regex). Three
+    /// table-driven sub-cases.
+    #[tokio::test]
+    async fn drop_column_invalid_column_name_rejected() {
+        let adapter = PostgresAdapter::new();
+
+        // Empty post-trim.
+        let req = drop_col_req("public", "users", "   ", false, true);
+        let r = adapter.drop_column(&req).await;
+        assert!(r.is_err(), "Expected Err for empty post-trim name");
+        let err_msg = r.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must not be empty"),
+            "Expected empty-name error, got: {err_msg}"
+        );
+
+        // Embedded quote.
+        let req = drop_col_req("public", "users", "bad\"name", false, true);
+        let r = adapter.drop_column(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded quote");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Leading digit.
+        let req = drop_col_req("public", "users", "1bad", false, true);
+        let r = adapter.drop_column(&req).await;
+        assert!(r.is_err(), "Expected Err for leading digit");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
     }
 
     // ── validate_identifier tests ─────────────────────────────────────

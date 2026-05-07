@@ -9,6 +9,8 @@ import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import AddColumnDialog from "@components/schema/AddColumnDialog";
+import DropColumnDialog from "@components/schema/DropColumnDialog";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -208,105 +210,11 @@ function EditableColumnRow({
 }
 
 // ---------------------------------------------------------------------------
-// New column row (inline add)
+// Sprint 236 \u2014 `NewColumnRow` (inline add) component removed.
+// `+ Column` toolbar button now opens `<AddColumnDialog>`. The inline
+// `NewColumnDraft` interface above is retained as a re-exportable type
+// (zero external callers; kept as historical surface).
 // ---------------------------------------------------------------------------
-
-interface NewColumnRowProps {
-  draft: NewColumnDraft;
-  onUpdate: (updates: Partial<NewColumnDraft>) => void;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-function NewColumnRow({
-  draft,
-  onUpdate,
-  onConfirm,
-  onCancel,
-}: NewColumnRowProps) {
-  const inputClass =
-    "w-full bg-transparent px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary";
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") onConfirm();
-    if (e.key === "Escape") onCancel();
-  };
-
-  return (
-    <tr
-      className="border-b border-border bg-muted/50"
-      onKeyDown={handleKeyDown}
-    >
-      <td className="border-r border-border px-3 py-1 text-xs">
-        <input
-          className={inputClass}
-          value={draft.name}
-          onChange={(e) => onUpdate({ name: e.target.value })}
-          placeholder="column_name"
-          aria-label="New column name"
-          autoFocus
-        />
-      </td>
-      <td className="border-r border-border px-3 py-1 text-xs">
-        <input
-          className={inputClass}
-          value={draft.data_type}
-          onChange={(e) => onUpdate({ data_type: e.target.value })}
-          placeholder="varchar(255)"
-          aria-label="New column data type"
-        />
-      </td>
-      <td className="border-r border-border px-3 py-1 text-xs">
-        <input
-          type="checkbox"
-          checked={draft.nullable}
-          onChange={(e) => onUpdate({ nullable: e.target.checked })}
-          aria-label="New column nullable"
-          className="rounded border-border"
-        />
-      </td>
-      <td className="border-r border-border px-3 py-1 text-xs">
-        <input
-          className={inputClass}
-          value={draft.default_value}
-          onChange={(e) => onUpdate({ default_value: e.target.value })}
-          placeholder="NULL"
-          aria-label="New column default value"
-        />
-      </td>
-      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
-        {"\u2014"}
-      </td>
-      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
-        {"\u2014"}
-      </td>
-      <td className="w-20 border-l border-border px-1 py-1 text-center">
-        <div className="flex items-center justify-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="text-success"
-            onClick={onConfirm}
-            disabled={!draft.name.trim() || !draft.data_type.trim()}
-            aria-label="Confirm add column"
-            title="Confirm"
-          >
-            <Check />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onCancel}
-            aria-label="Cancel add column"
-            title="Cancel"
-          >
-            <X />
-          </Button>
-        </div>
-      </td>
-    </tr>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // ColumnsEditor
@@ -349,8 +257,19 @@ export default function ColumnsEditor({
   const [pendingChanges, setPendingChanges] = useState<PendingColumnChange[]>(
     [],
   );
+  // Sprint 236 — `newColumnDrafts` retained because the inline-add path
+  // is REMOVED but the `NewColumnDraft` type is still re-exported for
+  // back-compat of any external import. Empty array is the locked
+  // surface; `+ Column` toolbar button now opens `AddColumnDialog`.
   const [newColumnDrafts, setNewColumnDrafts] = useState<NewColumnDraft[]>([]);
   const [droppedColumns, setDroppedColumns] = useState<Set<string>>(new Set());
+
+  // Sprint 236 — modal slots replacing the inline NewColumnDraft +
+  // per-row trash `pendingChanges` drop entries. Both flow through
+  // `onRefresh()` on commit-success (cache invalidation path; see
+  // Sprint 236 contract Decisions §Cache invalidation path).
+  const [showAddColumnDialog, setShowAddColumnDialog] = useState(false);
+  const [dropColumnTarget, setDropColumnTarget] = useState<string | null>(null);
 
   // SQL preview modal state — `showSqlModal` stays editor-local because the
   // Review SQL button + dialog mount are domain-specific (other editors
@@ -373,53 +292,13 @@ export default function ColumnsEditor({
   // Column editing handlers
   // -------------------------------------------------------------------------
 
+  // Sprint 236 — `+ Column` toolbar button now opens `AddColumnDialog`
+  // instead of pushing an inline `NewColumnDraft` row. The inline-add
+  // path is REMOVED; the modal becomes the sole add-column surface.
+  // The inline-batched MODIFY path (Edit pencil → save → review SQL →
+  // batched `alter_table`) stays UNCHANGED — Sprint 237 polish target.
   const handleAddColumn = () => {
-    setNewColumnDrafts((prev) => [
-      ...prev,
-      {
-        trackingId: crypto.randomUUID(),
-        name: "",
-        data_type: "",
-        nullable: true,
-        default_value: "",
-      },
-    ]);
-  };
-
-  const handleUpdateDraft = (
-    trackingId: string,
-    updates: Partial<NewColumnDraft>,
-  ) => {
-    setNewColumnDrafts((prev) =>
-      prev.map((d) => (d.trackingId === trackingId ? { ...d, ...updates } : d)),
-    );
-  };
-
-  const handleConfirmDraft = (trackingId: string) => {
-    const draft = newColumnDrafts.find((d) => d.trackingId === trackingId);
-    if (!draft || !draft.name.trim() || !draft.data_type.trim()) return;
-
-    const change: ColumnChange = {
-      type: "add",
-      name: draft.name.trim(),
-      data_type: draft.data_type.trim(),
-      nullable: draft.nullable,
-      default_value: draft.default_value.trim() || null,
-    };
-
-    setPendingChanges((prev) => [
-      ...prev,
-      { trackingId: draft.trackingId, change },
-    ]);
-    setNewColumnDrafts((prev) =>
-      prev.filter((d) => d.trackingId !== trackingId),
-    );
-  };
-
-  const handleCancelDraft = (trackingId: string) => {
-    setNewColumnDrafts((prev) =>
-      prev.filter((d) => d.trackingId !== trackingId),
-    );
+    setShowAddColumnDialog(true);
   };
 
   const handleSaveEdit = (columnName: string, change: ColumnChange) => {
@@ -436,26 +315,13 @@ export default function ColumnsEditor({
     setEditingColumn(null);
   };
 
+  // Sprint 236 — per-row trash icon now opens `DropColumnDialog`
+  // pre-filled with the column name instead of pushing a pending drop
+  // entry into `pendingChanges`. The inline-batched MODIFY path stays
+  // intact; the trash icon used to be the only entrypoint to the
+  // batched DROP path, which is now replaced by the dedicated modal.
   const handleDeleteColumn = (columnName: string) => {
-    setDroppedColumns((prev) => new Set(prev).add(columnName));
-    setPendingChanges((prev) => {
-      // Remove any pending add/modify for the same column
-      const filtered = prev.filter(
-        (p) =>
-          !(
-            p.originalColumn === columnName ||
-            (p.change.type === "add" && p.change.name === columnName)
-          ),
-      );
-      return [
-        ...filtered,
-        {
-          trackingId: crypto.randomUUID(),
-          change: { type: "drop", name: columnName },
-          originalColumn: columnName,
-        },
-      ];
-    });
+    setDropColumnTarget(columnName);
   };
 
   // -------------------------------------------------------------------------
@@ -578,78 +444,11 @@ export default function ColumnsEditor({
                     onDelete={() => handleDeleteColumn(col.name)}
                   />
                 ))}
-              {newColumnDrafts.map((draft) => (
-                <NewColumnRow
-                  key={draft.trackingId}
-                  draft={draft}
-                  onUpdate={(updates) =>
-                    handleUpdateDraft(draft.trackingId, updates)
-                  }
-                  onConfirm={() => handleConfirmDraft(draft.trackingId)}
-                  onCancel={() => handleCancelDraft(draft.trackingId)}
-                />
-              ))}
-              {/* Show pending add rows (confirmed but not yet executed) */}
-              {pendingChanges
-                .filter((p) => p.change.type === "add")
-                .map((p) => {
-                  const change = p.change;
-                  if (change.type !== "add") return null;
-                  return (
-                    <tr
-                      key={p.trackingId}
-                      className="border-b border-border bg-success/5"
-                    >
-                      <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs text-success">
-                        {change.name}
-                        <span className="rounded bg-success/10 px-1 py-0.5 text-3xs font-medium">
-                          new
-                        </span>
-                      </td>
-                      <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
-                        {change.data_type}
-                      </td>
-                      <td className="border-r border-border px-3 py-1 text-xs">
-                        {change.nullable ? (
-                          <span className="text-muted-foreground">YES</span>
-                        ) : (
-                          <span className="font-medium text-foreground">
-                            NO
-                          </span>
-                        )}
-                      </td>
-                      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
-                        {change.default_value ?? "\u2014"}
-                      </td>
-                      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
-                        {"\u2014"}
-                      </td>
-                      <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
-                        {"\u2014"}
-                      </td>
-                      <td className="w-20 border-l border-border px-1 py-1 text-center">
-                        <div className="flex items-center justify-center gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            className="hover:text-destructive"
-                            onClick={() => {
-                              setPendingChanges((prev) =>
-                                prev.filter(
-                                  (pc) => pc.trackingId !== p.trackingId,
-                                ),
-                              );
-                            }}
-                            aria-label={`Remove pending column ${change.name}`}
-                            title="Remove"
-                          >
-                            <X />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+              {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row
+                  rendering removed; `+ Column` toolbar now opens
+                  `AddColumnDialog`. The inline-batched MODIFY path
+                  stays \u2014 it goes through `pendingChanges` /
+                  `alter_table` (Sprint 237 polish target). */}
             </tbody>
           </table>
         </div>
@@ -687,6 +486,30 @@ export default function ColumnsEditor({
             void ddl.confirmDangerous();
           }}
           onCancel={ddl.cancelDangerous}
+        />
+      )}
+
+      {/* Sprint 236 — AddColumnDialog (replaces inline NewColumnDraft). */}
+      <AddColumnDialog
+        connectionId={connectionId}
+        schemaName={schema}
+        tableName={table}
+        columns={columns}
+        open={showAddColumnDialog}
+        onClose={() => setShowAddColumnDialog(false)}
+        onColumnAdded={onRefresh}
+      />
+
+      {/* Sprint 236 — DropColumnDialog (replaces per-row trash pending-drop). */}
+      {dropColumnTarget !== null && (
+        <DropColumnDialog
+          connectionId={connectionId}
+          schemaName={schema}
+          tableName={table}
+          columnName={dropColumnTarget}
+          open
+          onClose={() => setDropColumnTarget(null)}
+          onColumnDropped={onRefresh}
         />
       )}
     </div>

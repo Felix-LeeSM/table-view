@@ -9,6 +9,13 @@
 // confirm regressions for the structure-surface Safe Mode gate. The
 // `@lib/tauri` mock is hoisted so each test can stub `alterTable` to
 // return the danger DDL we want the analyzer to flag. Date: 2026-05-01.
+//
+// Sprint 236 (AC-236-04 / AC-236-05) — `+ Column` toolbar button + per-row
+// trash icon both REROUTED through `AddColumnDialog` / `DropColumnDialog`
+// modals (no longer push pendingChanges). The inline-batched MODIFY path
+// (Edit pencil → change → save → Review SQL → Execute) stays UNCHANGED,
+// so the Sprint 187 Safe Mode gate regressions are migrated to drive
+// the modify path instead of the trash path. Date: 2026-05-07.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   render,
@@ -25,6 +32,13 @@ vi.mock("@lib/tauri", () => ({
       sql: "ALTER TABLE users DROP COLUMN email",
     }),
   ),
+  // Sprint 236 — modal IPC wrappers are mocked so the dialogs mount
+  // without exploding when ColumnsEditor renders them. The modal flow
+  // itself is covered by `AddColumnDialog.test.tsx` /
+  // `DropColumnDialog.test.tsx`.
+  addColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
+  dropColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
+  listPostgresTypes: vi.fn(() => Promise.resolve([])),
 }));
 
 import * as tauri from "@lib/tauri";
@@ -61,6 +75,12 @@ function setProductionConnection() {
   });
 }
 
+// Sprint 236 — drives the inline-batched MODIFY path (Edit pencil →
+// change data_type → save) instead of the legacy inline-trash drop. The
+// hoisted `alterTable` mock returns a DROP COLUMN preview so the Safe
+// Mode analyzer still classifies the staged batch as danger (mirrors
+// the original Sprint 187 fixture intent). The trash icon is now a
+// modal opener and is NOT exercised here.
 async function renderEditorAndOpenPreview(columns = [SAMPLE_COLUMN]) {
   const onRefresh = vi.fn().mockResolvedValue(undefined);
   const view = render(
@@ -72,8 +92,16 @@ async function renderEditorAndOpenPreview(columns = [SAMPLE_COLUMN]) {
       onRefresh={onRefresh}
     />,
   );
-  // Click the inline trash icon to register a DROP COLUMN change.
-  fireEvent.click(screen.getByRole("button", { name: /Delete column email/i }));
+  // Open inline edit on the first column.
+  fireEvent.click(screen.getByRole("button", { name: /Edit column email/i }));
+  // Change data_type so handleSave detects a real diff and pushes a
+  // `modify` change to pendingChanges.
+  fireEvent.change(screen.getByLabelText("Data type for email"), {
+    target: { value: "varchar(255)" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Save changes for email/i }),
+  );
   // Click Review SQL to populate the preview body.
   fireEvent.click(screen.getByRole("button", { name: /Review SQL \(1\)/i }));
   await waitFor(() => {
@@ -164,18 +192,26 @@ describe("ColumnsEditor — paradigm-aware copy (Sprint 179)", () => {
   });
 });
 
-describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
+describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "strict" });
+    // Reset the alterTable mock back to the danger-DDL fixture so each
+    // test starts from the same Safe Mode classification baseline.
+    vi.mocked(tauri.alterTable).mockResolvedValue({
+      sql: "ALTER TABLE users DROP COLUMN email",
+    });
   });
 
-  // AC-187-04a — production + strict + DROP COLUMN preview blocks Execute
-  // with the standard strict message. The gate splits the previewSql on
-  // `;` so an ALTER batch with any DROP COLUMN inside trips strict.
-  // date 2026-05-01.
-  it("[AC-187-04a] production + strict + DROP COLUMN → execute blocked", async () => {
+  // AC-187-04a — production + strict + danger-classified preview blocks
+  // Execute with the standard strict message. The gate splits the
+  // previewSql on `;` so an ALTER batch with any DROP COLUMN inside
+  // trips strict. Sprint 236 migrated the trigger from the inline-trash
+  // path to the inline-MODIFY path; the analyzer classification still
+  // fires off the previewSql which the mock returns as DROP COLUMN.
+  // date 2026-05-01 / 2026-05-07.
+  it("[AC-187-04a] production + strict + danger preview → execute blocked", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     await renderEditorAndOpenPreview();
@@ -194,11 +230,12 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
     ).toBe(false);
   });
 
-  // AC-187-04b — production + warn + DROP COLUMN opens the type-to-confirm
-  // dialog instead of committing. alterTable must not be invoked with
-  // preview_only=false until the user types the analyzer reason.
-  // date 2026-05-01.
-  it("[AC-187-04b] production + warn + DROP COLUMN → ConfirmDangerousDialog mount", async () => {
+  // AC-187-04b — production + warn + danger preview opens the
+  // type-to-confirm dialog instead of committing. alterTable must not
+  // be invoked with preview_only=false until the user types the
+  // analyzer reason. Sprint 236 migrated the trigger to the inline
+  // MODIFY path. date 2026-05-01 / 2026-05-07.
+  it("[AC-187-04b] production + warn + danger preview → ConfirmDangerousDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
     await renderEditorAndOpenPreview();
@@ -222,7 +259,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
 
   // AC-187-04c — confirm flow: typing the reason verbatim enables the
   // destructive button; clicking it invokes alterTable with preview_only=
-  // false. date 2026-05-01.
+  // false. date 2026-05-01 / 2026-05-07.
   it("[AC-187-04c] confirmDangerous → alterTable called with preview_only=false", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -251,7 +288,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
   // AC-187-04d — cancel flow: clicking Cancel inside the warn dialog
   // surfaces the standard warn message via the SQL preview error banner
   // (no toast — structure-surface dialog already shows inline errors).
-  // date 2026-05-01.
+  // date 2026-05-01 / 2026-05-07.
   it("[AC-187-04d] cancelDangerous → previewError set with warn message", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -285,8 +322,8 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
   });
 
   // AC-187-04e — non-production environment skips the gate entirely.
-  // ADD COLUMN is safe-classified anyway, so the Execute click should
-  // commit immediately. date 2026-05-01.
+  // The MODIFY-flow click should commit immediately. date 2026-05-01 /
+  // 2026-05-07.
   it("[AC-187-04e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -328,7 +365,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
   // queryHistoryStore entry tagged `source: "ddl-structure"`. We re-use
   // the development-environment scaffold so the Safe Mode gate stays in
   // permissive mode (development connection) and the apply flows directly
-  // to runAlter without a confirm-dialog detour. 2026-05-02.
+  // to runAlter without a confirm-dialog detour. 2026-05-02 / 2026-05-07.
   it("[AC-196-04-1] runAlter records a ddl-structure history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
     useQueryHistoryStore.setState({ entries: [], globalLog: [] });
@@ -364,5 +401,75 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate", () => {
       expect(entries[0]!.source).toBe("ddl-structure");
       expect(entries[0]!.status).toBe("success");
     });
+  });
+});
+
+// Sprint 236 — `+ Column` toolbar button now opens `<AddColumnDialog>`
+// (modal). The inline `NewColumnRow` path is removed. Trash icon now
+// opens `<DropColumnDialog>`. These two tests pin the new mount
+// contract; the dialog internals themselves are exercised by
+// `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`. 2026-05-07.
+describe("ColumnsEditor — Sprint 236 modal entrypoints", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "conn-1",
+          name: "dev-conn",
+          db_type: "postgres",
+          host: "localhost",
+          port: 5432,
+          database: "app",
+          username: "u",
+          password: null,
+          environment: "development",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ],
+    });
+  });
+
+  // AC-236-04 — `+ Column` opens AddColumnDialog (column name input
+  // becomes visible). No inline NewColumnRow appears.
+  it("[AC-236-04] + Column toolbar button opens AddColumnDialog", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Add column" }));
+    expect(screen.getByLabelText("Column name")).toBeInTheDocument();
+  });
+
+  // AC-236-05 — Per-row trash icon opens DropColumnDialog (typing-
+  // confirm input becomes visible). pendingChanges stays empty.
+  it("[AC-236-05] trash icon opens DropColumnDialog instead of pushing pendingChanges", () => {
+    render(
+      <ColumnsEditor
+        connectionId="conn-1"
+        table="users"
+        schema="public"
+        columns={[SAMPLE_COLUMN]}
+        onRefresh={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Delete column email/i }),
+    );
+    expect(
+      screen.getByLabelText("Type the column name to confirm"),
+    ).toBeInTheDocument();
+    // Review SQL pendingChanges counter must NOT appear (no pending
+    // entries pushed by the trash click anymore).
+    expect(
+      screen.queryByRole("button", { name: /Review SQL/i }),
+    ).not.toBeInTheDocument();
   });
 });

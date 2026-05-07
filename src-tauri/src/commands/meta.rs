@@ -705,9 +705,10 @@ mod tests {
     async fn verify_dispatch_rdb_returns_current_database() {
         use crate::db::{NamespaceLabel, RdbAdapter};
         use crate::models::{
-            AlterTableRequest, ConstraintInfo, CreateIndexRequest, CreateTableRequest,
-            DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
-            RenameTableRequest, SchemaChangeResult, TableData,
+            AddColumnRequest, AlterTableRequest, ConstraintInfo, CreateIndexRequest,
+            CreateTableRequest, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
+            DropTableRequest, FilterCondition, IndexInfo, RenameTableRequest, SchemaChangeResult,
+            TableData,
         };
 
         struct StubRdbAdapter;
@@ -800,6 +801,20 @@ mod tests {
                 &'a self,
                 _req: &'a AlterTableRequest,
             ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn add_column<'a>(
+                &'a self,
+                _req: &'a AddColumnRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                // Sprint 236 — request-shaped trait stub.
+                Box::pin(async { Err(AppError::Unsupported("not used".into())) })
+            }
+            fn drop_column<'a>(
+                &'a self,
+                _req: &'a DropColumnRequest,
+            ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+                // Sprint 236 — request-shaped trait stub.
                 Box::pin(async { Err(AppError::Unsupported("not used".into())) })
             }
             fn create_table<'a>(

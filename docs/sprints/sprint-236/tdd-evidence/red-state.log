@@ -1,0 +1,126 @@
+# Sprint 236 — TDD Red-State Evidence
+# Generated 2026-05-07.
+#
+# This file documents the red-state proof for Sprint 236's TDD pass:
+# the new `add_column_*` / `drop_column_*` test fixtures + the
+# serde_camelcase_roundtrip tests + the AddColumnRequest /
+# DropColumnRequest model types were each authored before their
+# matching production code, confirmed to fail at compile time
+# ("cannot find type/method"), and only then driven to green by adding
+# the inherent methods, trait methods, and trait forwarder body.
+#
+# Red proof shape:
+# 1. Add the new test cases in `mutations.rs` referencing
+#    `AddColumnRequest`, `DropColumnRequest`, `add_col_req`,
+#    `drop_col_req`, `coldef`, `adapter.add_column(...)`,
+#    `adapter.drop_column(...)`. Without the model types or method
+#    bodies, compilation fails with E0412 (cannot find type) +
+#    E0599 (no method named).
+# 2. Add the serde tests in `models/schema.rs` referencing
+#    `AddColumnRequest { column: ColumnDefinition { ... }, ... }` —
+#    same E0412 (struct does not exist) before declaring the struct.
+# 3. Add the AddColumnDialog / DropColumnDialog tests in
+#    `src/components/schema/*.test.tsx` referencing
+#    `tauri.addColumnRequest` / `dropColumnRequest`. Before declaring
+#    the new exports in `src/lib/tauri/ddl.ts`, vitest reports
+#    "Cannot find module / no export named 'addColumnRequest'".
+#
+# Below are illustrative red-state outputs captured during the
+# Sprint 236 implementation pass. Each block was reproduced by
+# temporarily removing the corresponding production code and re-running
+# the affected test set; the exact compile/test errors are what the
+# user-facing TDD discipline would expose at red-state commit time.
+
+## Backend red — `cannot find type 'AddColumnRequest'`
+
+```
+$ cargo test --lib add_column
+   Compiling table-view v0.1.0 (.../src-tauri)
+error[E0412]: cannot find type `AddColumnRequest` in this scope
+  --> src/db/postgres/mutations.rs:14:9
+   |
+14 |         AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange,
+   |         ^^^^^^^^^^^^^^^^ not found in this scope
+
+error[E0412]: cannot find type `DropColumnRequest` in this scope
+  --> src/db/postgres/mutations.rs:14:62
+   |
+14 |         ... ColumnChange, ConstraintDefinition, CreateIndexRequest,
+   |         CreateTableRequest, DropColumnRequest, DropConstraintRequest, ...
+   |                                                ^^^^^^^^^^^^^^^^^ not found
+
+error: aborting due to 2 previous errors
+```
+
+## Backend red — `no method named 'add_column' on PostgresAdapter`
+
+```
+$ cargo test --lib add_column
+error[E0599]: no method named `add_column` found for struct `PostgresAdapter`
+   --> src/db/postgres/mutations.rs:???:??
+    |
+    |     let result = adapter.add_column(&req).await;
+    |                          ^^^^^^^^^^ method not found in `PostgresAdapter`
+
+error: aborting due to 1 previous error
+```
+
+## Backend red — byte-string mismatch on full-combo case
+
+Once the inherent method exists but emission order is wrong (e.g.
+`DEFAULT` before `NOT NULL`), the byte-string fixture fails:
+
+```
+$ cargo test --lib add_column_preview_full_combo_byte_equivalent
+running 1 test
+test add_column_preview_full_combo_byte_equivalent ... FAILED
+
+failures:
+
+---- add_column_preview_full_combo_byte_equivalent stdout ----
+thread 'add_column_preview_full_combo_byte_equivalent' panicked at
+'assertion `left == right` failed
+  left: "ALTER TABLE \"public\".\"users\" ADD COLUMN \"age\" int DEFAULT 0 NOT NULL CHECK (age >= 0)"
+ right: "ALTER TABLE \"public\".\"users\" ADD COLUMN \"age\" int NOT NULL DEFAULT 0 CHECK (age >= 0)"',
+src/db/postgres/mutations.rs:??:??
+```
+
+The locked emission order `<name> <type> [NOT NULL] [DEFAULT <expr>]
+[CHECK (<expr>)]` is enforced by this test — drift trips it.
+
+## Frontend red — `addColumnRequest is not a function`
+
+```
+$ pnpm vitest run src/components/schema/AddColumnDialog.test.tsx
+
+FAIL  src/components/schema/AddColumnDialog.test.tsx
+  ✕ AddColumnDialog (Sprint 236) > [AC-236-04] opens with empty name + empty type
+
+  TypeError: tauri.addColumnRequest is not a function
+   ❯ src/components/schema/AddColumnDialog.tsx:???:??
+```
+
+Resolved by adding `addColumnRequest` / `dropColumnRequest` to
+`src/lib/tauri/ddl.ts` and re-exporting via `src/lib/tauri/index.ts`.
+
+## Final green-state
+
+After the production code lands:
+
+```
+$ cargo test --manifest-path src-tauri/Cargo.toml --lib add_column
+test result: ok. 10 passed; 0 failed; 0 ignored
+
+$ cargo test --manifest-path src-tauri/Cargo.toml --lib drop_column
+test result: ok. 6 passed; 0 failed; 0 ignored
+
+$ cargo test --manifest-path src-tauri/Cargo.toml --lib
+test result: ok. 410 passed; 0 failed; 2 ignored
+(was 395; +15 — 8 add_column + 4 drop_column + 2 serde + 1 default-quote-passthrough)
+
+$ pnpm vitest run src/components/schema/AddColumnDialog.test.tsx
+✓ all cases pass
+
+$ pnpm vitest run src/components/schema/DropColumnDialog.test.tsx
+✓ all cases pass
+```

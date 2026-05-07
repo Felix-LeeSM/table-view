@@ -11,10 +11,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
-    CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
+    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
+    IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
+    ViewInfo,
 };
 
 use super::types::{
@@ -174,6 +175,31 @@ pub trait RdbAdapter: DbAdapter {
     fn alter_table<'a>(
         &'a self,
         req: &'a AlterTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
+
+    /// Sprint 236 — request-shaped `ALTER TABLE … ADD COLUMN`. Same
+    /// preview/execute semantics as `create_table` / `rename_table`.
+    /// Identifier validation is sourced from the shared
+    /// `validate_identifier` helper. SQL emission order is locked at
+    /// `<name> <type> [NOT NULL] [DEFAULT <expr>] [CHECK (<expr>)]`;
+    /// DEFAULT and CHECK expressions are free-text passthrough (no
+    /// escaping, no syntax check — user-responsible per Sprint 229
+    /// CHECK constraint contract).
+    fn add_column<'a>(
+        &'a self,
+        req: &'a AddColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
+
+    /// Sprint 236 — request-shaped `ALTER TABLE … DROP COLUMN`. Same
+    /// preview/execute + identifier validation as `add_column`.
+    /// `req.cascade == true` appends `CASCADE`; the default emits the
+    /// implicit-RESTRICT form (no `RESTRICT` keyword in the SQL string,
+    /// mirroring Sprint 235 `drop_table` convention). No pre-existence
+    /// check — let PG surface its native `column "X" does not exist`
+    /// error verbatim.
+    fn drop_column<'a>(
+        &'a self,
+        req: &'a DropColumnRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     /// Sprint 226 — `CREATE TABLE` with PG ANSI quoting + identifier

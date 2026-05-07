@@ -8,9 +8,9 @@
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, CreateIndexRequest, CreateTableRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
-    SchemaChangeResult,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, CreateIndexRequest,
+    CreateTableRequest, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
+    DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
 fn not_connected(connection_id: &str) -> AppError {
@@ -58,6 +58,35 @@ pub async fn alter_table(
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
     active.as_rdb()?.alter_table(&request).await
+}
+
+/// Sprint 236 — request-shaped ADD COLUMN handler. Mirrors
+/// `rename_table` / `drop_table` body shape: lock connections, dispatch
+/// through `as_rdb()`, delegate to the trait method.
+#[tauri::command]
+pub async fn add_column(
+    state: tauri::State<'_, AppState>,
+    request: AddColumnRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    active.as_rdb()?.add_column(&request).await
+}
+
+/// Sprint 236 — request-shaped DROP COLUMN handler. Same shape as
+/// `add_column`.
+#[tauri::command]
+pub async fn drop_column(
+    state: tauri::State<'_, AppState>,
+    request: DropColumnRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    active.as_rdb()?.drop_column(&request).await
 }
 
 #[tauri::command]

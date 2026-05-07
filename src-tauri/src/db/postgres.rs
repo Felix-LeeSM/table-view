@@ -46,10 +46,11 @@ use std::pin::Pin;
 
 use crate::error::AppError;
 use crate::models::{
-    AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
-    CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
+    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
+    IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
+    ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -204,6 +205,22 @@ impl RdbAdapter for PostgresAdapter {
         req: &'a AlterTableRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
         Box::pin(async move { self.alter_table(req).await })
+    }
+
+    fn add_column<'a>(
+        &'a self,
+        req: &'a AddColumnRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        // Sprint 236 — request-shaped delegate.
+        Box::pin(async move { self.add_column(req).await })
+    }
+
+    fn drop_column<'a>(
+        &'a self,
+        req: &'a DropColumnRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        // Sprint 236 — request-shaped delegate.
+        Box::pin(async move { self.drop_column(req).await })
     }
 
     fn create_table<'a>(

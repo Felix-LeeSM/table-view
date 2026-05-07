@@ -3,8 +3,19 @@
 // cancel / save / delete / multiple pending changes / Review SQL modal /
 // Execute / Cancel / preview-and-execute error / Actions header /
 // Enter-Escape keys / Escape closes modal / refresh after execute /
-// table prop reset / pending-add removal. Cases are byte-equivalent to
-// the originals — no behaviour change.
+// table prop reset / pending-add removal.
+//
+// Sprint 236 (AC-236-04 / AC-236-05 / AC-236-07 / AC-236-08) — `+ Column`
+// toolbar button + per-row trash icon now open `AddColumnDialog` /
+// `DropColumnDialog` modals (no inline NewColumnDraft, no trash-as-
+// pending-drop). The inline-batched MODIFY path (Edit pencil → change →
+// save → Review SQL → Execute) stays UNCHANGED. Cases below are
+// migrated mechanically: pending-drop tests now exercise the inline
+// MODIFY path (which still flows through `pendingChanges` + alterTable),
+// and inline-add NewColumnRow assertions are replaced with modal-mount
+// assertions. The dialog internals themselves are exhaustively covered
+// by `AddColumnDialog.test.tsx` / `DropColumnDialog.test.tsx`.
+// Date: 2026-05-07.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import StructurePanel from "./StructurePanel";
@@ -14,10 +25,40 @@ import {
   renderPanel,
   resetStructurePanelMocks,
 } from "./__tests__/structurePanelTestHelpers";
+import { invalidatePostgresTypesCache } from "@hooks/usePostgresTypes";
+
+// Helper: drives the inline-MODIFY path (Edit pencil → change data_type
+// → save) so a pending change is queued without using the trash icon.
+// The trash icon now opens `DropColumnDialog` which writes through
+// `onRefresh` directly — it doesn't push pendingChanges anymore.
+async function queuePendingModifyForName(): Promise<void> {
+  await act(async () => {
+    fireEvent.click(screen.getByLabelText("Edit column name"));
+  });
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText("Data type for name"), {
+      target: { value: "varchar(255)" },
+    });
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByLabelText("Save changes for name"));
+  });
+}
 
 describe("StructurePanel", () => {
   beforeEach(() => {
     resetStructurePanelMocks();
+    invalidatePostgresTypesCache("conn-1");
+    // Sprint 236 — modal IPC stubs so the dialogs that ColumnsEditor
+    // mounts unconditionally (`<AddColumnDialog>`) don't trip on
+    // missing tauri exports during initial render.
+    vi.spyOn(tauri, "addColumnRequest").mockResolvedValue({
+      sql: 'ALTER TABLE "public"."users" ADD COLUMN "email" varchar(255)',
+    });
+    vi.spyOn(tauri, "dropColumnRequest").mockResolvedValue({
+      sql: 'ALTER TABLE "public"."users" DROP COLUMN "name"',
+    });
+    vi.spyOn(tauri, "listPostgresTypes").mockResolvedValue([]);
   });
 
   // =======================================================================
@@ -51,7 +92,10 @@ describe("StructurePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("clicking Add Column adds an editable empty row", async () => {
+  // Sprint 236 — `+ Column` no longer adds an inline editable empty row;
+  // it now opens `<AddColumnDialog>`. The new assertion is the dialog's
+  // identifying input (`Column name`) is visible after the click.
+  it("[AC-236-04] clicking Add Column opens AddColumnDialog", async () => {
     await act(async () => {
       renderPanel();
     });
@@ -63,12 +107,13 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add column" }));
     });
 
-    // Should have 4 column rows + header
-    expect(screen.getAllByRole("row").length).toBe(5);
-
-    // New row should have placeholder inputs
-    expect(screen.getByPlaceholderText("column_name")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("varchar(255)")).toBeInTheDocument();
+    // Modal mounted — its `Column name` input is now visible.
+    expect(screen.getByLabelText("Column name")).toBeInTheDocument();
+    // No new editable empty row was inserted into the table — the
+    // legacy inline-add `Confirm add column` button is REMOVED.
+    expect(
+      screen.queryByLabelText("Confirm add column"),
+    ).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
@@ -115,21 +160,7 @@ describe("StructurePanel", () => {
       renderPanel();
     });
 
-    // Click edit on the "name" column
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Edit column name"));
-    });
-
-    // Change the data type
-    const dataTypeInput = screen.getByLabelText("Data type for name");
-    await act(async () => {
-      fireEvent.change(dataTypeInput, { target: { value: "varchar(255)" } });
-    });
-
-    // Save the edit
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Save changes for name"));
-    });
+    await queuePendingModifyForName();
 
     // Review SQL button should appear with count 1
     expect(
@@ -163,47 +194,53 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Delete column
+  // Delete column — Sprint 236 reroutes the trash icon to the
+  // `DropColumnDialog` modal. The legacy "trash → pendingChanges →
+  // Review SQL" surface is gone. Test now asserts the dialog mount.
   // -----------------------------------------------------------------------
-  it("clicking delete adds pending drop change and hides the column", async () => {
+  it("[AC-236-05] clicking delete opens DropColumnDialog", async () => {
     await act(async () => {
       renderPanel();
     });
 
-    // Delete the "name" column
     await act(async () => {
       fireEvent.click(screen.getByLabelText("Delete column name"));
     });
 
-    // The column should be removed from the visible list
-    // We still see "name" text in the column header "Name" but not as a cell
-    const allNameCells = screen
-      .getAllByRole("cell")
-      .filter((cell) => cell.textContent === "name");
-    expect(allNameCells.length).toBe(0);
-
-    // Review SQL button should appear with count 1
+    // The DropColumnDialog mounted — its typing-confirm input is the
+    // identifying surface.
     expect(
-      screen.getByRole("button", { name: "Review SQL (1)" }),
+      screen.getByLabelText("Type the column name to confirm"),
     ).toBeInTheDocument();
+    // No pendingChanges pushed by the click — Review SQL button absent.
+    expect(
+      screen.queryByRole("button", { name: /Review SQL/ }),
+    ).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
-  // Pending state tracking — multiple changes
+  // Pending state tracking — multiple changes (Sprint 236 migrated to
+  // inline-MODIFY: edit two columns to data_type changes).
   // -----------------------------------------------------------------------
   it("tracks multiple pending changes and shows correct count", async () => {
     await act(async () => {
       renderPanel();
     });
 
-    // Delete "name" column
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    // Modify "name" column data_type
+    await queuePendingModifyForName();
 
-    // Delete "org_id" column
+    // Modify "org_id" column data_type
     await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column org_id"));
+      fireEvent.click(screen.getByLabelText("Edit column org_id"));
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("Data type for org_id"), {
+        target: { value: "integer" },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Save changes for org_id"));
     });
 
     // Should show count of 2
@@ -213,43 +250,14 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Confirm new column draft
+  // Sprint 236 — confirming/canceling the inline-add draft is gone (the
+  // inline NewColumnRow component was removed). The corresponding
+  // `Confirm add column` / `Cancel add column` aria-labels no longer
+  // exist. The new contract: clicking `+ Column` mounts
+  // `AddColumnDialog`. The dialog's own internals (commit / cancel /
+  // form validation) are exhaustively covered by AddColumnDialog.test.
   // -----------------------------------------------------------------------
-  it("confirming a new column draft adds a pending add change", async () => {
-    await act(async () => {
-      renderPanel();
-    });
-
-    // Click Add Column
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Add column" }));
-    });
-
-    // Fill in the draft
-    const nameInput = screen.getByPlaceholderText("column_name");
-    const typeInput = screen.getByPlaceholderText("varchar(255)");
-
-    await act(async () => {
-      fireEvent.change(nameInput, { target: { value: "email" } });
-      fireEvent.change(typeInput, { target: { value: "varchar(255)" } });
-    });
-
-    // Confirm the draft
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Confirm add column"));
-    });
-
-    // Should show the new column as pending with "new" badge
-    expect(screen.getByText("email")).toBeInTheDocument();
-    expect(screen.getByText("new")).toBeInTheDocument();
-
-    // Review SQL button should appear
-    expect(
-      screen.getByRole("button", { name: "Review SQL (1)" }),
-    ).toBeInTheDocument();
-  });
-
-  it("canceling a new column draft removes the draft row", async () => {
+  it("[AC-236-04] AddColumnDialog Cancel closes the modal", async () => {
     await act(async () => {
       renderPanel();
     });
@@ -258,32 +266,30 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add column" }));
     });
 
-    // Should have draft row
-    expect(screen.getByPlaceholderText("column_name")).toBeInTheDocument();
+    // Modal mounted.
+    expect(screen.getByLabelText("Column name")).toBeInTheDocument();
 
-    // Cancel the draft
+    // Click the dialog's Cancel button.
     await act(async () => {
-      fireEvent.click(screen.getByLabelText("Cancel add column"));
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     });
 
-    // Draft row should be gone
-    expect(
-      screen.queryByPlaceholderText("column_name"),
-    ).not.toBeInTheDocument();
+    // Modal closed.
+    expect(screen.queryByLabelText("Column name")).not.toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------
-  // Review SQL modal
+  // Review SQL modal — Sprint 236 migrated the trigger to the inline
+  // MODIFY path. The Review SQL → Execute → preview/execute lifecycle
+  // is unchanged.
   // -----------------------------------------------------------------------
   it("clicking Review SQL opens a modal with SQL preview", async () => {
     await act(async () => {
       renderPanel();
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    // Create a pending change (inline-MODIFY).
+    await queuePendingModifyForName();
 
     // Click Review SQL
     await act(async () => {
@@ -302,19 +308,15 @@ describe("StructurePanel", () => {
 
   it("modal shows the preview SQL content", async () => {
     vi.mocked(tauri.alterTable).mockResolvedValue({
-      sql: "ALTER TABLE public.users DROP COLUMN name;",
+      sql: "ALTER TABLE public.users ALTER COLUMN name TYPE varchar(255);",
     });
 
     await act(async () => {
       renderPanel();
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    await queuePendingModifyForName();
 
-    // Click Review SQL
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
@@ -326,7 +328,7 @@ describe("StructurePanel", () => {
       .querySelector("pre") as HTMLPreElement | null;
     expect(preview).not.toBeNull();
     expect(preview!.textContent).toBe(
-      "ALTER TABLE public.users DROP COLUMN name;",
+      "ALTER TABLE public.users ALTER COLUMN name TYPE varchar(255);",
     );
   });
 
@@ -335,19 +337,15 @@ describe("StructurePanel", () => {
   // -----------------------------------------------------------------------
   it("clicking Execute in the modal runs alterTable without preview_only", async () => {
     vi.mocked(tauri.alterTable).mockResolvedValue({
-      sql: "ALTER TABLE public.users DROP COLUMN name;",
+      sql: "ALTER TABLE public.users ALTER COLUMN name TYPE varchar(255);",
     });
 
     await act(async () => {
       renderPanel();
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    await queuePendingModifyForName();
 
-    // Click Review SQL
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
@@ -355,7 +353,7 @@ describe("StructurePanel", () => {
     // Clear previous calls to isolate the execute call
     vi.mocked(tauri.alterTable).mockClear();
     vi.mocked(tauri.alterTable).mockResolvedValue({
-      sql: "ALTER TABLE public.users DROP COLUMN name;",
+      sql: "ALTER TABLE public.users ALTER COLUMN name TYPE varchar(255);",
     });
 
     // Click Execute
@@ -385,12 +383,8 @@ describe("StructurePanel", () => {
       renderPanel();
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    await queuePendingModifyForName();
 
-    // Click Review SQL
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
@@ -403,7 +397,8 @@ describe("StructurePanel", () => {
     // Modal should be closed
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    // Pending changes should be cleared — "name" column should reappear
+    // Pending changes should be cleared. The "name" column row is still
+    // visible (modify path doesn't hide the row).
     expect(screen.getByText("name")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /Review SQL/ }),
@@ -414,18 +409,17 @@ describe("StructurePanel", () => {
   // Error handling in modal
   // -----------------------------------------------------------------------
   it("shows error in modal when preview fails", async () => {
-    vi.mocked(tauri.alterTable).mockRejectedValue(new Error("Preview failed"));
-
     await act(async () => {
       renderPanel();
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    // Now stage a MODIFY and arrange the next alterTable call to
+    // reject — the preview fetch will surface the error.
+    await queuePendingModifyForName();
+    vi.mocked(tauri.alterTable).mockRejectedValueOnce(
+      new Error("Preview failed"),
+    );
 
-    // Click Review SQL
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
@@ -435,18 +429,18 @@ describe("StructurePanel", () => {
   });
 
   it("shows error in modal when execute fails and keeps modal open", async () => {
-    vi.mocked(tauri.alterTable)
-      .mockResolvedValueOnce({ sql: "ALTER TABLE users DROP COLUMN name;" })
-      .mockRejectedValueOnce(new Error("Execute failed"));
-
     await act(async () => {
       renderPanel();
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    await queuePendingModifyForName();
+
+    // Arrange: preview succeeds (returns SQL), execute fails.
+    vi.mocked(tauri.alterTable)
+      .mockResolvedValueOnce({
+        sql: "ALTER TABLE users ALTER COLUMN name TYPE varchar(255);",
+      })
+      .mockRejectedValueOnce(new Error("Execute failed"));
 
     // Click Review SQL (first call returns SQL)
     await act(async () => {
@@ -475,49 +469,10 @@ describe("StructurePanel", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Removing a pending add change
+  // Sprint 236 — pending-add removal (`Remove pending column email`) is
+  // gone with the inline NewColumnDraft surface. The replacement
+  // contract is the AddColumnDialog Cancel button (covered above).
   // -----------------------------------------------------------------------
-  it("allows removing a pending add column change", async () => {
-    await act(async () => {
-      renderPanel();
-    });
-
-    // Add a new column
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Add column" }));
-    });
-
-    await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText("column_name"), {
-        target: { value: "email" },
-      });
-      fireEvent.change(screen.getByPlaceholderText("varchar(255)"), {
-        target: { value: "varchar(255)" },
-      });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Confirm add column"));
-    });
-
-    // Should show "email" with "new" badge
-    expect(screen.getByText("email")).toBeInTheDocument();
-
-    // Click the remove button for the pending add
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Remove pending column email"));
-    });
-
-    // The pending add should be removed
-    expect(
-      screen.queryByLabelText("Remove pending column email"),
-    ).not.toBeInTheDocument();
-
-    // No pending changes — no Review SQL button
-    expect(
-      screen.queryByRole("button", { name: /Review SQL/ }),
-    ).not.toBeInTheDocument();
-  });
 
   // -----------------------------------------------------------------------
   // Edit with no actual changes just cancels edit mode
@@ -611,10 +566,8 @@ describe("StructurePanel", () => {
       // Wait for initial render
     });
 
-    // Create a pending change
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    // Create a pending change via the inline-MODIFY path.
+    await queuePendingModifyForName();
 
     expect(
       screen.getByRole("button", { name: "Review SQL (1)" }),
@@ -641,10 +594,7 @@ describe("StructurePanel", () => {
       renderPanel();
     });
 
-    // Create a pending change and open modal
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    await queuePendingModifyForName();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
@@ -664,17 +614,14 @@ describe("StructurePanel", () => {
   // Execute disabled when no SQL preview content
   // -----------------------------------------------------------------------
   it("Execute button is disabled when SQL preview is empty and loading", async () => {
-    // Make alterTable hang so loading is true
-    vi.mocked(tauri.alterTable).mockReturnValue(new Promise(() => {}));
-
     await act(async () => {
       renderPanel();
     });
 
-    // Create a pending change and open modal
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    // Stage a pending MODIFY before swapping the alterTable mock to a
+    // hanging promise so the preview stays in `loading=true`.
+    await queuePendingModifyForName();
+    vi.mocked(tauri.alterTable).mockReturnValue(new Promise(() => {}));
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
@@ -690,7 +637,7 @@ describe("StructurePanel", () => {
   // -----------------------------------------------------------------------
   it("refreshes column data after successful execute", async () => {
     vi.mocked(tauri.alterTable).mockResolvedValue({
-      sql: "ALTER TABLE users DROP COLUMN name;",
+      sql: "ALTER TABLE users ALTER COLUMN name TYPE varchar(255);",
     });
 
     await act(async () => {
@@ -699,17 +646,15 @@ describe("StructurePanel", () => {
 
     const initialFetchCount = mockGetTableColumns.mock.calls.length;
 
-    // Create a pending change and execute it
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Delete column name"));
-    });
+    // Stage and execute a MODIFY change.
+    await queuePendingModifyForName();
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
 
     vi.mocked(tauri.alterTable).mockResolvedValue({
-      sql: "ALTER TABLE users DROP COLUMN name;",
+      sql: "ALTER TABLE users ALTER COLUMN name TYPE varchar(255);",
     });
 
     await act(async () => {
@@ -717,6 +662,45 @@ describe("StructurePanel", () => {
     });
 
     // Should have fetched columns again
+    expect(mockGetTableColumns.mock.calls.length).toBeGreaterThan(
+      initialFetchCount,
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // Sprint 236 — AC-236-08: column appears / disappears after refresh.
+  // The DropColumnDialog modal commit closure calls `onColumnDropped()`
+  // which the parent ColumnsEditor wires to `onRefresh` →
+  // `getTableColumns`. This case asserts the refresh fires once after
+  // a successful drop commit.
+  // -----------------------------------------------------------------------
+  it("[AC-236-08] DropColumnDialog commit triggers getTableColumns refresh", async () => {
+    await act(async () => {
+      renderPanel();
+    });
+
+    const initialFetchCount = mockGetTableColumns.mock.calls.length;
+
+    // Open the drop dialog.
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Delete column name"));
+    });
+    // Type the column name to enable Apply.
+    await act(async () => {
+      fireEvent.change(
+        screen.getByLabelText("Type the column name to confirm"),
+        { target: { value: "name" } },
+      );
+    });
+    // Show DDL → preview fetch.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    // Apply → commit closure runs → onRefresh → getTableColumns.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+
     expect(mockGetTableColumns.mock.calls.length).toBeGreaterThan(
       initialFetchCount,
     );

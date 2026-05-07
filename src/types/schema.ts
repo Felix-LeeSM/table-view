@@ -157,6 +157,44 @@ export interface DropTableRequest {
   previewOnly?: boolean;
 }
 
+/**
+ * Sprint 236 — request payload for `tauri.addColumnRequest`. Mirrors
+ * the Rust `AddColumnRequest` struct (camelCase wire form via serde
+ * rename). `column` reuses the Sprint 226 `ColumnDefinition` shape so
+ * the existing `CreateTableDialog` field types are reusable in the new
+ * `AddColumnDialog`. `checkExpression` is request-level (NOT inside
+ * `ColumnDefinition`) so the Sprint 226 `CreateTableRequest` payload
+ * stays diff = 0; when present and the trimmed expression is non-empty
+ * the backend appends `CHECK (<expr>)` after `DEFAULT` (free-text
+ * passthrough — no escaping, no syntax check). `previewOnly` toggles
+ * between SQL emission and `BEGIN/COMMIT` execution.
+ */
+export interface AddColumnRequest {
+  connectionId: string;
+  schema: string;
+  table: string;
+  column: ColumnDefinition;
+  checkExpression?: string | null;
+  previewOnly?: boolean;
+}
+
+/**
+ * Sprint 236 — request payload for `tauri.dropColumnRequest`. Mirrors
+ * the Rust `DropColumnRequest` struct. `cascade` defaults to `false`
+ * (PG implicit RESTRICT; SQL omits the `RESTRICT` keyword for byte-
+ * equivalence with the implicit form, matching Sprint 235
+ * `DropTableRequest` convention). `previewOnly` matches
+ * `AddColumnRequest`.
+ */
+export interface DropColumnRequest {
+  connectionId: string;
+  schema: string;
+  table: string;
+  columnName: string;
+  cascade?: boolean;
+  previewOnly?: boolean;
+}
+
 export interface CreateIndexRequest {
   connection_id: string;
   schema: string;
