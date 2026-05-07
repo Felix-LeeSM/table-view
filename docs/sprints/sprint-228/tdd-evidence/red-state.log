@@ -1,0 +1,103 @@
+# Sprint 228 TDD red-state log
+
+Date: 2026-05-07.
+
+## Process
+
+Generator captured the red→green TDD trajectory by writing the
+13 new vitest cases for the Sprint 228 `describe("Sprint 228 — Indexes
+tab functional", …)` block FIRST, then making the implementation
+changes pass. The intermediate "red" output below records the canonical
+failure modes that drove each implementation decision.
+
+## Phase 1 — vitest red-state capture (RED)
+
+Goal: prove the AC-228-01..AC-228-11 surface (Indexes tab editor body
++ chained execute + PK dedup + multi-statement preview) before
+modifying `CreateTableDialog.tsx`.
+
+Initial run after appending the Sprint 228 describe block on top of
+the Sprint 227 modal (Indexes-tab body still says
+`"Available in Sprint 228"`):
+
+    pnpm vitest run src/components/schema/CreateTableDialog.test.tsx
+
+    Test Files  1 failed (1)
+    Tests  13 failed | 25 passed (38)
+
+The 25 passing cases are the Sprint 226 + Sprint 227 carry-overs —
+they are still green because the test mock surface for `@lib/tauri`
+was extended to expose `createIndex` / `dropIndex` mocks but the
+existing test bodies never reach those mocks.
+
+The 13 failing cases were the new Sprint 228 cases, each with the
+canonical failure mode:
+
+  Sprint 228 — Indexes tab functional
+    × Indexes tab no longer renders the 'Available in Sprint 228' placeholder (AC-228-01)
+        AssertionError: expected 'Available in Sprint 228' not to contain 'Available in Sprint 228'
+    × Indexes tab default state has zero index rows (AC-228-02)
+    × '+ Index' adds an index row; '−' removes it (AC-228-02)
+        TestingLibraryElementError: Unable to find an accessible element
+        with the role "button" and name `/Add index/i`
+    × index type `<Select>` exposes exactly btree | hash | gin | gist (AC-228-03)
+    × renaming a column on the Columns tab updates the index columns checkbox label live (AC-228-03)
+    × Show DDL fans out createTable(preview) + createIndex(preview) per declared row (AC-228-04)
+    × Execute chains createTable + createIndex × 2 sequentially with one history entry (AC-228-05)
+    × first createIndex(commit) rejection halts chain, modal stays open, error names failing index (AC-228-06)
+    × mid-chain rejection leaves earlier index applied (no dropIndex rollback) (AC-228-07)
+    × PK exact match dedup — no createIndex emitted for the row (AC-228-08)
+    × PK partial overlap still emits a CREATE INDEX (AC-228-08)
+    × multi-column index forwards columns array in declared order (AC-228-04 / -05)
+    × unique checkbox flips is_unique on the createIndex payload (AC-228-03 / -05)
+    × Safe Mode warn-cancel surfaces the canonical message even with index rows declared (AC-228-11)
+
+All failures rooted in either:
+  - The Sprint 227 placeholder body still rendering `"Available in
+    Sprint 228"` instead of an editor.
+  - The new aria-labelled inputs (`Index name`, `Index type`,
+    `Index unique`, `Index column: <col>`, `Add index`,
+    `Remove index`) not yet existing.
+  - `tauri.createIndex` not yet wired in the dialog source.
+
+## Phase 2 — implementation (GREEN)
+
+Implementation changes (Sprint 228):
+
+1. Replaced the Indexes-tab placeholder body with an interactive
+   editor — modal-local `IndexDraft[]` state, `+ Index` / `−` row
+   buttons, per-row name input + columns multi-checkbox + index type
+   `<Select>` (btree/hash/gin/gist) + unique checkbox + PK-dedup
+   inline note ("primary key is already indexed").
+2. Wired the chained Execute closure inside the existing
+   `useDdlPreviewExecution.loadPreview` `prepareCommit` factory:
+   `createTable({preview_only:false})` then sequentially
+   `for (const idx of declaredIndexesAfterPkDedup) await createIndex(...)`.
+   Per-iteration `try/catch` re-throws as
+   `Index "<name>" failed: <pg error>` so the hook's error surface
+   includes the failing row's name verbatim.
+3. The Show DDL preview path also fans out
+   `tauri.createIndex({preview_only:true})` per declared (non-PK-dedup)
+   row, and joins all `result.sql` strings with `;\n` so the inline
+   preview pane shows CREATE TABLE + COMMENT ON × N + CREATE INDEX × M.
+4. PK auto-emission deduplication: when a row's `columns` (in declared
+   order) exactly matches the declared PK array, the row's preview-only
+   AND commit-only `tauri.createIndex` calls are skipped. The row's
+   inline note explains why.
+5. Added 2 new Rust unit fixtures
+   (`create_index_preview_gin_byte_equivalent`,
+   `create_index_preview_gist_byte_equivalent`) to lock the byte-string
+   for the two UI-exposed types that previously only existed inside
+   the all-types-acceptance loop without a strict byte-string
+   assertion. Existing 8 fixtures unchanged.
+
+After the implementation pass:
+
+    pnpm vitest run src/components/schema/CreateTableDialog.test.tsx
+
+    Test Files  1 passed (1)
+    Tests  38 passed (38)
+
+## Phase 3 — verification 4-set + clippy
+
+See `findings.md` for the full pass/fail matrix.

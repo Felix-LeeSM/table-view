@@ -1,0 +1,223 @@
+import { Minus, Plus } from "lucide-react";
+import { Button } from "@components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
+
+/**
+ * `IndexesTabBody` — Sprint 228 (Phase 27 sprint 3) extraction.
+ *
+ * Why a sub-component:
+ *   - Sprint 228's editor body grew the parent `CreateTableDialog.tsx`
+ *     past the project's 700-LOC threshold (`docs/sprints/sprint-228/
+ *     contract.md` → "no anticipatory abstraction" + Generator's call
+ *     to extract). Pulling the JSX out keeps the parent under that
+ *     ceiling without changing any state ownership: index drafts +
+ *     handlers + dedup logic still live in the parent. This file is
+ *     a pure presentational mapper from props → DOM.
+ *
+ * Shape:
+ *   - The parent owns `indexes: IndexDraft[]` and the four mutators
+ *     (`onAdd` / `onRemove` / `onUpdate` / `onToggleColumn`). Render
+ *     decisions like "skipped because PK matches" are computed by the
+ *     parent (`isPkDuplicate(idx)`) so the dedup rule lives next to
+ *     the chain closure that consumes it.
+ *
+ * Source: parent's prior inline JSX (sprint-228 implementation pass);
+ * extraction is mechanical — no behavioural change.
+ */
+
+/**
+ * The four UI-exposed PostgreSQL index types. Backend's
+ * `validate_index_type` accepts `brin` too, but the UI hides it for
+ * DataGrip parity (Sprint 228 contract `Out of Scope`).
+ */
+export type IndexType = "btree" | "hash" | "gin" | "gist";
+
+export const INDEX_TYPE_OPTIONS: readonly IndexType[] = [
+  "btree",
+  "hash",
+  "gin",
+  "gist",
+];
+
+export interface IndexDraft {
+  trackingId: string;
+  name: string;
+  columns: string[];
+  index_type: IndexType;
+  unique: boolean;
+}
+
+export interface IndexesTabBodyProps {
+  /** Current index drafts. Empty array = the "no indexes declared" empty state. */
+  indexes: IndexDraft[];
+  /**
+   * Live-derived list of column names from the Columns tab (only those
+   * with a non-empty trimmed `name`). Drives the per-row column
+   * checkbox group.
+   */
+  availableColumns: string[];
+  /**
+   * Returns true iff the row's `columns` array exactly matches the
+   * declared PK array (same names, same order). Drives the inline
+   * "Skipped — primary key is already indexed" annotation. Computed
+   * by the parent so the dedup rule lives next to the chain closure.
+   */
+  isPkDuplicate: (draft: IndexDraft) => boolean;
+  onAdd: () => void;
+  onRemove: (trackingId: string) => void;
+  onUpdate: (trackingId: string, updates: Partial<IndexDraft>) => void;
+  onToggleColumn: (trackingId: string, colName: string) => void;
+}
+
+export default function IndexesTabBody({
+  indexes,
+  availableColumns,
+  isPkDuplicate,
+  onAdd,
+  onRemove,
+  onUpdate,
+  onToggleColumn,
+}: IndexesTabBodyProps) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <label className="text-xs font-medium text-secondary-foreground">
+          Indexes
+        </label>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onAdd}
+          aria-label="Add index"
+        >
+          <Plus />
+          Index
+        </Button>
+      </div>
+      {indexes.length === 0 ? (
+        <div className="rounded border border-dashed border-border bg-background p-4 text-center">
+          <p className="text-xs italic text-muted-foreground">
+            No indexes declared. PostgreSQL implicitly indexes primary-key
+            columns; click &quot;+ Index&quot; to declare additional indexes.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {indexes.map((idx) => {
+            const dedupe = isPkDuplicate(idx);
+            return (
+              <div
+                key={idx.trackingId}
+                className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
+              >
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <div className="flex gap-1.5">
+                    <input
+                      className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                      value={idx.name}
+                      onChange={(e) =>
+                        onUpdate(idx.trackingId, { name: e.target.value })
+                      }
+                      placeholder="index_name"
+                      aria-label="Index name"
+                    />
+                    <Select
+                      value={idx.index_type}
+                      onValueChange={(next) =>
+                        onUpdate(idx.trackingId, {
+                          index_type: next as IndexType,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label="Index type"
+                        size="sm"
+                        className="w-24"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INDEX_TYPE_OPTIONS.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <label className="flex cursor-pointer items-center gap-1 text-xs text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={idx.unique}
+                        onChange={(e) =>
+                          onUpdate(idx.trackingId, {
+                            unique: e.target.checked,
+                          })
+                        }
+                        className="rounded border-border"
+                        aria-label="Index unique"
+                      />
+                      Unique
+                    </label>
+                  </div>
+                  <div
+                    className="rounded border border-border bg-background p-2"
+                    aria-label="Index columns"
+                  >
+                    {availableColumns.length === 0 ? (
+                      <span className="text-xs italic text-muted-foreground">
+                        Add a column with a name to choose index columns
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {availableColumns.map((colName) => {
+                          const checked = idx.columns.includes(colName);
+                          return (
+                            <label
+                              key={colName}
+                              className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  onToggleColumn(idx.trackingId, colName)
+                                }
+                                className="rounded border-border"
+                                aria-label={`Index column: ${colName}`}
+                              />
+                              {colName}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {dedupe && (
+                    <p className="text-xs italic text-muted-foreground">
+                      Skipped — primary key is already indexed
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onRemove(idx.trackingId)}
+                  aria-label="Remove index"
+                  title="Remove index"
+                >
+                  <Minus />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

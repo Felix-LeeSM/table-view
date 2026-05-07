@@ -172,13 +172,16 @@ export default function CreateTableTypeCombobox({
       {suggestions.length > 0 && (
         <PopoverContent
           align="start"
+          side="bottom"
           sideOffset={2}
-          // Radix exposes `--radix-popover-content-available-height`
-          // and `--radix-popover-trigger-width` automatically; we use
-          // them to clamp height to the room actually available
-          // (modal/viewport edge) so the list never clips.
-          className="z-[60] w-[var(--radix-popover-trigger-width)] overflow-auto p-1"
-          style={{ maxHeight: "var(--radix-popover-content-available-height)" }}
+          // Force-bottom placement (no flip) + a fixed max-height with
+          // internal scroll. Earlier Sprint 227 hot-fix used
+          // `--radix-popover-content-available-height` which let radix
+          // shrink the dropdown when the modal sat near the viewport
+          // edge — yielding a clipped, jumpy list. Fixed 240px + scroll
+          // is far less surprising and matches DataGrip behaviour.
+          avoidCollisions={false}
+          className="z-[60] max-h-60 w-[var(--radix-popover-trigger-width)] overflow-y-auto p-1"
           // Keep focus on the input so keyboard nav (↑/↓ Enter Esc)
           // continues to drive the popover. Without this, opening the
           // popover steals focus into the content body.

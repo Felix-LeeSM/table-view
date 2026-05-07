@@ -1,36 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, Minus, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@components/ui/select";
+import { Dialog, DialogContent, DialogFooter } from "@components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
-import type { ColumnDefinition } from "@/types/schema";
+import CreateTableDialogHeader from "./CreateTableDialog/Header";
+import IndexesTabBody, {
+  type IndexDraft,
+} from "./CreateTableDialog/IndexesTabBody";
+import type { ColumnDefinition, CreateIndexRequest } from "@/types/schema";
 
 /**
  * `CreateTableDialog` — Sprint 226 / Phase 27 sprint 1, redesigned in
- * Sprint 227 (Phase 27 sprint 2) for DataGrip-parity.
+ * Sprint 227 (Phase 27 sprint 2) for DataGrip-parity, Indexes tab
+ * functionalised in Sprint 228 (Phase 27 sprint 3).
  *
  * Sprint 227 changes:
- * - Tabs (Columns / Keys / Indexes / Foreign Keys). Indexes / FK tabs
- *   are present-but-disabled placeholders (Sprint 228 / 229 plug in).
+ * - Tabs (Columns / Keys / Indexes / Foreign Keys). FK tab body is
+ *   still a Sprint 229 placeholder.
  * - Target schema dropdown header populated from `availableSchemas`
  *   (right-clicked schema is the default; user may switch).
  * - Per-column data-type input is the `CreateTableTypeCombobox`
@@ -39,6 +30,31 @@ import type { ColumnDefinition } from "@/types/schema";
  * - Inline collapsible DDL Preview pane replaces the modal-on-modal
  *   `SqlPreviewDialog`. Sibling editors keep using `SqlPreviewDialog`.
  * - Footer: Cancel + Execute (no separate "Preview SQL" button).
+ *
+ * Sprint 228 changes:
+ * - Indexes tab body is interactive — `+ Index` / `−` row buttons +
+ *   per-row index name input + columns multi-checkbox group +
+ *   index type `<Select>` (btree / hash / gin / gist) + unique flag.
+ * - Show DDL fans out one `tauri.createIndex({preview_only:true})` per
+ *   declared (non-PK-dedup) row alongside the canonical
+ *   `tauri.createTable({preview_only:true})`. Inline preview pane
+ *   renders the joined multi-statement bundle (CREATE TABLE +
+ *   COMMENT ON × N + CREATE INDEX × M, separated by `;\n`).
+ * - Execute closure (registered with `useDdlPreviewExecution.loadPreview`'s
+ *   `prepareCommit` factory) chains:
+ *     await tauri.createTable({preview_only:false})  // 1 transaction
+ *     for (const idx of declaredIndexesAfterPkDedup) {
+ *       try { await tauri.createIndex({preview_only:false, …}) }
+ *       catch (e) { throw new Error(`Index "${idx.name}" failed: ${e}`) }
+ *     }
+ *   This is partial-atomic policy C (DataGrip pattern) — index
+ *   failures do NOT roll back the CREATE TABLE; already-applied
+ *   indexes earlier in the chain stay applied; the failing index
+ *   name surfaces verbatim in the inline preview pane error slot.
+ * - PK auto-emission deduplication: a row whose `columns` (in declared
+ *   order) exactly matches the PK column list is skipped (PG indexes
+ *   PKs implicitly). The row remains visible with an inline note
+ *   `"Skipped — primary key is already indexed"`.
  *
  * The lifecycle hook (`useDdlPreviewExecution`, Sprint 214) is reused
  * verbatim — modal owns inline preview JSX, hook owns state slots
@@ -55,12 +71,20 @@ interface ColumnDraft {
   is_pk: boolean;
 }
 
+// Sprint 228 — `IndexDraft` / `IndexType` / `INDEX_TYPE_OPTIONS` live
+// inside the extracted `./CreateTableDialog/IndexesTabBody.tsx` so the
+// JSX that consumes them ships with the type. The parent only needs
+// the type-imports above to thread the draft list through.
+
+function makeId(): string {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
 function newDraft(): ColumnDraft {
   return {
-    trackingId:
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2),
+    trackingId: makeId(),
     name: "",
     data_type: "",
     nullable: true,
@@ -68,6 +92,32 @@ function newDraft(): ColumnDraft {
     comment: "",
     is_pk: false,
   };
+}
+
+function newIndexDraft(): IndexDraft {
+  return {
+    trackingId: makeId(),
+    name: "",
+    columns: [],
+    index_type: "btree",
+    unique: false,
+  };
+}
+
+/**
+ * True iff the index row's `columns` array (in declared order) is
+ * exactly the declared PK column array. PG implicitly indexes PK
+ * columns with the same shape, so the chain skips the redundant
+ * `tauri.createIndex` call (the backend would otherwise succeed, but
+ * we'd be paying for a duplicate index — DataGrip parity).
+ */
+function indexMatchesPk(idx: IndexDraft, pk: string[]): boolean {
+  if (pk.length === 0) return false;
+  if (idx.columns.length !== pk.length) return false;
+  for (let i = 0; i < pk.length; i += 1) {
+    if (idx.columns[i] !== pk[i]) return false;
+  }
+  return true;
 }
 
 export interface CreateTableDialogProps {
@@ -105,6 +155,9 @@ export default function CreateTableDialog({
 }: CreateTableDialogProps) {
   const [tableName, setTableName] = useState("");
   const [columns, setColumns] = useState<ColumnDraft[]>([newDraft()]);
+  // Sprint 228 — indexes editor draft list. Default = empty array
+  // (index editor is opt-in; 0 indexes is the canonical base state).
+  const [indexes, setIndexes] = useState<IndexDraft[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("columns");
   // Default schema = right-clicked schemaName. The dropdown selection
   // persists across tab switches but is reset when the modal closes.
@@ -136,6 +189,7 @@ export default function CreateTableDialog({
   const resetForm = () => {
     setTableName("");
     setColumns([newDraft()]);
+    setIndexes([]);
     setSelectedSchema(schemaName);
     setActiveTab("columns");
     setShowDdl(false);
@@ -185,6 +239,44 @@ export default function CreateTableDialog({
   ) => {
     setColumns((prev) =>
       prev.map((c) => (c.trackingId === trackingId ? { ...c, ...updates } : c)),
+    );
+    invalidatePreview();
+  };
+
+  // ── Sprint 228 — Indexes tab handlers ────────────────────────────
+
+  const handleAddIndex = () => {
+    setIndexes((prev) => [...prev, newIndexDraft()]);
+    invalidatePreview();
+  };
+
+  const handleRemoveIndex = (trackingId: string) => {
+    setIndexes((prev) => prev.filter((i) => i.trackingId !== trackingId));
+    invalidatePreview();
+  };
+
+  const handleUpdateIndex = (
+    trackingId: string,
+    updates: Partial<IndexDraft>,
+  ) => {
+    setIndexes((prev) =>
+      prev.map((i) => (i.trackingId === trackingId ? { ...i, ...updates } : i)),
+    );
+    invalidatePreview();
+  };
+
+  const handleToggleIndexColumn = (trackingId: string, colName: string) => {
+    setIndexes((prev) =>
+      prev.map((i) => {
+        if (i.trackingId !== trackingId) return i;
+        const has = i.columns.includes(colName);
+        return {
+          ...i,
+          columns: has
+            ? i.columns.filter((c) => c !== colName)
+            : [...i.columns, colName],
+        };
+      }),
     );
     invalidatePreview();
   };
@@ -240,6 +332,49 @@ export default function CreateTableDialog({
     };
   };
 
+  // Live PK column list — used by the Indexes tab for dedup decisions
+  // and surface annotations.
+  const declaredPk = useMemo(
+    () =>
+      columns
+        .filter((c) => c.is_pk && c.name.trim().length > 0)
+        .map((c) => c.name.trim()),
+    [columns],
+  );
+
+  /**
+   * The list of index drafts that the chain will actually execute,
+   * after filtering out:
+   * - rows whose `name` is empty / whitespace-only (user added a row
+   *   but didn't fill it in),
+   * - rows with zero columns selected,
+   * - rows whose columns array is exactly the declared PK (PG indexes
+   *   PKs implicitly — emitting a duplicate would fail with a name
+   *   collision in the worst case, or just waste storage).
+   */
+  const declaredIndexesForChain = useMemo<IndexDraft[]>(() => {
+    return indexes.filter((i) => {
+      if (i.name.trim().length === 0) return false;
+      if (i.columns.length === 0) return false;
+      if (indexMatchesPk(i, declaredPk)) return false;
+      return true;
+    });
+  }, [indexes, declaredPk]);
+
+  const buildIndexRequest = (
+    idx: IndexDraft,
+    previewOnly: boolean,
+  ): CreateIndexRequest => ({
+    connection_id: connectionId,
+    schema: selectedSchema,
+    table: tableName.trim(),
+    index_name: idx.name.trim(),
+    columns: idx.columns.map((c) => c.trim()).filter((c) => c.length > 0),
+    index_type: idx.index_type,
+    is_unique: idx.unique,
+    preview_only: previewOnly,
+  });
+
   const handleShowDdl = async () => {
     if (showDdl && !previewStale) {
       // Toggle off — collapse the pane without discarding the cached
@@ -250,10 +385,46 @@ export default function CreateTableDialog({
     setShowDdl(true);
     setPreviewStale(false);
     if (!canPreview) return;
+    // Snapshot the indexes-for-chain at preview time so the request /
+    // commit closures use the same list (form edits between Show DDL
+    // and Execute already invalidate the cache via `previewStale`).
+    const chainIndexes = declaredIndexesForChain;
     await ddl.loadPreview(
-      () => tauri.createTable(buildRequest(true)),
+      async () => {
+        const tableResult = await tauri.createTable(buildRequest(true));
+        // Multi-statement preview — fan out one CREATE INDEX preview
+        // call per declared (non-PK-dedup) row, in row-declared order.
+        // Sequential to keep output deterministic and to avoid mass
+        // parallel IPC; the row count is small and these are cheap
+        // SQL builders, not actual database calls.
+        const indexSqls: string[] = [];
+        for (const idx of chainIndexes) {
+          const r = await tauri.createIndex(buildIndexRequest(idx, true));
+          indexSqls.push(r.sql);
+        }
+        const all = [tableResult.sql, ...indexSqls].filter(
+          (s) => s && s.trim().length > 0,
+        );
+        return { sql: all.join(";\n") };
+      },
       () => async () => {
+        // Atomic policy C — CREATE TABLE first, in its own transaction
+        // (the backend wraps CREATE TABLE + COMMENT ON in a single
+        // tx). Index calls are sequential and each in its own
+        // transaction. Index failures do NOT roll back the table.
         await tauri.createTable(buildRequest(false));
+        for (const idx of chainIndexes) {
+          try {
+            await tauri.createIndex(buildIndexRequest(idx, false));
+          } catch (e) {
+            // Surface the failing index name verbatim so the hook's
+            // `previewError` slot tells the user which row failed.
+            // Subsequent indexes in `chainIndexes` are NOT executed
+            // because we re-throw here (the `for` loop unwinds and
+            // the closure rejects).
+            throw new Error(`Index "${idx.name.trim()}" failed: ${String(e)}`);
+          }
+        }
       },
     );
   };
@@ -287,54 +458,12 @@ export default function CreateTableDialog({
           showCloseButton={false}
         >
           <div className="rounded-lg bg-secondary shadow-xl">
-            {/* Header */}
-            <DialogHeader className="flex flex-col gap-2 border-b border-border px-4 py-3">
-              <div className="flex items-center justify-between">
-                <DialogTitle className="text-sm font-semibold text-foreground">
-                  Create Table
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Create a new table in {selectedSchema}
-                </DialogDescription>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleCancel}
-                  aria-label="Close dialog"
-                >
-                  <X />
-                </Button>
-              </div>
-              {/* Target schema dropdown */}
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="create-table-target-schema"
-                  className="text-xs font-medium text-secondary-foreground"
-                >
-                  Target schema
-                </label>
-                <Select
-                  value={selectedSchema}
-                  onValueChange={handleSchemaChange}
-                >
-                  <SelectTrigger
-                    id="create-table-target-schema"
-                    aria-label="Target schema"
-                    size="sm"
-                    className="min-w-32"
-                  >
-                    <SelectValue placeholder="schema" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {schemaOptions.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </DialogHeader>
+            <CreateTableDialogHeader
+              selectedSchema={selectedSchema}
+              schemaOptions={schemaOptions}
+              onSchemaChange={handleSchemaChange}
+              onClose={handleCancel}
+            />
 
             {/* Body */}
             <div className="space-y-3 px-4 py-3">
@@ -539,18 +668,22 @@ export default function CreateTableDialog({
                   </div>
                 </TabsContent>
 
-                {/* Indexes tab — Sprint 228 placeholder */}
+                {/* Indexes tab — Sprint 228 editor (extracted body) */}
                 <TabsContent
                   value="indexes"
                   className="pt-3 data-[state=inactive]:hidden"
                   data-testid="create-table-indexes-panel"
                   forceMount
                 >
-                  <div className="rounded border border-dashed border-border bg-background p-4 text-center">
-                    <p className="text-xs italic text-muted-foreground">
-                      Available in Sprint 228
-                    </p>
-                  </div>
+                  <IndexesTabBody
+                    indexes={indexes}
+                    availableColumns={validPkColumns}
+                    isPkDuplicate={(draft) => indexMatchesPk(draft, declaredPk)}
+                    onAdd={handleAddIndex}
+                    onRemove={handleRemoveIndex}
+                    onUpdate={handleUpdateIndex}
+                    onToggleColumn={handleToggleIndexColumn}
+                  />
                 </TabsContent>
 
                 {/* Foreign Keys tab — Sprint 229 placeholder */}

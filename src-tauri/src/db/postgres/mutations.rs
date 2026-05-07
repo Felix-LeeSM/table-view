@@ -1062,6 +1062,58 @@ mod tests {
         );
     }
 
+    /// Sprint 228 — explicit byte-string fixture for `gin`. The
+    /// pre-existing `create_index_all_types_accepted` loop only asserts
+    /// `is_ok()` for each type; this case locks the actual SQL output
+    /// so a future refactor (e.g. lowercase normalisation, identifier
+    /// quoting tweak) can't silently regress the gin path the
+    /// CreateTableDialog Indexes-tab editor exposes to users.
+    #[tokio::test]
+    async fn create_index_preview_gin_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "documents".to_string(),
+            index_name: "idx_docs_search".to_string(),
+            columns: vec!["search_tsv".to_string()],
+            index_type: "gin".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "CREATE INDEX \"idx_docs_search\" ON \"public\".\"documents\" USING gin (\"search_tsv\")"
+        );
+    }
+
+    /// Sprint 228 — explicit byte-string fixture for `gist`. Companion
+    /// to `create_index_preview_gin_byte_equivalent` — together they
+    /// cover the two UI-exposed types (gin/gist) that previously only
+    /// existed inside the all-types-acceptance loop.
+    #[tokio::test]
+    async fn create_index_preview_gist_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = CreateIndexRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "regions".to_string(),
+            index_name: "idx_regions_geom".to_string(),
+            columns: vec!["geom".to_string()],
+            index_type: "gist".to_string(),
+            is_unique: false,
+            preview_only: true,
+        };
+        let result = adapter.create_index(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "CREATE INDEX \"idx_regions_geom\" ON \"public\".\"regions\" USING gist (\"geom\")"
+        );
+    }
+
     #[tokio::test]
     async fn create_index_all_types_accepted() {
         let adapter = PostgresAdapter::new();
