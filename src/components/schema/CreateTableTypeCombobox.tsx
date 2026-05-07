@@ -190,26 +190,28 @@ export default function CreateTableTypeCombobox({
           sideOffset={2}
           // No flip, no auto-shrink — fixed 240px box with internal
           // scroll. Sprint 227 hot-fix used radix's available-height
-          // var which jumped/clipped near the viewport edge. The
-          // current pass forces inline `maxHeight` + `overflow` so a
-          // tailwind cn-merge or hot-reload glitch can't strip the
-          // scroll behaviour. Caret-driven nav still works because the
-          // highlighted option is `scrollIntoView`-ed below.
+          // var which jumped/clipped near the viewport edge. Force-
+          // inline scroll on BOTH the radix content node and the
+          // listbox `<ul>` so a cn-merge or hot-reload glitch on one
+          // layer can't strip the scroll. `onWheel.stopPropagation()`
+          // keeps the parent Dialog from swallowing wheel events.
           avoidCollisions={false}
-          className="z-[60] w-[var(--radix-popover-trigger-width)] p-1"
+          className="z-[60] w-[var(--radix-popover-trigger-width)] p-0"
           style={{ maxHeight: 240, overflowY: "auto" }}
           // Keep focus on the input so keyboard nav (↑/↓ Enter Esc)
           // continues to drive the popover. Without this, opening the
           // popover steals focus into the content body.
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
+          onWheel={(e) => e.stopPropagation()}
         >
           <ul
             ref={listboxRef}
             id="create-table-type-combobox-listbox"
             role="listbox"
             aria-label="PostgreSQL types"
-            className="flex flex-col gap-0.5"
+            className="flex flex-col gap-0.5 p-1"
+            style={{ maxHeight: 240, overflowY: "auto" }}
           >
             {suggestions.map((t, idx) => (
               <li key={t}>

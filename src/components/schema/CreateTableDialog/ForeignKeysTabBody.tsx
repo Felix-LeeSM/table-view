@@ -1,0 +1,613 @@
+import { Minus, Plus } from "lucide-react";
+import { Button } from "@components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@components/ui/select";
+
+/**
+ * `ForeignKeysTabBody` — Sprint 229 (Phase 27 sprint 4) extraction.
+ *
+ * Why a sub-component:
+ *   - Sprint 228's Indexes-tab editor body grew the parent
+ *     `CreateTableDialog.tsx` past the project's 700-LOC threshold
+ *     (extracted `IndexesTabBody.tsx` to drop it back to 793). Sprint
+ *     229's Foreign Keys tab adds three sub-sections (FK / CHECK /
+ *     UNIQUE) and ~280 LOC of JSX; inlining would push the parent
+ *     past 1000. Per Sprint 229 contract Concerns #1 the editor body
+ *     is mandatorily extracted to a sibling sub-component, mirroring
+ *     the Sprint 228 `IndexesTabBody.tsx` precedent.
+ *
+ * Shape:
+ *   - Pure presentational mapper. Owns no state. The parent owns the
+ *     three draft arrays (`fks`, `checks`, `uniques`) + the matching
+ *     mutator callbacks. Reference-schema-keyed cache slices flow
+ *     in as `refTablesByKey` / `refColumnsByKey` (the parent threads
+ *     them from `useSchemaStore.getState().tables` /
+ *     `tableColumnsCache`).
+ *
+ * Tab layout:
+ *   - One Foreign Keys tab containing **three labeled sub-sections**:
+ *     "Foreign Keys" (per-row name + local cols + ref schema/table/
+ *     cols + ON DELETE + ON UPDATE), "CHECK constraints" (per-row
+ *     name + expression input), "Unique constraints" (per-row name +
+ *     columns multi-checkbox). Each sub-section's empty state is the
+ *     dashed-border "No <name> declared. Click '+ <button>' to add
+ *     one." pattern from Sprint 228 `IndexesTabBody.tsx`.
+ *
+ * Source: Sprint 229 contract `docs/sprints/sprint-229/contract.md`
+ * "Design Bar / Quality Bar".
+ */
+
+/**
+ * The five PG-canonical referential actions for FK ON DELETE / ON
+ * UPDATE clauses. Backend whitelists this exact set (case-sensitive
+ * uppercase) — see `src-tauri/src/db/postgres/mutations.rs`
+ * `format_referential_action_clause`.
+ */
+export type ReferentialAction =
+  | "NO ACTION"
+  | "RESTRICT"
+  | "CASCADE"
+  | "SET NULL"
+  | "SET DEFAULT";
+
+export const REFERENTIAL_ACTIONS: readonly ReferentialAction[] = [
+  "NO ACTION",
+  "RESTRICT",
+  "CASCADE",
+  "SET NULL",
+  "SET DEFAULT",
+];
+
+export interface ForeignKeyDraft {
+  trackingId: string;
+  name: string;
+  /** Local columns selected from `availableColumns`. Order = click order. */
+  columns: string[];
+  ref_schema: string;
+  ref_table: string;
+  ref_columns: string[];
+  on_delete: ReferentialAction;
+  on_update: ReferentialAction;
+}
+
+export interface CheckDraft {
+  trackingId: string;
+  name: string;
+  /** Free-text SQL expression. Single-line; backend trims + non-empty check. */
+  expression: string;
+}
+
+export interface UniqueDraft {
+  trackingId: string;
+  name: string;
+  /** Selected columns from `availableColumns`. Order = click order. */
+  columns: string[];
+}
+
+export interface ForeignKeysTabBodyProps {
+  fks: ForeignKeyDraft[];
+  checks: CheckDraft[];
+  uniques: UniqueDraft[];
+  /**
+   * Live-derived list of column names from the Columns tab (only those
+   * with a non-empty trimmed `name`). Drives the FK local-columns +
+   * UNIQUE columns multi-checkbox groups.
+   */
+  availableColumns: string[];
+  /** Schemas available on the connection — drives the ref-schema dropdown. */
+  availableSchemas: string[];
+  /**
+   * Cached reference-table list keyed by `${connectionId}:${refSchema}`.
+   * Source: `useSchemaStore.tables`. When the key is missing the parent
+   * triggers a one-shot `loadTables` (AC-229-09) and falls back to a
+   * free-text input until the load resolves.
+   */
+  refTablesByKey: Record<string, string[]>;
+  /**
+   * Cached reference-column list keyed by
+   * `${connectionId}:${refSchema}:${refTable}`. Source:
+   * `useSchemaStore.tableColumnsCache`. Same fallback semantics as
+   * `refTablesByKey`.
+   */
+  refColumnsByKey: Record<string, string[]>;
+  /**
+   * Per-row "ref columns are loading" flag — set true between picking
+   * a ref-table and the columns cache being populated. Drives the
+   * disabled state of the ref-columns checkbox group.
+   */
+  fkRefColumnsLoadingByTrackingId: Record<string, boolean>;
+  onAddFk: () => void;
+  onRemoveFk: (trackingId: string) => void;
+  onUpdateFk: (trackingId: string, updates: Partial<ForeignKeyDraft>) => void;
+  onToggleFkLocalColumn: (trackingId: string, colName: string) => void;
+  onToggleFkRefColumn: (trackingId: string, colName: string) => void;
+  onAddCheck: () => void;
+  onRemoveCheck: (trackingId: string) => void;
+  onUpdateCheck: (trackingId: string, updates: Partial<CheckDraft>) => void;
+  onAddUnique: () => void;
+  onRemoveUnique: (trackingId: string) => void;
+  onUpdateUnique: (trackingId: string, updates: Partial<UniqueDraft>) => void;
+  onToggleUniqueColumn: (trackingId: string, colName: string) => void;
+}
+
+export default function ForeignKeysTabBody({
+  fks,
+  checks,
+  uniques,
+  availableColumns,
+  availableSchemas,
+  refTablesByKey,
+  refColumnsByKey,
+  fkRefColumnsLoadingByTrackingId,
+  onAddFk,
+  onRemoveFk,
+  onUpdateFk,
+  onToggleFkLocalColumn,
+  onToggleFkRefColumn,
+  onAddCheck,
+  onRemoveCheck,
+  onUpdateCheck,
+  onAddUnique,
+  onRemoveUnique,
+  onUpdateUnique,
+  onToggleUniqueColumn,
+}: ForeignKeysTabBodyProps) {
+  return (
+    <div className="space-y-4">
+      {/* ── Foreign Keys sub-section ─────────────────────────────── */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="text-xs font-medium text-secondary-foreground">
+            Foreign Keys
+          </label>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onAddFk}
+            aria-label="Add foreign key"
+          >
+            <Plus />
+            Foreign Key
+          </Button>
+        </div>
+        {fks.length === 0 ? (
+          <div className="rounded border border-dashed border-border bg-background p-4 text-center">
+            <p className="text-xs italic text-muted-foreground">
+              No foreign keys declared. Click &quot;+ Foreign Key&quot; to add
+              one.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {fks.map((fk) => {
+              const refTables =
+                refTablesByKey[`${fk.ref_schema}`] ??
+                refTablesByKey[fk.ref_schema] ??
+                [];
+              const refColsKey = `${fk.ref_schema}:${fk.ref_table}`;
+              const refCols = refColumnsByKey[refColsKey] ?? [];
+              const refColsLoading =
+                fkRefColumnsLoadingByTrackingId[fk.trackingId] === true;
+              return (
+                <div
+                  key={fk.trackingId}
+                  className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
+                >
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <input
+                      className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                      value={fk.name}
+                      onChange={(e) =>
+                        onUpdateFk(fk.trackingId, { name: e.target.value })
+                      }
+                      placeholder="fk_table_column"
+                      aria-label="Foreign key name"
+                    />
+
+                    {/* Local columns multi-checkbox group */}
+                    <div
+                      className="rounded border border-border bg-background p-2"
+                      aria-label="Foreign key local columns"
+                    >
+                      {availableColumns.length === 0 ? (
+                        <span className="text-xs italic text-muted-foreground">
+                          Add a column with a name to choose foreign key columns
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {availableColumns.map((colName) => {
+                            const checked = fk.columns.includes(colName);
+                            return (
+                              <label
+                                key={colName}
+                                className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    onToggleFkLocalColumn(
+                                      fk.trackingId,
+                                      colName,
+                                    )
+                                  }
+                                  className="rounded border-border"
+                                  aria-label={`Foreign key local column: ${colName}`}
+                                />
+                                {colName}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Reference schema + table */}
+                    <div className="flex gap-1.5">
+                      <Select
+                        value={fk.ref_schema}
+                        onValueChange={(next) =>
+                          onUpdateFk(fk.trackingId, {
+                            ref_schema: next,
+                            ref_table: "",
+                            ref_columns: [],
+                          })
+                        }
+                      >
+                        <SelectTrigger
+                          aria-label="Foreign key reference schema"
+                          size="sm"
+                          className="flex-1"
+                        >
+                          <SelectValue placeholder="schema" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableSchemas.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              {s}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {refTables.length > 0 ? (
+                        <Select
+                          value={fk.ref_table}
+                          onValueChange={(next) =>
+                            onUpdateFk(fk.trackingId, {
+                              ref_table: next,
+                              ref_columns: [],
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            aria-label="Foreign key reference table"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            <SelectValue placeholder="reference_table" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {refTables.map((t) => (
+                              <SelectItem key={t} value={t}>
+                                {t}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        // Cache miss / load-in-flight / connection offline:
+                        // free-text fallback so the user can still type the
+                        // table name. Backend `validate_identifier` rejects
+                        // malformed names.
+                        <input
+                          className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                          value={fk.ref_table}
+                          onChange={(e) =>
+                            onUpdateFk(fk.trackingId, {
+                              ref_table: e.target.value,
+                              ref_columns: [],
+                            })
+                          }
+                          placeholder="reference_table_name"
+                          aria-label="Foreign key reference table"
+                        />
+                      )}
+                    </div>
+
+                    {/* Reference columns */}
+                    <div
+                      className="rounded border border-border bg-background p-2"
+                      aria-label="Foreign key reference columns"
+                    >
+                      {fk.ref_table.trim().length === 0 ? (
+                        <span className="text-xs italic text-muted-foreground">
+                          Pick a reference table to choose reference columns
+                        </span>
+                      ) : refColsLoading ? (
+                        <span className="text-xs italic text-muted-foreground">
+                          Loading reference columns…
+                        </span>
+                      ) : refCols.length === 0 ? (
+                        // Free-text fallback when the column cache is empty
+                        // (e.g. fetch failed / connection offline). Comma-
+                        // split parser at the parent.
+                        <input
+                          className="w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                          value={fk.ref_columns.join(", ")}
+                          onChange={(e) =>
+                            onUpdateFk(fk.trackingId, {
+                              ref_columns: e.target.value
+                                .split(",")
+                                .map((c) => c.trim())
+                                .filter((c) => c.length > 0),
+                            })
+                          }
+                          placeholder="id, ..."
+                          aria-label="Foreign key reference columns text"
+                        />
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {refCols.map((colName) => {
+                            const checked = fk.ref_columns.includes(colName);
+                            return (
+                              <label
+                                key={colName}
+                                className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() =>
+                                    onToggleFkRefColumn(fk.trackingId, colName)
+                                  }
+                                  className="rounded border-border"
+                                  aria-label={`Foreign key reference column: ${colName}`}
+                                />
+                                {colName}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ON DELETE / ON UPDATE */}
+                    <div className="flex gap-1.5">
+                      <div className="flex flex-1 items-center gap-1">
+                        <span className="text-xs text-muted-foreground">
+                          ON DELETE
+                        </span>
+                        <Select
+                          value={fk.on_delete}
+                          onValueChange={(next) =>
+                            onUpdateFk(fk.trackingId, {
+                              on_delete: next as ReferentialAction,
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            aria-label="Foreign key on delete"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {REFERENTIAL_ACTIONS.map((a) => (
+                              <SelectItem key={a} value={a}>
+                                {a}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-1 items-center gap-1">
+                        <span className="text-xs text-muted-foreground">
+                          ON UPDATE
+                        </span>
+                        <Select
+                          value={fk.on_update}
+                          onValueChange={(next) =>
+                            onUpdateFk(fk.trackingId, {
+                              on_update: next as ReferentialAction,
+                            })
+                          }
+                        >
+                          <SelectTrigger
+                            aria-label="Foreign key on update"
+                            size="sm"
+                            className="flex-1"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {REFERENTIAL_ACTIONS.map((a) => (
+                              <SelectItem key={a} value={a}>
+                                {a}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => onRemoveFk(fk.trackingId)}
+                    aria-label="Remove foreign key"
+                    title="Remove foreign key"
+                  >
+                    <Minus />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── CHECK constraints sub-section ────────────────────────── */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="text-xs font-medium text-secondary-foreground">
+            CHECK constraints
+          </label>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onAddCheck}
+            aria-label="Add check"
+          >
+            <Plus />
+            CHECK
+          </Button>
+        </div>
+        {checks.length === 0 ? (
+          <div className="rounded border border-dashed border-border bg-background p-4 text-center">
+            <p className="text-xs italic text-muted-foreground">
+              No CHECK constraints declared. Click &quot;+ CHECK&quot; to add
+              one.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {checks.map((c) => (
+              <div
+                key={c.trackingId}
+                className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
+              >
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <input
+                    className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                    value={c.name}
+                    onChange={(e) =>
+                      onUpdateCheck(c.trackingId, { name: e.target.value })
+                    }
+                    placeholder="chk_table_n"
+                    aria-label="Check name"
+                  />
+                  <input
+                    type="text"
+                    className="rounded border border-border bg-background px-2 py-1 text-xs font-mono text-foreground outline-none focus:border-primary"
+                    value={c.expression}
+                    onChange={(e) =>
+                      onUpdateCheck(c.trackingId, {
+                        expression: e.target.value,
+                      })
+                    }
+                    placeholder="age >= 0"
+                    aria-label="Check expression"
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onRemoveCheck(c.trackingId)}
+                  aria-label="Remove check"
+                  title="Remove check"
+                >
+                  <Minus />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Table-level UNIQUE constraints sub-section ───────────── */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="text-xs font-medium text-secondary-foreground">
+            Unique constraints
+          </label>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={onAddUnique}
+            aria-label="Add unique"
+          >
+            <Plus />
+            Unique
+          </Button>
+        </div>
+        {uniques.length === 0 ? (
+          <div className="rounded border border-dashed border-border bg-background p-4 text-center">
+            <p className="text-xs italic text-muted-foreground">
+              No table-level UNIQUE constraints declared. Click &quot;+
+              Unique&quot; to add one.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {uniques.map((u) => (
+              <div
+                key={u.trackingId}
+                className="flex items-start gap-1.5 rounded border border-border bg-background p-2"
+              >
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <input
+                    className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                    value={u.name}
+                    onChange={(e) =>
+                      onUpdateUnique(u.trackingId, { name: e.target.value })
+                    }
+                    placeholder="uq_table_columns"
+                    aria-label="Unique name"
+                  />
+                  <div
+                    className="rounded border border-border bg-background p-2"
+                    aria-label="Unique columns"
+                  >
+                    {availableColumns.length === 0 ? (
+                      <span className="text-xs italic text-muted-foreground">
+                        Add a column with a name to choose unique columns
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {availableColumns.map((colName) => {
+                          const checked = u.columns.includes(colName);
+                          return (
+                            <label
+                              key={colName}
+                              className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  onToggleUniqueColumn(u.trackingId, colName)
+                                }
+                                className="rounded border-border"
+                                aria-label={`Unique column: ${colName}`}
+                              />
+                              {colName}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => onRemoveUnique(u.trackingId)}
+                  aria-label="Remove unique"
+                  title="Remove unique"
+                >
+                  <Minus />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

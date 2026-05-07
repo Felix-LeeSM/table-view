@@ -57,6 +57,41 @@ pub(super) fn qualified_table(schema: &str, table: &str) -> String {
     format!("{}.{}", quote_identifier(schema), quote_identifier(table))
 }
 
+/// Sprint 229 — closed whitelist of PG canonical referential actions
+/// for FK ON DELETE / ON UPDATE clauses (case-sensitive uppercase).
+const REFERENTIAL_ACTIONS: &[&str] = &[
+    "NO ACTION",
+    "RESTRICT",
+    "CASCADE",
+    "SET NULL",
+    "SET DEFAULT",
+];
+
+/// Format a referential action clause (`" ON DELETE CASCADE"` etc.)
+/// when the action is `Some`. Validates against the closed whitelist
+/// `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}` —
+/// case-sensitive uppercase, PG canonical form. Returns the empty
+/// string when `None` so the calling SQL emitter can append
+/// unconditionally without trailing whitespace when both clauses are
+/// omitted (Sprint 226+227+228 byte-equivalence).
+fn format_referential_action_clause(
+    action: Option<&str>,
+    keyword: &str,
+) -> Result<String, AppError> {
+    match action {
+        None => Ok(String::new()),
+        Some(value) => {
+            if !REFERENTIAL_ACTIONS.contains(&value) {
+                return Err(AppError::Validation(format!(
+                    "Invalid {} action: {}",
+                    keyword, value
+                )));
+            }
+            Ok(format!(" {} {}", keyword, value))
+        }
+    }
+}
+
 impl PostgresAdapter {
     /// Drop a table permanently. Uses parameterized schema validation but
     /// table-safe quoting since table names cannot be bound as parameters.
@@ -520,6 +555,8 @@ impl PostgresAdapter {
                 columns,
                 reference_table,
                 reference_columns,
+                on_delete,
+                on_update,
             } => {
                 if columns.is_empty() {
                     return Err(AppError::Validation(
@@ -538,11 +575,27 @@ impl PostgresAdapter {
                     .iter()
                     .map(|c| quote_identifier(c))
                     .collect();
+                // Sprint 229 — append optional ON DELETE / ON UPDATE
+                // clauses when the field is `Some(action)` AND the
+                // action matches the closed PG-canonical whitelist
+                // `{NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT}`
+                // (case-sensitive uppercase). Anything else →
+                // `AppError::Validation`. When `None`, the clause is
+                // omitted (Sprint 226+227+228 byte-equivalence — the
+                // pre-existing `add_constraint_preview_foreign_key`
+                // fixture's emitted SQL stays unchanged because both
+                // fields default to `None`).
+                let on_delete_clause =
+                    format_referential_action_clause(on_delete.as_deref(), "ON DELETE")?;
+                let on_update_clause =
+                    format_referential_action_clause(on_update.as_deref(), "ON UPDATE")?;
                 format!(
-                    "FOREIGN KEY ({}) REFERENCES {} ({})",
+                    "FOREIGN KEY ({}) REFERENCES {} ({}){}{}",
                     cols.join(", "),
                     quote_identifier(reference_table),
-                    ref_cols.join(", ")
+                    ref_cols.join(", "),
+                    on_delete_clause,
+                    on_update_clause,
                 )
             }
             ConstraintDefinition::Unique { columns } => {
@@ -1315,6 +1368,12 @@ mod tests {
                 columns: vec!["user_id".to_string()],
                 reference_table: "users".to_string(),
                 reference_columns: vec!["id".to_string()],
+                // Sprint 229 — Rust syntax requires complete field
+                // listings even when `#[serde(default)]` is set; the
+                // 2-line `None` initializer keeps the emitted SQL
+                // (asserted below) byte-equivalent to Sprint 228.
+                on_delete: None,
+                on_update: None,
             },
             preview_only: true,
         };
@@ -1324,6 +1383,86 @@ mod tests {
             result.unwrap().sql,
             "ALTER TABLE \"public\".\"orders\" ADD CONSTRAINT \"fk_orders_user\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\")"
         );
+    }
+
+    // ── Sprint 229 — ON DELETE / ON UPDATE referential actions ─────────
+
+    #[tokio::test]
+    async fn add_constraint_preview_foreign_key_on_delete_cascade() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            constraint_name: "fk_orders_user".to_string(),
+            definition: ConstraintDefinition::ForeignKey {
+                columns: vec!["user_id".to_string()],
+                reference_table: "users".to_string(),
+                reference_columns: vec!["id".to_string()],
+                on_delete: Some("CASCADE".to_string()),
+                on_update: None,
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"orders\" ADD CONSTRAINT \"fk_orders_user\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_constraint_preview_foreign_key_on_update_set_null_with_on_delete_restrict() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            constraint_name: "fk_orders_user".to_string(),
+            definition: ConstraintDefinition::ForeignKey {
+                columns: vec!["user_id".to_string()],
+                reference_table: "users".to_string(),
+                reference_columns: vec!["id".to_string()],
+                on_delete: Some("RESTRICT".to_string()),
+                on_update: Some("SET NULL".to_string()),
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_ok());
+        // Both clauses present, ON DELETE first then ON UPDATE
+        // (declaration order is locked: emitter renders ON DELETE then
+        // ON UPDATE so the byte-string is deterministic across calls).
+        assert_eq!(
+            result.unwrap().sql,
+            "ALTER TABLE \"public\".\"orders\" ADD CONSTRAINT \"fk_orders_user\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE RESTRICT ON UPDATE SET NULL"
+        );
+    }
+
+    #[tokio::test]
+    async fn add_constraint_preview_foreign_key_invalid_on_delete_fails() {
+        let adapter = PostgresAdapter::new();
+        let req = AddConstraintRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            constraint_name: "fk_orders_user".to_string(),
+            definition: ConstraintDefinition::ForeignKey {
+                columns: vec!["user_id".to_string()],
+                reference_table: "users".to_string(),
+                reference_columns: vec!["id".to_string()],
+                on_delete: Some("INVALID".to_string()),
+                on_update: None,
+            },
+            preview_only: true,
+        };
+        let result = adapter.add_constraint(&req).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid ON DELETE action"));
     }
 
     #[tokio::test]

@@ -46,7 +46,13 @@ import {
   within,
 } from "@testing-library/react";
 
-const { mockCreateTable, mockCreateIndex, mockDropIndex } = vi.hoisted(() => ({
+const {
+  mockCreateTable,
+  mockCreateIndex,
+  mockDropIndex,
+  mockAddConstraint,
+  mockDropConstraint,
+} = vi.hoisted(() => ({
   mockCreateTable: vi.fn(),
   mockCreateIndex: vi.fn(),
   // Sprint 228 — declared so a vitest spy can assert that the chain
@@ -54,12 +60,20 @@ const { mockCreateTable, mockCreateIndex, mockDropIndex } = vi.hoisted(() => ({
   // exported in production, but the mock surface needs to expose it
   // so the test can `expect(mockDropIndex).not.toHaveBeenCalled()`.
   mockDropIndex: vi.fn(),
+  // Sprint 229 — addConstraint chain is the new ADD CONSTRAINT × K
+  // step appended after the Sprint 228 createIndex × M chain. mock
+  // dropConstraint is exposed so AC-229-08 can assert no rollback
+  // on mid-chain failure.
+  mockAddConstraint: vi.fn(),
+  mockDropConstraint: vi.fn(),
 }));
 
 vi.mock("@lib/tauri", () => ({
   createTable: mockCreateTable,
   createIndex: mockCreateIndex,
   dropIndex: mockDropIndex,
+  addConstraint: mockAddConstraint,
+  dropConstraint: mockDropConstraint,
 }));
 
 import CreateTableDialog from "./CreateTableDialog";
@@ -485,14 +499,29 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     ).toBeInTheDocument();
   });
 
-  it("Foreign Keys tab renders 'Available in Sprint 229' placeholder and zero textboxes (AC-227-01)", () => {
+  it("Foreign Keys tab no longer renders the Sprint 228 placeholder (AC-227-01 superseded by AC-229-01)", () => {
+    // Sprint 229 — the AC-227-01 Foreign Keys placeholder body
+    // (`"Available in Sprint 229"`) was removed in favour of the
+    // interactive editor (AC-229-01). Assertion intentionally flipped:
+    // the editor's `+ Foreign Key` / `+ CHECK` / `+ Unique` add
+    // buttons must surface, and the placeholder string must be gone
+    // from the panel. The Foreign Keys tab now houses 3 sub-sections
+    // (FK + CHECK + UNIQUE) per Sprint 229 contract.
     renderDialog();
     activateTab("Foreign Keys");
     const panel = document.querySelector(
       '[data-testid="create-table-foreign-keys-panel"]',
     ) as HTMLElement;
-    expect(panel.textContent).toContain("Available in Sprint 229");
-    expect(within(panel).queryAllByRole("textbox")).toHaveLength(0);
+    expect(panel.textContent).not.toContain("Available in Sprint 229");
+    expect(
+      within(panel).getByRole("button", { name: /Add foreign key/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: /Add check/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: /Add unique/i }),
+    ).toBeInTheDocument();
   });
 
   // ── AC-227-02 Target schema picker ────────────────────────────────
@@ -1309,6 +1338,883 @@ describe("Sprint 228 — Indexes tab functional", () => {
       target: { value: "idx_x" },
     });
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+    });
+    await screen.findByText("Confirm dangerous statement");
+    const alertDialog = document.querySelector(
+      '[data-slot="alert-dialog-content"]',
+    ) as HTMLElement;
+    const cancelBtn = Array.from(alertDialog.querySelectorAll("button")).find(
+      (b) => b.textContent === "Cancel",
+    );
+    act(() => {
+      cancelBtn?.click();
+    });
+
+    await screen.findByText(
+      "Safe Mode (warn): confirmation cancelled — no changes committed",
+    );
+  });
+});
+
+// ── Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional ─────────
+//
+// Date: 2026-05-07.
+//
+// Why this block exists:
+//
+// Sprint 228 left the Foreign Keys tab as a `"Available in Sprint 229"`
+// placeholder. Sprint 229 closes that loop: replace the placeholder with
+// an interactive editor housing **three** constraint families on a
+// single tab — Foreign Keys + CHECK + UNIQUE — sharing the same
+// `tauri.addConstraint` chain target after the Sprint 228 createIndex
+// chain. Atomic policy C — table+COMMENT in one transaction, indexes
+// then constraints sequentially each in its own transaction; failures
+// do NOT roll back earlier-applied work. The failing constraint name
+// surfaces verbatim in the inline preview pane error slot.
+//
+// Path A backend extension landed: `ConstraintDefinition::ForeignKey`
+// gains `on_delete` / `on_update` (`#[serde(default)]`), whitelist
+// `{NO ACTION | RESTRICT | CASCADE | SET NULL | SET DEFAULT}`.
+//
+// Source: `docs/sprints/sprint-229/contract.md` AC-229-01..AC-229-12.
+
+import { useSchemaStore } from "@stores/schemaStore";
+
+describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    useQueryHistoryStore.setState({ entries: [] });
+    // Reset the schema store cache between tests — AC-229-09's reference
+    // table picker reads `useSchemaStore.tables[<conn>:<refSchema>]`.
+    useSchemaStore.setState({
+      schemas: {},
+      tables: {},
+      views: {},
+      functions: {},
+      tableColumnsCache: {},
+      loading: false,
+      error: null,
+    });
+  });
+
+  function getForeignKeysPanel(): HTMLElement {
+    return document.querySelector(
+      '[data-testid="create-table-foreign-keys-panel"]',
+    ) as HTMLElement;
+  }
+
+  // 2-column form helper: id integer / email text on `users` table.
+  async function fillTwoColumnFormAndOpenForeignKeysTab() {
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "orders" },
+    });
+    const columnsPanel = getColumnsPanel();
+    const colNameInputs = within(columnsPanel).getAllByLabelText("Column name");
+    fireEvent.change(colNameInputs[0]!, { target: { value: "order_id" } });
+    fireEvent.change(
+      within(columnsPanel).getAllByLabelText("Column data type")[0]!,
+      { target: { value: "integer" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Add column/i }));
+    const inputs2 = within(getColumnsPanel()).getAllByLabelText("Column name");
+    fireEvent.change(inputs2[1]!, { target: { value: "user_id" } });
+    fireEvent.change(
+      within(getColumnsPanel()).getAllByLabelText("Column data type")[1]!,
+      { target: { value: "integer" } },
+    );
+    activateTab("Foreign Keys");
+  }
+
+  function addFkRow() {
+    fireEvent.click(screen.getByRole("button", { name: /Add foreign key/i }));
+  }
+  function addCheckRow() {
+    fireEvent.click(screen.getByRole("button", { name: /Add check/i }));
+  }
+  function addUniqueRow() {
+    fireEvent.click(screen.getByRole("button", { name: /Add unique/i }));
+  }
+
+  // ── AC-229-01: FK tab placeholder removed; 3 add-buttons present ─
+
+  it("Foreign Keys tab no longer renders the 'Available in Sprint 229' placeholder (AC-229-01)", () => {
+    renderDialog();
+    activateTab("Foreign Keys");
+    const panel = getForeignKeysPanel();
+    expect(panel.textContent).not.toContain("Available in Sprint 229");
+    expect(
+      within(panel).getByRole("button", { name: /Add foreign key/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: /Add check/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: /Add unique/i }),
+    ).toBeInTheDocument();
+  });
+
+  // ── AC-229-02: FK row inputs + ON DELETE / ON UPDATE 5-option list
+
+  it("FK row renders all 7 inputs (name + local cols + ref schema + ref table + ref cols + ON DELETE + ON UPDATE) (AC-229-02)", async () => {
+    renderDialog({ availableSchemas: ["public", "analytics"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addFkRow();
+    const panel = getForeignKeysPanel();
+
+    expect(
+      within(panel).getByLabelText("Foreign key name"),
+    ).toBeInTheDocument();
+    // Local columns multi-checkbox group — labelled by column name.
+    expect(
+      within(panel).getByLabelText("Foreign key local column: order_id"),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByLabelText("Foreign key local column: user_id"),
+    ).toBeInTheDocument();
+    // Reference schema dropdown (combobox role from Radix Select trigger).
+    expect(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference schema",
+      }),
+    ).toBeInTheDocument();
+    // Reference table dropdown OR free-text input (cache miss fallback).
+    expect(
+      within(panel).getByLabelText("Foreign key reference table"),
+    ).toBeInTheDocument();
+    // ON DELETE / ON UPDATE selectors.
+    expect(
+      within(panel).getByRole("combobox", { name: "Foreign key on delete" }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("combobox", { name: "Foreign key on update" }),
+    ).toBeInTheDocument();
+    // Remove button.
+    expect(
+      within(panel).getByRole("button", { name: /Remove foreign key/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("ON DELETE / ON UPDATE dropdowns each list exactly 5 options (AC-229-02)", async () => {
+    renderDialog();
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addFkRow();
+    const panel = getForeignKeysPanel();
+    fireEvent.click(
+      within(panel).getByRole("combobox", { name: "Foreign key on delete" }),
+    );
+    const expected = [
+      "NO ACTION",
+      "RESTRICT",
+      "CASCADE",
+      "SET NULL",
+      "SET DEFAULT",
+    ];
+    for (const v of expected) {
+      expect(
+        await screen.findByRole("option", { name: v }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  // ── AC-229-03 Composite FK preview substring ────────────────────
+
+  it("composite FK emits FOREIGN KEY ('order_id','user_id') REFERENCES 'orders' ('id','line_no') in preview (AC-229-03)", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer, "user_id" integer)',
+    });
+    // Use the verbatim shape contract requires; backend will return
+    // the substring that the test inspects.
+    mockAddConstraint.mockResolvedValue({
+      sql: 'ALTER TABLE "public"."orders" ADD CONSTRAINT "fk_composite" FOREIGN KEY ("order_id", "user_id") REFERENCES "orders" ("id", "line_no")',
+    });
+
+    // Seed the schema store so the reference table picker can find
+    // `orders` under public, with id+line_no as columns.
+    useSchemaStore.setState({
+      tables: {
+        "conn-1:public": [
+          { name: "orders", schema: "public", row_count: null },
+        ],
+      },
+      tableColumnsCache: {
+        "conn-1:public:orders": [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+          {
+            name: "line_no",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    renderDialog({ availableSchemas: ["public"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addFkRow();
+
+    const panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Foreign key name"), {
+      target: { value: "fk_composite" },
+    });
+    // Pick local columns order_id + user_id.
+    fireEvent.click(
+      within(panel).getByLabelText("Foreign key local column: order_id"),
+    );
+    fireEvent.click(
+      within(panel).getByLabelText("Foreign key local column: user_id"),
+    );
+
+    // Reference schema = public (default), ref table = orders.
+    fireEvent.click(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference table",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "orders" }));
+
+    // After ref table picked, ref columns checkbox group surfaces.
+    await waitFor(() => {
+      expect(
+        within(getForeignKeysPanel()).getByLabelText(
+          "Foreign key reference column: id",
+        ),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(
+      within(getForeignKeysPanel()).getByLabelText(
+        "Foreign key reference column: id",
+      ),
+    );
+    fireEvent.click(
+      within(getForeignKeysPanel()).getByLabelText(
+        "Foreign key reference column: line_no",
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
+    const call = mockAddConstraint.mock.calls[0]![0] as {
+      definition: {
+        type: string;
+        columns: string[];
+        reference_table: string;
+        reference_columns: string[];
+      };
+    };
+    expect(call.definition.type).toBe("foreign_key");
+    expect(call.definition.columns).toEqual(["order_id", "user_id"]);
+    expect(call.definition.reference_table).toBe("orders");
+    expect(call.definition.reference_columns).toEqual(["id", "line_no"]);
+
+    const previewPane = document.querySelector(
+      "#create-table-ddl-preview",
+    ) as HTMLElement;
+    expect(previewPane.textContent).toContain(
+      'FOREIGN KEY ("order_id", "user_id") REFERENCES "orders" ("id", "line_no")',
+    );
+  });
+
+  // ── AC-229-04 CHECK preview ───────────────────────────────────────
+
+  it('CHECK row preview shows ADD CONSTRAINT "<name>" CHECK (<expression>) (AC-229-04)', async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer, "user_id" integer)',
+    });
+    mockAddConstraint.mockResolvedValue({
+      sql: 'ALTER TABLE "public"."orders" ADD CONSTRAINT "chk_age" CHECK (age >= 0)',
+    });
+
+    renderDialog();
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addCheckRow();
+    const panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Check name"), {
+      target: { value: "chk_age" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Check expression"), {
+      target: { value: "age >= 0" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
+    const call = mockAddConstraint.mock.calls[0]![0] as {
+      definition: { type: string; expression: string };
+      constraint_name: string;
+    };
+    expect(call.definition.type).toBe("check");
+    expect(call.definition.expression).toBe("age >= 0");
+    expect(call.constraint_name).toBe("chk_age");
+
+    const previewPane = document.querySelector(
+      "#create-table-ddl-preview",
+    ) as HTMLElement;
+    expect(previewPane.textContent).toContain(
+      'ADD CONSTRAINT "chk_age" CHECK (age >= 0)',
+    );
+  });
+
+  it("whitespace-only CHECK expression is filtered out of the chain (AC-229-04)", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer)',
+    });
+
+    renderDialog();
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addCheckRow();
+    const panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Check name"), {
+      target: { value: "chk_blank" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Check expression"), {
+      target: { value: "   " },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
+    expect(mockAddConstraint).not.toHaveBeenCalled();
+  });
+
+  // ── AC-229-05 table-level UNIQUE ─────────────────────────────────
+
+  it('table-level UNIQUE row preview shows ADD CONSTRAINT "<name>" UNIQUE ("col") (AC-229-05)', async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer, "user_id" integer)',
+    });
+    mockAddConstraint.mockResolvedValue({
+      sql: 'ALTER TABLE "public"."orders" ADD CONSTRAINT "uq_orders_user" UNIQUE ("user_id")',
+    });
+
+    renderDialog();
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addUniqueRow();
+    const panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Unique name"), {
+      target: { value: "uq_orders_user" },
+    });
+    fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
+    const call = mockAddConstraint.mock.calls[0]![0] as {
+      definition: { type: string; columns: string[] };
+    };
+    expect(call.definition.type).toBe("unique");
+    expect(call.definition.columns).toEqual(["user_id"]);
+
+    const previewPane = document.querySelector(
+      "#create-table-ddl-preview",
+    ) as HTMLElement;
+    expect(previewPane.textContent).toContain(
+      'ADD CONSTRAINT "uq_orders_user" UNIQUE ("user_id")',
+    );
+  });
+
+  // ── AC-229-06 multi-statement preview shows full bundle ─────────
+
+  it("Show DDL bundles CREATE TABLE + 3× ADD CONSTRAINT (1 FK + 1 CHECK + 1 UNIQUE) (AC-229-06)", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer, "user_id" integer)',
+    });
+    mockAddConstraint.mockImplementation(
+      async (req: {
+        definition: { type: string };
+        constraint_name: string;
+      }) => ({
+        sql: `ALTER TABLE "public"."orders" ADD CONSTRAINT "${req.constraint_name}" ${req.definition.type.toUpperCase()}`,
+      }),
+    );
+
+    useSchemaStore.setState({
+      tables: {
+        "conn-1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+      tableColumnsCache: {
+        "conn-1:public:users": [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    renderDialog({ availableSchemas: ["public"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+
+    addFkRow();
+    addCheckRow();
+    addUniqueRow();
+    const panel = getForeignKeysPanel();
+
+    fireEvent.change(within(panel).getByLabelText("Foreign key name"), {
+      target: { value: "fk_orders_user" },
+    });
+    fireEvent.click(
+      within(panel).getByLabelText("Foreign key local column: user_id"),
+    );
+    fireEvent.click(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference table",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "users" }));
+    await waitFor(() => {
+      expect(
+        within(getForeignKeysPanel()).getByLabelText(
+          "Foreign key reference column: id",
+        ),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(
+      within(getForeignKeysPanel()).getByLabelText(
+        "Foreign key reference column: id",
+      ),
+    );
+
+    fireEvent.change(
+      within(getForeignKeysPanel()).getByLabelText("Check name"),
+      {
+        target: { value: "chk_age" },
+      },
+    );
+    fireEvent.change(
+      within(getForeignKeysPanel()).getByLabelText("Check expression"),
+      { target: { value: "age >= 0" } },
+    );
+
+    fireEvent.change(
+      within(getForeignKeysPanel()).getByLabelText("Unique name"),
+      {
+        target: { value: "uq_orders_user" },
+      },
+    );
+    fireEvent.click(
+      within(getForeignKeysPanel()).getByLabelText("Unique column: user_id"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+
+    await waitFor(() => {
+      expect(mockCreateTable).toHaveBeenCalledTimes(1);
+      expect(mockAddConstraint).toHaveBeenCalledTimes(3);
+    });
+
+    // 0 indexes declared → no createIndex calls.
+    expect(mockCreateIndex).not.toHaveBeenCalled();
+
+    // IPC sequence: createTable(true), then addConstraint(true) × 3.
+    expect(
+      (mockCreateTable.mock.calls[0]![0] as { preview_only: boolean })
+        .preview_only,
+    ).toBe(true);
+    for (const c of mockAddConstraint.mock.calls) {
+      expect((c[0] as { preview_only: boolean }).preview_only).toBe(true);
+    }
+  });
+
+  // ── AC-229-07 chained Execute happy path ─────────────────────────
+
+  it("Execute chains createTable + addConstraint × 3 sequentially with one history entry (AC-229-07)", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer, "user_id" integer)',
+    });
+    let inflight = 0;
+    let maxConcurrent = 0;
+    mockAddConstraint.mockImplementation(
+      async (req: {
+        constraint_name: string;
+        definition: { type: string };
+      }) => {
+        inflight += 1;
+        if (inflight > maxConcurrent) maxConcurrent = inflight;
+        await new Promise<void>((r) => setTimeout(r, 0));
+        inflight -= 1;
+        return {
+          sql: `ALTER TABLE "public"."orders" ADD CONSTRAINT "${req.constraint_name}" ${req.definition.type.toUpperCase()}`,
+        };
+      },
+    );
+
+    useSchemaStore.setState({
+      tables: {
+        "conn-1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+      tableColumnsCache: {
+        "conn-1:public:users": [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    const onRefresh = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    renderDialog({ onRefresh, onClose, availableSchemas: ["public"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+
+    addFkRow();
+    let panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Foreign key name"), {
+      target: { value: "fk_orders_user" },
+    });
+    fireEvent.click(
+      within(panel).getByLabelText("Foreign key local column: user_id"),
+    );
+    fireEvent.click(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference table",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "users" }));
+    await waitFor(() => {
+      expect(
+        within(getForeignKeysPanel()).getByLabelText(
+          "Foreign key reference column: id",
+        ),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(
+      within(getForeignKeysPanel()).getByLabelText(
+        "Foreign key reference column: id",
+      ),
+    );
+
+    addCheckRow();
+    panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Check name"), {
+      target: { value: "chk_age" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Check expression"), {
+      target: { value: "age >= 0" },
+    });
+
+    addUniqueRow();
+    panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Unique name"), {
+      target: { value: "uq_orders_user" },
+    });
+    fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => {
+      expect(mockCreateTable).toHaveBeenCalledTimes(1);
+      expect(mockAddConstraint).toHaveBeenCalledTimes(3);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+    await waitFor(() => {
+      expect(mockCreateTable).toHaveBeenCalledTimes(2);
+      expect(mockAddConstraint).toHaveBeenCalledTimes(6);
+    });
+    await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+
+    // Sequential — at most 1 in flight.
+    expect(maxConcurrent).toBeLessThanOrEqual(1);
+
+    // 1 history entry.
+    const entries = useQueryHistoryStore.getState().entries;
+    expect(entries.filter((e) => e.source === "ddl-structure")).toHaveLength(1);
+
+    // Commit-only addConstraint × 3 (preview_only:false).
+    const commitConstraints = mockAddConstraint.mock.calls.filter(
+      (c) => (c[0] as { preview_only: boolean }).preview_only === false,
+    );
+    expect(commitConstraints).toHaveLength(3);
+  });
+
+  // ── AC-229-08 constraint failure mid-chain ───────────────────────
+
+  it("2nd addConstraint(commit) rejection halts chain, modal stays open, error names failing constraint (AC-229-08)", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."orders" ("order_id" integer, "user_id" integer)',
+    });
+    let commitConstraintCount = 0;
+    mockAddConstraint.mockImplementation(
+      async (req: {
+        preview_only: boolean;
+        constraint_name: string;
+        definition: { type: string };
+      }) => {
+        if (req.preview_only) {
+          return {
+            sql: `ALTER TABLE "public"."orders" ADD CONSTRAINT "${req.constraint_name}" ${req.definition.type.toUpperCase()}`,
+          };
+        }
+        commitConstraintCount += 1;
+        if (commitConstraintCount === 2) {
+          throw new Error('check constraint "chk_age" violated by some row');
+        }
+        return {
+          sql: `ALTER TABLE "public"."orders" ADD CONSTRAINT "${req.constraint_name}" ${req.definition.type.toUpperCase()}`,
+        };
+      },
+    );
+
+    useSchemaStore.setState({
+      tables: {
+        "conn-1:public": [{ name: "users", schema: "public", row_count: null }],
+      },
+      tableColumnsCache: {
+        "conn-1:public:users": [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+
+    const onClose = vi.fn();
+    renderDialog({ onClose, availableSchemas: ["public"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+
+    addFkRow();
+    let panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Foreign key name"), {
+      target: { value: "fk_orders_user" },
+    });
+    fireEvent.click(
+      within(panel).getByLabelText("Foreign key local column: user_id"),
+    );
+    fireEvent.click(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference table",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "users" }));
+    await waitFor(() => {
+      expect(
+        within(getForeignKeysPanel()).getByLabelText(
+          "Foreign key reference column: id",
+        ),
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(
+      within(getForeignKeysPanel()).getByLabelText(
+        "Foreign key reference column: id",
+      ),
+    );
+
+    addCheckRow();
+    panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Check name"), {
+      target: { value: "chk_age" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Check expression"), {
+      target: { value: "age >= 0" },
+    });
+
+    addUniqueRow();
+    panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Unique name"), {
+      target: { value: "uq_orders_user" },
+    });
+    fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+
+    await waitFor(() => {
+      const previewPane = document.querySelector(
+        "#create-table-ddl-preview",
+      ) as HTMLElement;
+      expect(previewPane.textContent).toContain("chk_age");
+    });
+
+    // Commit phase: only 2 addConstraint calls fired (1st succeeded,
+    // 2nd rejected, 3rd never fires).
+    const commitCalls = mockAddConstraint.mock.calls.filter(
+      (c) => (c[0] as { preview_only: boolean }).preview_only === false,
+    );
+    expect(commitCalls).toHaveLength(2);
+    expect(
+      (commitCalls[0]![0] as { constraint_name: string }).constraint_name,
+    ).toBe("fk_orders_user");
+    expect(
+      (commitCalls[1]![0] as { constraint_name: string }).constraint_name,
+    ).toBe("chk_age");
+
+    // CREATE TABLE was NOT rolled back — 1 preview + 1 commit = 2 calls.
+    expect(mockCreateTable).toHaveBeenCalledTimes(2);
+
+    // Modal stays open + no rollback.
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mockDropConstraint).not.toHaveBeenCalled();
+  });
+
+  // ── AC-229-09 reference table picker — schemaStore-cached + lazy load
+
+  it("reference table picker populates from useSchemaStore.tables cache (AC-229-09)", async () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn-1:public": [
+          { name: "users", schema: "public", row_count: null },
+          { name: "products", schema: "public", row_count: null },
+        ],
+      },
+    });
+
+    renderDialog({ availableSchemas: ["public"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addFkRow();
+
+    const panel = getForeignKeysPanel();
+    fireEvent.click(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference table",
+      }),
+    );
+
+    expect(
+      await screen.findByRole("option", { name: "users" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "products" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reference schema selection triggers loadTables on cache miss (AC-229-09)", async () => {
+    const loadTables = vi
+      .fn<(connectionId: string, schema: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    useSchemaStore.setState({
+      tables: {},
+      loadTables,
+    });
+
+    renderDialog({ availableSchemas: ["public", "analytics"] });
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addFkRow();
+    const panel = getForeignKeysPanel();
+
+    // Switching ref schema (e.g. to analytics) must trigger the lazy
+    // loadTables call when the cache is empty.
+    fireEvent.click(
+      within(panel).getByRole("combobox", {
+        name: "Foreign key reference schema",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "analytics" }));
+
+    await waitFor(() => {
+      expect(loadTables).toHaveBeenCalledWith("conn-1", "analytics");
+    });
+  });
+
+  // ── AC-229-10 0-constraint byte-equivalent regression ─────────────
+
+  it("0-constraint IPC sequence is byte-equivalent to Sprint 228 (AC-229-10)", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."events" ("id" integer)',
+    });
+
+    renderDialog();
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "events" },
+    });
+    const columnsPanel = getColumnsPanel();
+    fireEvent.change(within(columnsPanel).getByLabelText("Column name"), {
+      target: { value: "id" },
+    });
+    fireEvent.change(within(columnsPanel).getByLabelText("Column data type"), {
+      target: { value: "integer" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Execute" }));
+    await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(2));
+
+    // No addConstraint and no createIndex calls when 0 constraints / 0
+    // indexes declared.
+    expect(mockAddConstraint).not.toHaveBeenCalled();
+    expect(mockCreateIndex).not.toHaveBeenCalled();
+  });
+
+  // ── canonical Safe Mode warn-cancel verbatim survives bundle ────
+
+  it("Safe Mode warn-cancel surfaces the canonical message even with constraints declared (AC-229-12 / Sprint 228 invariant carry-over)", async () => {
+    setProductionConnection();
+    useSafeModeStore.setState({ mode: "warn" });
+    mockCreateTable.mockResolvedValue({
+      sql: 'DROP TABLE "public"."orders"',
+    });
+    mockAddConstraint.mockResolvedValue({
+      sql: 'ALTER TABLE "public"."orders" ADD CONSTRAINT "chk_x" CHECK (id > 0)',
+    });
+
+    renderDialog();
+    await fillTwoColumnFormAndOpenForeignKeysTab();
+    addCheckRow();
+    const panel = getForeignKeysPanel();
+    fireEvent.change(within(panel).getByLabelText("Check name"), {
+      target: { value: "chk_x" },
+    });
+    fireEvent.change(within(panel).getByLabelText("Check expression"), {
+      target: { value: "id > 0" },
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));

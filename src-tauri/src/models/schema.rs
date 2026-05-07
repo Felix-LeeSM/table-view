@@ -142,6 +142,19 @@ pub enum ConstraintDefinition {
         columns: Vec<String>,
         reference_table: String,
         reference_columns: Vec<String>,
+        /// Sprint 229 — referential action on DELETE of the referenced
+        /// row. Whitelist (case-sensitive, PG canonical uppercase):
+        /// `"NO ACTION"` | `"RESTRICT"` | `"CASCADE"` | `"SET NULL"` |
+        /// `"SET DEFAULT"`. `#[serde(default)]` keeps Sprint 226+227+228
+        /// callers byte-equivalent — those payloads omit the field, it
+        /// deserializes to `None`, and the SQL emitter skips the
+        /// `ON DELETE …` clause entirely (PG default = NO ACTION).
+        #[serde(default)]
+        on_delete: Option<String>,
+        /// Sprint 229 — referential action on UPDATE of the referenced
+        /// row. Same whitelist + default-omit semantics as `on_delete`.
+        #[serde(default)]
+        on_update: Option<String>,
     },
     Unique {
         columns: Vec<String>,
@@ -525,10 +538,16 @@ mod tests {
 
     #[test]
     fn constraint_definition_foreign_key_serde() {
+        // Sprint 229 — Rust struct construction requires complete field
+        // listings; the new `on_delete` / `on_update` fields default to
+        // `None`. JSON payloads that omit these keys (Sprint 226+227+228
+        // callers) deserialize to the same `None` via `#[serde(default)]`.
         let def = ConstraintDefinition::ForeignKey {
             columns: vec!["user_id".to_string()],
             reference_table: "users".to_string(),
             reference_columns: vec!["id".to_string()],
+            on_delete: None,
+            on_update: None,
         };
         let json = serde_json::to_string(&def).unwrap();
         let deserialized: ConstraintDefinition = serde_json::from_str(&json).unwrap();
@@ -537,10 +556,14 @@ mod tests {
                 columns,
                 reference_table,
                 reference_columns,
+                on_delete,
+                on_update,
             } => {
                 assert_eq!(columns, vec!["user_id".to_string()]);
                 assert_eq!(reference_table, "users");
                 assert_eq!(reference_columns, vec!["id".to_string()]);
+                assert!(on_delete.is_none());
+                assert!(on_update.is_none());
             }
             _ => panic!("Expected ForeignKey"),
         }
@@ -587,6 +610,8 @@ mod tests {
                 columns: vec!["user_id".to_string()],
                 reference_table: "users".to_string(),
                 reference_columns: vec!["id".to_string()],
+                on_delete: None,
+                on_update: None,
             },
             preview_only: true,
         };

@@ -1,0 +1,65 @@
+Sprint 229 — TDD red-state evidence
+====================================
+
+Date: 2026-05-07
+Authored: tests authored before any production-code change to
+`CreateTableDialog.tsx` and the new `ForeignKeysTabBody.tsx`.
+
+## red-state #1 — `ForeignKeysTabBody.test.tsx`
+
+Component file does not yet exist; vite import resolution fails
+immediately:
+
+```
+Error: Failed to resolve import "./ForeignKeysTabBody" from
+"src/components/schema/CreateTableDialog/ForeignKeysTabBody.test.tsx".
+Does the file exist?
+
+ Test Files  1 failed (1)
+      Tests  no tests
+```
+
+Path: see `red-state-foreign-keys-tab-body.log` for full output.
+
+## red-state #2 — `CreateTableDialog.test.tsx` (Sprint 229 cases)
+
+The Sprint 226+227+228 carry-over cases stay green (38 passing); the
+14 new Sprint 229 cases (1 mechanical assertion flip on the FK
+placeholder + 13 in the new Sprint 229 describe block) fail because:
+
+- `Add check` / `Add unique` / `Add foreign key` buttons do not exist
+  in the FK tab body — it still renders the `"Available in Sprint
+  229"` placeholder.
+- `addConstraint` / `dropConstraint` mocks added to `vi.mock("@lib/
+  tauri")` are imported but the modal's `handleShowDdl` /
+  `prepareCommit` chain factory does not yet call them.
+- Reference table picker / ON DELETE / ON UPDATE selectors / FK row
+  inputs do not yet render.
+
+Result before implementation:
+
+```
+ Test Files  1 failed (1)
+      Tests  14 failed | 38 passed (52)
+```
+
+Path: see `red-state-create-table-dialog.log` for full output.
+
+## red→green transition
+
+After implementing:
+- `src-tauri/src/models/schema.rs` — extend
+  `ConstraintDefinition::ForeignKey` with `on_delete` / `on_update`
+  (`#[serde(default)]`).
+- `src-tauri/src/db/postgres/mutations.rs` — extend FK SQL emitter +
+  3 new fixtures + 2-line struct-literal addition on existing FK
+  fixture.
+- `src/types/schema.ts` — additive `on_delete?` / `on_update?` on FK
+  arm.
+- `src/components/schema/CreateTableDialog/ForeignKeysTabBody.tsx`
+  (NEW, ~280 LOC).
+- `src/components/schema/CreateTableDialog.tsx` — replace placeholder,
+  wire 3 draft state arrays + chain extension.
+
+…all 52 cases pass green (38 carry-over + 14 new) and the 10
+ForeignKeysTabBody cases pass green.

@@ -7,12 +7,24 @@ import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
+import { useSchemaStore } from "@stores/schemaStore";
+import { useFkReferencePicker } from "@hooks/useFkReferencePicker";
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import CreateTableDialogHeader from "./CreateTableDialog/Header";
 import IndexesTabBody, {
   type IndexDraft,
 } from "./CreateTableDialog/IndexesTabBody";
-import type { ColumnDefinition, CreateIndexRequest } from "@/types/schema";
+import ForeignKeysTabBody, {
+  type ForeignKeyDraft,
+  type CheckDraft,
+  type UniqueDraft,
+} from "./CreateTableDialog/ForeignKeysTabBody";
+import type {
+  AddConstraintRequest,
+  ColumnDefinition,
+  ConstraintDefinition,
+  CreateIndexRequest,
+} from "@/types/schema";
 
 /**
  * `CreateTableDialog` — Sprint 226 / Phase 27 sprint 1, redesigned in
@@ -104,6 +116,35 @@ function newIndexDraft(): IndexDraft {
   };
 }
 
+function newFkDraft(defaultRefSchema: string): ForeignKeyDraft {
+  return {
+    trackingId: makeId(),
+    name: "",
+    columns: [],
+    ref_schema: defaultRefSchema,
+    ref_table: "",
+    ref_columns: [],
+    on_delete: "NO ACTION",
+    on_update: "NO ACTION",
+  };
+}
+
+function newCheckDraft(): CheckDraft {
+  return {
+    trackingId: makeId(),
+    name: "",
+    expression: "",
+  };
+}
+
+function newUniqueDraft(): UniqueDraft {
+  return {
+    trackingId: makeId(),
+    name: "",
+    columns: [],
+  };
+}
+
 /**
  * True iff the index row's `columns` array (in declared order) is
  * exactly the declared PK column array. PG implicitly indexes PK
@@ -158,6 +199,16 @@ export default function CreateTableDialog({
   // Sprint 228 — indexes editor draft list. Default = empty array
   // (index editor is opt-in; 0 indexes is the canonical base state).
   const [indexes, setIndexes] = useState<IndexDraft[]>([]);
+  // Sprint 229 — three constraint family draft lists. Default = empty;
+  // FK / CHECK / UNIQUE editors are all opt-in.
+  const [fks, setFks] = useState<ForeignKeyDraft[]>([]);
+  const [checks, setChecks] = useState<CheckDraft[]>([]);
+  const [uniques, setUniques] = useState<UniqueDraft[]>([]);
+  // Per-row "ref columns are loading" flag — set true between picking
+  // a reference table and its columns being populated by the lazy
+  // `getTableColumns` call. Drives the disabled state in the body.
+  const [fkRefColumnsLoadingByTrackingId, setFkRefColumnsLoadingByTrackingId] =
+    useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<TabKey>("columns");
   // Default schema = right-clicked schemaName. The dropdown selection
   // persists across tab switches but is reset when the modal closes.
@@ -190,6 +241,10 @@ export default function CreateTableDialog({
     setTableName("");
     setColumns([newDraft()]);
     setIndexes([]);
+    setFks([]);
+    setChecks([]);
+    setUniques([]);
+    setFkRefColumnsLoadingByTrackingId({});
     setSelectedSchema(schemaName);
     setActiveTab("columns");
     setShowDdl(false);
@@ -275,6 +330,164 @@ export default function CreateTableDialog({
           columns: has
             ? i.columns.filter((c) => c !== colName)
             : [...i.columns, colName],
+        };
+      }),
+    );
+    invalidatePreview();
+  };
+
+  // ── Sprint 229 — Foreign Keys / CHECK / UNIQUE handlers ──────────
+
+  const handleAddFk = () => {
+    setFks((prev) => [...prev, newFkDraft(selectedSchema)]);
+    invalidatePreview();
+  };
+
+  const handleRemoveFk = (trackingId: string) => {
+    setFks((prev) => prev.filter((f) => f.trackingId !== trackingId));
+    setFkRefColumnsLoadingByTrackingId((prev) => {
+      if (!(trackingId in prev)) return prev;
+      const next = { ...prev };
+      delete next[trackingId];
+      return next;
+    });
+    invalidatePreview();
+  };
+
+  const fkPicker = useFkReferencePicker(connectionId);
+
+  const handleUpdateFk = (
+    trackingId: string,
+    updates: Partial<ForeignKeyDraft>,
+  ) => {
+    let nextRefSchema: string | undefined;
+    let nextRefTable: string | undefined;
+    let snapshotRefSchema: string | undefined;
+    setFks((prev) =>
+      prev.map((f) => {
+        if (f.trackingId !== trackingId) return f;
+        if (updates.ref_schema && updates.ref_schema !== f.ref_schema) {
+          nextRefSchema = updates.ref_schema;
+        }
+        if (
+          updates.ref_table !== undefined &&
+          updates.ref_table !== f.ref_table
+        ) {
+          nextRefTable = updates.ref_table;
+        }
+        // Capture the resulting ref_schema for the column-lazy-load
+        // closure below — either the new value if it's being changed
+        // in this same `updates`, or the existing one.
+        snapshotRefSchema = updates.ref_schema ?? f.ref_schema;
+        return { ...f, ...updates };
+      }),
+    );
+    invalidatePreview();
+    // Lazy load tables when ref_schema changes and the cache is empty.
+    if (nextRefSchema) {
+      void fkPicker.ensureTablesLoaded(nextRefSchema);
+    }
+    // Lazy load reference columns when ref_table changes.
+    if (
+      nextRefTable !== undefined &&
+      nextRefTable.trim().length > 0 &&
+      snapshotRefSchema &&
+      snapshotRefSchema.trim().length > 0
+    ) {
+      const refTable = nextRefTable.trim();
+      const refSchema = snapshotRefSchema;
+      setFkRefColumnsLoadingByTrackingId((prev) => ({
+        ...prev,
+        [trackingId]: true,
+      }));
+      void fkPicker.loadColumnsIfMissing(refSchema, refTable).finally(() => {
+        setFkRefColumnsLoadingByTrackingId((prev) => {
+          if (!(trackingId in prev)) return prev;
+          const next = { ...prev };
+          delete next[trackingId];
+          return next;
+        });
+      });
+    }
+  };
+
+  const handleToggleFkLocalColumn = (trackingId: string, colName: string) => {
+    setFks((prev) =>
+      prev.map((f) => {
+        if (f.trackingId !== trackingId) return f;
+        const has = f.columns.includes(colName);
+        return {
+          ...f,
+          columns: has
+            ? f.columns.filter((c) => c !== colName)
+            : [...f.columns, colName],
+        };
+      }),
+    );
+    invalidatePreview();
+  };
+
+  const handleToggleFkRefColumn = (trackingId: string, colName: string) => {
+    setFks((prev) =>
+      prev.map((f) => {
+        if (f.trackingId !== trackingId) return f;
+        const has = f.ref_columns.includes(colName);
+        return {
+          ...f,
+          ref_columns: has
+            ? f.ref_columns.filter((c) => c !== colName)
+            : [...f.ref_columns, colName],
+        };
+      }),
+    );
+    invalidatePreview();
+  };
+
+  const handleAddCheck = () => {
+    setChecks((prev) => [...prev, newCheckDraft()]);
+    invalidatePreview();
+  };
+  const handleRemoveCheck = (trackingId: string) => {
+    setChecks((prev) => prev.filter((c) => c.trackingId !== trackingId));
+    invalidatePreview();
+  };
+  const handleUpdateCheck = (
+    trackingId: string,
+    updates: Partial<CheckDraft>,
+  ) => {
+    setChecks((prev) =>
+      prev.map((c) => (c.trackingId === trackingId ? { ...c, ...updates } : c)),
+    );
+    invalidatePreview();
+  };
+
+  const handleAddUnique = () => {
+    setUniques((prev) => [...prev, newUniqueDraft()]);
+    invalidatePreview();
+  };
+  const handleRemoveUnique = (trackingId: string) => {
+    setUniques((prev) => prev.filter((u) => u.trackingId !== trackingId));
+    invalidatePreview();
+  };
+  const handleUpdateUnique = (
+    trackingId: string,
+    updates: Partial<UniqueDraft>,
+  ) => {
+    setUniques((prev) =>
+      prev.map((u) => (u.trackingId === trackingId ? { ...u, ...updates } : u)),
+    );
+    invalidatePreview();
+  };
+  const handleToggleUniqueColumn = (trackingId: string, colName: string) => {
+    setUniques((prev) =>
+      prev.map((u) => {
+        if (u.trackingId !== trackingId) return u;
+        const has = u.columns.includes(colName);
+        return {
+          ...u,
+          columns: has
+            ? u.columns.filter((c) => c !== colName)
+            : [...u.columns, colName],
         };
       }),
     );
@@ -375,6 +588,158 @@ export default function CreateTableDialog({
     preview_only: previewOnly,
   });
 
+  // ── Sprint 229 — constraint chain wiring ────────────────────────
+
+  // Reactive subscriptions to the schema store. The reference table
+  // picker reads `useSchemaStore.tables[<conn>:<refSchema>]` and the
+  // reference column picker reads `tableColumnsCache[<conn>:<schema>:
+  // <table>]`. Subscribing reactively means the FK editor body
+  // re-renders when a lazy `loadTables` / `getTableColumns` populates
+  // a previously-empty slot — so the dropdowns auto-fill without the
+  // user having to re-open the row.
+  const tablesByConnAndSchema = useSchemaStore((s) => s.tables);
+  const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
+
+  /** Slice keyed by `<refSchema>` — each entry is `string[]` (table names). */
+  const refTablesByKey = useMemo<Record<string, string[]>>(() => {
+    const out: Record<string, string[]> = {};
+    for (const [storeKey, list] of Object.entries(tablesByConnAndSchema)) {
+      // storeKey is `${connectionId}:${schema}` — we surface only the
+      // entries belonging to the active connection.
+      if (!storeKey.startsWith(`${connectionId}:`)) continue;
+      const refSchema = storeKey.slice(connectionId.length + 1);
+      out[refSchema] = list.map((t) => t.name);
+    }
+    return out;
+  }, [tablesByConnAndSchema, connectionId]);
+
+  /** Slice keyed by `<refSchema>:<refTable>` — each entry is `string[]`. */
+  const refColumnsByKey = useMemo<Record<string, string[]>>(() => {
+    const out: Record<string, string[]> = {};
+    for (const [storeKey, list] of Object.entries(tableColumnsCache)) {
+      if (!storeKey.startsWith(`${connectionId}:`)) continue;
+      // storeKey = `${connectionId}:${schema}:${table}` — strip connId
+      // prefix and key on `${schema}:${table}` to match the body's
+      // `${fk.ref_schema}:${fk.ref_table}` look-up.
+      const remainder = storeKey.slice(connectionId.length + 1);
+      out[remainder] = list.map((c) => c.name);
+    }
+    return out;
+  }, [tableColumnsCache, connectionId]);
+
+  /**
+   * The list of constraint drafts (FK + CHECK + UNIQUE) that the chain
+   * will actually execute, after filtering out invalid rows. Order is
+   * `[...validatedFks, ...validatedChecks, ...validatedUniques]` —
+   * declared family order, byte-stable across preview and execute.
+   *
+   * Filter rules (per Sprint 229 contract Test Requirements §"empty /
+   * 누락 입력"):
+   * - Empty trimmed name uses the auto-suggested name; the row only
+   *   drops when name auto-suggestion can't fill (e.g. FK with no
+   *   local columns).
+   * - FK with empty local columns / empty ref table / empty ref columns
+   *   is filtered out (not enough info to produce valid SQL).
+   * - CHECK with whitespace-only expression is filtered out (backend
+   *   would reject anyway).
+   * - UNIQUE with empty columns is filtered out.
+   */
+  const declaredConstraintsForChain = useMemo<
+    {
+      trackingId: string;
+      name: string;
+      definition: ConstraintDefinition;
+    }[]
+  >(() => {
+    const tableNameSafe = tableName.trim();
+    const out: {
+      trackingId: string;
+      name: string;
+      definition: ConstraintDefinition;
+    }[] = [];
+
+    for (const f of fks) {
+      const cols = f.columns.map((c) => c.trim()).filter((c) => c.length > 0);
+      const refTable = f.ref_table.trim();
+      const refCols = f.ref_columns
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+      if (cols.length === 0) continue;
+      if (refTable.length === 0) continue;
+      if (refCols.length === 0) continue;
+      const autoName =
+        cols.length > 0 && tableNameSafe.length > 0
+          ? `fk_${tableNameSafe}_${cols.join("_")}`
+          : "";
+      const finalName = f.name.trim().length > 0 ? f.name.trim() : autoName;
+      if (finalName.length === 0) continue;
+      out.push({
+        trackingId: f.trackingId,
+        name: finalName,
+        definition: {
+          type: "foreign_key",
+          columns: cols,
+          reference_table: refTable,
+          reference_columns: refCols,
+          on_delete: f.on_delete,
+          on_update: f.on_update,
+        },
+      });
+    }
+
+    let checkIndex = 0;
+    for (const c of checks) {
+      checkIndex += 1;
+      const expr = c.expression.trim();
+      if (expr.length === 0) continue;
+      const autoName =
+        tableNameSafe.length > 0 ? `chk_${tableNameSafe}_${checkIndex}` : "";
+      const finalName = c.name.trim().length > 0 ? c.name.trim() : autoName;
+      if (finalName.length === 0) continue;
+      out.push({
+        trackingId: c.trackingId,
+        name: finalName,
+        definition: {
+          type: "check",
+          expression: expr,
+        },
+      });
+    }
+
+    for (const u of uniques) {
+      const cols = u.columns.map((c) => c.trim()).filter((c) => c.length > 0);
+      if (cols.length === 0) continue;
+      const autoName =
+        cols.length > 0 && tableNameSafe.length > 0
+          ? `uq_${tableNameSafe}_${cols.join("_")}`
+          : "";
+      const finalName = u.name.trim().length > 0 ? u.name.trim() : autoName;
+      if (finalName.length === 0) continue;
+      out.push({
+        trackingId: u.trackingId,
+        name: finalName,
+        definition: {
+          type: "unique",
+          columns: cols,
+        },
+      });
+    }
+
+    return out;
+  }, [fks, checks, uniques, tableName]);
+
+  const buildConstraintRequest = (
+    c: { name: string; definition: ConstraintDefinition },
+    previewOnly: boolean,
+  ): AddConstraintRequest => ({
+    connection_id: connectionId,
+    schema: selectedSchema,
+    table: tableName.trim(),
+    constraint_name: c.name,
+    definition: c.definition,
+    preview_only: previewOnly,
+  });
+
   const handleShowDdl = async () => {
     if (showDdl && !previewStale) {
       // Toggle off — collapse the pane without discarding the cached
@@ -385,24 +750,31 @@ export default function CreateTableDialog({
     setShowDdl(true);
     setPreviewStale(false);
     if (!canPreview) return;
-    // Snapshot the indexes-for-chain at preview time so the request /
+    // Snapshot the chain lists at preview time so the request /
     // commit closures use the same list (form edits between Show DDL
     // and Execute already invalidate the cache via `previewStale`).
     const chainIndexes = declaredIndexesForChain;
+    const chainConstraints = declaredConstraintsForChain;
     await ddl.loadPreview(
       async () => {
         const tableResult = await tauri.createTable(buildRequest(true));
         // Multi-statement preview — fan out one CREATE INDEX preview
-        // call per declared (non-PK-dedup) row, in row-declared order.
-        // Sequential to keep output deterministic and to avoid mass
-        // parallel IPC; the row count is small and these are cheap
-        // SQL builders, not actual database calls.
+        // call per declared (non-PK-dedup) row, then one ADD
+        // CONSTRAINT preview call per declared (validated) FK / CHECK /
+        // UNIQUE row, in declared order. Sequential to keep output
+        // deterministic; row count is small and these are cheap SQL
+        // builders, not actual database calls.
         const indexSqls: string[] = [];
         for (const idx of chainIndexes) {
           const r = await tauri.createIndex(buildIndexRequest(idx, true));
           indexSqls.push(r.sql);
         }
-        const all = [tableResult.sql, ...indexSqls].filter(
+        const constraintSqls: string[] = [];
+        for (const c of chainConstraints) {
+          const r = await tauri.addConstraint(buildConstraintRequest(c, true));
+          constraintSqls.push(r.sql);
+        }
+        const all = [tableResult.sql, ...indexSqls, ...constraintSqls].filter(
           (s) => s && s.trim().length > 0,
         );
         return { sql: all.join(";\n") };
@@ -412,6 +784,9 @@ export default function CreateTableDialog({
         // (the backend wraps CREATE TABLE + COMMENT ON in a single
         // tx). Index calls are sequential and each in its own
         // transaction. Index failures do NOT roll back the table.
+        // ADD CONSTRAINT calls run after the index chain — same
+        // partial-atomic semantics: failures do NOT roll back the
+        // table or earlier-applied indexes/constraints.
         await tauri.createTable(buildRequest(false));
         for (const idx of chainIndexes) {
           try {
@@ -423,6 +798,16 @@ export default function CreateTableDialog({
             // because we re-throw here (the `for` loop unwinds and
             // the closure rejects).
             throw new Error(`Index "${idx.name.trim()}" failed: ${String(e)}`);
+          }
+        }
+        for (const c of chainConstraints) {
+          try {
+            await tauri.addConstraint(buildConstraintRequest(c, false));
+          } catch (e) {
+            // Sprint 229 — same verbatim-name surface contract as the
+            // index chain. Format: `Constraint "<name>" failed: <PG
+            // error>` (Sprint 229 findings — locked surface text).
+            throw new Error(`Constraint "${c.name}" failed: ${String(e)}`);
           }
         }
       },
@@ -686,18 +1071,37 @@ export default function CreateTableDialog({
                   />
                 </TabsContent>
 
-                {/* Foreign Keys tab — Sprint 229 placeholder */}
+                {/* Foreign Keys tab — Sprint 229 editor (extracted body) */}
                 <TabsContent
                   value="foreign_keys"
                   className="pt-3 data-[state=inactive]:hidden"
                   data-testid="create-table-foreign-keys-panel"
                   forceMount
                 >
-                  <div className="rounded border border-dashed border-border bg-background p-4 text-center">
-                    <p className="text-xs italic text-muted-foreground">
-                      Available in Sprint 229
-                    </p>
-                  </div>
+                  <ForeignKeysTabBody
+                    fks={fks}
+                    checks={checks}
+                    uniques={uniques}
+                    availableColumns={validPkColumns}
+                    availableSchemas={schemaOptions}
+                    refTablesByKey={refTablesByKey}
+                    refColumnsByKey={refColumnsByKey}
+                    fkRefColumnsLoadingByTrackingId={
+                      fkRefColumnsLoadingByTrackingId
+                    }
+                    onAddFk={handleAddFk}
+                    onRemoveFk={handleRemoveFk}
+                    onUpdateFk={handleUpdateFk}
+                    onToggleFkLocalColumn={handleToggleFkLocalColumn}
+                    onToggleFkRefColumn={handleToggleFkRefColumn}
+                    onAddCheck={handleAddCheck}
+                    onRemoveCheck={handleRemoveCheck}
+                    onUpdateCheck={handleUpdateCheck}
+                    onAddUnique={handleAddUnique}
+                    onRemoveUnique={handleRemoveUnique}
+                    onUpdateUnique={handleUpdateUnique}
+                    onToggleUniqueColumn={handleToggleUniqueColumn}
+                  />
                 </TabsContent>
               </Tabs>
             </div>

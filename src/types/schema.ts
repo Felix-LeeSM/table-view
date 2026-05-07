@@ -158,6 +158,21 @@ export type ConstraintDefinition =
       columns: string[];
       reference_table: string;
       reference_columns: string[];
+      /**
+       * Sprint 229 — referential action when the referenced row is
+       * deleted. Whitelist (PG canonical, uppercase): NO ACTION |
+       * RESTRICT | CASCADE | SET NULL | SET DEFAULT. Optional — when
+       * omitted (or null) the backend's `#[serde(default)]` resolves
+       * to `None` and the SQL emitter omits the clause (PG defaults
+       * to NO ACTION).
+       */
+      on_delete?: string | null;
+      /**
+       * Sprint 229 — referential action when the referenced row is
+       * updated. Same whitelist + default-omit semantics as
+       * `on_delete`.
+       */
+      on_update?: string | null;
     }
   | {
       type: "unique";

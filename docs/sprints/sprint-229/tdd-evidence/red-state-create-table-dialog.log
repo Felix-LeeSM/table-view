@@ -1,0 +1,40 @@
+            [33mclass[39m=[32m"flex w-fit items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 data-[placeholder]:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground min-w-32"[39m
+            [33mdata-size[39m=[32m"sm"[39m
+            [33mdata-slot[39m=[32m"select-trigger"[39m
+            [33mdata-state[39m=[32m"closed"[39m
+            [33mdir[39m=[32m"ltr"[39m
+            [33mid[39m=[32m"create-table-target-schema"[39m
+            [33mrole[39m=[32m"combobox"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mdata-slot[39m=[32m"select-value"[39m
+              [33mstyle[39m=[32m"pointer-events: none;"[39m
+            [36m>[39m
+              [0mpublic[0m
+            [36m</span>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-down size-4 opacity-50"[39m
+              [33mfill[39m=[3...
+ ❯ Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.1/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ addCheckRow src/components/schema/CreateTableDialog.test.tsx:1440:28
+    1438|   }
+    1439|   function addCheckRow() {
+    1440|     fireEvent.click(screen.getByRole("button", { name: /Add check/i })…
+       |                            ^
+    1441|   }
+    1442|   function addUniqueRow() {
+ ❯ src/components/schema/CreateTableDialog.test.tsx:2138:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/14]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  14 failed | 38 passed (52)
+   Start at  09:54:48
+   Duration  5.26s (transform 178ms, setup 52ms, import 400ms, tests 4.30s, environment 411ms)
+
