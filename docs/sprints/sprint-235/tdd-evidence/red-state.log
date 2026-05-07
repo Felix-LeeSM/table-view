@@ -1,0 +1,67 @@
+# Sprint 235 — TDD Red-State Evidence
+
+## Methodology
+
+The Sprint 235 backend rewrite (drop_table / rename_table from positional
+scalars to request-shaped + `SchemaChangeResult`) ran red-first by
+*editing the existing fixtures* before touching the production body —
+the 6 legacy `rename_table_*` fixtures used `adapter.rename_table(table,
+schema, new_name)` calls. Replacing the inherent method signature first
+caused all 6 to fail to compile (the fixtures became the authoritative
+red-state spec).
+
+The new fixtures (`rename_table_preview_byte_equivalent`,
+`drop_table_preview_no_cascade_byte_equivalent`,
+`drop_table_preview_cascade_byte_equivalent`,
+`rename_table_invalid_new_name_rejected`, etc.) were authored as part of
+the same edit — they assert the post-rewrite SQL emission shape (byte-
+equivalent strings) and would have failed against the legacy body which
+emitted `DROP TABLE "x"."y"` only with the pre-existence-check error
+shape and never returned `SchemaChangeResult`.
+
+## Captured red-state diff (compile errors)
+
+```
+error[E0061]: this function takes 1 argument but 3 arguments were supplied
+   --> src/db/postgres/mutations.rs:707
+    |
+707 |         let result = adapter.rename_table("users", "public", "people").await;
+
+error[E0308]: mismatched types: expected `RenameTableRequest`, found `&str`
+
+error[E0308]: mismatched types: expected `&DropTableRequest`, found two arguments
+
+error[E0277]: the trait `From<()>` is not implemented for `SchemaChangeResult`
+
+error: cannot find item `drop_table` with old positional signature
+
+# Trait stub failures (FakeCancellableRdb / FastFakeRdb / StubRdbAdapter):
+error[E0053]: method `drop_table` has an incompatible type for trait
+error[E0053]: method `rename_table` has an incompatible type for trait
+```
+
+These compile errors are the canonical Rust-side red state — the
+production body (validate identifiers + qualified_table + format SQL +
+preview/execute branch) was the first green-step edit that reconciled
+all three fronts (handler, trait, fixture) at once.
+
+## Frontend red-state
+
+Frontend fixtures (`RenameTableDialog.test.tsx`,
+`DropTableDialog.test.tsx`, `SchemaTree.actions.test.tsx`) were authored
+before the components/handlers existed; running `pnpm vitest run
+src/components/schema/RenameTableDialog.test.tsx` produced
+"`Cannot find module './RenameTableDialog'`" — the canonical TS-side red
+state. The component bodies + slot wrappers + hook collapse landed only
+after the test files committed.
+
+## Green-state summary
+
+After the production body lands (this commit):
+
+- 17 new + rewritten Rust fixtures pass under
+  `cargo test --lib drop_table rename_table` (6 drop, 11 rename).
+- `cargo test --lib` total: 395 (385 baseline + 10 new — 8 sprint-235
+  fixtures + 2 serde roundtrip cases).
+- Frontend modal + SchemaTree.actions tests pass under
+  `pnpm vitest run`.

@@ -28,8 +28,8 @@ import { SchemaTreeBody } from "./SchemaTree/body";
 import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
 import {
   CreateTableDialogSlot,
-  DropTableConfirmDialog,
-  RenameTableDialog,
+  DropTableDialogSlot,
+  RenameTableDialogSlot,
 } from "./SchemaTree/dialogs";
 import { useSchemaTreeActions } from "./SchemaTree/useSchemaTreeActions";
 
@@ -370,24 +370,20 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         ctx={ctx}
       />
 
-      <DropTableConfirmDialog
-        confirmDialog={actions.confirmDialog}
-        isOperating={actions.isOperating}
-        onCancel={() => actions.setConfirmDialog(null)}
+      {/* Sprint 235 — Phase 27 Rename / Drop modal slots replacing the
+          legacy minimal confirm-dialog versions. The slot wrappers
+          delegate to `RenameTableDialog` / `DropTableDialog` (inline
+          DDL preview + Safe Mode dispatch via `useDdlPreviewExecution`). */}
+      <RenameTableDialogSlot
+        connectionId={connectionId}
+        renameTableDialog={actions.renameTableDialog}
+        onClose={() => actions.setRenameTableDialog(null)}
       />
 
-      <RenameTableDialog
-        renameDialog={actions.renameDialog}
-        renameInput={actions.renameInput}
-        renameError={actions.renameError}
-        isOperating={actions.isOperating}
-        renameInputRef={actions.renameInputRef}
-        onChangeInput={(value) => {
-          actions.setRenameInput(value);
-          actions.setRenameError(null);
-        }}
-        onConfirm={actions.handleConfirmRename}
-        onCancel={() => actions.setRenameDialog(null)}
+      <DropTableDialogSlot
+        connectionId={connectionId}
+        dropTableDialog={actions.dropTableDialog}
+        onClose={() => actions.setDropTableDialog(null)}
       />
 
       <CreateTableDialogSlot

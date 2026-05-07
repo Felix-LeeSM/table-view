@@ -1,0 +1,295 @@
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Button } from "@components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@components/ui/dialog";
+import * as tauri from "@lib/tauri";
+import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
+import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import SqlSyntax from "@components/shared/SqlSyntax";
+import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
+
+/**
+ * Sprint 235 — `DropTableDialog`. Typing-confirm input + CASCADE
+ * checkbox + inline DDL preview pane + Cancel + Show DDL + Apply
+ * buttons.
+ *
+ * Apply is `disabled` UNTIL the typing-confirm input matches the current
+ * table name byte-for-byte (case-sensitive — `Users` ≠ `users`). The
+ * typing-confirm pattern is NEW in Sprint 235 (no prior occurrence in
+ * the codebase — Mongo `useDocumentDatabaseDrop` uses a regular confirm
+ * dialog). Per Sprint 235 contract: NO `onChange` debounce, NO trim
+ * (whitespace-only matches stay invalid), every keystroke re-evaluates.
+ *
+ * CASCADE checkbox defaults to OFF — user opts INTO the more dangerous
+ * `DROP TABLE … CASCADE` form explicitly. Toggling it invalidates the
+ * cached preview so the next `Show DDL` click re-fetches with the new
+ * SQL.
+ *
+ * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
+ * TABLE` is classified as `ddl-drop` / danger by the analyzer, so the
+ * production-strict tier blocks, the production-warn tier escalates to
+ * `pendingConfirm` (additional `ConfirmDangerousDialog` mounts on top of
+ * the typing-confirm gate), and non-production / mode=off allows.
+ *
+ * Sequence:
+ *   1. user types name → typing match enables Apply → click Apply.
+ *   2. preview SQL fetched (or returned from cache) → `attemptExecute`.
+ *   3. Safe Mode gate decides → block (previewError) | warn-confirm
+ *      (pendingConfirm dialog) | safe (commit).
+ *   4. on warn-confirm, user types analyzer reason → commit runs.
+ *   5. on commit success, modal closes.
+ */
+
+export interface DropTableDialogProps {
+  /** Connection id used by the Safe Mode gate + history record. */
+  connectionId: string;
+  /** Schema name (display + payload). */
+  schemaName: string;
+  /** Current table name (typing-confirm target + payload). */
+  tableName: string;
+  /** Modal closes when set false. */
+  open: boolean;
+  /** Called on Cancel / outside-close / commit-success. */
+  onClose: () => void;
+}
+
+export default function DropTableDialog({
+  connectionId,
+  schemaName,
+  tableName,
+  open,
+  onClose,
+}: DropTableDialogProps) {
+  const [typingConfirm, setTypingConfirm] = useState("");
+  const [cascade, setCascade] = useState(false);
+  const [showDdl, setShowDdl] = useState(false);
+  const [previewStale, setPreviewStale] = useState(false);
+
+  const { dropTable: dropTableMutation } = useSchemaTableMutations();
+
+  const ddl = useDdlPreviewExecution({
+    connectionId,
+    onRefresh: async () => {
+      onClose();
+    },
+  });
+
+  // Reset form state on (re)open. Same pattern as RenameTableDialog.
+  useEffect(() => {
+    if (open) {
+      setTypingConfirm("");
+      setCascade(false);
+      setShowDdl(false);
+      setPreviewStale(false);
+      ddl.cancelPreview();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, tableName, schemaName]);
+
+  // Sprint 235 — typing-confirm match is case-sensitive byte-for-byte.
+  // No trim, no debounce — every keystroke re-evaluates.
+  const typingMatches = typingConfirm === tableName;
+
+  const canApply =
+    typingMatches && !ddl.previewLoading && !previewStale && !!ddl.previewSql;
+  const canPreview = typingMatches;
+
+  const invalidatePreview = () => {
+    if (ddl.previewSql) {
+      setPreviewStale(true);
+      setShowDdl(false);
+      ddl.cancelPreview();
+    }
+  };
+
+  const handleCascadeChange = (next: boolean) => {
+    setCascade(next);
+    invalidatePreview();
+  };
+
+  const buildRequest = (previewOnly: boolean) => ({
+    connectionId,
+    schema: schemaName,
+    table: tableName,
+    cascade,
+    previewOnly,
+  });
+
+  const handleShowDdl = async () => {
+    if (showDdl && !previewStale) {
+      setShowDdl(false);
+      return;
+    }
+    setShowDdl(true);
+    setPreviewStale(false);
+    if (!canPreview) return;
+    await ddl.loadPreview(
+      async () => {
+        const result = await tauri.dropTableRequest(buildRequest(true));
+        return { sql: result.sql };
+      },
+      // Commit closure — runs the drop via the Sprint 223 mutation hook
+      // so the schemaStore cache evicts + listTables fallback patches
+      // the deleted row optimistically.
+      () => async () => {
+        await dropTableMutation(connectionId, tableName, schemaName);
+      },
+    );
+  };
+
+  const handleApply = async () => {
+    if (!ddl.previewSql) return;
+    await ddl.attemptExecute();
+  };
+
+  const handleCancel = () => {
+    ddl.cancelPreview();
+    onClose();
+  };
+
+  const ddlButtonLabel = showDdl ? "Hide DDL" : "Show DDL";
+
+  return (
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) handleCancel();
+        }}
+      >
+        <DialogContent
+          className="w-dialog-md bg-secondary p-0"
+          showCloseButton={false}
+        >
+          <div className="rounded-lg bg-secondary shadow-xl">
+            <DialogHeader className="border-b border-border px-4 py-3">
+              <DialogTitle className="text-sm font-semibold text-foreground">
+                Drop Table
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                {schemaName}.{tableName}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 px-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                This action cannot be undone. Type the table name to confirm.
+              </p>
+              <div>
+                <label
+                  htmlFor="drop-table-typing-confirm"
+                  className="mb-1 block text-xs font-medium text-secondary-foreground"
+                >
+                  Type the table name to confirm
+                </label>
+                <input
+                  id="drop-table-typing-confirm"
+                  className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                  value={typingConfirm}
+                  onChange={(e) => setTypingConfirm(e.target.value)}
+                  placeholder={tableName}
+                  aria-label="Type the table name to confirm"
+                  autoFocus
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={cascade}
+                  onChange={(e) => handleCascadeChange(e.target.checked)}
+                  className="rounded border-border"
+                  aria-label="CASCADE"
+                />
+                CASCADE — drop dependent objects (default: off)
+              </label>
+            </div>
+
+            <div className="border-t border-border">
+              <button
+                type="button"
+                onClick={handleShowDdl}
+                disabled={!canPreview && !showDdl}
+                className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                aria-expanded={showDdl}
+                aria-controls="drop-table-ddl-preview"
+                aria-label={ddlButtonLabel}
+              >
+                <span>{ddlButtonLabel}</span>
+                {showDdl ? (
+                  <ChevronUp className="size-3" />
+                ) : (
+                  <ChevronDown className="size-3" />
+                )}
+              </button>
+              {showDdl && (
+                <div
+                  id="drop-table-ddl-preview"
+                  className="border-t border-border bg-background px-4 py-2"
+                >
+                  {ddl.previewLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" />
+                      Generating preview…
+                    </div>
+                  ) : ddl.previewError ? (
+                    <pre
+                      className="max-h-scroll-md overflow-auto whitespace-pre-wrap rounded border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive"
+                      role="alert"
+                    >
+                      {ddl.previewError}
+                    </pre>
+                  ) : ddl.previewSql ? (
+                    <pre className="max-h-scroll-md overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-2 text-xs font-mono text-foreground">
+                      <SqlSyntax sql={ddl.previewSql} />
+                    </pre>
+                  ) : (
+                    <span className="text-xs italic text-muted-foreground">
+                      -- Type the table name to see the generated SQL
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="border-t border-border px-4 py-3">
+              <Button variant="ghost" size="sm" onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={handleApply}
+                disabled={!canApply}
+                aria-label="Apply"
+              >
+                {ddl.previewLoading ? (
+                  <Loader2 className="animate-spin size-3.5" />
+                ) : null}
+                Apply
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {ddl.pendingConfirm && (
+        <ConfirmDangerousDialog
+          open
+          reason={ddl.pendingConfirm.reason}
+          sqlPreview={ddl.pendingConfirm.sql}
+          onConfirm={() => {
+            void ddl.confirmDangerous();
+          }}
+          onCancel={ddl.cancelDangerous}
+        />
+      )}
+    </>
+  );
+}

@@ -1,0 +1,353 @@
+// Sprint 235 (AC-235-02, AC-235-03, AC-235-05, AC-235-06, AC-235-09)
+// — DropTableDialog test suite. Date: 2026-05-07.
+//
+// Why this file exists:
+// - AC-235-05: typing-confirm enable/disable, CASCADE toggle → preview
+//   re-fetch on next Show DDL, CASCADE checked emits SQL with `... CASCADE`,
+//   case-sensitive typing match (`Users` ≠ `users`), Apply disabled
+//   before typing match.
+// - AC-235-06: Safe Mode block / warn-cancel / warn-confirm / safe matrix.
+//   `DROP TABLE` is classified `ddl-drop`/danger so the gate fires on
+//   production environments.
+// - AC-235-02 / AC-235-03: IPC payload shape (camelCase) + call sequence
+//   `[{ previewOnly: true }, { previewOnly: false }]`.
+// - AC-235-09: invalid-table-name rejection (defense-in-depth — typing-
+//   confirm is the user-visible gate).
+//
+// Mock pattern: `vi.hoisted` for `@lib/tauri.dropTableRequest`,
+// `tauri.dropTable` (compat), and `tauri.listTables` (Sprint 223
+// reload path).
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+  cleanup,
+} from "@testing-library/react";
+
+const { mockDropTableRequest, mockDropTable, mockListTables } = vi.hoisted(
+  () => ({
+    mockDropTableRequest: vi.fn(),
+    mockDropTable: vi.fn().mockResolvedValue(undefined),
+    mockListTables: vi.fn().mockResolvedValue([]),
+  }),
+);
+
+vi.mock("@lib/tauri", () => ({
+  dropTableRequest: mockDropTableRequest,
+  dropTable: mockDropTable,
+  listTables: mockListTables,
+}));
+
+import DropTableDialog from "./DropTableDialog";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
+import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSchemaStore } from "@stores/schemaStore";
+
+function setProductionConnection() {
+  useConnectionStore.setState({
+    connections: [
+      {
+        id: "conn-1",
+        name: "prod",
+        db_type: "postgresql",
+        host: "localhost",
+        port: 5432,
+        database: "app",
+        username: "u",
+        password: null,
+        environment: "production",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+    ],
+  });
+}
+
+function setDevConnection() {
+  useConnectionStore.setState({
+    connections: [
+      {
+        id: "conn-1",
+        name: "dev",
+        db_type: "postgresql",
+        host: "localhost",
+        port: 5432,
+        database: "app",
+        username: "u",
+        password: null,
+        environment: "development",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
+    ],
+  });
+}
+
+function renderDialog(
+  overrides: Partial<{
+    onClose: () => void;
+    schemaName: string;
+    tableName: string;
+  }> = {},
+) {
+  const onClose = overrides.onClose ?? vi.fn();
+  const schemaName = overrides.schemaName ?? "public";
+  const tableName = overrides.tableName ?? "users";
+  const view = render(
+    <DropTableDialog
+      connectionId="conn-1"
+      schemaName={schemaName}
+      tableName={tableName}
+      open
+      onClose={onClose}
+    />,
+  );
+  return { ...view, onClose, schemaName, tableName };
+}
+
+describe("DropTableDialog (Sprint 235)", () => {
+  beforeEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    useQueryHistoryStore.setState({ entries: [] });
+    useSchemaStore.setState({ tables: {} });
+    setDevConnection();
+    mockDropTableRequest.mockResolvedValue({
+      sql: 'DROP TABLE "public"."users"',
+    });
+    mockListTables.mockResolvedValue([]);
+  });
+
+  // AC-235-05 — Apply disabled before typing match.
+  it("[AC-235-05] Apply disabled until typing-confirm matches table name", () => {
+    renderDialog({ tableName: "users" });
+    const apply = screen.getByRole("button", { name: "Apply" });
+    expect(apply).toBeDisabled();
+  });
+
+  // AC-235-05 — case mismatch keeps Apply disabled.
+  it("[AC-235-05] case mismatch (Users vs users) keeps Apply disabled", () => {
+    renderDialog({ tableName: "Users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    const apply = screen.getByRole("button", { name: "Apply" });
+    expect(apply).toBeDisabled();
+  });
+
+  // AC-235-05 — typing match enables Show DDL flow (Apply needs preview SQL too).
+  it("[AC-235-05] typing match unlocks Show DDL → preview SQL fetched", async () => {
+    renderDialog({ tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // AC-235-05 — CASCADE checkbox default off → emits SQL without CASCADE.
+  it("[AC-235-05] CASCADE default off emits SQL without CASCADE keyword", async () => {
+    renderDialog({ tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalled();
+    });
+    expect(mockDropTableRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ cascade: false, previewOnly: true }),
+    );
+  });
+
+  // AC-235-05 — CASCADE toggled on → preview re-fetched with CASCADE.
+  it("[AC-235-05] CASCADE toggle invalidates preview + next Show DDL re-fetches with cascade:true", async () => {
+    mockDropTableRequest
+      .mockResolvedValueOnce({ sql: 'DROP TABLE "public"."users"' })
+      .mockResolvedValueOnce({
+        sql: 'DROP TABLE "public"."users" CASCADE',
+      });
+    renderDialog({ tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+    });
+    // Toggle CASCADE on → invalidates preview.
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("CASCADE"));
+    });
+    // Click Show DDL again → should re-fetch with cascade:true.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalledTimes(2);
+    });
+    const secondCall = mockDropTableRequest.mock.calls[1]?.[0];
+    expect(secondCall).toEqual(
+      expect.objectContaining({ cascade: true, previewOnly: true }),
+    );
+  });
+
+  // AC-235-05 — commit success closes modal.
+  it("[AC-235-05] commit-success closes modal + calls onClose once", async () => {
+    const onClose = vi.fn();
+    renderDialog({ tableName: "users", onClose });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalled();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+    // Sprint 223 useSchemaTableMutations chained the compat wrapper.
+    expect(mockDropTable).toHaveBeenCalledWith("conn-1", "users", "public");
+  });
+
+  // AC-235-02 / AC-235-03 — IPC payload shape (camelCase) +
+  // sequence `[{ previewOnly: true }, { previewOnly: false }]` —
+  // commit closure runs `tauri.dropTable` (compat) which goes through
+  // `dropTableRequest` with `previewOnly: false`.
+  it("[AC-235-02][AC-235-03] IPC sequence: preview true → commit goes through compat wrapper", async () => {
+    renderDialog({ schemaName: "public", tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
+    });
+    expect(mockDropTableRequest).toHaveBeenCalledWith({
+      connectionId: "conn-1",
+      schema: "public",
+      table: "users",
+      cascade: false,
+      previewOnly: true,
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTable).toHaveBeenCalled();
+    });
+    // Compat wrapper bridges to the request call. Each commit call goes
+    // through `tauri.dropTable` positional → `dropTableRequest` with
+    // previewOnly:false.
+    expect(mockDropTable).toHaveBeenCalledWith("conn-1", "users", "public");
+  });
+
+  // AC-235-06 — Safe Mode block path on production×strict.
+  it("[AC-235-06] production × strict + DROP TABLE → block path surfaces canonical message", async () => {
+    setProductionConnection();
+    useSafeModeStore.setState({ mode: "strict" });
+    mockDropTableRequest.mockResolvedValueOnce({
+      sql: 'DROP TABLE "public"."users"',
+    });
+    renderDialog({ tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalled();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    // Block surfaces previewError; commit closure (tauri.dropTable
+    // compat) NEVER runs.
+    await waitFor(() => {
+      const errorEls = document.querySelectorAll('[role="alert"]');
+      const messages = Array.from(errorEls).map((e) => e.textContent ?? "");
+      expect(
+        messages.some((m) => m.includes("Safe Mode blocked: DROP TABLE")),
+      ).toBe(true);
+    });
+    expect(mockDropTable).not.toHaveBeenCalled();
+  });
+
+  // AC-235-06 — Safe Mode warn-cancel surfaces canonical message.
+  it("[AC-235-06] production × warn + DROP TABLE → warn-cancel surfaces canonical message", async () => {
+    setProductionConnection();
+    useSafeModeStore.setState({ mode: "warn" });
+    mockDropTableRequest.mockResolvedValueOnce({
+      sql: 'DROP TABLE "public"."users"',
+    });
+    renderDialog({ tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalled();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    // Warn-tier mounts ConfirmDangerousDialog; user clicks Cancel.
+    const cancelButtons = await screen.findAllByText(/Cancel/);
+    // The last Cancel button is in the dangerous-confirm dialog (it
+    // mounts above the parent dialog).
+    await act(async () => {
+      fireEvent.click(cancelButtons[cancelButtons.length - 1]!);
+    });
+    await waitFor(() => {
+      const errorEls = document.querySelectorAll('[role="alert"]');
+      const messages = Array.from(errorEls).map((e) => e.textContent ?? "");
+      expect(
+        messages.some((m) =>
+          m.includes(
+            "Safe Mode (warn): confirmation cancelled — no changes committed",
+          ),
+        ),
+      ).toBe(true);
+    });
+    expect(mockDropTable).not.toHaveBeenCalled();
+  });
+
+  // AC-235-06 — local + safe → commit runs.
+  it("[AC-235-06] local × off + DROP TABLE → safe path runs commit closure once", async () => {
+    setDevConnection();
+    useSafeModeStore.setState({ mode: "off" });
+    mockDropTableRequest.mockResolvedValueOnce({
+      sql: 'DROP TABLE "public"."users"',
+    });
+    renderDialog({ tableName: "users" });
+    const input = screen.getByLabelText("Type the table name to confirm");
+    fireEvent.change(input, { target: { value: "users" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalled();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTable).toHaveBeenCalledTimes(1);
+    });
+  });
+});

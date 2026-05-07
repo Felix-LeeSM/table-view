@@ -48,8 +48,8 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
     CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaChangeResult, TableData,
-    TableInfo, ViewInfo,
+    DropTableRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -184,21 +184,19 @@ impl RdbAdapter for PostgresAdapter {
 
     fn drop_table<'a>(
         &'a self,
-        namespace: &'a str,
-        table: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
-        // Concrete signature is `(table, schema)`.
-        Box::pin(async move { self.drop_table(table, namespace).await })
+        req: &'a DropTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        // Sprint 235 — request-shaped delegate. Concrete inherent
+        // method already takes `&DropTableRequest`.
+        Box::pin(async move { self.drop_table(req).await })
     }
 
     fn rename_table<'a>(
         &'a self,
-        namespace: &'a str,
-        table: &'a str,
-        new_name: &'a str,
-    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
-        // Concrete signature is `(table, schema, new_name)`.
-        Box::pin(async move { self.rename_table(table, namespace, new_name).await })
+        req: &'a RenameTableRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        // Sprint 235 — request-shaped delegate.
+        Box::pin(async move { self.rename_table(req).await })
     }
 
     fn alter_table<'a>(

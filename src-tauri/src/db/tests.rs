@@ -11,7 +11,8 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
     CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    IndexInfo, SchemaChangeResult, SchemaInfo, TableData, TableInfo,
+    DropTableRequest, IndexInfo, RenameTableRequest, SchemaChangeResult, SchemaInfo, TableData,
+    TableInfo,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -305,18 +306,17 @@ impl RdbAdapter for FakeCancellableRdb {
     }
     fn drop_table<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async { Ok(()) })
+        _req: &'a DropTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 235 — request-shaped trait stub.
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn rename_table<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _new_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async { Ok(()) })
+        _req: &'a RenameTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 235 — request-shaped trait stub.
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn alter_table<'a>(
         &'a self,
@@ -780,18 +780,17 @@ impl RdbAdapter for FastFakeRdb {
     }
     fn drop_table<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async { Ok(()) })
+        _req: &'a DropTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 235 — request-shaped trait stub.
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn rename_table<'a>(
         &'a self,
-        _namespace: &'a str,
-        _table: &'a str,
-        _new_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async { Ok(()) })
+        _req: &'a RenameTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 235 — request-shaped trait stub.
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
     }
     fn alter_table<'a>(
         &'a self,

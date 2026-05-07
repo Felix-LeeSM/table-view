@@ -9,43 +9,43 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, CreateIndexRequest, CreateTableRequest,
-    DropConstraintRequest, DropIndexRequest, SchemaChangeResult,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
+    SchemaChangeResult,
 };
 
 fn not_connected(connection_id: &str) -> AppError {
     AppError::NotFound(format!("Connection '{}' not found", connection_id))
 }
 
+/// Sprint 235 — request-shaped DROP TABLE handler. Mirrors `create_table`
+/// / `alter_table`: single `request: DropTableRequest` arg, returns
+/// `SchemaChangeResult { sql }`. Tauri command name unchanged
+/// (`drop_table`); the IPC payload shape changes from positional scalars
+/// to `{ request: { connectionId, schema, table, cascade?, previewOnly? } }`.
 #[tauri::command]
 pub async fn drop_table(
     state: tauri::State<'_, AppState>,
-    connection_id: String,
-    table: String,
-    schema: String,
-) -> Result<(), AppError> {
+    request: DropTableRequest,
+) -> Result<SchemaChangeResult, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
-    active.as_rdb()?.drop_table(&schema, &table).await
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    active.as_rdb()?.drop_table(&request).await
 }
 
+/// Sprint 235 — request-shaped RENAME TABLE handler. Same shape as
+/// `drop_table` / `create_table`.
 #[tauri::command]
 pub async fn rename_table(
     state: tauri::State<'_, AppState>,
-    connection_id: String,
-    table: String,
-    schema: String,
-    new_name: String,
-) -> Result<(), AppError> {
+    request: RenameTableRequest,
+) -> Result<SchemaChangeResult, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
-    active
-        .as_rdb()?
-        .rename_table(&schema, &table, &new_name)
-        .await
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    active.as_rdb()?.rename_table(&request).await
 }
 
 #[tauri::command]

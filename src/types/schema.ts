@@ -129,6 +129,34 @@ export interface AlterTableRequest {
   preview_only?: boolean;
 }
 
+/**
+ * Sprint 235 — request payload for `tauri.renameTableRequest`. Mirrors
+ * the Rust `RenameTableRequest` struct (camelCase wire form via serde
+ * rename). `previewOnly` defaults to `false` server-side; the modal sends
+ * `true` for the Show DDL fetch and `false` for the commit.
+ */
+export interface RenameTableRequest {
+  connectionId: string;
+  schema: string;
+  table: string;
+  newName: string;
+  previewOnly?: boolean;
+}
+
+/**
+ * Sprint 235 — request payload for `tauri.dropTableRequest`. Mirrors
+ * the Rust `DropTableRequest` struct. `cascade` defaults to `false`
+ * (PG implicit RESTRICT; SQL omits the `RESTRICT` keyword for byte-
+ * equivalence). `previewOnly` matches `RenameTableRequest`.
+ */
+export interface DropTableRequest {
+  connectionId: string;
+  schema: string;
+  table: string;
+  cascade?: boolean;
+  previewOnly?: boolean;
+}
+
 export interface CreateIndexRequest {
   connection_id: string;
   schema: string;

@@ -12,17 +12,33 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
     CreateIndexRequest, CreateTableRequest, DropConstraintRequest, DropIndexRequest,
-    SchemaChangeResult,
+    DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
 use super::PostgresAdapter;
 
+/// PG `NAMEDATALEN` default — identifiers longer than 63 bytes are
+/// truncated by the server. Sprint 235 surfaces the 63-byte boundary as
+/// an explicit `AppError::Validation` so the dialog can render the
+/// failure inline rather than letting PG silently truncate.
+const PG_IDENTIFIER_MAX_BYTES: usize = 63;
+
 /// Validate a SQL identifier (table name, column name, index name, constraint name)
-/// to prevent SQL injection. Only allows `[a-zA-Z_][a-zA-Z0-9_]*`.
+/// to prevent SQL injection. Only allows `[a-zA-Z_][a-zA-Z0-9_]*` with
+/// length ≤ 63 bytes (PG's `NAMEDATALEN` default — Sprint 235).
+///
+/// Embedded NULL bytes (`\0`), embedded `"`, and embedded whitespace are
+/// implicitly rejected by the alphanumeric-or-underscore body rule.
 fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(AppError::Validation(format!("{} must not be empty", label)));
+    }
+    if trimmed.len() > PG_IDENTIFIER_MAX_BYTES {
+        return Err(AppError::Validation(format!(
+            "{} must not exceed {} bytes",
+            label, PG_IDENTIFIER_MAX_BYTES
+        )));
     }
     let mut chars = trimmed.chars();
     let Some(first) = chars.next() else {
@@ -93,80 +109,120 @@ fn format_referential_action_clause(
 }
 
 impl PostgresAdapter {
-    /// Drop a table permanently. Uses parameterized schema validation but
-    /// table-safe quoting since table names cannot be bound as parameters.
-    pub async fn drop_table(&self, table: &str, schema: &str) -> Result<(), AppError> {
-        let pool = self.active_pool().await?;
+    /// Drop a table permanently — Sprint 235 request-shaped variant.
+    ///
+    /// SQL emission:
+    ///   `req.cascade == false` →  `DROP TABLE "<schema>"."<table>"`
+    ///   `req.cascade == true`  →  `DROP TABLE "<schema>"."<table>" CASCADE`
+    ///
+    /// Note no `RESTRICT` keyword on the non-cascade branch — PG defaults
+    /// to RESTRICT and byte-equivalence with the implicit form is locked
+    /// by the Sprint 235 fixtures.
+    ///
+    /// `req.preview_only=true` returns the built SQL without touching
+    /// the database. `req.preview_only=false` runs the statement inside
+    /// a `BEGIN/COMMIT` transaction for parity with `create_table` /
+    /// `alter_table`.
+    ///
+    /// The pre-existence check (`information_schema.tables` lookup that
+    /// the legacy body performed) is REMOVED — let PG surface its native
+    /// `relation "X" does not exist` error verbatim. This mirrors
+    /// `create_table`'s "no client-side dependency analysis" stance and
+    /// flips the error type for "drop a non-existent table" from
+    /// `AppError::NotFound` to `AppError::Database`.
+    pub async fn drop_table(&self, req: &DropTableRequest) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
 
-        // Verify the table exists first
-        let exists: Vec<(String,)> = sqlx::query_as(
-            "SELECT table_name FROM information_schema.tables \
-             WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'",
-        )
-        .bind(schema)
-        .bind(table)
-        .fetch_all(&pool)
-        .await
-        .map_err(|e| AppError::Database(e.to_string()))?;
+        let qualified = qualified_table(&req.schema, &req.table);
+        let sql = if req.cascade {
+            format!("DROP TABLE {} CASCADE", qualified)
+        } else {
+            format!("DROP TABLE {}", qualified)
+        };
 
-        if exists.is_empty() {
-            return Err(AppError::NotFound(format!(
-                "Table {}.{} not found",
-                schema, table
-            )));
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
         }
 
-        let qualified = qualified_table(schema, table);
-        let sql = format!("DROP TABLE {}", qualified);
-        sqlx::query(&sql)
-            .execute(&pool)
+        let pool = self.active_pool().await?;
+
+        // BEGIN/COMMIT mirrors the `create_table` / `alter_table` shape
+        // so a failure (e.g. PG's verbatim `relation does not exist` or
+        // an FK reference blocking the implicit RESTRICT) leaves no
+        // partial state behind.
+        let mut tx = pool
+            .begin()
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        info!("Dropped table {}.{}", schema, table);
-        Ok(())
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            // Best-effort rollback. The original DB error is the
+            // user-facing failure; rollback errors are discarded so the
+            // message stays clean (mirrors `create_table`).
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!("Dropped table {}.{}", req.schema, req.table);
+        Ok(SchemaChangeResult { sql })
     }
 
-    /// Rename a table. Validates the new name is a valid identifier.
+    /// Rename a table — Sprint 235 request-shaped variant.
+    ///
+    /// SQL emission: `ALTER TABLE "<schema>"."<table>" RENAME TO "<new_name>"`.
+    /// Identifier validation routes through the shared
+    /// `validate_identifier` helper (single-sourced — no ad-hoc validator
+    /// drift). `req.preview_only` toggles between SQL emission and
+    /// `BEGIN/COMMIT` execution.
+    ///
+    /// Backend stays permissive on rename-to-self — the SQL is emitted
+    /// even when `req.new_name == req.table`, mirroring PG's own
+    /// behaviour for direct IPC callers. The dialog's Apply button
+    /// disables on rename-to-self as a UX optimisation.
     pub async fn rename_table(
         &self,
-        table: &str,
-        schema: &str,
-        new_name: &str,
-    ) -> Result<(), AppError> {
-        // Validate new name: non-empty, alphanumeric + underscores only
-        let trimmed = new_name.trim();
-        if trimmed.is_empty() {
-            return Err(AppError::Validation(
-                "New table name must not be empty".into(),
-            ));
-        }
-        if !trimmed
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
-            return Err(AppError::Validation(
-                "New table name must contain only alphanumeric characters and underscores".into(),
-            ));
-        }
-        if trimmed.chars().next().is_none_or(|c| c.is_ascii_digit()) {
-            return Err(AppError::Validation(
-                "New table name must not start with a digit".into(),
-            ));
+        req: &RenameTableRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        validate_identifier(&req.schema, "Schema name")?;
+        validate_identifier(&req.table, "Table name")?;
+        validate_identifier(&req.new_name, "New table name")?;
+
+        let qualified_old = qualified_table(&req.schema, &req.table);
+        let quoted_new = quote_identifier(req.new_name.trim());
+        let sql = format!("ALTER TABLE {} RENAME TO {}", qualified_old, quoted_new);
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
         }
 
         let pool = self.active_pool().await?;
 
-        let qualified_old = qualified_table(schema, table);
-        let quoted_new = quote_identifier(trimmed);
-        let sql = format!("ALTER TABLE {} RENAME TO {}", qualified_old, quoted_new);
-        sqlx::query(&sql)
-            .execute(&pool)
+        let mut tx = pool
+            .begin()
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
-        info!("Renamed table {}.{} to {}", schema, table, trimmed);
-        Ok(())
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!(
+            "Renamed table {}.{} to {}",
+            req.schema,
+            req.table,
+            req.new_name.trim()
+        );
+        Ok(SchemaChangeResult { sql })
     }
 
     // ── Schema change operations ──────────────────────────────────────
@@ -698,13 +754,51 @@ mod tests {
     use crate::models::{
         AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
         ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropConstraintRequest,
-        DropIndexRequest,
+        DropIndexRequest, DropTableRequest, RenameTableRequest,
     };
 
+    // ── drop_table / rename_table — Sprint 235 fixtures ──────────────
+    //
+    // Sprint 235 mechanically rewrote the legacy positional-args fixtures
+    // to the new `*Request` shapes. Original test intents (rejection of
+    // empty / whitespace / invalid-char / digit-start / connection-stage
+    // failure) preserved verbatim; new fixtures lock the byte-equivalent
+    // SQL emission, the CASCADE branch, the rename-to-self permissive
+    // path, and the 63-byte / embedded-NULL / embedded-quote rejections.
+
+    fn drop_req(schema: &str, table: &str, cascade: bool, preview_only: bool) -> DropTableRequest {
+        DropTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: schema.to_string(),
+            table: table.to_string(),
+            cascade,
+            preview_only,
+        }
+    }
+
+    fn rename_req(
+        schema: &str,
+        table: &str,
+        new_name: &str,
+        preview_only: bool,
+    ) -> RenameTableRequest {
+        RenameTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: schema.to_string(),
+            table: table.to_string(),
+            new_name: new_name.to_string(),
+            preview_only,
+        }
+    }
+
     #[tokio::test]
-    async fn drop_table_without_connection_fails() {
+    async fn drop_table_without_connection_fails_non_preview() {
+        // Sprint 235 — execute branch (preview_only=false) requires a
+        // live pool; without one the call surfaces the connection
+        // sentinel before any DB work happens.
         let adapter = PostgresAdapter::new();
-        let result = adapter.drop_table("users", "public").await;
+        let req = drop_req("public", "users", false, false);
+        let result = adapter.drop_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -714,9 +808,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rename_table_without_connection_fails() {
+    async fn rename_table_without_connection_fails_non_preview() {
         let adapter = PostgresAdapter::new();
-        let result = adapter.rename_table("users", "public", "people").await;
+        let req = rename_req("public", "users", "people", false);
+        let result = adapter.rename_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -728,7 +823,8 @@ mod tests {
     #[tokio::test]
     async fn rename_table_empty_name_fails() {
         let adapter = PostgresAdapter::new();
-        let result = adapter.rename_table("users", "public", "").await;
+        let req = rename_req("public", "users", "", true);
+        let result = adapter.rename_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -740,7 +836,8 @@ mod tests {
     #[tokio::test]
     async fn rename_table_whitespace_only_name_fails() {
         let adapter = PostgresAdapter::new();
-        let result = adapter.rename_table("users", "public", "   ").await;
+        let req = rename_req("public", "users", "   ", true);
+        let result = adapter.rename_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -752,7 +849,8 @@ mod tests {
     #[tokio::test]
     async fn rename_table_invalid_characters_fails() {
         let adapter = PostgresAdapter::new();
-        let result = adapter.rename_table("users", "public", "bad-name!").await;
+        let req = rename_req("public", "users", "bad-name!", true);
+        let result = adapter.rename_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(
@@ -764,26 +862,170 @@ mod tests {
     #[tokio::test]
     async fn rename_table_starts_with_digit_fails() {
         let adapter = PostgresAdapter::new();
-        let result = adapter.rename_table("users", "public", "123bad").await;
+        let req = rename_req("public", "users", "123bad", true);
+        let result = adapter.rename_table(&req).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
+        // Sprint 235 unified validator surfaces "must start with a letter
+        // or underscore" via `validate_identifier` — replaces the
+        // pre-Sprint 235 ad-hoc "must not start with a digit" message.
         assert!(
-            err_msg.contains("must not start with a digit"),
-            "Expected digit-start validation error, got: {err_msg}"
+            err_msg.contains("must start with a letter or underscore"),
+            "Expected leading-letter validation error, got: {err_msg}"
         );
     }
 
+    /// Sprint 235 — byte-equivalent SQL for the canonical preview path.
+    /// Locks the ANSI-quoted form `ALTER TABLE "schema"."old" RENAME TO
+    /// "new"` — any whitespace / quoting drift breaks this assertion
+    /// before the dialog reaches a user.
     #[tokio::test]
-    async fn rename_table_valid_name_passes_validation() {
+    async fn rename_table_preview_byte_equivalent() {
         let adapter = PostgresAdapter::new();
-        // This will fail at the connection stage, not validation
-        let result = adapter.rename_table("users", "public", "people").await;
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        // Should fail with connection error, not validation
+        let req = rename_req("public", "users", "people", true);
+        let result = adapter.rename_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" RENAME TO "people""#
+        );
+    }
+
+    /// Sprint 235 — preview branch returns SQL even when no live pool
+    /// exists. The check confirms `preview_only=true` short-circuits
+    /// before the `active_pool().await?` call.
+    #[tokio::test]
+    async fn rename_table_preview_only_does_not_execute() {
+        let adapter = PostgresAdapter::new();
+        let req = rename_req("public", "users", "people", true);
+        let result = adapter.rename_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
+    }
+
+    /// Sprint 235 — table-driven rejection cases for invalid `new_name`
+    /// values. Embedded space / embedded `"` / length > 63 / leading
+    /// digit all surface `AppError::Validation`.
+    #[tokio::test]
+    async fn rename_table_invalid_new_name_rejected() {
+        let adapter = PostgresAdapter::new();
+
+        // Case 1 — embedded space.
+        let req = rename_req("public", "users", "bad name", true);
+        let r = adapter.rename_table(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded space");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 2 — embedded `"` (PG identifiers escape via doubling, but
+        // the validator rejects them outright before they reach the
+        // quoter).
+        let req = rename_req("public", "users", "bad\"name", true);
+        let r = adapter.rename_table(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded quote");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        // Case 3 — length > 63 bytes (PG NAMEDATALEN limit).
+        let too_long = "a".repeat(64);
+        let req = rename_req("public", "users", &too_long, true);
+        let r = adapter.rename_table(&req).await;
+        assert!(r.is_err(), "Expected Err for >63 byte name");
+        let err_msg = r.unwrap_err().to_string();
         assert!(
-            err_msg.contains("Not connected"),
-            "Expected connection error for valid name, got: {err_msg}"
+            err_msg.contains("63 bytes") || err_msg.contains("must not exceed"),
+            "Expected 63-byte boundary error, got: {err_msg}"
+        );
+
+        // Case 4 — leading digit.
+        let req = rename_req("public", "users", "1bad", true);
+        let r = adapter.rename_table(&req).await;
+        assert!(r.is_err(), "Expected Err for leading digit");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+    }
+
+    /// Sprint 235 — rename-to-self stays permissive at the backend.
+    /// Frontend disables Apply, but direct IPC callers get the SQL
+    /// emitted exactly as if it were a real rename — PG itself
+    /// surfaces the no-op verbatim.
+    #[tokio::test]
+    async fn rename_table_same_name_emits_sql() {
+        let adapter = PostgresAdapter::new();
+        let req = rename_req("public", "users", "users", true);
+        let result = adapter.rename_table(&req).await;
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().sql,
+            r#"ALTER TABLE "public"."users" RENAME TO "users""#
+        );
+    }
+
+    /// Sprint 235 — embedded NULL byte rejection (defense-in-depth
+    /// against any caller that bypassed the frontend regex).
+    #[tokio::test]
+    async fn rename_table_embedded_null_byte_rejected() {
+        let adapter = PostgresAdapter::new();
+        let with_null = "bad\0name";
+        let req = rename_req("public", "users", with_null, true);
+        let r = adapter.rename_table(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded NULL byte");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+    }
+
+    /// Sprint 235 — DROP TABLE byte-equivalent (no CASCADE). Confirms the
+    /// implicit-RESTRICT form — no `RESTRICT` keyword in the emitted SQL.
+    #[tokio::test]
+    async fn drop_table_preview_no_cascade_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = drop_req("public", "users", false, true);
+        let result = adapter.drop_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(result.unwrap().sql, r#"DROP TABLE "public"."users""#);
+    }
+
+    /// Sprint 235 — DROP TABLE … CASCADE byte-equivalent.
+    #[tokio::test]
+    async fn drop_table_preview_cascade_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = drop_req("public", "users", true, true);
+        let result = adapter.drop_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result);
+        assert_eq!(
+            result.unwrap().sql,
+            r#"DROP TABLE "public"."users" CASCADE"#
+        );
+    }
+
+    /// Sprint 235 — preview branch returns SQL even without a live pool.
+    #[tokio::test]
+    async fn drop_table_preview_only_does_not_execute() {
+        let adapter = PostgresAdapter::new();
+        let req = drop_req("public", "users", false, true);
+        let result = adapter.drop_table(&req).await;
+        assert!(result.is_ok(), "Expected Ok preview, got {:?}", result);
+    }
+
+    /// Sprint 235 — invalid table-name rejections. Same identifier
+    /// validator as `rename_table`. Three cases (embedded space /
+    /// embedded quote / empty post-trim).
+    #[tokio::test]
+    async fn drop_table_invalid_table_name_rejected() {
+        let adapter = PostgresAdapter::new();
+
+        let req = drop_req("public", "bad table", false, true);
+        let r = adapter.drop_table(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded space");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        let req = drop_req("public", "bad\"name", false, true);
+        let r = adapter.drop_table(&req).await;
+        assert!(r.is_err(), "Expected Err for embedded quote");
+        assert!(matches!(r.unwrap_err(), AppError::Validation(_)));
+
+        let req = drop_req("public", "   ", false, true);
+        let r = adapter.drop_table(&req).await;
+        assert!(r.is_err(), "Expected Err for empty post-trim");
+        let err_msg = r.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("must not be empty"),
+            "Expected empty-name error, got: {err_msg}"
         );
     }
 

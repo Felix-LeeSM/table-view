@@ -212,6 +212,43 @@ pub struct ColumnDefinition {
     pub comment: Option<String>,
 }
 
+/// Request payload for `RENAME TABLE` (Sprint 235).
+///
+/// Mirrors the Sprint 226 `CreateTableRequest` shape: `connection_id`,
+/// `schema`, `table` identify the target; `new_name` is the rename
+/// destination; `preview_only` (default `false`) toggles between SQL
+/// emission and BEGIN/COMMIT execution. `#[serde(rename_all = "camelCase")]`
+/// keeps the wire payload aligned with the rest of the
+/// `*Request` family that the frontend's `@lib/tauri` wrappers send.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameTableRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub table: String,
+    pub new_name: String,
+    #[serde(default)]
+    pub preview_only: bool,
+}
+
+/// Request payload for `DROP TABLE` (Sprint 235).
+///
+/// `cascade` is opt-in (default `false` → PG's implicit RESTRICT, byte-
+/// equivalent emission omits the `RESTRICT` keyword). `preview_only`
+/// (default `false`) is the same preview/execute switch the rest of the
+/// Phase 24-26 DDL family already uses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DropTableRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub table: String,
+    #[serde(default)]
+    pub cascade: bool,
+    #[serde(default)]
+    pub preview_only: bool,
+}
+
 /// Request payload for `CREATE TABLE` (Sprint 226).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTableRequest {
@@ -741,6 +778,76 @@ mod tests {
         }"#;
         let parsed: CreateTableRequest = serde_json::from_str(json_no_comment).unwrap();
         assert!(parsed.table_comment.is_none());
+    }
+
+    // ── Sprint 235 — RenameTableRequest / DropTableRequest serde ──────
+
+    #[test]
+    fn rename_table_request_serde_roundtrip() {
+        // Sprint 235 — `preview_only` round-trips with `#[serde(default)]`
+        // semantics. Camel-case wire form mirrors the rest of the
+        // `*Request` family ({ connectionId, schema, table, newName,
+        // previewOnly }).
+        let req = RenameTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            new_name: "people".to_string(),
+            preview_only: true,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        // camelCase wire form check.
+        assert!(
+            json.contains("\"connectionId\":\"conn1\""),
+            "expected camelCase connectionId, got: {json}"
+        );
+        assert!(
+            json.contains("\"newName\":\"people\""),
+            "expected camelCase newName, got: {json}"
+        );
+        assert!(json.contains("\"previewOnly\":true"));
+        let deserialized: RenameTableRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn1");
+        assert_eq!(deserialized.schema, "public");
+        assert_eq!(deserialized.table, "users");
+        assert_eq!(deserialized.new_name, "people");
+        assert!(deserialized.preview_only);
+
+        // Back-compat — payload omitting `previewOnly` deserialises to
+        // false (Sprint 235 default-flag invariant).
+        let no_flag = r#"{"connectionId":"c","schema":"s","table":"t","newName":"n"}"#;
+        let parsed: RenameTableRequest = serde_json::from_str(no_flag).unwrap();
+        assert!(!parsed.preview_only);
+    }
+
+    #[test]
+    fn drop_table_request_serde_roundtrip() {
+        // Sprint 235 — both flags `#[serde(default)]`-friendly. Wire form
+        // is camelCase.
+        let req = DropTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            cascade: true,
+            preview_only: false,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("\"connectionId\":\"conn1\""));
+        assert!(json.contains("\"cascade\":true"));
+        assert!(json.contains("\"previewOnly\":false"));
+        let deserialized: DropTableRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn1");
+        assert_eq!(deserialized.schema, "public");
+        assert_eq!(deserialized.table, "users");
+        assert!(deserialized.cascade);
+        assert!(!deserialized.preview_only);
+
+        // Back-compat — payload omitting both flags deserialises to false
+        // (default-flag invariant).
+        let minimal = r#"{"connectionId":"c","schema":"s","table":"t"}"#;
+        let parsed: DropTableRequest = serde_json::from_str(minimal).unwrap();
+        assert!(!parsed.cascade);
+        assert!(!parsed.preview_only);
     }
 
     #[test]

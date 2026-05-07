@@ -1,21 +1,21 @@
-import { useCallback, useRef, useState, type RefObject } from "react";
-import { toast } from "@/lib/toast";
-import { logger } from "@/lib/logger";
+import { useCallback, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useTabStore } from "@stores/tabStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
-import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
 import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
-import type { ConfirmDialogState, RenameDialogState } from "./dialogs";
 
 /**
- * Handlers + dialog state for `SchemaTree`. Bundles the 12 action
- * handlers (drop / rename / open structure / open data / refresh schema /
- * function source / ...) with ConfirmDialog and RenameDialog state and
- * the relevant store subscriptions, so the entry component just
- * dispatches.
+ * Handlers + dialog state for `SchemaTree`. Sprint 235 collapses the
+ * legacy `confirmDialog` / `renameDialog` / `renameInput` / `renameError`
+ * / `isOperating` / `renameInputRef` slots into two simple state slots:
+ * `renameTableDialog` and `dropTableDialog`. The 3 handlers
+ * `handleDropTable` / `handleStartRename` / `handleConfirmRename`
+ * collapse into 2 simple openers (`handleStartRename` + `handleStartDrop`)
+ * — both just set the dialog state. The previously inline Safe Mode +
+ * history-record + toast paths now live INSIDE the new
+ * `RenameTableDialog` / `DropTableDialog` modals (which delegate to
+ * `useDdlPreviewExecution` for the lifecycle).
  *
  * Stores are read via selector subscription, never `getState()`, so the
  * hook stays test-mockable.
@@ -47,19 +47,20 @@ export interface SchemaTreeActions {
       | ((prev: Record<string, string>) => Record<string, string>),
   ) => void;
 
-  // Dialog state
-  confirmDialog: ConfirmDialogState | null;
-  setConfirmDialog: (dialog: ConfirmDialogState | null) => void;
-  renameDialog: RenameDialogState | null;
-  setRenameDialog: (dialog: RenameDialogState | null) => void;
-  renameInput: string;
-  setRenameInput: (value: string) => void;
-  renameError: string | null;
-  setRenameError: (value: string | null) => void;
-  isOperating: boolean;
-  renameInputRef: RefObject<HTMLInputElement | null>;
-  // Sprint 226 — create-table modal state. Schema name pre-fills the
-  // read-only field; null state keeps the modal closed.
+  // Sprint 235 — modal slots. Each slot's null state keeps the modal
+  // closed; setting `{ schemaName, tableName }` opens the matching
+  // dialog. The modal's own commit-success path closes itself by
+  // calling `setRenameTableDialog(null)` / `setDropTableDialog(null)`
+  // through the slot wrapper.
+  renameTableDialog: { schemaName: string; tableName: string } | null;
+  setRenameTableDialog: (
+    state: { schemaName: string; tableName: string } | null,
+  ) => void;
+  dropTableDialog: { schemaName: string; tableName: string } | null;
+  setDropTableDialog: (
+    state: { schemaName: string; tableName: string } | null,
+  ) => void;
+  // Sprint 226 — create-table modal state (unchanged).
   createTableDialog: { schemaName: string } | null;
   setCreateTableDialog: (state: { schemaName: string } | null) => void;
 
@@ -77,23 +78,21 @@ export interface SchemaTreeActions {
   handleTableClick: (tableName: string, schemaName: string) => void;
   handleTableDoubleClick: (tableName: string, schemaName: string) => void;
   handleOpenStructure: (tableName: string, schemaName: string) => void;
+  // Sprint 235 — both handlers are simple openers. Behavioural diff
+  // from the pre-Sprint 235 versions: the inline rename validation,
+  // tauri call, history record, and toast paths now run inside the
+  // modal (delegated to `useDdlPreviewExecution`).
   handleDropTable: (tableName: string, schemaName: string) => void;
   handleStartRename: (tableName: string, schemaName: string) => void;
-  handleConfirmRename: () => void;
   handleViewClick: (viewName: string, schemaName: string) => void;
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
-  // Sprint 226 — opens `CreateTableDialog` pre-filled with the
-  // right-clicked schema name. Commit-success refreshes the schema's
-  // table list via `refreshSchema(schemaName)`.
   handleCreateTable: (schemaName: string) => void;
 }
 
 export function useSchemaTreeActions({
   connectionId,
 }: UseSchemaTreeActionsArgs): SchemaTreeActions {
-  // Data layer (load / refresh / prefetch + loading state) is delegated
-  // to `useSchemaCache`; this hook only owns tree UI state and actions.
   const {
     schemas,
     loadingSchemas,
@@ -103,22 +102,10 @@ export function useSchemaTreeActions({
     expandSchema: loadExpandedSchema,
   } = useSchemaCache(connectionId);
 
-  // Read-only selectors for tree rendering. All writes go through the
-  // hook itself or the dropTable / renameTable store actions below.
   const functions = useSchemaStore((s) => s.functions);
-  // Sprint 223 (P10 step 2) — drop/rename now go through the use-case
-  // hook that owns the reload-then-fallback orchestration. The store
-  // actions themselves are thin Tauri-call wrappers; calling them
-  // directly via `useSchemaStore` selector here would skip the
-  // optimistic refresh.
-  const { dropTable, renameTable: renameTableAction } =
-    useSchemaTableMutations();
   const addTab = useTabStore((s) => s.addTab);
   const addQueryTab = useTabStore((s) => s.addQueryTab);
   const updateQuerySql = useTabStore((s) => s.updateQuerySql);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-  // MRU marking is the caller's responsibility; the 6 handlers below
-  // pair their `addTab` / `addQueryTab` call with `markConnectionUsed`.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
@@ -128,18 +115,18 @@ export function useSchemaTreeActions({
     Record<string, Set<CategoryKey>>
   >({});
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(
-    null,
-  );
-  const [renameDialog, setRenameDialog] = useState<RenameDialogState | null>(
-    null,
-  );
-  const [renameInput, setRenameInput] = useState("");
-  const [renameError, setRenameError] = useState<string | null>(null);
-  const [isOperating, setIsOperating] = useState(false);
-  const renameInputRef = useRef<HTMLInputElement>(null);
+  // Sprint 235 — collapsed dialog state. Each modal owns its own form
+  // state internally; this hook only tracks "which row was right-
+  // clicked" so the slot wrappers can mount the right modal.
+  const [renameTableDialog, setRenameTableDialog] = useState<{
+    schemaName: string;
+    tableName: string;
+  } | null>(null);
+  const [dropTableDialog, setDropTableDialog] = useState<{
+    schemaName: string;
+    tableName: string;
+  } | null>(null);
   const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
-  // Sprint 226 — Create Table modal state. Modal is closed when null.
   const [createTableDialog, setCreateTableDialog] = useState<{
     schemaName: string;
   } | null>(null);
@@ -162,13 +149,6 @@ export function useSchemaTreeActions({
   const handleRefresh = refreshConnection;
   const handleRefreshSchema = refreshSchema;
 
-  /**
-   * Single-click opens a *preview* tab. `addTab` defaults new tabs to
-   * `isPreview: true` and swaps the same-connection preview slot onto
-   * the new target, so opening another row reuses the slot rather than
-   * piling up tabs. Clicking the same row again is idempotent because
-   * `addTab` early-returns on exact-match.
-   */
   const handleTableClick = useCallback(
     (tableName: string, schemaName: string) => {
       setSelectedNodeId(
@@ -227,108 +207,24 @@ export function useSchemaTreeActions({
     [addTab, markConnectionUsed, connectionId],
   );
 
+  // Sprint 235 — opener for the new DropTableDialog. The legacy version
+  // built a `confirmDialog` state with an inline tauri.dropTable
+  // closure; the Phase 27 modal owns the entire commit lifecycle.
   const handleDropTable = useCallback(
     (tableName: string, schemaName: string) => {
-      setConfirmDialog({
-        title: "Drop Table",
-        message: `Are you sure you want to drop "${schemaName}.${tableName}"? This action cannot be undone.`,
-        confirmLabel: "Drop Table",
-        danger: true,
-        onConfirm: () => {
-          setIsOperating(true);
-          // Synthesise a user-readable SQL string for the history row.
-          // The real DROP runs server-side via `tauri.dropTable`.
-          const startedAt = Date.now();
-          const recordedSql = `DROP TABLE "${schemaName}"."${tableName}"`;
-          dropTable(connectionId, tableName, schemaName)
-            .then(() => {
-              addHistoryEntry({
-                sql: recordedSql,
-                executedAt: startedAt,
-                duration: Date.now() - startedAt,
-                status: "success",
-                connectionId,
-                paradigm: "rdb",
-                queryMode: "sql",
-                source: "ddl-structure",
-              });
-            })
-            .catch((err) => {
-              // Surface failures via toast + dev console; dialog still
-              // closes so the user isn't trapped.
-              const detail = err instanceof Error ? err.message : String(err);
-              toast.error(
-                `Failed to drop ${schemaName}.${tableName}: ${detail}`,
-              );
-              logger.error("[SchemaTree] dropTable:", err);
-              addHistoryEntry({
-                sql: recordedSql,
-                executedAt: startedAt,
-                duration: Date.now() - startedAt,
-                status: "error",
-                connectionId,
-                paradigm: "rdb",
-                queryMode: "sql",
-                source: "ddl-structure",
-              });
-            })
-            .finally(() => {
-              setIsOperating(false);
-              setConfirmDialog(null);
-            });
-        },
-      });
-    },
-    [connectionId, dropTable, addHistoryEntry],
-  );
-
-  const handleStartRename = useCallback(
-    (tableName: string, schemaName: string) => {
-      setRenameDialog({ tableName, schemaName, initialValue: tableName });
-      setRenameInput(tableName);
-      setRenameError(null);
+      setDropTableDialog({ schemaName, tableName });
     },
     [],
   );
 
-  const handleConfirmRename = useCallback(() => {
-    if (!renameDialog) return;
-    const newName = renameInput.trim();
-
-    if (!newName) {
-      setRenameError("Table name must not be empty");
-      return;
-    }
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newName)) {
-      setRenameError(
-        "Table name must start with a letter or underscore and contain only alphanumeric characters and underscores",
-      );
-      return;
-    }
-    if (newName === renameDialog.tableName) {
-      setRenameDialog(null);
-      return;
-    }
-
-    setIsOperating(true);
-    renameTableAction(
-      connectionId,
-      renameDialog.tableName,
-      renameDialog.schemaName,
-      newName,
-    )
-      .catch((err) => {
-        const detail = err instanceof Error ? err.message : String(err);
-        toast.error(
-          `Failed to rename ${renameDialog.schemaName}.${renameDialog.tableName}: ${detail}`,
-        );
-        logger.error("[SchemaTree] renameTable:", err);
-      })
-      .finally(() => {
-        setIsOperating(false);
-        setRenameDialog(null);
-      });
-  }, [renameDialog, renameInput, connectionId, renameTableAction]);
+  // Sprint 235 — opener for the new RenameTableDialog. Same shape as
+  // handleDropTable.
+  const handleStartRename = useCallback(
+    (tableName: string, schemaName: string) => {
+      setRenameTableDialog({ schemaName, tableName });
+    },
+    [],
+  );
 
   const handleViewClick = useCallback(
     (viewName: string, schemaName: string) => {
@@ -381,7 +277,6 @@ export function useSchemaTreeActions({
       );
       addQueryTab(connectionId);
       markConnectionUsed(connectionId);
-      // Load function source and put it in the newly created tab
       const latestTabs = useTabStore.getState().tabs;
       const newTab = latestTabs[latestTabs.length - 1];
       if (newTab && newTab.type === "query") {
@@ -396,11 +291,6 @@ export function useSchemaTreeActions({
     [connectionId, addQueryTab, markConnectionUsed, updateQuerySql, functions],
   );
 
-  // Sprint 226 — schema-row context menu entry-point. Opens
-  // `CreateTableDialog` pre-filled with the right-clicked schema name.
-  // The modal owns the form state; commit-success calls `refreshSchema`
-  // (passed through `dialogs.tsx`) so the new table appears in the tree
-  // without manual reload.
   const handleCreateTable = useCallback((schemaName: string) => {
     setCreateTableDialog({ schemaName });
   }, []);
@@ -453,16 +343,10 @@ export function useSchemaTreeActions({
     setTableSearch,
 
     // Dialog
-    confirmDialog,
-    setConfirmDialog,
-    renameDialog,
-    setRenameDialog,
-    renameInput,
-    setRenameInput,
-    renameError,
-    setRenameError,
-    isOperating,
-    renameInputRef,
+    renameTableDialog,
+    setRenameTableDialog,
+    dropTableDialog,
+    setDropTableDialog,
     createTableDialog,
     setCreateTableDialog,
 
@@ -482,7 +366,6 @@ export function useSchemaTreeActions({
     handleOpenStructure,
     handleDropTable,
     handleStartRename,
-    handleConfirmRename,
     handleViewClick,
     handleOpenViewStructure,
     handleFunctionClick,

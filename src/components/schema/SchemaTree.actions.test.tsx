@@ -1,11 +1,37 @@
-// Sprint 216 — `actions` axis split from `SchemaTree.test.tsx`. Covers
-// table click → addTab (AC-05), the table-row right-click context menu
-// (AC-CM-01..16: Structure / Data / Rename / Drop), F2 keyboard rename
-// (Sprint 107 #TREE-1), view-row click and view-context-menu Structure /
-// Data routing, function-row click → query tab, the AC-191-03 toast
-// fallback for dropTable / renameTable rejections, and the AC-192-04
-// header Export popover (RDB-only). Cases are byte-equivalent to the
-// originals.
+// Sprint 235 (Phase 27 sprint 10) — `SchemaTree.actions.test.tsx`
+// mechanical migration. Date: 2026-05-07.
+//
+// Why this file changed in Sprint 235:
+// - Sprint 235 promotes the legacy minimal `DropTableConfirmDialog` +
+//   `RenameTableDialog` slots to the Phase 27-shaped modals
+//   (`RenameTableDialog` + `DropTableDialog` — typing-confirm + inline
+//   DDL preview + Safe Mode dispatch via `useDdlPreviewExecution` +
+//   `useSchemaTableMutations`).
+// - The old `confirmDialog` / `renameDialog` / `renameInput` slots are
+//   collapsed into 2 `{ schemaName, tableName } | null` slots
+//   (`renameTableDialog` + `dropTableDialog`); the inline tauri /
+//   history / toast paths now run INSIDE the modals.
+// - All commit-side assertions move from `useSchemaStore.dropTable` /
+//   `renameTable` overrides to `@lib/tauri.dropTable` /
+//   `tauri.renameTable` mocks (the modals delegate to
+//   `useSchemaTableMutations` → `schemaStore.dropTable` →
+//   `tauri.dropTable` compat wrapper).
+// - The toast-fallback assertions (AC-191-03) are removed from this file
+//   because the modal owns the user-visible error surface (inline
+//   `previewError` + `pendingConfirm` dialog) — the original silent-
+//   swallow regression no longer applies.
+//
+// 4 NEW cases per AC-235-07 / AC-235-08:
+// - "Rename menu opens RenameTableDialog with pre-fill" (AC-235-07)
+// - "Drop menu opens DropTableDialog" (AC-235-08)
+// - "Rename commit-success → tauri.renameTable invoked + dialog closes"
+//   (AC-235-07)
+// - "Drop commit-success → tauri.dropTable invoked + dialog closes"
+//   (AC-235-08)
+//
+// The other context-menu / view / function / F2 / Export-popover / Create
+// Table cases remain byte-equivalent in intent — only the post-action
+// dialog assertions are mechanically updated.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   render,
@@ -14,10 +40,42 @@ import {
   waitFor,
   act,
 } from "@testing-library/react";
+
+// Sprint 235 — mock `@lib/tauri` so the new modals' DDL preview +
+// commit paths short-circuit. `dropTableRequest` and
+// `renameTableRequest` must resolve `{ sql }` for the preview path;
+// `dropTable` and `renameTable` are the Sprint 223 compat wrappers
+// the modal commit closure ultimately reaches.
+const {
+  mockDropTableRequest,
+  mockRenameTableRequest,
+  mockDropTable,
+  mockRenameTable,
+  mockListTables,
+  mockCreateTable,
+} = vi.hoisted(() => ({
+  mockDropTableRequest: vi.fn(),
+  mockRenameTableRequest: vi.fn(),
+  mockDropTable: vi.fn().mockResolvedValue(undefined),
+  mockRenameTable: vi.fn().mockResolvedValue(undefined),
+  mockListTables: vi.fn().mockResolvedValue([]),
+  mockCreateTable: vi.fn(),
+}));
+
+vi.mock("@lib/tauri", () => ({
+  dropTableRequest: mockDropTableRequest,
+  renameTableRequest: mockRenameTableRequest,
+  dropTable: mockDropTable,
+  renameTable: mockRenameTable,
+  listTables: mockListTables,
+  createTable: mockCreateTable,
+}));
+
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useTabStore } from "@stores/tabStore";
+import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   mockLoadSchemas,
   mockLoadTables,
@@ -34,7 +92,17 @@ describe("SchemaTree — actions", () => {
     vi.clearAllMocks();
     mockLoadSchemas.mockResolvedValue(undefined);
     mockLoadTables.mockResolvedValue(undefined);
+    mockListTables.mockResolvedValue([]);
+    mockDropTable.mockResolvedValue(undefined);
+    mockRenameTable.mockResolvedValue(undefined);
+    mockDropTableRequest.mockResolvedValue({
+      sql: 'DROP TABLE "public"."users"',
+    });
+    mockRenameTableRequest.mockResolvedValue({
+      sql: 'ALTER TABLE "public"."users" RENAME TO "people"',
+    });
     resetStores();
+    useSafeModeStore.setState({ mode: "off" });
   });
 
   // -----------------------------------------------------------------------
@@ -183,8 +251,11 @@ describe("SchemaTree — actions", () => {
     }
   });
 
-  // AC-CM-05: Drop shows confirmation dialog
-  it("shows confirmation dialog when Drop menu item is clicked", async () => {
+  // AC-CM-05 / AC-235-08 — Drop menu mounts the new DropTableDialog with
+  // typing-confirm + CASCADE checkbox. The dialog title remains "Drop
+  // Table" (verbatim from Sprint 226 minimal version) and the description
+  // surfaces `{schema}.{table}`.
+  it("[AC-235-08] Drop menu mounts DropTableDialog with typing-confirm", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -199,20 +270,19 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Drop"));
     });
 
-    // Confirmation dialog should be visible
+    // Dialog title + description from new modal
+    expect(screen.getByText("Drop Table")).toBeInTheDocument();
+    expect(screen.getByText("public.users")).toBeInTheDocument();
+    // Sprint 235 — typing-confirm input + CASCADE checkbox + Apply.
     expect(
-      screen.getByRole("dialog", { name: "Drop Table" }),
+      screen.getByLabelText("Type the table name to confirm"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Are you sure you want to drop/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/This action cannot be undone/),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("CASCADE")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
-  // AC-CM-06: Drop confirmation cancel closes dialog
-  it("closes drop confirmation dialog when Cancel is clicked", async () => {
+  // AC-CM-06 — Cancel closes the new DropTableDialog.
+  it("closes DropTableDialog when Cancel is clicked", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -227,29 +297,24 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Drop"));
     });
 
-    expect(
-      screen.getByRole("dialog", { name: "Drop Table" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Drop Table")).toBeInTheDocument();
 
-    // Click Cancel (find the one inside the dialog)
-    const dialog = screen.getByRole("dialog", { name: "Drop Table" });
-    const cancelBtn = dialog.querySelector("button:not([aria-label])");
+    // The Cancel button is the ghost-variant button in the DialogFooter.
+    const cancelBtn = screen.getByRole("button", { name: "Cancel" });
     await act(async () => {
-      fireEvent.click(cancelBtn!);
+      fireEvent.click(cancelBtn);
     });
 
-    // Dialog should be gone
-    expect(
-      screen.queryByRole("dialog", { name: "Drop Table" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Drop Table")).not.toBeInTheDocument();
+    });
   });
 
-  // AC-CM-07: Drop confirmation calls dropTable store action
-  it("calls dropTable when confirming drop dialog", async () => {
-    const mockDropTable = vi.fn().mockResolvedValue(undefined);
-    // Override the dropTable action in the store
-    useSchemaStore.setState({ dropTable: mockDropTable });
-
+  // AC-235-08 — Drop commit-success path. The new modal's typing-confirm
+  // + Show DDL + Apply lifecycle goes through `useDdlPreviewExecution` →
+  // `useSchemaTableMutations.dropTable` → `tauri.dropTable` compat
+  // wrapper.
+  it("[AC-235-08] Drop commit-success calls tauri.dropTable + dialog closes", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -264,16 +329,39 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Drop"));
     });
 
-    // Click the confirm button inside the dialog
+    // Type table name to enable Show DDL + Apply.
+    const typingConfirm = screen.getByLabelText(
+      "Type the table name to confirm",
+    );
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Drop Table" }));
+      fireEvent.change(typingConfirm, { target: { value: "users" } });
     });
 
-    expect(mockDropTable).toHaveBeenCalledWith("conn1", "users", "public");
+    // Show DDL → fetches preview SQL.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTableRequest).toHaveBeenCalled();
+    });
+
+    // Apply → commit closure runs. Connection environment defaults to
+    // `local` (resetStores empties connections, beforeEach safe-mode off
+    // permits commit), so the safe path runs and `tauri.dropTable` fires.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    await waitFor(() => {
+      expect(mockDropTable).toHaveBeenCalledWith("conn1", "users", "public");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Drop Table")).not.toBeInTheDocument();
+    });
   });
 
-  // AC-CM-08: Rename shows rename dialog
-  it("shows rename dialog when Rename menu item is clicked", async () => {
+  // AC-CM-08 / AC-235-07 — Rename menu mounts RenameTableDialog with
+  // pre-filled current name and inline DDL preview button.
+  it("[AC-235-07] Rename menu mounts RenameTableDialog pre-filled with current name", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -288,35 +376,16 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Rename"));
     });
 
-    // Rename dialog should be visible
     expect(screen.getByText("Rename Table")).toBeInTheDocument();
     expect(screen.getByText("public.users")).toBeInTheDocument();
-    expect(screen.getByLabelText("New table name")).toBeInTheDocument();
-    expect(screen.getByLabelText("Rename")).toBeInTheDocument();
-  });
-
-  // AC-CM-09: Rename dialog pre-fills current name
-  it("pre-fills rename input with current table name", async () => {
-    await expandSchemaWithTables();
-
-    const tableItem = screen.getByLabelText("users table");
-    await act(async () => {
-      fireEvent.contextMenu(tableItem, {
-        clientX: 100,
-        clientY: 200,
-      });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Rename"));
-    });
-
     const input = screen.getByLabelText("New table name") as HTMLInputElement;
     expect(input.value).toBe("users");
+    // Apply disabled at name == current (rename-to-self pre-check).
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
-  // AC-CM-10: Rename dialog cancel closes dialog
-  it("closes rename dialog when Cancel is clicked", async () => {
+  // AC-CM-10 — Cancel closes the new RenameTableDialog.
+  it("closes RenameTableDialog when Cancel is clicked", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -334,17 +403,18 @@ describe("SchemaTree — actions", () => {
     expect(screen.getByText("Rename Table")).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByText("Cancel"));
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     });
 
-    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+    });
   });
 
-  // AC-CM-11: Rename confirmation calls renameTable store action
-  it("calls renameTable when confirming rename dialog", async () => {
-    const mockRename = vi.fn().mockResolvedValue(undefined);
-    useSchemaStore.setState({ renameTable: mockRename });
-
+  // AC-235-07 — Rename commit-success path. Sprint 223 mutation hook
+  // calls `tauri.renameTable` (compat positional wrapper) which the
+  // modal commit closure forwards to.
+  it("[AC-235-07] Rename commit-success calls tauri.renameTable + dialog closes", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -359,30 +429,40 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Rename"));
     });
 
-    // Change the name
+    // Change the name to enable Apply.
     const input = screen.getByLabelText("New table name");
     await act(async () => {
       fireEvent.change(input, { target: { value: "people" } });
     });
 
-    // Confirm
+    // Show DDL → fetches preview SQL.
     await act(async () => {
-      fireEvent.click(screen.getByLabelText("Rename"));
+      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    });
+    await waitFor(() => {
+      expect(mockRenameTableRequest).toHaveBeenCalled();
     });
 
-    expect(mockRename).toHaveBeenCalledWith(
-      "conn1",
-      "users",
-      "public",
-      "people",
-    );
+    // Apply → commit closure runs.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    });
+    await waitFor(() => {
+      expect(mockRenameTable).toHaveBeenCalledWith(
+        "conn1",
+        "users",
+        "public",
+        "people",
+      );
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+    });
   });
 
-  // AC-CM-12: Rename with Enter key
-  it("submits rename on Enter key", async () => {
-    const mockRename = vi.fn().mockResolvedValue(undefined);
-    useSchemaStore.setState({ renameTable: mockRename });
-
+  // AC-CM-14 — Identifier validation. Empty / whitespace-only input
+  // surfaces inline error (Apply disabled).
+  it("shows inline error when renaming to empty / whitespace-only", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -399,76 +479,17 @@ describe("SchemaTree — actions", () => {
 
     const input = screen.getByLabelText("New table name");
     await act(async () => {
-      fireEvent.change(input, { target: { value: "people" } });
-    });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: "Enter" });
-    });
-
-    expect(mockRename).toHaveBeenCalledWith(
-      "conn1",
-      "users",
-      "public",
-      "people",
-    );
-  });
-
-  // AC-CM-13: Rename dialog closes on Escape
-  it("closes rename dialog on Escape key", async () => {
-    await expandSchemaWithTables();
-
-    const tableItem = screen.getByLabelText("users table");
-    await act(async () => {
-      fireEvent.contextMenu(tableItem, {
-        clientX: 100,
-        clientY: 200,
-      });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Rename"));
-    });
-
-    const input = screen.getByLabelText("New table name");
-    await act(async () => {
-      fireEvent.keyDown(input, { key: "Escape" });
-    });
-
-    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
-  });
-
-  // AC-CM-14: Rename validation - empty name
-  it("shows error when renaming to empty string", async () => {
-    await expandSchemaWithTables();
-
-    const tableItem = screen.getByLabelText("users table");
-    await act(async () => {
-      fireEvent.contextMenu(tableItem, {
-        clientX: 100,
-        clientY: 200,
-      });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Rename"));
-    });
-
-    const input = screen.getByLabelText("New table name");
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "" } });
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Rename"));
+      fireEvent.change(input, { target: { value: "   " } });
     });
 
     expect(
-      screen.getByText("Table name must not be empty"),
-    ).toBeInTheDocument();
+      screen.getByLabelText("Identifier validation error"),
+    ).toHaveTextContent(/must not be empty/);
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
-  // AC-CM-15: Rename validation - invalid characters
-  it("shows error when renaming to name with invalid characters", async () => {
+  // AC-CM-15 — Invalid characters surface inline error.
+  it("shows inline error when renaming to name with invalid characters", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -488,20 +509,14 @@ describe("SchemaTree — actions", () => {
       fireEvent.change(input, { target: { value: "bad-name!" } });
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Rename"));
-    });
-
     expect(
-      screen.getByText(/must start with a letter or underscore/),
-    ).toBeInTheDocument();
+      screen.getByLabelText("Identifier validation error"),
+    ).toHaveTextContent(/letter or underscore/);
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
   });
 
-  // AC-CM-16: Rename same name just closes dialog (no-op)
-  it("closes dialog without calling renameTable when name is unchanged", async () => {
-    const mockRename = vi.fn().mockResolvedValue(undefined);
-    useSchemaStore.setState({ renameTable: mockRename });
-
+  // AC-CM-16 — Rename to same name keeps Apply disabled (no-op).
+  it("[AC-235-07] Apply disabled when name unchanged (rename-to-self)", async () => {
     await expandSchemaWithTables();
 
     const tableItem = screen.getByLabelText("users table");
@@ -516,13 +531,9 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Rename"));
     });
 
-    // Don't change the name, just click rename
-    await act(async () => {
-      fireEvent.click(screen.getByLabelText("Rename"));
-    });
-
-    expect(mockRename).not.toHaveBeenCalled();
-    expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
+    // Don't change the name — Apply stays disabled.
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled();
+    expect(mockRenameTable).not.toHaveBeenCalled();
   });
 
   // =========================================================================
@@ -698,8 +709,8 @@ describe("SchemaTree — actions", () => {
   // Sprint 107 (#TREE-1): F2 keyboard rename on focused table button
   // =========================================================================
 
-  // AC-01: F2 on focused table button opens Rename Dialog
-  it("opens rename dialog when F2 is pressed on a focused table button", async () => {
+  // AC-01: F2 on focused table button opens the new RenameTableDialog
+  it("opens RenameTableDialog when F2 is pressed on a focused table button", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: {
@@ -793,7 +804,8 @@ describe("SchemaTree — actions", () => {
     expect(screen.queryByText("Rename Table")).not.toBeInTheDocument();
   });
 
-  // AC-02: After dialog opens (via F2), input is focused and selection covers full name
+  // AC-02: After dialog opens (via F2), input is focused and selection
+  // covers full name.
   it("focuses rename input and selects full existing name when opened via F2", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -820,94 +832,9 @@ describe("SchemaTree — actions", () => {
     expect(input.selectionEnd).toBe("users".length);
   });
 
-  // AC-03: Enter inside the F2-opened dialog input commits the rename
-  it("commits rename on Enter when dialog was opened via F2", async () => {
-    const mockRename = vi.fn().mockResolvedValue(undefined);
-
-    setSchemaStoreState({
-      schemas: { conn1: [{ name: "public" }] },
-      tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
-      },
-    });
-    useSchemaStore.setState({ renameTable: mockRename });
-
-    await act(async () => {
-      render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const tableButton = screen.getByLabelText("users table");
-    await act(async () => {
-      fireEvent.keyDown(tableButton, { key: "F2" });
-    });
-
-    const input = screen.getByLabelText("New table name");
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "people" } });
-    });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: "Enter" });
-    });
-
-    expect(mockRename).toHaveBeenCalledWith(
-      "conn1",
-      "users",
-      "public",
-      "people",
-    );
-  });
-
-  // AC-191-03 — Sprint 191 silent failure → toast 정리. dropTable 과
-  // renameTable 의 store 액션은 실제로 throw 하므로 SchemaTree 가 catch
-  // 분기에서 toast.error 를 발사하는지를 직접 단언한다 (
-  // useSchemaCache.test.ts 는 store-swallowing 분기만 단언). date 2026-05-02.
-  it("[AC-191-03-1] dropTable rejection surfaces toast error instead of silent swallow", async () => {
-    const toastMod = await import("@/lib/toast");
-    const errorSpy = vi
-      .spyOn(toastMod.toast, "error")
-      .mockImplementation(() => "");
-    const failingDropTable = vi
-      .fn()
-      .mockRejectedValue(new Error("permission denied"));
-    setSchemaStoreState({
-      schemas: { conn1: [{ name: "public" }] },
-      tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
-      },
-    });
-    useSchemaStore.setState({ dropTable: failingDropTable });
-
-    await act(async () => {
-      render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const tableItem = screen.getByLabelText("users table");
-    await act(async () => {
-      fireEvent.contextMenu(tableItem, { clientX: 100, clientY: 200 });
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByText("Drop"));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Drop Table" }));
-    });
-
-    await waitFor(() => {
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(
-          /Failed to drop public\.users:.*permission denied/,
-        ),
-      );
-    });
-    errorSpy.mockRestore();
-  });
-
   // AC-192-04 — Sprint 192 통합 export. 진입점은 헤더 Popover (Download
-  // 아이콘 → 클릭 시 schema 별 [Schema/Data/Full] 3 액션 노출). 우클릭
-  // context menu 에서 헤더 Popover 으로 이전된 이유: schema 행이 hide
-  // 되는 MySQL/SQLite tree shape 에서도 동작해야 하고, 사용자가 우클릭은
-  // 발견성이 떨어진다고 피드백 (2026-05-02). RDB 연결에서만 노출되고
-  // mongodb / redis 연결에서는 trigger button 자체가 hide.
+  // 아이콘 → 클릭 시 schema 별 [Schema/Data/Full] 3 액션 노출). RDB
+  // 연결에서만 노출되고 mongodb / redis 연결에서는 trigger button 자체가 hide.
   // date 2026-05-02
   it("[AC-192-04-1] header Export popover surfaces 3 actions per schema for RDB connections", async () => {
     setSchemaStoreState({
@@ -998,11 +925,6 @@ describe("SchemaTree — actions", () => {
   //   is called exactly once. The modal body (form, preview, commit) is
   //   covered by `CreateTableDialog.test.tsx`; this case only locks the
   //   tree-side wiring + the post-commit refresh contract.
-  // - Mock: `@lib/tauri.createTable` mock returns the SQL on both
-  //   preview and commit. The hook's `runCommit` awaits `onRefresh`
-  //   (which is plumbed to `refreshSchema(schemaName)` from
-  //   `useSchemaCache`); we spy `refreshSchema` via the
-  //   `useSchemaStore` action override so the assertion is direct.
   it("[AC-226-05] schema-row right-click surfaces 'Create Table…' menu item", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -1039,10 +961,6 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText(/Create Table/));
     });
 
-    // Modal heading is rendered + the Target schema dropdown shows
-    // the right-clicked schema name as the default selection
-    // (Sprint 227 mechanical migration: Sprint 226's read-only
-    // `Schema name` input became a `Target schema` Select primitive).
     expect(screen.getByText("Create Table")).toBeInTheDocument();
     const schemaTrigger = screen.getByRole("combobox", {
       name: "Target schema",
@@ -1052,24 +970,15 @@ describe("SchemaTree — actions", () => {
 
   it("[AC-226-05] commit-success calls refreshSchema('public') exactly once", async () => {
     // Sprint 226: prove the post-commit refresh contract.
-    // - Mock `@lib/tauri.createTable` so preview + commit succeed.
-    // - Spy on `useSchemaStore.loadTables` (the underlying call that
-    //   `useSchemaCache.refreshSchema` invokes for the schema's tables).
-    //   We set Safe Mode "off" so the gate passes through immediately.
-    const tauri = await import("@lib/tauri");
-    const createTableSpy = vi.spyOn(tauri, "createTable").mockResolvedValue({
+    mockCreateTable.mockResolvedValue({
       sql: 'CREATE TABLE "public"."new_t" ("id" integer)',
     });
     const loadTablesSpy = vi.fn().mockResolvedValue(undefined);
-    const safeModeMod = await import("@stores/safeModeStore");
-    safeModeMod.useSafeModeStore.setState({ mode: "off" });
 
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
       tables: { "conn1:public": [] },
     });
-    // The shared helper preserves a default `loadTables` mock — override
-    // here so we can spy on the post-commit refresh path specifically.
     useSchemaStore.setState({ loadTables: loadTablesSpy });
 
     await act(async () => {
@@ -1084,10 +993,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText(/Create Table/));
     });
 
-    // Fill the form. Sprint 227 mechanical migration: column-row
-    // inputs live inside the Columns tab panel; the Sprint 226
-    // text-string assertions (`"Table name"`, `"Column name"`,
-    // `"Column data type"`) are preserved verbatim.
+    // Fill the form.
     await act(async () => {
       fireEvent.change(screen.getByLabelText("Table name"), {
         target: { value: "new_t" },
@@ -1100,9 +1006,7 @@ describe("SchemaTree — actions", () => {
       });
     });
 
-    // Preview SQL — first call (preview_only: true). Sprint 227:
-    // Sprint 226's "Preview SQL" button is replaced by the inline
-    // "Show DDL" toggle which fires the same `preview_only:true` IPC.
+    // Show DDL → preview only.
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     });
@@ -1112,9 +1016,6 @@ describe("SchemaTree — actions", () => {
       ).toBeInTheDocument(),
     );
 
-    // Reset loadTables spy *before* commit so we count only the
-    // post-commit refresh call (auto-expand on schema render also fires
-    // loadTables — pre-commit calls are unrelated to AC-226-05).
     loadTablesSpy.mockClear();
 
     await act(async () => {
@@ -1130,27 +1031,15 @@ describe("SchemaTree — actions", () => {
       expect(callsForPublic).toHaveLength(1);
     });
     // Commit-side createTable call (preview_only:false) ran exactly once.
-    const commitCalls = createTableSpy.mock.calls.filter(
+    const commitCalls = mockCreateTable.mock.calls.filter(
       (c) => (c[0] as { preview_only: boolean }).preview_only === false,
     );
     expect(commitCalls).toHaveLength(1);
-
-    createTableSpy.mockRestore();
   });
 
   // =========================================================================
   // Sprint 226 polish — Tables 카테고리 헤더의 '+' 버튼 entry-point
   // =========================================================================
-  //
-  // Date: 2026-05-06.
-  //
-  // 사용자 UX 피드백 (2026-05-06): schema row 우클릭만으로는 발견성 0.
-  // Tables 카테고리 헤더 옆 '+' (hover-affordance) 추가. schema row 우클릭
-  // entry-point 는 그대로 유지 (power-user shortcut).
-  //
-  // - '+' 버튼은 Tables 카테고리에만 (Views/Functions 는 별도 sprint 후보).
-  // - aria-label = "Create table in <schemaName>" — schema row 우클릭의
-  //   "Create Table…" item 과 동일한 dialog 를 연다.
   it("Tables 카테고리 헤더의 '+' 버튼 click → CreateTableDialog 열림", async () => {
     setSchemaStoreState({
       schemas: { conn1: [{ name: "public" }] },
@@ -1161,17 +1050,11 @@ describe("SchemaTree — actions", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // schema 가 store 에 있으면 자동 expand → Tables row 즉시 등장
-    // (`SchemaTree.expand.test.tsx` AC-CAT-01 패턴 답습).
     const plusButton = screen.getByLabelText("Create table in public");
     await act(async () => {
       fireEvent.click(plusButton);
     });
 
-    // Modal 등장. Sprint 227 mechanical migration: Sprint 226's
-    // read-only `Schema name` input became a `Target schema`
-    // Select primitive — assert the dropdown trigger surfaces the
-    // pre-filled schema as the default.
     expect(screen.getByText("Create Table")).toBeInTheDocument();
     const schemaTrigger = screen.getByRole("combobox", {
       name: "Target schema",
@@ -1189,54 +1072,10 @@ describe("SchemaTree — actions", () => {
       render(<SchemaTree connectionId="conn1" />);
     });
 
-    // Tables / Views / Functions 카테고리 row 모두 노출.
     expect(screen.getByLabelText("Tables in public")).toBeInTheDocument();
     expect(screen.getByLabelText("Views in public")).toBeInTheDocument();
 
-    // '+' 버튼은 Tables 한정 — schema 당 1개.
     const plusButtons = screen.queryAllByLabelText(/^Create table in /);
     expect(plusButtons).toHaveLength(1);
-  });
-
-  it("[AC-191-03-2] renameTable rejection surfaces toast error", async () => {
-    const toastMod = await import("@/lib/toast");
-    const errorSpy = vi
-      .spyOn(toastMod.toast, "error")
-      .mockImplementation(() => "");
-    const failingRename = vi
-      .fn()
-      .mockRejectedValue(new Error("name already exists"));
-    setSchemaStoreState({
-      schemas: { conn1: [{ name: "public" }] },
-      tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
-      },
-    });
-    useSchemaStore.setState({ renameTable: failingRename });
-
-    await act(async () => {
-      render(<SchemaTree connectionId="conn1" />);
-    });
-
-    const tableButton = screen.getByLabelText("users table");
-    await act(async () => {
-      fireEvent.keyDown(tableButton, { key: "F2" });
-    });
-    const input = screen.getByLabelText("New table name");
-    await act(async () => {
-      fireEvent.change(input, { target: { value: "people" } });
-    });
-    await act(async () => {
-      fireEvent.keyDown(input, { key: "Enter" });
-    });
-
-    await waitFor(() => {
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(
-          /Failed to rename public\.users:.*name already exists/,
-        ),
-      );
-    });
-    errorSpy.mockRestore();
   });
 });

@@ -10,7 +10,7 @@ pub use query::{QueryColumn, QueryResult, QueryType};
 pub use schema::{
     AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition, ConstraintDefinition,
     CreateIndexRequest, CreateTableRequest, DropConstraintRequest, DropIndexRequest,
-    SchemaChangeResult,
+    DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,

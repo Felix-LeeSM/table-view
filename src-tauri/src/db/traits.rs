@@ -13,8 +13,8 @@ use crate::error::AppError;
 use crate::models::{
     AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig, ConstraintInfo,
     CreateIndexRequest, CreateTableRequest, DatabaseType, DropConstraintRequest, DropIndexRequest,
-    FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaChangeResult, TableData,
-    TableInfo, ViewInfo,
+    DropTableRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, ViewInfo,
 };
 
 use super::types::{
@@ -153,18 +153,23 @@ pub trait RdbAdapter: DbAdapter {
     ) -> BoxFuture<'a, Result<TableData, AppError>>;
 
     // DDL
+    /// Sprint 235 — request-shaped `DROP TABLE` matching `create_table` /
+    /// `alter_table`. `req.preview_only` toggles between SQL emission
+    /// (no DB write) and `BEGIN/COMMIT` execution. `req.cascade` opts
+    /// into `DROP TABLE … CASCADE`; the default emits the implicit-
+    /// RESTRICT form (no `RESTRICT` keyword in the SQL string).
     fn drop_table<'a>(
         &'a self,
-        namespace: &'a str,
-        table: &'a str,
-    ) -> BoxFuture<'a, Result<(), AppError>>;
+        req: &'a DropTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
+    /// Sprint 235 — request-shaped `RENAME TABLE`. Same preview/execute
+    /// semantics as `create_table` / `alter_table`. Identifier validation
+    /// is sourced from the shared `validate_identifier` helper.
     fn rename_table<'a>(
         &'a self,
-        namespace: &'a str,
-        table: &'a str,
-        new_name: &'a str,
-    ) -> BoxFuture<'a, Result<(), AppError>>;
+        req: &'a RenameTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
     fn alter_table<'a>(
         &'a self,
