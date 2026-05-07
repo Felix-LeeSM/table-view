@@ -1,0 +1,105 @@
+
+ RUN  v4.1.3 /Users/felix/Desktop/study/view-table
+
+ ❯ src/hooks/useSqlAutocomplete.test.ts (24 tests | 3 failed) 141ms
+     × emits a fully-quoted schema-qualified key for PG dialect (AC-233-01) 9ms
+     × emits a fully-quoted schema-qualified key for SQLite dialect (AC-233-02) 2ms
+     × registers fully-quoted key with empty children when columns are not cached (AC-233-03) 2ms
+ ❯ src/components/rdb/DataGrid.bottom-query.test.tsx (4 tests | 4 failed) 218ms
+     × renders the executed query through SqlSyntax with keyword token spans (AC-233-04) 116ms
+     × colorizes SELECT, FROM, LIMIT, OFFSET as keywords (AC-233-04) 34ms
+     × classifies PG double-quoted identifiers as identifiers, not strings (AC-233-04) 36ms
+     × colorizes LIMIT / OFFSET numeric arguments as numbers (AC-233-04) 30ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/hooks/useSqlAutocomplete.test.ts > useSqlAutocomplete > emits a fully-quoted schema-qualified key for PG dialect (AC-233-01)
+AssertionError: expected { …(90) } to have property ""public"."brief_news_tasks""
+ ❯ src/hooks/useSqlAutocomplete.test.ts:485:16
+    483|     );
+    484|     const ns = result.current as Record<string, unknown>;
+    485|     expect(ns).toHaveProperty('"public"."brief_news_tasks"');
+       |                ^
+    486|     const node = (
+    487|       ns as Record<string, { children?: Record<string, unknown> }>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  src/hooks/useSqlAutocomplete.test.ts > useSqlAutocomplete > emits a fully-quoted schema-qualified key for SQLite dialect (AC-233-02)
+AssertionError: expected { …(87) } to have property "`main`.`events`"
+ ❯ src/hooks/useSqlAutocomplete.test.ts:525:16
+    523|     const ns = result.current as Record<string, unknown>;
+    524|     // SQLite `identifierQuotes` first char is backtick.
+    525|     expect(ns).toHaveProperty("`main`.`events`");
+       |                ^
+    526|     const node = (
+    527|       ns as Record<string, { children?: Record<string, unknown> }>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  src/hooks/useSqlAutocomplete.test.ts > useSqlAutocomplete > registers fully-quoted key with empty children when columns are not cached (AC-233-03)
+AssertionError: expected { …(90) } to have property ""public"."brief_news_tasks""
+ ❯ src/hooks/useSqlAutocomplete.test.ts:553:16
+    551|     );
+    552|     const ns = result.current as Record<string, unknown>;
+    553|     expect(ns).toHaveProperty('"public"."brief_news_tasks"');
+       |                ^
+    554|     const node = (
+    555|       ns as Record<string, { children?: Record<string, unknown> }>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  src/components/rdb/DataGrid.bottom-query.test.tsx > DataGrid — bottom executed-query strip (Sprint 233) > renders the executed query through SqlSyntax with keyword token spans (AC-233-04)
+AssertionError: expected null not to be null
+ ❯ src/components/rdb/DataGrid.bottom-query.test.tsx:126:22
+    124|     // The font-mono root is the SqlSyntax component's outer span.
+    125|     const root = region.querySelector("span.font-mono");
+    126|     expect(root).not.toBeNull();
+       |                      ^
+    127|
+    128|     // At least one keyword span exists (SELECT, at minimum).
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  src/components/rdb/DataGrid.bottom-query.test.tsx > DataGrid — bottom executed-query strip (Sprint 233) > colorizes SELECT, FROM, LIMIT, OFFSET as keywords (AC-233-04)
+AssertionError: expected [] to include 'SELECT'
+ ❯ src/components/rdb/DataGrid.bottom-query.test.tsx:144:26
+    142|       region.querySelectorAll(".text-syntax-keyword"),
+    143|     ).map((el) => el.textContent);
+    144|     expect(keywordTexts).toContain("SELECT");
+       |                          ^
+    145|     expect(keywordTexts).toContain("FROM");
+    146|     expect(keywordTexts).toContain("LIMIT");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  src/components/rdb/DataGrid.bottom-query.test.tsx > DataGrid — bottom executed-query strip (Sprint 233) > classifies PG double-quoted identifiers as identifiers, not strings (AC-233-04)
+AssertionError: expected [] to include '"public"'
+ ❯ src/components/rdb/DataGrid.bottom-query.test.tsx:174:29
+    172|       region.querySelectorAll(".text-foreground"),
+    173|     ).map((el) => el.textContent);
+    174|     expect(identifierTexts).toContain('"public"');
+       |                             ^
+    175|     expect(identifierTexts).toContain('"brief_news_tasks"');
+    176|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  src/components/rdb/DataGrid.bottom-query.test.tsx > DataGrid — bottom executed-query strip (Sprint 233) > colorizes LIMIT / OFFSET numeric arguments as numbers (AC-233-04)
+AssertionError: expected [] to include '300'
+ ❯ src/components/rdb/DataGrid.bottom-query.test.tsx:189:25
+    187|       region.querySelectorAll(".text-syntax-number"),
+    188|     ).map((el) => el.textContent);
+    189|     expect(numberTexts).toContain("300");
+       |                         ^
+    190|     expect(numberTexts).toContain("0");
+    191|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  7 failed | 37 passed (44)
+   Start at  12:30:09
+   Duration  1.68s (transform 619ms, setup 120ms, import 1.52s, tests 812ms, environment 1.30s)
+

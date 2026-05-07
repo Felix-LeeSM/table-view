@@ -26,6 +26,7 @@ import DataGridTable from "@components/datagrid/DataGridTable";
 import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
+import SqlSyntax from "@components/shared/SqlSyntax";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 
@@ -498,9 +499,15 @@ export default function DataGrid({
               role="region"
               aria-label="Executed SQL query"
             >
-              <code className="whitespace-pre-wrap break-all text-xs text-secondary-foreground">
-                {data.executed_query}
-              </code>
+              {/* Sprint 233 (2026-05-07): syntax-highlight the executed query
+                  via SqlSyntax. The user-reported PG-double-quoted form
+                  (`SELECT * FROM "public"."brief_news_tasks" …`) tokenises
+                  cleanly — sqlTokenize.ts:213-220 distinguishes `"…"`
+                  identifiers from `'…'` string literals. */}
+              <SqlSyntax
+                sql={data.executed_query}
+                className="whitespace-pre-wrap break-all text-xs text-secondary-foreground"
+              />
             </div>
           )}
         </div>

@@ -203,12 +203,15 @@ describe("DataGrid", () => {
   });
 
   // 14. Executed query displays the actual query text
+  // Sprint 233 (2026-05-07): bottom strip now routes through `<SqlSyntax>`
+  // so the SQL is split across token spans. The full text still lives in
+  // the surrounding region's textContent — assert that instead of trying
+  // to match across span boundaries with `getByText`.
   it("displays the executed SQL query", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
-    expect(
-      screen.getByText(/SELECT \* FROM public\.users/),
-    ).toBeInTheDocument();
+    const region = screen.getByRole("region", { name: /SQL query/i });
+    expect(region.textContent).toContain("SELECT * FROM public.users");
   });
 
   // 21. Empty result set without filters shows "Table is empty" row

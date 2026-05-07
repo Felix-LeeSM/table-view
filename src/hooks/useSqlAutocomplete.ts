@@ -234,6 +234,34 @@ export function useSqlAutocomplete(
       }
     };
 
+    // Sprint 233 (2026-05-07): also emit the *fully-quoted*
+    // schema-qualified form (`"schema"."table"` for PG/SQLite).
+    // CodeMirror's `addNamespaceObject` (lang-sql:507-523) splits keys on
+    // `.`, so registering this form yields a top-level child `"schema"`
+    // whose child is `"table"` — distinct from the unquoted
+    // `schema.table` path. Users (per 2026-05-07 bug report) often paste
+    // the bottom-strip query verbatim, e.g.
+    // `SELECT * FROM "public"."brief_news_tasks" …`, and expect column
+    // autocomplete to keep working through that quoted path.
+    //
+    // The value mirrors `addQuotedAlias` shape — `{ self, children }` —
+    // so `nameCompletion`'s "auto-quote uppercase labels" rule does not
+    // re-quote the already-quoted label and turn it into a string.
+    const addFullyQuotedAlias = (
+      schemaName: string,
+      bareName: string,
+      colNs: Record<string, SQLNamespace>,
+    ) => {
+      if (!dialect) return;
+      const quoted = `${quoteChar}${schemaName}${quoteChar}.${quoteChar}${bareName}${quoteChar}`;
+      if (!ns[quoted]) {
+        ns[quoted] = {
+          self: { label: quoted, apply: quoted, type: "type" },
+          children: colNs,
+        };
+      }
+    };
+
     // Tables
     for (const [key, tableList] of Object.entries(tables)) {
       if (!key.startsWith(`${connectionId}:`)) continue;
@@ -244,6 +272,7 @@ export function useSqlAutocomplete(
         ns[table.name] = colNs;
         ns[qualified] = colNs;
         addQuotedAlias(table.name, colNs);
+        addFullyQuotedAlias(schemaName, table.name, colNs);
       }
     }
 
@@ -258,6 +287,7 @@ export function useSqlAutocomplete(
         if (!ns[v.name]) ns[v.name] = colNs;
         if (!ns[qualified]) ns[qualified] = colNs;
         addQuotedAlias(v.name, colNs);
+        addFullyQuotedAlias(schemaName, v.name, colNs);
       }
     }
 

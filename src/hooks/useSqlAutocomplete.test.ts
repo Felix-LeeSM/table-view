@@ -429,4 +429,131 @@ describe("useSqlAutocomplete", () => {
     expect(ns.COUNT?.self?.apply).toBe("COUNT");
     expect(ns.COUNT?.self?.type).toBe("function");
   });
+
+  // ── Sprint 233 — UPDATE SET column autocomplete (PG/SQLite) ─────────────
+  // 작성 일자: 2026-05-07. 작성 이유: 사용자 보고 (2026-05-07) — bottom strip
+  // 에 보이는 `"public"."brief_news_tasks"` 형태로 UPDATE 를 작성할 때
+  // CodeMirror SQL 자동완성이 컬럼을 surface 하지 못함. 원인은
+  // useSqlAutocomplete 가 `ns["public.brief_news_tasks"]` (도트 split path)
+  // 와 `ns["brief_news_tasks"]` (bare) 까지만 등록하고, 사용자가 종종 직접
+  // 사용하는 fully-quoted form `"public"."brief_news_tasks"` 는 등록되지
+  // 않아 CodeMirror 의 `addNamespaceObject` (lang-sql:507-523) 가 동일
+  // children 까지 도달하지 못함. PG / SQLite double-quote dialect 에서
+  // 이 키도 emit 해야 함.
+
+  // AC-233-01 — PG dialect 에서 fully-quoted schema-qualified key 가
+  // namespace 에 emit 되며, columns map 을 children 으로 가진다.
+  it("emits a fully-quoted schema-qualified key for PG dialect (AC-233-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [
+          { name: "brief_news_tasks", schema: "public", row_count: 1 },
+        ],
+      },
+      tableColumnsCache: {
+        "conn1:public:brief_news_tasks": [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+          {
+            name: "title",
+            data_type: "text",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", {
+        dialect: PostgreSQL,
+        dbType: "postgresql",
+      }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty('"public"."brief_news_tasks"');
+    const node = (ns as Record<string, { children?: Record<string, unknown> }>)[
+      '"public"."brief_news_tasks"'
+    ];
+    // The key holds a `{ self, children }` namespace whose `children`
+    // expose the cached columns. (Unlike bare keys that map directly to
+    // a column SQLNamespace, the quoted form must be wrapped to bypass
+    // CodeMirror's nameCompletion auto-quote rule.)
+    expect(node?.children).toBeDefined();
+    expect(node?.children).toHaveProperty("id");
+    expect(node?.children).toHaveProperty("title");
+  });
+
+  // AC-233-02 — SQLite dialect uses backtick (per CodeMirror identifier
+  // quote spec). The fully-quoted key reflects that quote char.
+  it("emits a fully-quoted schema-qualified key for SQLite dialect (AC-233-02)", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:main": [{ name: "events", schema: "main", row_count: 0 }],
+      },
+      tableColumnsCache: {
+        "conn1:main:events": [
+          {
+            name: "ts",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", { dialect: SQLite, dbType: "sqlite" }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    // SQLite `identifierQuotes` first char is backtick.
+    expect(ns).toHaveProperty("`main`.`events`");
+    const node = (ns as Record<string, { children?: Record<string, unknown> }>)[
+      "`main`.`events`"
+    ];
+    expect(node?.children).toHaveProperty("ts");
+  });
+
+  // AC-233-03 — Cache miss path: the fully-quoted key still registers
+  // (with empty children) so when the cache later populates, the next
+  // useMemo re-render will surface columns. This guards against the
+  // "user typed UPDATE before expanding the table in the SchemaTree"
+  // case described in the orchestrator brief (hypothesis C).
+  it("registers fully-quoted key with empty children when columns are not cached (AC-233-03)", () => {
+    useSchemaStore.setState({
+      tables: {
+        "conn1:public": [
+          { name: "brief_news_tasks", schema: "public", row_count: 0 },
+        ],
+      },
+      // No tableColumnsCache entry for this table.
+    });
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", {
+        dialect: PostgreSQL,
+        dbType: "postgresql",
+      }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty('"public"."brief_news_tasks"');
+    const node = (ns as Record<string, { children?: Record<string, unknown> }>)[
+      '"public"."brief_news_tasks"'
+    ];
+    expect(node?.children).toEqual({});
+  });
 });
