@@ -150,6 +150,21 @@ function EditableColumnRow({
           </span>
         )}
       </td>
+      <td
+        className="max-w-50 truncate border-r border-border px-3 py-1 text-xs font-mono text-foreground"
+        title={(col.check_clauses ?? []).join("\n")}
+      >
+        {(() => {
+          const clauses = col.check_clauses ?? [];
+          if (clauses.length === 0) return "\u2014";
+          // Strip the redundant `CHECK ` prefix that `pg_get_constraintdef`
+          // emits \u2014 the column header already says "Check", so showing
+          // `((age >= 0))` is denser without losing meaning. Multiple
+          // expressions join with `; ` to fit the single-row layout
+          // (full text is in the title tooltip).
+          return clauses.map((c) => c.replace(/^CHECK\s*/, "")).join("; ");
+        })()}
+      </td>
       <td className="max-w-50 truncate border-r border-border px-3 py-1 text-xs text-primary">
         {col.fk_reference ?? "\u2014"}
       </td>
@@ -418,6 +433,9 @@ export default function ColumnsEditor({
                 </th>
                 <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Default
+                </th>
+                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
+                  Check
                 </th>
                 <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
                   Ref

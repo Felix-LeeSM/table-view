@@ -93,9 +93,9 @@ describe("IndexesTabBody (Sprint 234)", () => {
         availableColumns={[]}
       />,
     );
-    // The empty-state span lives inside the row's "Index columns"
-    // group. Its label is on the wrapper aria-label.
-    const columnsGroup = screen.getByLabelText("Index columns");
+    // The OrderedColumnPicker uses `aria-label="Index column picker"`
+    // for its wrapper. The empty-state hint surfaces inside.
+    const columnsGroup = screen.getByLabelText("Index column picker");
     expect(
       within(columnsGroup).getByText(
         "Add named columns in the Columns tab to use this picker.",

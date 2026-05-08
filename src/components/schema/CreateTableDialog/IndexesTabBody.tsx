@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@components/ui/select";
+import OrderedColumnPicker from "./OrderedColumnPicker";
 
 /**
  * `IndexesTabBody` — Sprint 228 (Phase 27 sprint 3) extraction.
@@ -72,6 +73,13 @@ export interface IndexesTabBodyProps {
   onAdd: () => void;
   onRemove: (trackingId: string) => void;
   onUpdate: (trackingId: string, updates: Partial<IndexDraft>) => void;
+  /**
+   * Legacy single-toggle handler — kept on the prop interface for the
+   * Sprint 228 test surface that drove the old checkbox UI. The new
+   * `OrderedColumnPicker` calls `onUpdate(trackingId, { columns: next })`
+   * with the full ordered array on every mutation, so this prop is no
+   * longer wired internally; callers can pass a stub.
+   */
   onToggleColumn: (trackingId: string, colName: string) => void;
   /**
    * Sprint 234 — reorder callback. `direction = -1` moves the row up by
@@ -89,7 +97,6 @@ export default function IndexesTabBody({
   onAdd,
   onRemove,
   onUpdate,
-  onToggleColumn,
   onMove,
 }: IndexesTabBodyProps) {
   return (
@@ -179,39 +186,15 @@ export default function IndexesTabBody({
                       Unique
                     </label>
                   </div>
-                  <div
-                    className="rounded border border-border bg-background p-2"
-                    aria-label="Index columns"
-                  >
-                    {availableColumns.length === 0 ? (
-                      <span className="text-xs italic text-muted-foreground">
-                        Add named columns in the Columns tab to use this picker.
-                      </span>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {availableColumns.map((colName) => {
-                          const checked = idx.columns.includes(colName);
-                          return (
-                            <label
-                              key={colName}
-                              className="flex cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() =>
-                                  onToggleColumn(idx.trackingId, colName)
-                                }
-                                className="rounded border-border"
-                                aria-label={`Index column: ${colName}`}
-                              />
-                              {colName}
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
+                  <OrderedColumnPicker
+                    available={availableColumns}
+                    selected={idx.columns}
+                    onChange={(next) =>
+                      onUpdate(idx.trackingId, { columns: next })
+                    }
+                    ariaLabelPrefix="Index column"
+                    emptyMessage="Add named columns in the Columns tab to use this picker."
+                  />
                   {dedupe && (
                     <p className="text-xs italic text-muted-foreground">
                       Skipped — primary key is already indexed

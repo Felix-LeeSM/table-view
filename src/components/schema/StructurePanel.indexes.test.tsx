@@ -73,7 +73,7 @@ describe("StructurePanel", () => {
     expect(screen.getByText("Unique")).toBeInTheDocument();
   });
 
-  it("modal shows available columns as checkboxes", async () => {
+  it("modal surfaces available columns as ordered-picker chips", async () => {
     await act(async () => {
       renderPanel();
     });
@@ -86,13 +86,21 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Create index" }));
     });
 
-    // The modal fetches columns and displays them with data type in parentheses
-    // Use the dialog-scoped query to avoid conflicts with the table behind
+    // Sprint 239 — replaced the multi-checkbox grid with the
+    // OrderedColumnPicker. Each column surfaces as a `+ name` button
+    // inside the picker; the wrapper carries `aria-label="Index column
+    // picker"`. Three columns mounted by `renderPanel()` (id / name /
+    // email) → three `+`-chip buttons.
     const dialog = screen.getByRole("dialog", { name: "Create Index" });
     expect(dialog).toBeInTheDocument();
-    // The column checkboxes are present in the modal
-    const checkboxes = dialog.querySelectorAll('input[type="checkbox"]');
-    expect(checkboxes.length).toBeGreaterThanOrEqual(3);
+    const picker = dialog.querySelector(
+      '[aria-label="Index column picker"]',
+    ) as HTMLElement;
+    expect(picker).toBeTruthy();
+    const addChips = picker.querySelectorAll(
+      'button[aria-label^="Index column: "]',
+    );
+    expect(addChips.length).toBeGreaterThanOrEqual(3);
   });
 
   it("closing the modal works", async () => {
@@ -144,15 +152,10 @@ describe("StructurePanel", () => {
       });
     });
 
-    // Select a column checkbox - find the label containing "name" in the column list
-    const columnCheckboxes = screen.getAllByRole("checkbox");
-    // Find the checkbox next to "name" column text
-    const nameCheckbox = columnCheckboxes.find((cb) =>
-      cb.closest("label")?.textContent?.includes("name"),
-    );
-    expect(nameCheckbox).toBeTruthy();
+    // Sprint 239 — column picker is now an OrderedColumnPicker with `+`
+    // chip buttons keyed by `aria-label="Index column: <name>"`.
     await act(async () => {
-      fireEvent.click(nameCheckbox!);
+      fireEvent.click(screen.getByLabelText("Index column: name"));
     });
 
     // Click Preview SQL
@@ -366,13 +369,9 @@ describe("StructurePanel", () => {
       });
     });
 
-    // Select a column
-    const columnCheckboxes = screen.getAllByRole("checkbox");
-    const nameCheckbox = columnCheckboxes.find((cb) =>
-      cb.closest("label")?.textContent?.includes("name"),
-    );
+    // Sprint 239 — column picker is now an OrderedColumnPicker.
     await act(async () => {
-      fireEvent.click(nameCheckbox!);
+      fireEvent.click(screen.getByLabelText("Index column: name"));
     });
 
     // Click Preview SQL - this will fail

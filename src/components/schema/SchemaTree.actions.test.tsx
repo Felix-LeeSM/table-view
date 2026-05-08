@@ -53,6 +53,7 @@ const {
   mockRenameTable,
   mockListTables,
   mockCreateTable,
+  mockCreateTablePlan,
 } = vi.hoisted(() => ({
   mockDropTableRequest: vi.fn(),
   mockRenameTableRequest: vi.fn(),
@@ -60,6 +61,37 @@ const {
   mockRenameTable: vi.fn().mockResolvedValue(undefined),
   mockListTables: vi.fn().mockResolvedValue([]),
   mockCreateTable: vi.fn(),
+  // Sprint 240 — `CreateTableDialog` now calls a single
+  // `tauri.createTablePlan` IPC instead of fanning out
+  // create_table + create_index + add_constraint. The default impl
+  // routes through `mockCreateTable` so existing assertions on
+  // `mockCreateTable` call counts (preview vs commit) keep passing
+  // verbatim — the no-index/no-constraint path collapses to a
+  // single `mockCreateTable` invocation per IPC, identical to the
+  // pre-Sprint-240 contract.
+  mockCreateTablePlan: vi.fn(
+    async (req: {
+      connectionId: string;
+      schema: string;
+      name: string;
+      columns: unknown[];
+      primaryKey?: string[] | null;
+      tableComment?: string | null;
+      previewOnly?: boolean;
+    }) => {
+      const previewOnly = req.previewOnly ?? false;
+      const r = (await mockCreateTable({
+        connection_id: req.connectionId,
+        schema: req.schema,
+        name: req.name,
+        columns: req.columns,
+        primary_key: req.primaryKey ?? null,
+        table_comment: req.tableComment ?? null,
+        preview_only: previewOnly,
+      })) as { sql?: string };
+      return { sql: r.sql ?? "" };
+    },
+  ),
 }));
 
 vi.mock("@lib/tauri", () => ({
@@ -69,6 +101,7 @@ vi.mock("@lib/tauri", () => ({
   renameTable: mockRenameTable,
   listTables: mockListTables,
   createTable: mockCreateTable,
+  createTablePlan: mockCreateTablePlan,
 }));
 
 import SchemaTree from "./SchemaTree";
@@ -338,9 +371,7 @@ describe("SchemaTree — actions", () => {
     });
 
     // Show DDL → fetches preview SQL.
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -436,9 +467,7 @@ describe("SchemaTree — actions", () => {
     });
 
     // Show DDL → fetches preview SQL.
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockRenameTableRequest).toHaveBeenCalled();
     });
@@ -1006,10 +1035,17 @@ describe("SchemaTree — actions", () => {
       });
     });
 
-    // Show DDL → preview only.
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 238 — auto-debounced (250ms) preview fetch. Wait for the
+    // preview-only createTable call to settle before clicking Execute.
+    await waitFor(
+      () => {
+        const previewCalls = mockCreateTable.mock.calls.filter(
+          (c) => (c[0] as { preview_only: boolean }).preview_only === true,
+        );
+        expect(previewCalls.length).toBeGreaterThan(0);
+      },
+      { timeout: 1000 },
+    );
     await waitFor(() =>
       expect(
         screen.getByRole("button", { name: /Execute/i }),

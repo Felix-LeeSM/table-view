@@ -23,6 +23,7 @@ import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import OrderedColumnPicker from "@components/schema/CreateTableDialog/OrderedColumnPicker";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -56,14 +57,6 @@ function CreateIndexModal({
   const [isUnique, setIsUnique] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const toggleColumn = (colName: string) => {
-    setSelectedColumns((prev) =>
-      prev.includes(colName)
-        ? prev.filter((c) => c !== colName)
-        : [...prev, colName],
-    );
-  };
 
   const isValid = indexName.trim() && selectedColumns.length > 0;
 
@@ -126,35 +119,23 @@ function CreateIndexModal({
               />
             </div>
 
-            {/* Columns */}
+            {/* Columns — ordered picker so the user sees the index column
+                ordinal that will land in the CREATE INDEX statement. */}
             <div>
               <label className="mb-1 block text-xs font-medium text-secondary-foreground">
                 Columns
               </label>
-              <div className="max-h-scroll-sm overflow-auto rounded border border-border bg-background p-2">
-                {columns.map((col) => (
-                  <label
-                    key={col.name}
-                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-foreground hover:bg-muted"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedColumns.includes(col.name)}
-                      onChange={() => toggleColumn(col.name)}
-                      className="rounded border-border"
-                    />
-                    {col.name}
-                    <span className="text-muted-foreground">
-                      ({col.data_type})
-                    </span>
-                  </label>
-                ))}
-                {columns.length === 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    No columns available
-                  </span>
-                )}
-              </div>
+              <OrderedColumnPicker
+                available={columns.map((c) => c.name)}
+                selected={selectedColumns}
+                labelOf={(name) => {
+                  const found = columns.find((c) => c.name === name);
+                  return found ? `${found.name} (${found.data_type})` : name;
+                }}
+                onChange={setSelectedColumns}
+                ariaLabelPrefix="Index column"
+                emptyMessage="No columns available"
+              />
             </div>
 
             {/* Index Type */}

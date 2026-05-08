@@ -102,8 +102,10 @@ export default function AddColumnDialog({
   const [notNull, setNotNull] = useState(false);
   const [defaultExpr, setDefaultExpr] = useState("");
   const [checkExpr, setCheckExpr] = useState("");
-  const [showDdl, setShowDdl] = useState(false);
-  const [previewStale, setPreviewStale] = useState(false);
+  // Preview pane defaults open — auto-debounced fetch fills it as the
+  // user types. Hiding it by default required an extra click and made
+  // users think the preview was broken.
+  const [showDdl, setShowDdl] = useState(true);
 
   const { types, typesByName } = usePostgresTypes(connectionId);
 
@@ -126,8 +128,7 @@ export default function AddColumnDialog({
       setNotNull(false);
       setDefaultExpr("");
       setCheckExpr("");
-      setShowDdl(false);
-      setPreviewStale(false);
+      setShowDdl(true);
       ddl.cancelPreview();
     }
     // Intentional narrow deps — `tableName` / `schemaName` are the
@@ -145,72 +146,58 @@ export default function AddColumnDialog({
   );
 
   const canPreview = !validationError && trimmedType.length > 0 && !collision;
-  const canApply =
-    canPreview && !ddl.previewLoading && !previewStale && !!ddl.previewSql;
+  const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  const invalidatePreview = () => {
-    if (ddl.previewSql) {
-      setPreviewStale(true);
-      setShowDdl(false);
-      ddl.cancelPreview();
-    }
-  };
-
-  const handleNameChange = (value: string) => {
-    setColumnName(value);
-    invalidatePreview();
-  };
-  const handleTypeChange = (value: string) => {
-    setDataType(value);
-    invalidatePreview();
-  };
-  const handleNotNullChange = (next: boolean) => {
-    setNotNull(next);
-    invalidatePreview();
-  };
-  const handleDefaultChange = (value: string) => {
-    setDefaultExpr(value);
-    invalidatePreview();
-  };
-  const handleCheckChange = (value: string) => {
-    setCheckExpr(value);
-    invalidatePreview();
-  };
-
-  const buildRequest = (previewOnly: boolean) => ({
-    connectionId,
-    schema: schemaName,
-    table: tableName,
-    column: {
-      name: trimmedName,
-      data_type: trimmedType,
-      nullable: !notNull,
-      default_value: defaultExpr.trim().length > 0 ? defaultExpr : null,
-    },
-    checkExpression: checkExpr.trim().length > 0 ? checkExpr : null,
-    previewOnly,
-  });
-
-  const handleShowDdl = async () => {
-    if (showDdl && !previewStale) {
-      setShowDdl(false);
-      return;
-    }
-    setShowDdl(true);
-    setPreviewStale(false);
+  // Sprint 238 — auto-refresh debounced. 5 form 필드(이름/타입/NOT NULL/
+  // DEFAULT/CHECK) 중 어느 하나라도 변하면 250 ms 후 preview 를 재빌드.
+  // 사용자는 form 을 채우는 동안 SQL 이 라이브로 업데이트되는 것을 보고,
+  // Apply 는 stale 게이트 없이 preview 가 존재하기만 하면 활성화.
+  useEffect(() => {
+    if (!open) return;
     if (!canPreview) return;
-    await ddl.loadPreview(
-      async () => {
-        const result = await tauri.addColumnRequest(buildRequest(true));
-        return { sql: result.sql };
-      },
-      // Commit closure — re-issue the request with previewOnly:false.
-      // The hook's `onRefresh` (above) calls `onColumnAdded` +
-      // `onClose` in sequence.
-      () => async () => {
-        await tauri.addColumnRequest(buildRequest(false));
-      },
-    );
+    const handle = window.setTimeout(() => {
+      const trimmedDefault = defaultExpr.trim();
+      const trimmedCheck = checkExpr.trim();
+      const buildRequest = (previewOnly: boolean) => ({
+        connectionId,
+        schema: schemaName,
+        table: tableName,
+        column: {
+          name: trimmedName,
+          data_type: trimmedType,
+          nullable: !notNull,
+          default_value: trimmedDefault.length > 0 ? defaultExpr : null,
+        },
+        checkExpression: trimmedCheck.length > 0 ? checkExpr : null,
+        previewOnly,
+      });
+      void ddl.loadPreview(
+        async () => {
+          const result = await tauri.addColumnRequest(buildRequest(true));
+          return { sql: result.sql };
+        },
+        () => async () => {
+          await tauri.addColumnRequest(buildRequest(false));
+        },
+      );
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    canPreview,
+    trimmedName,
+    trimmedType,
+    notNull,
+    defaultExpr,
+    checkExpr,
+    connectionId,
+    schemaName,
+    tableName,
+  ]);
+
+  const handleShowDdl = () => {
+    setShowDdl((s) => !s);
   };
 
   const handleApply = async () => {
@@ -259,7 +246,7 @@ export default function AddColumnDialog({
                   id="add-column-name"
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={columnName}
-                  onChange={(e) => handleNameChange(e.target.value)}
+                  onChange={(e) => setColumnName(e.target.value)}
                   placeholder="column_name"
                   aria-label="Column name"
                   autoFocus
@@ -295,7 +282,7 @@ export default function AddColumnDialog({
                   value={dataType}
                   typesSource={types}
                   typeKindMap={typesByName}
-                  onChange={handleTypeChange}
+                  onChange={setDataType}
                   ariaLabel="Column data type"
                 />
               </div>
@@ -305,7 +292,7 @@ export default function AddColumnDialog({
                   <input
                     type="checkbox"
                     checked={notNull}
-                    onChange={(e) => handleNotNullChange(e.target.checked)}
+                    onChange={(e) => setNotNull(e.target.checked)}
                     className="rounded border-border"
                     aria-label="NOT NULL"
                   />
@@ -324,7 +311,7 @@ export default function AddColumnDialog({
                   id="add-column-default"
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={defaultExpr}
-                  onChange={(e) => handleDefaultChange(e.target.value)}
+                  onChange={(e) => setDefaultExpr(e.target.value)}
                   placeholder="e.g. 0, now(), 'pending'"
                   aria-label="DEFAULT expression"
                 />
@@ -341,7 +328,7 @@ export default function AddColumnDialog({
                   id="add-column-check"
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={checkExpr}
-                  onChange={(e) => handleCheckChange(e.target.value)}
+                  onChange={(e) => setCheckExpr(e.target.value)}
                   placeholder="e.g. age >= 0"
                   aria-label="CHECK expression"
                 />
@@ -352,7 +339,7 @@ export default function AddColumnDialog({
               <button
                 type="button"
                 onClick={handleShowDdl}
-                disabled={!canPreview && !showDdl}
+                // Toggle is always enabled now; the pane shows helpful empty/loading states
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="add-column-ddl-preview"

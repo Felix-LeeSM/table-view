@@ -692,10 +692,14 @@ describe("StructurePanel", () => {
         { target: { value: "name" } },
       );
     });
-    // Show DDL → preview fetch.
+    // Sprint 238 — auto-debounced (250ms) preview fetch settles before
+    // Apply becomes enabled. Wait for the dropColumnRequest mock to be
+    // called at least once with previewOnly=true before clicking Apply.
+    const dropColumnSpy = vi.mocked(tauri.dropColumnRequest);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+      await new Promise((resolve) => setTimeout(resolve, 300));
     });
+    expect(dropColumnSpy).toHaveBeenCalled();
     // Apply → commit closure runs → onRefresh → getTableColumns.
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));

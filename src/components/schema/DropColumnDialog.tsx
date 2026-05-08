@@ -75,8 +75,10 @@ export default function DropColumnDialog({
 }: DropColumnDialogProps) {
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
-  const [showDdl, setShowDdl] = useState(false);
-  const [previewStale, setPreviewStale] = useState(false);
+  // Preview pane defaults open — auto-debounced fetch fills it as the
+  // user types. Hiding it by default required an extra click and made
+  // users think the preview was broken.
+  const [showDdl, setShowDdl] = useState(true);
 
   const ddl = useDdlPreviewExecution({
     connectionId,
@@ -91,8 +93,7 @@ export default function DropColumnDialog({
     if (open) {
       setTypingConfirm("");
       setCascade(false);
-      setShowDdl(false);
-      setPreviewStale(false);
+      setShowDdl(true);
       ddl.cancelPreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,51 +103,54 @@ export default function DropColumnDialog({
   // No trim, no debounce — every keystroke re-evaluates (mirror Sprint
   // 235 `DropTableDialog`).
   const typingMatches = typingConfirm === columnName;
-
-  const canApply =
-    typingMatches && !ddl.previewLoading && !previewStale && !!ddl.previewSql;
   const canPreview = typingMatches;
+  const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  const invalidatePreview = () => {
-    if (ddl.previewSql) {
-      setPreviewStale(true);
-      setShowDdl(false);
-      ddl.cancelPreview();
-    }
-  };
-
-  const handleCascadeChange = (next: boolean) => {
-    setCascade(next);
-    invalidatePreview();
-  };
-
-  const buildRequest = (previewOnly: boolean) => ({
-    connectionId,
-    schema: schemaName,
-    table: tableName,
-    columnName,
-    cascade,
-    previewOnly,
-  });
-
-  const handleShowDdl = async () => {
-    if (showDdl && !previewStale) {
-      setShowDdl(false);
-      return;
-    }
-    setShowDdl(true);
-    setPreviewStale(false);
+  // Sprint 238 — auto-refresh debounced. CASCADE 토글 + typing-confirm
+  // 매치 시 자동으로 preview SQL 을 다시 빌드. Apply 버튼은 stale 게이트
+  // 없이 preview 가 존재하기만 하면 활성화.
+  useEffect(() => {
+    if (!open) return;
     if (!canPreview) return;
-    await ddl.loadPreview(
-      async () => {
-        const result = await tauri.dropColumnRequest(buildRequest(true));
-        return { sql: result.sql };
-      },
-      // Commit closure — re-issue the request with previewOnly:false.
-      () => async () => {
-        await tauri.dropColumnRequest(buildRequest(false));
-      },
-    );
+    const handle = window.setTimeout(() => {
+      void ddl.loadPreview(
+        async () => {
+          const result = await tauri.dropColumnRequest({
+            connectionId,
+            schema: schemaName,
+            table: tableName,
+            columnName,
+            cascade,
+            previewOnly: true,
+          });
+          return { sql: result.sql };
+        },
+        () => async () => {
+          await tauri.dropColumnRequest({
+            connectionId,
+            schema: schemaName,
+            table: tableName,
+            columnName,
+            cascade,
+            previewOnly: false,
+          });
+        },
+      );
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    canPreview,
+    cascade,
+    connectionId,
+    schemaName,
+    tableName,
+    columnName,
+  ]);
+
+  const handleShowDdl = () => {
+    setShowDdl((s) => !s);
   };
 
   const handleApply = async () => {
@@ -208,7 +212,7 @@ export default function DropColumnDialog({
                 <input
                   type="checkbox"
                   checked={cascade}
-                  onChange={(e) => handleCascadeChange(e.target.checked)}
+                  onChange={(e) => setCascade(e.target.checked)}
                   className="rounded border-border"
                   aria-label="CASCADE"
                 />
@@ -220,7 +224,7 @@ export default function DropColumnDialog({
               <button
                 type="button"
                 onClick={handleShowDdl}
-                disabled={!canPreview && !showDdl}
+                // Toggle is always enabled now; the pane shows helpful empty/loading states
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="drop-column-ddl-preview"

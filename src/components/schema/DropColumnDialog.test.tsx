@@ -145,9 +145,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
     });
@@ -166,9 +164,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -177,8 +173,10 @@ describe("DropColumnDialog (Sprint 236)", () => {
     );
   });
 
-  // AC-236-05 — CASCADE toggled on → preview re-fetched with CASCADE.
-  it("[AC-236-05] CASCADE toggle invalidates preview + next Show DDL re-fetches with cascade:true", async () => {
+  // AC-236-05 — CASCADE toggled on → preview auto-refetches with CASCADE.
+  // Sprint 238: 자동 refresh — CASCADE 토글만으로 새 preview 가 fetch 된다
+  // (이전 Sprint 236 의 "Show DDL 재클릭 필요" friction 해소).
+  it("[AC-236-05] CASCADE toggle auto-refetches preview with cascade:true", async () => {
     mockDropColumnRequest
       .mockResolvedValueOnce({
         sql: 'ALTER TABLE "public"."users" DROP COLUMN "email"',
@@ -189,25 +187,19 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
     });
-    // Toggle CASCADE on → invalidates preview.
+    expect(mockDropColumnRequest.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ cascade: false, previewOnly: true }),
+    );
     await act(async () => {
       fireEvent.click(screen.getByLabelText("CASCADE"));
-    });
-    // Click Show DDL again → should re-fetch with cascade:true.
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     });
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalledTimes(2);
     });
-    const secondCall = mockDropColumnRequest.mock.calls[1]?.[0];
-    expect(secondCall).toEqual(
+    expect(mockDropColumnRequest.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({ cascade: true, previewOnly: true }),
     );
   });
@@ -222,9 +214,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
     });
@@ -254,9 +244,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email", onClose, onColumnDropped });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -279,9 +267,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -316,9 +302,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -355,9 +339,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email" });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropColumnRequest).toHaveBeenCalled();
     });
@@ -381,9 +363,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     renderDialog({ columnName: "email", onClose });
     const input = screen.getByLabelText("Type the column name to confirm");
     fireEvent.change(input, { target: { value: "email" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       const errorEls = document.querySelectorAll('[role="alert"]');
       const messages = Array.from(errorEls).map((e) => e.textContent ?? "");

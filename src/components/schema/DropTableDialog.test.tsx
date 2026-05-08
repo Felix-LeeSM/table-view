@@ -144,9 +144,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
@@ -157,9 +155,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -168,8 +164,10 @@ describe("DropTableDialog (Sprint 235)", () => {
     );
   });
 
-  // AC-235-05 — CASCADE toggled on → preview re-fetched with CASCADE.
-  it("[AC-235-05] CASCADE toggle invalidates preview + next Show DDL re-fetches with cascade:true", async () => {
+  // AC-235-05 — CASCADE toggled on → preview auto-refetches with CASCADE.
+  // Sprint 238: 자동 refresh — CASCADE 토글만으로 새 preview 가 fetch 된다
+  // (이전 Sprint 235 의 "Show DDL 재클릭 필요" friction 해소).
+  it("[AC-235-05] CASCADE toggle auto-refetches preview with cascade:true", async () => {
     mockDropTableRequest
       .mockResolvedValueOnce({ sql: 'DROP TABLE "public"."users"' })
       .mockResolvedValueOnce({
@@ -178,25 +176,22 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // 타이핑이 typingMatches=true 로 만들면 자동 fetch (cascade:false) 가
+    // debounce 후 한 번 발생.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
-    // Toggle CASCADE on → invalidates preview.
+    expect(mockDropTableRequest.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ cascade: false, previewOnly: true }),
+    );
+    // CASCADE 토글 → 두 번째 자동 fetch (cascade:true).
     await act(async () => {
       fireEvent.click(screen.getByLabelText("CASCADE"));
-    });
-    // Click Show DDL again → should re-fetch with cascade:true.
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     });
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(2);
     });
-    const secondCall = mockDropTableRequest.mock.calls[1]?.[0];
-    expect(secondCall).toEqual(
+    expect(mockDropTableRequest.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({ cascade: true, previewOnly: true }),
     );
   });
@@ -207,9 +202,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users", onClose });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -231,9 +224,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ schemaName: "public", tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalledTimes(1);
     });
@@ -266,9 +257,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -297,9 +286,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });
@@ -337,9 +324,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     renderDialog({ tableName: "users" });
     const input = screen.getByLabelText("Type the table name to confirm");
     fireEvent.change(input, { target: { value: "users" } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockDropTableRequest).toHaveBeenCalled();
     });

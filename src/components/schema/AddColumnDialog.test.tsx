@@ -204,9 +204,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
         target: { value: "varchar(255)" },
       });
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockAddColumnRequest).toHaveBeenCalledTimes(1);
     });
@@ -237,9 +235,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
       });
       fireEvent.click(screen.getByLabelText("NOT NULL"));
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockAddColumnRequest).toHaveBeenCalled();
     });
@@ -264,9 +260,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
         target: { value: "'O'Brien'" },
       });
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockAddColumnRequest).toHaveBeenCalled();
     });
@@ -291,9 +285,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
         target: { value: "age >= 0" },
       });
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockAddColumnRequest).toHaveBeenCalled();
     });
@@ -315,9 +307,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
         target: { value: "varchar(255)" },
       });
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockAddColumnRequest).toHaveBeenCalledTimes(1);
     });
@@ -359,9 +349,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
         target: { value: "age >= 0" },
       });
     });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockAddColumnRequest).toHaveBeenCalled();
     });

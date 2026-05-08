@@ -30,6 +30,10 @@ import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
  *     pre-check; the backend stays permissive but the modal saves the
  *     pointless round-trip).
  *
+ * Sprint 238 — preview pane updates live (debounced) while the user
+ * types; the pane no longer auto-collapses on form edit and Apply no
+ * longer gates on a stale flag. Show DDL is purely a visibility toggle.
+ *
  * No Safe Mode UX path — `useDdlPreviewExecution` already routes preview
  * SQL through `analyzeStatement` + `useSafeModeGate`; rename SQL emits
  * `ALTER TABLE … RENAME TO …` which the analyzer classifies as `ddl-other`
@@ -76,8 +80,10 @@ export default function RenameTableDialog({
   onClose,
 }: RenameTableDialogProps) {
   const [newName, setNewName] = useState(tableName);
-  const [showDdl, setShowDdl] = useState(false);
-  const [previewStale, setPreviewStale] = useState(false);
+  // Preview pane defaults open — auto-debounced fetch fills it as the
+  // user types. Hiding it by default required an extra click and made
+  // users think the preview was broken.
+  const [showDdl, setShowDdl] = useState(true);
 
   const { renameTable: renameTableMutation } = useSchemaTableMutations();
 
@@ -92,12 +98,11 @@ export default function RenameTableDialog({
 
   // Reset form state whenever the modal (re)opens. The hook's
   // `previewSql` / `previewError` are reset via `cancelPreview` so the
-  // next `Show DDL` click fetches fresh.
+  // auto-refresh effect below fetches fresh.
   useEffect(() => {
     if (open) {
       setNewName(tableName);
-      setShowDdl(false);
-      setPreviewStale(false);
+      setShowDdl(true);
       ddl.cancelPreview();
     }
     // Intentional narrow deps — `tableName` is the seed that drives the
@@ -107,57 +112,50 @@ export default function RenameTableDialog({
 
   const validationError = validateIdentifier(newName);
   const isRenameToSelf = newName === tableName;
-  const canApply =
-    !validationError && !isRenameToSelf && !ddl.previewLoading && !previewStale;
   const canPreview = !validationError && !isRenameToSelf;
+  const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  const invalidatePreview = () => {
-    if (ddl.previewSql) {
-      setPreviewStale(true);
-      setShowDdl(false);
-      ddl.cancelPreview();
-    }
-  };
-
-  const handleNewNameChange = (value: string) => {
-    setNewName(value);
-    invalidatePreview();
-  };
-
-  const buildRequest = (previewOnly: boolean) => ({
-    connectionId,
-    schema: schemaName,
-    table: tableName,
-    newName: newName.trim(),
-    previewOnly,
-  });
-
-  const handleShowDdl = async () => {
-    if (showDdl && !previewStale) {
-      setShowDdl(false);
-      return;
-    }
-    setShowDdl(true);
-    setPreviewStale(false);
+  // Sprint 238 — auto-refresh the preview pane (debounced 250 ms) so
+  // the SQL the user sees stays in sync with the form, and the commit
+  // closure registered with `loadPreview` always reflects the latest
+  // form state. Without this, every keystroke either invalidated and
+  // collapsed the pane (forcing the user to click Show DDL again) or
+  // left a stale closure registered.
+  useEffect(() => {
+    if (!open) return;
     if (!canPreview) return;
-    await ddl.loadPreview(
-      async () => {
-        const result = await tauri.renameTableRequest(buildRequest(true));
-        return { sql: result.sql };
-      },
-      // Commit closure — runs the rename via the Sprint 223 mutation
-      // hook so the schemaStore cache is patched + listTables fallback
-      // path is exercised. The hook's commit closure ignores the
-      // returned SQL string (only the preview pane consumes it).
-      () => async () => {
-        await renameTableMutation(
-          connectionId,
-          tableName,
-          schemaName,
-          newName.trim(),
-        );
-      },
-    );
+    const handle = window.setTimeout(() => {
+      const trimmed = newName.trim();
+      void ddl.loadPreview(
+        async () => {
+          const result = await tauri.renameTableRequest({
+            connectionId,
+            schema: schemaName,
+            table: tableName,
+            newName: trimmed,
+            previewOnly: true,
+          });
+          return { sql: result.sql };
+        },
+        () => async () => {
+          await renameTableMutation(
+            connectionId,
+            tableName,
+            schemaName,
+            trimmed,
+          );
+        },
+      );
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // ddl.loadPreview / renameTableMutation are stable per render but
+    // including them creates noise; keep deps narrow to inputs that
+    // actually drive the SQL.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, canPreview, newName, connectionId, schemaName, tableName]);
+
+  const handleShowDdl = () => {
+    setShowDdl((s) => !s);
   };
 
   const handleApply = async () => {
@@ -206,15 +204,15 @@ export default function RenameTableDialog({
                   id="rename-table-new-name"
                   className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground outline-none focus:border-primary"
                   value={newName}
-                  onChange={(e) => handleNewNameChange(e.target.value)}
+                  onChange={(e) => setNewName(e.target.value)}
                   placeholder="new_table_name"
                   aria-label="New table name"
                   autoFocus
                   onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter" && canApply) {
                       e.preventDefault();
-                      void handleShowDdl();
+                      void handleApply();
                     }
                   }}
                 />
@@ -234,7 +232,7 @@ export default function RenameTableDialog({
               <button
                 type="button"
                 onClick={handleShowDdl}
-                disabled={!canPreview && !showDdl}
+                // Toggle is always enabled now; the pane shows helpful empty/loading states
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="rename-table-ddl-preview"

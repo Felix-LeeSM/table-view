@@ -69,8 +69,10 @@ export default function DropTableDialog({
 }: DropTableDialogProps) {
   const [typingConfirm, setTypingConfirm] = useState("");
   const [cascade, setCascade] = useState(false);
-  const [showDdl, setShowDdl] = useState(false);
-  const [previewStale, setPreviewStale] = useState(false);
+  // Preview pane defaults open — auto-debounced fetch fills it as the
+  // user types. Hiding it by default required an extra click and made
+  // users think the preview was broken.
+  const [showDdl, setShowDdl] = useState(true);
 
   const { dropTable: dropTableMutation } = useSchemaTableMutations();
 
@@ -86,8 +88,7 @@ export default function DropTableDialog({
     if (open) {
       setTypingConfirm("");
       setCascade(false);
-      setShowDdl(false);
-      setPreviewStale(false);
+      setShowDdl(true);
       ddl.cancelPreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,52 +97,38 @@ export default function DropTableDialog({
   // Sprint 235 — typing-confirm match is case-sensitive byte-for-byte.
   // No trim, no debounce — every keystroke re-evaluates.
   const typingMatches = typingConfirm === tableName;
-
-  const canApply =
-    typingMatches && !ddl.previewLoading && !previewStale && !!ddl.previewSql;
   const canPreview = typingMatches;
+  const canApply = canPreview && !ddl.previewLoading && !!ddl.previewSql;
 
-  const invalidatePreview = () => {
-    if (ddl.previewSql) {
-      setPreviewStale(true);
-      setShowDdl(false);
-      ddl.cancelPreview();
-    }
-  };
-
-  const handleCascadeChange = (next: boolean) => {
-    setCascade(next);
-    invalidatePreview();
-  };
-
-  const buildRequest = (previewOnly: boolean) => ({
-    connectionId,
-    schema: schemaName,
-    table: tableName,
-    cascade,
-    previewOnly,
-  });
-
-  const handleShowDdl = async () => {
-    if (showDdl && !previewStale) {
-      setShowDdl(false);
-      return;
-    }
-    setShowDdl(true);
-    setPreviewStale(false);
+  // Sprint 238 — auto-refresh the preview pane on every form edit so
+  // Apply stays enabled and the registered commit closure reflects the
+  // latest CASCADE choice. The pane no longer auto-collapses.
+  useEffect(() => {
+    if (!open) return;
     if (!canPreview) return;
-    await ddl.loadPreview(
-      async () => {
-        const result = await tauri.dropTableRequest(buildRequest(true));
-        return { sql: result.sql };
-      },
-      // Commit closure — runs the drop via the Sprint 223 mutation hook
-      // so the schemaStore cache evicts + listTables fallback patches
-      // the deleted row optimistically.
-      () => async () => {
-        await dropTableMutation(connectionId, tableName, schemaName);
-      },
-    );
+    const handle = window.setTimeout(() => {
+      void ddl.loadPreview(
+        async () => {
+          const result = await tauri.dropTableRequest({
+            connectionId,
+            schema: schemaName,
+            table: tableName,
+            cascade,
+            previewOnly: true,
+          });
+          return { sql: result.sql };
+        },
+        () => async () => {
+          await dropTableMutation(connectionId, tableName, schemaName);
+        },
+      );
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, canPreview, cascade, connectionId, schemaName, tableName]);
+
+  const handleShowDdl = () => {
+    setShowDdl((s) => !s);
   };
 
   const handleApply = async () => {
@@ -203,7 +190,7 @@ export default function DropTableDialog({
                 <input
                   type="checkbox"
                   checked={cascade}
-                  onChange={(e) => handleCascadeChange(e.target.checked)}
+                  onChange={(e) => setCascade(e.target.checked)}
                   className="rounded border-border"
                   aria-label="CASCADE"
                 />
@@ -215,7 +202,7 @@ export default function DropTableDialog({
               <button
                 type="button"
                 onClick={handleShowDdl}
-                disabled={!canPreview && !showDdl}
+                // Toggle is always enabled now; the pane shows helpful empty/loading states
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="drop-table-ddl-preview"
