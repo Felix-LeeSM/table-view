@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import DataGridToolbar from "./DataGridToolbar";
+import DataGridToolbar, { type DataGridToolbarProps } from "./DataGridToolbar";
 import type { SortInfo, TableData } from "@/types/schema";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
 
@@ -65,7 +65,7 @@ const defaultProps = {
   onDuplicateRow: vi.fn(),
 };
 
-function renderToolbar(overrides: Partial<typeof defaultProps> = {}) {
+function renderToolbar(overrides: Partial<DataGridToolbarProps> = {}) {
   return render(<DataGridToolbar {...defaultProps} {...overrides} />);
 }
 
@@ -144,6 +144,54 @@ describe("DataGridToolbar — Sprint 98 commit flashing", () => {
     // attributes (they change between major versions).
     const spinner = container.querySelector(".animate-spin");
     expect(spinner).not.toBeNull();
+  });
+});
+
+// Sprint 249 (ADR 0022 Phase 5) — Toolbar Undo button. Maps to
+// AC-249-T1..T3 from `docs/sprints/sprint-249/contract.md`. The button
+// is a discoverability surface for users who don't know the Cmd+Z
+// binding wired in DataGrid. Date 2026-05-09.
+describe("DataGridToolbar — Sprint 249 Undo button (AC-249-T1..T3)", () => {
+  it("[AC-249-T1] canUndo=true → Undo button is enabled", () => {
+    const onUndo = vi.fn();
+    renderToolbar({ onUndo, canUndo: true });
+    const btn = screen.getByRole("button", {
+      name: "Undo last pending change",
+    });
+    expect(btn).toBeInTheDocument();
+    expect(btn).not.toBeDisabled();
+  });
+
+  it("[AC-249-T2] canUndo=false → Undo button is disabled", () => {
+    const onUndo = vi.fn();
+    renderToolbar({ onUndo, canUndo: false });
+    const btn = screen.getByRole("button", {
+      name: "Undo last pending change",
+    });
+    expect(btn).toBeDisabled();
+  });
+
+  it("[AC-249-T3] click → onUndo is called once", () => {
+    const onUndo = vi.fn();
+    renderToolbar({ onUndo, canUndo: true });
+    const btn = screen.getByRole("button", {
+      name: "Undo last pending change",
+    });
+
+    fireEvent.click(btn);
+
+    expect(onUndo).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render the Undo button when onUndo is not provided", () => {
+    // Document grid path: it doesn't yet wire pending undo. Without
+    // an `onUndo` prop the button is intentionally absent so that
+    // `canUndo` from the editState (which reflects RDB-style state)
+    // can't bleed a non-functional button into the document toolbar.
+    renderToolbar();
+    expect(
+      screen.queryByRole("button", { name: "Undo last pending change" }),
+    ).not.toBeInTheDocument();
   });
 });
 

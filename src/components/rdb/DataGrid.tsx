@@ -274,6 +274,44 @@ export default function DataGrid({
     return () => window.removeEventListener("refresh-data", handler);
   }, [cancelEdit]);
 
+  // Sprint 249 (ADR 0022 Phase 5) — Cmd+Z (macOS) / Ctrl+Z (Win/Linux)
+  // pending-undo. Active only while DataGrid is mounted; defers to the
+  // browser's native text-editor undo whenever an INPUT / TEXTAREA /
+  // contenteditable element holds focus (so editing a cell value still
+  // gets the OS-level undo). Cmd+Shift+Z is intentionally untouched
+  // here — Phase 5 is undo-only and Shift+Cmd+Z stays available for a
+  // future redo without colliding.
+  const { undo: undoPending, canUndo } = editState;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        !(
+          (e.metaKey || e.ctrlKey) &&
+          e.key.toLowerCase() === "z" &&
+          !e.shiftKey
+        )
+      ) {
+        return;
+      }
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        // Browser native undo wins for text editors — our pending-undo
+        // only applies once the cell editor has been dismissed.
+        return;
+      }
+      if (!canUndo) return;
+      e.preventDefault();
+      undoPending();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [canUndo, undoPending]);
+
   const handleSort = (columnName: string, shiftKey: boolean = false) => {
     if (shiftKey) {
       setSorts((prev) => {
@@ -406,6 +444,8 @@ export default function DataGrid({
         onAddRow={editState.handleAddRow}
         onDeleteRow={editState.handleDeleteRow}
         onDuplicateRow={editState.handleDuplicateRow}
+        onUndo={editState.undo}
+        canUndo={editState.canUndo}
       />
 
       {/* Filter bar */}

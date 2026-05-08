@@ -11,6 +11,7 @@ import {
   Copy,
   Filter,
   Eye,
+  Undo2,
 } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
 import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
@@ -85,6 +86,16 @@ export interface DataGridToolbarProps {
   onAddRow: () => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
+  /**
+   * Sprint 249 (ADR 0022 Phase 5) — pending-edit undo. The Toolbar
+   * surfaces a small Undo button when `canUndo` is true so users who
+   * don't know Cmd+Z can still recover from a mis-Add / mis-Delete /
+   * accidental cell change before commit. Callers that don't yet wire
+   * the action default the prop to a noop + `canUndo=false` so the
+   * button stays disabled (existing DocumentDataGrid path).
+   */
+  onUndo?: () => void;
+  canUndo?: boolean;
 }
 
 export default function DataGridToolbar({
@@ -119,6 +130,8 @@ export default function DataGridToolbar({
   onAddRow,
   onDeleteRow,
   onDuplicateRow,
+  onUndo,
+  canUndo = false,
 }: DataGridToolbarProps) {
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
@@ -182,6 +195,22 @@ export default function DataGridToolbar({
                   Discard
                 </Button>
               </>
+            )}
+            {onUndo && (
+              // Sprint 249 (ADR 0022 Phase 5) — discoverable Undo for users
+              // who don't know the Cmd+Z binding. Disabled when the undo
+              // stack is empty so a click never silently no-ops.
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={onUndo}
+                disabled={!canUndo}
+                aria-label="Undo last pending change"
+                title="Undo (Cmd+Z) — pending changes only"
+              >
+                <Undo2 />
+                Undo
+              </Button>
             )}
           </>
         ) : (

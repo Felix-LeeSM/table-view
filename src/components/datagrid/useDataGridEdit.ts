@@ -232,6 +232,29 @@ export interface CommitError {
   failedKey?: string;
 }
 
+/**
+ * Snapshot of the three pending-state slices captured **before** a mutating
+ * handler applies its change. Stored on `undoStack` (ADR 0022 Phase 5,
+ * Sprint 249) so the user can step a `Cmd+Z` (or toolbar Undo) back to
+ * the prior pending shape without going to the DB. Deep-cloned at push
+ * time — the snapshot never aliases live state.
+ */
+export type EditSnapshot = {
+  pendingEdits: ReadonlyMap<string, string | null>;
+  pendingNewRows: ReadonlyArray<unknown[]>;
+  pendingDeletedRowKeys: ReadonlySet<string>;
+};
+
+/**
+ * Maximum number of snapshots retained on the undo stack. 50 is
+ * intentionally conservative — TablePlus / DBeaver hover around ~100 but
+ * for an embedded grid 50 is plenty (a typical session rarely exceeds
+ * 10-20 distinct mutations before a commit / discard) and keeps the
+ * memory ceiling bounded for `pendingNewRows` / `pendingEdits` deep
+ * clones. Older entries are FIFO-dropped via `shift()`.
+ */
+export const UNDO_STACK_MAX = 50;
+
 export interface DataGridEditState {
   // Cell editing
   editingCell: { row: number; col: number } | null;
@@ -325,6 +348,18 @@ export interface DataGridEditState {
   handleAddRow: () => void;
   handleDeleteRow: () => void;
   handleDuplicateRow: () => void;
+
+  /**
+   * Pop the most recent {@link EditSnapshot} off the undo stack and
+   * restore `pendingEdits` / `pendingNewRows` / `pendingDeletedRowKeys`
+   * to that state. No-op when the stack is empty (canUndo=false).
+   *
+   * Pending range only — commit-time DML is the durable boundary;
+   * once committed the user cannot Cmd+Z. ADR 0022 Phase 5 (Sprint 249).
+   */
+  undo: () => void;
+  /** True when there is at least one snapshot to restore. */
+  canUndo: boolean;
 }
 
 export function useDataGridEdit({
@@ -361,6 +396,13 @@ export function useDataGridEdit({
     Set<string>
   >(new Set());
 
+  // Sprint 249 (ADR 0022 Phase 5) — undo stack for pending-state mutations.
+  // Captures a deep snapshot of the three pending slices at the moment a
+  // mutating handler runs; `undo()` LIFO-restores. Capped at
+  // `UNDO_STACK_MAX` entries to bound memory; `clearAllPending` empties
+  // the stack so commit / discard correctly orphan history.
+  const [undoStack, setUndoStack] = useState<EditSnapshot[]>([]);
+
   // Multi-row selection lives in `useDataGridSelection` so the facade
   // stays paradigm-agnostic.
   const {
@@ -392,10 +434,56 @@ export function useDataGridEdit({
     setPendingEditErrors(new Map());
     setPendingNewRows([]);
     setPendingDeletedRowKeys(new Set());
+    // Sprint 249: commit success / explicit discard tear down history —
+    // a Cmd+Z after commit must NOT resurrect the prior pending state
+    // (the DB is the new baseline) and discard is itself a "fresh slate"
+    // user gesture.
+    setUndoStack([]);
     clearSelection();
     setEditingCell(null);
     setEditValue("");
   }, [clearSelection]);
+
+  /**
+   * Push a deep-copied snapshot of the current pending slices onto the
+   * undo stack, dropping the oldest entry when over `UNDO_STACK_MAX`.
+   *
+   * Callers must invoke this BEFORE applying their mutation (so the
+   * snapshot reflects the pre-mutation state). For no-op mutations
+   * (`saveCurrentEdit` where `applyEditOrClear` returns the same map),
+   * callers must skip this so a phantom no-op doesn't pollute the stack.
+   */
+  const pushSnapshot = useCallback(() => {
+    setUndoStack((prev) => {
+      const snap: EditSnapshot = {
+        // Deep-copy: pendingEdits / pendingNewRows / pendingDeletedRowKeys
+        // are referentially-shared with React state; we must clone so a
+        // later mutation cannot retroactively edit our snapshot.
+        pendingEdits: new Map(pendingEdits),
+        pendingNewRows: pendingNewRows.map((row) => [...row]),
+        pendingDeletedRowKeys: new Set(pendingDeletedRowKeys),
+      };
+      const next = [...prev, snap];
+      if (next.length > UNDO_STACK_MAX) next.shift();
+      return next;
+    });
+  }, [pendingEdits, pendingNewRows, pendingDeletedRowKeys]);
+
+  const undo = useCallback(() => {
+    setUndoStack((prevStack) => {
+      if (prevStack.length === 0) return prevStack;
+      const last = prevStack[prevStack.length - 1]!;
+      // LIFO restore — clone again on read so external mutation of the
+      // restored Map/Array/Set doesn't bleed back into snapshots that
+      // remain on the stack from earlier pushes.
+      setPendingEdits(new Map(last.pendingEdits));
+      setPendingNewRows(last.pendingNewRows.map((row) => [...row]));
+      setPendingDeletedRowKeys(new Set(last.pendingDeletedRowKeys));
+      return prevStack.slice(0, -1);
+    });
+  }, []);
+
+  const canUndo = undoStack.length > 0;
 
   const {
     sqlPreview,
@@ -443,12 +531,19 @@ export function useDataGridEdit({
     const key = editKey(editingCell.row, editingCell.col);
     const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
     const originalValue = cellToEditValue(originalCell);
-    setPendingEdits((prev) =>
-      applyEditOrClear(prev, key, editValue, originalValue),
-    );
+    // Sprint 249: snapshot only when the edit actually changes
+    // pendingEdits — `applyEditOrClear` returns the same Map identity
+    // for no-ops (open editor + close without typing, or revert to
+    // original). We compute the resolved next map up-front so the
+    // pre-mutation snapshot lines up with the actual state change.
+    const next = applyEditOrClear(pendingEdits, key, editValue, originalValue);
+    if (next !== pendingEdits) {
+      pushSnapshot();
+      setPendingEdits(next);
+    }
     setEditingCell(null);
     setEditValue("");
-  }, [editingCell, editValue, data]);
+  }, [editingCell, editValue, data, pendingEdits, pushSnapshot]);
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
@@ -494,16 +589,33 @@ export function useDataGridEdit({
         const key = editKey(editingCell.row, editingCell.col);
         const originalCell = data?.rows[editingCell.row]?.[editingCell.col];
         const originalValue = cellToEditValue(originalCell);
-        setPendingEdits((prev) =>
-          applyEditOrClear(prev, key, editValue, originalValue),
+        // Sprint 249: same no-op skip rule as `saveCurrentEdit` — only
+        // snapshot when this auto-save path actually shifts pendingEdits.
+        const next = applyEditOrClear(
+          pendingEdits,
+          key,
+          editValue,
+          originalValue,
         );
+        if (next !== pendingEdits) {
+          pushSnapshot();
+          setPendingEdits(next);
+        }
       }
       setEditingCell({ row: rowIdx, col: colIdx });
       setEditValue(currentValue);
       // Promote preview tab on inline edit start
       if (activeTabId) promoteTab(activeTabId);
     },
-    [editingCell, editValue, data, activeTabId, promoteTab],
+    [
+      editingCell,
+      editValue,
+      data,
+      activeTabId,
+      promoteTab,
+      pendingEdits,
+      pushSnapshot,
+    ],
   );
 
   // The handlers (handleCommit / handleExecuteCommit / dispatchMqlCommand
@@ -519,14 +631,19 @@ export function useDataGridEdit({
 
   const handleAddRow = useCallback(() => {
     if (!data) return;
+    // Sprint 249: deliberate user action — always snapshot.
+    pushSnapshot();
     const emptyRow = data.columns.map(() => null);
     setPendingNewRows((prev) => [...prev, emptyRow]);
     // Promote preview tab on row add
     if (activeTabId) promoteTab(activeTabId);
-  }, [data, activeTabId, promoteTab]);
+  }, [data, activeTabId, promoteTab, pushSnapshot]);
 
   const handleDeleteRow = useCallback(() => {
     if (selectedRowIds.size === 0) return;
+    // Sprint 249: snapshot AFTER the empty-selection guard so a no-op
+    // delete (no rows selected) doesn't pollute the stack.
+    pushSnapshot();
     setPendingDeletedRowKeys((prev) => {
       const next = new Set(prev);
       selectedRowIds.forEach((rowIdx) => {
@@ -538,10 +655,19 @@ export function useDataGridEdit({
     clearSelection();
     // Promote preview tab on row delete
     if (activeTabId) promoteTab(activeTabId);
-  }, [selectedRowIds, page, activeTabId, promoteTab, clearSelection]);
+  }, [
+    selectedRowIds,
+    page,
+    activeTabId,
+    promoteTab,
+    clearSelection,
+    pushSnapshot,
+  ]);
 
   const handleDuplicateRow = useCallback(() => {
     if (!data || selectedRowIds.size === 0) return;
+    // Sprint 249: same guard-then-snapshot ordering as `handleDeleteRow`.
+    pushSnapshot();
     const sortedIds = [...selectedRowIds].sort((a, b) => a - b);
     const newRows = sortedIds.map((rowIdx) => {
       const row = data.rows[rowIdx];
@@ -550,7 +676,14 @@ export function useDataGridEdit({
     setPendingNewRows((prev) => [...prev, ...newRows]);
     clearSelection();
     if (activeTabId) promoteTab(activeTabId);
-  }, [data, selectedRowIds, activeTabId, promoteTab, clearSelection]);
+  }, [
+    data,
+    selectedRowIds,
+    activeTabId,
+    promoteTab,
+    clearSelection,
+    pushSnapshot,
+  ]);
 
   const hasPendingChanges =
     pendingEdits.size > 0 ||
@@ -670,5 +803,7 @@ export function useDataGridEdit({
     handleAddRow,
     handleDeleteRow,
     handleDuplicateRow,
+    undo,
+    canUndo,
   };
 }

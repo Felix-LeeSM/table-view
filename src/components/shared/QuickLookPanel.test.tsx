@@ -44,6 +44,8 @@ function makeEditState(
     handleAddRow: vi.fn(),
     handleDeleteRow: vi.fn(),
     handleDuplicateRow: vi.fn(),
+    undo: vi.fn(),
+    canUndo: false,
     ...overrides,
   };
 }
