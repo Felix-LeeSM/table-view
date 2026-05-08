@@ -1,0 +1,106 @@
+# cargo-deny 설정 — license / vulnerability / banned crate 게이트.
+#
+# 정책 요지:
+#   - licenses: 잘 알려진 OSS 라이선스만 허용. 모호하거나 source-available 라이선스는
+#     명시적으로 추가하기 전까지 deny.
+#   - advisories: 알려진 CVE 는 deny. unmaintained / unsound 는 warn (수동 검토 후
+#     ignore 항목에 추가하거나 의존성 교체).
+#   - bans: 중복 의존성은 warn (Tauri/Tokio 생태계는 minor-version drift 가
+#     불가피). 위험 crate 는 deny 리스트에 추가.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "warn"
+# 정책: ignore 항목은 모두 (a) 우리가 직접 갈아끼울 수 없는 transitive 의존성이고,
+# (b) upstream 에 fix 가 도달하기를 기다리는 상태. 매 항목 옆에 검토일을 명시 —
+# 6개월 경과 시 일괄 재검토 (해소된 advisory 는 즉시 제거).
+# 직접 의존성에 unmaintained 가 발생하면 ignore 하지 말고 대체 crate 로 이주.
+ignore = [
+  # ── Tauri / Wry 생태계: GTK3 bindings (Linux 백엔드) ──────────────────
+  # 경로: tauri-runtime-wry → wry → webkit2gtk-sys → gdkx11-sys → gtk-sys 등.
+  # tauri 2.x 가 gtk-rs 4.x 로 이주하기 전까지 해소 불가. 우리는 macOS 가
+  # 1차 타겟이라 실 경로상 dead code 비중이 큼.
+  "RUSTSEC-2024-0411", # gtk crate
+  "RUSTSEC-2024-0412", # gtk-sys
+  "RUSTSEC-2024-0413", # gdk
+  "RUSTSEC-2024-0414", # gdk-sys
+  "RUSTSEC-2024-0415", # gdk-pixbuf
+  "RUSTSEC-2024-0416", # gdkx11 / gdkx11-sys
+  "RUSTSEC-2024-0417", # gio
+  "RUSTSEC-2024-0418", # glib
+  "RUSTSEC-2024-0419", # gobject-sys
+  "RUSTSEC-2024-0420", # pango / pango-sys
+  # ── Tauri 생태계: open-i18n/rust-unic ────────────────────────────────
+  # 경로: tauri-utils → urlpattern → unic-ucd-ident → unic-* family.
+  # tauri 가 url-pattern impl 을 다른 곳으로 옮기면 자동 해소.
+  "RUSTSEC-2024-0370", # proc-macro-error (urlpattern → unic 의 macro 부) — 일부 항목과 묶임
+  "RUSTSEC-2025-0075", # unic-char-property
+  "RUSTSEC-2025-0080", # unic-char-range
+  "RUSTSEC-2025-0081", # unic-common
+  "RUSTSEC-2025-0098", # unic-ucd-ident / unic-ucd-version
+  "RUSTSEC-2025-0100", # 추가 unic 군
+  # ── 단발 unmaintained ────────────────────────────────────────────────
+  "RUSTSEC-2025-0057", # fxhash (transitive, 다수 경로)
+  # ── MongoDB driver: hickory-dns CVE 2건 ──────────────────────────────
+  # 경로: mongodb 3.6.0 → hickory-resolver 0.25.2 → hickory-proto 0.25.2.
+  # mongodb 가 hickory-proto 를 ~0.25.2 로 핀해 cargo update 로 해소 불가.
+  # 실 영향: 우리 desktop app 은 hickory 를 *DNS 클라이언트* 로 사용 — 두
+  # CVE 모두 악의적 DNS 응답 처리 시 트리거. 사용자가 임의 MongoDB host 를
+  # 입력해 악의적 resolver 를 통과해야 발현. RISKS.md 의 active 항목으로
+  # 추적 (2026-05-07 등록). mongodb 4.x 또는 hickory-proto 0.25.3+ 채택
+  # 시 즉시 해소.
+  "RUSTSEC-2026-0118", # hickory-proto NSEC3 unbounded loop
+  "RUSTSEC-2026-0119", # hickory-proto O(n²) name compression
+]
+
+[licenses]
+version = 2
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "CC0-1.0",
+  "MPL-2.0",
+  "BSL-1.0",
+  "OpenSSL",
+  # webpki-roots — Mozilla CA 번들. Community Data License Agreement
+  # Permissive 2.0 — 데이터 (CA list) 에 한해 적용되는 OSS 친화 라이선스.
+  # 2026-05-07 검토.
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.8
+
+# 우리 crate 는 `publish = false` 이므로 자체 license 표기 의무 없음.
+# 하위 테이블로 분리해야 cargo-deny 0.19.x 가 인식한다 (inline `private = {…}`
+# 형태는 일부 버전에서 schema 적용이 누락됨).
+[licenses.private]
+ignore = true
+
+[[licenses.exceptions]]
+# ring 은 다중 라이선스를 OR 로 표현하지 않고 자체 LICENSE 파일을 동봉.
+# 실효는 ISC + MIT + OpenSSL 결합으로 확인되어 있어 예외 처리.
+name = "ring"
+allow = ["LicenseRef-ring"]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

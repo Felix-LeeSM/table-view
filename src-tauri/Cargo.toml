@@ -3,6 +3,9 @@ name = "table-view"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.91.0"
+# 데스크톱 앱 — crates.io 에 publish 되지 않음. 표식이 있어야 cargo deny 가
+# `[licenses.private]` 규칙으로 우리 crate 의 license 검사를 건너뛴다.
+publish = false
 
 [lib]
 name = "table_view_lib"
@@ -34,7 +37,6 @@ zeroize = { version = "1", features = ["derive"] }
 bip39 = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
 thiserror = "2"
-anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
