@@ -165,14 +165,22 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/Safe Mode blocked/);
   });
 
-  it("[AC-185-05b] production + strict + safe DML → passes through to executeQueryBatch", async () => {
+  it("[AC-244-09] production + strict + safe DML (UPDATE WHERE pk) → blocked (read-only)", async () => {
+    // Sprint 244 (2026-05-08) — was AC-185-05b "passes through". The
+    // user reported raw `UPDATE...WHERE id = 1` running under strict.
+    // The gate now treats strict on production as read-only — even
+    // analyzer-safe writes block. The DataGrid's `useSafeModeReadOnly`
+    // gate (Sprint 243) already enforced this; the lib decision matrix
+    // now matches.
     setup("production", "strict");
     await openPreviewAndExecute([
       "UPDATE users SET name = 'Alicia' WHERE id = 1",
     ]);
 
-    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    expect(mockToastError).not.toHaveBeenCalled();
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith(
+      expect.stringMatching(/Safe Mode blocked.*UPDATE statement/),
+    );
   });
 
   it("[AC-185-05c] non-production + strict + WHERE-less DELETE → passes (env-gated)", async () => {

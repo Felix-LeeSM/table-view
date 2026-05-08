@@ -79,6 +79,124 @@ describe("decideSafeModeAction", () => {
     });
   });
 
+  // Sprint 244 — read-only policy on production+strict/off. The user
+  // reported (2026-05-08) that raw `UPDATE ... WHERE id = 1` and
+  // `INSERT INTO ...` still ran under strict because the analyzer marks
+  // them severity=safe (mass-mutation risk only). Strict on production
+  // means "no writes at all" — same policy as the DataGrid's
+  // `useSafeModeReadOnly` gate. Block on kind, not on severity, when
+  // mode is strict/off.
+  it("[AC-244-01] production × strict + UPDATE WHERE pk (safe-severity) → block", () => {
+    const update: StatementAnalysis = {
+      kind: "update",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("strict", "production", update)).toEqual({
+      action: "block",
+      reason:
+        "Safe Mode blocked: UPDATE statement (toggle Safe Mode off in toolbar to override)",
+    });
+  });
+
+  it("[AC-244-02] production × strict + INSERT (safe-severity) → block", () => {
+    const insert: StatementAnalysis = {
+      kind: "insert",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("strict", "production", insert)).toEqual({
+      action: "block",
+      reason:
+        "Safe Mode blocked: INSERT statement (toggle Safe Mode off in toolbar to override)",
+    });
+  });
+
+  it("[AC-244-03] production × strict + DELETE WHERE pk (safe-severity) → block", () => {
+    const del: StatementAnalysis = {
+      kind: "delete",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("strict", "production", del)).toEqual({
+      action: "block",
+      reason:
+        "Safe Mode blocked: DELETE statement (toggle Safe Mode off in toolbar to override)",
+    });
+  });
+
+  it("[AC-244-04] production × strict + CREATE TABLE (ddl-other safe) → block", () => {
+    const create: StatementAnalysis = {
+      kind: "ddl-other",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("strict", "production", create)).toEqual({
+      action: "block",
+      reason:
+        "Safe Mode blocked: DDL-OTHER statement (toggle Safe Mode off in toolbar to override)",
+    });
+  });
+
+  it("[AC-244-05] production × off + INSERT (safe-severity) → block (prod-auto)", () => {
+    // off collapses to strict on production — the toolbar can't bypass
+    // the read-only policy either; the override hint points at the
+    // connection environment tag.
+    const insert: StatementAnalysis = {
+      kind: "insert",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("off", "production", insert)).toEqual({
+      action: "block",
+      reason:
+        "Safe Mode blocked: INSERT statement (production environment forces Safe Mode — change connection environment tag to override)",
+    });
+  });
+
+  it("[AC-244-06] production × warn + INSERT (safe-severity) → allow (warn keeps existing severity-driven policy)", () => {
+    // warn deliberately stays friction-free for write-with-WHERE / INSERT;
+    // only analyzer-flagged danger (DELETE without WHERE, $out, etc.)
+    // raises a confirm. The Sprint 244 read-only tightening is strict-
+    // only — warn users opted out.
+    const insert: StatementAnalysis = {
+      kind: "insert",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("warn", "production", insert)).toEqual({
+      action: "allow",
+    });
+  });
+
+  it("[AC-244-07] production × strict + Mongo read pipeline (mongo-other safe) → allow", () => {
+    // Mongo read aggregates aren't SQL writes and aren't danger, so
+    // strict still allows them. Mongo writes ($out/$merge/delete-all)
+    // are caught via severity=danger by the analyzer, so they fall into
+    // the existing danger branch.
+    const mongoRead: StatementAnalysis = {
+      kind: "mongo-other",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("strict", "production", mongoRead)).toEqual({
+      action: "allow",
+    });
+  });
+
+  it("[AC-244-08] non-production + strict + INSERT → allow (non-prod bypass)", () => {
+    // Sprint 244 read-only policy applies only on production. Staging /
+    // dev / local are unaffected so dev workflows aren't disrupted.
+    const insert: StatementAnalysis = {
+      kind: "insert",
+      severity: "safe",
+      reasons: [],
+    };
+    expect(decideSafeModeAction("strict", "staging", insert)).toEqual({
+      action: "allow",
+    });
+  });
+
   it("[AC-189-06a-7] danger with empty reasons → block uses fallback text", () => {
     // Defensive: danger severity should always carry at least one reason
     // string, but if the analyzer ever returns an empty array we still

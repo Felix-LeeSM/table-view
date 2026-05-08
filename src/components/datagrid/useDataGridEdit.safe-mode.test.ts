@@ -120,7 +120,11 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
     );
   });
 
-  it("[AC-185-04b] production + strict + safe DML → passes through to executeQueryBatch", async () => {
+  it("[AC-244-10] production + strict + safe DML (DELETE WHERE pk) → blocked (read-only)", async () => {
+    // Sprint 244 (2026-05-08) — was AC-185-04b "passes through". Strict
+    // on production is now a read-only gate at the lib decision layer
+    // (matches the DataGrid's `useSafeModeReadOnly` toolbar gate from
+    // Sprint 243). Even analyzer-safe writes block.
     const { result } = renderHookFor("production", "strict");
 
     act(() => {
@@ -131,8 +135,10 @@ describe("useDataGridEdit — Sprint 185 Safe Mode gate", () => {
       await result.current.handleExecuteCommit();
     });
 
-    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
-    expect(result.current.commitError).toBeNull();
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+    expect(result.current.commitError).not.toBeNull();
+    expect(result.current.commitError!.message).toMatch(/Safe Mode blocked/);
+    expect(result.current.commitError!.message).toMatch(/DELETE statement/);
   });
 
   it("[AC-185-04c] non-production + strict + WHERE-less DELETE → passes (env-gated)", async () => {
