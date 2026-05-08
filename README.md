@@ -41,14 +41,26 @@ Phase 1–12 완료, Phase 13–27 진행 중. **TablePlus 패리티 7단계 (Ph
 
 준비물:
 
-- Node.js `22.14.0`
-- pnpm `10.20.0`
-- Rust `1.91.0`
+- [mise](https://mise.jdx.dev/) (권장) 또는 asdf — `.tool-versions` 기반 런타임 관리
 - OS별 Tauri 2 시스템 의존성
 
-버전 기준은 [`.tool-versions`](./.tool-versions)입니다.
+버전 기준은 [`.tool-versions`](./.tool-versions)입니다 (Node.js, pnpm, Rust, lefthook, direnv).
 
-의존성 설치:
+신규 클론 후 셋업 (런타임 + cargo 보조 도구 + git hook 활성화):
+
+```bash
+bash scripts/setup.sh
+```
+
+`scripts/setup.sh` 가 하는 일:
+
+1. mise (또는 asdf) 로 `.tool-versions` 의 모든 런타임 설치
+2. `cargo-binstall` 부트스트랩 후 `cargo-llvm-cov`, `cargo-deny`, `cargo-machete` 설치
+3. `rustup component add llvm-tools-preview` (coverage 의존)
+4. `git config core.hooksPath .githooks` (lefthook hook 활성화)
+5. `pnpm install`
+
+이미 셋업된 환경에서 의존성만 갱신하려면:
 
 ```bash
 pnpm install
