@@ -23,11 +23,7 @@ use crate::commands::connection::AppState;
 use crate::db::{DocumentQueryResult, FindBody};
 use crate::error::AppError;
 
-use super::{register_cancel_token, release_cancel_token};
-
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
-}
+use super::{not_connected, register_cancel_token, release_cancel_token};
 
 async fn find_documents_inner(
     state: &AppState,
@@ -156,24 +152,7 @@ mod tests {
     //! 추출했으니 테스트도 그것을 직접 호출. 시나리오: NotFound /
     //! Unsupported(document) / 트레이트 위임 / cancel-token release.
     use super::*;
-    use crate::db::testing::{StubDocumentAdapter, StubRdbAdapter};
-    use crate::db::ActiveAdapter;
-
-    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
-        let s = AppState::new();
-        {
-            let mut conns = s.active_connections.lock().await;
-            conns.insert(id.to_string(), active);
-        }
-        s
-    }
-
-    fn document_default() -> ActiveAdapter {
-        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
-    }
-    fn rdb_default() -> ActiveAdapter {
-        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
-    }
+    use crate::commands::test_util::{document_default, rdb_default, state_with};
 
     // ── find_documents ──────────────────────────────────────────────────
 

@@ -19,42 +19,15 @@
 //!     `update_document`, `delete_document`). Sprint 86 (F-2) will wire the
 //!     frontend `mqlGenerator.ts` + `useDataGridEdit` paradigm dispatch, and
 //!     Sprint 87 (F-3) will complete the inline-edit UI + AddDocumentModal.
+//!
+//! Sprint 237 P5+ (2026-05-08) — `register_cancel_token` /
+//! `release_cancel_token` helpers were hoisted to `commands/mod.rs` (twin
+//! copy with `commands/rdb/mod.rs` collapsed). sub-files 의
+//! `use super::{register_cancel_token, release_cancel_token}` 호환을 위해
+//! re-export 만 둔다.
 
 pub mod browse;
 pub mod mutate;
 pub mod query;
 
-use tokio_util::sync::CancellationToken;
-
-use crate::commands::connection::AppState;
-
-/// Sprint 180 (AC-180-04) — cancel-token registration helper, mirrors
-/// the RDB schema-command shape so the document and RDB paths share the
-/// same lifecycle on `state.query_tokens`.
-///
-/// Sprint 237 P5 (2026-05-08) — hoisted from per-file copies in
-/// `browse.rs` and `query.rs` so handler bodies can be extracted into
-/// `_inner(&AppState)` shape and unit-tested without `tauri::State`.
-pub(super) async fn register_cancel_token(
-    state: &AppState,
-    query_id: Option<&str>,
-) -> Option<(String, CancellationToken)> {
-    let qid = query_id?.to_string();
-    let token = CancellationToken::new();
-    let stored = token.clone();
-    {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.insert(qid.clone(), stored);
-    }
-    Some((qid, token))
-}
-
-pub(super) async fn release_cancel_token(
-    state: &AppState,
-    cancel_handle: &Option<(String, CancellationToken)>,
-) {
-    if let Some((qid, _)) = cancel_handle {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(qid);
-    }
-}
+pub(super) use crate::commands::{not_connected, register_cancel_token, release_cancel_token};

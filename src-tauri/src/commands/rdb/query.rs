@@ -12,7 +12,7 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{FilterCondition, QueryResult, TableData};
 
-use super::{register_cancel_token, release_cancel_token};
+use super::{not_connected, register_cancel_token, release_cancel_token};
 
 /// Validate query execution inputs.
 ///
@@ -38,10 +38,6 @@ pub fn validate_cancel_inputs(query_id: &str) -> Result<(), AppError> {
         return Err(AppError::Validation("Query ID cannot be empty".into()));
     }
     Ok(())
-}
-
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
 }
 
 async fn execute_query_inner(
@@ -398,23 +394,11 @@ mod tests {
     // 의 lifecycle 까지 검증. AppState 는 직접 생성 (Tauri State wrapping 우회).
 
     use crate::commands::connection::AppState;
-    use crate::db::testing::{clone_app_error, StubDocumentAdapter, StubRdbAdapter};
+    use crate::commands::test_util::{document_default, state_with};
+    use crate::db::testing::{clone_app_error, StubRdbAdapter};
     use crate::db::{ActiveAdapter, RdbQueryResult};
     use crate::models::{QueryColumn, QueryType, TableData};
     use tokio_util::sync::CancellationToken;
-
-    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
-        let s = AppState::new();
-        {
-            let mut conns = s.active_connections.lock().await;
-            conns.insert(id.to_string(), active);
-        }
-        s
-    }
-
-    fn document_default() -> ActiveAdapter {
-        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
-    }
 
     // ── execute_query — 5 contract scenarios ─────────────────────────────
 

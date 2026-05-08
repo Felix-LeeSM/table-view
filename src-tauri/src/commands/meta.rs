@@ -15,13 +15,9 @@
 
 use crate::commands::connection::AppState;
 use crate::commands::document::browse::DatabaseInfo;
+use crate::commands::not_connected;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
-
-/// Lookup helper — returns `AppError::NotFound` when the id isn't connected.
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
-}
 
 /// Paradigm-aware database list for the active connection.
 ///

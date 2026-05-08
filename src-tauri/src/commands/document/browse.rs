@@ -18,7 +18,7 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, TableInfo};
 
-use super::{register_cancel_token, release_cancel_token};
+use super::{not_connected, register_cancel_token, release_cancel_token};
 
 /// Wire shape for `list_mongo_databases`. The backend `NamespaceInfo`
 /// already has `{ name: String }` — this alias exists purely so the
@@ -46,11 +46,6 @@ impl From<TableInfo> for CollectionInfo {
             document_count: value.row_count,
         }
     }
-}
-
-/// Lookup helper — returns `AppError::NotFound` when the id isn't connected.
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
 }
 
 async fn list_mongo_databases_inner(
@@ -190,25 +185,9 @@ mod tests {
     //!   3. trait 위임 결과 propagate (Ok/Err)
     //!   4. NamespaceInfo→DatabaseInfo, TableInfo→CollectionInfo 변환 verbatim
     use super::*;
-    use crate::commands::connection::AppState;
-    use crate::db::testing::{clone_app_error, StubDocumentAdapter, StubRdbAdapter};
+    use crate::commands::test_util::{document_default, rdb_default, state_with};
+    use crate::db::testing::{clone_app_error, StubDocumentAdapter};
     use crate::db::{ActiveAdapter, NamespaceInfo};
-
-    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
-        let s = AppState::new();
-        {
-            let mut conns = s.active_connections.lock().await;
-            conns.insert(id.to_string(), active);
-        }
-        s
-    }
-
-    fn document_default() -> ActiveAdapter {
-        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
-    }
-    fn rdb_default() -> ActiveAdapter {
-        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
-    }
 
     // ── list_mongo_databases — 5 scenarios ───────────────────────────────
 

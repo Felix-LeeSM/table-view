@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::commands::connection::AppState;
+use crate::commands::{register_cancel_token, release_cancel_token};
 use crate::db::RdbAdapter;
 use crate::error::AppError;
 
@@ -98,28 +99,16 @@ async fn export_grid_rows_inner(
         "export_grid_rows invoked"
     );
 
-    // Sprint 180 — cooperative cancellation. Hoist registration outside
-    // the `active_connections` lock, identical to the shape used by
-    // `execute_query` and `query_table_data`.
-    let cancel_handle: Option<(String, CancellationToken)> = if let Some(eid) = export_id {
-        let token = CancellationToken::new();
-        let stored = token.clone();
-        {
-            let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(eid.to_string(), stored);
-        }
-        Some((eid.to_string(), token))
-    } else {
-        None
-    };
-
-    let cancel_ref = cancel_handle.as_ref().map(|(_, tok)| tok);
+    // Sprint 180 — cooperative cancellation. Sprint 237 P5+ hoist 이후
+    // commands/mod.rs 의 공통 헬퍼 사용 — `execute_query` /
+    // `query_table_data` 와 동일 lifecycle.
+    let cancel_handle = register_cancel_token(state, export_id).await;
+    let task_token = cancel_handle.as_ref().map(|(_, tok)| tok.clone());
 
     // Run the synchronous file I/O on a blocking thread so the async
     // executor stays responsive. The blocking task captures owned data;
     // the cancellation token is the only shared handle.
     let target_for_task = target_path.clone();
-    let task_token = cancel_ref.cloned();
     let task = tauri::async_runtime::spawn_blocking(move || {
         write_export(
             format,
@@ -139,10 +128,7 @@ async fn export_grid_rows_inner(
         ))),
     };
 
-    if let Some((eid, _)) = cancel_handle {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(&eid);
-    }
+    release_cancel_token(state, &cancel_handle).await;
 
     if let Err(ref e) = result {
         warn!(error = %e, "export_grid_rows failed");
@@ -368,18 +354,8 @@ async fn export_schema_dump_inner(
         "export_schema_dump invoked"
     );
 
-    // 1. cancel registration.
-    let cancel_handle: Option<(String, CancellationToken)> = if let Some(eid) = export_id {
-        let token = CancellationToken::new();
-        let stored = token.clone();
-        {
-            let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(eid.to_string(), stored);
-        }
-        Some((eid.to_string(), token))
-    } else {
-        None
-    };
+    // 1. cancel registration — Sprint 237 P5+ 공통 헬퍼.
+    let cancel_handle = register_cancel_token(state, export_id).await;
     let cancel_owned: Option<CancellationToken> = cancel_handle.as_ref().map(|(_, t)| t.clone());
 
     // 2. dump 본체.
@@ -395,11 +371,8 @@ async fn export_schema_dump_inner(
     )
     .await;
 
-    // 3. token cleanup.
-    if let Some((eid, _)) = cancel_handle {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(&eid);
-    }
+    // 3. token cleanup — Sprint 237 P5+ 공통 헬퍼.
+    release_cancel_token(state, &cancel_handle).await;
 
     // 4. cleanup partial file on error.
     if let Err(ref e) = result {

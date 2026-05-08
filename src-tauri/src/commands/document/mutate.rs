@@ -40,12 +40,7 @@ use crate::commands::connection::AppState;
 use crate::db::DocumentId;
 use crate::error::AppError;
 
-/// Map "unknown connection id" into the uniform NotFound error the rest of
-/// the document commands emit. Kept local so `browse.rs`, `query.rs`, and
-/// `mutate.rs` can each carry the helper without a shared module.
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
-}
+use super::not_connected;
 
 async fn insert_document_inner(
     state: &AppState,
@@ -293,24 +288,9 @@ mod tests {
     //! 핸들러를 `_inner(&AppState)` 로 추출했으니 prod 코드 직접 호출.
     //! 시나리오 매트릭스: NotFound / Unsupported(document) / 트레이트 위임.
     use super::*;
-    use crate::db::testing::{StubDocumentAdapter, StubRdbAdapter};
+    use crate::commands::test_util::{document_default, rdb_default, state_with};
+    use crate::db::testing::StubDocumentAdapter;
     use crate::db::ActiveAdapter;
-
-    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
-        let s = AppState::new();
-        {
-            let mut conns = s.active_connections.lock().await;
-            conns.insert(id.to_string(), active);
-        }
-        s
-    }
-
-    fn document_default() -> ActiveAdapter {
-        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
-    }
-    fn rdb_default() -> ActiveAdapter {
-        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
-    }
 
     // ── insert_document ─────────────────────────────────────────────────
 

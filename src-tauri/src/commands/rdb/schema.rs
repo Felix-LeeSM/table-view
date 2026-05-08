@@ -13,12 +13,7 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, TableInfo, ViewInfo};
 
-use super::{register_cancel_token, release_cancel_token};
-
-/// Lookup helper — returns `AppError::NotFound` when the id isn't connected.
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
-}
+use super::{not_connected, register_cancel_token, release_cancel_token};
 
 async fn list_schemas_inner(
     state: &AppState,
@@ -381,26 +376,11 @@ mod tests {
     //!
     //! 총 39 tests.
     use super::*;
-    use crate::db::testing::{clone_app_error, StubDocumentAdapter, StubRdbAdapter};
+    use crate::commands::test_util::{document_default, rdb_default, state_with};
+    use crate::db::testing::{clone_app_error, StubRdbAdapter};
     use crate::db::{ActiveAdapter, NamespaceInfo};
     use crate::models::{ConstraintInfo, FunctionInfo, IndexInfo};
     use std::collections::HashMap;
-
-    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
-        let state = AppState::new();
-        {
-            let mut conns = state.active_connections.lock().await;
-            conns.insert(id.to_string(), active);
-        }
-        state
-    }
-
-    fn rdb_default() -> ActiveAdapter {
-        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
-    }
-    fn document_default() -> ActiveAdapter {
-        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
-    }
 
     // ── list_schemas witness — 5 contract + boundary scenarios ────────────
 

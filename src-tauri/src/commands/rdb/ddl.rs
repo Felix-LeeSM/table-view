@@ -17,9 +17,7 @@ use crate::models::{
     DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
-fn not_connected(connection_id: &str) -> AppError {
-    AppError::NotFound(format!("Connection '{}' not found", connection_id))
-}
+use super::not_connected;
 
 async fn drop_table_inner(
     state: &AppState,
@@ -240,22 +238,10 @@ mod tests {
     //! 32 tests 전체.
 
     use super::*;
-    use crate::db::testing::{clone_app_error, StubDocumentAdapter, StubRdbAdapter};
+    use crate::commands::test_util::{document_default, rdb_default, state_with};
+    use crate::db::testing::{clone_app_error, StubRdbAdapter};
     use crate::db::ActiveAdapter;
     use crate::models::{ColumnChange, ColumnDefinition, ConstraintDefinition};
-
-    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
-        let s = AppState::new();
-        {
-            let mut conns = s.active_connections.lock().await;
-            conns.insert(id.to_string(), active);
-        }
-        s
-    }
-
-    fn rdb_default() -> ActiveAdapter {
-        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
-    }
 
     fn rdb_with_drop_table_outcome(outcome: Result<SchemaChangeResult, AppError>) -> ActiveAdapter {
         let mut s = StubRdbAdapter::default();
@@ -264,10 +250,6 @@ mod tests {
             Err(e) => Err(clone_app_error(e)),
         }));
         ActiveAdapter::Rdb(Box::new(s))
-    }
-
-    fn document_default() -> ActiveAdapter {
-        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
     }
 
     // ── Request 빌더 ─────────────────────────────────────────────────────
