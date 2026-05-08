@@ -663,6 +663,7 @@ mod tests {
                 is_foreign_key: false,
                 fk_reference: None,
                 comment: None,
+                check_clauses: Vec::new(),
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
@@ -786,6 +787,7 @@ mod tests {
                 is_foreign_key: false,
                 fk_reference: None,
                 comment: None,
+                check_clauses: Vec::new(),
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;

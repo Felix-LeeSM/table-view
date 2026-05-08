@@ -12,10 +12,10 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
-    IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
-    ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest, DatabaseType,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
+    FunctionInfo, IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData,
+    TableInfo, ViewInfo,
 };
 
 use super::types::{
@@ -208,6 +208,78 @@ pub trait RdbAdapter: DbAdapter {
         &'a self,
         req: &'a CreateTableRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
+
+    /// Sprint 240 — unified `CREATE TABLE + indexes + constraints` in a
+    /// single round trip. Preview mode joins child SQL with `;\n`;
+    /// execute mode runs CREATE TABLE first (in its own tx with
+    /// COMMENTs), then indexes / constraints each in their own tx
+    /// (atomic policy = C). Default impl synthesises the behaviour by
+    /// chaining `create_table` + `create_index` + `add_constraint` so
+    /// non-PG adapters compile without a custom override.
+    fn create_table_plan<'a>(
+        &'a self,
+        req: &'a CreateTablePlanRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async move {
+            use crate::models::{AddConstraintRequest, CreateIndexRequest, CreateTableRequest};
+
+            let parent_req = CreateTableRequest {
+                connection_id: req.connection_id.clone(),
+                schema: req.schema.clone(),
+                name: req.name.clone(),
+                columns: req.columns.clone(),
+                primary_key: req.primary_key.clone(),
+                preview_only: req.preview_only,
+                table_comment: req.table_comment.clone(),
+            };
+            let parent_result = self.create_table(&parent_req).await?;
+            let mut sql_parts: Vec<String> = vec![parent_result.sql];
+
+            for idx in &req.indexes {
+                let ireq = CreateIndexRequest {
+                    connection_id: req.connection_id.clone(),
+                    schema: req.schema.clone(),
+                    table: req.name.clone(),
+                    index_name: idx.index_name.clone(),
+                    columns: idx.columns.clone(),
+                    index_type: idx.index_type.clone(),
+                    is_unique: idx.is_unique,
+                    preview_only: req.preview_only,
+                };
+                // Sprint 240 — surface the failing index name so the
+                // dialog's preview pane shows which row blocked the
+                // chain. Atomic policy = C: earlier-applied indexes
+                // remain applied (no rollback).
+                let r = self.create_index(&ireq).await.map_err(|e| {
+                    AppError::Database(format!("Index \"{}\" failed: {}", idx.index_name, e))
+                })?;
+                sql_parts.push(r.sql);
+            }
+
+            for c in &req.constraints {
+                let creq = AddConstraintRequest {
+                    connection_id: req.connection_id.clone(),
+                    schema: req.schema.clone(),
+                    table: req.name.clone(),
+                    constraint_name: c.constraint_name.clone(),
+                    definition: c.definition.clone(),
+                    preview_only: req.preview_only,
+                };
+                // Sprint 240 — same per-row name surface as indexes.
+                let r = self.add_constraint(&creq).await.map_err(|e| {
+                    AppError::Database(format!(
+                        "Constraint \"{}\" failed: {}",
+                        c.constraint_name, e
+                    ))
+                })?;
+                sql_parts.push(r.sql);
+            }
+
+            Ok(SchemaChangeResult {
+                sql: sql_parts.join(";\n"),
+            })
+        })
+    }
 
     fn create_index<'a>(
         &'a self,

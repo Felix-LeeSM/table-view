@@ -22,6 +22,15 @@ pub struct ColumnInfo {
     pub is_foreign_key: bool,
     pub fk_reference: Option<String>,
     pub comment: Option<String>,
+    /// CHECK constraint expressions where this column appears in the
+    /// constraint's column list. Multiple constraints can target the
+    /// same column; each entry is the full `pg_get_constraintdef()`
+    /// output (e.g. `"CHECK ((age >= 0))"`). Empty when no CHECK
+    /// constraint references the column. `#[serde(default)]` keeps
+    /// payloads from older callers (or non-PG adapters that don't
+    /// populate the field) deserializing to an empty vector.
+    #[serde(default)]
+    pub check_clauses: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -328,6 +337,72 @@ pub struct SchemaChangeResult {
     pub sql: String,
 }
 
+/// Sprint 240 — single child index entry inside a `CreateTablePlanRequest`.
+///
+/// Mirrors `CreateIndexRequest` minus the `connection_id` / `schema` /
+/// `table` / `preview_only` fields (those are inherited from the parent
+/// plan request — one round-trip per CREATE TABLE workflow). The
+/// adapter layer fans this out into a `CreateIndexRequest` per entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTablePlanIndex {
+    pub index_name: String,
+    pub columns: Vec<String>,
+    pub index_type: String,
+    #[serde(default)]
+    pub is_unique: bool,
+}
+
+/// Sprint 240 — single child constraint entry inside a
+/// `CreateTablePlanRequest`. Mirrors `AddConstraintRequest` minus the
+/// connection / schema / table / preview-flag fields. The adapter layer
+/// fans this out into an `AddConstraintRequest` per entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTablePlanConstraint {
+    pub constraint_name: String,
+    pub definition: ConstraintDefinition,
+}
+
+/// Sprint 240 — unified `CREATE TABLE + indexes + constraints` request.
+///
+/// Architecture intent (per user feedback in Sprint 240): the SQL
+/// preview the user sees should come from the same server-side emitter
+/// that ultimately executes. Pre-Sprint-240 the `CreateTableDialog`
+/// fanned out N+1 round-trips during preview (1 `create_table` +
+/// N `create_index` + M `add_constraint`); Sprint 240 collapses this
+/// to a single `create_table_plan` IPC.
+///
+/// Atomic policy = C (partial-atomic) — the parent CREATE TABLE
+/// statement runs inside its own transaction (with COMMENTs); each
+/// child index / constraint runs in its own transaction. This matches
+/// the per-call behaviour the dialog had before, just over one round
+/// trip instead of N+1.
+///
+/// `preview_only` (default `false`) toggles between SQL emission and
+/// execution. In preview mode the adapter joins each child's emitted
+/// SQL with `;\n` so the frontend can render the full plan in one
+/// pane. `#[serde(rename_all = "camelCase")]` keeps the wire form
+/// aligned with the rest of the Sprint 235+ `*Request` family.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTablePlanRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub name: String,
+    pub columns: Vec<ColumnDefinition>,
+    #[serde(default)]
+    pub primary_key: Option<Vec<String>>,
+    #[serde(default)]
+    pub table_comment: Option<String>,
+    #[serde(default)]
+    pub indexes: Vec<CreateTablePlanIndex>,
+    #[serde(default)]
+    pub constraints: Vec<CreateTablePlanConstraint>,
+    #[serde(default)]
+    pub preview_only: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ViewInfo {
     pub name: String,
@@ -416,6 +491,7 @@ mod tests {
             is_foreign_key: false,
             fk_reference: None,
             comment: Some("Primary user identifier".to_string()),
+            check_clauses: vec!["CHECK ((user_id > 0))".to_string()],
         };
         let json = serde_json::to_string(&col).unwrap();
         let deserialized: ColumnInfo = serde_json::from_str(&json).unwrap();
@@ -433,6 +509,7 @@ mod tests {
             deserialized.comment,
             Some("Primary user identifier".to_string())
         );
+        assert_eq!(deserialized.check_clauses, vec!["CHECK ((user_id > 0))"]);
     }
 
     #[test]
@@ -446,6 +523,7 @@ mod tests {
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
+            check_clauses: Vec::new(),
         };
         let json = serde_json::to_string(&col).unwrap();
         let deserialized: ColumnInfo = serde_json::from_str(&json).unwrap();
@@ -456,6 +534,26 @@ mod tests {
         assert!(deserialized.default_value.is_none());
         assert!(deserialized.fk_reference.is_none());
         assert!(deserialized.comment.is_none());
+        assert!(deserialized.check_clauses.is_empty());
+    }
+
+    /// Back-compat: payloads that omit `check_clauses` (older callers,
+    /// non-PG adapters) deserialize to an empty vector via
+    /// `#[serde(default)]`.
+    #[test]
+    fn column_info_serde_back_compat_missing_check_clauses() {
+        let json = r#"{
+            "name": "legacy",
+            "data_type": "text",
+            "nullable": true,
+            "default_value": null,
+            "is_primary_key": false,
+            "is_foreign_key": false,
+            "fk_reference": null,
+            "comment": null
+        }"#;
+        let parsed: ColumnInfo = serde_json::from_str(json).unwrap();
+        assert!(parsed.check_clauses.is_empty());
     }
 
     #[test]
@@ -471,6 +569,7 @@ mod tests {
                     is_foreign_key: false,
                     fk_reference: None,
                     comment: None,
+                    check_clauses: Vec::new(),
                 },
                 ColumnInfo {
                     name: "name".to_string(),
@@ -481,6 +580,7 @@ mod tests {
                     is_foreign_key: false,
                     fk_reference: None,
                     comment: Some("User display name".to_string()),
+                    check_clauses: Vec::new(),
                 },
             ],
             rows: vec![

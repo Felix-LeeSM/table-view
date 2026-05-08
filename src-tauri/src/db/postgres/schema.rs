@@ -214,6 +214,34 @@ impl PostgresAdapter {
         let comment_map: std::collections::HashMap<String, Option<String>> =
             comment_rows.into_iter().collect();
 
+        // CHECK constraint expressions per column. `pg_get_constraintdef`
+        // returns the canonical `CHECK ((<expr>))` form. A constraint
+        // referencing N columns (via `conkey`) is duplicated across all
+        // N rows so each column accumulates the same expression.
+        // `array_agg` would also work but the per-column flatten via
+        // `unnest` keeps the join symmetric with the FK / PK queries.
+        let check_rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT a.attname, pg_catalog.pg_get_constraintdef(c.oid, true) \
+             FROM pg_catalog.pg_constraint c \
+             JOIN pg_catalog.pg_class t ON t.oid = c.conrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace \
+             JOIN pg_catalog.pg_attribute a \
+               ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey) \
+             WHERE c.contype = 'c' AND n.nspname = $1 AND t.relname = $2 \
+             ORDER BY c.conname, a.attnum",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let mut check_map: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (col_name, def) in check_rows {
+            check_map.entry(col_name).or_default().push(def);
+        }
+
         Ok(rows
             .into_iter()
             .map(|(name, data_type, is_nullable, default_value)| {
@@ -223,6 +251,7 @@ impl PostgresAdapter {
                     None => (false, None),
                 };
                 let comment = comment_map.get(&name).and_then(Option::clone);
+                let check_clauses = check_map.remove(&name).unwrap_or_default();
                 ColumnInfo {
                     name,
                     data_type,
@@ -232,6 +261,7 @@ impl PostgresAdapter {
                     is_foreign_key: is_fk,
                     fk_reference,
                     comment,
+                    check_clauses,
                 }
             })
             .collect())
@@ -322,6 +352,30 @@ impl PostgresAdapter {
             .map(|(t, c, cmt)| ((t, c), cmt))
             .collect();
 
+        // CHECK constraints across the schema. Same shape as the per-
+        // table version in `get_table_columns_inner` but keyed by
+        // (table, column) so a single round-trip covers every table.
+        let check_rows: Vec<(String, String, String)> = sqlx::query_as(
+            "SELECT t.relname, a.attname, pg_catalog.pg_get_constraintdef(c.oid, true) \
+             FROM pg_catalog.pg_constraint c \
+             JOIN pg_catalog.pg_class t ON t.oid = c.conrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace \
+             JOIN pg_catalog.pg_attribute a \
+               ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey) \
+             WHERE c.contype = 'c' AND n.nspname = $1 \
+             ORDER BY t.relname, c.conname, a.attnum",
+        )
+        .bind(schema)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let mut check_map: std::collections::HashMap<(String, String), Vec<String>> =
+            std::collections::HashMap::new();
+        for (t, c, def) in check_rows {
+            check_map.entry((t, c)).or_default().push(def);
+        }
+
         // Group columns by table
         let mut result: std::collections::HashMap<String, Vec<ColumnInfo>> =
             std::collections::HashMap::new();
@@ -335,6 +389,9 @@ impl PostgresAdapter {
             let comment = comment_map
                 .get(&(table_name.clone(), col_name.clone()))
                 .and_then(Option::clone);
+            let check_clauses = check_map
+                .remove(&(table_name.clone(), col_name.clone()))
+                .unwrap_or_default();
 
             result.entry(table_name).or_default().push(ColumnInfo {
                 name: col_name,
@@ -345,6 +402,7 @@ impl PostgresAdapter {
                 is_foreign_key: is_fk,
                 fk_reference,
                 comment,
+                check_clauses,
             });
         }
 
@@ -655,6 +713,7 @@ impl PostgresAdapter {
                     is_foreign_key: false,
                     fk_reference: None,
                     comment,
+                    check_clauses: Vec::new(),
                 }
             })
             .collect())

@@ -17,6 +17,14 @@ export interface ColumnInfo {
   is_foreign_key: boolean;
   fk_reference: string | null;
   comment: string | null;
+  /**
+   * CHECK constraint expressions referencing this column. Each entry is
+   * the canonical `pg_get_constraintdef()` form (e.g. `"CHECK ((age >= 0))"`).
+   * A constraint over multiple columns appears in each column's vector.
+   * Backend-optional (#[serde(default)] keeps payloads from older callers
+   * / non-PG adapters compatible) — read with `?? []` on the consumer side.
+   */
+  check_clauses?: string[];
 }
 
 export interface IndexInfo {
@@ -294,6 +302,54 @@ export interface CreateTableRequest {
   columns: ColumnDefinition[];
   primary_key?: string[] | null;
   preview_only?: boolean;
+}
+
+/**
+ * Sprint 240 — child index entry inside a `CreateTablePlanRequest`.
+ * Mirrors the Rust `CreateTablePlanIndex` struct (camelCase wire
+ * form). The parent-level `connectionId` / `schema` / `name` /
+ * `previewOnly` are inherited; this entry only carries the per-index
+ * fields the backend's `create_index` adapter method needs.
+ */
+export interface CreateTablePlanIndex {
+  indexName: string;
+  columns: string[];
+  indexType: string;
+  isUnique?: boolean;
+}
+
+/**
+ * Sprint 240 — child constraint entry inside a `CreateTablePlanRequest`.
+ * Mirrors the Rust `CreateTablePlanConstraint` struct.
+ */
+export interface CreateTablePlanConstraint {
+  constraintName: string;
+  definition: ConstraintDefinition;
+}
+
+/**
+ * Sprint 240 — unified `CREATE TABLE + indexes + constraints` payload.
+ *
+ * The `CreateTableDialog` previously fanned out N+1 IPC calls during
+ * each preview refresh (1 `create_table` + N `create_index` + M
+ * `add_constraint`). Sprint 240 collapses this into a single
+ * server-side IPC: the backend builds the full SQL plan once and the
+ * frontend renders it in one preview pane.
+ *
+ * Atomic policy = C (partial-atomic) on commit — parent CREATE TABLE
+ * runs in its own transaction (with COMMENTs); each child runs in its
+ * own transaction. Preview mode joins child SQL with `;\n`.
+ */
+export interface CreateTablePlanRequest {
+  connectionId: string;
+  schema: string;
+  name: string;
+  columns: ColumnDefinition[];
+  primaryKey?: string[] | null;
+  tableComment?: string | null;
+  indexes?: CreateTablePlanIndex[];
+  constraints?: CreateTablePlanConstraint[];
+  previewOnly?: boolean;
 }
 
 export interface ViewInfo {

@@ -873,6 +873,7 @@ mod tests {
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
+            check_clauses: Vec::new(),
         }
     }
 
@@ -886,6 +887,7 @@ mod tests {
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
+            check_clauses: Vec::new(),
         }
     }
 

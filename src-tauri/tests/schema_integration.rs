@@ -399,6 +399,78 @@ async fn test_get_table_columns_with_comments() {
     adapter.disconnect_pool().await.unwrap();
 }
 
+/// `get_table_columns` populates `check_clauses` from `pg_constraint`
+/// (contype='c'). Validates the per-column flatten over `conkey`:
+/// a constraint over (a, b) appears in BOTH columns' clause vectors
+/// with the canonical `pg_get_constraintdef()` form. Date 2026-05-08.
+#[tokio::test]
+async fn test_get_table_columns_populates_check_clauses() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("chks");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (\
+             id SERIAL PRIMARY KEY, \
+             age INTEGER CHECK (age >= 0), \
+             min_v INTEGER, \
+             max_v INTEGER, \
+             CONSTRAINT chk_range CHECK (min_v <= max_v))"
+        ))
+        .await
+        .expect("Failed to create table");
+
+    let columns = adapter
+        .get_table_columns(&table_name, "public")
+        .await
+        .expect("get_table_columns failed");
+
+    let age_col = columns
+        .iter()
+        .find(|c| c.name == "age")
+        .expect("age column missing");
+    assert_eq!(age_col.check_clauses.len(), 1, "age has 1 check");
+    assert!(
+        age_col.check_clauses[0].contains("age >= 0"),
+        "age check should reference age >= 0, got: {:?}",
+        age_col.check_clauses
+    );
+
+    // Both `min_v` and `max_v` should carry the table-level CHECK
+    // because conkey lists both column attnums.
+    let min_col = columns
+        .iter()
+        .find(|c| c.name == "min_v")
+        .expect("min_v column missing");
+    let max_col = columns
+        .iter()
+        .find(|c| c.name == "max_v")
+        .expect("max_v column missing");
+    assert_eq!(min_col.check_clauses.len(), 1, "min_v has 1 check");
+    assert_eq!(max_col.check_clauses.len(), 1, "max_v has 1 check");
+    assert!(
+        min_col.check_clauses[0].contains("min_v <= max_v"),
+        "min_v check def: {:?}",
+        min_col.check_clauses
+    );
+
+    // Columns without CHECK constraints stay empty.
+    let id_col = columns
+        .iter()
+        .find(|c| c.name == "id")
+        .expect("id column missing");
+    assert!(id_col.check_clauses.is_empty(), "id has no check");
+
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .expect("Failed to drop table");
+    adapter.disconnect_pool().await.unwrap();
+}
+
 #[tokio::test]
 async fn test_query_table_data_with_filter_bigint() {
     let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {

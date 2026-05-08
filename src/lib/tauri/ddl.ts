@@ -4,6 +4,7 @@ import type {
   AddConstraintRequest,
   AlterTableRequest,
   CreateIndexRequest,
+  CreateTablePlanRequest,
   CreateTableRequest,
   DropColumnRequest,
   DropConstraintRequest,
@@ -125,6 +126,19 @@ export async function createTable(
   request: CreateTableRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("create_table", { request });
+}
+
+/**
+ * Sprint 240 — unified `CREATE TABLE + indexes + constraints` wrapper.
+ * Single round-trip preview / execute for the multi-tab
+ * `CreateTableDialog`. Returns the joined SQL plan as a single string
+ * (statements separated by `;\n`); the dialog renders it verbatim in
+ * the preview pane.
+ */
+export async function createTablePlan(
+  request: CreateTablePlanRequest,
+): Promise<SchemaChangeResult> {
+  return invoke<SchemaChangeResult>("create_table_plan", { request });
 }
 
 export async function createIndex(

@@ -342,6 +342,7 @@ mod tests {
                 is_foreign_key: false,
                 fk_reference: None,
                 comment: None,
+                check_clauses: Vec::new(),
             }])
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;

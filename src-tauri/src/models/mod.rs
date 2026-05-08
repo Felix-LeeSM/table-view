@@ -9,9 +9,9 @@ pub use connection::{
 pub use query::{QueryColumn, QueryResult, QueryType};
 pub use schema::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-    ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
-    SchemaChangeResult,
+    ConstraintDefinition, CreateIndexRequest, CreateTablePlanConstraint, CreateTablePlanIndex,
+    CreateTablePlanRequest, CreateTableRequest, DropColumnRequest, DropConstraintRequest,
+    DropIndexRequest, DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,

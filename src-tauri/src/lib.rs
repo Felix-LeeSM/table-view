@@ -153,6 +153,7 @@ pub fn run() {
         commands::rdb::ddl::drop_column,
         commands::rdb::ddl::alter_table,
         commands::rdb::ddl::create_table,
+        commands::rdb::ddl::create_table_plan,
         commands::rdb::ddl::create_index,
         commands::rdb::ddl::drop_index,
         commands::rdb::ddl::add_constraint,

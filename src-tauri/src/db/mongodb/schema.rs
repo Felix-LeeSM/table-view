@@ -183,6 +183,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
+            check_clauses: Vec::new(),
         });
     } else {
         columns.push(ColumnInfo {
@@ -196,6 +197,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
+            check_clauses: Vec::new(),
         });
     }
 
@@ -215,6 +217,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             is_foreign_key: false,
             fk_reference: None,
             comment: None,
+            check_clauses: Vec::new(),
         });
     }
 

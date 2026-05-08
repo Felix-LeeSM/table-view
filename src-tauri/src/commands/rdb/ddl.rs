@@ -13,8 +13,8 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, CreateIndexRequest,
-    CreateTableRequest, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, RenameTableRequest, SchemaChangeResult,
+    CreateTablePlanRequest, CreateTableRequest, DropColumnRequest, DropConstraintRequest,
+    DropIndexRequest, DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
 use super::not_connected;
@@ -143,6 +143,28 @@ pub async fn create_table(
     request: CreateTableRequest,
 ) -> Result<SchemaChangeResult, AppError> {
     create_table_inner(state.inner(), &request).await
+}
+
+async fn create_table_plan_inner(
+    state: &AppState,
+    request: &CreateTablePlanRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    active.as_rdb()?.create_table_plan(request).await
+}
+
+/// Sprint 240 — unified `CREATE TABLE + indexes + constraints` handler.
+/// Single round-trip server-side preview (frontend was fanning out
+/// 1+N+M IPC calls per dialog refresh pre-Sprint-240).
+#[tauri::command]
+pub async fn create_table_plan(
+    state: tauri::State<'_, AppState>,
+    request: CreateTablePlanRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    create_table_plan_inner(state.inner(), &request).await
 }
 
 async fn create_index_inner(
