@@ -124,7 +124,7 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
     //    image는 auth 비활성, 익명 연결 가능.
     let cell = MONGO_CONTAINER
         .get_or_init(|| async {
-            match MongoImage.start().await {
+            match MongoImage::default().start().await {
                 Ok(c) => Some(Arc::new(c)),
                 Err(e) => {
                     println!(
