@@ -1,10 +1,19 @@
 // AC-185-05 — EditableQueryResultGrid Safe Mode gate. 4 cases per Sprint 185.
 // AC-186-05 — Sprint 186 adds warn-tier dialog handoff (3 cases).
-// date 2026-05-01.
+// AC-244 — Sprint 244 (2026-05-08): policy tightened. Strict / off on
+// production is now read-only — any write/DDL blocks regardless of
+// analyzer severity. `[AC-185-05b]` (safe DML pass-through) was
+// inverted to `[AC-244-09]` (block) below.
+// date 2026-05-01 (initial), 2026-05-08 (Sprint 244 tightening).
 //
-// Same gate shape as useDataGridEdit — block when (production + strict +
-// dangerous statement). Block aborts before executeQueryBatch and surfaces
-// the standardized "Safe Mode blocked: ..." message via state + toast.
+// Current policy: same as the DataGrid's `useSafeModeReadOnly` gate —
+//   - production + strict | off: SELECT pass, all writes/DDL block.
+//   - production + warn: severity-driven (danger → confirm dialog,
+//     safe writes pass).
+//   - non-production: bypass.
+//
+// Block aborts before executeQueryBatch and surfaces the standardized
+// "Safe Mode blocked: ..." message via state + toast.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   render,

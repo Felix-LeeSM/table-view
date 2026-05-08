@@ -1,13 +1,22 @@
-// AC-185-04 — useDataGridEdit Safe Mode gate. 4 cases per Sprint 185 contract.
-// AC-186-04 — Sprint 186 adds warn-tier handoff (pendingConfirm + confirmDangerous + cancelDangerous).
-// date 2026-05-01.
+// AC-185-04 — useDataGridEdit Safe Mode gate. Originally 4 cases per
+// Sprint 185 contract.
+// AC-186-04 — Sprint 186 adds warn-tier handoff (pendingConfirm +
+// confirmDangerous + cancelDangerous).
+// AC-244 — Sprint 244 (2026-05-08): policy tightened from "block only
+// dangerous DML/DDL" to "block any write/DDL on production+strict|off".
+// `[AC-185-04b]` (safe DML pass-through under strict) was inverted to
+// `[AC-244-10]` (block) — see the test body for the policy matrix.
 //
-// The gate fires when the active connection is environment === "production"
-// AND useSafeModeStore.mode === "strict" AND any statement in the commit
-// batch is dangerous (WHERE-less DML or DDL drop). The block aborts before
-// `executeQueryBatch` is invoked. We exercise four scenarios — block on
-// (production+strict+dangerous), pass on (production+strict+safe),
-// pass on (non-production+strict+dangerous), pass on (production+off+dangerous).
+// Current policy (post-Sprint 244):
+//   - production + strict | off: SELECT and Mongo read pass; any SQL
+//     write (incl. INSERT / UPDATE WHERE / DELETE WHERE) and any DDL
+//     are blocked. This matches the DataGrid's `useSafeModeReadOnly`
+//     toolbar gate.
+//   - production + warn: severity-driven — only analyzer-flagged
+//     danger (WHERE-less DELETE/UPDATE, DROP, $out) hits the confirm
+//     dialog; safe writes flow through.
+//   - non-production: bypass.
+// date 2026-05-01 (initial), 2026-05-08 (Sprint 244 tightening).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useDataGridEdit } from "./useDataGridEdit";
