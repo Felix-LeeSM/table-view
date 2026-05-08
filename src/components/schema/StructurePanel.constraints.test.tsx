@@ -265,6 +265,12 @@ describe("StructurePanel", () => {
   });
 
   it("executing drop constraint calls dropConstraint without preview_only", async () => {
+    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
+    // destructive DROP CONSTRAINT flows through. The default `strict`
+    // mode would now open the M.1 non-production confirm dialog and
+    // short-circuit this commit-path test.
+    const { useSafeModeStore } = await import("@stores/safeModeStore");
+    useSafeModeStore.setState({ mode: "warn" });
     await act(async () => {
       renderPanel();
     });

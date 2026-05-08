@@ -675,6 +675,12 @@ describe("StructurePanel", () => {
   // a successful drop commit.
   // -----------------------------------------------------------------------
   it("[AC-236-08] DropColumnDialog commit triggers getTableColumns refresh", async () => {
+    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
+    // destructive DROP COLUMN flows through. The default `strict` mode
+    // would now open the M.1 non-production confirm dialog and short-
+    // circuit the refresh-after-commit assertion.
+    const { useSafeModeStore } = await import("@stores/safeModeStore");
+    useSafeModeStore.setState({ mode: "warn" });
     await act(async () => {
       renderPanel();
     });

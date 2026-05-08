@@ -479,7 +479,11 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     ).toBe(false);
   });
 
-  it("blocks commit closure entirely when Safe Mode is strict and statement is dangerous", async () => {
+  it("opens confirm dialog (does not commit) when Safe Mode is strict and statement is dangerous", async () => {
+    // Sprint 245 (ADR 0022 Phase 1) — was "blocks commit closure
+    // entirely". The destructive-only policy raises the confirm dialog
+    // instead of blocking; commit closure (preview_only=false) still
+    // must NOT run until the user confirms.
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     mockCreateTable.mockResolvedValue({
@@ -496,7 +500,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    await screen.findByText(/Safe Mode blocked/);
+    await screen.findByText("Confirm dangerous statement");
     const calls = mockCreateTable.mock.calls;
     expect(
       calls.some(

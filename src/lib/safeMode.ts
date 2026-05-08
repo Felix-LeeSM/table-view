@@ -1,23 +1,48 @@
-import type { StatementAnalysis, StatementKind } from "@/lib/sql/sqlSafety";
+import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
 
 /**
  * Paradigm-agnostic Safe Mode decision matrix as a pure function.
- * Production connections cannot disable Safe Mode by toggling "off" —
- * `off` collapses to `strict` for production but stays effective on
- * local / testing / development / staging.
  *
- * Decision rules (Sprint 244 — read-only policy):
+ * Sprint 245 (ADR 0022 Phase 1) — destructive-only policy. Sprint 244's
+ * "production+strict|off = read-only" was reverted because production
+ * INSERT / UPDATE WHERE / CREATE / ALTER additive flow blocked too much
+ * day-to-day work and the dialog surface fragmented (block / confirm /
+ * read-only-toast). The new matrix:
  *
- *   environment !== "production"        →  allow  (null ⇒ non-production)
- *   mode === "warn" (prod)              →  severity-driven (safe→allow, danger→confirm)
- *   mode === "strict"|"off" (prod)      →  read-only — SQL writes/DDL are
- *     blocked even when the analyzer marks them severity=safe (UPDATE
- *     ...WHERE pk, INSERT, CREATE TABLE). Strict's purpose is "no writes
- *     at all on production"; the analyzer's safe-severity is about
- *     mass-mutation risk, not write-vs-read. Mongo writes still funnel
- *     through severity=danger ($out / $merge / delete-all / etc.) so
- *     they're caught by the danger branch. Mongo read pipelines remain
- *     allowed (mongo-other + safe).
+ *   - destructive (DROP / TRUNCATE / ALTER DROP / WHERE-less DELETE·UPDATE
+ *     and Mongo $out / $merge / drop / *-all variants — anything the
+ *     analyzer marks `severity === "danger"`):
+ *       * production + strict / warn → confirm with bare analyzer reason
+ *         (preserves Phase 1 dialog type-to-confirm flow — Phase 2 will
+ *         replace the typing with simple Yes/No)
+ *       * production + off            → confirm with prod-auto copy
+ *         (preserves the distinguishing "off can't bypass production"
+ *         hint inherited from Sprint 190's hard-auto policy)
+ *       * non-prod + strict           → confirm with strict-mode copy
+ *         (M.1 NEW flow — shared-staging / learning environments)
+ *       * non-prod + warn / off       → allow
+ *
+ *   - safe write (INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER
+ *     additive / Mongo *-many): always allow. Cmd+Z (Phase 5) is the
+ *     safety net here, not a dialog.
+ *
+ *   - read (SELECT / WITH / Mongo read pipeline): always allow.
+ *
+ *   - environment === null (connection store hasn't hydrated): treated as
+ *     non-production / allow. Defensive — the Mongo aggregate path can
+ *     fire before `connectionStore` populates.
+ *
+ * Mode 3-tier (`strict` / `warn` / `off`) keeps its store / UI shape; only
+ * the *meaning* changed:
+ *   - strict: destructive dialog in *all* environments (incl. dev).
+ *   - warn (default): destructive dialog in production only.
+ *   - off: prod-auto — production still confirms (with prod-auto copy);
+ *     non-prod is unguarded (safe writes + destructive both allowed).
+ *
+ * Block action survives in the type union for the future "Phase 2 dialog
+ * unification" and Mongo single-node fallback (where dry-run is
+ * unavailable). Phase 1 never returns `block`; production destructive
+ * always returns `confirm` so the dialog UI can take over uniformly.
  */
 export type SafeMode = "strict" | "warn" | "off";
 
@@ -26,50 +51,49 @@ export type SafeModeDecision =
   | { action: "block"; reason: string }
   | { action: "confirm"; reason: string };
 
-// SQL kinds that mutate state. Even when the analyzer's severity is
-// `safe` (e.g. UPDATE with WHERE, INSERT, CREATE TABLE), strict / off
-// on production blocks them — Safe Mode strict means read-only.
-const SQL_WRITE_KINDS: ReadonlySet<StatementKind> = new Set<StatementKind>([
-  "insert",
-  "update",
-  "delete",
-  "ddl-drop",
-  "ddl-truncate",
-  "ddl-alter-drop",
-  "ddl-other",
-]);
-
 export function decideSafeModeAction(
   mode: SafeMode,
   environment: string | null,
   analysis: StatementAnalysis,
 ): SafeModeDecision {
-  if (environment !== "production") return { action: "allow" };
-
-  const isSqlWrite = SQL_WRITE_KINDS.has(analysis.kind);
+  const isProduction = environment === "production";
   const isDanger = analysis.severity === "danger";
 
-  if (mode === "strict" || mode === "off") {
-    if (!isSqlWrite && !isDanger) return { action: "allow" };
-    const fallback = isDanger
-      ? "Dangerous statement"
-      : `${analysis.kind.toUpperCase()} statement`;
-    const primary = analysis.reasons[0] ?? fallback;
+  // Read / safe-write are never gated. The analyzer marks INSERT, UPDATE
+  // WHERE, DELETE WHERE, CREATE, ALTER (additive), Mongo *-many, and
+  // SELECT / read pipelines as `safe`. Pass-through everywhere.
+  if (!isDanger) return { action: "allow" };
+
+  // From here on: destructive (`severity === "danger"`).
+  const reason = analysis.reasons[0] ?? "Dangerous statement";
+
+  if (isProduction) {
     if (mode === "off") {
+      // prod-auto — the toolbar "off" toggle is a no-op on production
+      // connections. Distinguishing copy points at the connection
+      // environment tag rather than the toolbar override.
       return {
-        action: "block",
-        reason: `Safe Mode blocked: ${primary} (production environment forces Safe Mode — change connection environment tag to override)`,
+        action: "confirm",
+        reason: `${reason} (production environment forces Safe Mode — change connection environment tag to override)`,
       };
     }
+    // strict / warn on production share the analyzer's bare reason — the
+    // existing Phase 1 dialog renders this verbatim with a type-to-confirm
+    // input so a longer parenthesised hint would force users to type the
+    // override instructions. Phase 2 will redesign the dialog to surface
+    // the override hint outside the typed string.
+    return { action: "confirm", reason };
+  }
+
+  // Non-production destructive. Strict opts users into the dialog
+  // everywhere (M.1 — shared-staging / learning environments); warn /
+  // off are unguarded so dev workflows aren't disrupted.
+  if (mode === "strict") {
     return {
-      action: "block",
-      reason: `Safe Mode blocked: ${primary} (toggle Safe Mode off in toolbar to override)`,
+      action: "confirm",
+      reason: `${reason} (Safe Mode strict — destructive statement in non-production)`,
     };
   }
 
-  // mode === "warn" — severity-driven. Write-with-WHERE statements stay
-  // friction-free; only analyzer-flagged danger triggers a confirm.
-  if (!isDanger) return { action: "allow" };
-  const primary = analysis.reasons[0] ?? "Dangerous statement";
-  return { action: "confirm", reason: primary };
+  return { action: "allow" };
 }

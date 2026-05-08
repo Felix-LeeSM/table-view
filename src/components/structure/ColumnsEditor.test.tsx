@@ -204,14 +204,12 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     });
   });
 
-  // AC-187-04a — production + strict + danger-classified preview blocks
-  // Execute with the standard strict message. The gate splits the
-  // previewSql on `;` so an ALTER batch with any DROP COLUMN inside
-  // trips strict. Sprint 236 migrated the trigger from the inline-trash
-  // path to the inline-MODIFY path; the analyzer classification still
-  // fires off the previewSql which the mock returns as DROP COLUMN.
-  // date 2026-05-01 / 2026-05-07.
-  it("[AC-187-04a] production + strict + danger preview → execute blocked", async () => {
+  // AC-187-04a — production + strict + danger-classified preview opens
+  // the confirm dialog (was block under Sprint 187/244). Sprint 245
+  // (ADR 0022 Phase 1) — destructive-only policy uses the same dialog
+  // for strict / warn / off on production. date 2026-05-01 /
+  // 2026-05-07 / 2026-05-08.
+  it("[AC-187-04a] production + strict + danger preview → confirm dialog opens, alterTable deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     await renderEditorAndOpenPreview();
@@ -220,8 +218,9 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText(/Safe Mode blocked: ALTER TABLE DROP COLUMN/);
-    // The danger DDL must NOT have been committed.
+    await screen.findByText("Confirm dangerous statement");
+    // The danger DDL must NOT have been committed yet (only fires on
+    // confirm).
     const calls = vi.mocked(tauri.alterTable).mock.calls;
     expect(
       calls.some(

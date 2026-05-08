@@ -88,9 +88,11 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     useSafeModeStore.setState({ mode: "strict" });
   });
 
-  // AC-187-06a — production + strict + DROP CONSTRAINT preview blocks
-  // Execute. date 2026-05-01.
-  it("[AC-187-06a] production + strict + DROP CONSTRAINT → execute blocked", async () => {
+  // AC-187-06a — production + strict + DROP CONSTRAINT preview opens
+  // the confirm dialog (was block under Sprint 187/244). Sprint 245
+  // (ADR 0022 Phase 1) — destructive-only policy uses the same dialog
+  // for strict / warn / off on production. date 2026-05-01 / 2026-05-08.
+  it("[AC-187-06a] production + strict + DROP CONSTRAINT → confirm dialog opens, dropConstraint deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     await renderEditorAndOpenPreview();
@@ -99,7 +101,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText(/Safe Mode blocked: ALTER TABLE DROP CONSTRAINT/);
+    await screen.findByText("Confirm dangerous statement");
     const calls = vi.mocked(tauri.dropConstraint).mock.calls;
     expect(
       calls.some(
@@ -188,7 +190,9 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     ).toBe(false);
   });
 
-  // AC-187-06e — non-production environment skips the gate. date 2026-05-01.
+  // AC-187-06e — non-production + warn environment commits without
+  // gate. Sprint 245 — re-pinned to mode=warn to avoid the new M.1
+  // strict-mode dialog (covered separately). date 2026-05-01 / 2026-05-08.
   it("[AC-187-06e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -206,7 +210,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
         } as any,
       ],
     });
-    useSafeModeStore.setState({ mode: "strict" });
+    useSafeModeStore.setState({ mode: "warn" });
     await renderEditorAndOpenPreview();
 
     act(() => {

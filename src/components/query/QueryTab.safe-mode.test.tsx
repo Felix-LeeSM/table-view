@@ -2,48 +2,30 @@
 // cases per contract `docs/sprints/sprint-231/contract.md`. date
 // 2026-05-07.
 //
-// The single-statement and multi-statement RDB branches in
-// `useQueryExecution.handleExecute` previously dispatched `executeQuery`
-// without consulting Safe Mode, so production users could run UPDATE /
-// DELETE / DROP TABLE without confirmation. This file mirrors the gate
-// pattern from the Mongo aggregate path (`pendingMongoConfirm`) and the
-// grid edit path (`useDataGridEdit.safe-mode.test.ts`).
+// Sprint 244 (2026-05-08) tightened to "prod+strict|off = read-only" —
+// REVERTED in Sprint 245 (ADR 0022 Phase 1). The 4 Sprint 244
+// regression cases (`[AC-244-11..14]`) were removed because they
+// asserted block on safe writes that now pass through, and one new
+// case (`[AC-245-N1]`) covers the M.1 non-prod + strict destructive
+// dialog flow.
 //
-// Sprint 244 (2026-05-08) — Policy tightened. The original Sprint 231
-// matrix only blocked analyzer-`danger` statements (WHERE-less DELETE,
-// DROP) on prod+strict. The user reported that `INSERT INTO ...` and
-// `UPDATE ... WHERE id = 1` from the SQL editor still executed, so the
-// gate now blocks **any** SQL write/DDL on production+strict|off (read-
-// only policy — same as the DataGrid's `useSafeModeReadOnly` gate).
-// `warn` mode keeps the original severity-driven semantics so users in
-// warn don't lose write-with-WHERE friction-free flow.
-//
-// Matrix coverage:
-//   Sprint 231 baseline (preserved):
-//   - prod+strict + WHERE-less DELETE single → block
+// Matrix coverage (Sprint 245 — destructive-only):
+//   - prod+strict|warn + WHERE-less DELETE single → confirm dialog
+//     (was block for strict under Sprint 244)
 //   - prod+strict + safe SELECT single → allow
-//   - prod+warn   + WHERE-less DELETE single → confirm dialog
-//   - prod+off    + DROP TABLE single → block (prod-auto)
-//   - non-prod    + DROP TABLE single → allow (env-gated)
-//   - prod+strict + multi (safe + dangerous) → block, batch aborted
-//   - prod+warn   + multi (UPDATE-WHERE + WHERE-less DELETE) → confirm,
+//   - prod+warn  + safe write (INSERT) single → allow
+//   - prod+off   + DROP TABLE single → confirm dialog with prod-auto
+//     reason copy (was block under Sprint 244)
+//   - non-prod + warn / off + DROP TABLE → allow (env-gated)
+//   - non-prod + strict + DROP TABLE → confirm dialog (M.1 NEW flow)
+//   - prod+warn + multi (UPDATE WHERE + WHERE-less DELETE) → confirm
 //     then 2 sequential executeQuery calls on confirm
-//   - prod+warn   + cancel pendingRdbConfirm → state cleared, no call
-//
-//   Sprint 244 additions (read-only on prod+strict):
-//   - [AC-244-11] prod+strict + UPDATE WHERE pk → block (was the
-//     user's headline regression)
-//   - [AC-244-12] prod+strict + INSERT → block (write blocked even
-//     though analyzer marks it safe)
-//   - [AC-244-13] prod+strict + CREATE TABLE → block (DDL is a write)
-//   - [AC-244-14] prod+warn   + INSERT → allow (warn keeps severity-
-//     driven policy; this case proves the strict tightening did not
-//     leak into warn)
+//   - prod+warn + cancel pendingRdbConfirm → state cleared
 //
 // AC-231-06 mandates that at least one case demonstrates the previous-
-// version FAIL: `[AC-231-01a]` is the canary — Sprint 230 code calls
-// executeQuery directly, so the `not.toHaveBeenCalled()` assertion
-// captures the red state.
+// version FAIL: `[AC-231-01a]` (now expecting confirm) is the canary —
+// Sprint 230 code calls executeQuery directly, so the
+// `not.toHaveBeenCalled()` assertion captures the red state.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
@@ -181,11 +163,13 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     useSafeModeStore.setState({ mode: "strict" });
   });
 
-  // ── AC-231-01a: Block on production + strict + WHERE-less DELETE ──
+  // ── AC-231-01a: Confirm on production + strict + WHERE-less DELETE ──
   // This is the TDD canary — Sprint 230 code dispatches executeQuery
   // unconditionally, so the `not.toHaveBeenCalled` assertion fails until
-  // the gate is wired in.
-  it("[AC-231-01a] production + strict + WHERE-less DELETE → block, executeQuery NOT called, queryState=error", async () => {
+  // the gate is wired in. Sprint 245 (ADR 0022 Phase 1) — was "block",
+  // now "confirm dialog" because the destructive-only policy raises a
+  // dialog (not an error) for prod+strict+destructive.
+  it("[AC-231-01a] production + strict + WHERE-less DELETE → confirm dialog, executeQuery NOT called", async () => {
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
     const tab = seedTab("DELETE FROM users");
@@ -196,24 +180,22 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
 
     expect(mockExecuteQuery).not.toHaveBeenCalled();
+    // Dialog rendered (mirrors AC-231-01b warn-tier flow); tab stays
+    // idle (no error transition) so the user can confirm or cancel.
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Type danger reason to confirm"),
+      ).toBeInTheDocument();
+    });
     const state = useTabStore.getState();
     const updated = state.tabs.find((t) => t.id === "query-1");
-    expect(updated?.type === "query" && updated.queryState.status).toBe(
-      "error",
-    );
-    if (
-      updated &&
-      updated.type === "query" &&
-      updated.queryState.status === "error"
-    ) {
-      expect(updated.queryState.error).toMatch(/Safe Mode blocked/);
-      expect(updated.queryState.error).toMatch(/DELETE without WHERE/);
+    if (updated && updated.type === "query") {
+      expect(updated.queryState.status).toBe("idle");
     }
-    // History on block: status=error, duration=0, no dispatch hint.
+    // History entry NOT recorded on confirm (only on actual execute /
+    // cancel). Mirrors warn-tier behaviour from Sprint 231.
     const history = useQueryHistoryStore.getState().entries;
-    expect(history).toHaveLength(1);
-    expect(history[0]!.status).toBe("error");
-    expect(history[0]!.duration).toBe(0);
+    expect(history).toHaveLength(0);
   });
 
   // ── AC-231-01e: Allow on production + strict + safe SELECT ──
@@ -233,95 +215,14 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
   });
 
-  // ── AC-244-11..13: Sprint 244 read-only policy on prod+strict ──
-  // The user reported (2026-05-08) that raw `UPDATE ... WHERE id = 1`
-  // and `INSERT INTO ...` still executed under strict because the
-  // analyzer marks them severity=safe. The lib decision matrix was
-  // tightened to block any SQL write/DDL on prod+strict|off; the
-  // following three cases are the SQL-editor-path regression guards
-  // matching that change. They mirror the DataGrid's
-  // `[AC-244-09/10]` (EditableQueryResultGrid + useDataGridEdit).
-  it("[AC-244-11] production + strict + UPDATE WHERE pk → block (read-only on prod+strict)", async () => {
-    seedConnection("production");
-    useSafeModeStore.setState({ mode: "strict" });
-    const tab = seedTab("UPDATE users SET name = 'x' WHERE id = 1");
-    render(<QueryTab tab={tab} />);
-
-    await act(async () => {
-      screen.getByTestId("execute-btn").click();
-    });
-
-    expect(mockExecuteQuery).not.toHaveBeenCalled();
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
-    expect(updated?.type === "query" && updated.queryState.status).toBe(
-      "error",
-    );
-    if (
-      updated &&
-      updated.type === "query" &&
-      updated.queryState.status === "error"
-    ) {
-      expect(updated.queryState.error).toMatch(/Safe Mode blocked/);
-      expect(updated.queryState.error).toMatch(/UPDATE statement/);
-    }
-  });
-
-  it("[AC-244-12] production + strict + INSERT → block (read-only on prod+strict)", async () => {
-    seedConnection("production");
-    useSafeModeStore.setState({ mode: "strict" });
-    const tab = seedTab("INSERT INTO users (name) VALUES ('alice')");
-    render(<QueryTab tab={tab} />);
-
-    await act(async () => {
-      screen.getByTestId("execute-btn").click();
-    });
-
-    expect(mockExecuteQuery).not.toHaveBeenCalled();
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
-    if (
-      updated &&
-      updated.type === "query" &&
-      updated.queryState.status === "error"
-    ) {
-      expect(updated.queryState.error).toMatch(/INSERT statement/);
-    }
-  });
-
-  it("[AC-244-13] production + strict + CREATE TABLE → block (DDL is a write)", async () => {
-    // CREATE/ALTER/etc. are classified `ddl-other` + safe by the
-    // analyzer. Read-only policy treats them as writes (schema is
-    // state) and blocks. Note: this also confirms strict prevents
-    // *additive* schema changes — DROP was already blocked via the
-    // dangerous-DDL path.
-    seedConnection("production");
-    useSafeModeStore.setState({ mode: "strict" });
-    const tab = seedTab("CREATE TABLE foo (id int)");
-    render(<QueryTab tab={tab} />);
-
-    await act(async () => {
-      screen.getByTestId("execute-btn").click();
-    });
-
-    expect(mockExecuteQuery).not.toHaveBeenCalled();
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
-    if (
-      updated &&
-      updated.type === "query" &&
-      updated.queryState.status === "error"
-    ) {
-      expect(updated.queryState.error).toMatch(/DDL-OTHER statement/);
-    }
-  });
-
-  it("[AC-244-14] production + warn + INSERT → allow (warn keeps severity-driven policy)", async () => {
-    // Warn mode deliberately stays friction-free for safe writes —
-    // INSERT / UPDATE-WHERE / DELETE-WHERE pass without a confirm
-    // dialog. Only analyzer-flagged danger raises a confirm. This
-    // guards against a future overreach of the Sprint 244 strict
-    // tightening into warn.
+  // ── AC-245-C4: Sprint 245 prod+strict safe write pass-through ──
+  // Was [AC-244-11..14] under Sprint 244 (block on safe DML/DDL);
+  // reverted in Sprint 245 — safe writes flow through on production
+  // regardless of mode, dialog only opens on destructive statements.
+  it("[AC-245-C4] production + strict + INSERT INTO → executeQuery called once (Sprint 244 block reverted)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("production");
-    useSafeModeStore.setState({ mode: "warn" });
+    useSafeModeStore.setState({ mode: "strict" });
     const tab = seedTab("INSERT INTO users (name) VALUES ('alice')");
     render(<QueryTab tab={tab} />);
 
@@ -333,6 +234,88 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
     // No confirm dialog should have mounted.
+    expect(
+      screen.queryByLabelText("Type danger reason to confirm"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("[AC-245-C4-2] production + strict + UPDATE WHERE pk → executeQuery called once", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    seedConnection("production");
+    useSafeModeStore.setState({ mode: "strict" });
+    const tab = seedTab("UPDATE users SET name = 'x' WHERE id = 1");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("[AC-245-C4-3] production + strict + CREATE TABLE → executeQuery called once (additive DDL passes)", async () => {
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    seedConnection("production");
+    useSafeModeStore.setState({ mode: "strict" });
+    const tab = seedTab("CREATE TABLE foo (id int)");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── AC-245-N1: M.1 NEW flow — non-prod + strict + destructive → confirm ──
+  // Strict mode now opens the destructive dialog in non-production too
+  // (shared-staging / learning environments). warn / off on non-prod
+  // remain unguarded for dev workflows.
+  it("[AC-245-N1] development + strict + DROP TABLE → confirm dialog (M.1 NEW flow)", async () => {
+    seedConnection("development");
+    useSafeModeStore.setState({ mode: "strict" });
+    const tab = seedTab("DROP TABLE users");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Type danger reason to confirm"),
+      ).toBeInTheDocument();
+    });
+    // Reason carries the strict-mode hint copy so downstream UI guidance
+    // can differentiate it from the prod+strict / prod+warn copy.
+    expect(
+      screen.getAllByText(
+        /Safe Mode strict — destructive statement in non-production/,
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("[AC-245-N2] development + warn + DROP TABLE → executeQuery called once (warn unguarded outside prod)", async () => {
+    // Paired with N1 to lock the matrix: warn / off on non-prod do not
+    // open the dialog even on destructive statements.
+    mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
+    seedConnection("development");
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedTab("DROP TABLE users");
+    render(<QueryTab tab={tab} />);
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+    });
     expect(
       screen.queryByLabelText("Type danger reason to confirm"),
     ).not.toBeInTheDocument();
@@ -364,8 +347,12 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     ).toBeGreaterThan(0);
   });
 
-  // ── AC-231-01c: Block on production + off + dangerous (prod-auto) ──
-  it("[AC-231-01c] production + off + DROP TABLE → block (prod-auto override copy)", async () => {
+  // ── AC-231-01c: Confirm on production + off + dangerous (prod-auto) ──
+  // Sprint 245 (ADR 0022 Phase 1) — was "block (prod-auto override
+  // copy)". The destructive-only policy opens the confirm dialog
+  // instead; prod-auto reason copy is preserved in the dialog body so
+  // off remains distinguishable from warn on production.
+  it("[AC-231-01c] production + off + DROP TABLE → confirm dialog with prod-auto reason copy", async () => {
     seedConnection("production");
     useSafeModeStore.setState({ mode: "off" });
     const tab = seedTab("DROP TABLE users");
@@ -376,25 +363,25 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
 
     expect(mockExecuteQuery).not.toHaveBeenCalled();
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
-    if (
-      updated &&
-      updated.type === "query" &&
-      updated.queryState.status === "error"
-    ) {
-      expect(updated.queryState.error).toMatch(
-        /production environment forces Safe Mode/,
-      );
-    } else {
-      throw new Error("expected query state to be in error after block");
-    }
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Type danger reason to confirm"),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getAllByText(/production environment forces Safe Mode/).length,
+    ).toBeGreaterThan(0);
   });
 
-  // ── AC-231-01d: Allow on non-production (env-gated) ──
-  it("[AC-231-01d] development + strict + DROP TABLE → allow (env-gated)", async () => {
+  // ── AC-231-01d: Allow on non-production (env-gated) — warn / off ──
+  // Sprint 245 (ADR 0022 Phase 1) — under the new M.1 flow, dev +
+  // strict + destructive opens the confirm dialog (covered by
+  // [AC-245-N1]). Re-pin this AC to dev + warn so it still asserts
+  // "non-prod = unguarded" without overlapping the strict M.1 path.
+  it("[AC-231-01d] development + warn + DROP TABLE → allow (env-gated)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("development");
-    useSafeModeStore.setState({ mode: "strict" });
+    useSafeModeStore.setState({ mode: "warn" });
     const tab = seedTab("DROP TABLE users");
     render(<QueryTab tab={tab} />);
 
@@ -407,8 +394,13 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
   });
 
-  // ── AC-231-02a: Multi-statement (mixed) → block aborts entire batch ──
-  it("[AC-231-02a] production + strict + multi (safe + dangerous) → block, executeQuery NOT called", async () => {
+  // ── AC-231-02a: Multi-statement (mixed) → confirm dialog (Sprint 245) ──
+  // Was block under Sprint 244 (read-only policy). Under the
+  // destructive-only policy, prod+strict+multi(safe SELECT +
+  // WHERE-less DELETE) opens the same warn-tier confirm dialog
+  // because the DELETE is destructive. The dialog covers the whole
+  // batch (per-statement individual approval forbidden by AC-231-02).
+  it("[AC-231-02a] production + strict + multi (safe + destructive) → confirm dialog, executeQuery NOT called", async () => {
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
     const tab = seedTab("SELECT 1; DELETE FROM users");
@@ -419,10 +411,11 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
 
     expect(mockExecuteQuery).not.toHaveBeenCalled();
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
-    expect(updated?.type === "query" && updated.queryState.status).toBe(
-      "error",
-    );
+    await waitFor(() => {
+      expect(
+        screen.getByLabelText("Type danger reason to confirm"),
+      ).toBeInTheDocument();
+    });
   });
 
   // ── AC-231-02b: confirm-then-run runs full batch in order ──

@@ -270,6 +270,12 @@ describe("StructurePanel", () => {
   });
 
   it("executing drop index calls dropIndex without preview_only", async () => {
+    // Sprint 245 (ADR 0022 Phase 1) — pin Safe Mode to `warn` so the
+    // destructive DROP INDEX flows through. The default `strict` mode
+    // would now open the M.1 non-production confirm dialog and short-
+    // circuit this commit-path test.
+    const { useSafeModeStore } = await import("@stores/safeModeStore");
+    useSafeModeStore.setState({ mode: "warn" });
     await act(async () => {
       renderPanel();
     });
@@ -408,6 +414,11 @@ describe("StructurePanel", () => {
   });
 
   it("shows error in modal when execute drop index fails", async () => {
+    // Sprint 245 — pin warn so the destructive DROP INDEX flows
+    // through (otherwise non-prod + strict opens the M.1 confirm
+    // dialog and the failure-during-execute branch never fires).
+    const { useSafeModeStore } = await import("@stores/safeModeStore");
+    useSafeModeStore.setState({ mode: "warn" });
     vi.mocked(tauri.dropIndex)
       .mockResolvedValueOnce({ sql: "DROP INDEX users_name_idx;" })
       .mockRejectedValueOnce(new Error("Execute failed"));

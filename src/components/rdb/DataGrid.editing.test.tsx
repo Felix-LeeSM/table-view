@@ -737,15 +737,11 @@ describe("DataGrid", () => {
     // stripe is purely decorative (aria-hidden) and uses the colour from
     // ENVIRONMENT_META. date 2026-05-01.
     //
-    // Sprint 243 — production + Safe Mode strict / off (prod-auto) flips
-    // the grid to read-only, which would block this test's
-    // double-click-then-edit path. Pin the mode to `warn` so the
-    // dangerous-statement gate stays in place but cell editing flows
-    // through (the AC under test is the env stripe colour, not the
-    // gate).
+    // Sprint 245 (ADR 0022 Phase 1) — the Sprint 243 mode=warn
+    // workaround was removed. The destructive-only policy lets cell
+    // editing flow through under any mode for safe DML (UPDATE WHERE
+    // pk), so this test no longer needs to pin mode.
     const { useConnectionStore } = await import("@stores/connectionStore");
-    const { useSafeModeStore } = await import("@stores/safeModeStore");
-    useSafeModeStore.setState({ mode: "warn" });
     useConnectionStore.setState({
       connections: [
         {

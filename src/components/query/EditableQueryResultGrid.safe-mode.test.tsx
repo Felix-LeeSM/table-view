@@ -1,19 +1,18 @@
 // AC-185-05 — EditableQueryResultGrid Safe Mode gate. 4 cases per Sprint 185.
 // AC-186-05 — Sprint 186 adds warn-tier dialog handoff (3 cases).
-// AC-244 — Sprint 244 (2026-05-08): policy tightened. Strict / off on
-// production is now read-only — any write/DDL blocks regardless of
-// analyzer severity. `[AC-185-05b]` (safe DML pass-through) was
-// inverted to `[AC-244-09]` (block) below.
-// date 2026-05-01 (initial), 2026-05-08 (Sprint 244 tightening).
+// Sprint 244 (2026-05-08) tightened the policy to "production+strict|off
+// = read-only" — REVERTED in Sprint 245 (ADR 0022 Phase 1). `[AC-244-09]`
+// (block on prod+strict + safe DML) was re-inverted back to a
+// pass-through assertion below as `[AC-245-C3]`.
+// date 2026-05-01 (initial), 2026-05-08 (Sprint 244 → Sprint 245).
 //
-// Current policy: same as the DataGrid's `useSafeModeReadOnly` gate —
-//   - production + strict | off: SELECT pass, all writes/DDL block.
-//   - production + warn: severity-driven (danger → confirm dialog,
-//     safe writes pass).
-//   - non-production: bypass.
-//
-// Block aborts before executeQueryBatch and surfaces the standardized
-// "Safe Mode blocked: ..." message via state + toast.
+// Current policy (Sprint 245 — ADR 0022 Phase 1, destructive-only):
+//   - production + any mode: SELECT and safe writes (INSERT, UPDATE
+//     WHERE, DELETE WHERE, CREATE, ALTER additive) flow through;
+//     destructive opens the confirm dialog (mode-specific reason copy).
+//   - non-production + strict: destructive opens the dialog (M.1 new
+//     flow); safe writes / SELECT pass.
+//   - non-production + warn / off: bypass.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   render,
@@ -163,57 +162,67 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     });
   }
 
-  it("[AC-185-05a] production + strict + WHERE-less DELETE → blocked, executeQueryBatch not called", async () => {
+  it("[AC-185-05a] production + strict + WHERE-less DELETE → confirm dialog opens, executeQueryBatch not called", async () => {
+    // Sprint 245 (ADR 0022 Phase 1) — was "block" under Sprint 244's
+    // read-only policy. Production destructive now opens the confirm
+    // dialog regardless of mode.
     setup("production", "strict");
-    await openPreviewAndExecute(["DELETE FROM users"]);
+    await clickExecute(["DELETE FROM users"]);
 
+    await screen.findByText("Confirm dangerous statement");
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(
-      expect.stringMatching(/Safe Mode blocked.*DELETE without WHERE/),
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent(/Safe Mode blocked/);
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  it("[AC-244-09] production + strict + safe DML (UPDATE WHERE pk) → blocked (read-only)", async () => {
-    // Sprint 244 (2026-05-08) — was AC-185-05b "passes through". The
-    // user reported raw `UPDATE...WHERE id = 1` running under strict.
-    // The gate now treats strict on production as read-only — even
-    // analyzer-safe writes block. The DataGrid's `useSafeModeReadOnly`
-    // gate (Sprint 243) already enforced this; the lib decision matrix
-    // now matches.
+  it("[AC-245-C3] production + strict + safe DML (UPDATE WHERE pk) → executeQueryBatch called once (Sprint 244 block reverted)", async () => {
+    // Sprint 245 — was [AC-244-09] "block". Safe writes flow through
+    // on production regardless of mode under the destructive-only
+    // policy; Cmd+Z (Phase 5) is the safety net.
     setup("production", "strict");
     await openPreviewAndExecute([
       "UPDATE users SET name = 'Alicia' WHERE id = 1",
     ]);
 
-    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(
-      expect.stringMatching(/Safe Mode blocked.*UPDATE statement/),
-    );
+    expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  it("[AC-185-05c] non-production + strict + WHERE-less DELETE → passes (env-gated)", async () => {
+  it("[AC-185-05c] non-production + strict + WHERE-less DELETE → confirm dialog (M.1 new flow)", async () => {
+    // Sprint 245 — was "passes through". Strict on non-production now
+    // also opens the destructive dialog (M.1 — for shared-staging /
+    // learning environments).
     setup("development", "strict");
+    await clickExecute(["DELETE FROM users"]);
+
+    await screen.findByText("Confirm dangerous statement");
+    expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
+  });
+
+  it("[AC-185-05c-2] non-production + warn + WHERE-less DELETE → passes through", async () => {
+    // Sprint 245 — paired with the M.1 new flow above so the matrix
+    // coverage stays complete: warn on non-prod does NOT open the
+    // dialog even on destructive statements.
+    setup("development", "warn");
     await openPreviewAndExecute(["DELETE FROM users"]);
 
     expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  it("[AC-190-01-4] production + off + WHERE-less DELETE → blocked (prod-auto)", async () => {
-    // Sprint 190 (FB-1b) — Hard auto. Was AC-185-05d (mode override let
-    // it through). Off is now no-op on production; gate fires with the
-    // production-forces-Safe-Mode copy. date 2026-05-02.
+  it("[AC-245-L6] production + off + WHERE-less DELETE → confirm dialog with prod-auto reason copy", async () => {
+    // Sprint 245 — was [AC-190-01-4] "block (prod-auto)". The
+    // destructive-only policy opens the confirm dialog instead of
+    // blocking; prod-auto reason copy ("production environment forces
+    // Safe Mode — change connection environment tag to override") is
+    // preserved in the dialog body.
     setup("production", "off");
-    await openPreviewAndExecute(["DELETE FROM users"]);
+    await clickExecute(["DELETE FROM users"]);
 
+    await screen.findByText("Confirm dangerous statement");
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(
-      expect.stringMatching(/production environment forces Safe Mode/),
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /production environment forces Safe Mode/,
-    );
+    expect(
+      screen.getAllByText(/production environment forces Safe Mode/).length,
+    ).toBeGreaterThan(0);
   });
 
   function getWarnDialog() {

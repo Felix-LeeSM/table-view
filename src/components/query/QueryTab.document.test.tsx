@@ -655,7 +655,10 @@ describe("QueryTab — document", () => {
       useSafeModeStore.setState({ mode: "strict" });
     });
 
-    it("[AC-188-03a] production × strict × $out → blocks dispatch with canonical error", async () => {
+    it("[AC-188-03a] production × strict × $out → confirm dialog opens, dispatch deferred", async () => {
+      // Sprint 245 (ADR 0022 Phase 1) — was "blocks dispatch with
+      // canonical error". The destructive-only policy opens the confirm
+      // dialog instead of blocking; dispatch only fires on confirm.
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "strict" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
@@ -667,15 +670,15 @@ describe("QueryTab — document", () => {
       });
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      await screen.findByTestId("confirm-dangerous-input");
       const updated = useTabStore
         .getState()
         .tabs.find((t) => t.id === "query-1");
-      if (updated?.type === "query" && updated.queryState.status === "error") {
-        expect(updated.queryState.error).toMatch(
-          /Safe Mode blocked: MongoDB \$out/,
-        );
-      } else {
-        throw new Error("expected error queryState");
+      if (updated?.type === "query") {
+        // Confirm flow keeps queryState idle until the user types and
+        // confirms or cancels.
+        expect(updated.queryState.status).not.toBe("error");
+        expect(updated.queryState.status).not.toBe("running");
       }
     });
 
@@ -736,12 +739,12 @@ describe("QueryTab — document", () => {
       }
     });
 
-    it("[AC-190-01-5] production × off × $out → blocked (prod-auto, Sprint 190)", async () => {
+    it("[AC-190-01-5] production × off × $out → confirm dialog with prod-auto reason copy", async () => {
       // Sprint 190 (FB-1b) — Hard auto. Was AC-188-03d (off bypassed gate).
-      // Off is no-op on production: aggregate dispatch is blocked exactly
-      // like strict, with the production-forces-Safe-Mode copy. Asserts
-      // queryState.error verbatim (same pattern as AC-188-03a) so the lib
-      // copy reaches the QueryTab error surface intact. date 2026-05-02.
+      // Sprint 245 (ADR 0022 Phase 1) — was "blocked (prod-auto)"; now
+      // opens the confirm dialog with prod-auto reason copy preserved.
+      // Off remains distinguishable from warn on production via the
+      // dialog body text. date 2026-05-02 / 2026-05-08.
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "off" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
@@ -753,20 +756,18 @@ describe("QueryTab — document", () => {
       });
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
-      const updated = useTabStore
-        .getState()
-        .tabs.find((t) => t.id === "query-1");
-      if (updated?.type === "query" && updated.queryState.status === "error") {
-        expect(updated.queryState.error).toMatch(
-          /production environment forces Safe Mode/,
-        );
-      } else {
-        throw new Error("expected error queryState");
-      }
+      await screen.findByTestId("confirm-dangerous-input");
+      expect(
+        screen.getAllByText(/production environment forces Safe Mode/).length,
+      ).toBeGreaterThan(0);
     });
 
-    it("[AC-188-03e] non-production × strict × $out → dispatch proceeds (env scoping)", async () => {
-      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+    it("[AC-188-03e] non-production × strict × $out → confirm dialog (M.1 NEW flow)", async () => {
+      // Sprint 245 (ADR 0022 Phase 1) — was "dispatch proceeds (env
+      // scoping)". Strict now opens the destructive dialog in non-
+      // production too (M.1 — shared-staging / learning environments).
+      // Warn / off on non-prod still bypass the dialog for safe writes
+      // and destructive alike.
       useConnectionStore.setState({
         connections: [
           makeConn({
@@ -778,6 +779,39 @@ describe("QueryTab — document", () => {
         ],
       });
       useSafeModeStore.setState({ mode: "strict" });
+      const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
+      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      render(<QueryTab tab={tab} />);
+
+      await act(async () => {
+        screen.getByTestId("execute-btn").click();
+      });
+
+      expect(mockAggregateDocuments).not.toHaveBeenCalled();
+      await screen.findByTestId("confirm-dangerous-input");
+      expect(
+        screen.getAllByText(
+          /Safe Mode strict — destructive statement in non-production/,
+        ).length,
+      ).toBeGreaterThan(0);
+    });
+
+    it("[AC-188-03e-2] non-production × warn × $out → dispatch proceeds (warn unguarded outside prod)", async () => {
+      // Sprint 245 — paired with the M.1 strict flow above so the
+      // matrix coverage stays complete: warn / off on non-prod do not
+      // open the dialog even on destructive Mongo pipelines.
+      mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
+      useConnectionStore.setState({
+        connections: [
+          makeConn({
+            id: "conn-mongo",
+            db_type: "mongodb",
+            paradigm: "document",
+            environment: "staging",
+          }),
+        ],
+      });
+      useSafeModeStore.setState({ mode: "warn" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
       useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
       render(<QueryTab tab={tab} />);

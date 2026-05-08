@@ -67,58 +67,62 @@ describe("SafeModeToggle", () => {
     expect(useSafeModeStore.getState().mode).toBe("strict");
   });
 
-  // [HF-187-A1] — per-mode `title` tooltip pins three contract pieces:
+  // [AC-245-T1..T3] per-mode `title` tooltip pins:
   //   1. heading line names the mode AND its next click action;
-  //   2. strict tooltip surfaces the canonical blocked-statement set so the
-  //      copy can't drift away from `analyzeStatement`;
-  //   3. non-production scoping note appears in the gating modes
-  //      (strict / warn) so users on local don't think they're being
-  //      blocked.
+  //   2. strict tooltip surfaces the canonical destructive-statement set
+  //      AND the new "all environments" scoping (M.1 — Phase 1 redefines
+  //      strict to confirm in dev too);
+  //   3. warn tooltip names the production-only scope;
+  //   4. off tooltip preserves the prod-auto disclaimer (production
+  //      remains gated even when off is selected).
   // We test through the rendered DOM `title` attribute rather than mocking
   // a tooltip primitive — the toolbar uses native browser tooltips for
-  // every sibling button (DisconnectButton, HistoryButton), so this is the
-  // real user-visible surface. date 2026-05-01.
-  it("[HF-187-A1] per-mode tooltip exposes mode summary + danger statements + scoping note", () => {
-    const { rerender } = render(<SafeModeToggle />);
+  // every sibling button. date 2026-05-08 (Sprint 245).
+  it("[AC-245-T1] strict tooltip names all-environment scope + destructive statements", () => {
+    render(<SafeModeToggle />);
     const strictTitle = screen
       .getByRole("button", { name: "Safe Mode" })
       .getAttribute("title");
     expect(strictTitle).toMatch(
       /Safe Mode: Strict \(click to switch to warn\)/,
     );
+    // M.1 scoping: strict now applies in *all* environments including
+    // non-production. Phrase pinned so future drift away from the policy
+    // matrix in `decideSafeModeAction` shows up as a test failure.
+    expect(strictTitle).toMatch(/all environments/);
+    expect(strictTitle).toMatch(/non-production/);
+    // Canonical destructive statement set — same as Sprint 187 baseline,
+    // ensures the help copy can't drift away from `analyzeStatement`.
     expect(strictTitle).toMatch(
       /DROP TABLE \/ DATABASE \/ SCHEMA \/ INDEX \/ VIEW/,
     );
     expect(strictTitle).toMatch(/UPDATE \/ DELETE without WHERE/);
-    expect(strictTitle).toMatch(/Non-production environments .* never gated/);
+  });
 
+  it("[AC-245-T2] warn tooltip names production-only scope", () => {
     useSafeModeStore.setState({ mode: "warn" });
-    rerender(<SafeModeToggle />);
+    render(<SafeModeToggle />);
     const warnTitle = screen
       .getByRole("button", { name: "Safe Mode: Warn" })
       .getAttribute("title");
     expect(warnTitle).toMatch(/Safe Mode: Warn \(click to disable\)/);
-    expect(warnTitle).toMatch(/type-to-confirm/);
-    expect(warnTitle).toMatch(/Non-production environments are never gated/);
+    expect(warnTitle).toMatch(/production only/);
+    expect(warnTitle).toMatch(/never gated/);
+  });
 
+  it("[AC-245-T3] off tooltip preserves prod-auto disclaimer", () => {
     useSafeModeStore.setState({ mode: "off" });
-    rerender(<SafeModeToggle />);
+    render(<SafeModeToggle />);
     const offTitle = screen
       .getByRole("button", { name: "Safe Mode: Off" })
       .getAttribute("title");
-    // Sprint 190 (AC-190-04) — off-tooltip carries the prod-auto disclaimer
-    // because the toolbar "off" toggle is now a no-op on production-tagged
-    // connections (Hard auto via decideSafeModeAction). The previous "No
-    // guard." copy was a verbatim lie post-Sprint-190; the new copy makes
-    // the production carve-out explicit and points at the legitimate
-    // off-mode use cases (local / testing / development / staging). date
-    // 2026-05-02.
     expect(offTitle).toMatch(
       /Safe Mode: Off \(click to re-enable for non-production\)/,
     );
-    expect(offTitle).toMatch(
-      /Production-tagged connections still force Safe Mode/,
-    );
+    // prod-auto: production-tagged connections still gate destructive
+    // statements even when off is selected. Sprint 245 keeps this
+    // copy distinct from warn so users know off cannot bypass production.
+    expect(offTitle).toMatch(/production-auto|Production-tagged/);
     expect(offTitle).toMatch(/local \/ testing/);
     expect(offTitle).toMatch(/development \/ staging/);
   });

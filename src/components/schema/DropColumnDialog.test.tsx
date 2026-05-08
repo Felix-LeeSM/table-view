@@ -257,8 +257,12 @@ describe("DropColumnDialog (Sprint 236)", () => {
     expect(onColumnDropped).toHaveBeenCalledTimes(1);
   });
 
-  // AC-236-06 — Safe Mode block path on production×strict.
-  it("[AC-236-06] production × strict + DROP COLUMN → block path surfaces canonical message", async () => {
+  // AC-236-06 — Safe Mode confirm dialog on production×strict (was
+  // block under Sprint 236/244). Sprint 245 (ADR 0022 Phase 1) —
+  // destructive-only policy raises the confirm dialog instead. The
+  // commit closure (previewOnly:false) still must NOT run until the
+  // user confirms.
+  it("[AC-236-06] production × strict + DROP COLUMN → confirm dialog opens, commit closure deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     mockDropColumnRequest.mockResolvedValueOnce({
@@ -274,17 +278,9 @@ describe("DropColumnDialog (Sprint 236)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
-    // Block surfaces previewError; commit closure (previewOnly:false)
-    // NEVER runs.
-    await waitFor(() => {
-      const errorEls = document.querySelectorAll('[role="alert"]');
-      const messages = Array.from(errorEls).map((e) => e.textContent ?? "");
-      expect(
-        messages.some((m) =>
-          m.includes("Safe Mode blocked: ALTER TABLE DROP COLUMN"),
-        ),
-      ).toBe(true);
-    });
+    // Confirm dialog mounts; commit closure (previewOnly:false) does
+    // NOT run until the user types the analyzer reason.
+    await screen.findByText("Confirm dangerous statement");
     // Only the preview call ran; no commit.
     expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
     expect(mockDropColumnRequest.mock.calls[0]?.[0]).toEqual(

@@ -247,8 +247,11 @@ describe("DropTableDialog (Sprint 235)", () => {
     expect(mockDropTable).toHaveBeenCalledWith("conn-1", "users", "public");
   });
 
-  // AC-235-06 — Safe Mode block path on production×strict.
-  it("[AC-235-06] production × strict + DROP TABLE → block path surfaces canonical message", async () => {
+  // AC-235-06 — Safe Mode confirm dialog on production×strict (was
+  // block under Sprint 235/244). Sprint 245 (ADR 0022 Phase 1) —
+  // destructive-only policy raises the confirm dialog instead. The
+  // commit closure still must NOT run until the user confirms.
+  it("[AC-235-06] production × strict + DROP TABLE → confirm dialog opens, commit closure deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     mockDropTableRequest.mockResolvedValueOnce({
@@ -264,15 +267,9 @@ describe("DropTableDialog (Sprint 235)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
-    // Block surfaces previewError; commit closure (tauri.dropTable
-    // compat) NEVER runs.
-    await waitFor(() => {
-      const errorEls = document.querySelectorAll('[role="alert"]');
-      const messages = Array.from(errorEls).map((e) => e.textContent ?? "");
-      expect(
-        messages.some((m) => m.includes("Safe Mode blocked: DROP TABLE")),
-      ).toBe(true);
-    });
+    // Confirm dialog mounts; commit closure (tauri.dropTable compat)
+    // does NOT run until the user types the analyzer reason.
+    await screen.findByText("Confirm dangerous statement");
     expect(mockDropTable).not.toHaveBeenCalled();
   });
 

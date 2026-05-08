@@ -85,13 +85,6 @@ export interface DataGridToolbarProps {
   onAddRow: () => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
-  /**
-   * Sprint 243 — when `true`, the toolbar's Add / Delete / Duplicate
-   * buttons render `disabled` with a Safe-Mode title hint. Driven by
-   * `useSafeModeReadOnly(connectionId)` upstream — true only on
-   * production connections in `strict` / `off` (prod-auto) mode.
-   */
-  readOnly?: boolean;
 }
 
 export default function DataGridToolbar({
@@ -126,11 +119,7 @@ export default function DataGridToolbar({
   onAddRow,
   onDeleteRow,
   onDuplicateRow,
-  readOnly = false,
 }: DataGridToolbarProps) {
-  const readOnlyTitle = readOnly
-    ? "Read-only — Safe Mode strict on production connection"
-    : null;
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
       <div className="flex items-center gap-2 text-xs text-secondary-foreground">
@@ -207,9 +196,8 @@ export default function DataGridToolbar({
               size="icon-xs"
               className="text-muted-foreground"
               onClick={onAddRow}
-              disabled={readOnly}
               aria-label={addRowLabel}
-              title={readOnlyTitle ?? addRowLabel}
+              title={addRowLabel}
             >
               <Plus />
             </Button>
@@ -218,9 +206,9 @@ export default function DataGridToolbar({
               size="icon-xs"
               className="text-muted-foreground"
               onClick={onDeleteRow}
-              disabled={readOnly || selectedRowIdsCount === 0}
+              disabled={selectedRowIdsCount === 0}
               aria-label={deleteRowLabel}
-              title={readOnlyTitle ?? deleteRowLabel}
+              title={deleteRowLabel}
             >
               <Trash2 />
             </Button>
@@ -229,9 +217,9 @@ export default function DataGridToolbar({
               size="icon-xs"
               className="text-muted-foreground"
               onClick={onDuplicateRow}
-              disabled={readOnly || selectedRowIdsCount === 0}
+              disabled={selectedRowIdsCount === 0}
               aria-label={duplicateRowLabel}
-              title={readOnlyTitle ?? duplicateRowLabel}
+              title={duplicateRowLabel}
             >
               <Copy />
             </Button>

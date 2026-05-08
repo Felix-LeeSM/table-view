@@ -91,9 +91,11 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
     useSafeModeStore.setState({ mode: "strict" });
   });
 
-  // AC-187-05a — production + strict + DROP INDEX preview blocks Execute
-  // with the standard strict message. date 2026-05-01.
-  it("[AC-187-05a] production + strict + DROP INDEX → execute blocked", async () => {
+  // AC-187-05a — production + strict + DROP INDEX preview opens the
+  // confirm dialog (was block under Sprint 187/244). Sprint 245 (ADR
+  // 0022 Phase 1) — destructive-only policy uses the same dialog for
+  // strict / warn / off on production. date 2026-05-01 / 2026-05-08.
+  it("[AC-187-05a] production + strict + DROP INDEX → confirm dialog opens, dropIndex deferred", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "strict" });
     await renderEditorAndOpenPreview();
@@ -102,8 +104,9 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText(/Safe Mode blocked: DROP INDEX/);
-    // dropIndex with preview_only=false must NOT have been invoked.
+    await screen.findByText("Confirm dangerous statement");
+    // dropIndex with preview_only=false must NOT have been invoked yet
+    // (only fires on confirm).
     const calls = vi.mocked(tauri.dropIndex).mock.calls;
     expect(
       calls.some(
@@ -196,7 +199,11 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
     ).toBe(false);
   });
 
-  // AC-187-05e — non-production environment skips the gate. date 2026-05-01.
+  // AC-187-05e — non-production + warn environment commits without
+  // gate. Sprint 245 (ADR 0022 Phase 1) — re-pinned to mode=warn so it
+  // still asserts "non-prod = unguarded" without overlapping the new
+  // M.1 strict-mode dialog flow (covered separately by the per-paradigm
+  // M.1 tests). date 2026-05-01 / 2026-05-08.
   it("[AC-187-05e] non-production environment commits without gate", async () => {
     useConnectionStore.setState({
       connections: [
@@ -214,7 +221,7 @@ describe("IndexesEditor — Sprint 187 Safe Mode gate", () => {
         } as any,
       ],
     });
-    useSafeModeStore.setState({ mode: "strict" });
+    useSafeModeStore.setState({ mode: "warn" });
     await renderEditorAndOpenPreview();
 
     act(() => {
