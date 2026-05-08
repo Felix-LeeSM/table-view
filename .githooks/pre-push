@@ -17,4 +17,5 @@ if ! command -v lefthook >/dev/null 2>&1; then
   exit 1
 fi
 
-exec lefthook run pre-push "$@"
+# `--no-auto-install` — pre-commit wrapper 의 주석 참조.
+exec lefthook run pre-push --no-auto-install "$@"

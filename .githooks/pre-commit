@@ -25,4 +25,9 @@ if ! command -v lefthook >/dev/null 2>&1; then
   exit 1
 fi
 
-exec lefthook run pre-commit "$@"
+# `--no-auto-install` — 우리는 `core.hooksPath = .githooks` 로 git 의 hook
+# 디렉토리를 옮겼다. lefthook 의 기본 동작은 매 실행마다 `.git/hooks/` 에
+# 자체 stub 을 sync 하려 시도하는데, core.hooksPath 가 다른 곳을 가리키면
+# "skip sync" 경고를 띄운다. 우리에게 sync 는 영영 불필요하므로 명시적으로
+# 끈다.
+exec lefthook run pre-commit --no-auto-install "$@"
