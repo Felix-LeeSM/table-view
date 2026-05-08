@@ -1012,6 +1012,149 @@ async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
     assert!(body.contains("Data: \"public\".\"users\""));
 }
 
+// ── _inner dispatchers (Sprint 237 P5, 2026-05-08) ─────────────────
+// 작성 이유: export_grid_rows / export_schema_dump / write_text_file_export
+// 이 `tauri::State<'_, AppState>` 받는 wrapper 라 0% 였던 본체를 _inner
+// 로 추출. cancel-token register/release contract + spawn_blocking
+// happy path 만 격리해 테스트.
+
+#[tokio::test]
+async fn export_grid_rows_inner_csv_round_trip_releases_token() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("grid.csv");
+    let summary = super::export_grid_rows_inner(
+        &state,
+        ExportFormat::Csv,
+        path.clone(),
+        vec!["id".into(), "name".into()],
+        vec![vec![json!(1), json!("alice")]],
+        table_ctx(),
+        Some("export-csv"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(summary.rows_written, 1);
+    assert!(path.exists());
+    // token must be cleaned up regardless of success/failure
+    assert!(!state.query_tokens.lock().await.contains_key("export-csv"));
+}
+
+#[tokio::test]
+async fn export_grid_rows_inner_json_with_table_ctx_returns_validation_err_and_cleans_partial_file()
+{
+    // JSON export 는 Collection ctx 만 허용 — Table ctx 면 Validation
+    // 에러. 실패 시 partial file 도 cleanup 되어야 한다.
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("grid.json");
+    let res = super::export_grid_rows_inner(
+        &state,
+        ExportFormat::Json,
+        path.clone(),
+        vec!["id".into()],
+        vec![vec![json!(1)]],
+        table_ctx(),
+        None,
+    )
+    .await;
+    assert!(matches!(res, Err(AppError::Validation(_))));
+    // Validation 은 file 생성 전에 reject — 파일이 만들어지지 않았어야.
+    assert!(!path.exists());
+}
+
+#[tokio::test]
+async fn export_grid_rows_inner_no_export_id_skips_token_registration() {
+    // export_id 가 None 이면 query_tokens 에 어떤 항목도 등록되지
+    // 않아야 한다. 다른 export 가 동시에 돌고 있을 때 충돌 회피.
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("noid.csv");
+    super::export_grid_rows_inner(
+        &state,
+        ExportFormat::Csv,
+        path,
+        vec!["id".into()],
+        vec![vec![json!(1)]],
+        table_ctx(),
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(state.query_tokens.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn export_schema_dump_inner_releases_token_on_round_trip() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("dump.sql");
+    let opts = dump_opts(ExportInclude::Ddl, 100);
+    super::export_schema_dump_inner(
+        &state,
+        "no-such-conn",
+        path,
+        "-- header",
+        "",
+        &[],
+        &opts,
+        Some("dump-1"),
+    )
+    .await
+    .unwrap();
+    assert!(!state.query_tokens.lock().await.contains_key("dump-1"));
+}
+
+#[tokio::test]
+async fn export_schema_dump_inner_validation_err_cleans_partial_file_and_releases_token() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("zero.sql");
+    // batch_size = 0 → Validation 에러
+    let opts = dump_opts(ExportInclude::Both, 0);
+    let res = super::export_schema_dump_inner(
+        &state,
+        "conn",
+        path.clone(),
+        "",
+        "",
+        &[dump_table("public", "t", vec!["id"])],
+        &opts,
+        Some("dump-zero"),
+    )
+    .await;
+    assert!(matches!(res, Err(AppError::Validation(_))));
+    // wrapper 의 partial-file cleanup 확인 — file::create 전에 reject 되므로
+    // 파일이 생성되지 않았다.
+    assert!(!path.exists());
+    // 토큰은 등록 후 삭제됐어야 — release 분기 커버.
+    assert!(!state.query_tokens.lock().await.contains_key("dump-zero"));
+}
+
+#[tokio::test]
+async fn write_text_file_export_inner_writes_content_and_returns_byte_count() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("txt.sql");
+    let content = "-- migration\nCREATE TABLE t();\n".to_string();
+    let summary = super::write_text_file_export_inner(path.clone(), content.clone())
+        .await
+        .unwrap();
+    assert_eq!(summary.rows_written, 0);
+    assert_eq!(summary.bytes_written as usize, content.len());
+    let body = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(body, content);
+}
+
+#[tokio::test]
+async fn write_text_file_export_inner_invalid_path_cleans_up_and_propagates_io_err() {
+    // 디렉토리가 없는 경로 → write_text_file 가 Io 에러. wrapper 의
+    // best-effort cleanup branch 가 호출되지만 파일은 애초에 생성되지
+    // 않았으므로 remove_file 가 silently 실패. 결과는 그대로 반환.
+    let res =
+        super::write_text_file_export_inner("/nonexistent/dir/out.sql".into(), "x".into()).await;
+    assert!(res.is_err());
+}
+
 // [AC-192-05] ExportInclude serde lowercase wire — frontend `"ddl"`
 // 등이 정확히 enum variant 로 매칭.
 #[test]

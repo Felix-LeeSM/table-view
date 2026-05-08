@@ -66,6 +66,31 @@ pub async fn export_grid_rows(
     context: ExportContext,
     export_id: Option<String>,
 ) -> Result<ExportSummary, AppError> {
+    export_grid_rows_inner(
+        state.inner(),
+        format,
+        target_path,
+        headers,
+        rows,
+        context,
+        export_id.as_deref(),
+    )
+    .await
+}
+
+/// Sprint 237 P5 (2026-05-08) — handler body hoisted from
+/// `export_grid_rows` so unit tests can drive the cancel-token register
+/// → spawn_blocking → token release contract via `&AppState` without
+/// needing a `tauri::State`.
+async fn export_grid_rows_inner(
+    state: &AppState,
+    format: ExportFormat,
+    target_path: PathBuf,
+    headers: Vec<String>,
+    rows: Vec<Vec<JsonValue>>,
+    context: ExportContext,
+    export_id: Option<&str>,
+) -> Result<ExportSummary, AppError> {
     info!(
         format = ?format,
         rows = rows.len(),
@@ -76,14 +101,14 @@ pub async fn export_grid_rows(
     // Sprint 180 — cooperative cancellation. Hoist registration outside
     // the `active_connections` lock, identical to the shape used by
     // `execute_query` and `query_table_data`.
-    let cancel_handle: Option<(String, CancellationToken)> = if let Some(eid) = export_id.as_ref() {
+    let cancel_handle: Option<(String, CancellationToken)> = if let Some(eid) = export_id {
         let token = CancellationToken::new();
         let stored = token.clone();
         {
             let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(eid.clone(), stored);
+            tokens.insert(eid.to_string(), stored);
         }
-        Some((eid.clone(), token))
+        Some((eid.to_string(), token))
     } else {
         None
     };
@@ -185,6 +210,16 @@ pub fn write_export(
 /// rows_written 은 row-단위가 아니므로 0 sentinel.
 #[tauri::command]
 pub async fn write_text_file_export(
+    target_path: PathBuf,
+    content: String,
+) -> Result<ExportSummary, AppError> {
+    write_text_file_export_inner(target_path, content).await
+}
+
+/// Sprint 237 P5 (2026-05-08) — handler body hoisted from the Tauri
+/// command wrapper. AppState 의존이 없어 시그니처에 state 파라미터가
+/// 없다 — spawn_blocking + best-effort cleanup 만 단위 테스트로 노출.
+async fn write_text_file_export_inner(
     target_path: PathBuf,
     content: String,
 ) -> Result<ExportSummary, AppError> {
@@ -297,6 +332,34 @@ pub async fn export_schema_dump(
     options: ExportSchemaDumpOptions,
     export_id: Option<String>,
 ) -> Result<ExportSummary, AppError> {
+    export_schema_dump_inner(
+        state.inner(),
+        &connection_id,
+        target_path,
+        &ddl_header,
+        &ddl_footer,
+        &tables,
+        &options,
+        export_id.as_deref(),
+    )
+    .await
+}
+
+/// Sprint 237 P5 (2026-05-08) — handler body hoisted from
+/// `export_schema_dump` so the cancel-token register → run_schema_dump
+/// dispatch → token release contract can be unit-tested without
+/// `tauri::State`.
+#[allow(clippy::too_many_arguments)]
+async fn export_schema_dump_inner(
+    state: &AppState,
+    connection_id: &str,
+    target_path: PathBuf,
+    ddl_header: &str,
+    ddl_footer: &str,
+    tables: &[ExportDumpTable],
+    options: &ExportSchemaDumpOptions,
+    export_id: Option<&str>,
+) -> Result<ExportSummary, AppError> {
     info!(
         target = ?target_path,
         connection = %connection_id,
@@ -306,14 +369,14 @@ pub async fn export_schema_dump(
     );
 
     // 1. cancel registration.
-    let cancel_handle: Option<(String, CancellationToken)> = if let Some(eid) = export_id.as_ref() {
+    let cancel_handle: Option<(String, CancellationToken)> = if let Some(eid) = export_id {
         let token = CancellationToken::new();
         let stored = token.clone();
         {
             let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(eid.clone(), stored);
+            tokens.insert(eid.to_string(), stored);
         }
-        Some((eid.clone(), token))
+        Some((eid.to_string(), token))
     } else {
         None
     };
@@ -321,13 +384,13 @@ pub async fn export_schema_dump(
 
     // 2. dump 본체.
     let result = run_schema_dump(
-        &state,
-        &connection_id,
+        state,
+        connection_id,
         &target_path,
-        &ddl_header,
-        &ddl_footer,
-        &tables,
-        &options,
+        ddl_header,
+        ddl_footer,
+        tables,
+        options,
         cancel_owned.as_ref(),
     )
     .await;

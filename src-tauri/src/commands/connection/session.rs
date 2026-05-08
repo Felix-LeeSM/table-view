@@ -47,6 +47,22 @@ fn emit_status_change(app: &tauri::AppHandle, conn_id: &str, status: ConnectionS
     }
 }
 
+/// Sprint 237 P5 (2026-05-08) — exponential backoff for the keep-alive
+/// reconnection loop, hoisted as a pure helper so the schedule (1s, 2s,
+/// 4s for attempts 1, 2, 3) can be unit-tested without standing up the
+/// full Tauri runtime.
+///
+/// `attempt` is 1-based (`consecutive_failures` after increment). The
+/// `attempt - 1` underflow guard returns `Duration::ZERO` for attempt 0
+/// — the production path always passes ≥1 but defensive zero handling
+/// keeps the helper total.
+pub(crate) fn backoff_for_attempt(attempt: u32) -> Duration {
+    if attempt == 0 {
+        return Duration::ZERO;
+    }
+    Duration::from_secs(2u64.pow(attempt - 1))
+}
+
 /// Sprint 175 — captured once on the very first `get_session_id` call. The
 /// delta `rust:first-ipc - rust:entry` is the "Tauri startup overhead" line
 /// item in `docs/sprints/sprint-175/baseline.md`. `OnceLock::set` returns
@@ -129,7 +145,7 @@ pub(super) async fn keep_alive_loop(
             return; // Stop keep-alive task
         }
 
-        let backoff = Duration::from_secs(2u64.pow(consecutive_failures - 1));
+        let backoff = backoff_for_attempt(consecutive_failures);
         info!(
             conn_id = %conn_id,
             attempt = consecutive_failures,
@@ -177,5 +193,52 @@ pub(super) async fn keep_alive_loop(
                 emit_status_change(&app, &conn_id, err_status);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! 작성 이유 (2026-05-08, Sprint 237 P5): `keep_alive_loop` 본체는
+    //! `tauri::AppHandle` / `app.emit` / `app.state` 에 강하게 결합돼
+    //! 단위 테스트가 어렵다. backoff schedule 만 pure helper 로 분리해
+    //! 1s/2s/4s 의 exponential 진행과 attempt=0 underflow 방어를 격리
+    //! 검증. `StatusChangeEvent` 의 wire shape 도 frontend 가 의존하는
+    //! `id` / `status` 필드 이름을 회귀 가드.
+    use super::*;
+
+    #[test]
+    fn backoff_attempt_one_returns_one_second() {
+        assert_eq!(backoff_for_attempt(1), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn backoff_attempt_two_returns_two_seconds() {
+        assert_eq!(backoff_for_attempt(2), Duration::from_secs(2));
+    }
+
+    #[test]
+    fn backoff_attempt_three_returns_four_seconds() {
+        assert_eq!(backoff_for_attempt(3), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn backoff_attempt_zero_short_circuits_to_zero() {
+        // attempt=0 은 production path 에서 발생하지 않지만 (`consecutive_failures`
+        // 가 +1 후에야 호출), `2u64.pow(0u32.wrapping_sub(1))` 같은 underflow
+        // 를 막는 방어 분기.
+        assert_eq!(backoff_for_attempt(0), Duration::ZERO);
+    }
+
+    #[test]
+    fn status_change_event_serde_uses_id_and_status_camel_case_keys() {
+        // frontend 가 `connection-status-changed` payload 에서 `id`/`status`
+        // 두 키만 본다 — variant 가 추가될 때 wire shape 가 깨지지 않도록.
+        let evt = StatusChangeEvent {
+            id: "abc".into(),
+            status: ConnectionStatus::Connected,
+        };
+        let json = serde_json::to_string(&evt).unwrap();
+        assert!(json.contains("\"id\":\"abc\""));
+        assert!(json.contains("\"status\""));
     }
 }

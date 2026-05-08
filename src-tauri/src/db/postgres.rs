@@ -374,3 +374,27 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.list_types().await })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! 작성 이유 (2026-05-08, Sprint 237 P5): trait dispatcher 본 파일은
+    //! 30+ 메서드가 모두 PG pool 호출에 의존하므로 실 PG 없이는 거의
+    //! 회수 불가. 그러나 paradigm tag (`kind`, `namespace_label`) 은
+    //! sync 라 pool 없이 즉시 검증 가능 — 회수는 작지만 trait wiring
+    //! 회귀(예: namespace_label 을 Database 로 잘못 바꾸는 PR)에 대한
+    //! tripwire.
+    use super::*;
+    use crate::db::postgres::PostgresAdapter;
+
+    #[test]
+    fn kind_returns_postgresql_paradigm() {
+        let a = PostgresAdapter::new();
+        assert!(matches!(a.kind(), DatabaseType::Postgresql));
+    }
+
+    #[test]
+    fn namespace_label_is_schema() {
+        let a = PostgresAdapter::new();
+        assert!(matches!(a.namespace_label(), NamespaceLabel::Schema));
+    }
+}
