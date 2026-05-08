@@ -98,6 +98,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Sprint 237 P5+ (2026-05-08) — PG/Mongo 둘 다 GHA service container 로
+    # 띄우고 환경변수로 endpoint 를 노출. tests/common/mod.rs 의
+    # pg_endpoint/mongo_endpoint helper 가 PGHOST/MONGO_HOST 가 있으면
+    # testcontainers 를 띄우지 않고 외부 인스턴스를 그대로 재사용하므로,
+    # GHA service 와 testcontainers 가 자연스럽게 swap-in/out 된다.
     services:
       postgres:
         image: postgres:16-alpine
@@ -112,6 +117,17 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 15
+      mongodb:
+        # auth 비활성 default. tests/common/mod.rs 가 user 없는 익명 연결
+        # 을 지원하므로 추가 셋팅 불필요.
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - name: Checkout
@@ -139,7 +155,9 @@ jobs:
           PGUSER: testuser
           PGPASSWORD: testpass
           PGDATABASE: table_view_test
-        run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+        run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading
 
   # ADR 0019 (2026-05-01) — E2E job removed from CI.
   #

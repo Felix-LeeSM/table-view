@@ -20,22 +20,13 @@ pre-commit:
       glob: "*.rs"
       run: cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
     rust-coverage:
-      # cargo llvm-cov 는 내부적으로 cargo test 를 instrument 해 돌리므로
-      # 코드만 변경된 경우 cache 가 거의 그대로 hit (1차 실행 ~3분, 후속
-      # ~30s-2min). pre-commit 5분 budget 안 (사용자 합의, 2026-05-07).
-      # baseline (2026-05-08, spec-first 라운드 3): lines 76.36% / functions
-      # 75.48% / regions 77.18%. 75% 목표 달성.
-      # 직전 baseline (2026-05-08 라운드 2): 72.10 / 71.90 / 73.35 →
-      #                                       (+4.26 / +3.58 / +3.83).
-      # 향상 원인:
-      #   - commands/rdb/{schema,query,ddl}.rs + commands/document/{browse,
-      #     query,mutate}.rs 핸들러를 `_inner(&AppState, …)` 로 추출. 공개
-      #     Tauri 커맨드는 `state.inner()` 한 줄로 위임. 테스트가 `_inner`
-      #     를 직접 호출 → dispatch_* 보조 헬퍼 중복 제거, 프로덕션 라인
-      #     커버 1:1 매칭.
-      #   - db/tests.rs 에 default trait impl 16개 시나리오 추가
-      #     (current_database 4-branch 포함) → db/traits.rs 98.80%.
-      #   - export/tests.rs run_schema_dump 8 시나리오 추가.
+      # pre-commit 의 coverage gate 는 Tier 1 (unit + storage_integration 미포함)
+      # 만 측정. Tier 2 (testcontainers 기반 PG/Mongo 통합) 는 매 commit 마다
+      # docker cold start 비용이 부담스러우므로 staged path 기반 conditional
+      # rust-pg-test / rust-mongo-test 로 분리. pre-push 의 6_rust-coverage
+      # 가 모든 통합을 합쳐 instrument + 임계값 검증.
+      # baseline (2026-05-08, Tier 1 only): 76.98 / 75.85 / 77.62. cushion 을
+      # 위해 75/74/76 임계값 유지.
       glob: "*.rs"
       run: |
         if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
@@ -49,6 +40,18 @@ pre-commit:
           --fail-under-lines 75 \
           --fail-under-functions 74 \
           --fail-under-regions 76
+    rust-pg-test:
+      # Sprint 237 P5+ (2026-05-08) — staged 가 PG adapter 본체를 건드릴
+      # 때만 testcontainers 기반 PG 통합 (~30s cold, ~16s cached) 을 트리거.
+      # PG 코드를 만지지 않은 일반 commit 에는 영향 없음. Docker daemon 이
+      # 없으면 cargo pg-test 가 실패하므로, PG 영역 작업자는 daemon 가동을
+      # 사전 조건으로 본다.
+      glob: "src-tauri/src/db/postgres/**/*.rs"
+      run: cd src-tauri && cargo pg-test
+    rust-mongo-test:
+      # Sprint 237 P5+ (2026-05-08) — Mongo adapter 본체 staged 시 트리거.
+      glob: "src-tauri/src/db/mongodb/**/*.rs"
+      run: cd src-tauri && cargo mongo-test
     ts-format:
       glob: "*.{ts,tsx}"
       run: npx prettier --write {staged_files}
@@ -100,10 +103,16 @@ pre-push:
       tags: lint rust
       run: cd src-tauri && cargo machete
     6_rust-coverage:
-      # `cargo llvm-cov` 는 내부에서 `cargo test --lib` 를 돌리며 coverage
-      # 를 측정하므로, 별도의 `cargo test --lib` 단계와 중복된다. 따라서
-      # 단일 명령으로 통합. integration 테스트(`storage_integration`)는
-      # `--test` 플래그로 같이 instrument.
+      # `cargo llvm-cov` 가 unit + 모든 통합 테스트를 한 번에 instrument.
+      # Tier 2 (testcontainers 기반 PG/Mongo 통합) 가 db/postgres/* 와
+      # db/mongodb/* 본체 라인을 hit 하므로 unit-only 대비 +4pp 상승.
+      # baseline (2026-05-08, Tier 1+2 통합): 81.30 / 77.97 / 82.08.
+      # cushion 을 2pp 두고 임계값 79/76/80.
+      # 첫 실행은 PG/Mongo image pull 포함 ~3-5분, 캐시 후 ~1-2분.
+      # Docker daemon 부재 환경 (예: 원격 sandbox) 에서는 testcontainers 가
+      # 즉시 실패 → push 차단됨. ADR-0019 정신상 push 는 "작동하는 게이트"
+      # 만 가져야 하므로, daemon 부재면 PG_TEST_URL/MONGO_HOST 를 셋팅해
+      # 외부 인스턴스로 우회해야 한다.
       tags: test rust
       run: |
         if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
@@ -111,10 +120,16 @@ pre-push:
           echo "       'bash scripts/setup.sh' 실행 후 재시도하세요." >&2
           exit 1
         fi
-        cd src-tauri && cargo llvm-cov --lib --test storage_integration --summary-only \
-          --fail-under-lines 75 \
-          --fail-under-functions 74 \
-          --fail-under-regions 76
+        cd src-tauri && cargo llvm-cov --lib \
+          --test storage_integration \
+          --test query_integration \
+          --test schema_integration \
+          --test fixture_loading \
+          --test mongo_integration \
+          --summary-only \
+          --fail-under-lines 79 \
+          --fail-under-functions 76 \
+          --fail-under-regions 80
     7_ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage
