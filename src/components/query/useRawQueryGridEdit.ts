@@ -57,7 +57,7 @@ export interface UseRawQueryGridEditResult {
   sqlPreview: string[] | null;
   executing: boolean;
   executeError: string | null;
-  /** Warn-tier handoff — non-null while ConfirmDangerousDialog is mounted. */
+  /** Warn-tier handoff — non-null while ConfirmDestructiveDialog is mounted. */
   pendingConfirm: { reason: string; sql: string } | null;
   // Edit handlers
   startEdit: (rowIdx: number, colIdx: number) => void;
@@ -100,7 +100,7 @@ export function useRawQueryGridEdit({
   const [executing, setExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
   // Warn-tier handoff: populated when warn mode + production +
-  // dangerous statement, consumed by `<ConfirmDangerousDialog>`.
+  // dangerous statement, consumed by `<ConfirmDestructiveDialog>`.
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;

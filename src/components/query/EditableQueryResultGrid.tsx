@@ -15,7 +15,7 @@ import {
   type ContextMenuItem,
 } from "@components/shared/ContextMenu";
 import CellDetailDialog from "@components/datagrid/CellDetailDialog";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import {
   cellToEditString,
   editKey,
@@ -420,10 +420,15 @@ export default function EditableQueryResultGrid({
         </DialogContent>
       </Dialog>
       {grid.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open={true}
           reason={grid.pendingConfirm.reason}
           sqlPreview={grid.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void grid.confirmDangerous();
           }}

@@ -11,9 +11,10 @@ import {
 } from "@components/ui/dialog";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
+import { useConnectionStore } from "@stores/connectionStore";
 
 /**
  * Sprint 235 — `RenameTableDialog`. Single text input + Cancel + Show DDL +
@@ -86,6 +87,10 @@ export default function RenameTableDialog({
   const [showDdl, setShowDdl] = useState(true);
 
   const { renameTable: renameTableMutation } = useSchemaTableMutations();
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
 
   const ddl = useDdlPreviewExecution({
     connectionId,
@@ -296,10 +301,15 @@ export default function RenameTableDialog({
       </Dialog>
 
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

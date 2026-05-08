@@ -8,7 +8,7 @@ import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import AddColumnDialog from "@components/schema/AddColumnDialog";
 import DropColumnDialog from "@components/schema/DropColumnDialog";
 
@@ -496,10 +496,15 @@ export default function ColumnsEditor({
       {/* Warn-tier confirmation. Mounted as a sibling so it stacks above
           the SQL preview dialog. */}
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

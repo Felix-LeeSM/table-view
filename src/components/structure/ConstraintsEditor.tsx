@@ -26,7 +26,7 @@ import SqlPreviewDialog from "./SqlPreviewDialog";
 import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 
 // ---------------------------------------------------------------------------
 // Constraint type
@@ -542,12 +542,17 @@ export default function ConstraintsEditor({
         />
       )}
 
-      {/* Warn-tier type-to-confirm dialog. */}
+      {/* Warn-tier destructive confirmation dialog (Sprint 246). */}
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

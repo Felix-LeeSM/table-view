@@ -3,7 +3,7 @@
 // commit & SQL preview (5) + Sprint 32 row operations (5) + Sprint 43
 // promoteTab triggers (4) + Sprint 44 Data Grid UX (3) + Sprint 50
 // multi-row selection (5) + [AC-185-06] preview-dialog environment
-// stripe + [AC-186-06] warn+production+dangerous ConfirmDangerousDialog.
+// stripe + [AC-186-06] warn+production+dangerous ConfirmDestructiveDialog.
 // Cases are byte-equivalent to the originals — no behaviour change.
 //
 // Inline `vi.spyOn(sqlGen, "generateSqlWithKeys")` survives in the
@@ -788,8 +788,8 @@ describe("DataGrid", () => {
     useConnectionStore.setState({ connections: [] });
   });
 
-  it("[AC-186-06] warn + production + dangerous → ConfirmDangerousDialog rendered with reason", async () => {
-    // AC-186-06 — Sprint 186 mounts ConfirmDangerousDialog when the
+  it("[AC-186-06] warn + production + dangerous → ConfirmDestructiveDialog rendered with reason", async () => {
+    // AC-186-06 — Sprint 186 mounts ConfirmDestructiveDialog when the
     // useDataGridEdit hook surfaces pendingConfirm. The generator is
     // PK-bounded so it never emits a WHERE-less DELETE on its own; we
     // mock generateSqlWithKeys to inject a danger shape and verify the
@@ -839,7 +839,7 @@ describe("DataGrid", () => {
       });
       // Open the SQL preview, then click Execute. The mocked generator
       // returns the WHERE-less DELETE; warn mode + production should
-      // surface the ConfirmDangerousDialog.
+      // surface the ConfirmDestructiveDialog.
       act(() => {
         window.dispatchEvent(new Event("commit-changes"));
       });
@@ -847,7 +847,7 @@ describe("DataGrid", () => {
       act(() => {
         screen.getByLabelText("Execute SQL").click();
       });
-      await screen.findByText("Confirm dangerous statement");
+      await screen.findByText("PRODUCTION DATABASE");
       const dialogContent = document.querySelector(
         '[data-slot="alert-dialog-content"]',
       );

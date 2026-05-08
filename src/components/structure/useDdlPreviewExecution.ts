@@ -11,8 +11,8 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
  *   2. on Execute, split `previewSql` on `";"`, walk each statement
  *      through `analyzeStatement` + `useSafeModeGate.decide`, and branch
  *      on strict / warn / safe.
- *   3. warn-tier surfaces a `ConfirmDangerousDialog`; the user types the
- *      analyzer reason and the same commit closure runs.
+ *   3. warn-tier surfaces a `ConfirmDestructiveDialog`; the user clicks
+ *      Confirm (or hits Enter) and the same commit closure runs.
  *   4. commit (`*_preview_only=false`) records a
  *      `useQueryHistoryStore.addHistoryEntry` entry tagged
  *      `source: "ddl-structure"`, then triggers `onRefresh()`.

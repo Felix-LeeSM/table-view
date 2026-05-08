@@ -280,7 +280,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     });
     // Confirm dialog mounts; commit closure (previewOnly:false) does
     // NOT run until the user types the analyzer reason.
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     // Only the preview call ran; no commit.
     expect(mockDropColumnRequest).toHaveBeenCalledTimes(1);
     expect(mockDropColumnRequest.mock.calls[0]?.[0]).toEqual(
@@ -305,7 +305,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
-    // Warn-tier mounts ConfirmDangerousDialog; user clicks Cancel.
+    // Warn-tier mounts ConfirmDestructiveDialog; user clicks Cancel.
     const cancelButtons = await screen.findAllByText(/Cancel/);
     await act(async () => {
       fireEvent.click(cancelButtons[cancelButtons.length - 1]!);

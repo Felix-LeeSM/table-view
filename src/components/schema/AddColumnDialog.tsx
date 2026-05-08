@@ -11,10 +11,11 @@ import {
 } from "@components/ui/dialog";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
+import { useConnectionStore } from "@stores/connectionStore";
 import type { ColumnInfo } from "@/types/schema";
 
 /**
@@ -112,6 +113,10 @@ export default function AddColumnDialog({
   const [showDdl, setShowDdl] = useState(true);
 
   const { types, typesByName } = usePostgresTypes(connectionId);
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
 
   const ddl = useDdlPreviewExecution({
     connectionId,
@@ -441,10 +446,15 @@ export default function AddColumnDialog({
       </Dialog>
 
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

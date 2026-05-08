@@ -7,7 +7,7 @@ import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
  * `useSafeModeStore.mode` (strict → warn → off → strict). The strict → warn
  * step prevents a single click from silently disabling the production
  * guard; the destructive confirm dialog opens at commit time on
- * production regardless of mode (see `ConfirmDangerousDialog`).
+ * production regardless of mode (see `ConfirmDestructiveDialog`).
  *
  * Sprint 245 (ADR 0022 Phase 1) — mode 3-tier semantic redefined to a
  * destructive-only policy. The store enum / icons / cycle order are

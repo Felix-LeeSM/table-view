@@ -630,7 +630,7 @@ describe("QueryTab — document", () => {
   // AC-188-03 — `useSafeModeGate` is wired into the aggregate dispatch
   // path. Pin every cell of the matrix that the contract enumerates by
   // exercising the actual user-visible surface (queryState transitions +
-  // ConfirmDangerousDialog) rather than asserting on the gate hook
+  // ConfirmDestructiveDialog) rather than asserting on the gate hook
   // internals — those have unit coverage in `useSafeModeGate.test.ts`.
   // date 2026-05-01.
   describe("Sprint 188 — Mongo aggregate safe-mode gate", () => {
@@ -670,7 +670,7 @@ describe("QueryTab — document", () => {
       });
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
-      await screen.findByTestId("confirm-dangerous-input");
+      await screen.findByTestId("confirm-destructive-confirm");
       const updated = useTabStore
         .getState()
         .tabs.find((t) => t.id === "query-1");
@@ -682,7 +682,10 @@ describe("QueryTab — document", () => {
       }
     });
 
-    it("[AC-188-03b] production × warn × $out → opens confirm dialog; type-to-confirm dispatches", async () => {
+    it("[AC-188-03b] production × warn × $out → opens confirm dialog; Confirm dispatches", async () => {
+      // Sprint 246 (ADR 0022 Phase 2) — confirm dialog is a simple
+      // Yes/No, so the test clicks Confirm instead of typing the
+      // analyzer reason verbatim.
       mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "warn" });
@@ -696,10 +699,11 @@ describe("QueryTab — document", () => {
 
       // Dialog should be visible and dispatch should be deferred.
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
-      const input = await screen.findByTestId("confirm-dangerous-input");
+      const confirmBtn = await screen.findByTestId(
+        "confirm-destructive-confirm",
+      );
       const user = userEvent.setup();
-      await user.type(input, "MongoDB $out (collection replace)");
-      await user.click(screen.getByRole("button", { name: /Run anyway/ }));
+      await user.click(confirmBtn);
 
       await waitFor(() => {
         expect(mockAggregateDocuments).toHaveBeenCalledTimes(1);
@@ -723,7 +727,7 @@ describe("QueryTab — document", () => {
         screen.getByTestId("execute-btn").click();
       });
 
-      await screen.findByTestId("confirm-dangerous-input");
+      await screen.findByTestId("confirm-destructive-confirm");
       const user = userEvent.setup();
       await user.click(screen.getByRole("button", { name: /Cancel/ }));
 
@@ -756,7 +760,7 @@ describe("QueryTab — document", () => {
       });
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
-      await screen.findByTestId("confirm-dangerous-input");
+      await screen.findByTestId("confirm-destructive-confirm");
       expect(
         screen.getAllByText(/production environment forces Safe Mode/).length,
       ).toBeGreaterThan(0);
@@ -788,7 +792,7 @@ describe("QueryTab — document", () => {
       });
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
-      await screen.findByTestId("confirm-dangerous-input");
+      await screen.findByTestId("confirm-destructive-confirm");
       expect(
         screen.getAllByText(
           /Safe Mode strict — destructive statement in non-production/,

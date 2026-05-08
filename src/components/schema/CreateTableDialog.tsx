@@ -21,9 +21,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useFkReferencePicker } from "@hooks/useFkReferencePicker";
 import { usePostgresTypes } from "@hooks/usePostgresTypes";
 import CreateTableTypeCombobox from "./CreateTableTypeCombobox";
@@ -291,6 +292,10 @@ export default function CreateTableDialog({
     return Array.from(set);
   }, [availableSchemas, schemaName]);
 
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
   const ddl = useDdlPreviewExecution({
     connectionId,
     onRefresh: async () => {
@@ -1559,10 +1564,15 @@ export default function CreateTableDialog({
 
       {/* Warn-tier confirmation dialog. Stacks above the create modal. */}
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

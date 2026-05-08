@@ -20,7 +20,6 @@ import {
   fireEvent,
   act,
   waitFor,
-  within,
 } from "@testing-library/react";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -169,7 +168,7 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     setup("production", "strict");
     await clickExecute(["DELETE FROM users"]);
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
   });
@@ -190,11 +189,15 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
   it("[AC-185-05c] non-production + strict + WHERE-less DELETE → confirm dialog (M.1 new flow)", async () => {
     // Sprint 245 — was "passes through". Strict on non-production now
     // also opens the destructive dialog (M.1 — for shared-staging /
-    // learning environments).
+    // learning environments). Sprint 246 (ADR 0022 Phase 2) — non-prod
+    // header reads "Destructive statement" + "Safe Mode (strict)"
+    // subcaption (no "PRODUCTION DATABASE" shout).
     setup("development", "strict");
     await clickExecute(["DELETE FROM users"]);
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("Destructive statement");
+    expect(screen.queryByText("PRODUCTION DATABASE")).not.toBeInTheDocument();
+    expect(screen.getByText(/Safe Mode \(strict\)/)).toBeInTheDocument();
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
   });
 
@@ -218,54 +221,37 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     setup("production", "off");
     await clickExecute(["DELETE FROM users"]);
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
     expect(
       screen.getAllByText(/production environment forces Safe Mode/).length,
     ).toBeGreaterThan(0);
   });
 
-  function getWarnDialog() {
-    // Scope queries to the AlertDialogContent (warn dialog) so the SQL
-    // preview Dialog's Cancel button doesn't collide.
-    return screen
-      .getByText("Confirm dangerous statement")
-      .closest('[data-slot="alert-dialog-content"]')! as HTMLElement;
-  }
-
-  it("[AC-186-05a] production + warn + WHERE-less DELETE → ConfirmDangerousDialog opens, executeQueryBatch not called", async () => {
+  it("[AC-186-05a] production + warn + WHERE-less DELETE → ConfirmDestructiveDialog opens, executeQueryBatch not called", async () => {
+    // Sprint 246 (ADR 0022 Phase 2) — header is "PRODUCTION DATABASE"
+    // and the Confirm button is enabled immediately (no type-to-confirm
+    // gate). The mount-only invariant (no commit until user clicks
+    // Confirm) is preserved.
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 
-    await screen.findByText("Confirm dangerous statement");
-    const dialog = getWarnDialog();
-    const confirmBtn = within(dialog).getByRole("button", {
-      name: "Run anyway",
-    });
-    expect(confirmBtn).toBeDisabled();
+    await screen.findByText("PRODUCTION DATABASE");
+    const confirmBtn = screen.getByTestId("confirm-destructive-confirm");
+    expect(confirmBtn).not.toBeDisabled();
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
   });
 
-  it("[AC-186-05b] warn dialog Confirm with reason typed → executeQueryBatch called", async () => {
+  it("[AC-186-05b] warn dialog Confirm click → executeQueryBatch called", async () => {
+    // Sprint 246 — Confirm is a single click; type-to-confirm gate
+    // removed.
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 
-    await screen.findByText("Confirm dangerous statement");
-    const dialog = getWarnDialog();
-    const input = within(dialog).getByTestId(
-      "confirm-dangerous-input",
-    ) as HTMLInputElement;
+    await screen.findByText("PRODUCTION DATABASE");
     act(() => {
-      fireEvent.change(input, {
-        target: { value: "DELETE without WHERE clause" },
-      });
-    });
-    const confirmBtn = within(dialog).getByRole("button", {
-      name: "Run anyway",
-    });
-    act(() => {
-      confirmBtn.click();
+      screen.getByTestId("confirm-destructive-confirm").click();
     });
     await waitFor(() => {
       expect(mockExecuteQueryBatch).toHaveBeenCalledTimes(1);
@@ -276,10 +262,9 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
     setup("production", "warn");
     await clickExecute(["DELETE FROM users"]);
 
-    await screen.findByText("Confirm dangerous statement");
-    const dialog = getWarnDialog();
+    await screen.findByText("PRODUCTION DATABASE");
     act(() => {
-      within(dialog).getByRole("button", { name: "Cancel" }).click();
+      screen.getByTestId("confirm-destructive-cancel").click();
     });
     await waitFor(() => {
       expect(mockToastInfo).toHaveBeenCalledWith(

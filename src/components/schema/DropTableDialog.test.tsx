@@ -269,7 +269,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     });
     // Confirm dialog mounts; commit closure (tauri.dropTable compat)
     // does NOT run until the user types the analyzer reason.
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     expect(mockDropTable).not.toHaveBeenCalled();
   });
 
@@ -290,7 +290,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
-    // Warn-tier mounts ConfirmDangerousDialog; user clicks Cancel.
+    // Warn-tier mounts ConfirmDestructiveDialog; user clicks Cancel.
     const cancelButtons = await screen.findAllByText(/Cancel/);
     // The last Cancel button is in the dangerous-confirm dialog (it
     // mounts above the parent dialog).

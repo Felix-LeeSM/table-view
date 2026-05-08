@@ -101,7 +101,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const calls = vi.mocked(tauri.dropConstraint).mock.calls;
     expect(
       calls.some(
@@ -110,9 +110,9 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     ).toBe(false);
   });
 
-  // AC-187-06b — production + warn opens ConfirmDangerousDialog instead
+  // AC-187-06b — production + warn opens ConfirmDestructiveDialog instead
   // of committing. date 2026-05-01.
-  it("[AC-187-06b] production + warn + DROP CONSTRAINT → ConfirmDangerousDialog mount", async () => {
+  it("[AC-187-06b] production + warn + DROP CONSTRAINT → ConfirmDestructiveDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
     await renderEditorAndOpenPreview();
@@ -121,7 +121,7 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const alertDialog = document.querySelector(
       '[data-slot="alert-dialog-content"]',
     ) as HTMLElement;
@@ -139,13 +139,11 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
-    await screen.findByText("Confirm dangerous statement");
-    const input = screen.getByTestId("confirm-dangerous-input");
-    fireEvent.change(input, {
-      target: { value: "ALTER TABLE DROP CONSTRAINT" },
-    });
+    await screen.findByText("PRODUCTION DATABASE");
+    // Sprint 246 (ADR 0022 Phase 2) — Confirm is a simple Yes button;
+    // the prior verbatim-typing gate was removed.
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: /Run anyway/i }));
+      fireEvent.click(screen.getByTestId("confirm-destructive-confirm"));
     });
 
     await waitFor(() => {
@@ -168,15 +166,10 @@ describe("ConstraintsEditor — Sprint 187 Safe Mode gate", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
-    await screen.findByText("Confirm dangerous statement");
-    const alertDialog = document.querySelector(
-      '[data-slot="alert-dialog-content"]',
-    ) as HTMLElement;
-    const cancelBtn = Array.from(alertDialog.querySelectorAll("button")).find(
-      (b) => b.textContent === "Cancel",
-    );
+    await screen.findByText("PRODUCTION DATABASE");
+    // Sprint 246 — Cancel is reachable via stable testid; no DOM walk.
     act(() => {
-      cancelBtn?.click();
+      fireEvent.click(screen.getByTestId("confirm-destructive-cancel"));
     });
 
     await screen.findByText(

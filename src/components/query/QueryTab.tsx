@@ -13,7 +13,7 @@ import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import QueryTabToolbar from "./QueryTab/Toolbar";
 import QueryHistoryPanel from "./QueryTab/HistoryPanel";
 import { useQueryExecution } from "./QueryTab/useQueryExecution";
@@ -218,10 +218,15 @@ export default function QueryTab({ tab }: QueryTabProps) {
       />
 
       {pendingMongoConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={pendingMongoConfirm.reason}
           sqlPreview={JSON.stringify(pendingMongoConfirm.pipeline, null, 2)}
+          environment={
+            connection?.environment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={confirmMongoDangerous}
           onCancel={cancelMongoDangerous}
         />
@@ -229,15 +234,20 @@ export default function QueryTab({ tab }: QueryTabProps) {
 
       {/* Sprint 231 — raw RDB warn-tier confirm dialog. Mirrors the Mongo
           dialog above but joins the batch verbatim (`;\n`) so the user
-          sees every dangerous statement before approving. The
-          `<ConfirmDangerousDialog>` resets its typed buffer on each
-          re-mount (`useEffect` keyed on `open + reason`), so an earlier
-          pending state can't pre-enable Confirm. */}
+          sees every dangerous statement before approving. Sprint 246
+          (ADR 0022 Phase 2) replaced the type-to-confirm gate with a
+          simple Yes/No + environment-aware header; the dialog mounts
+          via the same `pendingRdbConfirm` shape. */}
       {pendingRdbConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={pendingRdbConfirm.reason}
           sqlPreview={pendingRdbConfirm.statements.join(";\n")}
+          environment={
+            connection?.environment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={confirmRdbDangerous}
           onCancel={cancelRdbDangerous}
         />

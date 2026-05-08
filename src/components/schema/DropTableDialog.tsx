@@ -11,9 +11,10 @@ import {
 } from "@components/ui/dialog";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
+import { useConnectionStore } from "@stores/connectionStore";
 
 /**
  * Sprint 235 — `DropTableDialog`. Typing-confirm input + CASCADE
@@ -35,8 +36,8 @@ import { useSchemaTableMutations } from "@/hooks/useSchemaTableMutations";
  * Safe Mode dispatch is provided by `useDdlPreviewExecution` — `DROP
  * TABLE` is classified as `ddl-drop` / danger by the analyzer, so the
  * production-strict tier blocks, the production-warn tier escalates to
- * `pendingConfirm` (additional `ConfirmDangerousDialog` mounts on top of
- * the typing-confirm gate), and non-production / mode=off allows.
+ * `pendingConfirm` (additional `ConfirmDestructiveDialog` mounts on top
+ * of the typing-confirm gate), and non-production / mode=off allows.
  *
  * Sequence:
  *   1. user types name → typing match enables Apply → click Apply.
@@ -75,6 +76,10 @@ export default function DropTableDialog({
   const [showDdl, setShowDdl] = useState(true);
 
   const { dropTable: dropTableMutation } = useSchemaTableMutations();
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
 
   const ddl = useDdlPreviewExecution({
     connectionId,
@@ -267,10 +272,15 @@ export default function DropTableDialog({
       </Dialog>
 
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

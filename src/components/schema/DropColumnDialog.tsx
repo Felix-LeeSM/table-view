@@ -11,8 +11,9 @@ import {
 } from "@components/ui/dialog";
 import * as tauri from "@lib/tauri";
 import { useDdlPreviewExecution } from "@components/structure/useDdlPreviewExecution";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
+import { useConnectionStore } from "@stores/connectionStore";
 
 /**
  * Sprint 236 — `DropColumnDialog`. Mirrors the Sprint 235
@@ -35,7 +36,7 @@ import SqlSyntax from "@components/shared/SqlSyntax";
  * `ALTER TABLE … DROP COLUMN` is classified as `ddl-drop`/danger by
  * `analyzeStatement`, so the production-strict tier blocks, the
  * production-warn tier escalates to `pendingConfirm` (additional
- * `ConfirmDangerousDialog` mounts on top of the typing-confirm gate),
+ * `ConfirmDestructiveDialog` mounts on top of the typing-confirm gate),
  * and non-production / mode=off allows.
  *
  * On commit success the dialog calls `onColumnDropped()` which the
@@ -79,6 +80,11 @@ export default function DropColumnDialog({
   // user types. Hiding it by default required an extra click and made
   // users think the preview was broken.
   const [showDdl, setShowDdl] = useState(true);
+
+  const connectionEnvironment = useConnectionStore(
+    (s) =>
+      s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
 
   const ddl = useDdlPreviewExecution({
     connectionId,
@@ -289,10 +295,15 @@ export default function DropColumnDialog({
       </Dialog>
 
       {ddl.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open
           reason={ddl.pendingConfirm.reason}
           sqlPreview={ddl.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

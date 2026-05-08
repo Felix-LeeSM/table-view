@@ -27,7 +27,7 @@ import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import SqlSyntax from "@components/shared/SqlSyntax";
-import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
+import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 
 interface DataGridProps {
@@ -628,10 +628,15 @@ export default function DataGrid({
         </DialogContent>
       </Dialog>
       {editState.pendingConfirm && (
-        <ConfirmDangerousDialog
+        <ConfirmDestructiveDialog
           open={true}
           reason={editState.pendingConfirm.reason}
           sqlPreview={editState.pendingConfirm.sql}
+          environment={
+            connectionEnvironment === "production"
+              ? "production"
+              : "non-production"
+          }
           onConfirm={() => {
             void editState.confirmDangerous();
           }}

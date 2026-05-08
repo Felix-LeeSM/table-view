@@ -184,7 +184,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     // idle (no error transition) so the user can confirm or cancel.
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Type danger reason to confirm"),
+        screen.getByTestId("confirm-destructive-confirm"),
       ).toBeInTheDocument();
     });
     const state = useTabStore.getState();
@@ -235,7 +235,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
     // No confirm dialog should have mounted.
     expect(
-      screen.queryByLabelText("Type danger reason to confirm"),
+      screen.queryByTestId("confirm-destructive-confirm"),
     ).not.toBeInTheDocument();
   });
 
@@ -288,7 +288,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     expect(mockExecuteQuery).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Type danger reason to confirm"),
+        screen.getByTestId("confirm-destructive-confirm"),
       ).toBeInTheDocument();
     });
     // Reason carries the strict-mode hint copy so downstream UI guidance
@@ -317,7 +317,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
     expect(
-      screen.queryByLabelText("Type danger reason to confirm"),
+      screen.queryByTestId("confirm-destructive-confirm"),
     ).not.toBeInTheDocument();
   });
 
@@ -336,7 +336,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     // Dialog rendered with the analyzer reason verbatim.
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Type danger reason to confirm"),
+        screen.getByTestId("confirm-destructive-confirm"),
       ).toBeInTheDocument();
     });
     // The reason appears in multiple places (header description + "type
@@ -365,7 +365,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     expect(mockExecuteQuery).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Type danger reason to confirm"),
+        screen.getByTestId("confirm-destructive-confirm"),
       ).toBeInTheDocument();
     });
     expect(
@@ -413,7 +413,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     expect(mockExecuteQuery).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(
-        screen.getByLabelText("Type danger reason to confirm"),
+        screen.getByTestId("confirm-destructive-confirm"),
       ).toBeInTheDocument();
     });
   });
@@ -433,29 +433,18 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     });
 
     expect(mockExecuteQuery).not.toHaveBeenCalled();
-    // The reason text is the FIRST dangerous statement's reason —
-    // here the UPDATE (with WHERE) is safe, so DELETE without WHERE wins.
-    const input = await screen.findByLabelText("Type danger reason to confirm");
-    // Verify both statements appear verbatim in the preview.
+    // Sprint 246 (ADR 0022 Phase 2) — Confirm is a single-click button;
+    // the prior verbatim-typing + Enter gate is gone. The full batch
+    // preview still surfaces verbatim so the user can review.
+    const confirmBtn = await screen.findByTestId("confirm-destructive-confirm");
     const preview = await screen.findByLabelText("Statement preview");
     expect(preview.textContent).toContain(
       "UPDATE users SET active = 1 WHERE id = 1",
     );
     expect(preview.textContent).toContain("DELETE FROM logs");
 
-    // Type the reason verbatim and Enter to confirm.
     await act(async () => {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      const fireEvent = (await import("@testing-library/react")).fireEvent;
-      fireEvent.change(input, {
-        target: { value: "DELETE without WHERE clause" },
-      });
-    });
-    await act(async () => {
-      const fireEvent = (await import("@testing-library/react")).fireEvent;
-      fireEvent.keyDown(input, { key: "Enter" });
+      confirmBtn.click();
     });
 
     await waitFor(() => {
@@ -497,7 +486,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     // Dialog disappears.
     await waitFor(() => {
       expect(
-        screen.queryByLabelText("Type danger reason to confirm"),
+        screen.queryByTestId("confirm-destructive-confirm"),
       ).not.toBeInTheDocument();
     });
     // Tab state stays idle (running invariant: never entered running).

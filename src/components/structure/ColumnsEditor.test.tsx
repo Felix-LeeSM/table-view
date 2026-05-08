@@ -218,7 +218,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     // The danger DDL must NOT have been committed yet (only fires on
     // confirm).
     const calls = vi.mocked(tauri.alterTable).mock.calls;
@@ -230,11 +230,13 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   });
 
   // AC-187-04b — production + warn + danger preview opens the
-  // type-to-confirm dialog instead of committing. alterTable must not
-  // be invoked with preview_only=false until the user types the
-  // analyzer reason. Sprint 236 migrated the trigger to the inline
-  // MODIFY path. date 2026-05-01 / 2026-05-07.
-  it("[AC-187-04b] production + warn + danger preview → ConfirmDangerousDialog mount", async () => {
+  // confirm dialog instead of committing. alterTable must not be
+  // invoked with preview_only=false until the user clicks Confirm.
+  // Sprint 236 migrated the trigger to the inline MODIFY path; Sprint
+  // 246 (ADR 0022 Phase 2) replaced the type-to-confirm gate with the
+  // simple Yes/No environment-aware dialog. date 2026-05-01 /
+  // 2026-05-07 / 2026-05-08.
+  it("[AC-187-04b] production + warn + danger preview → ConfirmDestructiveDialog mount", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
     await renderEditorAndOpenPreview();
@@ -243,7 +245,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const alertDialog = document.querySelector(
       '[data-slot="alert-dialog-content"]',
     ) as HTMLElement;
@@ -256,9 +258,11 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     ).toBe(false);
   });
 
-  // AC-187-04c — confirm flow: typing the reason verbatim enables the
-  // destructive button; clicking it invokes alterTable with preview_only=
-  // false. date 2026-05-01 / 2026-05-07.
+  // AC-187-04c — confirm flow: clicking the simple Confirm button
+  // invokes alterTable with preview_only=false. Sprint 246 (ADR 0022
+  // Phase 2) replaced the type-to-confirm + Run-anyway gate with a
+  // single Yes button, so the test drives the destructive testid
+  // directly. date 2026-05-01 / 2026-05-07 / 2026-05-08.
   it("[AC-187-04c] confirmDangerous → alterTable called with preview_only=false", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -267,11 +271,9 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
-    await screen.findByText("Confirm dangerous statement");
-    const input = screen.getByTestId("confirm-dangerous-input");
-    fireEvent.change(input, { target: { value: "ALTER TABLE DROP COLUMN" } });
+    await screen.findByText("PRODUCTION DATABASE");
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: /Run anyway/i }));
+      fireEvent.click(screen.getByTestId("confirm-destructive-confirm"));
     });
 
     await waitFor(() => {
@@ -287,7 +289,9 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // AC-187-04d — cancel flow: clicking Cancel inside the warn dialog
   // surfaces the standard warn message via the SQL preview error banner
   // (no toast — structure-surface dialog already shows inline errors).
-  // date 2026-05-01 / 2026-05-07.
+  // Sprint 246 — Cancel button is reachable via the dialog's stable
+  // testid; no need to query the AlertDialog DOM. date 2026-05-01 /
+  // 2026-05-07 / 2026-05-08.
   it("[AC-187-04d] cancelDangerous → previewError set with warn message", async () => {
     setProductionConnection();
     useSafeModeStore.setState({ mode: "warn" });
@@ -296,17 +300,9 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /Execute/i }));
     });
-    await screen.findByText("Confirm dangerous statement");
-    // The warn dialog renders its own Cancel — scope to the AlertDialog
-    // content so we don't grab the SQL preview footer Cancel.
-    const alertDialog = document.querySelector(
-      '[data-slot="alert-dialog-content"]',
-    ) as HTMLElement;
-    const cancelBtn = Array.from(alertDialog.querySelectorAll("button")).find(
-      (b) => b.textContent === "Cancel",
-    );
+    await screen.findByText("PRODUCTION DATABASE");
     act(() => {
-      cancelBtn?.click();
+      fireEvent.click(screen.getByTestId("confirm-destructive-cancel"));
     });
 
     await screen.findByText(

@@ -310,7 +310,7 @@ export interface DataGridEditState {
   /**
    * Warn-tier Safe Mode handoff. Populated when an RDB commit on a
    * production-tagged connection trips warn mode; the consumer surfaces
-   * `<ConfirmDangerousDialog>`. `null` means no pending confirmation.
+   * `<ConfirmDestructiveDialog>`. `null` means no pending confirmation.
    */
   pendingConfirm: {
     reason: string;

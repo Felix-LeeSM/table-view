@@ -455,7 +455,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const alertDialog = document.querySelector(
       '[data-slot="alert-dialog-content"]',
     ) as HTMLElement;
@@ -500,7 +500,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const calls = mockCreateTable.mock.calls;
     expect(
       calls.some(
@@ -1485,7 +1485,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const alertDialog = document.querySelector(
       '[data-slot="alert-dialog-content"]',
     ) as HTMLElement;
@@ -2378,7 +2378,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
-    await screen.findByText("Confirm dangerous statement");
+    await screen.findByText("PRODUCTION DATABASE");
     const alertDialog = document.querySelector(
       '[data-slot="alert-dialog-content"]',
     ) as HTMLElement;
