@@ -9,7 +9,8 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "@components/ui/button";
-import { Dialog, DialogContent, DialogFooter } from "@components/ui/dialog";
+import { Dialog, DialogFooter } from "@components/ui/dialog";
+import { DialogShell } from "@components/ui/dialog-shell";
 import {
   Select,
   SelectContent,
@@ -35,11 +36,13 @@ import ForeignKeysTabBody, {
   type CheckDraft,
   type UniqueDraft,
 } from "./CreateTableDialog/ForeignKeysTabBody";
+import InlineFkPopover from "./CreateTableDialog/InlineFkPopover";
 import type {
-  AddConstraintRequest,
   ColumnDefinition,
   ConstraintDefinition,
-  CreateIndexRequest,
+  CreateTablePlanConstraint,
+  CreateTablePlanIndex,
+  CreateTablePlanRequest,
 } from "@/types/schema";
 
 /**
@@ -97,6 +100,30 @@ interface ColumnDraft {
   default_value: string;
   comment: string;
   is_pk: boolean;
+  /**
+   * Sprint 241 — inline single-column FK target (TablePlus parity).
+   * Empty `fk_ref_table` ⇒ no inline FK on this column. When populated,
+   * the chain builder synthesises a `ConstraintDefinition::ForeignKey`
+   * with a single-element `columns` array and auto-name
+   * `fk_<table>_<column>`. Multi-column FKs stay in the Constraints
+   * tab.
+   *
+   * `fk_ref_schema` blank ⇒ fall back to the table's own schema
+   * (PG implicit-search-path semantics). `fk_on_delete` / `fk_on_update`
+   * default to `"NO ACTION"`; user can override via the cell popover.
+   */
+  fk_ref_schema: string;
+  fk_ref_table: string;
+  fk_ref_column: string;
+  fk_on_delete: string;
+  fk_on_update: string;
+  /**
+   * Sprint 241 — inline single-column CHECK expression. Empty ⇒ no
+   * inline CHECK. When non-empty, the chain builder synthesises a
+   * `ConstraintDefinition::Check` with auto-name `chk_<table>_<column>`.
+   * Multi-column / cross-column CHECKs stay in the Constraints tab.
+   */
+  check_expression: string;
 }
 
 // Sprint 228 — `IndexDraft` / `IndexType` / `INDEX_TYPE_OPTIONS` live
@@ -119,6 +146,12 @@ function newDraft(): ColumnDraft {
     default_value: "",
     comment: "",
     is_pk: false,
+    fk_ref_schema: "",
+    fk_ref_table: "",
+    fk_ref_column: "",
+    fk_on_delete: "NO ACTION",
+    fk_on_update: "NO ACTION",
+    check_expression: "",
   };
 }
 
@@ -234,11 +267,10 @@ export default function CreateTableDialog({
   // Default schema = right-clicked schemaName. The dropdown selection
   // persists across tab switches but is reset when the modal closes.
   const [selectedSchema, setSelectedSchema] = useState<string>(schemaName);
-  const [showDdl, setShowDdl] = useState(false);
-  // Cache invalidation flag — flipped to true whenever any form field
-  // changes after a preview has been loaded. Next "Show DDL" click
-  // re-fetches.
-  const [previewStale, setPreviewStale] = useState(false);
+  // Preview pane defaults open — auto-debounced fetch fills it as the
+  // user types. Hiding it by default required an extra click and made
+  // users think the preview was broken.
+  const [showDdl, setShowDdl] = useState(true);
 
   const schemaOptions = useMemo(() => {
     const list = availableSchemas?.length ? availableSchemas : [schemaName];
@@ -271,8 +303,7 @@ export default function CreateTableDialog({
     setFkRefColumnsLoadingByTrackingId({});
     setSelectedSchema(schemaName);
     setActiveTab("columns");
-    setShowDdl(false);
-    setPreviewStale(false);
+    setShowDdl(true);
   };
 
   // Reset the modal whenever it (re)opens. `selectedSchema` follows
@@ -301,7 +332,6 @@ export default function CreateTableDialog({
 
   const handleAddColumn = () => {
     setColumns((prev) => [...prev, newDraft()]);
-    invalidatePreview();
   };
 
   const handleRemoveColumn = (trackingId: string) => {
@@ -309,7 +339,6 @@ export default function CreateTableDialog({
       if (prev.length <= 1) return prev;
       return prev.filter((c) => c.trackingId !== trackingId);
     });
-    invalidatePreview();
   };
 
   const handleUpdateColumn = (
@@ -319,7 +348,6 @@ export default function CreateTableDialog({
     setColumns((prev) =>
       prev.map((c) => (c.trackingId === trackingId ? { ...c, ...updates } : c)),
     );
-    invalidatePreview();
   };
 
   // Sprint 234 — generic in-place swap helper for the row reorders.
@@ -346,19 +374,16 @@ export default function CreateTableDialog({
   // declaration order is byte-significant in CREATE TABLE).
   const handleMoveColumn = (trackingId: string, direction: -1 | 1) => {
     setColumns((prev) => moveByTrackingId(prev, trackingId, direction));
-    invalidatePreview();
   };
 
   // ── Sprint 228 — Indexes tab handlers ────────────────────────────
 
   const handleAddIndex = () => {
     setIndexes((prev) => [...prev, newIndexDraft()]);
-    invalidatePreview();
   };
 
   const handleRemoveIndex = (trackingId: string) => {
     setIndexes((prev) => prev.filter((i) => i.trackingId !== trackingId));
-    invalidatePreview();
   };
 
   const handleUpdateIndex = (
@@ -368,7 +393,6 @@ export default function CreateTableDialog({
     setIndexes((prev) =>
       prev.map((i) => (i.trackingId === trackingId ? { ...i, ...updates } : i)),
     );
-    invalidatePreview();
   };
 
   const handleToggleIndexColumn = (trackingId: string, colName: string) => {
@@ -384,20 +408,17 @@ export default function CreateTableDialog({
         };
       }),
     );
-    invalidatePreview();
   };
 
   // Sprint 234 — index reorder (parent-owned, mirrors `handleMoveColumn`).
   const handleMoveIndex = (trackingId: string, direction: -1 | 1) => {
     setIndexes((prev) => moveByTrackingId(prev, trackingId, direction));
-    invalidatePreview();
   };
 
   // ── Sprint 229 — Foreign Keys / CHECK / UNIQUE handlers ──────────
 
   const handleAddFk = () => {
     setFks((prev) => [...prev, newFkDraft(selectedSchema)]);
-    invalidatePreview();
   };
 
   const handleRemoveFk = (trackingId: string) => {
@@ -408,7 +429,6 @@ export default function CreateTableDialog({
       delete next[trackingId];
       return next;
     });
-    invalidatePreview();
   };
 
   const fkPicker = useFkReferencePicker(connectionId);
@@ -449,7 +469,6 @@ export default function CreateTableDialog({
         return { ...f, ...updates };
       }),
     );
-    invalidatePreview();
     // Lazy load tables when ref_schema changes and the cache is empty.
     if (nextRefSchema) {
       void fkPicker.ensureTablesLoaded(nextRefSchema);
@@ -491,7 +510,6 @@ export default function CreateTableDialog({
         };
       }),
     );
-    invalidatePreview();
   };
 
   const handleToggleFkRefColumn = (trackingId: string, colName: string) => {
@@ -507,16 +525,13 @@ export default function CreateTableDialog({
         };
       }),
     );
-    invalidatePreview();
   };
 
   const handleAddCheck = () => {
     setChecks((prev) => [...prev, newCheckDraft()]);
-    invalidatePreview();
   };
   const handleRemoveCheck = (trackingId: string) => {
     setChecks((prev) => prev.filter((c) => c.trackingId !== trackingId));
-    invalidatePreview();
   };
   const handleUpdateCheck = (
     trackingId: string,
@@ -525,16 +540,13 @@ export default function CreateTableDialog({
     setChecks((prev) =>
       prev.map((c) => (c.trackingId === trackingId ? { ...c, ...updates } : c)),
     );
-    invalidatePreview();
   };
 
   const handleAddUnique = () => {
     setUniques((prev) => [...prev, newUniqueDraft()]);
-    invalidatePreview();
   };
   const handleRemoveUnique = (trackingId: string) => {
     setUniques((prev) => prev.filter((u) => u.trackingId !== trackingId));
-    invalidatePreview();
   };
   const handleUpdateUnique = (
     trackingId: string,
@@ -543,7 +555,6 @@ export default function CreateTableDialog({
     setUniques((prev) =>
       prev.map((u) => (u.trackingId === trackingId ? { ...u, ...updates } : u)),
     );
-    invalidatePreview();
   };
   const handleToggleUniqueColumn = (trackingId: string, colName: string) => {
     setUniques((prev) =>
@@ -558,7 +569,6 @@ export default function CreateTableDialog({
         };
       }),
     );
-    invalidatePreview();
   };
 
   // Sprint 234 — FK / CHECK / UNIQUE reorder handlers (parent-owned).
@@ -566,47 +576,31 @@ export default function CreateTableDialog({
   // components carry the boundary `disabled` state via row position.
   const handleMoveFk = (trackingId: string, direction: -1 | 1) => {
     setFks((prev) => moveByTrackingId(prev, trackingId, direction));
-    invalidatePreview();
   };
   const handleMoveCheck = (trackingId: string, direction: -1 | 1) => {
     setChecks((prev) => moveByTrackingId(prev, trackingId, direction));
-    invalidatePreview();
   };
   const handleMoveUnique = (trackingId: string, direction: -1 | 1) => {
     setUniques((prev) => moveByTrackingId(prev, trackingId, direction));
-    invalidatePreview();
   };
 
-  // Invalidates the cached DDL preview. Called from every form-edit
-  // pathway. When the inline pane is currently open it collapses back
-  // to the "Show DDL" label so the next click re-fetches; the cached
-  // SQL is discarded so the Execute button can't fire stale DDL.
-  const invalidatePreview = () => {
-    if (ddl.previewSql) {
-      setPreviewStale(true);
-      setShowDdl(false);
-      ddl.cancelPreview();
-    }
-  };
+  // Sprint 238 — auto-refresh preview on form edit (debounced 250 ms);
+  // 직접 invalidatePreview / previewStale 추적은 제거됐다. 사용자가
+  // form 을 편집하는 동안 SQL 이 라이브로 업데이트되며, Execute 버튼은
+  // stale 게이트 없이 preview 가 존재하기만 하면 활성화된다.
+  // (auto-refresh effect 는 buildRequest 정의 다음에 위치.)
 
   const handleSchemaChange = (next: string) => {
     setSelectedSchema(next);
-    invalidatePreview();
   };
 
   const handleTableNameChange = (next: string) => {
     setTableName(next);
-    invalidatePreview();
   };
 
-  // Sprint 234 — table-level COMMENT input handler. Mirrors the
-  // per-column comment input pattern (Sprint 227) — every keystroke
-  // invalidates the cached DDL preview because the SQL output includes
-  // a `COMMENT ON TABLE` statement when the trimmed comment is
-  // non-empty.
+  // Sprint 234 — table-level COMMENT input handler.
   const handleTableCommentChange = (next: string) => {
     setTableComment(next);
-    invalidatePreview();
   };
 
   const buildRequest = (previewOnly: boolean) => {
@@ -644,6 +638,47 @@ export default function CreateTableDialog({
     };
   };
 
+  // Sprint 240 — unified plan request. Bundles CREATE TABLE columns +
+  // primary key + table_comment + index drafts + constraint drafts so
+  // the backend's `create_table_plan` IPC emits the full preview SQL
+  // (or executes the chain) in one round trip. `chainIndexes` /
+  // `chainConstraints` are caller-provided so the auto-refresh
+  // useEffect can pass identical snapshots to preview and commit.
+  const buildPlanRequest = (
+    chainIndexes: IndexDraft[],
+    chainConstraints: {
+      trackingId: string;
+      name: string;
+      definition: ConstraintDefinition;
+    }[],
+    previewOnly: boolean,
+  ): CreateTablePlanRequest => {
+    const base = buildRequest(previewOnly);
+    const planIndexes: CreateTablePlanIndex[] = chainIndexes.map((idx) => ({
+      indexName: idx.name.trim(),
+      columns: idx.columns.map((c) => c.trim()).filter((c) => c.length > 0),
+      indexType: idx.index_type,
+      isUnique: idx.unique,
+    }));
+    const planConstraints: CreateTablePlanConstraint[] = chainConstraints.map(
+      (c) => ({
+        constraintName: c.name,
+        definition: c.definition,
+      }),
+    );
+    return {
+      connectionId: base.connection_id,
+      schema: base.schema,
+      name: base.name,
+      columns: base.columns,
+      primaryKey: base.primary_key,
+      tableComment: base.table_comment ?? null,
+      indexes: planIndexes,
+      constraints: planConstraints,
+      previewOnly,
+    };
+  };
+
   // Live PK column list — used by the Indexes tab for dedup decisions
   // and surface annotations.
   const declaredPk = useMemo(
@@ -672,20 +707,6 @@ export default function CreateTableDialog({
       return true;
     });
   }, [indexes, declaredPk]);
-
-  const buildIndexRequest = (
-    idx: IndexDraft,
-    previewOnly: boolean,
-  ): CreateIndexRequest => ({
-    connection_id: connectionId,
-    schema: selectedSchema,
-    table: tableName.trim(),
-    index_name: idx.name.trim(),
-    columns: idx.columns.map((c) => c.trim()).filter((c) => c.length > 0),
-    index_type: idx.index_type,
-    is_unique: idx.unique,
-    preview_only: previewOnly,
-  });
 
   // ── Sprint 229 — constraint chain wiring ────────────────────────
 
@@ -824,99 +845,115 @@ export default function CreateTableDialog({
       });
     }
 
-    return out;
-  }, [fks, checks, uniques, tableName]);
+    // Sprint 241 — pick up inline single-column FK / CHECK declared on
+    // column rows (TablePlus parity). Auto-name uses the column name so
+    // multiple rows with the same target table don't collide. Empty
+    // ref_schema falls back to `selectedSchema` so the user only has to
+    // pick a different schema when the target lives in another one.
+    for (const col of columns) {
+      const colName = col.name.trim();
+      if (colName.length === 0) continue;
 
-  const buildConstraintRequest = (
-    c: { name: string; definition: ConstraintDefinition },
-    previewOnly: boolean,
-  ): AddConstraintRequest => ({
-    connection_id: connectionId,
-    schema: selectedSchema,
-    table: tableName.trim(),
-    constraint_name: c.name,
-    definition: c.definition,
-    preview_only: previewOnly,
-  });
+      const refTable = col.fk_ref_table.trim();
+      const refColumn = col.fk_ref_column.trim();
+      if (refTable.length > 0 && refColumn.length > 0) {
+        const fkName =
+          tableNameSafe.length > 0 ? `fk_${tableNameSafe}_${colName}` : "";
+        if (fkName.length > 0) {
+          // Inline FK reference targets share the table's own schema —
+          // matches the Sprint 229 Constraints tab behaviour (the
+          // backend's `ConstraintDefinition::ForeignKey` does not yet
+          // accept a separate schema; cross-schema FKs are deferred).
+          out.push({
+            trackingId: `inline-fk-${col.trackingId}`,
+            name: fkName,
+            definition: {
+              type: "foreign_key",
+              columns: [colName],
+              reference_table: refTable,
+              reference_columns: [refColumn],
+              on_delete: col.fk_on_delete,
+              on_update: col.fk_on_update,
+            },
+          });
+        }
+      }
 
-  const handleShowDdl = async () => {
-    if (showDdl && !previewStale) {
-      // Toggle off — collapse the pane without discarding the cached
-      // preview. Next click re-shows the same SQL without re-fetch.
-      setShowDdl(false);
-      return;
+      const expr = col.check_expression.trim();
+      if (expr.length > 0) {
+        const chkName =
+          tableNameSafe.length > 0 ? `chk_${tableNameSafe}_${colName}` : "";
+        if (chkName.length > 0) {
+          out.push({
+            trackingId: `inline-chk-${col.trackingId}`,
+            name: chkName,
+            definition: {
+              type: "check",
+              expression: expr,
+            },
+          });
+        }
+      }
     }
-    setShowDdl(true);
-    setPreviewStale(false);
+
+    return out;
+  }, [fks, checks, uniques, columns, tableName]);
+
+  // Sprint 240 — auto-refresh debounced + single-IPC unified plan.
+  // Replaces the Sprint 238 N+1 fan-out (1 createTable + N createIndex
+  // + M addConstraint round trips) with one `tauri.createTablePlan`
+  // call per debounce flush. The backend builds the joined preview
+  // SQL (or executes the chain under atomic policy C) and returns it
+  // verbatim — the dialog's preview pane renders the result with
+  // zero client-side composition.
+  useEffect(() => {
+    if (!open) return;
     if (!canPreview) return;
-    // Snapshot the chain lists at preview time so the request /
-    // commit closures use the same list (form edits between Show DDL
-    // and Execute already invalidate the cache via `previewStale`).
-    const chainIndexes = declaredIndexesForChain;
-    const chainConstraints = declaredConstraintsForChain;
-    await ddl.loadPreview(
-      async () => {
-        const tableResult = await tauri.createTable(buildRequest(true));
-        // Multi-statement preview — fan out one CREATE INDEX preview
-        // call per declared (non-PK-dedup) row, then one ADD
-        // CONSTRAINT preview call per declared (validated) FK / CHECK /
-        // UNIQUE row, in declared order. Sequential to keep output
-        // deterministic; row count is small and these are cheap SQL
-        // builders, not actual database calls.
-        const indexSqls: string[] = [];
-        for (const idx of chainIndexes) {
-          const r = await tauri.createIndex(buildIndexRequest(idx, true));
-          indexSqls.push(r.sql);
-        }
-        const constraintSqls: string[] = [];
-        for (const c of chainConstraints) {
-          const r = await tauri.addConstraint(buildConstraintRequest(c, true));
-          constraintSqls.push(r.sql);
-        }
-        const all = [tableResult.sql, ...indexSqls, ...constraintSqls].filter(
-          (s) => s && s.trim().length > 0,
-        );
-        return { sql: all.join(";\n") };
-      },
-      () => async () => {
-        // Atomic policy C — CREATE TABLE first, in its own transaction
-        // (the backend wraps CREATE TABLE + COMMENT ON in a single
-        // tx). Index calls are sequential and each in its own
-        // transaction. Index failures do NOT roll back the table.
-        // ADD CONSTRAINT calls run after the index chain — same
-        // partial-atomic semantics: failures do NOT roll back the
-        // table or earlier-applied indexes/constraints.
-        await tauri.createTable(buildRequest(false));
-        for (const idx of chainIndexes) {
-          try {
-            await tauri.createIndex(buildIndexRequest(idx, false));
-          } catch (e) {
-            // Surface the failing index name verbatim so the hook's
-            // `previewError` slot tells the user which row failed.
-            // Subsequent indexes in `chainIndexes` are NOT executed
-            // because we re-throw here (the `for` loop unwinds and
-            // the closure rejects).
-            throw new Error(`Index "${idx.name.trim()}" failed: ${String(e)}`);
-          }
-        }
-        for (const c of chainConstraints) {
-          try {
-            await tauri.addConstraint(buildConstraintRequest(c, false));
-          } catch (e) {
-            // Sprint 229 — same verbatim-name surface contract as the
-            // index chain. Format: `Constraint "<name>" failed: <PG
-            // error>` (Sprint 229 findings — locked surface text).
-            throw new Error(`Constraint "${c.name}" failed: ${String(e)}`);
-          }
-        }
-      },
-    );
+    const handle = window.setTimeout(() => {
+      // Snapshot at debounce-flush time — same chain rows feed both
+      // the preview request and the commit closure, so both observe
+      // identical row sets even if the user keeps typing.
+      const chainIndexes = declaredIndexesForChain;
+      const chainConstraints = declaredConstraintsForChain;
+      void ddl.loadPreview(
+        async () => {
+          return tauri.createTablePlan(
+            buildPlanRequest(chainIndexes, chainConstraints, true),
+          );
+        },
+        () => async () => {
+          await tauri.createTablePlan(
+            buildPlanRequest(chainIndexes, chainConstraints, false),
+          );
+        },
+      );
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // Dep array intentionally watches the inputs that drive SQL
+    // content: the table-level fields, the column drafts, and the
+    // chain row arrays. `ddl.loadPreview` / build* helpers are stable
+    // per render and excluded for noise reduction.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    canPreview,
+    tableName,
+    tableComment,
+    selectedSchema,
+    columns,
+    declaredIndexesForChain,
+    declaredConstraintsForChain,
+    connectionId,
+  ]);
+
+  const handleShowDdl = () => {
+    setShowDdl((s) => !s);
   };
 
   const handleExecute = async () => {
-    // Execute closure runs through the hook's Safe Mode gate +
-    // history record. The commit closure was registered by
-    // `loadPreview`. If the preview is stale or unloaded, refuse.
+    // Sprint 238: stale 게이트 제거 — auto-refresh 가 commit closure 를
+    // 항상 최신 form snapshot 으로 갱신하므로, previewSql 만 존재하면
+    // 안전하게 commit 가능.
     if (!ddl.previewSql) return;
     await ddl.attemptExecute();
   };
@@ -937,21 +974,22 @@ export default function CreateTableDialog({
           if (!next) handleCancel();
         }}
       >
-        <DialogContent
-          className="w-dialog-md bg-secondary p-0"
-          showCloseButton={false}
-        >
-          <div className="rounded-lg bg-secondary shadow-xl">
-            {/* Sprint 234 — schema picker moved OUT of the header into
-                the body (above Table name input). Header is now just
-                title + sr-only description + close button. */}
+        <DialogShell className="w-dialog-md" showCloseButton={false}>
+          {/* Sprint 241 — 3-region compound layout (Header / Body /
+              Footer). Header + Footer are pinned (flex-shrink-0); only
+              the middle Body scrolls so the user always sees the title
+              bar above and the DDL preview / Execute button below
+              while a long column / index / constraint list scrolls
+              between them. */}
+          <DialogShell.Header>
             <CreateTableDialogHeader
               selectedSchema={selectedSchema}
               onClose={handleCancel}
             />
+          </DialogShell.Header>
 
-            {/* Body */}
-            <div className="space-y-3 px-4 py-3">
+          <DialogShell.Body>
+            <div className="space-y-3">
               {/* Sprint 234 — Schema picker (moved out of the header).
                   Renders ABOVE the Table name input so the layout reads
                   top-to-bottom: schema → table name → table comment →
@@ -1060,10 +1098,18 @@ export default function CreateTableDialog({
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="foreign_keys" className="rounded-none">
-                    Foreign Keys
+                    Constraints
                     {declaredConstraintsForChain.length > 0 && (
                       <span className="ml-1 text-3xs text-muted-foreground">
-                        ({declaredConstraintsForChain.length})
+                        (
+                        {[
+                          fks.length > 0 ? `FK ${fks.length}` : null,
+                          checks.length > 0 ? `CHK ${checks.length}` : null,
+                          uniques.length > 0 ? `UQ ${uniques.length}` : null,
+                        ]
+                          .filter((s): s is string => s !== null)
+                          .join(" · ")}
+                        )
                       </span>
                     )}
                   </TabsTrigger>
@@ -1091,6 +1137,10 @@ export default function CreateTableDialog({
                         Column
                       </Button>
                     </div>
+                    {/* Sprint 241 — single-layer scroll. Long lists
+                        flow naturally inside the dialog body's outer
+                        scroll region; the row container itself does
+                        not introduce a second scroll axis. */}
                     <div className="space-y-1">
                       {columns.map((col, position) => {
                         // Sprint 234 — boundary flags for ↑/↓ reorder.
@@ -1165,6 +1215,69 @@ export default function CreateTableDialog({
                                 placeholder="comment (optional)"
                                 aria-label="Column comment"
                               />
+                              {/* Sprint 241 — inline FK + CHECK on the
+                                column row (TablePlus parity). FK is
+                                edited via a popover (cell-click
+                                pattern); single-column CHECK is a
+                                free-text input. Multi-column variants
+                                continue to live in the Constraints
+                                tab. */}
+                              <div className="flex items-center gap-1.5">
+                                <InlineFkPopover
+                                  columnTrackingId={col.trackingId}
+                                  value={{
+                                    ref_schema: col.fk_ref_schema,
+                                    ref_table: col.fk_ref_table,
+                                    ref_column: col.fk_ref_column,
+                                    on_delete: col.fk_on_delete,
+                                    on_update: col.fk_on_update,
+                                  }}
+                                  defaultSchema={selectedSchema}
+                                  availableSchemas={schemaOptions}
+                                  refTablesByKey={refTablesByKey}
+                                  refColumnsByKey={refColumnsByKey}
+                                  onSchemaPicked={(s) => {
+                                    void fkPicker.ensureTablesLoaded(s);
+                                  }}
+                                  onTablePicked={(s, t) => {
+                                    void fkPicker.loadColumnsIfMissing(s, t);
+                                  }}
+                                  onChange={(updates) => {
+                                    const mapped: Partial<ColumnDraft> = {};
+                                    if (updates.ref_schema !== undefined)
+                                      mapped.fk_ref_schema = updates.ref_schema;
+                                    if (updates.ref_table !== undefined)
+                                      mapped.fk_ref_table = updates.ref_table;
+                                    if (updates.ref_column !== undefined)
+                                      mapped.fk_ref_column = updates.ref_column;
+                                    if (updates.on_delete !== undefined)
+                                      mapped.fk_on_delete = updates.on_delete;
+                                    if (updates.on_update !== undefined)
+                                      mapped.fk_on_update = updates.on_update;
+                                    handleUpdateColumn(col.trackingId, mapped);
+                                  }}
+                                  onClear={() =>
+                                    handleUpdateColumn(col.trackingId, {
+                                      fk_ref_schema: "",
+                                      fk_ref_table: "",
+                                      fk_ref_column: "",
+                                      fk_on_delete: "NO ACTION",
+                                      fk_on_update: "NO ACTION",
+                                    })
+                                  }
+                                />
+                                <input
+                                  className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
+                                  value={col.check_expression}
+                                  onChange={(e) =>
+                                    handleUpdateColumn(col.trackingId, {
+                                      check_expression: e.target.value,
+                                    })
+                                  }
+                                  placeholder="check expression (optional, e.g. age >= 0)"
+                                  aria-label="Column check expression"
+                                />
+                              </div>
                             </div>
                             {/* Sprint 234 — ↑ / ↓ reorder buttons (left
                               of `−`). Boundary-disabled at top/bottom
@@ -1323,13 +1436,16 @@ export default function CreateTableDialog({
                 </TabsContent>
               </Tabs>
             </div>
+          </DialogShell.Body>
 
-            {/* Inline DDL Preview pane (collapsible) */}
-            <div className="border-t border-border">
+          <DialogShell.Footer>
+            {/* Inline DDL Preview pane (collapsible) — pinned above the
+                action button row so it stays visible while the body
+                scrolls. */}
+            <div>
               <button
                 type="button"
                 onClick={handleShowDdl}
-                disabled={!canPreview && !showDdl}
                 className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-secondary-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 aria-expanded={showDdl}
                 aria-controls="create-table-ddl-preview"
@@ -1372,7 +1488,6 @@ export default function CreateTableDialog({
               )}
             </div>
 
-            {/* Footer */}
             <DialogFooter className="border-t border-border px-4 py-3">
               <Button variant="ghost" size="sm" onClick={handleCancel}>
                 Cancel
@@ -1380,12 +1495,7 @@ export default function CreateTableDialog({
               <Button
                 size="sm"
                 onClick={handleExecute}
-                disabled={
-                  !canPreview ||
-                  ddl.previewLoading ||
-                  !ddl.previewSql ||
-                  previewStale
-                }
+                disabled={!canPreview || ddl.previewLoading || !ddl.previewSql}
                 aria-label="Execute"
               >
                 {ddl.previewLoading ? (
@@ -1394,8 +1504,8 @@ export default function CreateTableDialog({
                 Execute
               </Button>
             </DialogFooter>
-          </div>
-        </DialogContent>
+          </DialogShell.Footer>
+        </DialogShell>
       </Dialog>
 
       {/* Warn-tier confirmation dialog. Stacks above the create modal. */}

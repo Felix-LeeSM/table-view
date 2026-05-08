@@ -45,6 +45,7 @@ import {
   act,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 const {
   mockCreateTable,
@@ -52,6 +53,7 @@ const {
   mockDropIndex,
   mockAddConstraint,
   mockDropConstraint,
+  mockCreateTablePlan,
   mockListPostgresTypes,
 } = vi.hoisted(() => ({
   mockCreateTable: vi.fn(),
@@ -67,14 +69,104 @@ const {
   // on mid-chain failure.
   mockAddConstraint: vi.fn(),
   mockDropConstraint: vi.fn(),
+  // Sprint 240 — `createTablePlan` is the new unified IPC the dialog
+  // calls in place of the Sprint 228/229 N+1 fan-out. The default
+  // impl below routes the plan through `mockCreateTable` /
+  // `mockCreateIndex` / `mockAddConstraint` so the existing
+  // fan-out-shaped assertions (call counts, ordering, rejection
+  // halts the chain) keep validating the same contract. The
+  // backend's trait default impl mirrors this exact fan-out, so
+  // the simulation is faithful — not an arbitrary test seam.
+  mockCreateTablePlan: vi.fn(),
   // Sprint 230 — usePostgresTypes consumes this. Default impl returns
   // an empty array so non-Sprint-230 cases see the canonical-only
   // merged list (= canonical exactly).
   mockListPostgresTypes: vi.fn().mockResolvedValue([]),
 }));
 
+// Sprint 240 — wire `createTablePlan` to the legacy fan-out mocks. The
+// production code now issues exactly one IPC per debounce flush, but
+// the test asserts the per-step shape (call counts on `createTable` /
+// `createIndex` / `addConstraint`, order, propagated rejection). This
+// impl keeps those asserts valid by replaying the same chain the
+// backend's default `RdbAdapter::create_table_plan` would have run.
+mockCreateTablePlan.mockImplementation(
+  async (req: {
+    connectionId: string;
+    schema: string;
+    name: string;
+    columns: unknown[];
+    primaryKey?: string[] | null;
+    tableComment?: string | null;
+    indexes?: Array<{
+      indexName: string;
+      columns: string[];
+      indexType: string;
+      isUnique?: boolean;
+    }>;
+    constraints?: Array<{
+      constraintName: string;
+      definition: unknown;
+    }>;
+    previewOnly?: boolean;
+  }) => {
+    const previewOnly = req.previewOnly ?? false;
+    const sqlParts: string[] = [];
+    const tableResult = await mockCreateTable({
+      connection_id: req.connectionId,
+      schema: req.schema,
+      name: req.name,
+      columns: req.columns,
+      primary_key: req.primaryKey ?? null,
+      table_comment: req.tableComment ?? null,
+      preview_only: previewOnly,
+    });
+    sqlParts.push((tableResult as { sql?: string }).sql ?? "");
+    for (const idx of req.indexes ?? []) {
+      try {
+        const r = await mockCreateIndex({
+          connection_id: req.connectionId,
+          schema: req.schema,
+          table: req.name,
+          index_name: idx.indexName,
+          columns: idx.columns,
+          index_type: idx.indexType,
+          is_unique: idx.isUnique ?? false,
+          preview_only: previewOnly,
+        });
+        sqlParts.push((r as { sql?: string }).sql ?? "");
+      } catch (e) {
+        // Sprint 240 — wrap rejection with the failing index name so
+        // the dialog's preview pane surfaces "Index \"idx_x\" failed:
+        // ...". Mirrors the backend `create_table_plan` default impl
+        // (`db/traits.rs`).
+        throw new Error(`Index "${idx.indexName}" failed: ${String(e)}`);
+      }
+    }
+    for (const c of req.constraints ?? []) {
+      try {
+        const r = await mockAddConstraint({
+          connection_id: req.connectionId,
+          schema: req.schema,
+          table: req.name,
+          constraint_name: c.constraintName,
+          definition: c.definition,
+          preview_only: previewOnly,
+        });
+        sqlParts.push((r as { sql?: string }).sql ?? "");
+      } catch (e) {
+        throw new Error(
+          `Constraint "${c.constraintName}" failed: ${String(e)}`,
+        );
+      }
+    }
+    return { sql: sqlParts.filter((s) => s.length > 0).join(";\n") };
+  },
+);
+
 vi.mock("@lib/tauri", () => ({
   createTable: mockCreateTable,
+  createTablePlan: mockCreateTablePlan,
   createIndex: mockCreateIndex,
   dropIndex: mockDropIndex,
   addConstraint: mockAddConstraint,
@@ -166,7 +258,25 @@ function getKeysPanel(): HTMLElement {
 }
 
 function activateTab(label: string) {
-  fireEvent.click(screen.getByRole("tab", { name: label }));
+  // The outer (main) Tabs in `CreateTableDialog` is controlled
+  // (`value` + `onValueChange`), so a single `fireEvent.click` on the
+  // trigger flips state via React. The first matching tab is the main
+  // tablist's trigger — sub-tabs (FK / CHECK / UNIQUE inside the
+  // Constraints panel) have non-overlapping labels.
+  const tab = screen.getAllByRole("tab", { name: label })[0];
+  if (!tab) throw new Error(`No tab with label ${label}`);
+  fireEvent.click(tab);
+}
+
+// Sprint 241 — the Constraints panel splits FK / CHECK / UNIQUE into
+// a nested uncontrolled `<Tabs defaultValue="fk">`. Radix Tabs in
+// uncontrolled mode does NOT react to bare `fireEvent.click`; it
+// requires the pointer-event sequence that `userEvent` synthesises.
+async function activateConstraintSubTab(
+  name: "Foreign Keys" | "CHECK" | "UNIQUE",
+) {
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("tab", { name: new RegExp(`^${name}`) }));
 }
 
 describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)", () => {
@@ -274,7 +384,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
 
     // Sprint 227 — Show DDL drives the preview fetch (no separate
     // "Preview SQL" button in the footer).
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockCreateTable).toHaveBeenCalledTimes(1);
     });
@@ -312,7 +422,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog();
     await fillSimpleForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -338,7 +448,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog();
     await fillSimpleForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -379,7 +489,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog();
     await fillSimpleForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -407,7 +517,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog({ onRefresh, onClose });
     await fillSimpleForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -443,7 +553,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     activateTab("Keys");
     fireEvent.click(within(getKeysPanel()).getByLabelText("Primary key: id"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     const previewCall = mockCreateTable.mock.calls[0]![0] as {
@@ -478,12 +588,19 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
 
   // ── AC-227-01 Tabs layout ─────────────────────────────────────────
 
-  it("renders exactly four tabs labelled Columns / Keys / Indexes / Foreign Keys (AC-227-01)", () => {
+  it("renders exactly four tabs labelled Columns / Keys / Indexes / Constraints (AC-227-01)", () => {
     renderDialog();
-    const tabs = screen.getAllByRole("tab");
+    // Sprint 241 split FK / CHECK / UNIQUE into a nested tablist inside
+    // the Constraints panel, so the document now has multiple
+    // `tablist`s. Scope the count check to the OUTER (first) tablist —
+    // the four main tabs — so the sub-tabs don't inflate the count.
+    const mainTablist = screen.getAllByRole("tablist")[0]!;
+    const tabs = within(mainTablist).getAllByRole("tab");
     expect(tabs).toHaveLength(4);
     const labels = tabs.map((t) => t.textContent?.trim());
-    expect(labels).toEqual(["Columns", "Keys", "Indexes", "Foreign Keys"]);
+    // The fourth tab was renamed `Foreign Keys` → `Constraints` because
+    // it actually houses three constraint families (FK + CHECK + UNIQUE).
+    expect(labels).toEqual(["Columns", "Keys", "Indexes", "Constraints"]);
   });
 
   it("Indexes tab no longer renders the Sprint 227 placeholder (AC-227-01 superseded by AC-228-01)", () => {
@@ -505,28 +622,29 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     ).toBeInTheDocument();
   });
 
-  it("Foreign Keys tab no longer renders the Sprint 228 placeholder (AC-227-01 superseded by AC-229-01)", () => {
+  it("Foreign Keys tab no longer renders the Sprint 228 placeholder (AC-227-01 superseded by AC-229-01)", async () => {
     // Sprint 229 — the AC-227-01 Foreign Keys placeholder body
     // (`"Available in Sprint 229"`) was removed in favour of the
-    // interactive editor (AC-229-01). Assertion intentionally flipped:
-    // the editor's `+ Foreign Key` / `+ CHECK` / `+ Unique` add
-    // buttons must surface, and the placeholder string must be gone
-    // from the panel. The Foreign Keys tab now houses 3 sub-sections
-    // (FK + CHECK + UNIQUE) per Sprint 229 contract.
+    // interactive editor (AC-229-01). Sprint 241 — split into 3
+    // sub-tabs (FK / CHECK / UNIQUE), so each family's `+ Add` button
+    // is reachable only after activating its sub-tab.
     renderDialog();
-    activateTab("Foreign Keys");
+    activateTab("Constraints");
     const panel = document.querySelector(
       '[data-testid="create-table-foreign-keys-panel"]',
     ) as HTMLElement;
     expect(panel.textContent).not.toContain("Available in Sprint 229");
+    // FK sub-tab is the default — its add button is visible immediately.
     expect(
       within(panel).getByRole("button", { name: /Add foreign key/i }),
     ).toBeInTheDocument();
+    await activateConstraintSubTab("CHECK");
     expect(
-      within(panel).getByRole("button", { name: /Add check/i }),
+      await within(panel).findByRole("button", { name: /Add check/i }),
     ).toBeInTheDocument();
+    await activateConstraintSubTab("UNIQUE");
     expect(
-      within(panel).getByRole("button", { name: /Add unique/i }),
+      await within(panel).findByRole("button", { name: /Add unique/i }),
     ).toBeInTheDocument();
   });
 
@@ -557,7 +675,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     });
     fireEvent.click(analyticsOption);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as { schema: string };
     expect(call.schema).toBe("analytics");
@@ -610,7 +728,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     fireEvent.change(typeInput, { target: { value: "numeric(10,4)" } });
     fireEvent.blur(typeInput);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       columns: Array<{ data_type: string }>;
@@ -649,7 +767,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       target: { value: "primary key" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       columns: Array<{ comment?: string }>;
@@ -672,7 +790,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
       target: { value: "pk" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     expect(
       (mockCreateTable.mock.calls[0]![0] as { preview_only: boolean })
@@ -688,7 +806,9 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     expect(previewPane.textContent).toContain("COMMENT ON");
   });
 
-  it("editing a field after preview invalidates the cached preview — next 'Show DDL' triggers a 2nd preview call (AC-227-05)", async () => {
+  it("editing a field after preview auto-refetches preview (AC-227-05 / Sprint 238)", async () => {
+    // Sprint 238: 자동 refresh — table name 수정만으로 preview 가
+    // debounce 후 재발행되며, "Show DDL" 재클릭이 필요 없다.
     setDevConnection();
     useSafeModeStore.setState({ mode: "off" });
     mockCreateTable.mockResolvedValue({
@@ -697,15 +817,11 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     renderDialog();
     await fillSimpleForm();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
-    // Edit the table name → cache invalidated, pane collapses.
     fireEvent.change(screen.getByLabelText("Table name"), {
       target: { value: "events_v2" },
     });
-    // Show DDL again triggers a 2nd preview fetch.
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(2));
   });
 
@@ -900,7 +1016,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockCreateTable).toHaveBeenCalledTimes(1);
       expect(mockCreateIndex).toHaveBeenCalledTimes(1);
@@ -967,17 +1083,31 @@ describe("Sprint 228 — Indexes tab functional", () => {
     const idCheckboxes = within(panel).getAllByLabelText("Index column: id");
     fireEvent.click(idCheckboxes[idCheckboxes.length - 1]!);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
-    await waitFor(() => {
-      expect(mockCreateTable).toHaveBeenCalledTimes(1);
-      expect(mockCreateIndex).toHaveBeenCalledTimes(2);
-    });
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch
+    // settles after 250 ms idle. Wait for the Execute button to actually
+    // become enabled (i.e. previewSql populated AND previewLoading=false)
+    // before firing the click — the mock-count-only waitFor used to fire
+    // mid-await and click a still-disabled button.
+    await waitFor(
+      () => {
+        expect(mockCreateTable).toHaveBeenCalledTimes(1);
+        expect(mockCreateIndex).toHaveBeenCalledTimes(2);
+        const btn = screen.getByRole("button", {
+          name: "Execute",
+        }) as HTMLButtonElement;
+        expect(btn.disabled).toBe(false);
+      },
+      { timeout: 3000 },
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
-    await waitFor(() => {
-      expect(mockCreateTable).toHaveBeenCalledTimes(2);
-      expect(mockCreateIndex).toHaveBeenCalledTimes(4);
-    });
+    await waitFor(
+      () => {
+        expect(mockCreateTable).toHaveBeenCalledTimes(2);
+        expect(mockCreateIndex).toHaveBeenCalledTimes(4);
+      },
+      { timeout: 3000 },
+    );
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 
@@ -1046,7 +1176,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     const idCheckboxes = within(panel).getAllByLabelText("Index column: id");
     fireEvent.click(idCheckboxes[idCheckboxes.length - 1]!);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(2));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -1123,7 +1253,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     expect(emailBoxes.length).toBeGreaterThanOrEqual(3);
     for (let i = 0; i < 3; i += 1) fireEvent.click(emailBoxes[i]!);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(3));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -1188,7 +1318,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Index column: id"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     // No createIndex call — row is PK-deduped.
@@ -1229,7 +1359,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Index column: id"));
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockCreateIndex).toHaveBeenCalledTimes(1);
     });
@@ -1258,7 +1388,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
       target: { value: "integer" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -1291,7 +1421,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Index column: id"));
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(1));
     const call = mockCreateIndex.mock.calls[0]![0] as { columns: string[] };
     expect(call.columns).toEqual(["id", "email"]);
@@ -1318,7 +1448,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
     fireEvent.click(within(panel).getByLabelText("Index unique"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateIndex).toHaveBeenCalledTimes(1));
     const call = mockCreateIndex.mock.calls[0]![0] as { is_unique?: boolean };
     expect(call.is_unique).toBe(true);
@@ -1345,7 +1475,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     });
     fireEvent.click(within(panel).getByLabelText("Index column: email"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -1436,34 +1566,44 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       within(getColumnsPanel()).getAllByLabelText("Column data type")[1]!,
       { target: { value: "integer" } },
     );
-    activateTab("Foreign Keys");
+    activateTab("Constraints");
   }
 
+  // Sprint 241 — Constraints panel has nested sub-tabs; each `+ Add`
+  // button is hidden behind its family's sub-tab. The helpers below
+  // activate the sub-tab first (FK is the default so its helper is
+  // synchronous; CHECK / UNIQUE need an async sub-tab activation).
   function addFkRow() {
     fireEvent.click(screen.getByRole("button", { name: /Add foreign key/i }));
   }
-  function addCheckRow() {
-    fireEvent.click(screen.getByRole("button", { name: /Add check/i }));
+  async function addCheckRow() {
+    await activateConstraintSubTab("CHECK");
+    fireEvent.click(await screen.findByRole("button", { name: /Add check/i }));
   }
-  function addUniqueRow() {
-    fireEvent.click(screen.getByRole("button", { name: /Add unique/i }));
+  async function addUniqueRow() {
+    await activateConstraintSubTab("UNIQUE");
+    fireEvent.click(await screen.findByRole("button", { name: /Add unique/i }));
   }
 
   // ── AC-229-01: FK tab placeholder removed; 3 add-buttons present ─
 
-  it("Foreign Keys tab no longer renders the 'Available in Sprint 229' placeholder (AC-229-01)", () => {
+  it("Foreign Keys tab no longer renders the 'Available in Sprint 229' placeholder (AC-229-01)", async () => {
     renderDialog();
-    activateTab("Foreign Keys");
+    activateTab("Constraints");
     const panel = getForeignKeysPanel();
     expect(panel.textContent).not.toContain("Available in Sprint 229");
+    // Sprint 241 — FK is the default sub-tab; CHECK / UNIQUE add
+    // buttons live behind their respective sub-tab triggers.
     expect(
       within(panel).getByRole("button", { name: /Add foreign key/i }),
     ).toBeInTheDocument();
+    await activateConstraintSubTab("CHECK");
     expect(
-      within(panel).getByRole("button", { name: /Add check/i }),
+      await within(panel).findByRole("button", { name: /Add check/i }),
     ).toBeInTheDocument();
+    await activateConstraintSubTab("UNIQUE");
     expect(
-      within(panel).getByRole("button", { name: /Add unique/i }),
+      await within(panel).findByRole("button", { name: /Add unique/i }),
     ).toBeInTheDocument();
   });
 
@@ -1621,7 +1761,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       ),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
     const call = mockAddConstraint.mock.calls[0]![0] as {
       definition: {
@@ -1658,7 +1798,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     renderDialog();
     await fillTwoColumnFormAndOpenForeignKeysTab();
-    addCheckRow();
+    await addCheckRow();
     const panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Check name"), {
       target: { value: "chk_age" },
@@ -1667,7 +1807,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "age >= 0" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
     const call = mockAddConstraint.mock.calls[0]![0] as {
       definition: { type: string; expression: string };
@@ -1694,7 +1834,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     renderDialog();
     await fillTwoColumnFormAndOpenForeignKeysTab();
-    addCheckRow();
+    await addCheckRow();
     const panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Check name"), {
       target: { value: "chk_blank" },
@@ -1703,7 +1843,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "   " },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     expect(mockAddConstraint).not.toHaveBeenCalled();
   });
@@ -1722,14 +1862,14 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     renderDialog();
     await fillTwoColumnFormAndOpenForeignKeysTab();
-    addUniqueRow();
+    await addUniqueRow();
     const panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Unique name"), {
       target: { value: "uq_orders_user" },
     });
     fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(1));
     const call = mockAddConstraint.mock.calls[0]![0] as {
       definition: { type: string; columns: string[] };
@@ -1786,11 +1926,15 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     await fillTwoColumnFormAndOpenForeignKeysTab();
 
     addFkRow();
-    addCheckRow();
-    addUniqueRow();
+    await addCheckRow();
+    await addUniqueRow();
+    // Sprint 241 — sub-tabs hide inactive panels; each family's fields
+    // are only reachable while its sub-tab is active. Re-activate
+    // before manipulating each family's controls.
+    await activateConstraintSubTab("Foreign Keys");
     const panel = getForeignKeysPanel();
 
-    fireEvent.change(within(panel).getByLabelText("Foreign key name"), {
+    fireEvent.change(await within(panel).findByLabelText("Foreign key name"), {
       target: { value: "fk_orders_user" },
     });
     fireEvent.click(
@@ -1815,8 +1959,9 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       ),
     );
 
+    await activateConstraintSubTab("CHECK");
     fireEvent.change(
-      within(getForeignKeysPanel()).getByLabelText("Check name"),
+      await within(getForeignKeysPanel()).findByLabelText("Check name"),
       {
         target: { value: "chk_age" },
       },
@@ -1826,8 +1971,9 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       { target: { value: "age >= 0" } },
     );
 
+    await activateConstraintSubTab("UNIQUE");
     fireEvent.change(
-      within(getForeignKeysPanel()).getByLabelText("Unique name"),
+      await within(getForeignKeysPanel()).findByLabelText("Unique name"),
       {
         target: { value: "uq_orders_user" },
       },
@@ -1836,7 +1982,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       within(getForeignKeysPanel()).getByLabelText("Unique column: user_id"),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
 
     await waitFor(() => {
       expect(mockCreateTable).toHaveBeenCalledTimes(1);
@@ -1933,7 +2079,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       ),
     );
 
-    addCheckRow();
+    await addCheckRow();
     panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Check name"), {
       target: { value: "chk_age" },
@@ -1942,14 +2088,14 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "age >= 0" },
     });
 
-    addUniqueRow();
+    await addUniqueRow();
     panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Unique name"), {
       target: { value: "uq_orders_user" },
     });
     fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => {
       expect(mockCreateTable).toHaveBeenCalledTimes(1);
       expect(mockAddConstraint).toHaveBeenCalledTimes(3);
@@ -2058,7 +2204,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       ),
     );
 
-    addCheckRow();
+    await addCheckRow();
     panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Check name"), {
       target: { value: "chk_age" },
@@ -2067,14 +2213,14 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "age >= 0" },
     });
 
-    addUniqueRow();
+    await addUniqueRow();
     panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Unique name"), {
       target: { value: "uq_orders_user" },
     });
     fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(3));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -2187,7 +2333,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "integer" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
@@ -2213,7 +2359,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     renderDialog();
     await fillTwoColumnFormAndOpenForeignKeysTab();
-    addCheckRow();
+    await addCheckRow();
     const panel = getForeignKeysPanel();
     fireEvent.change(within(panel).getByLabelText("Check name"), {
       target: { value: "chk_x" },
@@ -2222,7 +2368,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       target: { value: "id > 0" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -2397,15 +2543,17 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     expect(commentInput).toBeInTheDocument();
     expect(commentInput.getAttribute("placeholder")).toBe("comment (optional)");
     // Verify positional ordering — Table comment input sits AFTER Table
-    // name input but BEFORE the tablist. Use document position bits.
+    // name input but BEFORE the tablist. Sprint 241 introduced nested
+    // sub-tabs inside the Constraints panel, so the document now has
+    // multiple `tablist`s; use the first (outer / main) one.
     const tableNameInput = screen.getByLabelText("Table name");
-    const tablist = screen.getByRole("tablist");
+    const mainTablist = screen.getAllByRole("tablist")[0]!;
     expect(
       tableNameInput.compareDocumentPosition(commentInput) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      commentInput.compareDocumentPosition(tablist) &
+      commentInput.compareDocumentPosition(mainTablist) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
@@ -2436,7 +2584,7 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       target: { value: "  event log  " },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       table_comment: string | null;
@@ -2467,7 +2615,7 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       target: { value: "   " },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
+    // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
     const call = mockCreateTable.mock.calls[0]![0] as {
       table_comment: string | null;
@@ -2505,14 +2653,12 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
       expect(keysTab).toBeInTheDocument();
     });
 
-    // The Indexes / Foreign Keys badges remain hidden because their
+    // The Indexes / Constraints badges remain hidden because their
     // declared lists are still empty (the tabs themselves still exist
-    // — `Indexes` and `Foreign Keys` — but neither carries a `(N)`
+    // — `Indexes` and `Constraints` — but neither carries a `(...)`
     // suffix in its accessible name).
     expect(screen.queryByRole("tab", { name: /^Indexes.*\(\d+\)/ })).toBeNull();
-    expect(
-      screen.queryByRole("tab", { name: /^Foreign Keys.*\(\d+\)/ }),
-    ).toBeNull();
+    expect(screen.queryByRole("tab", { name: /^Constraints.*\(/ })).toBeNull();
   });
 
   // Sprint 234 AC-234-02 — locked empty-state message surfaces when no
@@ -2591,9 +2737,10 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     expect(downButtons[2]).toBeDisabled();
   });
 
-  // Sprint 234 AC-234-04 — reorder invalidates the cached DDL preview
-  // so the next "Show DDL" click re-fetches.
-  it("reorder invalidates the cached DDL preview (AC-234-04)", async () => {
+  // Sprint 234 AC-234-04 / Sprint 238 — reorder auto-refetches the
+  // preview with the swapped column order. 더 이상 "Show DDL" 재클릭이
+  // 필요하지 않다.
+  it("reorder auto-refetches the preview with new column order (AC-234-04)", async () => {
     setDevConnection();
     useSafeModeStore.setState({ mode: "off" });
     mockCreateTable.mockResolvedValue({
@@ -2615,23 +2762,152 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     fireEvent.change(typeInputs[0]!, { target: { value: "integer" } });
     fireEvent.change(typeInputs[1]!, { target: { value: "text" } });
 
-    // First Show DDL → 1 createTable preview.
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(1));
 
-    // Reorder the rows — preview cache must invalidate.
     const downButtons = within(columnsPanel).getAllByRole("button", {
       name: /Move column down/i,
     });
     fireEvent.click(downButtons[0]!);
 
-    // The Show DDL pane collapsed (invalidatePreview path); next click
-    // triggers a 2nd preview fetch with the swapped column order.
-    fireEvent.click(screen.getByRole("button", { name: "Show DDL" }));
     await waitFor(() => expect(mockCreateTable).toHaveBeenCalledTimes(2));
     const second = mockCreateTable.mock.calls[1]![0] as {
       columns: Array<{ name: string }>;
     };
     expect(second.columns.map((c) => c.name)).toEqual(["name", "id"]);
+  });
+});
+
+// ── Sprint 241 — inline FK + CHECK on column row ──────────────────────
+//
+// Date: 2026-05-08.
+//
+// Why these tests exist:
+//
+// Sprint 241 moves single-column FK + CHECK out of the Constraints tab
+// and onto the column row itself (TablePlus parity). The column-row
+// `+ FK` cell opens a popover for ref schema/table/column + ON
+// DELETE/UPDATE; the inline `check expression (optional, …)` text
+// input takes free-text expressions. Both feed the same constraint
+// chain the Constraints tab does — auto-named `fk_<table>_<col>` /
+// `chk_<table>_<col>` so multiple inline declarations don't collide.
+// Multi-column variants stay in the Constraints tab; the tab now
+// renders a one-line scope reminder.
+//
+// Per AC-241 contract Test Requirements: ≥ 4 cases — column-row UI
+// presence, inline CHECK chain pickup, inline FK chain pickup, the
+// Constraints-tab reminder copy.
+describe("Sprint 241 — inline FK + CHECK on column row", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "off" });
+    useQueryHistoryStore.setState({ entries: [] });
+    mockCreateTable.mockResolvedValue({
+      sql: 'CREATE TABLE "public"."t" ()',
+    });
+    mockAddConstraint.mockImplementation(
+      async (req: {
+        constraint_name: string;
+        definition: { type: string };
+      }) => ({
+        sql: `-- ${req.definition.type} ${req.constraint_name}`,
+      }),
+    );
+    setDevConnection();
+  });
+
+  it("renders the inline FK trigger + inline CHECK input on each column row", () => {
+    renderDialog();
+    const columnsPanel = getColumnsPanel();
+    // Empty FK trigger label = `+ FK`.
+    const fkTriggers = within(columnsPanel).getAllByLabelText(
+      /Foreign key for column /i,
+    );
+    expect(fkTriggers).toHaveLength(1);
+    expect(fkTriggers[0]!.textContent).toContain("+ FK");
+
+    // Inline CHECK input.
+    const chkInputs = within(columnsPanel).getAllByLabelText(
+      "Column check expression",
+    );
+    expect(chkInputs).toHaveLength(1);
+  });
+
+  it("inline CHECK expression flows into the constraint chain with auto-name chk_<table>_<column>", async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "users" },
+    });
+    const columnsPanel = getColumnsPanel();
+    const nameInput = within(columnsPanel).getByLabelText("Column name");
+    fireEvent.change(nameInput, { target: { value: "age" } });
+    const typeInput = within(columnsPanel).getByLabelText("Column data type");
+    fireEvent.change(typeInput, { target: { value: "integer" } });
+    const chkInput = within(columnsPanel).getByLabelText(
+      "Column check expression",
+    );
+    fireEvent.change(chkInput, { target: { value: "age >= 0" } });
+
+    await waitFor(() =>
+      expect(mockAddConstraint).toHaveBeenCalledWith(
+        expect.objectContaining({
+          constraint_name: "chk_users_age",
+          definition: { type: "check", expression: "age >= 0" },
+        }),
+      ),
+    );
+  });
+
+  it("inline FK fields flow into the constraint chain with auto-name fk_<table>_<column>", async () => {
+    renderDialog();
+    fireEvent.change(screen.getByLabelText("Table name"), {
+      target: { value: "orders" },
+    });
+    const columnsPanel = getColumnsPanel();
+    const nameInput = within(columnsPanel).getByLabelText("Column name");
+    fireEvent.change(nameInput, { target: { value: "user_id" } });
+    const typeInput = within(columnsPanel).getByLabelText("Column data type");
+    fireEvent.change(typeInput, { target: { value: "integer" } });
+
+    // Open the FK popover and fill ref_table + ref_column via the
+    // free-text fallback inputs (cache is empty — no Select renders).
+    const fkTrigger = within(columnsPanel).getByLabelText(
+      /Foreign key for column /i,
+    );
+    fireEvent.click(fkTrigger);
+    const refTableInput = await screen.findByLabelText(
+      "Inline FK reference table",
+    );
+    fireEvent.change(refTableInput, { target: { value: "users" } });
+    const refColumnInput = screen.getByLabelText("Inline FK reference column");
+    fireEvent.change(refColumnInput, { target: { value: "id" } });
+
+    await waitFor(() =>
+      expect(mockAddConstraint).toHaveBeenCalledWith(
+        expect.objectContaining({
+          constraint_name: "fk_orders_user_id",
+          definition: expect.objectContaining({
+            type: "foreign_key",
+            columns: ["user_id"],
+            reference_table: "users",
+            reference_columns: ["id"],
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("Constraints tab surfaces the multi-column scope reminder", () => {
+    // Sprint 241 — each sub-tab carries its own tailored scope
+    // reminder (FK / CHECK / UNIQUE) rather than a single combined
+    // message. The FK sub-tab is active by default; its reminder is
+    // visible immediately after opening the parent Constraints tab.
+    renderDialog();
+    activateTab("Constraints");
+    expect(
+      screen.getByText(
+        /Single-column foreign keys are edited inline on the column row/i,
+      ),
+    ).toBeInTheDocument();
   });
 });

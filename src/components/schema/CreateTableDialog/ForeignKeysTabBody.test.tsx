@@ -15,6 +15,7 @@
 // contract: ≥ 5 cases + ≥ 70% line coverage on the new file.
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import ForeignKeysTabBody, {
   type ForeignKeyDraft,
@@ -85,17 +86,35 @@ function defaultProps() {
   };
 }
 
+// Sprint 241 — sub-tabs split FK / CHECK / UNIQUE into three separate
+// panels. Activate the named sub-tab so the family's controls are
+// visible to RTL queries (inactive panels are hidden via CSS, which
+// hides them from `getByLabelText` / `getByRole` by default).
+async function activateSubTab(name: "Foreign Keys" | "CHECK" | "UNIQUE") {
+  // Radix Tabs in jsdom doesn't react to bare `fireEvent.click`; the
+  // pointer-event sequence that `userEvent` synthesises (pointerdown →
+  // mousedown → pointerup → click) is what flips the panel state.
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("tab", { name: new RegExp(`^${name}`) }));
+}
+
 describe("ForeignKeysTabBody", () => {
-  it("renders three sub-section add buttons in the empty state", () => {
+  it("renders the three constraint family sub-tabs in the empty state", async () => {
     render(<ForeignKeysTabBody {...defaultProps()} />);
+    // FK sub-tab is the default; its add button is visible without
+    // any tab interaction. The CHECK / UNIQUE add buttons live behind
+    // their own sub-tab triggers — `findByRole` polls so the panel
+    // mount has a chance to flush.
     expect(
       screen.getByRole("button", { name: /Add foreign key/i }),
     ).toBeInTheDocument();
+    await activateSubTab("CHECK");
     expect(
-      screen.getByRole("button", { name: /Add check/i }),
+      await screen.findByRole("button", { name: /Add check/i }),
     ).toBeInTheDocument();
+    await activateSubTab("UNIQUE");
     expect(
-      screen.getByRole("button", { name: /Add unique/i }),
+      await screen.findByRole("button", { name: /Add unique/i }),
     ).toBeInTheDocument();
   });
 
@@ -149,17 +168,19 @@ describe("ForeignKeysTabBody", () => {
     expect(onRemoveFk).toHaveBeenCalledWith("fk-xyz");
   });
 
-  it("CHECK row renders name + expression inputs", () => {
+  it("CHECK row renders name + expression inputs", async () => {
     const c = checkDraft({ trackingId: "chk-1", name: "chk_age" });
     render(<ForeignKeysTabBody {...defaultProps()} checks={[c]} />);
-    expect(screen.getByLabelText("Check name")).toBeInTheDocument();
+    await activateSubTab("CHECK");
+    expect(await screen.findByLabelText("Check name")).toBeInTheDocument();
     expect(screen.getByLabelText("Check expression")).toBeInTheDocument();
   });
 
-  it("UNIQUE row renders name + columns multi-checkbox group", () => {
+  it("UNIQUE row renders name + columns multi-checkbox group", async () => {
     const u = uniqueDraft({ trackingId: "uq-1", name: "uq_email" });
     render(<ForeignKeysTabBody {...defaultProps()} uniques={[u]} />);
-    expect(screen.getByLabelText("Unique name")).toBeInTheDocument();
+    await activateSubTab("UNIQUE");
+    expect(await screen.findByLabelText("Unique name")).toBeInTheDocument();
     expect(screen.getByLabelText("Unique column: id")).toBeInTheDocument();
     expect(screen.getByLabelText("Unique column: user_id")).toBeInTheDocument();
   });
@@ -184,32 +205,39 @@ describe("ForeignKeysTabBody", () => {
     }
   });
 
-  it("Toggling FK local column invokes onToggleFkLocalColumn", () => {
-    const onToggleFkLocalColumn = vi.fn();
+  // Sprint 239 — the multi-checkbox column picker was replaced by an
+  // ordered chip picker. Clicking an available `+ name` chip calls
+  // `onUpdateFk(trackingId, { columns: [...prev, name] })`. The legacy
+  // single-toggle handlers stay on the prop interface as no-op stubs.
+  it("Clicking an available FK local column chip appends it via onUpdateFk", () => {
+    const onUpdateFk = vi.fn();
     const fk = fkDraft({ trackingId: "fk-9" });
     render(
       <ForeignKeysTabBody
         {...defaultProps()}
         fks={[fk]}
-        onToggleFkLocalColumn={onToggleFkLocalColumn}
+        onUpdateFk={onUpdateFk}
       />,
     );
     fireEvent.click(screen.getByLabelText("Foreign key local column: id"));
-    expect(onToggleFkLocalColumn).toHaveBeenCalledWith("fk-9", "id");
+    expect(onUpdateFk).toHaveBeenCalledWith("fk-9", { columns: ["id"] });
   });
 
-  it("Toggling UNIQUE column invokes onToggleUniqueColumn", () => {
-    const onToggleUniqueColumn = vi.fn();
+  it("Clicking an available UNIQUE column chip appends it via onUpdateUnique", async () => {
+    const onUpdateUnique = vi.fn();
     const u = uniqueDraft({ trackingId: "uq-2" });
     render(
       <ForeignKeysTabBody
         {...defaultProps()}
         uniques={[u]}
-        onToggleUniqueColumn={onToggleUniqueColumn}
+        onUpdateUnique={onUpdateUnique}
       />,
     );
-    fireEvent.click(screen.getByLabelText("Unique column: user_id"));
-    expect(onToggleUniqueColumn).toHaveBeenCalledWith("uq-2", "user_id");
+    await activateSubTab("UNIQUE");
+    fireEvent.click(await screen.findByLabelText("Unique column: user_id"));
+    expect(onUpdateUnique).toHaveBeenCalledWith("uq-2", {
+      columns: ["user_id"],
+    });
   });
 
   it("FK reference table renders as Select when refTables list is provided", () => {
