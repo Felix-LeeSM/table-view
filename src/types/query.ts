@@ -64,6 +64,11 @@ export interface QueryStatementResult {
  *
  * If a multi-statement run fails for *every* statement, the state collapses
  * to `{ status: "error" }` instead — same as single-statement failure.
+ *
+ * Sprint 248 (ADR 0022 Phase 4) — `isDryRun` is set by the explicit
+ * "Dry Run" button / `Cmd+Shift+Enter` shortcut so the result grid can
+ * surface a "rolled back" banner. Defaults to `false` / undefined for the
+ * regular `executeQuery` / `executeQueryBatch` paths.
  */
 export type QueryState =
   | { status: "idle" }
@@ -72,5 +77,6 @@ export type QueryState =
       status: "completed";
       result: QueryResult;
       statements?: QueryStatementResult[];
+      isDryRun?: boolean;
     }
   | { status: "error"; error: string };

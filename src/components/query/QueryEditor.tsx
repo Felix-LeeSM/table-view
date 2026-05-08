@@ -24,6 +24,13 @@ interface QueryEditorProps {
   sql: string;
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
+  /**
+   * Sprint 248 (ADR 0022 Phase 4) — `Cmd+Shift+Enter` dry-run handler.
+   * Forwarded to `SqlQueryEditor` (rdb) where the keymap binding lives;
+   * `MongoQueryEditor` accepts the prop but does not bind any keymap
+   * because the dry-run IPC is rdb-only.
+   */
+  onDryRun?: () => void;
   schemaNamespace?: SQLNamespace;
   /**
    * Paradigm of the hosting tab. `"rdb"` (default) routes to
@@ -60,6 +67,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       sql,
       onSqlChange,
       onExecute,
+      onDryRun,
       schemaNamespace,
       paradigm = "rdb",
       queryMode,
@@ -76,6 +84,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
             sql={sql}
             onSqlChange={onSqlChange}
             onExecute={onExecute}
+            onDryRun={onDryRun}
             schemaNamespace={schemaNamespace}
             sqlDialect={sqlDialect}
           />
@@ -87,6 +96,7 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
             sql={sql}
             onSqlChange={onSqlChange}
             onExecute={onExecute}
+            onDryRun={onDryRun}
             queryMode={queryMode ?? "find"}
             mongoExtensions={mongoExtensions ?? EMPTY_EXTENSIONS}
           />

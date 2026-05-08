@@ -95,6 +95,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
   const favorites = useQueryFavorites({ tab });
   const {
     handleExecute,
+    handleDryRun,
     pendingMongoConfirm,
     confirmMongoDangerous,
     cancelMongoDangerous,
@@ -122,6 +123,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
         tab={tab}
         isDocument={isDocument}
         onExecute={handleExecute}
+        onDryRun={handleDryRun}
         onFormat={handleFormat}
         onSetQueryMode={setQueryMode}
         favorites={favorites}
@@ -144,6 +146,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   sql={tab.sql}
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
                   onExecute={handleExecute}
+                  onDryRun={handleDryRun}
                   schemaNamespace={schemaNamespace}
                   sqlDialect={sqlDialect}
                 />
@@ -155,6 +158,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   sql={tab.sql}
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
                   onExecute={handleExecute}
+                  onDryRun={handleDryRun}
                   queryMode={tab.queryMode}
                   mongoExtensions={mongoExtensions}
                 />
@@ -205,6 +209,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
           connectionId={tab.connectionId}
           sql={tab.sql}
           onAfterCommit={handleExecute}
+          // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so
+          // the result grid renders the rolled-back banner. Derived
+          // here so the grid stays paradigm-agnostic.
+          isDryRun={
+            tab.queryState.status === "completed" &&
+            tab.queryState.isDryRun === true
+          }
         />
       </div>
 

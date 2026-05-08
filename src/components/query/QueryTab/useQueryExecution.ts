@@ -3,6 +3,7 @@ import { useTabStore } from "@stores/tabStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
   executeQuery,
+  executeQueryDryRun,
   cancelQuery,
   findDocuments,
   aggregateDocuments,
@@ -11,6 +12,7 @@ import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
+import { toast } from "@lib/toast";
 import type { QueryTab } from "@stores/tabStore";
 import type { FindBody } from "@/types/document";
 import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
@@ -51,6 +53,16 @@ export interface UseQueryExecutionArgs {
 
 export interface QueryExecution {
   handleExecute: () => Promise<void>;
+  /**
+   * Sprint 248 (ADR 0022 Phase 4) — explicit dry-run dispatch. Wraps the
+   * SQL in a transaction that is unconditionally rolled back via
+   * `executeQueryDryRun`, so the user can preview destructive results
+   * without committing. Mongo paradigm short-circuits to a `toast.info`
+   * disclaimer (the IPC supports rdb only). Empty SQL / running tab are
+   * no-ops; Safe Mode dialogs do NOT trigger because nothing commits.
+   * History is intentionally not recorded for dry-runs.
+   */
+  handleDryRun: () => Promise<void>;
   pendingMongoConfirm: {
     pipeline: Record<string, unknown>[];
     reason: string;
@@ -84,6 +96,11 @@ export function useQueryExecution({
   const completeMultiStatementQuery = useTabStore(
     (s) => s.completeMultiStatementQuery,
   );
+  // Sprint 248 — explicit dry-run completion path. Mirrors
+  // `completeQuery` / `completeMultiStatementQuery` but stamps
+  // `isDryRun: true` so `<QueryResultGrid>` can render the rolled-back
+  // banner.
+  const completeQueryDryRun = useTabStore((s) => s.completeQueryDryRun);
   // History recording is the caller's responsibility (the tabStore no
   // longer reaches across stores). We rebuild the payload here so the
   // 8 call sites can pass only the variable fields below.
@@ -571,8 +588,89 @@ export function useQueryExecution({
     runRdbBatchNow,
   ]);
 
+  // Sprint 248 (ADR 0022 Phase 4) — explicit dry-run dispatch. Bypasses
+  // the Safe Mode destructive-confirm dialog (no commit happens) and
+  // routes the same `executeQueryDryRun` IPC the confirm dialog's
+  // `<DryRunPreview>` uses. Mongo paradigm is unsupported (the IPC is
+  // rdb-only); we surface a toast disclaimer + return without invoking
+  // the IPC. History is intentionally not recorded — dry-runs are
+  // ephemeral previews. The `queryId` is prefixed with `"dry:"` so the
+  // backend cancel-token registry (and any future filtering by id) can
+  // distinguish dry-run cancels from real-query cancels.
+  const handleDryRun = useCallback(async () => {
+    // Mongo paradigm — disclaimer + return. The IPC throws Unsupported
+    // for document connections; surface the message before the round
+    // trip so users get instant feedback.
+    if (tab.paradigm === "document") {
+      toast.info("Dry-run is not supported for MongoDB.");
+      return;
+    }
+
+    // Empty / running guards mirror `handleExecute`. Running takes
+    // priority because firing a second dry-run while a query is in
+    // flight would race the queryState transition.
+    if (tab.queryState.status === "running") return;
+    const sql = tab.sql.trim();
+    if (!sql) return;
+
+    const statements = splitSqlStatements(sql).filter((stmt) => {
+      // Mirror the comment-strip-then-non-empty filter used by
+      // `handleExecute` so dry-run treats `-- comment` only as empty.
+      let s = stmt;
+      s = s.replace(/--[^\n]*/g, "");
+      s = s.replace(/\/\*[\s\S]*?\*\//g, "");
+      return s.trim().length > 0;
+    });
+    if (statements.length === 0) return;
+
+    const queryId = `dry:${tab.id}-${Date.now()}`;
+    updateQueryState(tab.id, { status: "running", queryId });
+    try {
+      const results = await executeQueryDryRun(
+        tab.connectionId,
+        statements,
+        queryId,
+      );
+      // Backend always returns one QueryResult per statement, in input
+      // order. Single-statement → no statements breakdown; multi → adapt
+      // each into the QueryStatementResult shape so the result grid's
+      // multi-statement Tabs view can reuse its existing rendering.
+      if (results.length <= 1) {
+        const lastResult: import("@/types/query").QueryResult =
+          results[0] ??
+          ({
+            columns: [],
+            rows: [],
+            total_count: 0,
+            execution_time_ms: 0,
+            query_type: "ddl",
+          } satisfies import("@/types/query").QueryResult);
+        completeQueryDryRun(tab.id, queryId, lastResult);
+        return;
+      }
+      const statementResults: import("@/types/query").QueryStatementResult[] =
+        results.map((res, idx) => ({
+          sql: statements[idx] ?? "",
+          status: "success" as const,
+          result: res,
+          durationMs: res.execution_time_ms,
+        }));
+      const lastResult = results[results.length - 1]!;
+      completeQueryDryRun(tab.id, queryId, lastResult, statementResults);
+    } catch (err) {
+      failQuery(
+        tab.id,
+        queryId,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    // Excluding store actions from deps is deliberate — see hook header.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId, tab.paradigm]);
+
   return {
     handleExecute,
+    handleDryRun,
     pendingMongoConfirm,
     confirmMongoDangerous,
     cancelMongoDangerous,

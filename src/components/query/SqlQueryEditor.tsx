@@ -34,6 +34,14 @@ export interface SqlQueryEditorProps {
   onSqlChange: (sql: string) => void;
   onExecute: () => void;
   /**
+   * Sprint 248 (ADR 0022 Phase 4) — `Cmd+Shift+Enter` dry-run handler.
+   * Optional so non-tab callers (DDL editor previews, story-book) can
+   * keep mounting `SqlQueryEditor` without supplying it; when omitted
+   * the keymap binding routes to a no-op so `Cmd+Shift+Enter` falls
+   * through to the default keymap.
+   */
+  onDryRun?: () => void;
+  /**
    * SQL namespace produced by `useSqlAutocomplete`. Drives the autocomplete
    * popup with table / view / column / function / keyword candidates. May
    * be `undefined` (e.g. before the schema store has loaded), in which case
@@ -61,7 +69,7 @@ const buildSqlLang = (
 
 const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
   function SqlQueryEditor(
-    { sql, onSqlChange, onExecute, schemaNamespace, sqlDialect },
+    { sql, onSqlChange, onExecute, onDryRun, schemaNamespace, sqlDialect },
     ref,
   ) {
     // Resolve dialect once so ref + reconfigure paths share the same value.
@@ -78,6 +86,11 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
     onSqlChangeRef.current = onSqlChange;
     const onExecuteRef = useRef(onExecute);
     onExecuteRef.current = onExecute;
+    // Sprint 248 — `onDryRun` ref so the keymap closure picks up the
+    // latest handler without recreating the editor on every parent
+    // re-render.
+    const onDryRunRef = useRef(onDryRun);
+    onDryRunRef.current = onDryRun;
 
     // Keep a ref to the latest sql so we can avoid recreating the editor
     // on every keystroke.
@@ -114,6 +127,20 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
               key: "Mod-Enter",
               run: () => {
                 onExecuteRef.current();
+                return true;
+              },
+            },
+            // Sprint 248 (ADR 0022 Phase 4) — explicit dry-run shortcut.
+            // Bound BEFORE defaultKeymap so the editor keystroke wins
+            // over any default `Cmd-Shift-Enter` mapping. When `onDryRun`
+            // is omitted, return `false` so the binding falls through
+            // (keeps non-tab callers' default behaviour intact).
+            {
+              key: "Cmd-Shift-Enter",
+              run: () => {
+                const handler = onDryRunRef.current;
+                if (!handler) return false;
+                handler();
                 return true;
               },
             },

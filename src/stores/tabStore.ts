@@ -438,6 +438,50 @@ export const useTabStore = create<TabState>((set, get) => ({
       };
     }),
 
+  // Sprint 248 (ADR 0022 Phase 4) — explicit dry-run completion. Called
+  // when the "Dry Run" button / `Cmd+Shift+Enter` shortcut finishes a
+  // BEGIN/ROLLBACK preview. Same stale-response guard as `completeQuery`
+  // / `completeMultiStatementQuery`; the only payload delta is
+  // `isDryRun: true`, which the result grid reads to surface the
+  // "rolled back. No data was changed." banner. Single-statement runs
+  // leave `statements` undefined; multi-statement runs populate it the
+  // same way the multi-statement action does.
+  completeQueryDryRun: (tabId, queryId, result, statements) =>
+    set((state) => {
+      const current = state.tabs.find((t) => t.id === tabId);
+      if (
+        !current ||
+        current.type !== "query" ||
+        current.queryState.status !== "running" ||
+        !("queryId" in current.queryState) ||
+        current.queryState.queryId !== queryId
+      ) {
+        return state;
+      }
+      return {
+        tabs: state.tabs.map((t) =>
+          t.id === tabId && t.type === "query"
+            ? {
+                ...t,
+                queryState:
+                  statements === undefined
+                    ? {
+                        status: "completed" as const,
+                        result,
+                        isDryRun: true,
+                      }
+                    : {
+                        status: "completed" as const,
+                        result,
+                        statements,
+                        isDryRun: true,
+                      },
+              }
+            : t,
+        ),
+      };
+    }),
+
   loadQueryIntoTab: (payload) => {
     const { connectionId, paradigm, queryMode, database, collection, sql } =
       payload;

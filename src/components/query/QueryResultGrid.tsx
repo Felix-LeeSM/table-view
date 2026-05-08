@@ -26,6 +26,14 @@ interface QueryResultGridProps {
   sql?: string;
   /** Called after a raw-result edit is committed so the parent can refresh. */
   onAfterCommit?: () => void;
+  /**
+   * Sprint 248 (ADR 0022 Phase 4) — when true, mounts a "Dry Run —
+   * rolled back. No data was changed." banner above the result body so
+   * users immediately understand the rows / counts they see were rolled
+   * back. Derived from `queryState.completed.isDryRun` upstream so the
+   * grid stays paradigm-agnostic.
+   */
+  isDryRun?: boolean;
 }
 
 /** Human-readable label for a QueryType value. */
@@ -439,6 +447,7 @@ export default function QueryResultGrid({
   connectionId,
   sql,
   onAfterCommit,
+  isDryRun: isDryRunProp,
 }: QueryResultGridProps) {
   // Running state
   if (queryState.status === "running") {
@@ -469,26 +478,49 @@ export default function QueryResultGrid({
 
   // Completed state
   if (queryState.status === "completed") {
+    // Sprint 248 — explicit `isDryRun` prop wins over the queryState
+    // flag (so callers wrapping the grid in a custom shell can force
+    // the banner), but defaults to the queryState payload so QueryTab
+    // doesn't need a derive step.
+    const isDryRun = isDryRunProp ?? queryState.isDryRun === true;
+
     // Multi-statement runs render one tab per statement; single-statement
     // (or callers that omit `statements`) keep the bare single-result UI
     // — no Tabs scaffolding, so `queryByRole("tab") === null` holds.
-    if (queryState.statements && queryState.statements.length >= 2) {
-      return (
+    const body =
+      queryState.statements && queryState.statements.length >= 2 ? (
         <CompletedMultiResult
           statements={queryState.statements}
           connectionId={connectionId}
           onAfterCommit={onAfterCommit}
         />
+      ) : (
+        <CompletedSingleResult
+          result={queryState.result}
+          connectionId={connectionId}
+          sql={sql}
+          onAfterCommit={onAfterCommit}
+        />
+      );
+
+    if (isDryRun) {
+      return (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Sprint 248 (ADR 0022 Phase 4) — dry-run rolled-back banner.
+              Mounted above both single + multi result bodies so the
+              user can see at a glance that nothing was committed. */}
+          <div
+            role="status"
+            data-testid="dry-run-banner"
+            className="border-b border-warning/40 bg-warning/10 px-3 py-1 text-xs text-warning"
+          >
+            Dry Run — rolled back. No data was changed.
+          </div>
+          {body}
+        </div>
       );
     }
-    return (
-      <CompletedSingleResult
-        result={queryState.result}
-        connectionId={connectionId}
-        sql={sql}
-        onAfterCommit={onAfterCommit}
-      />
-    );
+    return body;
   }
 
   // Idle state — prompt the user

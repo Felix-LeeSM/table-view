@@ -20,11 +20,17 @@ import {
 import type { SQLDialect } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
 
+// Sprint 248 — `executeQueryDryRun` mock for the new "Dry Run" button
+// path. `vi.fn()` lives at module scope so individual tests can read
+// `.mock.calls` after clicking the button.
+const mockExecuteQueryDryRun = vi.fn();
+
 vi.mock("@lib/tauri", () => ({
   executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
   cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
   findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
   aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+  executeQueryDryRun: (...args: unknown[]) => mockExecuteQueryDryRun(...args),
 }));
 
 // Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after
@@ -127,6 +133,7 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 describe("QueryTab — toolbar", () => {
   beforeEach(() => {
     resetQueryTabStores();
+    mockExecuteQueryDryRun.mockReset();
   });
 
   // ── Sprint 25: Query Editor Toolbar ──
@@ -181,5 +188,79 @@ describe("QueryTab — toolbar", () => {
       "SELECT 1",
       expect.any(String),
     );
+  });
+
+  // ── Sprint 248 (ADR 0022 Phase 4): Dry Run button ──
+
+  // [AC-248-T1] rdb + idle + non-empty SQL → enabled.
+  it("[AC-248-T1] renders Dry Run button enabled for rdb + idle + non-empty SQL", () => {
+    const tab = makeQueryTab();
+    render(<QueryTab tab={tab} />);
+
+    const dryRunBtn = screen.getByLabelText("Dry run query");
+    expect(dryRunBtn).toBeInTheDocument();
+    expect(dryRunBtn).not.toBeDisabled();
+    // Shortcut hint surfaced for keyboard discoverability.
+    expect(dryRunBtn).toHaveAttribute(
+      "title",
+      expect.stringContaining("Cmd+Shift+Enter"),
+    );
+  });
+
+  // [AC-248-T2] document paradigm → disabled (Mongo dry-run unsupported).
+  it("[AC-248-T2] disables Dry Run button on document paradigm", () => {
+    const tab = makeQueryTab({
+      paradigm: "document",
+      queryMode: "find",
+      sql: "{}",
+      database: "test",
+      collection: "users",
+    });
+    render(<QueryTab tab={tab} />);
+
+    const dryRunBtn = screen.getByLabelText("Dry run query");
+    expect(dryRunBtn).toBeDisabled();
+  });
+
+  // [AC-248-T3] running queryState → disabled.
+  it("[AC-248-T3] disables Dry Run button when running", () => {
+    const tab = makeQueryTab({
+      queryState: { status: "running", queryId: "q-1" },
+    });
+    render(<QueryTab tab={tab} />);
+
+    const dryRunBtn = screen.getByLabelText("Dry run query");
+    expect(dryRunBtn).toBeDisabled();
+  });
+
+  // [AC-248-T4] click triggers `executeQueryDryRun` IPC (i.e. the
+  // `onDryRun` callback fires).
+  it("[AC-248-T4] click triggers handleDryRun → executeQueryDryRun IPC", async () => {
+    mockExecuteQueryDryRun.mockResolvedValueOnce([
+      {
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 1,
+        query_type: { dml: { rows_affected: 0 } },
+      },
+    ]);
+    const tab = makeQueryTab({ sql: "DELETE FROM users WHERE id = 1" });
+    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    render(<QueryTab tab={tab} />);
+
+    const dryRunBtn = screen.getByLabelText("Dry run query");
+    await act(async () => {
+      dryRunBtn.click();
+    });
+
+    expect(mockExecuteQueryDryRun).toHaveBeenCalledTimes(1);
+    expect(mockExecuteQueryDryRun).toHaveBeenCalledWith(
+      "conn1",
+      ["DELETE FROM users WHERE id = 1"],
+      expect.stringMatching(/^dry:/),
+    );
+    // Real-execute path NEVER fires for dry-run clicks.
+    expect(mockExecuteQuery).not.toHaveBeenCalled();
   });
 });

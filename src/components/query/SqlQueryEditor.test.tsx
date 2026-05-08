@@ -205,6 +205,35 @@ describe("SqlQueryEditor (Sprint 139)", () => {
     expect(localOnExecute).toHaveBeenCalled();
   });
 
+  // [AC-248-K1] Sprint 248 (ADR 0022 Phase 4) — Cmd+Shift+Enter routes
+  // to `onDryRun`. Mirrors the Mod-Enter assertion above (CodeMirror's
+  // native key handling does not fire under jsdom synthetic events, so
+  // we invoke the keymap binding directly).
+  it("[AC-248-K1] fires onDryRun via Cmd-Shift-Enter binding", () => {
+    const localOnExecute = vi.fn();
+    const localOnDryRun = vi.fn();
+    render(
+      <SqlQueryEditor
+        sql="DELETE FROM users WHERE id = 1"
+        onSqlChange={onSqlChange}
+        onExecute={localOnExecute}
+        onDryRun={localOnDryRun}
+      />,
+    );
+    const view = getEditorView();
+    const bindings = getKeymapBindings(view).filter(
+      (b) => b.key === "Cmd-Shift-Enter",
+    );
+    expect(bindings.length).toBeGreaterThanOrEqual(1);
+    for (const b of bindings) {
+      if (typeof b.run === "function") b.run(view);
+    }
+    expect(localOnDryRun).toHaveBeenCalled();
+    // Mod-Enter regression guard — Cmd-Shift-Enter must NOT also fire
+    // the Run path.
+    expect(localOnExecute).not.toHaveBeenCalled();
+  });
+
   // External sql prop syncs into editor.
   it("syncs external sql prop changes into the editor document", async () => {
     const { rerender } = render(

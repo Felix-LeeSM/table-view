@@ -178,6 +178,22 @@ export interface TabState {
     },
   ) => void;
   /**
+   * Sprint 248 (ADR 0022 Phase 4) — explicit dry-run completion. Called
+   * by the "Dry Run" toolbar button / `Cmd+Shift+Enter` shortcut after
+   * `executeQueryDryRun` resolves. Stamps `isDryRun: true` onto the
+   * completed payload so `<QueryResultGrid>` can surface the
+   * "rolled back. No data was changed." banner. Same stale-response /
+   * `queryId` guards as {@link completeQuery}; single-statement runs
+   * leave `statements` undefined, multi-statement runs populate it the
+   * same way `completeMultiStatementQuery` does.
+   */
+  completeQueryDryRun: (
+    tabId: string,
+    queryId: string,
+    result: QueryResult,
+    statements?: QueryStatementResult[],
+  ) => void;
+  /**
    * Paradigm-aware history-entry restore. Updates the active query tab
    * in place when it matches connection + paradigm; otherwise spawns a
    * new tab that inherits paradigm / queryMode (and database/collection

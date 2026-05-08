@@ -1,6 +1,15 @@
 import { Button } from "@components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
-import { Play, Square, Loader2, Paintbrush, Star, Save, X } from "lucide-react";
+import {
+  Play,
+  Square,
+  Loader2,
+  Paintbrush,
+  Star,
+  Save,
+  X,
+  FlaskConical,
+} from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
 import type { QueryTab, QueryMode } from "@stores/tabStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
@@ -25,6 +34,15 @@ export interface QueryTabToolbarProps {
   tab: QueryTab;
   isDocument: boolean;
   onExecute: () => void;
+  /**
+   * Sprint 248 (ADR 0022 Phase 4) — explicit "Dry Run" handler. Wraps
+   * the editor SQL in a transaction that is unconditionally rolled
+   * back, so the user can preview destructive results without
+   * committing. Mongo paradigm renders the button disabled (the IPC
+   * supports rdb only); the keyboard shortcut layer additionally
+   * surfaces a toast disclaimer when invoked on document tabs.
+   */
+  onDryRun: () => void;
   onFormat: () => void;
   onSetQueryMode: (tabId: string, mode: QueryMode) => void;
   favorites: QueryFavoritesState;
@@ -34,6 +52,7 @@ export default function QueryTabToolbar({
   tab,
   isDocument,
   onExecute,
+  onDryRun,
   onFormat,
   onSetQueryMode,
   favorites,
@@ -76,6 +95,25 @@ export default function QueryTabToolbar({
           <span className="text-3xs text-muted-foreground">{"⌘⏎"}</span>
         </Button>
       )}
+      {/* Sprint 248 (ADR 0022 Phase 4) — explicit "Dry Run" button.
+          BEGIN/ROLLBACK preview without commit. Mongo paradigm is
+          unsupported (IPC rejects with `Unsupported`), so the button is
+          disabled there. Disabled mirror of Run's gating: empty SQL or
+          a query already running both block dispatch. */}
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={onDryRun}
+        disabled={
+          isDocument || tab.queryState.status === "running" || !tab.sql.trim()
+        }
+        aria-label="Dry run query"
+        title="Dry run (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK"
+      >
+        <FlaskConical />
+        <span>Dry Run</span>
+        <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
+      </Button>
       {!isDocument && (
         <Button
           variant="ghost"
