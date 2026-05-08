@@ -18,6 +18,13 @@ tauri-build = { version = "2", features = [] }
 tempfile = "3"
 serial_test = "3"
 tauri = { version = "2", features = ["test"] }
+# Sprint 237 P5+ (2026-05-08) — DB tier 2 통합 테스트용. cargo test --test
+# pg_integration 호출 시 process 안에서 docker container lifecycle 을
+# 자체 관리. PG_TEST_URL env 가 셋팅돼 있으면 외부 PG 재사용 (빠른
+# iteration). docker daemon 이 없는 환경 (CI sandbox 등) 에서는 즉시
+# 실패하므로 pre-push 에는 포함하지 않는다.
+testcontainers = "0.20"
+testcontainers-modules = { version = "0.8", features = ["postgres", "mongo"] }
 
 [dependencies]
 tauri = { version = "2", features = [] }

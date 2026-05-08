@@ -1,0 +1,14 @@
+[alias]
+# Sprint 237 P5+ (2026-05-08) — DB tier 2 통합 테스트 단축. testcontainers
+# 가 첫 호출 시 docker container 를 lazy 로 띄우고, 프로세스 종료 시
+# Drop 으로 자동 정리. PG/Mongo *_HOST/*_PORT 등 env 가 셋팅돼 있으면
+# 외부 인스턴스 재사용 (개발 중 빠른 iteration).
+#
+# 호출 예:
+#   cargo pg-test                 — PG 통합 테스트 (query/schema/fixture)
+#   cargo mongo-test              — Mongo 통합 테스트
+#   cargo db-test                 — PG + Mongo 전부
+#   PGHOST=... cargo pg-test      — 외부 PG 재사용
+pg-test = "test --test query_integration --test schema_integration --test fixture_loading"
+mongo-test = "test --test mongo_integration"
+db-test = "test --test query_integration --test schema_integration --test fixture_loading --test mongo_integration"

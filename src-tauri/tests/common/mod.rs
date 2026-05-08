@@ -1,39 +1,183 @@
 //! Shared test utilities for integration tests.
 //!
-//! Provides per-DBMS connection configuration, a graceful adapter setup
-//! function that returns `None` (and prints a skip message) when the target
-//! database is unavailable, and a helper to enumerate which DBMS types have
-//! running instances.
+//! Sprint 237 P5+ (2026-05-08) — DB lifecycle을 테스트 프로세스가
+//! 직접 관리. testcontainers-rs로 첫 호출 시 PG/Mongo 컨테이너를 lazy
+//! 시작하고, 프로세스 종료 시 Drop으로 자동 정리. docker-compose
+//! 외부 의존을 끊었기 때문에 `cargo pg-test`/`cargo mongo-test` 한
+//! 줄이면 호출자는 Docker daemon만 떠 있으면 된다.
+//!
+//! 빠른 iteration escape hatch: `PG_TEST_URL` (postgres://user:pass@host:port/db)
+//! 또는 `PGHOST`/`PGPORT`/`PGUSER`/`PGPASSWORD`/`PGDATABASE` 가 셋팅돼
+//! 있으면 외부 PG 재사용. Mongo도 동일 패턴 (`MONGO_TEST_URL` 또는 host
+//! 변수).
+//!
+//! Docker daemon이 없는 환경에서는 testcontainers가 즉시 실패하고 helper
+//! 가 `None` 을 반환해 기존 통합 테스트의 silent-skip 시맨틱을 보존한다.
+
+use std::sync::Arc;
+use std::time::Duration;
 
 use table_view_lib::db::mongodb::MongoAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::DbAdapter;
 use table_view_lib::models::{ConnectionConfig, DatabaseType};
+use testcontainers::runners::AsyncRunner;
+use testcontainers::ContainerAsync;
+use testcontainers_modules::mongo::Mongo as MongoImage;
+use testcontainers_modules::postgres::Postgres as PostgresImage;
+use tokio::sync::OnceCell;
 
-/// Default host, port, user, password, and database for each DBMS when running
-/// under `docker-compose.test.yml`. Values can be overridden with environment
-/// variables.
-fn env_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_string())
+#[derive(Clone, Debug)]
+struct PgEndpoint {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    database: String,
+}
+
+#[derive(Clone, Debug)]
+struct MongoEndpoint {
+    host: String,
+    port: u16,
+    user: Option<String>,
+    password: Option<String>,
+    database: String,
+    auth_source: Option<String>,
+}
+
+/// 컨테이너 핸들을 process 종료까지 살려두기 위해 `Arc<...>` 로 보관.
+/// Drop 시 testcontainers가 컨테이너를 자동 stop+rm 한다.
+static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
+static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
+
+async fn pg_endpoint() -> Option<PgEndpoint> {
+    // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.
+    if let (Ok(host), Ok(port_str), Ok(user), Ok(password), Ok(database)) = (
+        std::env::var("PGHOST"),
+        std::env::var("PGPORT"),
+        std::env::var("PGUSER"),
+        std::env::var("PGPASSWORD"),
+        std::env::var("PGDATABASE"),
+    ) {
+        return Some(PgEndpoint {
+            host,
+            port: port_str.parse().unwrap_or(5432),
+            user,
+            password,
+            database,
+        });
+    }
+
+    // 2) testcontainers — lazy 시작.
+    let cell = PG_CONTAINER
+        .get_or_init(|| async {
+            match PostgresImage::default().start().await {
+                Ok(c) => Some(Arc::new(c)),
+                Err(e) => {
+                    println!(
+                        "SKIP: PostgreSQL testcontainer 시작 실패 ({}). \
+                         Docker daemon 이 떠 있는지 확인하거나 \
+                         PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE 환경 \
+                         변수로 외부 PG 를 지정하세요.",
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .await
+        .as_ref()?;
+
+    let port = match cell.get_host_port_ipv4(5432).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("SKIP: PG container 포트 매핑 실패 ({})", e);
+            return None;
+        }
+    };
+
+    Some(PgEndpoint {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: "postgres".to_string(),
+        password: "postgres".to_string(),
+        database: "postgres".to_string(),
+    })
+}
+
+async fn mongo_endpoint() -> Option<MongoEndpoint> {
+    // 1) 외부 Mongo 재사용 — host/port 만이라도 있으면 됨 (auth 없는 dev
+    //    인스턴스 가정). user/password 도 있으면 함께 사용.
+    if let (Ok(host), Ok(port_str)) = (std::env::var("MONGO_HOST"), std::env::var("MONGO_PORT")) {
+        return Some(MongoEndpoint {
+            host,
+            port: port_str.parse().unwrap_or(27017),
+            user: std::env::var("MONGO_USER").ok(),
+            password: std::env::var("MONGO_PASSWORD").ok(),
+            database: std::env::var("MONGO_DATABASE").unwrap_or_else(|_| "table_view_test".into()),
+            auth_source: std::env::var("MONGO_AUTH_SOURCE").ok(),
+        });
+    }
+
+    // 2) testcontainers — lazy 시작. testcontainers-modules의 기본 Mongo
+    //    image는 auth 비활성, 익명 연결 가능.
+    let cell = MONGO_CONTAINER
+        .get_or_init(|| async {
+            match MongoImage.start().await {
+                Ok(c) => Some(Arc::new(c)),
+                Err(e) => {
+                    println!(
+                        "SKIP: Mongo testcontainer 시작 실패 ({}). \
+                         Docker daemon 이 떠 있는지 확인하거나 \
+                         MONGO_HOST/MONGO_PORT 환경 변수로 외부 인스턴스를 \
+                         지정하세요.",
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .await
+        .as_ref()?;
+
+    let port = match cell.get_host_port_ipv4(27017).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("SKIP: Mongo container 포트 매핑 실패 ({})", e);
+            return None;
+        }
+    };
+
+    Some(MongoEndpoint {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: None,
+        password: None,
+        database: "table_view_test".to_string(),
+        auth_source: None,
+    })
 }
 
 /// Return a `ConnectionConfig` for the given database type.
 ///
-/// Environment variable overrides (per DBMS prefix):
-///   PostgreSQL — `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
-///   MySQL      — `MYSQL_HOST`, `MYSQL_TCP_PORT`, `MYSQL_USER`, `MYSQL_PWD`, `MYSQL_DATABASE`
-///   MongoDB    — `MONGO_HOST`, `MONGO_PORT`, `MONGO_USER`, `MONGO_PASSWORD`, `MONGO_DATABASE`
+/// PG/Mongo는 testcontainers (또는 환경변수 override) 가 endpoint를 결정.
+/// 이 함수는 동기지만 endpoint resolution은 비동기라 panic-on-missing 시그너처를
+/// 유지하기 어렵다. 따라서 Postgresql/Mongodb 분기는 placeholder를 반환하고,
+/// 실제 endpoint 주입은 `setup_adapter` / `setup_mongo_adapter` 가 직접 처리한다.
+/// MySQL은 이전 시그너처 보존 (env override 만).
+#[allow(dead_code)]
 pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
     match db_type {
         DatabaseType::Postgresql => ConnectionConfig {
             id: "test-conn".to_string(),
             name: "TestDB".to_string(),
             db_type: DatabaseType::Postgresql,
-            host: env_or("PGHOST", "localhost"),
-            port: env_or("PGPORT", "5432").parse().unwrap_or(5432),
-            user: env_or("PGUSER", "testuser"),
-            password: env_or("PGPASSWORD", "testpass"),
-            database: env_or("PGDATABASE", "table_view_test"),
+            host: "127.0.0.1".to_string(),
+            port: 5432,
+            user: "postgres".to_string(),
+            password: "postgres".to_string(),
+            database: "postgres".to_string(),
             group_id: None,
             color: None,
             connection_timeout: Some(5),
@@ -65,20 +209,17 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
             id: "test-conn".to_string(),
             name: "TestMongo".to_string(),
             db_type: DatabaseType::Mongodb,
-            host: env_or("MONGO_HOST", "localhost"),
-            port: env_or("MONGO_PORT", "27017").parse().unwrap_or(27017),
-            user: env_or("MONGO_USER", "testuser"),
-            password: env_or("MONGO_PASSWORD", "testpass"),
-            database: env_or("MONGO_DATABASE", "table_view_test"),
+            host: "127.0.0.1".to_string(),
+            port: 27017,
+            user: String::new(),
+            password: String::new(),
+            database: "table_view_test".to_string(),
             group_id: None,
             color: None,
             connection_timeout: Some(5),
             keep_alive_interval: None,
             environment: None,
-            // docker-compose.test.yml initialises mongo with the default
-            // auth database `admin`, so auth_source must point there when
-            // credentials are exercised.
-            auth_source: Some("admin".to_string()),
+            auth_source: None,
             replica_set: None,
             tls_enabled: None,
         },
@@ -86,88 +227,161 @@ pub fn test_config(db_type: DatabaseType) -> ConnectionConfig {
     }
 }
 
+fn env_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+/// PG endpoint를 반영한 `ConnectionConfig`. setup_adapter 에서도 동일
+/// endpoint 를 쓰므로, 직접 sqlx Pool 같은 sibling 클라이언트를 만드는
+/// 테스트는 이 helper 로 endpoint 를 통일하면 된다.
+#[allow(dead_code)]
+pub async fn pg_test_config() -> Option<ConnectionConfig> {
+    let endpoint = pg_endpoint().await?;
+    Some(ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestDB".to_string(),
+        db_type: DatabaseType::Postgresql,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.database,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
+    })
+}
+
+/// Mongo endpoint를 반영한 `ConnectionConfig`. mongo_integration.rs 가
+/// sibling driver client (`seed_client`) 를 만들 때 이 helper 의 결과를
+/// 그대로 넘기면 testcontainers 의 random port 와 일치한다.
+#[allow(dead_code)]
+pub async fn mongo_test_config() -> Option<ConnectionConfig> {
+    let endpoint = mongo_endpoint().await?;
+    Some(ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestMongo".to_string(),
+        db_type: DatabaseType::Mongodb,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user.clone().unwrap_or_default(),
+        password: endpoint.password.clone().unwrap_or_default(),
+        database: endpoint.database,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: endpoint.auth_source,
+        replica_set: None,
+        tls_enabled: None,
+    })
+}
+
 /// Attempt to connect to the requested database and return a connected adapter.
 ///
-/// Returns `Some(adapter)` on success, or `None` with a skip message when the
-/// database is unavailable. This pattern lets integration tests exit with code 0
-/// even when Docker is not running.
+/// Returns `Some(adapter)` on success, or `None` when the testcontainer cannot
+/// start (e.g. Docker daemon not running) or `connect_pool` fails. 호출자는
+/// `match … None => return` 패턴으로 silent-skip 한다.
 #[allow(dead_code)]
 pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
-    // Currently only PostgresAdapter is returned by this helper; the mongo
-    // variant has its own dedicated helper (`setup_mongo_adapter`) because
-    // the concrete adapter type differs.
     assert!(
         matches!(db_type, DatabaseType::Postgresql),
         "setup_adapter: only PostgreSQL is supported at this time. \
          Use setup_mongo_adapter for MongoDB."
     );
 
-    let config = test_config(db_type);
+    let endpoint = pg_endpoint().await?;
+    let config = ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestDB".to_string(),
+        db_type: DatabaseType::Postgresql,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.database,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
+    };
+
     let adapter = PostgresAdapter::new();
-    match adapter.connect_pool(&config).await {
-        Ok(()) => Some(adapter),
-        Err(e) => {
-            println!(
-                "SKIP: PostgreSQL database not available ({}). \
-                 Start with: docker compose -f docker-compose.test.yml up -d",
-                e
-            );
-            None
+    // testcontainers의 PG image는 readiness probe를 자체 실행하지만, sqlx
+    // pool 생성이 race로 한두 번 실패할 수 있으므로 짧은 retry.
+    for attempt in 0..5 {
+        match adapter.connect_pool(&config).await {
+            Ok(()) => return Some(adapter),
+            Err(_) if attempt < 4 => {
+                tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+            }
+            Err(e) => {
+                println!("SKIP: PG connect_pool failed after retries ({})", e);
+                return None;
+            }
         }
     }
+    None
 }
 
-/// Attempt to connect to the MongoDB test database and return a connected
-/// `MongoAdapter`. Returns `None` with a skip message when the database is
-/// unavailable — mirrors the Postgres skip pattern so the integration test
-/// can exit 0 when Docker is not running.
+/// Mongo는 PostgresAdapter와 다른 concrete type이라 별도 helper.
 #[allow(dead_code)]
 pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
-    let config = test_config(DatabaseType::Mongodb);
+    let endpoint = mongo_endpoint().await?;
+    let config = ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestMongo".to_string(),
+        db_type: DatabaseType::Mongodb,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user.clone().unwrap_or_default(),
+        password: endpoint.password.clone().unwrap_or_default(),
+        database: endpoint.database,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: endpoint.auth_source,
+        replica_set: None,
+        tls_enabled: None,
+    };
+
     let adapter = MongoAdapter::new();
-    match adapter.connect(&config).await {
-        Ok(()) => Some(adapter),
-        Err(e) => {
-            println!(
-                "SKIP: MongoDB database not available ({}). \
-                 Start with: docker compose -f docker-compose.test.yml up -d mongodb",
-                e
-            );
-            None
+    for attempt in 0..5 {
+        match adapter.connect(&config).await {
+            Ok(()) => return Some(adapter),
+            Err(_) if attempt < 4 => {
+                tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+            }
+            Err(e) => {
+                println!("SKIP: Mongo connect failed after retries ({})", e);
+                return None;
+            }
         }
     }
+    None
 }
 
 /// Return the list of DBMS types that are currently reachable.
-///
-/// Probes each supported DBMS by attempting a short-lived connection using
-/// [`test_config`]. Only types whose connection succeeds are included in the
-/// returned vec. This is useful for parameterised or conditional test
-/// selection in future multi-DBMS integration suites.
 #[allow(dead_code)]
 pub async fn available_dbms() -> Vec<DatabaseType> {
-    let candidates = vec![DatabaseType::Postgresql, DatabaseType::Mongodb];
     let mut available = Vec::new();
-
-    for db_type in candidates {
-        match db_type {
-            DatabaseType::Postgresql => {
-                let config = test_config(db_type.clone());
-                let adapter = PostgresAdapter::new();
-                if adapter.connect_pool(&config).await.is_ok() {
-                    available.push(db_type);
-                }
-            }
-            DatabaseType::Mongodb => {
-                let config = test_config(db_type.clone());
-                let adapter = MongoAdapter::new();
-                if adapter.connect(&config).await.is_ok() {
-                    available.push(db_type);
-                }
-            }
-            _ => {}
-        }
+    if setup_adapter(DatabaseType::Postgresql).await.is_some() {
+        available.push(DatabaseType::Postgresql);
     }
-
+    if setup_mongo_adapter().await.is_some() {
+        available.push(DatabaseType::Mongodb);
+    }
     available
 }
