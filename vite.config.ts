@@ -29,11 +29,14 @@ export default defineConfig(async () => ({
         : ["text", ["lcov", { projectDirectory: "src" }]],
       include: ["src/**/*.{ts,tsx}"],
       thresholds: {
-        // Sprint 9 이후 70%+ 달성
-        // perFile은 기존 0% 파일이 커버된 후 도입 예정
-        lines: 68,
-        functions: 64,
-        branches: 60,
+        // 2026-05-07 — pre-push gate 도입과 함께 일괄 70% 상향. 부족분은
+        // 신규 테스트 추가로 메운다 (사용자 결정). 이전 기준 68/64/60 은
+        // Sprint 9 직후의 "현실적 floor" 였으나, 코드베이스가 충분히
+        // 자라 70 일괄 적용이 가능한 시점.
+        // perFile 임계값은 0% 파일이 커버된 후 도입.
+        lines: 70,
+        functions: 70,
+        branches: 70,
       },
     },
   },

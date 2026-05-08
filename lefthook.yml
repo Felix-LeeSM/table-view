@@ -19,6 +19,25 @@ pre-commit:
     rust-clippy:
       glob: "*.rs"
       run: cd src-tauri && cargo clippy --all-targets --all-features -- -D warnings
+    rust-coverage:
+      # cargo llvm-cov 는 내부적으로 cargo test 를 instrument 해 돌리므로
+      # 코드만 변경된 경우 cache 가 거의 그대로 hit (1차 실행 ~3분, 후속
+      # ~30s-2min). pre-commit 5분 budget 안 (사용자 합의, 2026-05-07).
+      # baseline (2026-05-07): lines 63.84% / functions 57.12% / regions 65.36%.
+      # 목표 70%, 신규 테스트 추가 시 점진적 상향.
+      glob: "*.rs"
+      run: |
+        if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
+          echo "ERROR: rustup llvm-tools-preview 컴포넌트가 없습니다." >&2
+          echo "       cargo llvm-cov 가 interactive 프롬프트로 install 의향을" >&2
+          echo "       물어 hook 이 무한 대기할 수 있습니다." >&2
+          echo "       'bash scripts/setup.sh' 실행 후 재시도하세요." >&2
+          exit 1
+        fi
+        cd src-tauri && cargo llvm-cov --lib --summary-only \
+          --fail-under-lines 63 \
+          --fail-under-functions 57 \
+          --fail-under-regions 65
     ts-format:
       glob: "*.{ts,tsx}"
       run: npx prettier --write {staged_files}
@@ -27,6 +46,11 @@ pre-commit:
       glob: "*.{ts,tsx}"
       run: npx eslint --fix {staged_files}
       stage_fixed: true
+    ts-typecheck:
+      # `tsc --noEmit` 은 staged 파일 단위로 분리할 수 없다 (전체 프로젝트
+      # 그래프를 봐야 type 추론이 정확). .ts/.tsx 가 staged 인 경우에만 트리거.
+      glob: "*.{ts,tsx}"
+      run: npx tsc --noEmit
     no-secrets:
       run: |
         STAGED=$(git diff --cached --name-only | grep -v '^docs/')
@@ -41,24 +65,49 @@ pre-push:
   # (macOS WKWebView)에서 통과해야만 push 허용. `--no-verify` / `LEFTHOOK=0`
   # 회피는 `.claude/hooks/pre-bash.sh`에서 차단.
   #
-  # 순서: 빠른 체크(test/lint/check)가 먼저 실패하면 e2e 부팅 비용을 아낌.
+  # 순서: 빠른 체크가 먼저 실패하면 무거운 체크 시간을 아낀다 (fail-fast).
   # `piped: true`로 직렬 실행 — e2e는 cold start ~1-3분이라 다른 체크와
-  # 동시에 돌리면 docker boot 비용이 항상 부과됨.
+  # 동시에 돌리면 docker boot 비용이 항상 부과됨. 직렬은 또한 실패 원인을
+  # 한눈에 짚게 한다.
   piped: true
   commands:
-    1_rust-test:
-      tags: test rust
-      run: cd src-tauri && cargo test --lib --test storage_integration
-    2_ts-test:
-      tags: test frontend
-      run: npm run test -- --run --coverage
-    3_ts-lint:
+    1_ts-typecheck:
+      tags: lint frontend
+      run: npx tsc --noEmit
+    2_ts-lint:
       tags: lint frontend
       run: npm run lint
-    4_tauri-check:
+    3_tauri-check:
       tags: build
       run: cd src-tauri && cargo check
-    5_e2e:
+    4_cargo-deny:
+      # license / advisory / banned crate 게이트. deny.toml 참조.
+      tags: security rust
+      run: cd src-tauri && cargo deny check
+    5_cargo-machete:
+      # 사용되지 않는 cargo 의존성 검출. 가벼움 (~5s).
+      tags: lint rust
+      run: cd src-tauri && cargo machete
+    6_rust-coverage:
+      # `cargo llvm-cov` 는 내부에서 `cargo test --lib` 를 돌리며 coverage
+      # 를 측정하므로, 별도의 `cargo test --lib` 단계와 중복된다. 따라서
+      # 단일 명령으로 통합. integration 테스트(`storage_integration`)는
+      # `--test` 플래그로 같이 instrument.
+      tags: test rust
+      run: |
+        if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
+          echo "ERROR: rustup llvm-tools-preview 컴포넌트가 없습니다." >&2
+          echo "       'bash scripts/setup.sh' 실행 후 재시도하세요." >&2
+          exit 1
+        fi
+        cd src-tauri && cargo llvm-cov --lib --test storage_integration --summary-only \
+          --fail-under-lines 63 \
+          --fail-under-functions 57 \
+          --fail-under-regions 65
+    7_ts-test:
+      tags: test frontend
+      run: npm run test -- --run --coverage
+    8_e2e:
       # 일시 비활성화 (2026-05-01). pre-push e2e 게이트가 다음 세 가지로
       # 동시에 깨진 상태로, 모든 push를 막고 있어 *전체* 작업이 정지됨.
       # ADR 0019의 "작동하지 않는 게이트는 게이트가 아니다" 논리를 그대로 적용:
