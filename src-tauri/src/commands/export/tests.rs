@@ -535,6 +535,483 @@ fn test_pg_value_to_sql_literal_array_casts_jsonb() {
     assert!(lit.contains("'[1,2,\"a\"]'"), "lit: {}", lit);
 }
 
+// ── run_schema_dump direct tests (Sprint 237 P5) ─────────────────────
+//
+// 작성 이유 (2026-05-08): export/mod.rs 의 `run_schema_dump` body 가
+// 0% coverage (Tauri command wrapper `export_schema_dump` 만 통합
+// smoke 로 doctored). private async fn 이지만 `&AppState` 만 받으므로
+// `AppState::new()` + 공유 stub 으로 직접 구동 가능. dispatch 분기
+// (NotFound / Unsupported / Ok / Cancel / batch_size=0) 와 mpsc drain
+// 회로 (table 별 INSERT formatting) 를 격리해 회귀 가드.
+
+use crate::commands::connection::AppState;
+use crate::db::testing::StubRdbAdapter;
+use crate::db::ActiveAdapter;
+use crate::error::AppError;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
+
+fn dump_table(schema: &str, table: &str, cols: Vec<&str>) -> ExportDumpTable {
+    ExportDumpTable {
+        schema: schema.into(),
+        table: table.into(),
+        column_names: cols.into_iter().map(|s| s.into()).collect(),
+    }
+}
+
+fn dump_opts(include: ExportInclude, batch_size: u32) -> ExportSchemaDumpOptions {
+    ExportSchemaDumpOptions {
+        include,
+        batch_size,
+    }
+}
+
+#[tokio::test]
+async fn run_schema_dump_rejects_zero_batch_size() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("dump.sql");
+    let res = super::run_schema_dump(
+        &state,
+        "conn-x",
+        &path,
+        "",
+        "",
+        &[],
+        &dump_opts(ExportInclude::Both, 0),
+        None,
+    )
+    .await;
+    match res {
+        Err(AppError::Validation(msg)) => assert!(msg.contains("batch_size")),
+        other => panic!("expected Validation err, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn run_schema_dump_writes_ddl_header_only_when_include_ddl_no_tables() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("ddl_only.sql");
+    // 끝에 `\n` 없는 header → 자동 append 되는 분기 검증.
+    let header = "CREATE TABLE t();";
+    let summary = super::run_schema_dump(
+        &state,
+        "conn-x",
+        &path,
+        header,
+        "",
+        &[],
+        &dump_opts(ExportInclude::Ddl, 100),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(summary.rows_written, 0);
+    let body = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(body, format!("{}\n", header));
+    assert_eq!(summary.bytes_written as usize, body.len());
+}
+
+#[tokio::test]
+async fn run_schema_dump_appends_footer_with_sequence_resets_section() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("footer.sql");
+    let footer = "SELECT setval('s', 1);";
+    let summary = super::run_schema_dump(
+        &state,
+        "conn-x",
+        &path,
+        "",
+        footer,
+        &[],
+        &dump_opts(ExportInclude::Ddl, 100),
+        None,
+    )
+    .await
+    .unwrap();
+    let body = std::fs::read_to_string(&path).unwrap();
+    assert!(body.contains("Sequence resets"));
+    assert!(body.contains(footer));
+    assert!(body.ends_with('\n'));
+    assert_eq!(summary.bytes_written as usize, body.len());
+}
+
+#[tokio::test]
+async fn run_schema_dump_dml_returns_database_err_when_connection_missing() {
+    let state = AppState::new();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("missing.sql");
+    let res = super::run_schema_dump(
+        &state,
+        "no-such-conn",
+        &path,
+        "",
+        "",
+        &[dump_table("public", "t", vec!["id"])],
+        &dump_opts(ExportInclude::Dml, 100),
+        None,
+    )
+    .await;
+    match res {
+        Err(AppError::Database(msg)) => assert!(msg.contains("not found")),
+        other => panic!("expected Database not-found, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn run_schema_dump_dml_rejects_non_rdb_paradigm_with_unsupported() {
+    use crate::db::testing::StubDocumentAdapter;
+
+    let state = AppState::new();
+    {
+        let mut active = state.active_connections.lock().await;
+        active.insert(
+            "doc-conn".into(),
+            ActiveAdapter::Document(Box::new(StubDocumentAdapter::default())),
+        );
+    }
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("paradigm.sql");
+    let res = super::run_schema_dump(
+        &state,
+        "doc-conn",
+        &path,
+        "",
+        "",
+        &[dump_table("db", "c", vec!["id"])],
+        &dump_opts(ExportInclude::Dml, 100),
+        None,
+    )
+    .await;
+    match res {
+        Err(AppError::Unsupported(msg)) => assert!(msg.contains("relational")),
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn run_schema_dump_skips_tables_with_empty_column_names() {
+    // column_names 가 비어 있으면 INSERT 생성을 skip — DDL 만 의미 있는
+    // 테이블에 대한 보호.
+    let state = AppState::new();
+    {
+        let mut active = state.active_connections.lock().await;
+        active.insert(
+            "rdb-conn".into(),
+            ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default())),
+        );
+    }
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("skip.sql");
+    let summary = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &path,
+        "",
+        "",
+        &[dump_table("public", "t", vec![])], // empty cols
+        &dump_opts(ExportInclude::Dml, 100),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(summary.rows_written, 0);
+    let body = std::fs::read_to_string(&path).unwrap();
+    assert!(!body.contains("INSERT"));
+    // 빈 column 테이블은 header 도 안 찍음.
+    assert!(!body.contains("Data:"));
+}
+
+#[tokio::test]
+async fn run_schema_dump_short_circuits_when_pre_cancelled() {
+    let state = AppState::new();
+    {
+        let mut active = state.active_connections.lock().await;
+        active.insert(
+            "rdb-conn".into(),
+            ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default())),
+        );
+    }
+    let token = CancellationToken::new();
+    token.cancel();
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("cancel.sql");
+    let res = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &path,
+        "",
+        "",
+        &[dump_table("public", "t", vec!["id"])],
+        &dump_opts(ExportInclude::Dml, 100),
+        Some(&token),
+    )
+    .await;
+    match res {
+        Err(AppError::Database(msg)) => assert!(msg.contains("cancelled")),
+        other => panic!("expected cancelled, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn run_schema_dump_writes_insert_lines_for_streamed_rows() {
+    // stub adapter 의 stream_table_rows 는 default = Unsupported.
+    // 통합 검증을 위해 stream_table_rows_fn 이 closure 로 batch 를 보낼
+    // 수 있어야 — testing.rs 가 그 hook 을 노출하지 않으므로 별도 inline
+    // adapter 를 작성한다.
+    use crate::db::traits::{DbAdapter, RdbAdapter};
+    use crate::db::types::{BoxFuture, NamespaceInfo, NamespaceLabel, RdbQueryResult};
+    use crate::models::{
+        AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
+        ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
+        DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
+        RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
+    };
+    use std::collections::HashMap;
+
+    struct StreamingStub {
+        batches: Arc<std::sync::Mutex<Vec<Vec<Vec<JsonValue>>>>>,
+    }
+    impl DbAdapter for StreamingStub {
+        fn kind(&self) -> DatabaseType {
+            DatabaseType::Postgresql
+        }
+        fn connect<'a>(&'a self, _c: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+    }
+    impl RdbAdapter for StreamingStub {
+        fn namespace_label(&self) -> NamespaceLabel {
+            NamespaceLabel::Schema
+        }
+        fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_tables<'a>(
+            &'a self,
+            _ns: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_columns<'a>(
+            &'a self,
+            _ns: &'a str,
+            _t: &'a str,
+            _c: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn execute_sql<'a>(
+            &'a self,
+            _s: &'a str,
+            _c: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+            Box::pin(async {
+                Ok(RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 0,
+                    execution_time_ms: 0,
+                    query_type: crate::models::QueryType::Select,
+                })
+            })
+        }
+        #[allow(clippy::too_many_arguments)]
+        fn query_table_data<'a>(
+            &'a self,
+            _ns: &'a str,
+            _t: &'a str,
+            _p: i32,
+            _ps: i32,
+            _ob: Option<&'a str>,
+            _f: Option<&'a [FilterCondition]>,
+            _rw: Option<&'a str>,
+            _c: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<TableData, AppError>> {
+            Box::pin(async {
+                Ok(TableData {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 0,
+                    page: 1,
+                    page_size: 0,
+                    executed_query: String::new(),
+                })
+            })
+        }
+        fn drop_table<'a>(
+            &'a self,
+            _r: &'a DropTableRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn rename_table<'a>(
+            &'a self,
+            _r: &'a RenameTableRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn alter_table<'a>(
+            &'a self,
+            _r: &'a AlterTableRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn add_column<'a>(
+            &'a self,
+            _r: &'a AddColumnRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_column<'a>(
+            &'a self,
+            _r: &'a DropColumnRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn create_table<'a>(
+            &'a self,
+            _r: &'a CreateTableRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn create_index<'a>(
+            &'a self,
+            _r: &'a CreateIndexRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_index<'a>(
+            &'a self,
+            _r: &'a DropIndexRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn add_constraint<'a>(
+            &'a self,
+            _r: &'a AddConstraintRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn drop_constraint<'a>(
+            &'a self,
+            _r: &'a DropConstraintRequest,
+        ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+            Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+        }
+        fn get_table_indexes<'a>(
+            &'a self,
+            _ns: &'a str,
+            _t: &'a str,
+            _c: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_table_constraints<'a>(
+            &'a self,
+            _ns: &'a str,
+            _t: &'a str,
+            _c: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn get_view_definition<'a>(
+            &'a self,
+            _ns: &'a str,
+            _v: &'a str,
+        ) -> BoxFuture<'a, Result<String, AppError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+        fn get_view_columns<'a>(
+            &'a self,
+            _ns: &'a str,
+            _v: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn list_schema_columns<'a>(
+            &'a self,
+            _ns: &'a str,
+        ) -> BoxFuture<'a, Result<HashMap<String, Vec<ColumnInfo>>, AppError>> {
+            Box::pin(async { Ok(HashMap::new()) })
+        }
+        fn get_function_source<'a>(
+            &'a self,
+            _ns: &'a str,
+            _f: &'a str,
+        ) -> BoxFuture<'a, Result<String, AppError>> {
+            Box::pin(async { Ok(String::new()) })
+        }
+        fn stream_table_rows<'a>(
+            &'a self,
+            _ns: &'a str,
+            _t: &'a str,
+            _bs: u32,
+            _cols: &'a [String],
+            sender: mpsc::Sender<Vec<Vec<JsonValue>>>,
+            _c: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<u64, AppError>> {
+            let batches = self.batches.clone();
+            Box::pin(async move {
+                let snapshot: Vec<Vec<Vec<JsonValue>>> = batches.lock().unwrap().clone();
+                let mut total: u64 = 0;
+                for batch in snapshot {
+                    total += batch.len() as u64;
+                    if sender.send(batch).await.is_err() {
+                        break;
+                    }
+                }
+                Ok(total)
+            })
+        }
+    }
+
+    let stub = StreamingStub {
+        batches: Arc::new(std::sync::Mutex::new(vec![
+            vec![vec![json!(1), json!("alice")], vec![json!(2), json!("bob")]],
+            vec![vec![JsonValue::Null, json!("carol")]],
+        ])),
+    };
+
+    let state = AppState::new();
+    {
+        let mut active = state.active_connections.lock().await;
+        active.insert("rdb-conn".into(), ActiveAdapter::Rdb(Box::new(stub)));
+    }
+
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("inserts.sql");
+    let summary = super::run_schema_dump(
+        &state,
+        "rdb-conn",
+        &path,
+        "",
+        "",
+        &[dump_table("public", "users", vec!["id", "name"])],
+        &dump_opts(ExportInclude::Dml, 2),
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(summary.rows_written, 3);
+
+    let body = std::fs::read_to_string(&path).unwrap();
+    let insert_count = body.matches("INSERT INTO").count();
+    assert_eq!(insert_count, 3);
+    assert!(body.contains(r#"INSERT INTO "public"."users" ("id", "name") VALUES (1, 'alice');"#));
+    assert!(body.contains(r#"VALUES (NULL, 'carol');"#));
+    assert!(body.contains("Data: \"public\".\"users\""));
+}
+
 // [AC-192-05] ExportInclude serde lowercase wire — frontend `"ddl"`
 // 등이 정확히 enum variant 로 매칭.
 #[test]

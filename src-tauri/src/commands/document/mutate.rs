@@ -32,6 +32,9 @@
 //!
 //! These flow to the frontend via the standard Tauri error-serialisation
 //! pathway (`AppError: Serialize` in `src-tauri/src/error.rs`).
+//!
+//! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
+//! `_inner(&AppState)` shape so unit tests can drive prod code directly.
 
 use crate::commands::connection::AppState;
 use crate::db::DocumentId;
@@ -42,6 +45,23 @@ use crate::error::AppError;
 /// `mutate.rs` can each carry the helper without a shared module.
 fn not_connected(connection_id: &str) -> AppError {
     AppError::NotFound(format!("Connection '{}' not found", connection_id))
+}
+
+async fn insert_document_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    document: bson::Document,
+) -> Result<DocumentId, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .insert_document(database, collection, document)
+        .await
 }
 
 /// Insert a single BSON document into `database.collection` and return the
@@ -59,13 +79,31 @@ pub async fn insert_document(
     collection: String,
     document: bson::Document,
 ) -> Result<DocumentId, AppError> {
+    insert_document_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        document,
+    )
+    .await
+}
+
+async fn update_document_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    document_id: DocumentId,
+    patch: bson::Document,
+) -> Result<(), AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
-        .insert_document(&database, &collection, document)
+        .update_document(database, collection, document_id, patch)
         .await
 }
 
@@ -85,13 +123,31 @@ pub async fn update_document(
     document_id: DocumentId,
     patch: bson::Document,
 ) -> Result<(), AppError> {
+    update_document_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        document_id,
+        patch,
+    )
+    .await
+}
+
+async fn delete_document_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    document_id: DocumentId,
+) -> Result<(), AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
-        .update_document(&database, &collection, document_id, patch)
+        .delete_document(database, collection, document_id)
         .await
 }
 
@@ -109,13 +165,30 @@ pub async fn delete_document(
     collection: String,
     document_id: DocumentId,
 ) -> Result<(), AppError> {
+    delete_document_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        document_id,
+    )
+    .await
+}
+
+async fn delete_many_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    filter: bson::Document,
+) -> Result<u64, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
-        .delete_document(&database, &collection, document_id)
+        .delete_many(database, collection, filter)
         .await
 }
 
@@ -134,13 +207,31 @@ pub async fn delete_many(
     collection: String,
     filter: bson::Document,
 ) -> Result<u64, AppError> {
+    delete_many_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        filter,
+    )
+    .await
+}
+
+async fn update_many_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    filter: bson::Document,
+    patch: bson::Document,
+) -> Result<u64, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
-        .delete_many(&database, &collection, filter)
+        .update_many(database, collection, filter, patch)
         .await
 }
 
@@ -156,13 +247,30 @@ pub async fn update_many(
     filter: bson::Document,
     patch: bson::Document,
 ) -> Result<u64, AppError> {
+    update_many_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        filter,
+        patch,
+    )
+    .await
+}
+
+async fn drop_collection_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+) -> Result<(), AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
-        .update_many(&database, &collection, filter, patch)
+        .drop_collection(database, collection)
         .await
 }
 
@@ -175,12 +283,264 @@ pub async fn drop_collection(
     database: String,
     collection: String,
 ) -> Result<(), AppError> {
-    let connections = state.active_connections.lock().await;
-    let active = connections
-        .get(&connection_id)
-        .ok_or_else(|| not_connected(&connection_id))?;
-    active
-        .as_document()?
-        .drop_collection(&database, &collection)
+    drop_collection_inner(state.inner(), &connection_id, &database, &collection).await
+}
+
+#[cfg(test)]
+#[allow(clippy::field_reassign_with_default)]
+mod tests {
+    //! 작성 이유 (2026-05-08, Sprint 237 P5): document/mutate.rs 6 commands
+    //! 핸들러를 `_inner(&AppState)` 로 추출했으니 prod 코드 직접 호출.
+    //! 시나리오 매트릭스: NotFound / Unsupported(document) / 트레이트 위임.
+    use super::*;
+    use crate::db::testing::{StubDocumentAdapter, StubRdbAdapter};
+    use crate::db::ActiveAdapter;
+
+    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
+        let s = AppState::new();
+        {
+            let mut conns = s.active_connections.lock().await;
+            conns.insert(id.to_string(), active);
+        }
+        s
+    }
+
+    fn document_default() -> ActiveAdapter {
+        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
+    }
+    fn rdb_default() -> ActiveAdapter {
+        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
+    }
+
+    // ── insert_document ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn insert_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            insert_document_inner(&state, "absent", "db", "c", bson::Document::new()).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn insert_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            insert_document_inner(&state, "rdb", "db", "c", bson::Document::new()).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn insert_document_default_returns_documentid_number_zero() {
+        let state = state_with("d", document_default()).await;
+        let r = insert_document_inner(&state, "d", "db", "c", bson::Document::new())
+            .await
+            .unwrap();
+        match r {
+            DocumentId::Number(n) => assert_eq!(n, 0),
+            other => panic!("Expected Number, got: {:?}", other),
+        }
+    }
+
+    // ── update_document ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn update_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            update_document_inner(
+                &state,
+                "absent",
+                "db",
+                "c",
+                DocumentId::Number(1),
+                bson::Document::new()
+            )
+            .await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn update_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            update_document_inner(
+                &state,
+                "rdb",
+                "db",
+                "c",
+                DocumentId::Number(1),
+                bson::Document::new()
+            )
+            .await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn update_document_default_ok() {
+        let state = state_with("d", document_default()).await;
+        assert!(update_document_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            DocumentId::Number(1),
+            bson::Document::new()
+        )
         .await
+        .is_ok());
+    }
+
+    // ── delete_document ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn delete_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            delete_document_inner(&state, "absent", "db", "c", DocumentId::Number(1)).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            delete_document_inner(&state, "rdb", "db", "c", DocumentId::Number(1)).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_document_default_ok() {
+        let state = state_with("d", document_default()).await;
+        assert!(
+            delete_document_inner(&state, "d", "db", "c", DocumentId::Number(1))
+                .await
+                .is_ok()
+        );
+    }
+
+    // ── delete_many / update_many ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn delete_many_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            delete_many_inner(&state, "absent", "db", "c", bson::Document::new()).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_many_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            delete_many_inner(&state, "rdb", "db", "c", bson::Document::new()).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn delete_many_default_returns_zero() {
+        let state = state_with("d", document_default()).await;
+        assert_eq!(
+            delete_many_inner(&state, "d", "db", "c", bson::Document::new())
+                .await
+                .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn update_many_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            update_many_inner(
+                &state,
+                "absent",
+                "db",
+                "c",
+                bson::Document::new(),
+                bson::Document::new()
+            )
+            .await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn update_many_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            update_many_inner(
+                &state,
+                "rdb",
+                "db",
+                "c",
+                bson::Document::new(),
+                bson::Document::new()
+            )
+            .await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn update_many_default_returns_zero() {
+        let state = state_with("d", document_default()).await;
+        assert_eq!(
+            update_many_inner(
+                &state,
+                "d",
+                "db",
+                "c",
+                bson::Document::new(),
+                bson::Document::new()
+            )
+            .await
+            .unwrap(),
+            0
+        );
+    }
+
+    // ── drop_collection ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn drop_collection_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            drop_collection_inner(&state, "absent", "db", "c").await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn drop_collection_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            drop_collection_inner(&state, "rdb", "db", "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn drop_collection_routes_with_db_and_collection_args_propagated() {
+        let mut s = StubDocumentAdapter::default();
+        s.drop_collection_fn = Some(Box::new(|db: &str, coll: &str| {
+            if db.is_empty() || coll.is_empty() {
+                Err(AppError::Validation(format!(
+                    "missing args: '{db}'.'{coll}'"
+                )))
+            } else {
+                Ok(())
+            }
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        assert!(drop_collection_inner(&state, "d", "DB", "C").await.is_ok());
+    }
 }

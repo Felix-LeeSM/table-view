@@ -957,4 +957,110 @@ mod tests {
         let cols: Vec<ColumnInfo> = Vec::new();
         assert_eq!(build_default_order_clause(&cols), "");
     }
+
+    // ── strip_leading_comments / strip_trailing_terminator 보강 ──────────
+    // 작성: 2026-05-07. 기존 strip_* 테스트가 happy path + 코멘트 분기를
+    // 커버하지만 (a) "코멘트 없이 leading whitespace 만" (b) "빈 입력"
+    // edge 가 비어있어 P4 (빈/누락 입력 분기 동등 비중) 보강.
+
+    #[test]
+    fn strip_leading_comments_trims_leading_whitespace_only_without_comment() {
+        // 코멘트 분기를 모두 패스해 break 로 빠지는 경로 — 기존 테스트는
+        // 항상 코멘트 시작으로 분기를 들어가서 이 path 가 비어있었다.
+        assert_eq!(strip_leading_comments("   \n\t SELECT 1"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_leading_comments_empty_input_returns_empty() {
+        assert_eq!(strip_leading_comments(""), "");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_trims_trailing_whitespace_without_semicolon() {
+        // trim_end_matches 자체는 자명하지만 ;없이 whitespace 만 trim 되는
+        // path 가 기존 테스트에서 누락. 회귀 가드.
+        assert_eq!(strip_trailing_terminator("SELECT 1   \n"), "SELECT 1");
+    }
+
+    #[test]
+    fn strip_trailing_terminator_empty_input_returns_empty() {
+        assert_eq!(strip_trailing_terminator(""), "");
+    }
+
+    // ── pg_cast_type ──────────────────────────────────────────────────────
+    // 작성: 2026-05-07. information_schema.columns.data_type → SQL cast
+    // 타깃 매핑. parameterized 쿼리에서 bind 시 캐스트 누락 → 타입 추론
+    // 실패 회귀를 차단. happy path + edge (text-like → None, 미지 → None).
+
+    #[test]
+    fn pg_cast_type_integer_family() {
+        assert_eq!(pg_cast_type("bigint"), Some("bigint"));
+        assert_eq!(pg_cast_type("integer"), Some("integer"));
+        assert_eq!(pg_cast_type("smallint"), Some("smallint"));
+    }
+
+    #[test]
+    fn pg_cast_type_numeric_aliases_collapse_to_numeric() {
+        // PG 는 `numeric` 과 `decimal` 을 alias 로 취급. 둘 다 같은 cast.
+        assert_eq!(pg_cast_type("numeric"), Some("numeric"));
+        assert_eq!(pg_cast_type("decimal"), Some("numeric"));
+    }
+
+    #[test]
+    fn pg_cast_type_floating_point() {
+        assert_eq!(pg_cast_type("real"), Some("real"));
+        assert_eq!(pg_cast_type("double precision"), Some("double precision"));
+    }
+
+    #[test]
+    fn pg_cast_type_timestamp_distinguishes_with_timezone() {
+        // information_schema 는 "timestamp without time zone" /
+        // "timestamp with time zone" 를 풀 표현으로 보고하므로 그 형태가
+        // 입력 — 출력은 `timestamp` / `timestamptz` 의 PG canonical 이름.
+        assert_eq!(
+            pg_cast_type("timestamp without time zone"),
+            Some("timestamp")
+        );
+        assert_eq!(
+            pg_cast_type("timestamp with time zone"),
+            Some("timestamptz")
+        );
+    }
+
+    #[test]
+    fn pg_cast_type_time_distinguishes_with_timezone() {
+        assert_eq!(pg_cast_type("time without time zone"), Some("time"));
+        assert_eq!(pg_cast_type("time with time zone"), Some("timetz"));
+    }
+
+    #[test]
+    fn pg_cast_type_uuid_and_boolean_and_date_simple() {
+        assert_eq!(pg_cast_type("uuid"), Some("uuid"));
+        assert_eq!(pg_cast_type("boolean"), Some("boolean"));
+        assert_eq!(pg_cast_type("date"), Some("date"));
+    }
+
+    #[test]
+    fn pg_cast_type_text_like_returns_none_no_cast_needed() {
+        // text 계열은 bind 시 그냥 text 로 가도 PG 가 추론하므로 cast 불요.
+        for t in &[
+            "text",
+            "varchar",
+            "character varying",
+            "char",
+            "character",
+            "name",
+        ] {
+            assert_eq!(pg_cast_type(t), None, "text-like '{}' should not cast", t);
+        }
+    }
+
+    #[test]
+    fn pg_cast_type_unknown_returns_none() {
+        // 새 타입(예: jsonb, money, geometry) 은 None — 호출 측에서 cast
+        // 없이 bind. 기존 안전 path 유지.
+        assert_eq!(pg_cast_type("jsonb"), None);
+        assert_eq!(pg_cast_type("money"), None);
+        assert_eq!(pg_cast_type(""), None);
+    }
 }

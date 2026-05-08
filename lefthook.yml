@@ -23,8 +23,19 @@ pre-commit:
       # cargo llvm-cov 는 내부적으로 cargo test 를 instrument 해 돌리므로
       # 코드만 변경된 경우 cache 가 거의 그대로 hit (1차 실행 ~3분, 후속
       # ~30s-2min). pre-commit 5분 budget 안 (사용자 합의, 2026-05-07).
-      # baseline (2026-05-07): lines 63.84% / functions 57.12% / regions 65.36%.
-      # 목표 70%, 신규 테스트 추가 시 점진적 상향.
+      # baseline (2026-05-08, spec-first 라운드 3): lines 76.36% / functions
+      # 75.48% / regions 77.18%. 75% 목표 달성.
+      # 직전 baseline (2026-05-08 라운드 2): 72.10 / 71.90 / 73.35 →
+      #                                       (+4.26 / +3.58 / +3.83).
+      # 향상 원인:
+      #   - commands/rdb/{schema,query,ddl}.rs + commands/document/{browse,
+      #     query,mutate}.rs 핸들러를 `_inner(&AppState, …)` 로 추출. 공개
+      #     Tauri 커맨드는 `state.inner()` 한 줄로 위임. 테스트가 `_inner`
+      #     를 직접 호출 → dispatch_* 보조 헬퍼 중복 제거, 프로덕션 라인
+      #     커버 1:1 매칭.
+      #   - db/tests.rs 에 default trait impl 16개 시나리오 추가
+      #     (current_database 4-branch 포함) → db/traits.rs 98.80%.
+      #   - export/tests.rs run_schema_dump 8 시나리오 추가.
       glob: "*.rs"
       run: |
         if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
@@ -35,9 +46,9 @@ pre-commit:
           exit 1
         fi
         cd src-tauri && cargo llvm-cov --lib --summary-only \
-          --fail-under-lines 63 \
-          --fail-under-functions 57 \
-          --fail-under-regions 65
+          --fail-under-lines 75 \
+          --fail-under-functions 74 \
+          --fail-under-regions 76
     ts-format:
       glob: "*.{ts,tsx}"
       run: npx prettier --write {staged_files}
@@ -101,9 +112,9 @@ pre-push:
           exit 1
         fi
         cd src-tauri && cargo llvm-cov --lib --test storage_integration --summary-only \
-          --fail-under-lines 63 \
-          --fail-under-functions 57 \
-          --fail-under-regions 65
+          --fail-under-lines 75 \
+          --fail-under-functions 74 \
+          --fail-under-regions 76
     7_ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage

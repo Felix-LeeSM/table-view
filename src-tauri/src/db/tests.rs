@@ -914,3 +914,375 @@ async fn test_rdb_query_table_data_with_none_token_resolves_normally() {
         .await;
     assert!(result.is_ok(), "None token should resolve normally");
 }
+
+// ── Default trait impl coverage (RdbAdapter / DocumentAdapter) ───────
+//
+// 작성 이유 (2026-05-08): `db/traits.rs` 의 default method body 가 0%
+// coverage 였다. `FastFakeRdb` 와 `FakeCancellableDocument` 둘 다
+// 의도적으로 default 가 있는 method 를 override 하지 않으므로
+// 그 인스턴스에 trait 호출을 보내면 default impl 이 실행된다.
+// `current_database` default 는 execute_sql 결과 형태에 따라 4-갈래
+// 분기 (no rows / no cols / non-string / string val + propagated err)
+// 가 있어 별도 stub `CurrentDbStub` 를 closure 로 변형해 검증한다.
+
+#[tokio::test]
+async fn test_rdb_default_list_databases_returns_empty_vec() {
+    let adapter = FastFakeRdb;
+    let dbs: Vec<NamespaceInfo> = adapter.list_databases().await.unwrap();
+    assert!(dbs.is_empty());
+}
+
+#[tokio::test]
+async fn test_rdb_default_switch_database_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.switch_database("any").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(
+                msg.contains("database switching"),
+                "unexpected msg: {}",
+                msg
+            );
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_execute_sql_batch_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    let stmts: Vec<String> = vec!["SELECT 1".into()];
+    match adapter.execute_sql_batch(&stmts, None).await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(
+                msg.contains("batched transactions"),
+                "unexpected msg: {}",
+                msg
+            );
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_stream_table_rows_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let cols: Vec<String> = vec!["id".into()];
+    let res = adapter
+        .stream_table_rows("public", "t", 100, &cols, tx, None)
+        .await;
+    match res {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("Row streaming"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_list_views_returns_empty_vec() {
+    let adapter = FastFakeRdb;
+    let views: Vec<crate::models::ViewInfo> = adapter.list_views("public").await.unwrap();
+    assert!(views.is_empty());
+}
+
+#[tokio::test]
+async fn test_rdb_default_list_functions_returns_empty_vec() {
+    let adapter = FastFakeRdb;
+    let funcs: Vec<crate::models::FunctionInfo> = adapter.list_functions("public").await.unwrap();
+    assert!(funcs.is_empty());
+}
+
+#[tokio::test]
+async fn test_rdb_default_list_types_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.list_types().await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("list types"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_current_database_no_rows_returns_database_err() {
+    // FastFakeRdb.execute_sql 은 rows=[] 를 반환하므로
+    // `result.rows.first()` 가 None → "returned no rows" 분기.
+    let adapter = FastFakeRdb;
+    match adapter.current_database().await {
+        Err(AppError::Database(msg)) => {
+            assert!(msg.contains("no rows"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Database err, got {:?}", other.is_ok()),
+    }
+}
+
+/// Closure-driven stub specifically for exercising `current_database`
+/// default body branches (empty cols / non-string / string val / Err).
+struct CurrentDbStub {
+    response: Box<dyn Fn() -> Result<RdbQueryResult, AppError> + Send + Sync>,
+}
+
+impl DbAdapter for CurrentDbStub {
+    fn kind(&self) -> DatabaseType {
+        DatabaseType::Postgresql
+    }
+    fn connect<'a>(&'a self, _config: &'a ConnectionConfig) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+impl RdbAdapter for CurrentDbStub {
+    fn namespace_label(&self) -> NamespaceLabel {
+        NamespaceLabel::Schema
+    }
+    fn list_namespaces<'a>(&'a self) -> BoxFuture<'a, Result<Vec<NamespaceInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn list_tables<'a>(
+        &'a self,
+        _namespace: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TableInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn get_columns<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn execute_sql<'a>(
+        &'a self,
+        _sql: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<RdbQueryResult, AppError>> {
+        let res = (self.response)();
+        Box::pin(async move { res })
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn query_table_data<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _page: i32,
+        _page_size: i32,
+        _order_by: Option<&'a str>,
+        _filters: Option<&'a [FilterCondition]>,
+        _raw_where: Option<&'a str>,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<TableData, AppError>> {
+        Box::pin(async {
+            Ok(TableData {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: 0,
+                page: 1,
+                page_size: 0,
+                executed_query: String::new(),
+            })
+        })
+    }
+    fn drop_table<'a>(
+        &'a self,
+        _req: &'a DropTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn rename_table<'a>(
+        &'a self,
+        _req: &'a RenameTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn alter_table<'a>(
+        &'a self,
+        _req: &'a AlterTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn add_column<'a>(
+        &'a self,
+        _req: &'a AddColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn drop_column<'a>(
+        &'a self,
+        _req: &'a DropColumnRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn create_table<'a>(
+        &'a self,
+        _req: &'a CreateTableRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn create_index<'a>(
+        &'a self,
+        _req: &'a CreateIndexRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn drop_index<'a>(
+        &'a self,
+        _req: &'a DropIndexRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn add_constraint<'a>(
+        &'a self,
+        _req: &'a AddConstraintRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn drop_constraint<'a>(
+        &'a self,
+        _req: &'a DropConstraintRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async { Ok(SchemaChangeResult { sql: String::new() }) })
+    }
+    fn get_table_indexes<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<IndexInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn get_table_constraints<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<ConstraintInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn get_view_definition<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _view: &'a str,
+    ) -> BoxFuture<'a, Result<String, AppError>> {
+        Box::pin(async { Ok(String::new()) })
+    }
+    fn get_view_columns<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _view: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<ColumnInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn list_schema_columns<'a>(
+        &'a self,
+        _namespace: &'a str,
+    ) -> BoxFuture<'a, Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError>> {
+        Box::pin(async { Ok(std::collections::HashMap::new()) })
+    }
+    fn get_function_source<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _function: &'a str,
+    ) -> BoxFuture<'a, Result<String, AppError>> {
+        Box::pin(async { Ok(String::new()) })
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_current_database_empty_first_row_returns_no_columns_err() {
+    // rows=[[]] — `rows.first()` 는 Some(빈 row), `row.first()` 가 None
+    // → "returned no columns" 분기.
+    let stub = CurrentDbStub {
+        response: Box::new(|| {
+            Ok(RdbQueryResult {
+                columns: Vec::new(),
+                rows: vec![Vec::new()],
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: crate::models::QueryType::Select,
+            })
+        }),
+    };
+    match stub.current_database().await {
+        Err(AppError::Database(msg)) => {
+            assert!(msg.contains("no columns"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Database err, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_current_database_string_val_returns_some() {
+    // rows=[["mydb"]] → `val.as_str()` Some → Ok(Some("mydb")).
+    let stub = CurrentDbStub {
+        response: Box::new(|| {
+            Ok(RdbQueryResult {
+                columns: Vec::new(),
+                rows: vec![vec![serde_json::json!("mydb")]],
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: crate::models::QueryType::Select,
+            })
+        }),
+    };
+    let res = stub.current_database().await.unwrap();
+    assert_eq!(res, Some("mydb".to_string()));
+}
+
+#[tokio::test]
+async fn test_rdb_default_current_database_non_string_val_returns_none() {
+    // rows=[[42]] → `val.as_str()` None → Ok(None). PG 환경에서는 일어
+    // 나지 않지만 default 분기 robustness 단언.
+    let stub = CurrentDbStub {
+        response: Box::new(|| {
+            Ok(RdbQueryResult {
+                columns: Vec::new(),
+                rows: vec![vec![serde_json::json!(42)]],
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: crate::models::QueryType::Select,
+            })
+        }),
+    };
+    let res = stub.current_database().await.unwrap();
+    assert_eq!(res, None);
+}
+
+#[tokio::test]
+async fn test_rdb_default_current_database_propagates_execute_sql_err() {
+    // execute_sql 이 Err 를 반환하면 `?` 로 그대로 전파.
+    let stub = CurrentDbStub {
+        response: Box::new(|| Err(AppError::Database("boom".into()))),
+    };
+    match stub.current_database().await {
+        Err(AppError::Database(msg)) => assert_eq!(msg, "boom"),
+        other => panic!("expected propagated Database err, got {:?}", other.is_ok()),
+    }
+}
+
+// ── DocumentAdapter defaults ──────────────────────────────────────────
+
+#[tokio::test]
+async fn test_document_default_switch_database_returns_unsupported() {
+    let adapter = FakeCancellableDocument;
+    match adapter.switch_database("any").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("document adapter"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_document_default_current_database_returns_none() {
+    let adapter = FakeCancellableDocument;
+    let res = adapter.current_database().await.unwrap();
+    assert_eq!(res, None);
+}

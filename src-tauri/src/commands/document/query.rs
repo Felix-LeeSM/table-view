@@ -14,43 +14,49 @@
 //! unknown connection id → `AppError::NotFound`, non-document paradigm →
 //! `AppError::Unsupported` (via `as_document()?`), adapter failures bubble up
 //! as `AppError::Database` / `AppError::Connection` / `AppError::Validation`.
-
-use tokio_util::sync::CancellationToken;
+//!
+//! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
+//! `_inner(&AppState)` shape; cancel-token helpers moved to
+//! `commands/document/mod.rs`.
 
 use crate::commands::connection::AppState;
 use crate::db::{DocumentQueryResult, FindBody};
 use crate::error::AppError;
 
+use super::{register_cancel_token, release_cancel_token};
+
 fn not_connected(connection_id: &str) -> AppError {
     AppError::NotFound(format!("Connection '{}' not found", connection_id))
 }
 
-/// Sprint 180 (AC-180-04) — cancel-token registration helper.
-async fn register_cancel_token(
-    state: &tauri::State<'_, AppState>,
-    query_id: &Option<String>,
-) -> Option<(String, CancellationToken)> {
-    if let Some(qid) = query_id.as_ref() {
-        let token = CancellationToken::new();
-        let stored = token.clone();
-        {
-            let mut tokens = state.query_tokens.lock().await;
-            tokens.insert(qid.clone(), stored);
-        }
-        Some((qid.clone(), token))
-    } else {
-        None
-    }
-}
+async fn find_documents_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    body: FindBody,
+    query_id: Option<&str>,
+) -> Result<DocumentQueryResult, AppError> {
+    let cancel_handle = register_cancel_token(state, query_id).await;
 
-async fn release_cancel_token(
-    state: &tauri::State<'_, AppState>,
-    cancel_handle: &Option<(String, CancellationToken)>,
-) {
-    if let Some((qid, _)) = cancel_handle {
-        let mut tokens = state.query_tokens.lock().await;
-        tokens.remove(qid);
-    }
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        active
+            .as_document()?
+            .find(
+                database,
+                collection,
+                body,
+                cancel_handle.as_ref().map(|(_, tok)| tok),
+            )
+            .await
+    };
+
+    release_cancel_token(state, &cancel_handle).await;
+    result
 }
 
 /// Execute a MongoDB `find` against `database.collection` and return the
@@ -68,26 +74,44 @@ pub async fn find_documents(
     // Sprint 180 (AC-180-04): optional cancel-token id.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
-    let cancel_handle = register_cancel_token(&state, &query_id).await;
-    let body = body.unwrap_or_default();
+    find_documents_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        body.unwrap_or_default(),
+        query_id.as_deref(),
+    )
+    .await
+}
+
+async fn aggregate_documents_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    pipeline: Vec<bson::Document>,
+    query_id: Option<&str>,
+) -> Result<DocumentQueryResult, AppError> {
+    let cancel_handle = register_cancel_token(state, query_id).await;
 
     let result = {
         let connections = state.active_connections.lock().await;
         let active = connections
-            .get(&connection_id)
-            .ok_or_else(|| not_connected(&connection_id))?;
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
         active
             .as_document()?
-            .find(
-                &database,
-                &collection,
-                body,
+            .aggregate(
+                database,
+                collection,
+                pipeline,
                 cancel_handle.as_ref().map(|(_, tok)| tok),
             )
             .await
     };
 
-    release_cancel_token(&state, &cancel_handle).await;
+    release_cancel_token(state, &cancel_handle).await;
     result
 }
 
@@ -115,24 +139,115 @@ pub async fn aggregate_documents(
     // Sprint 180 (AC-180-04): optional cancel-token id, mirrors find_documents.
     query_id: Option<String>,
 ) -> Result<DocumentQueryResult, AppError> {
-    let cancel_handle = register_cancel_token(&state, &query_id).await;
+    aggregate_documents_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        pipeline,
+        query_id.as_deref(),
+    )
+    .await
+}
 
-    let result = {
-        let connections = state.active_connections.lock().await;
-        let active = connections
-            .get(&connection_id)
-            .ok_or_else(|| not_connected(&connection_id))?;
-        active
-            .as_document()?
-            .aggregate(
-                &database,
-                &collection,
-                pipeline,
-                cancel_handle.as_ref().map(|(_, tok)| tok),
-            )
+#[cfg(test)]
+mod tests {
+    //! 작성 이유 (2026-05-08, Sprint 237 P5): 핸들러를 `_inner(&AppState)` 로
+    //! 추출했으니 테스트도 그것을 직접 호출. 시나리오: NotFound /
+    //! Unsupported(document) / 트레이트 위임 / cancel-token release.
+    use super::*;
+    use crate::db::testing::{StubDocumentAdapter, StubRdbAdapter};
+    use crate::db::ActiveAdapter;
+
+    async fn state_with(id: &str, active: ActiveAdapter) -> AppState {
+        let s = AppState::new();
+        {
+            let mut conns = s.active_connections.lock().await;
+            conns.insert(id.to_string(), active);
+        }
+        s
+    }
+
+    fn document_default() -> ActiveAdapter {
+        ActiveAdapter::Document(Box::new(StubDocumentAdapter::default()))
+    }
+    fn rdb_default() -> ActiveAdapter {
+        ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))
+    }
+
+    // ── find_documents ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn find_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            find_documents_inner(&state, "absent", "db", "c", FindBody::default(), None).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn find_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            find_documents_inner(&state, "rdb", "db", "c", FindBody::default(), None).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn find_doc_default_returns_empty_query_result() {
+        let state = state_with("d", document_default()).await;
+        let r = find_documents_inner(&state, "d", "db", "c", FindBody::default(), None)
             .await
-    };
+            .unwrap();
+        assert!(r.columns.is_empty());
+        assert!(r.rows.is_empty());
+        assert_eq!(r.total_count, 0);
+    }
 
-    release_cancel_token(&state, &cancel_handle).await;
-    result
+    #[tokio::test]
+    async fn find_releases_token_on_round_trip() {
+        let state = state_with("d", document_default()).await;
+        let _ =
+            find_documents_inner(&state, "d", "db", "c", FindBody::default(), Some("q-find")).await;
+        assert!(!state.query_tokens.lock().await.contains_key("q-find"));
+    }
+
+    // ── aggregate_documents ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn aggregate_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            aggregate_documents_inner(&state, "absent", "db", "c", Vec::new(), None).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn aggregate_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            aggregate_documents_inner(&state, "rdb", "db", "c", Vec::new(), None).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn aggregate_doc_default_returns_empty_query_result() {
+        let state = state_with("d", document_default()).await;
+        let r = aggregate_documents_inner(&state, "d", "db", "c", Vec::new(), None)
+            .await
+            .unwrap();
+        assert!(r.columns.is_empty());
+        assert_eq!(r.total_count, 0);
+    }
+
+    #[tokio::test]
+    async fn aggregate_releases_token_on_round_trip() {
+        let state = state_with("d", document_default()).await;
+        let _ = aggregate_documents_inner(&state, "d", "db", "c", Vec::new(), Some("q-agg")).await;
+        assert!(!state.query_tokens.lock().await.contains_key("q-agg"));
+    }
 }
