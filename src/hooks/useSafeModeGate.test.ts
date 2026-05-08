@@ -9,7 +9,7 @@
 // (AC-189-06a-3). date 2026-05-02.
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useSafeModeGate } from "./useSafeModeGate";
+import { useSafeModeGate, useSafeModeReadOnly } from "./useSafeModeGate";
 import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
@@ -80,5 +80,53 @@ describe("useSafeModeGate (store wiring)", () => {
     useSafeModeStore.setState({ mode: "strict" });
     const { result } = renderHook(() => useSafeModeGate("missing"));
     expect(result.current.decide(DANGER).action).toBe("allow");
+  });
+});
+
+// Sprint 243 — Strict-mode read-only gate. Coarser than the per-statement
+// dangerous-DML gate above: returns true whenever the connection is
+// production AND mode is `strict` or `off` (prod-auto upgrade). Drives
+// the DataGrid's cell-edit + toolbar disable. Date 2026-05-08.
+describe("useSafeModeReadOnly (DataGrid cell-edit gate)", () => {
+  beforeEach(() => {
+    localStorage.removeItem(SAFE_MODE_STORAGE_KEY);
+    useConnectionStore.setState({ connections: [] });
+  });
+
+  it("production + strict → readOnly true", () => {
+    useConnectionStore.setState({ connections: [makeConn()] });
+    useSafeModeStore.setState({ mode: "strict" });
+    const { result } = renderHook(() => useSafeModeReadOnly("c1"));
+    expect(result.current).toBe(true);
+  });
+
+  it("production + off (prod-auto) → readOnly true", () => {
+    useConnectionStore.setState({ connections: [makeConn()] });
+    useSafeModeStore.setState({ mode: "off" });
+    const { result } = renderHook(() => useSafeModeReadOnly("c1"));
+    expect(result.current).toBe(true);
+  });
+
+  it("production + warn → readOnly false (warn-tier confirm path stays editable)", () => {
+    useConnectionStore.setState({ connections: [makeConn()] });
+    useSafeModeStore.setState({ mode: "warn" });
+    const { result } = renderHook(() => useSafeModeReadOnly("c1"));
+    expect(result.current).toBe(false);
+  });
+
+  it("staging + strict → readOnly false (non-production override)", () => {
+    useConnectionStore.setState({
+      connections: [makeConn({ environment: "staging" })],
+    });
+    useSafeModeStore.setState({ mode: "strict" });
+    const { result } = renderHook(() => useSafeModeReadOnly("c1"));
+    expect(result.current).toBe(false);
+  });
+
+  it("missing connection → readOnly false (null environment / non-prod path)", () => {
+    useConnectionStore.setState({ connections: [] });
+    useSafeModeStore.setState({ mode: "strict" });
+    const { result } = renderHook(() => useSafeModeReadOnly("missing"));
+    expect(result.current).toBe(false);
   });
 });

@@ -29,6 +29,8 @@ import { ExportButton } from "@components/shared/ExportButton";
 import SqlSyntax from "@components/shared/SqlSyntax";
 import ConfirmDangerousDialog from "@components/workspace/ConfirmDangerousDialog";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
+import { useSafeModeReadOnly } from "@hooks/useSafeModeGate";
+import { toast } from "@/lib/toast";
 
 interface DataGridProps {
   connectionId: string;
@@ -254,6 +256,55 @@ export default function DataGrid({
     fetchData,
   });
 
+  // Sprint 243 — Safe Mode strict read-only gate. When the user
+  // requested a strict / prod-auto Safe Mode policy on a production
+  // connection, the dangerous-DML gate alone (which classifies cell
+  // `UPDATE ... WHERE pk` as `safe`) is too permissive for the
+  // expected guarantee. Wrap every edit-entry handler so it no-ops
+  // with a toast instead of opening the in-cell editor or producing
+  // a pending edit. Toolbar buttons render `disabled` upstream via
+  // the `readOnly` prop on `DataGridToolbar`.
+  const safeModeReadOnly = useSafeModeReadOnly(connectionId);
+  const {
+    handleStartEdit: rawHandleStartEdit,
+    handleAddRow: rawHandleAddRow,
+    handleDeleteRow: rawHandleDeleteRow,
+    handleDuplicateRow: rawHandleDuplicateRow,
+  } = editState;
+  const guardedHandleStartEdit = useCallback(
+    (rowIdx: number, colIdx: number, currentValue: string | null) => {
+      if (safeModeReadOnly) {
+        toast.info(
+          "Read-only — Safe Mode strict on production connection. Toggle the connection's environment tag or change Safe Mode in the toolbar to edit.",
+        );
+        return;
+      }
+      rawHandleStartEdit(rowIdx, colIdx, currentValue);
+    },
+    [safeModeReadOnly, rawHandleStartEdit],
+  );
+  const guardedHandleAddRow = useCallback(() => {
+    if (safeModeReadOnly) {
+      toast.info("Read-only — Safe Mode strict on production connection.");
+      return;
+    }
+    rawHandleAddRow();
+  }, [safeModeReadOnly, rawHandleAddRow]);
+  const guardedHandleDeleteRow = useCallback(() => {
+    if (safeModeReadOnly) {
+      toast.info("Read-only — Safe Mode strict on production connection.");
+      return;
+    }
+    rawHandleDeleteRow();
+  }, [safeModeReadOnly, rawHandleDeleteRow]);
+  const guardedHandleDuplicateRow = useCallback(() => {
+    if (safeModeReadOnly) {
+      toast.info("Read-only — Safe Mode strict on production connection.");
+      return;
+    }
+    rawHandleDuplicateRow();
+  }, [safeModeReadOnly, rawHandleDuplicateRow]);
+
   // Cancel active cell editing when the user explicitly refreshes data
   // (Cmd+R / F5 / refresh button) so the input doesn't linger at a
   // stale row position after new data arrives.
@@ -395,9 +446,10 @@ export default function DataGrid({
         onToggleQuickLook={() => setShowQuickLook((prev) => !prev)}
         onCommit={editState.handleCommit}
         onDiscard={editState.handleDiscard}
-        onAddRow={editState.handleAddRow}
-        onDeleteRow={editState.handleDeleteRow}
-        onDuplicateRow={editState.handleDuplicateRow}
+        onAddRow={guardedHandleAddRow}
+        onDeleteRow={guardedHandleDeleteRow}
+        onDuplicateRow={guardedHandleDuplicateRow}
+        readOnly={safeModeReadOnly}
       />
 
       {/* Filter bar */}
@@ -453,12 +505,12 @@ export default function DataGrid({
           onSetEditNull={editState.setEditNull}
           onSaveCurrentEdit={editState.saveCurrentEdit}
           onCancelEdit={editState.cancelEdit}
-          onStartEdit={editState.handleStartEdit}
+          onStartEdit={guardedHandleStartEdit}
           onSelectRow={editState.handleSelectRow}
           onSort={handleSort}
           onColumnWidthsChange={setColumnWidths}
-          onDeleteRow={editState.handleDeleteRow}
-          onDuplicateRow={editState.handleDuplicateRow}
+          onDeleteRow={guardedHandleDeleteRow}
+          onDuplicateRow={guardedHandleDuplicateRow}
           onNavigateToFk={handleNavigateToFk}
           activeFilterCount={activeFilterCount}
           onClearFilters={handleClearAllFiltersFromEmptyState}

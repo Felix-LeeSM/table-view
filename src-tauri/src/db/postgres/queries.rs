@@ -528,6 +528,8 @@ impl PostgresAdapter {
         let offset = (page - 1).max(0) * page_size;
 
         let mut order_clause = String::new();
+        let mut user_sort_columns: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         if let Some(order_by) = &order_by {
             // Parse comma-separated "column_name ASC, column_name DESC" format
             let valid_columns: std::collections::HashSet<&str> =
@@ -548,10 +550,30 @@ impl PostgresAdapter {
                         col_name.replace('"', "\"\""),
                         direction
                     ));
+                    user_sort_columns.insert(col_name.to_string());
                 }
             }
             if !order_parts.is_empty() {
-                order_clause = format!(" ORDER BY {}", order_parts.join(", "));
+                // Sprint 243 — append PK columns (ASC) as a tiebreaker
+                // when the user's sort doesn't already cover them. PG
+                // freely reorders rows with equal sort keys based on
+                // physical heap layout; an UPDATE moves the tuple to
+                // the heap tail, so without a stable secondary sort
+                // the edited row appears at the bottom of its same-
+                // value group on the next refetch. The PK tiebreaker
+                // pins the order deterministically. Skipped when the
+                // user already sorted by every PK column (no point
+                // appending a redundant clause). Same rationale as
+                // Sprint 232's no-sort fallback, extended to the
+                // user-supplied path.
+                let pk_tiebreaker_parts: Vec<String> = columns
+                    .iter()
+                    .filter(|c| c.is_primary_key && !user_sort_columns.contains(&c.name))
+                    .map(|c| format!("\"{}\" ASC", c.name.replace('"', "\"\"")))
+                    .collect();
+                let mut all_parts = order_parts;
+                all_parts.extend(pk_tiebreaker_parts);
+                order_clause = format!(" ORDER BY {}", all_parts.join(", "));
             }
         }
 
