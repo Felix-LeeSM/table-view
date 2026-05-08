@@ -314,6 +314,7 @@ mod tests {
                 nullable: true,
                 default_value: None,
                 comment: None,
+                is_identity: false,
             },
             check_expression: None,
             preview_only: true,
