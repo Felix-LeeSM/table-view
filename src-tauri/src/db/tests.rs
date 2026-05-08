@@ -963,6 +963,24 @@ async fn test_rdb_default_execute_sql_batch_returns_unsupported() {
     }
 }
 
+// [AC-247-B7] — RdbAdapter::dry_run_sql_batch default impl returns
+// `AppError::Unsupported("This adapter does not support dry-run")`.
+// FastFakeRdb 는 의도적으로 이 method 를 override 하지 않으므로 trait
+// dispatch 가 default body 로 떨어진다. PG 만 override (postgres.rs); MySQL/
+// SQLite 는 default 를 그대로 inherit 해 frontend 에 Unsupported 를 surface.
+// Date 2026-05-09.
+#[tokio::test]
+async fn test_rdb_default_dry_run_sql_batch_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    let stmts: Vec<String> = vec!["SELECT 1".into()];
+    match adapter.dry_run_sql_batch(&stmts, None).await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("dry-run"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
 #[tokio::test]
 async fn test_rdb_default_stream_table_rows_returns_unsupported() {
     let adapter = FastFakeRdb;

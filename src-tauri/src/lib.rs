@@ -166,6 +166,7 @@ pub fn run() {
         commands::rdb::schema::list_postgres_types,
         commands::rdb::query::execute_query,
         commands::rdb::query::execute_query_batch,
+        commands::rdb::query::execute_query_dry_run,
         commands::rdb::query::cancel_query,
         commands::meta::list_databases,
         commands::meta::switch_active_db,

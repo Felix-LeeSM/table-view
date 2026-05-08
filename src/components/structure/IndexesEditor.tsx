@@ -464,6 +464,9 @@ export default function IndexesEditor({
               ? "production"
               : "non-production"
           }
+          connectionId={connectionId}
+          statements={[ddl.pendingConfirm.sql]}
+          paradigm="rdb"
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

@@ -35,6 +35,9 @@ const mockToastInfo = vi.fn();
 vi.mock("@lib/tauri", () => ({
   executeQuery: vi.fn(),
   executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
+  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
 }));
 
 vi.mock("@lib/toast", () => ({

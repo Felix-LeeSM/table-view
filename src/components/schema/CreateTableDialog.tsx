@@ -1573,6 +1573,9 @@ export default function CreateTableDialog({
               ? "production"
               : "non-production"
           }
+          connectionId={connectionId}
+          statements={[ddl.pendingConfirm.sql]}
+          paradigm="rdb"
           onConfirm={() => {
             void ddl.confirmDangerous();
           }}

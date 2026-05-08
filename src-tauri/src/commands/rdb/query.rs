@@ -199,6 +199,91 @@ pub async fn execute_query_batch(
     execute_query_batch_inner(state.inner(), &connection_id, &statements, &query_id).await
 }
 
+async fn execute_query_dry_run_inner(
+    state: &AppState,
+    connection_id: &str,
+    statements: &[String],
+    query_id: &str,
+) -> Result<Vec<QueryResult>, AppError> {
+    info!(
+        connection_id = %connection_id,
+        query_id = %query_id,
+        batch_size = statements.len(),
+        "Executing query dry-run"
+    );
+
+    if connection_id.trim().is_empty() {
+        return Err(AppError::Validation("Connection ID cannot be empty".into()));
+    }
+    if statements.is_empty() {
+        return Err(AppError::Validation("Query batch cannot be empty".into()));
+    }
+    for (idx, sql) in statements.iter().enumerate() {
+        if sql.trim().is_empty() {
+            return Err(AppError::Validation(format!(
+                "Statement {} of {} is empty",
+                idx + 1,
+                statements.len()
+            )));
+        }
+    }
+
+    let cancel_handle = register_cancel_token(state, Some(query_id)).await;
+    let child_token = cancel_handle.as_ref().map(|(_, t)| t.clone());
+
+    let result = {
+        let connections = state.active_connections.lock().await;
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        active
+            .as_rdb()?
+            .dry_run_sql_batch(statements, child_token.as_ref())
+            .await
+    };
+
+    release_cancel_token(state, &cancel_handle).await;
+
+    match &result {
+        Ok(results) => info!(
+            query_id = %query_id,
+            executed = results.len(),
+            "Dry-run completed (rolled back)"
+        ),
+        Err(e) => warn!(
+            query_id = %query_id,
+            batch_size = statements.len(),
+            error = %e,
+            "Dry-run failed"
+        ),
+    }
+
+    result
+}
+
+/// Sprint 247 (ADR 0022 Phase 3) — execute a batch of SQL statements
+/// inside a transaction that is unconditionally rolled back. Returns
+/// per-statement statistics (`rows_affected`, `execution_time_ms`) so
+/// the destructive-statement confirm dialog can preview impact before
+/// the user clicks Yes/No on the eventual commit.
+///
+/// Behaviour mirrors `execute_query_batch` (input validation, paradigm
+/// guard, cancel-token registration, error message shape) — only the
+/// transaction outcome differs (ROLLBACK instead of COMMIT). Adapters
+/// that do not implement `dry_run_sql_batch` (MySQL/SQLite today)
+/// surface `AppError::Unsupported` from the trait default; Mongo
+/// connections fail at the paradigm guard with `AppError::Unsupported`
+/// before the trait method is reached.
+#[tauri::command]
+pub async fn execute_query_dry_run(
+    state: State<'_, AppState>,
+    connection_id: String,
+    statements: Vec<String>,
+    query_id: String,
+) -> Result<Vec<QueryResult>, AppError> {
+    execute_query_dry_run_inner(state.inner(), &connection_id, &statements, &query_id).await
+}
+
 async fn cancel_query_inner(state: &AppState, query_id: &str) -> Result<String, AppError> {
     info!(query_id = %query_id, "Attempting to cancel query");
 
@@ -564,6 +649,106 @@ mod tests {
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].rows[0][0], serde_json::Value::String("A".into()));
         assert_eq!(r[1].rows[0][0], serde_json::Value::String("B".into()));
+    }
+
+    // ── Sprint 247 (ADR 0022 Phase 3) — dry-run dispatch tests ───────────
+    //
+    // 작성 이유 (2026-05-09): execute_query_dry_run_inner 의 input
+    // validation + paradigm guard + adapter dispatch contract 가 검증되지
+    // 않음. execute_query_batch_inner 와 시그니처가 동일해 mirror 6 케이스
+    // 작성 (B1..B6). default trait impl (B7) 은 db/tests.rs 에서 별도
+    // 검증 — RdbAdapter 의 default body 호출 path 는 그쪽이 owner.
+
+    #[tokio::test]
+    async fn dry_run_empty_connection_id_rejected() {
+        // [AC-247-B1] — connection_id 가 trim 후 비어있으면 lookup 도
+        // 안 가고 Validation 으로 short-circuit.
+        let state = AppState::new();
+        let stmts = vec!["SELECT 1".to_string()];
+        match execute_query_dry_run_inner(&state, "  ", &stmts, "qd").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Connection ID cannot be empty"))
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn dry_run_empty_statements_rejected() {
+        // [AC-247-B2] — empty Vec 이면 Validation. PG inherent 의 empty
+        // short-circuit (Ok(vec![])) 보다 outer guard 가 먼저.
+        let state = AppState::new();
+        match execute_query_dry_run_inner(&state, "c", &[], "qd").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Query batch cannot be empty"))
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn dry_run_empty_statement_at_index_reports_position() {
+        // [AC-247-B3] — 3개 중 2번째가 비어있으면 "Statement 2 of 3"
+        // 메시지에 위치 포함. execute_query_batch 와 동일 카피.
+        let state = AppState::new();
+        let stmts = vec!["a".into(), "".into(), "".into()];
+        match execute_query_dry_run_inner(&state, "c", &stmts, "qd").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Statement 2 of 3"), "위치 누락: {msg}")
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn dry_run_unknown_connection_returns_notfound() {
+        // [AC-247-B4] — connection 미등록 시 NotFound. validation 통과
+        // 후 active_connections lookup 에서 reject.
+        let state = AppState::new();
+        let stmts = vec!["SELECT 1".to_string()];
+        assert!(matches!(
+            execute_query_dry_run_inner(&state, "absent", &stmts, "qd").await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn dry_run_document_paradigm_returns_unsupported() {
+        // [AC-247-B5] — Mongo 연결을 RDB command 가 reject. as_rdb 의
+        // paradigm guard 가 dry-run 시도조차 못 하게 막음.
+        let state = state_with("doc", document_default()).await;
+        let stmts = vec!["SELECT 1".to_string()];
+        assert!(matches!(
+            execute_query_dry_run_inner(&state, "doc", &stmts, "qd").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn dry_run_rdb_propagates_results() {
+        // [AC-247-B6] — adapter 의 dry_run_sql_batch 결과를 그대로 propagate.
+        // mock 에서 total_count=3 반환 → command 결과의 total_count 도 3.
+        let mut s = StubRdbAdapter::default();
+        s.dry_run_sql_batch_fn = Some(Box::new(|stmts: &[String]| {
+            Ok(stmts
+                .iter()
+                .map(|_| RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 3,
+                    execution_time_ms: 7,
+                    query_type: QueryType::Dml { rows_affected: 3 },
+                })
+                .collect())
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["UPDATE t SET x = 1".into()];
+        let r = execute_query_dry_run_inner(&state, "c", &stmts, "qd")
+            .await
+            .unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].total_count, 3);
+        assert_eq!(r[0].execution_time_ms, 7);
     }
 
     // ── query_table_data — dispatch contract ─────────────────────────────

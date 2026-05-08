@@ -52,6 +52,8 @@ vi.mock("@lib/tauri", () => ({
   cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
   findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
   aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
 }));
 
 // `verifyActiveDb` is fired post-execute by `dispatchDbMutationHint`. Stub

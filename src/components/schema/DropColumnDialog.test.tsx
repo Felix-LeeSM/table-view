@@ -30,6 +30,9 @@ const { mockDropColumnRequest } = vi.hoisted(() => ({
 
 vi.mock("@lib/tauri", () => ({
   dropColumnRequest: mockDropColumnRequest,
+  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
 }));
 
 import DropColumnDialog from "./DropColumnDialog";

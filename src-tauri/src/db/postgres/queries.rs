@@ -404,6 +404,92 @@ impl PostgresAdapter {
             work.await
         }
     }
+
+    /// Sprint 247 (ADR 0022 Phase 3) — dry-run a list of statements inside
+    /// a single transaction WITHOUT committing. Same shape as
+    /// `execute_query_batch`, but the transaction is unconditionally
+    /// rolled back at the end so the database is left untouched.
+    ///
+    /// Empty input short-circuits with `Ok(vec![])` (no BEGIN/ROLLBACK
+    /// round-trip — matches `execute_query_batch`'s no-op contract).
+    /// Failure on statement K returns the same `"statement K of N failed:
+    /// <msg>"` error message as the commit path so the preview pane and
+    /// the eventual commit produce identical error copy.
+    pub async fn dry_run_query_batch(
+        &self,
+        statements: &[String],
+        cancel_token: Option<&CancellationToken>,
+    ) -> Result<Vec<QueryResult>, AppError> {
+        if statements.is_empty() {
+            return Ok(Vec::new());
+        }
+        for (idx, raw) in statements.iter().enumerate() {
+            if strip_trailing_terminator(raw).trim().is_empty() {
+                return Err(AppError::Validation(format!(
+                    "Statement {} of {} is empty",
+                    idx + 1,
+                    statements.len()
+                )));
+            }
+        }
+
+        let pool = self.active_pool().await?;
+        let total = statements.len();
+
+        let work = async {
+            let mut tx = pool
+                .begin()
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?;
+
+            let mut results: Vec<QueryResult> = Vec::with_capacity(total);
+            for (idx, raw) in statements.iter().enumerate() {
+                let stmt = strip_trailing_terminator(raw);
+                let start = std::time::Instant::now();
+                let exec_result = sqlx::query(stmt).execute(&mut *tx).await;
+                match exec_result {
+                    Ok(res) => {
+                        let rows_affected = res.rows_affected();
+                        results.push(QueryResult {
+                            columns: Vec::new(),
+                            rows: Vec::new(),
+                            total_count: rows_affected as i64,
+                            execution_time_ms: start.elapsed().as_millis() as u64,
+                            query_type: QueryType::Dml { rows_affected },
+                        });
+                    }
+                    Err(e) => {
+                        let _ = tx.rollback().await;
+                        return Err(AppError::Database(format!(
+                            "statement {} of {} failed: {}",
+                            idx + 1,
+                            total,
+                            e
+                        )));
+                    }
+                }
+            }
+
+            // Unconditional rollback — the entire point of dry-run is to
+            // observe statistics without persisting changes. A failed
+            // rollback at this stage is unactionable (the connection is
+            // returned to the pool which resets state), so we surface
+            // the rollback error verbatim only if `commit_ok == false`.
+            tx.rollback()
+                .await
+                .map_err(|e| AppError::Database(format!("rollback failed: {}", e)))?;
+            Ok::<Vec<QueryResult>, AppError>(results)
+        };
+
+        if let Some(token) = cancel_token {
+            tokio::select! {
+                result = work => result,
+                _ = token.cancelled() => Err(AppError::Database("Query cancelled".into())),
+            }
+        } else {
+            work.await
+        }
+    }
     #[allow(clippy::too_many_arguments)]
     pub async fn query_table_data(
         &self,

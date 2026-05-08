@@ -637,6 +637,11 @@ export default function DataGrid({
               ? "production"
               : "non-production"
           }
+          connectionId={connectionId}
+          statements={
+            editState.pendingConfirm.sql ? [editState.pendingConfirm.sql] : []
+          }
+          paradigm="rdb"
           onConfirm={() => {
             void editState.confirmDangerous();
           }}

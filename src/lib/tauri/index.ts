@@ -12,3 +12,9 @@ export * from "./query";
 export * from "./ddl";
 export * from "./document";
 export * from "./export";
+
+// Sprint 247 (ADR 0022 Phase 3) — explicit re-export so a verbatim grep
+// against this barrel surfaces the dry-run symbol used by Phase 3 wiring.
+// The `export * from "./query"` line above already re-exports it
+// transitively; this line is the canonical, symbol-by-name landing.
+export { executeQueryDryRun } from "./query";

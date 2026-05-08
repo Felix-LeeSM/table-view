@@ -139,6 +139,39 @@ pub trait RdbAdapter: DbAdapter {
         })
     }
 
+    /// Sprint 247 (ADR 0022 Phase 3) — dry-run a list of statements inside
+    /// a single transaction without committing. Semantics: `BEGIN; <run
+    /// each statement>; ROLLBACK;`. The returned `Vec<RdbQueryResult>`
+    /// surfaces per-statement statistics (`total_count` = `rows_affected`,
+    /// `execution_time_ms`) just like `execute_sql_batch`, but the
+    /// transaction is unconditionally rolled back so the database is left
+    /// in its pre-call state.
+    ///
+    /// Used by the destructive-statement confirm dialog (Sprint 247) to
+    /// preview the impact of a commit before the user clicks Yes/No. The
+    /// failure message shape mirrors `execute_sql_batch` (`"statement K
+    /// of N failed: <msg>"`) so the preview pane and the eventual commit
+    /// path produce identical error copy.
+    ///
+    /// Default impl: `AppError::Unsupported`. PG overrides this in
+    /// `db/postgres/queries.rs::execute_query_dry_run` (Sprint 247);
+    /// MySQL/SQLite inherit the default until a dialect-specific
+    /// implementation lands. Mongo adapters are NOT expected to call
+    /// this method — the frontend hook (`useDryRun`) routes
+    /// `paradigm === "document"` to a disclaimer state without invoking
+    /// IPC.
+    fn dry_run_sql_batch<'a>(
+        &'a self,
+        _statements: &'a [String],
+        _cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<RdbQueryResult>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support dry-run".into(),
+            ))
+        })
+    }
+
     /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(

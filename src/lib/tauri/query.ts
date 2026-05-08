@@ -56,3 +56,26 @@ export async function executeQueryBatch(
     queryId,
   });
 }
+
+// Sprint 247 (ADR 0022 Phase 3) — dry-run a batch of SQL statements
+// inside a transaction that is unconditionally rolled back. Returns
+// per-statement statistics (`total_count` / `execution_time_ms`) for the
+// destructive-statement confirm dialog's preview pane. The eventual
+// commit goes through `executeQueryBatch`, NOT this wrapper — dry-run
+// is observation only. Failure shape mirrors `executeQueryBatch`
+// (`"statement K of N failed: ..."`) so preview and commit produce
+// identical error copy. Adapters without dry-run support (MySQL/SQLite
+// today) reject with `Unsupported`; Mongo connections never reach this
+// wrapper because the hook routes paradigm="document" to a disclaimer
+// state without invoking IPC.
+export async function executeQueryDryRun(
+  connectionId: string,
+  statements: string[],
+  queryId: string,
+): Promise<QueryResult[]> {
+  return invoke<QueryResult[]>("execute_query_dry_run", {
+    connectionId,
+    statements,
+    queryId,
+  });
+}

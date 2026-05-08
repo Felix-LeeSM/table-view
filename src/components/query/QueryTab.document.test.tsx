@@ -39,6 +39,10 @@ vi.mock("@lib/tauri", () => ({
   cancelQuery: (...args: unknown[]) => mockCancelQuery(...args),
   findDocuments: (...args: unknown[]) => mockFindDocuments(...args),
   aggregateDocuments: (...args: unknown[]) => mockAggregateDocuments(...args),
+  // Sprint 247 — `<DryRunPreview>` IPC stub. Document paradigm short-
+  // circuits to `unsupported` without invoking IPC; the mock is here
+  // for completeness so the import resolves.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
 }));
 
 // Sprint 132 — the QueryTab raw-query hook calls `verifyActiveDb` after

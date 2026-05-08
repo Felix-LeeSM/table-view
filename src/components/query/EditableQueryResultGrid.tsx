@@ -429,6 +429,19 @@ export default function EditableQueryResultGrid({
               ? "production"
               : "non-production"
           }
+          connectionId={connectionId}
+          // `pendingConfirm.sql` carries the joined batch (`;\n`-
+          // delimited) per Sprint 196. For the dry-run preview we
+          // want one entry per statement so each row reports its own
+          // rows_affected. We re-split the joined string here rather
+          // than reach into the hook's source `sqls` array because
+          // the hook's public surface intentionally emits the joined
+          // string as the user-facing preview.
+          statements={grid.pendingConfirm.sql
+            .split(";")
+            .map((s) => s.trim())
+            .filter(Boolean)}
+          paradigm="rdb"
           onConfirm={() => {
             void grid.confirmDangerous();
           }}

@@ -39,6 +39,9 @@ vi.mock("@lib/tauri", () => ({
   addColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
   dropColumnRequest: vi.fn(() => Promise.resolve({ sql: "" })),
   listPostgresTypes: vi.fn(() => Promise.resolve([])),
+  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
 }));
 
 import * as tauri from "@lib/tauri";

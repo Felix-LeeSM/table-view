@@ -24,6 +24,9 @@ vi.mock("@lib/tauri", () => ({
       sql: "ALTER TABLE users ADD CONSTRAINT u_users_email UNIQUE (email)",
     }),
   ),
+  // Sprint 247 — `<DryRunPreview>` IPC stub. See IndexesEditor.test.tsx.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
 }));
 
 import * as tauri from "@lib/tauri";

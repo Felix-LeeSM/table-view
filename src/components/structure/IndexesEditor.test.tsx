@@ -25,6 +25,11 @@ vi.mock("@lib/tauri", () => ({
       sql: "CREATE INDEX idx_users_email ON users (email)",
     }),
   ),
+  // Sprint 247 — `<DryRunPreview>` mounts inside `<ConfirmDestructiveDialog>`
+  // and calls `executeQueryDryRun`. Stub `[]` so the dialog assertions stay
+  // unchanged; the dry-run lifecycle itself is covered in useDryRun.test.ts.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
 }));
 
 import * as tauri from "@lib/tauri";

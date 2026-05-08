@@ -79,6 +79,11 @@ pub(crate) struct StubRdbAdapter {
     pub execute_sql_fn: Option<FnOne<str, RdbQueryResult>>,
     pub execute_sql_batch_fn:
         Option<Box<dyn Fn(&[String]) -> Result<Vec<RdbQueryResult>, AppError> + Send + Sync>>,
+    /// Sprint 247 — `dry_run_sql_batch` override. `None` falls back to the
+    /// trait default (`Unsupported`) so wiring tests that don't care about
+    /// dry-run still type-check.
+    pub dry_run_sql_batch_fn:
+        Option<Box<dyn Fn(&[String]) -> Result<Vec<RdbQueryResult>, AppError> + Send + Sync>>,
     pub query_table_data_fn: Option<FnTwo<str, str, TableData>>,
 
     pub drop_table_fn: Option<FnOne<DropTableRequest, SchemaChangeResult>>,
@@ -118,6 +123,7 @@ impl Default for StubRdbAdapter {
             switch_database_fn: None,
             execute_sql_fn: None,
             execute_sql_batch_fn: None,
+            dry_run_sql_batch_fn: None,
             query_table_data_fn: None,
             drop_table_fn: None,
             rename_table_fn: None,
@@ -214,6 +220,21 @@ impl RdbAdapter for StubRdbAdapter {
             || {
                 Err(AppError::Unsupported(
                     "stub default execute_sql_batch".into(),
+                ))
+            },
+            |f| f(statements),
+        );
+        Box::pin(async move { r })
+    }
+    fn dry_run_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        _: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<RdbQueryResult>, AppError>> {
+        let r = self.dry_run_sql_batch_fn.as_ref().map_or_else(
+            || {
+                Err(AppError::Unsupported(
+                    "stub default dry_run_sql_batch".into(),
                 ))
             },
             |f| f(statements),

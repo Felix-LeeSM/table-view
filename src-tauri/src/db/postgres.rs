@@ -156,6 +156,16 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.execute_query_batch(statements, cancel).await })
     }
 
+    fn dry_run_sql_batch<'a>(
+        &'a self,
+        statements: &'a [String],
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<RdbQueryResult>, AppError>> + Send + 'a>> {
+        // Sprint 247 — delegate to the inherent `dry_run_query_batch`
+        // (BEGIN → execute statements → ROLLBACK).
+        Box::pin(async move { self.dry_run_query_batch(statements, cancel).await })
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn query_table_data<'a>(
         &'a self,

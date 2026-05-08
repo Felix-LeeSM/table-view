@@ -227,6 +227,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
               ? "production"
               : "non-production"
           }
+          connectionId={tab.connectionId}
+          // Mongo dry-run is unsupported (paradigm="document" routes to
+          // disclaimer); statements are still serialized for symmetry.
+          statements={[JSON.stringify(pendingMongoConfirm.pipeline)]}
+          paradigm="document"
           onConfirm={confirmMongoDangerous}
           onCancel={cancelMongoDangerous}
         />
@@ -248,6 +253,9 @@ export default function QueryTab({ tab }: QueryTabProps) {
               ? "production"
               : "non-production"
           }
+          connectionId={tab.connectionId}
+          statements={pendingRdbConfirm.statements}
+          paradigm="rdb"
           onConfirm={confirmRdbDangerous}
           onCancel={cancelRdbDangerous}
         />

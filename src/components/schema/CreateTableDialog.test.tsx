@@ -172,6 +172,9 @@ vi.mock("@lib/tauri", () => ({
   addConstraint: mockAddConstraint,
   dropConstraint: mockDropConstraint,
   listPostgresTypes: mockListPostgresTypes,
+  // Sprint 247 — `<DryRunPreview>` IPC stub for confirm dialog.
+  executeQueryDryRun: vi.fn(() => Promise.resolve([])),
+  cancelQuery: vi.fn(() => Promise.resolve("cancelled")),
 }));
 
 import CreateTableDialog from "./CreateTableDialog";
