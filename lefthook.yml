@@ -106,8 +106,10 @@ pre-push:
       # `cargo llvm-cov` 가 unit + 모든 통합 테스트를 한 번에 instrument.
       # Tier 2 (testcontainers 기반 PG/Mongo 통합) 가 db/postgres/* 와
       # db/mongodb/* 본체 라인을 hit 하므로 unit-only 대비 +4pp 상승.
-      # baseline (2026-05-08, Tier 1+2 통합): 81.30 / 77.97 / 82.08.
-      # cushion 을 2pp 두고 임계값 79/76/80.
+      # baseline (2026-05-08, Tier 1+2 통합, queries/schema/indexes/constraints
+      # 시나리오 보강 후): 83.58 / 78.76 / 85.16. cushion 을 2pp 두고 임계값
+      # 81/76/83 (functions 는 cushion 2.7pp 지만 한 자릿수 변동에 민감하므로
+      # 76 유지; lines 는 +0.87pp 상승분을 임계값에 반영).
       # 첫 실행은 PG/Mongo image pull 포함 ~3-5분, 캐시 후 ~1-2분.
       # Docker daemon 부재 환경 (예: 원격 sandbox) 에서는 testcontainers 가
       # 즉시 실패 → push 차단됨. ADR-0019 정신상 push 는 "작동하는 게이트"
@@ -127,9 +129,9 @@ pre-push:
           --test fixture_loading \
           --test mongo_integration \
           --summary-only \
-          --fail-under-lines 79 \
+          --fail-under-lines 83 \
           --fail-under-functions 76 \
-          --fail-under-regions 80
+          --fail-under-regions 81
     7_ts-test:
       tags: test frontend
       run: npm run test -- --run --coverage

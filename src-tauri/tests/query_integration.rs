@@ -5,7 +5,7 @@ use std::time::Duration;
 use table_view_lib::commands::connection::AppState;
 use table_view_lib::commands::query::{validate_cancel_inputs, validate_query_inputs};
 use table_view_lib::error::AppError;
-use table_view_lib::models::{DatabaseType, QueryType};
+use table_view_lib::models::{DatabaseType, FilterCondition, FilterOperator, QueryType};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
@@ -593,5 +593,645 @@ async fn test_select_with_block_comment() {
     assert_eq!(result.columns[0].name, "num");
     assert!(matches!(result.query_type, QueryType::Select));
 
+    adapter.disconnect_pool().await.ok();
+}
+
+// ── execute_query_batch 통합 시나리오 ──────────────────────────────────────
+// 작성: 2026-05-08, Sprint 237 P5 후속 커버리지 보강.
+// 단위 테스트는 empty / validation 경로만 가지고 있고 실제 BEGIN/COMMIT/
+// ROLLBACK 분기는 통합으로만 hit 된다. 회귀 가드 4 종:
+//  1. happy path — 두 개의 INSERT 가 한 트랜잭션에서 모두 commit.
+//  2. rollback — 두 번째 statement 가 fail 하면 첫 statement 도 롤백되어
+//     테이블에 0 row 가 남아야 한다 (transaction atomicity).
+//  3. trailing semicolon — 각 statement 의 trailing `;` 는 strip 후 실행.
+//  4. mixed DML — UPDATE + DELETE 가 같은 batch 에서 누적 rows_affected 와
+//     index 별 결과가 모두 정확.
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_execute_query_batch_commits_all_statements() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_batch_commit_{ts}");
+
+    adapter
+        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .await
+        .expect("CREATE TABLE");
+
+    let stmts = vec![
+        format!("INSERT INTO {table} VALUES (1), (2)"),
+        format!("INSERT INTO {table} VALUES (3)"),
+    ];
+    let results = adapter
+        .execute_query_batch(&stmts, None)
+        .await
+        .expect("batch should commit");
+
+    assert_eq!(results.len(), 2);
+    // First statement affected 2 rows; second affected 1.
+    assert_eq!(results[0].total_count, 2);
+    assert_eq!(results[1].total_count, 1);
+    match results[0].query_type {
+        QueryType::Dml { rows_affected } => assert_eq!(rows_affected, 2),
+        _ => panic!("expected Dml"),
+    }
+
+    // Verify rows actually persisted.
+    let count = adapter
+        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .await
+        .expect("count");
+    assert_eq!(count.rows[0][0].as_i64(), Some(3));
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_execute_query_batch_rolls_back_on_mid_failure() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_batch_rollback_{ts}");
+
+    adapter
+        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .await
+        .expect("CREATE TABLE");
+
+    // Statement 2 references a column that does not exist → fails;
+    // statement 1 must roll back so the row count stays 0.
+    let stmts = vec![
+        format!("INSERT INTO {table} VALUES (1)"),
+        format!("INSERT INTO {table} (no_such_col) VALUES (2)"),
+    ];
+    let err = adapter
+        .execute_query_batch(&stmts, None)
+        .await
+        .expect_err("batch should fail at statement 2");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("statement 2 of 2 failed"),
+        "expected error to cite index, got: {msg}"
+    );
+
+    let count = adapter
+        .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
+        .await
+        .expect("count");
+    assert_eq!(
+        count.rows[0][0].as_i64(),
+        Some(0),
+        "rollback must leave the table empty"
+    );
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_execute_query_batch_strips_trailing_semicolons() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_batch_semi_{ts}");
+
+    adapter
+        .execute_query(&format!("CREATE TABLE {table} (id INT)"), None)
+        .await
+        .expect("CREATE TABLE");
+
+    // Each statement carries a trailing `;` — strip_trailing_terminator
+    // must clean it before sqlx::query::execute on the transaction.
+    let stmts = vec![
+        format!("INSERT INTO {table} VALUES (10);"),
+        format!("INSERT INTO {table} VALUES (20);  "),
+    ];
+    let results = adapter
+        .execute_query_batch(&stmts, None)
+        .await
+        .expect("batch with trailing semi should succeed");
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0].total_count, 1);
+    assert_eq!(results[1].total_count, 1);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+// ── query_table_data 필터 / raw_where 시나리오 ────────────────────────────
+// 작성: 2026-05-08. queries.rs 의 큰 build-WHERE 분기 (filters vs raw_where,
+// pg_cast_type 의 cast suffix 적용, ORDER BY parser, pagination offset) 는
+// 통합으로만 진짜 검증 가능.
+
+async fn seed_filter_table(adapter: &table_view_lib::db::postgres::PostgresAdapter, table: &str) {
+    adapter
+        .execute_query(
+            &format!(
+                "CREATE TABLE {table} (\
+                  id INT PRIMARY KEY, \
+                  name TEXT, \
+                  amount NUMERIC, \
+                  active BOOLEAN, \
+                  note TEXT\
+                )"
+            ),
+            None,
+        )
+        .await
+        .expect("CREATE TABLE");
+    adapter
+        .execute_query(
+            &format!(
+                "INSERT INTO {table} VALUES \
+                 (1, 'Alice', 100.0, true, 'first'), \
+                 (2, 'Bob', 200.0, false, 'second'), \
+                 (3, 'Charlie', 300.0, true, NULL), \
+                 (4, 'Dave', 400.0, false, NULL), \
+                 (5, 'Eve', 500.0, true, 'fifth')"
+            ),
+            None,
+        )
+        .await
+        .expect("INSERT");
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_filter_eq_with_numeric_cast() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_filter_eq_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    let filters = vec![FilterCondition {
+        column: "amount".to_string(),
+        operator: FilterOperator::Eq,
+        value: Some("300.0".to_string()),
+    }];
+    let data = adapter
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .await
+        .expect("filter eq");
+    assert_eq!(data.total_count, 1);
+    assert_eq!(data.rows.len(), 1);
+    // The PK column is `id`; since seed_filter_table picks Charlie at id=3.
+    assert_eq!(data.rows[0][0].as_i64(), Some(3));
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_filter_like_and_isnull() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_filter_like_isnull_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    // LIKE pattern matches names starting with 'A' or 'B' through wildcard.
+    let filters = vec![FilterCondition {
+        column: "name".to_string(),
+        operator: FilterOperator::Like,
+        value: Some("A%".to_string()),
+    }];
+    let data = adapter
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .await
+        .expect("filter like");
+    assert_eq!(data.total_count, 1);
+    assert_eq!(data.rows.len(), 1);
+
+    // IsNull on `note` should hit Charlie + Dave.
+    let filters = vec![FilterCondition {
+        column: "note".to_string(),
+        operator: FilterOperator::IsNull,
+        value: None,
+    }];
+    let data = adapter
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .await
+        .expect("filter is null");
+    assert_eq!(data.total_count, 2);
+
+    // IsNotNull complements: 3 rows have a note.
+    let filters = vec![FilterCondition {
+        column: "note".to_string(),
+        operator: FilterOperator::IsNotNull,
+        value: None,
+    }];
+    let data = adapter
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .await
+        .expect("filter is not null");
+    assert_eq!(data.total_count, 3);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_filter_unknown_column_is_ignored() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_filter_unknown_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    // Unknown column must NOT raise — queries.rs silently skips invalid
+    // columns to keep the grid resilient against a stale frontend cache.
+    let filters = vec![FilterCondition {
+        column: "nope".to_string(),
+        operator: FilterOperator::Eq,
+        value: Some("x".to_string()),
+    }];
+    let data = adapter
+        .query_table_data(&table, "public", 1, 50, None, Some(&filters), None)
+        .await
+        .expect("unknown column → no WHERE → all rows");
+    assert_eq!(data.total_count, 5);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_raw_where_accepts_clean_clause() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_raw_where_clean_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    let data = adapter
+        .query_table_data(
+            &table,
+            "public",
+            1,
+            50,
+            None,
+            None,
+            Some("amount > 200 AND active = TRUE"),
+        )
+        .await
+        .expect("raw_where clean");
+    // amount > 200 AND active = TRUE → Charlie (300) + Eve (500).
+    assert_eq!(data.total_count, 2);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_raw_where_rejects_semicolon() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_raw_where_semi_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    let err = adapter
+        .query_table_data(
+            &table,
+            "public",
+            1,
+            50,
+            None,
+            None,
+            Some("id = 1; DROP TABLE secrets"),
+        )
+        .await
+        .expect_err("raw_where with `;` must be rejected");
+    match err {
+        AppError::Validation(msg) => {
+            assert!(msg.contains("semicolons"), "got: {msg}");
+        }
+        other => panic!("expected Validation, got {other:?}"),
+    }
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_raw_where_rejects_dangerous_keywords() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_raw_where_kw_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    for kw in ["DROP", "DELETE", "INSERT", "UPDATE", "ALTER", "TRUNCATE"] {
+        let clause = format!("{kw} TABLE foo");
+        let err = adapter
+            .query_table_data(&table, "public", 1, 50, None, None, Some(&clause))
+            .await
+            .expect_err(&format!("{kw} must be rejected"));
+        match err {
+            AppError::Validation(msg) => assert!(
+                msg.to_uppercase().contains(kw),
+                "validation msg should cite {kw}, got: {msg}"
+            ),
+            other => panic!("expected Validation for {kw}, got {other:?}"),
+        }
+    }
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_query_table_data_pagination_and_ordering() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_pagination_{ts}");
+    seed_filter_table(&adapter, &table).await;
+
+    // page=2, page_size=2, ORDER BY id ASC → rows 3,4.
+    let data = adapter
+        .query_table_data(&table, "public", 2, 2, Some("id ASC"), None, None)
+        .await
+        .expect("paginate");
+    assert_eq!(data.total_count, 5);
+    assert_eq!(data.rows.len(), 2);
+    assert_eq!(data.page, 2);
+    assert_eq!(data.page_size, 2);
+    assert_eq!(data.rows[0][0].as_i64(), Some(3));
+    assert_eq!(data.rows[1][0].as_i64(), Some(4));
+
+    // ORDER BY DESC reverses.
+    let data = adapter
+        .query_table_data(&table, "public", 1, 2, Some("id DESC"), None, None)
+        .await
+        .expect("desc order");
+    assert_eq!(data.rows[0][0].as_i64(), Some(5));
+    assert_eq!(data.rows[1][0].as_i64(), Some(4));
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+// ── stream_table_rows 시나리오 ────────────────────────────────────────────
+// 작성: 2026-05-08. 단위 테스트로는 BEGIN/DECLARE CURSOR/FETCH/CLOSE 를
+// hit 할 수 없다. validation 분기 + happy path (mpsc 수신) + receiver-drop
+// 분기를 통합으로 고정.
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_stream_table_rows_validation_rejects_zero_batch_size() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let cols = vec!["id".to_string()];
+    let err = adapter
+        .stream_table_rows("public", "anything", 0, &cols, tx, None)
+        .await
+        .expect_err("batch_size 0 must reject");
+    match err {
+        AppError::Validation(msg) => {
+            assert!(msg.contains("batch_size"), "got: {msg}");
+        }
+        other => panic!("expected Validation, got {other:?}"),
+    }
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_stream_table_rows_validation_rejects_empty_columns() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let (tx, _rx) = tokio::sync::mpsc::channel(1);
+    let err = adapter
+        .stream_table_rows("public", "anything", 100, &[], tx, None)
+        .await
+        .expect_err("empty column_names must reject");
+    match err {
+        AppError::Validation(msg) => {
+            assert!(msg.contains("column_names"), "got: {msg}");
+        }
+        other => panic!("expected Validation, got {other:?}"),
+    }
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_stream_table_rows_yields_batches_in_order() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_stream_{ts}");
+
+    adapter
+        .execute_query(
+            &format!("CREATE TABLE {table} (id INT PRIMARY KEY, label TEXT)"),
+            None,
+        )
+        .await
+        .expect("CREATE");
+    adapter
+        .execute_query(
+            &format!(
+                "INSERT INTO {table} VALUES \
+                 (1,'a'),(2,'b'),(3,'c'),(4,'d'),(5,'e')"
+            ),
+            None,
+        )
+        .await
+        .expect("INSERT");
+
+    let (sender, mut rx) = tokio::sync::mpsc::channel(8);
+    let cols = vec!["id".to_string(), "label".to_string()];
+    let adapter_for_stream = adapter.clone();
+    let table_for_stream = table.clone();
+    let stream_handle = tokio::spawn(async move {
+        adapter_for_stream
+            .stream_table_rows("public", &table_for_stream, 2, &cols, sender, None)
+            .await
+    });
+
+    let mut total_rows = 0_u64;
+    let mut collected: Vec<i64> = Vec::new();
+    while let Some(batch) = rx.recv().await {
+        for row in &batch {
+            collected.push(row[0].as_i64().expect("id should be i64"));
+        }
+        total_rows += batch.len() as u64;
+    }
+    let total = stream_handle.await.expect("task").expect("stream ok");
+    assert_eq!(total, 5);
+    assert_eq!(total_rows, 5);
+    assert_eq!(collected.len(), 5);
+    // Cursor returns rows in heap order; the `collected` list should be
+    // a permutation of {1..=5} regardless of physical order.
+    let mut sorted = collected.clone();
+    sorted.sort();
+    assert_eq!(sorted, vec![1, 2, 3, 4, 5]);
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_stream_table_rows_aborts_when_receiver_drops() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_stream_drop_{ts}");
+
+    adapter
+        .execute_query(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"), None)
+        .await
+        .expect("CREATE");
+    // Insert enough rows that batch_size=1 yields more than one send call,
+    // so the receiver-drop happens after the first batch is queued.
+    let mut values = String::new();
+    for i in 1..=20 {
+        if i > 1 {
+            values.push(',');
+        }
+        values.push_str(&format!("({i})"));
+    }
+    adapter
+        .execute_query(&format!("INSERT INTO {table} VALUES {values}"), None)
+        .await
+        .expect("INSERT");
+
+    // bound = 1: first send fills the channel; once we drop rx the next
+    // send fails and stream_table_rows must surface AppError::Database
+    // with the receiver-drop message.
+    let (sender, rx) = tokio::sync::mpsc::channel(1);
+    drop(rx); // immediate drop — first send fails.
+    let cols = vec!["id".to_string()];
+    let err = adapter
+        .stream_table_rows("public", &table, 1, &cols, sender, None)
+        .await
+        .expect_err("dropped receiver should abort");
+    match err {
+        AppError::Database(msg) => {
+            assert!(
+                msg.contains("Receiver dropped"),
+                "expected receiver-drop error, got: {msg}"
+            );
+        }
+        other => panic!("expected Database, got {other:?}"),
+    }
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
     adapter.disconnect_pool().await.ok();
 }

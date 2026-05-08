@@ -772,3 +772,502 @@ async fn test_get_view_columns_for_unknown_view_returns_empty() {
 
     adapter.disconnect_pool().await.unwrap();
 }
+
+// ── Sprint 237 P5+ refactor pass — coverage 확장 시나리오 (2026-05-08) ───
+// 작성 이유: db/postgres/schema.rs 가 29.73% 커버. 미커버 함수들
+// (list_views / list_functions / get_view_definition / get_function_source /
+// list_types / list_databases / list_schema_columns / get_view_columns 의
+// 데이터 path) 를 fixture-기반 통합 시나리오로 hit. 각 시나리오는
+// unique 이름으로 격리.
+
+#[tokio::test]
+async fn test_list_views_returns_created_view() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("lv_t");
+    let view_name = format!("{table_name}_v");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (id SERIAL PRIMARY KEY, name TEXT)"
+        ))
+        .await
+        .expect("create table");
+    adapter
+        .execute(&format!(
+            "CREATE VIEW \"{view_name}\" AS SELECT id, name FROM \"{table_name}\""
+        ))
+        .await
+        .expect("create view");
+
+    let views = adapter.list_views("public").await.expect("list_views");
+    assert!(
+        views.iter().any(|v| v.name == view_name),
+        "view '{view_name}' missing from list_views: {:?}",
+        views.iter().map(|v| &v.name).collect::<Vec<_>>()
+    );
+
+    adapter
+        .execute(&format!("DROP VIEW \"{view_name}\""))
+        .await
+        .ok();
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_view_definition_returns_select_text() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("gvd_t");
+    let view_name = format!("{table_name}_v");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (id INT, name TEXT)"
+        ))
+        .await
+        .expect("create table");
+    adapter
+        .execute(&format!(
+            "CREATE VIEW \"{view_name}\" AS SELECT id FROM \"{table_name}\""
+        ))
+        .await
+        .expect("create view");
+
+    let def = adapter
+        .get_view_definition("public", &view_name)
+        .await
+        .expect("get_view_definition");
+    // PG `pg_get_viewdef` 는 본문을 SELECT … FROM … 형태로 정규화. 정확한
+    // whitespace 는 PG 버전마다 달라 substring 검사로 fail-safe.
+    assert!(
+        def.to_lowercase().contains("select"),
+        "view definition missing SELECT: {def}"
+    );
+    assert!(
+        def.contains(&table_name),
+        "view definition missing source table: {def}"
+    );
+
+    adapter
+        .execute(&format!("DROP VIEW \"{view_name}\""))
+        .await
+        .ok();
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_list_functions_returns_user_function() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let fn_name = format!("test_fn_{}", unique_table_name("x"));
+
+    adapter
+        .execute(&format!(
+            "CREATE FUNCTION \"{fn_name}\"(x INT) RETURNS INT \
+             LANGUAGE SQL AS $$ SELECT x + 1 $$"
+        ))
+        .await
+        .expect("create function");
+
+    let funcs = adapter
+        .list_functions("public")
+        .await
+        .expect("list_functions");
+    assert!(
+        funcs.iter().any(|f| f.name == fn_name),
+        "function '{fn_name}' missing from list_functions: {:?}",
+        funcs.iter().map(|f| &f.name).collect::<Vec<_>>()
+    );
+
+    adapter
+        .execute(&format!("DROP FUNCTION \"{fn_name}\"(INT)"))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_function_source_returns_body() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let fn_name = format!("src_fn_{}", unique_table_name("x"));
+
+    adapter
+        .execute(&format!(
+            "CREATE FUNCTION \"{fn_name}\"(x INT) RETURNS INT \
+             LANGUAGE SQL AS $$ SELECT x * 2 $$"
+        ))
+        .await
+        .expect("create function");
+
+    let source = adapter
+        .get_function_source("public", &fn_name)
+        .await
+        .expect("get_function_source");
+    assert!(
+        source.contains("x * 2") || source.contains("x*2"),
+        "function source missing body 'x * 2': {source}"
+    );
+
+    adapter
+        .execute(&format!("DROP FUNCTION \"{fn_name}\"(INT)"))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_list_types_includes_pg_builtin_int4() {
+    // pg_type 카탈로그 dump. PG 기본 타입 (`int4`, `text`) 이 즉시 반환되어야 한다.
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let types = adapter.list_types().await.expect("list_types");
+    assert!(
+        types.iter().any(|t| t.name == "int4"),
+        "expected 'int4' in list_types result"
+    );
+    assert!(
+        types.iter().any(|t| t.name == "text"),
+        "expected 'text' in list_types result"
+    );
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_list_databases_includes_admin_dbs() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let dbs = adapter.list_databases().await.expect("list_databases");
+    // testcontainers의 PG는 default DB 'postgres'. external override 시
+    // 'table_view_test'. 둘 중 하나는 항상 포함.
+    let names: Vec<_> = dbs.iter().map(|d| &d.name).collect();
+    assert!(
+        names
+            .iter()
+            .any(|n| *n == "postgres" || *n == "table_view_test"),
+        "expected 'postgres' or 'table_view_test' in list_databases: {:?}",
+        names
+    );
+
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_list_schema_columns_aggregates_multiple_tables() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let t1 = unique_table_name("lsc_a");
+    let t2 = unique_table_name("lsc_b");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{t1}\" (id INT PRIMARY KEY, label TEXT)"
+        ))
+        .await
+        .expect("create t1");
+    adapter
+        .execute(&format!("CREATE TABLE \"{t2}\" (k INT, v BIGINT)"))
+        .await
+        .expect("create t2");
+
+    let map = adapter
+        .list_schema_columns("public")
+        .await
+        .expect("list_schema_columns");
+    let cols_t1 = map.get(&t1).unwrap_or_else(|| panic!("t1 missing in map"));
+    let cols_t2 = map.get(&t2).unwrap_or_else(|| panic!("t2 missing in map"));
+    assert_eq!(cols_t1.len(), 2, "t1 should have 2 columns");
+    assert_eq!(cols_t2.len(), 2, "t2 should have 2 columns");
+    assert!(cols_t1.iter().any(|c| c.name == "id"));
+    assert!(cols_t2.iter().any(|c| c.name == "v"));
+
+    adapter.execute(&format!("DROP TABLE \"{t1}\"")).await.ok();
+    adapter.execute(&format!("DROP TABLE \"{t2}\"")).await.ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+// ── get_table_indexes / get_table_constraints / FK 통합 시나리오 ──────────
+// 작성: 2026-05-08. db/postgres/schema.rs 의 indexes/constraints SQL +
+// BTreeMap 집계 분기, get_table_columns 의 FK reference (`format_fk_reference`)
+// 분기는 통합으로만 hit 된다. UI 의 schema panel 이 직접 노출하는 메타라
+// 회귀 가드 가치가 크다.
+
+#[tokio::test]
+async fn test_get_table_indexes_returns_pk_and_secondary_indexes() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let t = unique_table_name("idx_t");
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{t}\" (\
+              id INT PRIMARY KEY, \
+              email TEXT, \
+              status TEXT\
+            )"
+        ))
+        .await
+        .expect("create");
+    let idx_email = format!("{t}_email_uq");
+    let idx_status = format!("{t}_status_idx");
+    adapter
+        .execute(&format!(
+            "CREATE UNIQUE INDEX \"{idx_email}\" ON \"{t}\" (email)"
+        ))
+        .await
+        .expect("unique idx");
+    adapter
+        .execute(&format!(
+            "CREATE INDEX \"{idx_status}\" ON \"{t}\" (status)"
+        ))
+        .await
+        .expect("plain idx");
+
+    let indexes = adapter
+        .get_table_indexes(&t, "public")
+        .await
+        .expect("get_table_indexes");
+
+    // PK + unique email + plain status — PG names PK as `<table>_pkey` so
+    // we look it up by the primary flag rather than asserting the name.
+    let pk = indexes
+        .iter()
+        .find(|i| i.is_primary)
+        .expect("PK index missing");
+    assert!(pk.is_unique, "PK must be unique");
+    assert_eq!(pk.columns, vec!["id".to_string()]);
+
+    let uniq = indexes
+        .iter()
+        .find(|i| i.name == idx_email)
+        .expect("unique idx missing");
+    assert!(uniq.is_unique);
+    assert!(!uniq.is_primary);
+    assert_eq!(uniq.columns, vec!["email".to_string()]);
+
+    let plain = indexes
+        .iter()
+        .find(|i| i.name == idx_status)
+        .expect("plain idx missing");
+    assert!(!plain.is_unique);
+    assert!(!plain.is_primary);
+    assert_eq!(plain.columns, vec!["status".to_string()]);
+
+    adapter.execute(&format!("DROP TABLE \"{t}\"")).await.ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_table_indexes_composite_columns_preserve_attnum_order() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let t = unique_table_name("idx_comp");
+    adapter
+        .execute(&format!("CREATE TABLE \"{t}\" (a INT, b INT, c INT)"))
+        .await
+        .expect("create");
+    let idx = format!("{t}_ab_idx");
+    adapter
+        .execute(&format!("CREATE INDEX \"{idx}\" ON \"{t}\" (a, b)"))
+        .await
+        .expect("composite idx");
+
+    let indexes = adapter
+        .get_table_indexes(&t, "public")
+        .await
+        .expect("get_table_indexes");
+    let composite = indexes.iter().find(|i| i.name == idx).expect("missing");
+    // attnum-ordered: a then b.
+    assert_eq!(composite.columns, vec!["a".to_string(), "b".to_string()]);
+
+    adapter.execute(&format!("DROP TABLE \"{t}\"")).await.ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_table_indexes_for_unknown_table_returns_empty() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let indexes = adapter
+        .get_table_indexes("does_not_exist_zzz", "public")
+        .await
+        .expect("empty result, not error");
+    assert!(indexes.is_empty());
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_table_constraints_pk_unique_check() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let t = unique_table_name("cons_t");
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{t}\" (\
+              id INT PRIMARY KEY, \
+              email TEXT UNIQUE, \
+              age INT CHECK (age >= 0)\
+            )"
+        ))
+        .await
+        .expect("create");
+
+    let constraints = adapter
+        .get_table_constraints(&t, "public")
+        .await
+        .expect("get_table_constraints");
+
+    // PG generates implicit constraint names; lookup by type.
+    let pk = constraints
+        .iter()
+        .find(|c| c.constraint_type == "PRIMARY KEY")
+        .expect("PK missing");
+    assert_eq!(pk.columns, vec!["id".to_string()]);
+    assert!(pk.reference_table.is_none());
+
+    let uniq = constraints
+        .iter()
+        .find(|c| c.constraint_type == "UNIQUE")
+        .expect("UNIQUE missing");
+    assert_eq!(uniq.columns, vec!["email".to_string()]);
+
+    let chk = constraints
+        .iter()
+        .find(|c| c.constraint_type == "CHECK")
+        .expect("CHECK missing");
+    // CHECK 의 column list 는 information_schema.key_column_usage 에 채워지지
+    // 않으므로 빈 vec 가 가능. 변형 존재 자체만 pin.
+    let _ = chk;
+
+    adapter.execute(&format!("DROP TABLE \"{t}\"")).await.ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_table_constraints_foreign_key_carries_reference() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let parent = unique_table_name("fk_parent");
+    let child = unique_table_name("fk_child");
+    adapter
+        .execute(&format!("CREATE TABLE \"{parent}\" (id INT PRIMARY KEY)"))
+        .await
+        .expect("create parent");
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{child}\" (\
+              id INT PRIMARY KEY, \
+              parent_id INT REFERENCES \"{parent}\"(id)\
+            )"
+        ))
+        .await
+        .expect("create child");
+
+    let constraints = adapter
+        .get_table_constraints(&child, "public")
+        .await
+        .expect("get_table_constraints");
+
+    let fk = constraints
+        .iter()
+        .find(|c| c.constraint_type == "FOREIGN KEY")
+        .expect("FK missing");
+    assert_eq!(fk.columns, vec!["parent_id".to_string()]);
+    assert_eq!(fk.reference_table.as_deref(), Some(parent.as_str()));
+    assert_eq!(
+        fk.reference_columns.as_deref(),
+        Some(&["id".to_string()][..])
+    );
+
+    adapter
+        .execute(&format!("DROP TABLE \"{child}\""))
+        .await
+        .ok();
+    adapter
+        .execute(&format!("DROP TABLE \"{parent}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_get_table_columns_populates_fk_reference_in_child() {
+    // get_table_columns 의 FK 분기는 `format_fk_reference("schema.table(col)")`
+    // 형식 string 을 ColumnInfo.fk_reference 에 채운다. 이 분기는 plain
+    // CREATE TABLE 만으로는 hit 안 되고 REFERENCES 가 있어야 활성.
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let parent = unique_table_name("fkcol_parent");
+    let child = unique_table_name("fkcol_child");
+    adapter
+        .execute(&format!("CREATE TABLE \"{parent}\" (id INT PRIMARY KEY)"))
+        .await
+        .expect("create parent");
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{child}\" (\
+              id INT PRIMARY KEY, \
+              parent_id INT REFERENCES \"{parent}\"(id)\
+            )"
+        ))
+        .await
+        .expect("create child");
+
+    let cols = adapter
+        .get_table_columns(&child, "public")
+        .await
+        .expect("get_table_columns");
+    let parent_id = cols
+        .iter()
+        .find(|c| c.name == "parent_id")
+        .expect("parent_id missing");
+    assert!(parent_id.is_foreign_key);
+    let expected = format!("public.{parent}(id)");
+    assert_eq!(parent_id.fk_reference.as_deref(), Some(expected.as_str()));
+
+    adapter
+        .execute(&format!("DROP TABLE \"{child}\""))
+        .await
+        .ok();
+    adapter
+        .execute(&format!("DROP TABLE \"{parent}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
