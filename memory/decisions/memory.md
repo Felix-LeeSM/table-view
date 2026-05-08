@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-05
+updated: 2026-05-09
 ---
 
 # ADR 인덱스
@@ -28,6 +28,7 @@ updated: 2026-05-05
 | [0019](./0019-e2e-pre-push-not-ci/memory.md) | E2E를 CI에서 제거하고 lefthook pre-push(host-native)로 이동 | Accepted | 2026-05-01 | 0015 |
 | [0020](./0020-e2e-pre-push-host-docker/memory.md) | ADR 0019 후속 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원) | Accepted | 2026-05-01 | — |
 | [0021](./0021-export-envelope-auto-mnemonic-no-ttl/memory.md) | Export envelope: 자동 생성 BIP39 mnemonic + Argon2id OWASP first profile, TTL/max_uses 미도입 | Accepted | 2026-05-05 | — |
+| [0022](./0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md) | Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호 | Accepted | 2026-05-09 | — |
 
 ## 역사 (Superseded / Deprecated)
 
