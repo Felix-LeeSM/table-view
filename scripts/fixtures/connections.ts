@@ -2,7 +2,14 @@
 // Reads + rewrites `connections.json` in the platform app data dir
 // (matches Rust storage path: ~/Library/Application Support/table-view/
 // connections.json on macOS, ~/.local/share/table-view/... on Linux).
-// Plaintext password (per locked decision); group "Fixtures" auto-created.
+//
+// Password handling: the Rust storage layer assumes every on-disk
+// `password` field is AES-256-GCM ciphertext keyed by the file at
+// `<app-data>/.key`. Plaintext fields throw "Ciphertext too short" the
+// moment the user clicks Connect. Fixture therefore re-implements the
+// same envelope (12-byte nonce + ciphertext + 16-byte GCM tag, base64)
+// in Node, sharing the same `.key` file. Auto-generates the key when
+// missing so fixture CLI works before the app has ever been launched.
 import {
   readFileSync,
   writeFileSync,
@@ -10,6 +17,7 @@ import {
   existsSync,
   chmodSync,
 } from "node:fs";
+import { createCipheriv, randomBytes } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { homedir, platform } from "node:os";
 import type { ProfileSpec, ResolvedSpec } from "./spec.js";
@@ -71,6 +79,54 @@ function storageFilePath(): string {
   return resolve(appDataPath(), "connections.json");
 }
 
+function keyFilePath(): string {
+  return resolve(appDataPath(), ".key");
+}
+
+// Mirrors `crypto::get_or_create_key` in src-tauri/src/storage/crypto.rs.
+// The on-disk format is base64(32 random bytes) — anything shorter is
+// rejected so we surface the corruption instead of silently producing
+// an unusable AES key.
+function loadOrCreateAppKey(): Buffer {
+  const path = keyFilePath();
+  if (existsSync(path)) {
+    const key = Buffer.from(readFileSync(path, "utf8").trim(), "base64");
+    if (key.length !== 32) {
+      throw new Error(
+        `invalid key at ${path}: expected 32 bytes (got ${key.length}). Move the file aside and re-run.`,
+      );
+    }
+    return key;
+  }
+  const key = randomBytes(32);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, key.toString("base64"), "utf8");
+  if (platform() !== "win32") {
+    try {
+      chmodSync(path, 0o600);
+    } catch {
+      // best-effort; key file is still functional even if chmod fails.
+    }
+  }
+  return key;
+}
+
+// Mirrors `crypto::encrypt` in src-tauri/src/storage/crypto.rs:
+// nonce(12) ‖ ciphertext ‖ gcm_tag(16), all base64. The Rust `aes_gcm`
+// crate appends the auth tag to its ciphertext output automatically;
+// Node's `createCipheriv` returns the tag separately via getAuthTag(),
+// hence the explicit concat below.
+function encryptForStorage(plain: string, key: Buffer): string {
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, nonce);
+  const ciphertext = Buffer.concat([
+    cipher.update(plain, "utf8"),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([nonce, ciphertext, tag]).toString("base64");
+}
+
 function loadStorage(): StorageData {
   const path = storageFilePath();
   if (!existsSync(path)) return { connections: [], groups: [] };
@@ -120,7 +176,8 @@ export function upsertConnections(spec: ResolvedSpec): {
     });
   }
 
-  for (const conn of buildConnections(spec)) {
+  const key = loadOrCreateAppKey();
+  for (const conn of buildConnections(spec, key)) {
     const existingIdx = data.connections.findIndex((c) => c.id === conn.id);
     if (existingIdx >= 0) {
       data.connections[existingIdx] = conn;
@@ -152,7 +209,7 @@ export function clearConnections(): { removed: number } {
   return { removed: before - data.connections.length };
 }
 
-function buildConnections(spec: ResolvedSpec): StoredConnection[] {
+function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const out: StoredConnection[] = [];
   const pg = pgEnvConn();
   const mongo = mongoEnvConn();
@@ -166,7 +223,7 @@ function buildConnections(spec: ResolvedSpec): StoredConnection[] {
       host: pg.host,
       port: pg.port,
       user: pg.user,
-      password: pg.password,
+      password: encryptForStorage(pg.password, key),
       database: profile.database.pg,
       group_id: FIXTURE_GROUP_ID,
       color: c.color ?? null,
@@ -187,7 +244,7 @@ function buildConnections(spec: ResolvedSpec): StoredConnection[] {
       host: mongo.host,
       port: mongo.port,
       user: mongo.user,
-      password: mongo.password,
+      password: encryptForStorage(mongo.password, key),
       database: profile.database.mongo,
       group_id: FIXTURE_GROUP_ID,
       color: c.color ?? null,
