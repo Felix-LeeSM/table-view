@@ -1,0 +1,30 @@
+# E2E profile — compiled but currently dormant (tauri-driver cold-start
+# / OOM blocks the WebDriver flow). Once unblocked, e2e specs run
+# `db:reset e2e` per cycle; until then the profile is a static contract.
+seed: 42
+database:
+  pg: table_view_e2e
+  mongo: table_view_e2e
+locale_mix:
+  en: 0.95
+  ko: 0.02
+  ja: 0.01
+  zh: 0.01
+  edge: 0.01
+rows:
+  customers: 200
+  products: 80
+  orders: 500
+  order_items: 1500
+  support_tickets: 100
+connections:
+  pg:
+    - id: fixture-e2e-pg
+      name: E2E (Postgres)
+      color: "#dc2626"
+      environment: testing
+  mongo:
+    - id: fixture-e2e-mongo
+      name: E2E (Mongo)
+      color: "#dc2626"
+      environment: testing

@@ -24,17 +24,11 @@
 // 작성 일자: 2026-05-09 (Sprint 253, /tdd 흐름)
 
 import { describe, it, expect } from "vitest";
-
-// @ts-expect-error — node:fs is the canonical Node module. Vitest runs in
-// Node so the import resolves at runtime; @types/node is not declared as
-// a direct dep, hence the suppression.
 import { readFileSync } from "node:fs";
-// @ts-expect-error — see above for rationale.
 import { resolve } from "node:path";
 
 // process.cwd() at vitest invocation = repo root (where vite.config.ts
 // lives). `src/themes.css` is the canonical SoT path for theme tokens.
-// @ts-expect-error — process is a Node global; no @types/node import.
 const themes = readFileSync(resolve(process.cwd(), "src/themes.css"), "utf-8");
 
 describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", () => {

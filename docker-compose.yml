@@ -44,6 +44,8 @@ services:
     # different port.
     ports:
       - "${MONGO_PORT:-37017}:27017"
+    volumes:
+      - mongodata:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -101,3 +103,4 @@ services:
 
 volumes:
   pgdata:
+  mongodata:

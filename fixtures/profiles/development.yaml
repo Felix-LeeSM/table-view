@@ -1,0 +1,29 @@
+# Development profile — daily dev workflow consumer.
+# 5K-20K rows, 10-15% multilingual / edge mix.
+seed: 4242
+database:
+  pg: table_view_development
+  mongo: table_view_development
+locale_mix:
+  en: 0.70
+  ko: 0.10
+  ja: 0.07
+  zh: 0.05
+  edge: 0.08
+rows:
+  customers: 5000
+  products: 800
+  orders: 12000
+  order_items: 36000
+  support_tickets: 2400
+connections:
+  pg:
+    - id: fixture-dev-pg
+      name: Dev (Postgres)
+      color: "#7c3aed"
+      environment: development
+  mongo:
+    - id: fixture-dev-mongo
+      name: Dev (Mongo)
+      color: "#16a34a"
+      environment: development

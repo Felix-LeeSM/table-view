@@ -1,0 +1,65 @@
+# Fixture base spec — entity shape (shared across profiles).
+# See docs/fixture-data-workflow-handoff.md for the full contract.
+#
+# Profiles override `seed`, `locale_mix`, and per-entity row counts.
+# Defaults: nullable=false, unique=false, primary=false. PK auto-implies
+# nullable=false + unique=true and is never edge-injected.
+
+entities:
+  customers:
+    targets: [pg, mongo]
+    pg: { schema: core, table: customers }
+    mongo: { collection: core_customers }
+    columns:
+      id:         { type: uuid, primary: true }
+      email:      { type: email, unique: true }
+      full_name:  { type: full_name, locale_aware: true, max_length: 200 }
+      phone:      { type: phone, nullable: true }
+      created_at: { type: timestamp, range: [-365d, 0d] }
+
+  products:
+    targets: [pg, mongo]
+    pg: { schema: catalog, table: products }
+    mongo: { collection: catalog_products }
+    columns:
+      id:        { type: uuid, primary: true }
+      sku:       { type: sku, unique: true }
+      name:      { type: product_name, locale_aware: true, max_length: 200 }
+      price:     { type: decimal, range: [0.99, 999.99] }
+      tags:      { type: array_of, item: string, count: [0, 4] }
+
+  orders:
+    targets: [pg, mongo]
+    pg: { schema: sales, table: orders }
+    mongo:
+      collection: sales_orders
+      embed:
+        items:    { from: order_items, kind: many }
+    columns:
+      id:          { type: uuid, primary: true }
+      customer_id: { type: ref, to: customers.id }
+      ordered_at:  { type: timestamp, range: [-90d, 0d] }
+      status:      { type: enum, values: [pending, paid, shipped, delivered, refunded] }
+      total:       { type: decimal, range: [0.99, 9999.99] }
+
+  order_items:
+    targets: [pg]   # mongo: embedded inside orders.items
+    pg: { schema: sales, table: order_items }
+    columns:
+      id:         { type: uuid, primary: true }
+      order_id:   { type: ref, to: orders.id }
+      product_id: { type: ref, to: products.id }
+      quantity:   { type: int, range: [1, 5] }
+      unit_price: { type: decimal, range: [0.99, 999.99] }
+
+  support_tickets:
+    targets: [pg, mongo]
+    pg: { schema: support, table: tickets }
+    mongo: { collection: support_tickets }
+    columns:
+      id:          { type: uuid, primary: true }
+      customer_id: { type: ref, to: customers.id, nullable: true }
+      subject:     { type: text, locale_aware: true, max_length: 200 }
+      body:        { type: text, locale_aware: true, max_length: 5000, nullable: true }
+      status:      { type: enum, values: [open, pending, resolved, closed] }
+      created_at:  { type: timestamp, range: [-180d, 0d] }
