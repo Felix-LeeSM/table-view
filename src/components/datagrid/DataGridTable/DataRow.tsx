@@ -186,6 +186,12 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                         role="textbox"
                         aria-label={`Editing ${col.name} — currently NULL`}
                         tabIndex={0}
+                        // Sprint 250 (AC-250-01): blur on the NULL chip
+                        // routes to the same commit entry point as
+                        // Tab/Enter. `saveCurrentEdit` is idempotent
+                        // (editingCell-null guard inside) so re-blur
+                        // after the editor closes is a safe no-op.
+                        onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
                           if (e.key === "Tab") {
                             e.preventDefault();
@@ -252,6 +258,13 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                         value={editValue}
                         aria-label={`Editing ${col.name}`}
                         onChange={(e) => onSetEditValue(e.target.value)}
+                        // Sprint 250 (AC-250-01): blur (clicking another
+                        // cell, the toolbar, or empty space) commits the
+                        // edit identically to Tab/Enter. `saveCurrentEdit`
+                        // first-line guards on editingCell, so the
+                        // post-commit re-render that fires another blur
+                        // is a no-op (AC-250-05 race guard).
+                        onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
                           if (
                             (e.metaKey || e.ctrlKey) &&

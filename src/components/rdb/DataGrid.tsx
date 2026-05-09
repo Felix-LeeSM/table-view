@@ -274,6 +274,41 @@ export default function DataGrid({
     return () => window.removeEventListener("refresh-data", handler);
   }, [cancelEdit]);
 
+  // Sprint 250 — modal-aware Esc → handleDiscard. Esc on the body (no
+  // dialog open, no active cell editor) empties the four pending slices
+  // (pendingEdits / pendingNewRows / pendingDeletedRowKeys / undoStack)
+  // identical to the toolbar Discard button. The listener short-circuits
+  // when:
+  //   1. editState.editingCell !== null — the cell editor's local Esc
+  //      handler (DataRow `onKeyDown`) already calls `cancelEdit`, which
+  //      e.stopPropagation()s but not preventDefault. Window listeners
+  //      still fire, so we must guard here too.
+  //   2. A `[role="dialog"]` or `[role="alertdialog"]` is mounted —
+  //      Radix Dialog / AlertDialog handles Esc-close itself, and the
+  //      grid must not double-discard pending state when the user is
+  //      actually trying to close a confirmation modal (BLOB viewer,
+  //      SQL preview, ConfirmDestructiveDialog, etc.).
+  const { handleDiscard } = editState;
+  const editingCell = editState.editingCell;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Editor-local Esc wins — DataRow's onKeyDown already invoked
+      // cancelEdit. Skip the grid-wide discard.
+      if (editingCell !== null) return;
+      // Modal/dialog open → defer to its native Esc handler.
+      if (
+        document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
+      ) {
+        return;
+      }
+      e.preventDefault();
+      handleDiscard();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [editingCell, handleDiscard]);
+
   // Sprint 249 (ADR 0022 Phase 5) — Cmd+Z (macOS) / Ctrl+Z (Win/Linux)
   // pending-undo. Active only while DataGrid is mounted; defers to the
   // browser's native text-editor undo whenever an INPUT / TEXTAREA /
