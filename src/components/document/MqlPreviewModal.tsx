@@ -41,6 +41,12 @@ export default function MqlPreviewModal({
       loading={loading}
       confirmDisabled={executeDisabled}
       confirmAriaLabel="Execute MQL commands"
+      // Sprint 252: Plain-text join — Mongo dialect highlighter absent so
+      // SqlSyntax is intentionally NOT wrapped here (AC-252-07 plain
+      // fallback). Empty previewLines → joined string is "" → button
+      // self-suppresses (AC-252-04).
+      copyText={previewLines.join("\n")}
+      copyAriaLabel="Copy MQL commands to clipboard"
       confirmLabel={
         <>
           {loading ? <Loader2 className="animate-spin" /> : <Play />}

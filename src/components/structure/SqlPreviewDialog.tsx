@@ -83,6 +83,11 @@ export default function SqlPreviewDialog({
       description="Review and execute SQL changes"
       className="w-dialog-md bg-secondary"
       headerStripe={stripe}
+      // Sprint 252: Surface header Copy button. PreviewCopyButton self-
+      // suppresses on empty/whitespace, so a stub `sql=""` keeps the
+      // button hidden and existing AC-109 markup unchanged.
+      copyText={sql}
+      copyAriaLabel="Copy SQL to clipboard"
       preview={
         <pre className="max-h-scroll-lg overflow-auto whitespace-pre-wrap rounded border border-border bg-background p-3 text-xs font-mono text-foreground">
           {sql.trim() ? (

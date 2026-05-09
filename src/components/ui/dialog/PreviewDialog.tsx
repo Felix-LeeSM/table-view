@@ -9,6 +9,7 @@ import {
   type DialogTone,
 } from "@components/ui/dialog";
 import { Button } from "@components/ui/button";
+import PreviewCopyButton from "@components/ui/dialog/PreviewCopyButton";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,20 @@ export interface PreviewDialogProps {
    * keeps existing callers untouched.
    */
   headerStripe?: ReactNode;
+  /**
+   * Sprint 252: Optional clipboard payload. When defined AND non-empty
+   * after `.trim()`, a Copy button renders on the right side of the
+   * header (`data-testid="preview-dialog-copy"`). Empty/whitespace or
+   * undefined → button NOT rendered, preserving byte-identical output for
+   * existing callers that have not opted in.
+   */
+  copyText?: string;
+  /**
+   * Sprint 252: Optional ARIA label override for the Copy button. Defaults
+   * to "Copy". Provide a more specific label (e.g. "Copy SQL to clipboard")
+   * when the surface benefits from screen-reader specificity.
+   */
+  copyAriaLabel?: string;
 }
 
 export default function PreviewDialog({
@@ -92,6 +107,8 @@ export default function PreviewDialog({
   className,
   confirmAriaLabel,
   headerStripe = null,
+  copyText,
+  copyAriaLabel,
 }: PreviewDialogProps) {
   return (
     <Dialog
@@ -103,14 +120,27 @@ export default function PreviewDialog({
       <DialogContent className={cn(className)} tone={tone}>
         {headerStripe}
         <DialogHeader>
-          <DialogTitle className="text-sm font-semibold text-foreground">
-            {title}
-          </DialogTitle>
-          {description ? (
-            <DialogDescription className="text-xs text-muted-foreground">
-              {description}
-            </DialogDescription>
-          ) : null}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-col gap-1">
+              <DialogTitle className="text-sm font-semibold text-foreground">
+                {title}
+              </DialogTitle>
+              {description ? (
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {description}
+                </DialogDescription>
+              ) : null}
+            </div>
+            {copyText !== undefined ? (
+              // PreviewCopyButton self-suppresses when `text.trim() === ""`,
+              // so empty/whitespace copyText still renders nothing.
+              <PreviewCopyButton
+                text={copyText}
+                ariaLabel={copyAriaLabel}
+                className="shrink-0"
+              />
+            ) : null}
+          </div>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">

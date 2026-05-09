@@ -27,6 +27,7 @@ import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import SqlSyntax from "@components/shared/SqlSyntax";
+import PreviewCopyButton from "@components/ui/dialog/PreviewCopyButton";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 
@@ -635,13 +636,24 @@ export default function DataGrid({
               <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview
               </h3>
-              <button
-                className="rounded p-1 hover:bg-muted"
-                onClick={() => editState.setSqlPreview(null)}
-                aria-label="Close SQL preview"
-              >
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                {/* Sprint 252: shared Copy button (PreviewCopyButton) — same
+                    `data-testid="preview-dialog-copy"` as PreviewDialog so
+                    callers' assertions stay consistent across the inline
+                    grid preview and the structure preview surfaces.
+                    Empty/whitespace join → button self-suppresses. */}
+                <PreviewCopyButton
+                  text={editState.sqlPreview?.join(";\n") ?? ""}
+                  ariaLabel="Copy SQL to clipboard"
+                />
+                <button
+                  className="rounded p-1 hover:bg-muted"
+                  onClick={() => editState.setSqlPreview(null)}
+                  aria-label="Close SQL preview"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto p-4">
               {editState.sqlPreview?.map((sql, i) => {
@@ -655,7 +667,10 @@ export default function DataGrid({
                         : "mb-2 whitespace-pre-wrap break-all rounded bg-secondary p-2 text-xs text-secondary-foreground"
                     }
                   >
-                    {sql}
+                    {/* Sprint 252: SqlSyntax wrap (AC-252-05). Each statement
+                        is highlighted in-place; `<pre>` markup + failure
+                        styling preserved exactly. */}
+                    <SqlSyntax sql={sql} />
                   </pre>
                 );
               })}
