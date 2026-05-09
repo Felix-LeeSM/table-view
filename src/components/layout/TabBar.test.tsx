@@ -205,7 +205,13 @@ describe("TabBar", () => {
     expect(tab.className).not.toContain("py-2");
   });
 
-  // ── Sprint 28: Tab Connection Color Display ──
+  // ── Sprint 253 (AC-253-03): TabBar connection-color stripe REMOVED ──
+  //
+  // 이전 (Sprint 28 / Sprint 45) 의 좌측 1px connection-색 stripe 는
+  // ADR 0023 의 13-question grill Q11 결과 *완전 제거* 되었다 (다중
+  // connection workflow 부재 + 후속 chrome H 가 환경 시그널을 carry).
+  // 본 회귀 가드는 stripe 가 어떤 connection 설정 조합에서도 다시
+  // mount 되지 않음을 단언한다. 작성 일자: 2026-05-09.
 
   function makeConnection(
     overrides: Partial<ConnectionConfig> = {},
@@ -226,7 +232,7 @@ describe("TabBar", () => {
     };
   }
 
-  it("renders color stripe for tab with connection color", () => {
+  it("does NOT render a connection-color stripe even when a color is set (AC-253-03)", () => {
     useConnectionStore.setState({
       connections: [makeConnection({ id: "conn1", color: "red" })],
     } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
@@ -234,37 +240,11 @@ describe("TabBar", () => {
     addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
     render(<TabBar />);
 
-    const stripe = screen.getByLabelText("Connection color");
-    expect(stripe).toBeInTheDocument();
-    expect((stripe as HTMLElement).style.backgroundColor).toBe("red");
-  });
-
-  it("still renders a stripe when no color is set (uses derived palette color)", () => {
-    useConnectionStore.setState({
-      connections: [makeConnection({ id: "conn1", color: null })],
-    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
-
-    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
-    render(<TabBar />);
-
-    const stripe = screen.getByLabelText("Connection color");
-    expect(stripe).toBeInTheDocument();
-    // A non-empty color is applied (palette-derived), even without user input.
-    expect((stripe as HTMLElement).style.backgroundColor).not.toBe("");
-  });
-
-  it("does not render a stripe when the tab's connection has been removed", () => {
-    useConnectionStore.setState({
-      connections: [],
-    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
-
-    addTableTab({ title: "Orphan", table: "orphan", connectionId: "missing" });
-    render(<TabBar />);
-
+    // No stripe — the affordance was retired in Sprint 253.
     expect(screen.queryByLabelText("Connection color")).toBeNull();
   });
 
-  it("renders different colors for different connections", () => {
+  it("does NOT render any connection-color stripe across multi-connection setups (AC-253-03)", () => {
     useConnectionStore.setState({
       connections: [
         makeConnection({ id: "conn1", color: "red" }),
@@ -276,10 +256,7 @@ describe("TabBar", () => {
     addTableTab({ title: "Orders", table: "orders", connectionId: "conn2" });
     render(<TabBar />);
 
-    const stripes = screen.getAllByLabelText("Connection color");
-    expect(stripes).toHaveLength(2);
-    expect((stripes[0] as HTMLElement).style.backgroundColor).toBe("red");
-    expect((stripes[1] as HTMLElement).style.backgroundColor).toBe("blue");
+    expect(screen.queryAllByLabelText("Connection color")).toHaveLength(0);
   });
 
   // ── Sprint 29: Preview Tab Display ──
@@ -356,21 +333,10 @@ describe("TabBar", () => {
     expect(useTabStore.getState().tabs[1]!.type).toBe("query");
   });
 
-  // ── Sprint 45: Tab color dot tooltip ──
-
-  it("color stripe has title with connection name", () => {
-    useConnectionStore.setState({
-      connections: [
-        makeConnection({ id: "conn1", name: "My Database", color: "red" }),
-      ],
-    } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
-
-    addTableTab({ title: "Users", table: "users", connectionId: "conn1" });
-    render(<TabBar />);
-
-    const stripe = screen.getByLabelText("Connection color");
-    expect(stripe).toHaveAttribute("title", "My Database");
-  });
+  // ── Sprint 253 (AC-253-03): Sprint 45 tooltip test retired ──
+  //
+  // The "Connection color" stripe (and its connection-name tooltip) was
+  // removed in Sprint 253. Replaced by the regression guards above.
 
   // ── Drag-and-drop reorder ──
 
@@ -892,5 +858,158 @@ describe("TabBar", () => {
 
     expect(useTabStore.getState().tabs).toHaveLength(1);
     expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
+  });
+
+  // ── Sprint 253 (AC-253-04, AC-253-05): Tab DnD empty-area release ──
+  //
+  // 13-question grill Q13 결과: drag 후 strip 의 "탭이 없는 빈 영역"
+  // (마지막 탭 우측 또는 두 탭 사이 시각적 gap) 에서 mouse release 시,
+  // 현재는 silent no-op (사용자 mental model 깨짐). Chrome/VSCode 표준
+  // 동작에 맞춰 cursor X 기반 가장 가까운 탭 결정 → before/after 로
+  // moveTab 호출.
+  //
+  // 설계 결정:
+  // - per-tab onMouseUp 은 e.stopPropagation() 으로 strip 의 onMouseUp
+  //   bubble 을 차단 (탭 위 release 의 중복 reorder 방지).
+  // - strip onMouseUp 은 *빈 영역* release 전용. dragStateRef 가 isDragging
+  //   인지 가드. cursor X 가 마지막 탭의 right edge 이상이면 끝으로 (after).
+  //   아니면 첫 midpoint ≥ cursor X 인 탭 앞 (before).
+  //
+  // jsdom 의 getBoundingClientRect 는 기본값이 0 이라 명시 mock 필수.
+  // 작성 일자: 2026-05-09 (/tdd 흐름 — 본 case 들이 먼저 fail → 구현 → green).
+
+  function mockTabRects(
+    rects: { left: number; right: number; width: number }[],
+  ) {
+    // 각 [data-tab-id] element 에 명시 boundingClientRect 부여.
+    const tabEls = document.querySelectorAll<HTMLElement>("[data-tab-id]");
+    tabEls.forEach((el, i) => {
+      const r = rects[i];
+      if (!r) return;
+      el.getBoundingClientRect = () =>
+        ({
+          left: r.left,
+          right: r.right,
+          top: 0,
+          bottom: 32,
+          width: r.width,
+          height: 32,
+          x: r.left,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    });
+  }
+
+  it("drag release on empty area past the last tab moves source to the end (AC-253-04)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    // Layout: t1 [0..100], t2 [100..200], t3 [200..300]. Cursor at 350 — past t3.right.
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+    const tablist = screen.getByRole("tablist");
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+
+    act(() => {
+      // Start drag on t1.
+      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
+      // Move > 4px to flip isDragging.
+      fireEvent.mouseMove(document, { clientX: 10 });
+      // Release on the empty area of the tablist, past t3's right edge.
+      fireEvent.mouseUp(tablist, { clientX: 350 });
+    });
+
+    const after = useTabStore.getState().tabs.map((t) => t.id);
+    // t1 → end of strip → [t2, t3, t1].
+    expect(after).toEqual([before[1], before[2], before[0]]);
+  });
+
+  it("drag release in a gap between two tabs inserts before the closer one (AC-253-04)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    // Layout: t1 [0..100], t2 [100..200], t3 [200..300]. Cursor at 210 →
+    // past t2 midpoint (150) but ≤ t3 midpoint (250). Expected: insert
+    // before t3 (the first tab whose midpoint ≥ cursor X).
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+    const tablist = screen.getByRole("tablist");
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+
+    act(() => {
+      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
+      fireEvent.mouseMove(document, { clientX: 10 });
+      // Release on tablist (NOT on a tab) at X=210 — the visual gap
+      // immediately after t2 / immediately before t3.
+      fireEvent.mouseUp(tablist, { clientX: 210 });
+    });
+
+    const after = useTabStore.getState().tabs.map((t) => t.id);
+    // t1 inserted before t3 → [t2, t1, t3].
+    expect(after).toEqual([before[1], before[0], before[2]]);
+  });
+
+  it("strip onMouseUp without an active drag is a no-op (AC-253-04)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tablist = screen.getByRole("tablist");
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+
+    // No mouseDown / mouseMove → dragStateRef.isDragging is never true.
+    act(() => {
+      fireEvent.mouseUp(tablist, { clientX: 350 });
+    });
+
+    expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+  });
+
+  it("releasing on a tab itself only triggers ONE moveTab (no double reorder via bubble) (AC-253-05)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    // Layout matches the gap-test fixture so the strip's onMouseUp would
+    // — if it ran — also choose an "after" target. We assert that it does
+    // NOT run on bubble: the per-tab handler must stopPropagation.
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+
+    act(() => {
+      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
+      fireEvent.mouseMove(document, { clientX: 10 });
+      // Release directly on t3. clientX inside t3 (250 — midpoint), so
+      // per-tab handler picks "after" → [t2, t3, t1]. If the strip's
+      // onMouseUp also fires on bubble at clientX=250, it would also pick
+      // "before t3" (midpoint=250 ≥ cursorX=250) → moveTab called twice
+      // → wrong final order. Bubble guard MUST prevent that.
+      fireEvent.mouseUp(tabs[2]!, { clientX: 250 });
+    });
+
+    const after = useTabStore.getState().tabs.map((t) => t.id);
+    // Single moveTab → t1 after t3 → [t2, t3, t1].
+    expect(after).toEqual([before[1], before[2], before[0]]);
   });
 });

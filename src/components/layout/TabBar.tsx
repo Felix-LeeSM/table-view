@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Table2, Code2, Leaf } from "lucide-react";
 import { useTabStore, type Tab, type TableTab } from "@stores/tabStore";
-import { useConnectionStore } from "@stores/connectionStore";
 import { Button } from "@components/ui/button";
-import { getConnectionColor } from "@lib/connectionColor";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 
 export default function TabBar() {
@@ -14,7 +12,6 @@ export default function TabBar() {
   const promoteTab = useTabStore((s) => s.promoteTab);
   const moveTab = useTabStore((s) => s.moveTab);
   const dirtyTabIds = useTabStore((s) => s.dirtyTabIds);
-  const connections = useConnectionStore((s) => s.connections);
 
   // Pending close confirmation. When the user attempts to close a dirty
   // tab via the close button or middle-click we stash the tab here and
@@ -83,6 +80,52 @@ export default function TabBar() {
         aria-label="Open connections"
         className="flex flex-1 overflow-x-auto select-none"
         style={{ scrollbarWidth: "none" }}
+        // Sprint 253 (AC-253-04, ADR 0023, grill Q13): drop on the
+        // strip's empty area (past the last tab, or the visual gap
+        // between two tabs) — Chrome/VSCode standard. Without this
+        // handler, only releases on the per-tab elements would reorder,
+        // and a release in the empty trailing space silently no-ops.
+        //
+        // Bubble guard: per-tab onMouseUp calls e.stopPropagation(), so
+        // this handler only fires for releases that did NOT land on a
+        // [data-tab-id] descendant. As a defense-in-depth check, we also
+        // verify dragStateRef.isDragging — if drag never started (mouse
+        // up without prior mouse down threshold-cross), this is a no-op.
+        onMouseUp={(e) => {
+          const src = dragStateRef.current;
+          if (!src?.isDragging) return;
+          const container = e.currentTarget as HTMLElement;
+          const tabEls = Array.from(
+            container.querySelectorAll<HTMLElement>("[data-tab-id]"),
+          );
+          if (tabEls.length === 0) return;
+          const cursorX = e.clientX;
+          // Past the last tab's right edge → insert source after the
+          // last tab (= move to end). This matches the natural "drop in
+          // the trailing space" UX.
+          const lastEl = tabEls[tabEls.length - 1]!;
+          const lastRect = lastEl.getBoundingClientRect();
+          let targetEl: HTMLElement;
+          let side: "before" | "after";
+          if (cursorX >= lastRect.right) {
+            targetEl = lastEl;
+            side = "after";
+          } else {
+            // Otherwise, find the first tab whose midpoint is ≥ cursor X
+            // and insert before it. Falls through to the last tab if no
+            // midpoint comparison matches (defensive — shouldn't happen
+            // because we already handled "past last tab" above).
+            const found = tabEls.find((el) => {
+              const r = el.getBoundingClientRect();
+              return r.left + r.width / 2 >= cursorX;
+            });
+            targetEl = found ?? lastEl;
+            side = "before";
+          }
+          const targetId = targetEl.getAttribute("data-tab-id");
+          if (!targetId || targetId === src.tabId) return;
+          moveTab(src.tabId, targetId, side);
+        }}
       >
         {tabs.map((tab) => (
           <div
@@ -193,24 +236,15 @@ export default function TabBar() {
                   e.clientX < rect.left + rect.width / 2 ? "before" : "after";
                 moveTab(src.tabId, tab.id, side);
               }
+              // Sprint 253 (AC-253-05) — stop bubble so the strip-level
+              // onMouseUp (empty-area handler) does not also reorder on
+              // a release that already landed on a tab. Without this,
+              // both handlers would fire (per-tab first, strip on bubble)
+              // and the strip's cursor-X resolution might pick the same
+              // tab again, double-invoking moveTab and corrupting order.
+              e.stopPropagation();
             }}
           >
-            {(() => {
-              const conn = connections.find((c) => c.id === tab.connectionId);
-              if (!conn) return null;
-              const color = getConnectionColor(conn);
-              const isActive = tab.id === activeTabId;
-              return (
-                <span
-                  className={`absolute inset-y-0 left-0 w-0.5 ${
-                    isActive ? "opacity-100" : "opacity-60"
-                  }`}
-                  style={{ backgroundColor: color }}
-                  aria-label="Connection color"
-                  title={conn.name}
-                />
-              );
-            })()}
             {tab.type === "query" ? (
               <Code2 size={12} className="shrink-0 text-muted-foreground" />
             ) : (

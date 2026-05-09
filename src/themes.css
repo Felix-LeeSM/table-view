@@ -2176,6 +2176,22 @@
   --tv-destructive-foreground: #ffffff;
   --tv-success-foreground: #ffffff;
   --tv-warning-foreground: #ffffff;
+  /* Sprint 253 (ADR 0023) — `--tv-warning` deepened from amber #f59e0b
+   * to #ea580c so warning/staging chrome and STOP-tier red form a clear
+   * visual gradient (amber → orange → red). `--tv-status-connecting`
+   * intentionally retains amber #f59e0b in every theme block to keep the
+   * "connecting" state semantically distinct from "warning/staging". */
+  --tv-warning: #ea580c;
+  /* Sprint 253 (ADR 0023, AC-253-01) — environment-specific tokens for
+   * the upcoming Chrome H stripe (Sprint 256) + ConfirmDestructiveDialog
+   * header alignment + Button F color × env matrix. Universal (theme-
+   * independent) so all 72 theme variants inherit identically. */
+  --tv-env-prod: #dc2626;
+  --tv-env-prod-wash: #fef2f2;
+  --tv-env-prod-text: #7f1d1d;
+  --tv-env-staging: #ea580c;
+  --tv-env-staging-wash: #fff7ed;
+  --tv-env-staging-text: #7c2d12;
   --tv-highlight: #eab308;
   --tv-radius: 0.5rem;
   --tv-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
