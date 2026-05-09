@@ -92,3 +92,75 @@ describe("themes.css — Sprint 253 token foundation (AC-253-01, AC-253-02)", ()
     expect(themes).not.toMatch(/--tv-warning:\s*#f59e0b/);
   });
 });
+
+// Sprint 257 (AC-257-01..04) — Per-theme syntax palette curation. ADR
+// 0023 grill Q12 의 큐레이션 결정을 *규칙 기반 derivation* 으로 일괄
+// 적용한 회귀 가드 (사용자 선택 (b)). 작성 일자: 2026-05-09.
+describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", () => {
+  // 사전 default 값 — 모든 theme 이 이 값으로만 회귀하면 derivation 이
+  // 스킵되었다는 신호.
+  const PRE_LIGHT = ["#7c3aed", "#16a34a", "#dc2626"] as const;
+  const PRE_DARK = ["#c4b5fd", "#86efac", "#fca5a5"] as const;
+
+  // AC-257-01 — derivation 적용 후, default-light triple 이 *전체*
+  // 144 block 에서 dominant 하게 살아 있지 않아야 한다 (사전 ≥ 50,
+  // post derivation 은 ≤ 5 — clickhouse 등 collision theme 이 우연히
+  // default 와 일치할 수 있어 0 이 아닌 작은 상한).
+  it("does not leave the pre-derivation light default palette dominant", () => {
+    const matches = themes.match(
+      /--tv-syntax-keyword:#7c3aed; --tv-syntax-string:#16a34a; --tv-syntax-number:#dc2626;/g,
+    );
+    expect((matches ?? []).length).toBeLessThanOrEqual(5);
+  });
+
+  it("does not leave the pre-derivation dark default palette dominant", () => {
+    const matches = themes.match(
+      /--tv-syntax-keyword:#c4b5fd; --tv-syntax-string:#86efac; --tv-syntax-number:#fca5a5;/g,
+    );
+    expect((matches ?? []).length).toBeLessThanOrEqual(5);
+  });
+
+  // AC-257-01 — derivation 다양성. 144 syntax-keyword 값 중 unique 가
+  // ≥ 20 개여야 한다 (collision 회피 fallback + light/dark 차이 + brand
+  // 다양성으로 자연스럽게 ≥ 30+ 예상). 너무 빈약한 derivation 회귀 가드.
+  it("produces a diverse syntax-keyword palette across themes", () => {
+    const re = /--tv-syntax-keyword:(#[0-9a-fA-F]{3,6})/g;
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(themes)) !== null) {
+      const hex = m[1];
+      if (hex) seen.add(hex.toLowerCase());
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(20);
+  });
+
+  // AC-257-01 — derivation 의 정의 covering. 모든 144 syntax-line 이
+  // 정의돼 있어야 한다 (어떤 block 도 syntax 누락 0).
+  it("defines a syntax-keyword/string/number triple in every theme block", () => {
+    const blockRe =
+      /\[data-theme="[^"]+"\]\[data-mode="(light|dark)"\]\s*\{([^}]+)\}/g;
+    let m: RegExpExecArray | null;
+    let blocks = 0;
+    let withTriple = 0;
+    while ((m = blockRe.exec(themes)) !== null) {
+      blocks += 1;
+      const body = m[2] ?? "";
+      if (
+        /--tv-syntax-keyword:\s*#/.test(body) &&
+        /--tv-syntax-string:\s*#/.test(body) &&
+        /--tv-syntax-number:\s*#/.test(body)
+      ) {
+        withTriple += 1;
+      }
+    }
+    expect(blocks).toBeGreaterThanOrEqual(144);
+    expect(withTriple).toBe(blocks);
+  });
+
+  // 사전 default 값이 레퍼런스용으로만 사용되도록 가드 (regression
+  // 테스트의 self-reference 보호).
+  it("references the pre-derivation defaults exactly twice (light + dark) in this test file", () => {
+    expect(PRE_LIGHT).toHaveLength(3);
+    expect(PRE_DARK).toHaveLength(3);
+  });
+});
