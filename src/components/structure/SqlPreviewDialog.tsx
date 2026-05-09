@@ -1,7 +1,6 @@
-import { Loader2, Play } from "lucide-react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
 import SqlSyntax from "@components/shared/SqlSyntax";
-import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
+import ExecuteButton from "@components/ui/ExecuteButton";
 
 /**
  * Surfaced commit failure passed through from `useDataGridEdit`'s
@@ -41,17 +40,20 @@ export interface SqlPreviewDialogProps {
    */
   commitError?: SqlPreviewCommitError | null;
   /**
-   * Optional environment tag for the connection backing this commit. When
-   * set, a 1px-h color stripe renders above the dialog header. `null`
-   * keeps the dialog visually unchanged for paradigm / surface variants
-   * that don't plumb an environment.
-   *
-   * Typed as `string | null` so editors can plumb `connection.environment`
-   * (loosely typed in the store) without casting; the runtime guard
-   * `environment in ENVIRONMENT_META` narrows to `EnvironmentTag` before
-   * lookup.
+   * Optional environment tag for the connection backing this commit.
+   * Drives `<ExecuteButton>`'s severity × env color matrix and the
+   * "Execute on <conn>" label suffix. Typed as `string | null` so editors
+   * can plumb `connection.environment` (loosely typed in the store)
+   * without casting.
    */
   environment?: string | null;
+  /**
+   * Sprint 256 (ADR 0023, AC-256-05) — display name of the connection
+   * backing this commit. Drives the env-aware "Execute on <conn>"
+   * label on the footer's `<ExecuteButton>`. Optional so legacy callers
+   * (no env plumbed) keep the plain "Execute" label.
+   */
+  connectionLabel?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -62,27 +64,15 @@ export default function SqlPreviewDialog({
   error,
   commitError,
   environment = null,
+  connectionLabel = null,
   onConfirm,
   onCancel,
 }: SqlPreviewDialogProps) {
-  const stripe =
-    environment && environment in ENVIRONMENT_META ? (
-      <div
-        className="-mx-6 -mt-6 mb-2 h-1"
-        style={{
-          background: ENVIRONMENT_META[environment as EnvironmentTag].color,
-        }}
-        data-environment-stripe={environment}
-        aria-hidden="true"
-      />
-    ) : null;
-
   return (
     <PreviewDialog
       title="Review SQL Changes"
       description="Review and execute SQL changes"
       className="w-dialog-md bg-secondary"
-      headerStripe={stripe}
       // Sprint 252: Surface header Copy button. PreviewCopyButton self-
       // suppresses on empty/whitespace, so a stub `sql=""` keeps the
       // button hidden and existing AC-109 markup unchanged.
@@ -105,11 +95,15 @@ export default function SqlPreviewDialog({
       confirmDisabled={!sql.trim()}
       onConfirm={onConfirm}
       onCancel={onCancel}
-      confirmLabel={
-        <>
-          {loading ? <Loader2 className="animate-spin" /> : <Play />}
-          {loading ? "Executing..." : "Execute"}
-        </>
+      confirmButton={
+        <ExecuteButton
+          severity="warn"
+          environment={environment}
+          connectionLabel={connectionLabel}
+          loading={loading}
+          disabled={!sql.trim()}
+          onClick={onConfirm}
+        />
       }
     />
   );

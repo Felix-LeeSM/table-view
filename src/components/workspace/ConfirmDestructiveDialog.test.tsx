@@ -294,4 +294,82 @@ describe("ConfirmDestructiveDialog", () => {
     );
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
   });
+
+  // Sprint 256 (2026-05-09, AC-256-06) — production header binds to the
+  // chrome-stripe env token (`--tv-env-prod` / `--tv-env-prod-text`) so
+  // the dialog reads as the same visual surface as the persistent
+  // chrome above. Non-production header preserves the prior style
+  // (no env background) per the "비-prod 헤더는 회귀 0" invariant.
+  it("[AC-256-06] production header uses --tv-env-prod / --tv-env-prod-text tokens", () => {
+    render(
+      <ConfirmDestructiveDialog
+        open={true}
+        reason={REASON}
+        sqlPreview={SQL}
+        environment="production"
+        connectionId="c"
+        statements={[]}
+        paradigm="rdb"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const header = screen
+      .getByRole("alertdialog")
+      .querySelector('[data-environment-header="production"]') as HTMLElement;
+    expect(header).not.toBeNull();
+    expect(header.getAttribute("style")).toMatch(/--tv-env-prod\)/);
+    expect(header.getAttribute("style")).toMatch(/--tv-env-prod-text\)/);
+  });
+
+  it("[AC-256-06] non-production header preserves no env background", () => {
+    render(
+      <ConfirmDestructiveDialog
+        open={true}
+        reason={REASON}
+        sqlPreview={SQL}
+        environment="non-production"
+        connectionId="c"
+        statements={[]}
+        paradigm="rdb"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const header = screen
+      .getByRole("alertdialog")
+      .querySelector(
+        '[data-environment-header="non-production"]',
+      ) as HTMLElement;
+    expect(header).not.toBeNull();
+    // Non-prod header must NOT carry the prod env tokens.
+    expect(header.getAttribute("style") ?? "").not.toMatch(/--tv-env-prod\)/);
+  });
+
+  // Sprint 256 (2026-05-09, AC-256-05) — footer Confirm replaced by
+  // ExecuteButton (severity=danger, env-aware). Visible label still
+  // reads "Execute" but ariaLabel preserves "Confirm" for the existing
+  // a11y contract; data-severity-env="danger" carries the STOP-tier
+  // colour invariant.
+  it("[AC-256-05] footer uses ExecuteButton with data-severity-env=danger", () => {
+    render(
+      <ConfirmDestructiveDialog
+        open={true}
+        reason={REASON}
+        sqlPreview={SQL}
+        environment="production"
+        connectionId="c"
+        statements={[]}
+        paradigm="rdb"
+        connectionLabel="prod-db"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const btn = screen.getByTestId("confirm-destructive-confirm");
+    expect(btn.getAttribute("data-severity-env")).toBe("danger");
+    expect(btn.getAttribute("style")).toMatch(/--tv-destructive\)/);
+    // Aria-label preserved from D4.
+    expect(btn.getAttribute("aria-label")).toBe("Confirm");
+  });
 });

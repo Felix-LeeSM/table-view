@@ -7,6 +7,7 @@ import {
   AlertDialogFooter,
 } from "@components/ui/alert-dialog";
 import { Button } from "@components/ui/button";
+import ExecuteButton from "@components/ui/ExecuteButton";
 import DryRunPreview from "./DryRunPreview";
 
 /**
@@ -64,6 +65,13 @@ export interface ConfirmDestructiveDialogProps {
    * `execute_query_dry_run` while the dialog is open.
    */
   paradigm: "rdb" | "document";
+  /**
+   * Sprint 256 (ADR 0023, AC-256-05) — connection display name for the
+   * env-aware footer ExecuteButton ("Execute on <conn>"). Optional;
+   * legacy callers default to the plain "Confirm" affordance via the
+   * STOP-tier red regardless of connection identity.
+   */
+  connectionLabel?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -76,6 +84,7 @@ export default function ConfirmDestructiveDialog({
   connectionId,
   statements,
   paradigm,
+  connectionLabel = null,
   onConfirm,
   onCancel,
 }: ConfirmDestructiveDialogProps) {
@@ -84,6 +93,18 @@ export default function ConfirmDestructiveDialog({
   const subcaption = isProduction
     ? "Destructive statement"
     : "Safe Mode (strict) — non-production";
+
+  // Sprint 256 (AC-256-06) — production header binds to the env tokens
+  // (`--tv-env-prod` / `-prod-text`) for visual gravity matching the
+  // prod-only window border in `App.tsx`. Non-production headers keep
+  // the muted-foreground appearance to honour the contract's
+  // "비-prod 헤더는 회귀 0" invariant.
+  const headerStyle = isProduction
+    ? {
+        backgroundColor: "var(--tv-env-prod)",
+        color: "var(--tv-env-prod-text)",
+      }
+    : undefined;
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => !o && onCancel()}>
@@ -101,9 +122,29 @@ export default function ConfirmDestructiveDialog({
           }
         }}
       >
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{subcaption}</AlertDialogDescription>
+        <AlertDialogHeader
+          className={
+            isProduction ? "-mx-6 -mt-6 rounded-t-lg px-6 py-3" : undefined
+          }
+          style={headerStyle}
+          data-environment-header={
+            isProduction ? "production" : "non-production"
+          }
+        >
+          <AlertDialogTitle
+            style={
+              isProduction ? { color: "var(--tv-env-prod-text)" } : undefined
+            }
+          >
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription
+            style={
+              isProduction ? { color: "var(--tv-env-prod-text)" } : undefined
+            }
+          >
+            {subcaption}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <p className="text-sm text-foreground">
           Reason: <span className="font-semibold">{reason}</span>
@@ -129,15 +170,17 @@ export default function ConfirmDestructiveDialog({
           >
             Cancel
           </Button>
-          <Button
-            variant="destructive"
-            size="sm"
+          <ExecuteButton
+            severity="danger"
+            environment={isProduction ? "production" : null}
+            connectionLabel={connectionLabel}
+            loading={false}
+            disabled={false}
             onClick={onConfirm}
-            data-testid="confirm-destructive-confirm"
+            ariaLabel="Confirm"
             autoFocus
-          >
-            Confirm
-          </Button>
+            testId="confirm-destructive-confirm"
+          />
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

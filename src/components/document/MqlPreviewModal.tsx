@@ -1,5 +1,5 @@
-import { Loader2, Play } from "lucide-react";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import ExecuteButton from "@components/ui/ExecuteButton";
 
 /**
  * MQL preview modal for the document paradigm. Mirrors the RDB SQL
@@ -20,6 +20,14 @@ export interface MqlPreviewModalProps {
   onExecute: () => void | Promise<void>;
   onCancel: () => void;
   loading?: boolean;
+  /**
+   * Sprint 256 (ADR 0023, AC-256-05) — environment + connection label
+   * for the env-aware footer ExecuteButton. Optional; legacy callers
+   * (mongo write paths that haven't been plumbed yet) keep the plain
+   * "Execute" affordance.
+   */
+  environment?: string | null;
+  connectionLabel?: string | null;
 }
 
 export default function MqlPreviewModal({
@@ -28,6 +36,8 @@ export default function MqlPreviewModal({
   onExecute,
   onCancel,
   loading = false,
+  environment = null,
+  connectionLabel = null,
 }: MqlPreviewModalProps) {
   const executeDisabled = loading || previewLines.length === 0;
 
@@ -47,11 +57,16 @@ export default function MqlPreviewModal({
       // self-suppresses (AC-252-04).
       copyText={previewLines.join("\n")}
       copyAriaLabel="Copy MQL commands to clipboard"
-      confirmLabel={
-        <>
-          {loading ? <Loader2 className="animate-spin" /> : <Play />}
-          {loading ? "Executing..." : "Execute"}
-        </>
+      confirmButton={
+        <ExecuteButton
+          severity="warn"
+          environment={environment}
+          connectionLabel={connectionLabel}
+          loading={loading}
+          disabled={executeDisabled}
+          onClick={() => void onExecute()}
+          ariaLabel="Execute MQL commands"
+        />
       }
       preview={
         <div

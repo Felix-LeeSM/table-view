@@ -2174,6 +2174,12 @@
 :root {
   --tv-destructive: #ef4444;
   --tv-destructive-foreground: #ffffff;
+  /* Sprint 256 (ADR 0023, AC-256-05) — common `--tv-success` for the
+   * ExecuteButton WARN + dev|null|local|testing|development cell. Alias
+   * to `--tv-status-connected` so light/dark mode still inherits the
+   * theme's green; redeclared at the `:root` level so all 72 themes
+   * resolve the same token uniformly without per-theme overrides. */
+  --tv-success: #16a34a;
   --tv-success-foreground: #ffffff;
   --tv-warning-foreground: #ffffff;
   /* Sprint 253 (ADR 0023) — `--tv-warning` deepened from amber #f59e0b
@@ -2201,5 +2207,6 @@
 }
 [data-mode="dark"] {
   --tv-destructive: #f87171;
+  --tv-success: #22c55e;
   --tv-highlight: #facc15;
 }

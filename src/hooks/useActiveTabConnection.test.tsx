@@ -1,0 +1,138 @@
+// Sprint 256 (2026-05-09): `useActiveTabConnection` — combine
+// `useTabStore.activeTabId` + `useConnectionStore.connections` →
+// `Connection | null`. Drives the EnvironmentChromeStripe + prod window
+// border + ExecuteButton callsites. Tests cover: happy path (tab →
+// connection), absent active tab → null, connection deleted while tab
+// still references it → null fallback, and re-subscription on store
+// mutation (the load-bearing reactivity that makes the chrome update in
+// one frame when the user switches tabs).
+//
+// AC mapping: AC-256-01 (chrome stripe data source), AC-256-03 (instant
+// activation on tab switch).
+
+import { describe, it, expect, beforeEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { useActiveTabConnection } from "./useActiveTabConnection";
+import { useTabStore } from "@stores/tabStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import type { ConnectionConfig } from "@/types/connection";
+import type { Tab } from "@stores/tabStore";
+
+function makeConnection(
+  id: string,
+  environment: string | null = null,
+): ConnectionConfig {
+  return {
+    id,
+    name: `${id} DB`,
+    db_type: "postgresql",
+    host: "localhost",
+    port: 5432,
+    user: "postgres",
+    has_password: false,
+    database: "test",
+    group_id: null,
+    color: null,
+    environment,
+    paradigm: "rdb",
+  };
+}
+
+function makeQueryTab(id: string, connectionId: string): Tab {
+  // Minimal QueryTab shape — `useActiveTabConnection` only reads
+  // `connectionId` so other fields can be stubs.
+  return {
+    id,
+    type: "query",
+    connectionId,
+    title: "untitled",
+    closable: true,
+    sql: "",
+    queryState: { status: "idle" },
+    paradigm: "rdb",
+    queryMode: "sql",
+  };
+}
+
+beforeEach(() => {
+  useTabStore.setState({ tabs: [], activeTabId: null });
+  useConnectionStore.setState({
+    connections: [],
+    activeStatuses: {},
+    focusedConnId: null,
+  });
+});
+
+describe("useActiveTabConnection", () => {
+  it("returns null when no active tab", () => {
+    const { result } = renderHook(() => useActiveTabConnection());
+    expect(result.current).toBeNull();
+  });
+
+  it("returns the connection for the active tab", () => {
+    const conn = makeConnection("c1", "production");
+    useConnectionStore.setState({ connections: [conn] });
+    useTabStore.setState({
+      tabs: [makeQueryTab("t1", "c1")],
+      activeTabId: "t1",
+    });
+
+    const { result } = renderHook(() => useActiveTabConnection());
+    expect(result.current?.id).toBe("c1");
+    expect(result.current?.environment).toBe("production");
+  });
+
+  it("returns null when active tab references a missing connection", () => {
+    // Tab survives a connection deletion (TabBar-side cleanup is async)
+    // — the hook must not blow up; instead it falls back to null so the
+    // chrome stripe disappears.
+    useConnectionStore.setState({ connections: [] });
+    useTabStore.setState({
+      tabs: [makeQueryTab("t1", "ghost")],
+      activeTabId: "t1",
+    });
+
+    const { result } = renderHook(() => useActiveTabConnection());
+    expect(result.current).toBeNull();
+  });
+
+  it("re-subscribes when activeTabId changes (chrome must update one-frame)", () => {
+    // Sets the AC-256-03 invariant: switching the active tab from a dev
+    // connection to a prod connection produces a *new* hook value
+    // synchronously on the next render.
+    const dev = makeConnection("dev", "development");
+    const prod = makeConnection("prod", "production");
+    useConnectionStore.setState({ connections: [dev, prod] });
+    useTabStore.setState({
+      tabs: [makeQueryTab("t-dev", "dev"), makeQueryTab("t-prod", "prod")],
+      activeTabId: "t-dev",
+    });
+
+    const { result } = renderHook(() => useActiveTabConnection());
+    expect(result.current?.environment).toBe("development");
+
+    act(() => {
+      useTabStore.setState({ activeTabId: "t-prod" });
+    });
+
+    expect(result.current?.environment).toBe("production");
+  });
+
+  it("re-subscribes when the connection list mutates (deletion → null)", () => {
+    const conn = makeConnection("c1", "staging");
+    useConnectionStore.setState({ connections: [conn] });
+    useTabStore.setState({
+      tabs: [makeQueryTab("t1", "c1")],
+      activeTabId: "t1",
+    });
+
+    const { result } = renderHook(() => useActiveTabConnection());
+    expect(result.current?.id).toBe("c1");
+
+    act(() => {
+      useConnectionStore.setState({ connections: [] });
+    });
+
+    expect(result.current).toBeNull();
+  });
+});

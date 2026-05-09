@@ -100,4 +100,15 @@ describe("MqlPreviewModal", () => {
 
     expect(onExecute).toHaveBeenCalledTimes(1);
   });
+
+  // Sprint 256 (2026-05-09, AC-256-05) — env-aware ExecuteButton with
+  // staging connection. Background renders via the warning token; label
+  // includes the connection name to anchor the dispatch target.
+  it("[AC-256-05] env=staging + connectionLabel renders 'Execute on <conn>' with warning token", () => {
+    renderModal({ environment: "staging", connectionLabel: "stage-mongo" });
+    const btn = screen.getByRole("button", { name: "Execute MQL commands" });
+    expect(btn.getAttribute("data-severity-env")).toBe("warn:staging");
+    expect(btn.getAttribute("style")).toMatch(/--tv-warning\)/);
+    expect(btn.textContent).toContain("Execute on stage-mongo");
+  });
 });

@@ -2,8 +2,9 @@
 // step 5, last). Covers Sprint 30 inline cell editing (5) + Sprint 31
 // commit & SQL preview (5) + Sprint 32 row operations (5) + Sprint 43
 // promoteTab triggers (4) + Sprint 44 Data Grid UX (3) + Sprint 50
-// multi-row selection (5) + [AC-185-06] preview-dialog environment
-// stripe + [AC-186-06] warn+production+dangerous ConfirmDestructiveDialog.
+// multi-row selection (5) + [AC-186-06] warn+production+dangerous
+// ConfirmDestructiveDialog. (AC-185-06 env color stripe removed in
+// Sprint 256.)
 // Cases are byte-equivalent to the originals — no behaviour change.
 //
 // Inline `vi.spyOn(sqlGen, "generateSqlWithKeys")` survives in the
@@ -11,7 +12,7 @@
 // install/restore lifecycle. Dynamic `await import(...)` calls in
 // the last two cases stay inline (vi.mock-avoidance is intentional).
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { screen, fireEvent, act } from "@testing-library/react";
 import type { SortInfo, TableData } from "@/types/schema";
 import {
   MOCK_DATA,
@@ -731,62 +732,13 @@ describe("DataGrid", () => {
     expect(rows[2]!.className).not.toContain("bg-accent/20");
   });
 
-  it("[AC-185-06] Preview Dialog header renders environment color stripe (production red)", async () => {
-    // AC-185-06 — DataGrid Preview Dialog inserts a 1px coloured div above
-    // the header when the active connection has an environment tag. The
-    // stripe is purely decorative (aria-hidden) and uses the colour from
-    // ENVIRONMENT_META. date 2026-05-01.
-    //
-    // Sprint 245 (ADR 0022 Phase 1) — the Sprint 243 mode=warn
-    // workaround was removed. The destructive-only policy lets cell
-    // editing flow through under any mode for safe DML (UPDATE WHERE
-    // pk), so this test no longer needs to pin mode.
-    const { useConnectionStore } = await import("@stores/connectionStore");
-    useConnectionStore.setState({
-      connections: [
-        {
-          id: "conn1",
-          name: "prod-conn",
-          db_type: "postgres",
-          host: "localhost",
-          port: 5432,
-          database: "app",
-          username: "u",
-          password: null,
-          environment: "production",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
-      ],
-    });
-    renderDataGrid();
-    await screen.findByText("3 rows");
-    // Edit a cell so handleCommit has something to preview.
-    const tds = document.querySelectorAll("tbody tr:first-child td");
-    act(() => {
-      fireEvent.doubleClick(tds[2]!); // 'name' column
-    });
-    const input = document.querySelector(
-      "tbody tr:first-child input",
-    ) as HTMLInputElement;
-    act(() => {
-      fireEvent.change(input, { target: { value: "Alicia" } });
-    });
-    act(() => {
-      fireEvent.keyDown(input, { key: "Enter" });
-    });
-    // Trigger commit via the toolbar Commit button.
-    act(() => {
-      window.dispatchEvent(new Event("commit-changes"));
-    });
-    const stripe = await waitFor(() =>
-      document.querySelector('[data-environment-stripe="production"]'),
-    );
-    expect(stripe).not.toBeNull();
-    expect((stripe as HTMLElement).style.background).toMatch(
-      /#ef4444|rgb\(239,?\s*68,?\s*68\)/i,
-    );
-    useConnectionStore.setState({ connections: [] });
-  });
+  // Sprint 256 (2026-05-09): the AC-185-06 1px env color stripe above the
+  // DataGrid Preview Dialog header was removed per user feedback
+  // ("datagrid 에서 수정할 때 SQL preview 뜨는 것 상단에 한줄 그어놓은
+  // 것도 ... 그냥 제거해"). The env signal flows through the footer
+  // ExecuteButton's color × env matrix and the ConfirmDestructiveDialog
+  // header tokens instead. The regression guard for the stripe is
+  // intentionally dropped.
 
   it("[AC-186-06] warn + production + dangerous → ConfirmDestructiveDialog rendered with reason", async () => {
     // AC-186-06 — Sprint 186 mounts ConfirmDestructiveDialog when the

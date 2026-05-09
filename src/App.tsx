@@ -12,6 +12,7 @@ import { useMruStore } from "./stores/mruStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 import { useThemeStore } from "./stores/themeStore";
 import { markBootMilestone } from "./lib/perf/bootInstrumentation";
+import { useActiveTabConnection } from "./hooks/useActiveTabConnection";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -335,10 +336,32 @@ export default function App() {
     return () => window.removeEventListener("quickopen-function", handler);
   }, [addQueryTab, markConnectionUsed, updateQuerySql]);
 
+  // Sprint 256 (ADR 0023, AC-256-02) — prod-only 1px window border
+  // tracks the *active tab* (not focusedConnId) so a user pivoting from
+  // a prod tab to a dev tab loses the red frame instantly. The
+  // `chrome-prod-border` class is opted-in here on a wrapper that lives
+  // *outside* the existing flex shell so the existing layout math is
+  // untouched (prevents a re-layout / scroll-shift the moment the
+  // border appears).
+  const activeConnection = useActiveTabConnection();
+  const isProdActive = activeConnection?.environment === "production";
+
   return (
     <ErrorBoundary>
-      <div className="flex h-screen w-screen overflow-hidden bg-background">
-        <WorkspacePage />
+      <div
+        className="flex h-screen w-screen flex-col overflow-hidden bg-background"
+        data-prod-active={isProdActive ? "true" : undefined}
+        style={
+          isProdActive
+            ? {
+                boxShadow: "inset 0 0 0 1px var(--tv-env-prod)",
+              }
+            : undefined
+        }
+      >
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <WorkspacePage />
+        </div>
         <QuickOpen />
         <ShortcutCheatsheet />
         <QueryLog />

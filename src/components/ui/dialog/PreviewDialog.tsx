@@ -67,14 +67,6 @@ export interface PreviewDialogProps {
   /** Optional aria-label for the confirm button. */
   confirmAriaLabel?: string;
   /**
-   * Optional decoration rendered above the dialog header. Used by
-   * `SqlPreviewDialog` (structure surface) to surface a tiny environment
-   * color stripe so production-tagged commits read at a glance, matching
-   * the DataGrid + EditableQueryResultGrid stripe pattern. Default `null`
-   * keeps existing callers untouched.
-   */
-  headerStripe?: ReactNode;
-  /**
    * Sprint 252: Optional clipboard payload. When defined AND non-empty
    * after `.trim()`, a Copy button renders on the right side of the
    * header (`data-testid="preview-dialog-copy"`). Empty/whitespace or
@@ -88,6 +80,15 @@ export interface PreviewDialogProps {
    * when the surface benefits from screen-reader specificity.
    */
   copyAriaLabel?: string;
+  /**
+   * Sprint 256 (ADR 0023, AC-256-05) — optional override for the entire
+   * confirm button. When provided, it replaces the default `<Button>`
+   * footer affordance and must own its own `disabled` / `onClick`
+   * wiring. The default Cancel button is still rendered. Used by
+   * `SqlPreviewDialog` / `MqlPreviewModal` to plumb the env-aware
+   * `<ExecuteButton>` without nesting buttons inside `confirmLabel`.
+   */
+  confirmButton?: ReactNode;
 }
 
 export default function PreviewDialog({
@@ -106,9 +107,9 @@ export default function PreviewDialog({
   tone = "default",
   className,
   confirmAriaLabel,
-  headerStripe = null,
   copyText,
   copyAriaLabel,
+  confirmButton,
 }: PreviewDialogProps) {
   return (
     <Dialog
@@ -118,7 +119,6 @@ export default function PreviewDialog({
       }}
     >
       <DialogContent className={cn(className)} tone={tone}>
-        {headerStripe}
         <DialogHeader>
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-col gap-1">
@@ -177,7 +177,7 @@ export default function PreviewDialog({
           ) : null}
         </div>
 
-        {onConfirm ? (
+        {onConfirm || confirmButton ? (
           <DialogFooter className="flex justify-end gap-2">
             <Button
               variant="ghost"
@@ -187,15 +187,19 @@ export default function PreviewDialog({
             >
               {cancelLabel}
             </Button>
-            <Button
-              variant={tone === "destructive" ? "destructive" : "default"}
-              size="sm"
-              onClick={onConfirm}
-              disabled={loading || confirmDisabled}
-              aria-label={confirmAriaLabel}
-            >
-              {confirmLabel}
-            </Button>
+            {confirmButton ? (
+              confirmButton
+            ) : (
+              <Button
+                variant={tone === "destructive" ? "destructive" : "default"}
+                size="sm"
+                onClick={onConfirm}
+                disabled={loading || confirmDisabled}
+                aria-label={confirmAriaLabel}
+              >
+                {confirmLabel}
+              </Button>
+            )}
           </DialogFooter>
         ) : null}
       </DialogContent>

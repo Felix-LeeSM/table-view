@@ -63,6 +63,11 @@
   --spacing-scroll-sm: 7.5rem; /* 120px */
   --spacing-scroll-md: 12.5rem; /* 200px */
   --spacing-scroll-lg: 18.75rem; /* 300px */
+  /* Sprint 256 (ADR 0023, AC-256-05) — composed `<ExecuteButton>` truncates
+   * its target label at 260px so a long connection name ("Execute on
+   * <conn>") never bloats a tight footer. Named `execute-label` to
+   * confine the token to the button's responsibility. */
+  --spacing-execute-label: 16.25rem; /* 260px */
 }
 
 body {

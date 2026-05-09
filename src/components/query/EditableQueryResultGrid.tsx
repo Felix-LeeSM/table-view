@@ -16,6 +16,7 @@ import {
 } from "@components/shared/ContextMenu";
 import CellDetailDialog from "@components/datagrid/CellDetailDialog";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import ExecuteButton from "@components/ui/ExecuteButton";
 import {
   cellToEditString,
   editKey,
@@ -23,7 +24,6 @@ import {
 } from "@components/datagrid/useDataGridEdit";
 import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { useConnectionStore } from "@stores/connectionStore";
-import { ENVIRONMENT_META, type EnvironmentTag } from "@/types/connection";
 import PendingChangesTray from "./PendingChangesTray";
 import { useRawQueryGridEdit } from "./useRawQueryGridEdit";
 
@@ -74,6 +74,11 @@ export default function EditableQueryResultGrid({
   const connectionEnvironment = useConnectionStore(
     (s) =>
       s.connections.find((c) => c.id === connectionId)?.environment ?? null,
+  );
+  // Sprint 256 (AC-256-05) — connection name for the env-aware
+  // ExecuteButton "Execute on <conn>" target label.
+  const connectionLabel = useConnectionStore(
+    (s) => s.connections.find((c) => c.id === connectionId)?.name ?? null,
   );
 
   const [contextMenu, setContextMenu] = useState<{
@@ -352,19 +357,6 @@ export default function EditableQueryResultGrid({
               }
             }}
           >
-            {connectionEnvironment &&
-              connectionEnvironment in ENVIRONMENT_META && (
-                <div
-                  className="h-1"
-                  style={{
-                    background:
-                      ENVIRONMENT_META[connectionEnvironment as EnvironmentTag]
-                        .color,
-                  }}
-                  data-environment-stripe={connectionEnvironment}
-                  aria-hidden="true"
-                />
-              )}
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h3 className="text-sm font-semibold text-foreground">
                 SQL Preview
@@ -405,16 +397,16 @@ export default function EditableQueryResultGrid({
               >
                 Cancel
               </Button>
-              <Button
-                autoFocus
-                size="sm"
-                className="bg-success hover:bg-success/90"
+              <ExecuteButton
+                severity="warn"
+                environment={connectionEnvironment}
+                connectionLabel={connectionLabel}
+                loading={grid.executing}
+                disabled={false}
                 onClick={grid.handleExecute}
-                aria-label="Execute SQL"
-                disabled={grid.executing}
-              >
-                {grid.executing ? "Executing…" : "Execute"}
-              </Button>
+                ariaLabel="Execute SQL"
+                autoFocus
+              />
             </DialogFooter>
           </div>
         </DialogContent>

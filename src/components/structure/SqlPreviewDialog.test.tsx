@@ -101,26 +101,48 @@ describe("SqlPreviewDialog (sprint-109 syntax highlight)", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  // AC-187-03a — production environment renders the color stripe so the
-  // structure-surface SQL preview reads at a glance matching the DataGrid /
-  // EditableQueryResultGrid stripe Sprint 185 introduced. date 2026-05-01.
-  it("[AC-187-03a] production environment renders color stripe", () => {
+  // Sprint 256 (2026-05-09, AC-256-05) — footer Execute is now
+  // ExecuteButton with env-aware label. SqlPreviewDialog plumbs
+  // `environment` + `connectionLabel` so production reads
+  // "Execute on <conn>" with the destructive (red) token.
+  it("[AC-256-05] env=production + connectionLabel renders 'Execute on <conn>' with destructive token", () => {
     render(
       <SqlPreviewDialog
-        sql="DROP INDEX idx_users_email"
+        sql="DROP TABLE foo"
         loading={false}
         error={null}
         environment="production"
+        connectionLabel="prod-db"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
-
-    const dialog = screen.getByRole("dialog");
-    const stripe = dialog.querySelector(
-      '[data-environment-stripe="production"]',
-    );
-    expect(stripe).not.toBeNull();
-    expect(stripe?.getAttribute("aria-hidden")).toBe("true");
+    const btn = screen.getByRole("button", { name: /execute on prod-db/i });
+    expect(btn.getAttribute("data-severity-env")).toBe("warn:prod");
+    expect(btn.getAttribute("style")).toMatch(/--tv-destructive\)/);
   });
+
+  it("[AC-256-05] env=null falls back to plain 'Execute' with success token", () => {
+    render(
+      <SqlPreviewDialog
+        sql="CREATE TABLE foo (id INT);"
+        loading={false}
+        error={null}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const btn = screen.getByRole("button", { name: /execute/i });
+    expect(btn.getAttribute("data-severity-env")).toBe("warn:dev");
+    expect(btn.getAttribute("style")).toMatch(/--tv-success\)/);
+    // Plain "Execute" — no "on" suffix.
+    expect(btn.textContent?.trim()).toBe("Execute");
+  });
+
+  // Sprint 256 (2026-05-09): the AC-187-03a 1px env color stripe above the
+  // dialog header was removed per user feedback ("border 도 적용 안 되고
+  // 구리군 — 그냥 제거해"). Env signal now flows exclusively through the
+  // footer ExecuteButton's color × env matrix and the
+  // ConfirmDestructiveDialog header tokens. The regression guard for the
+  // stripe is intentionally dropped.
 });
