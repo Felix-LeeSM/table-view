@@ -1,7 +1,7 @@
 ---
 title: Lessons 인덱스
 type: index
-updated: 2026-05-06
+updated: 2026-05-10
 ---
 
 # Lessons 인덱스
@@ -30,6 +30,7 @@ updated: 2026-05-06
 
 - [2026-04-24 · user-facing SQL 필드에 내부 row_to_json 래퍼가 누출된 버그](data-and-query/2026-04-24-user-facing-sql-vs-internal-wrapper/memory.md)
 - [2026-04-25 · FK 참조 점프 — 뼈대 완성돼 있으나 프론트/백엔드 문자열 포맷 불일치로 한 번도 작동 안 함](data-and-query/2026-04-25-fk-reference-string-contract-drift/memory.md)
+- [2026-05-10 · 외부 도구가 Tauri storage 파일을 직접 만질 때 envelope (특히 password 암호화) 을 받는 쪽과 1:1 재현 + round-trip 테스트 + 앱 sanity smoke 필수](data-and-query/2026-05-10-fixture-password-storage-envelope/memory.md)
 
 ## e2e — e2e regression 패턴
 
