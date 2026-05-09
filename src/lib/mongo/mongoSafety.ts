@@ -14,6 +14,9 @@ import type { StatementAnalysis } from "@/lib/sql/sqlSafety";
  *
  * On multiple violations, only the first stage's reason is surfaced;
  * resolving it lets the next violation re-block on the same path.
+ *
+ * Sprint 254 (2026-05-09) — read-only pipeline 은 `severity: "info"` (was
+ * "safe"). 3-tier union split. ADR 0023 grill Q2-(a).
  */
 export function analyzeMongoPipeline(pipeline: unknown[]): StatementAnalysis {
   for (const stage of pipeline) {
@@ -36,7 +39,8 @@ export function analyzeMongoPipeline(pipeline: unknown[]): StatementAnalysis {
       };
     }
   }
-  return { kind: "mongo-other", severity: "safe", reasons: [] };
+  // Sprint 254 — read-only pipeline = INFO.
+  return { kind: "mongo-other", severity: "info", reasons: [] };
 }
 
 function isPipelineStage(value: unknown): value is Record<string, unknown> {
@@ -53,17 +57,9 @@ function isPipelineStage(value: unknown): value is Record<string, unknown> {
  * `analyzeMongoPipeline`). Returns the same `StatementAnalysis` shape
  * so `useSafeModeGate.decide` stays paradigm-agnostic.
  *
- * Classification:
- * - `dropCollection` → `danger` (no partial protection).
- * - `deleteMany` with empty filter (`{}`) → `danger`. Mongo parallel
- *   of `DELETE without WHERE`.
- * - `updateMany` with empty filter → `danger`. Mongo parallel of
- *   `UPDATE without WHERE`.
- * - non-empty filter → `safe`.
- *
- * `_id` mutations in patches are NOT checked here — the backend's
- * `update_many_impl` rejects them as a validation error before the
- * driver round-trip; the UI catches via the post-call toast.
+ * Sprint 254 (2026-05-09) — non-empty filter `*-many` 는 `severity: "warn"`
+ * (was "safe"). 빈 filter `*-all` + dropCollection 은 `severity: "danger"`
+ * 그대로.
  */
 export type MongoOperation =
   | { kind: "deleteMany"; filter: Record<string, unknown> }
@@ -90,7 +86,8 @@ export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
         reasons: ["MongoDB deleteMany without filter"],
       };
     }
-    return { kind: "mongo-delete-many", severity: "safe", reasons: [] };
+    // Sprint 254 — bounded *-many = WARN tier.
+    return { kind: "mongo-delete-many", severity: "warn", reasons: [] };
   }
   // updateMany
   if (isEmptyFilter(op.filter)) {
@@ -100,30 +97,23 @@ export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
       reasons: ["MongoDB updateMany without filter"],
     };
   }
-  return { kind: "mongo-update-many", severity: "safe", reasons: [] };
+  // Sprint 254 — bounded *-many = WARN tier.
+  return { kind: "mongo-update-many", severity: "warn", reasons: [] };
 }
 
 function isEmptyFilter(filter: Record<string, unknown>): boolean {
-  // analyzeMongoPipeline 의 isPipelineStage 와 동일 가드를 적용해도 되지만
-  // operation analyzer 는 caller 가 Record 보장 후 호출하므로 key 수만 본다.
   return Object.keys(filter).length === 0;
 }
 
 /**
  * Sprint 255 — Mongo paradigm 의 INFO tier 식별 휴리스틱. raw MQL editor 의
  * WARN dialog mount 분기에서 호출되어 read-only aggregate pipeline (find /
- * pure-read pipeline: $match / $sort / $project / $group / $addFields /
- * $unset 만으로 구성) 만 dialog skip → 직접 IPC 발동.
+ * pure-read pipeline) 만 dialog skip → 직접 IPC 발동.
  *
- * INFO = `severity: "safe"` && `kind === "mongo-other"` — `analyzeMongoPipeline`
- * 가 read-only pipeline 만 `mongo-other` + safe 로 분류하기 때문.
- * `analyzeMongoOperation` 으로부터 온 `mongo-delete-many` / `mongo-update-many`
- * (non-empty filter) 는 safe 지만 INFO 가 아님 → WARN 후보. `*-all` /
- * `mongo-out` / `mongo-merge` / `mongo-drop` 은 danger 이므로 STOP.
- *
- * Mongo find path 는 `useQueryExecution` 에서 항상 INFO 로 처리 (이 helper
- * 거치지 않음 — find 는 pipeline analyzer 가 적용되지 않는 경로).
+ * Sprint 254 — `severity === "info"` 직접 비교로 단순화. 기존 매핑
+ * (`mongo-other` + safe) 동일 의미 보존: read-only pipeline 만 severity:"info"
+ * 로 분류된다.
  */
 export function isInfoMongoOperation(analysis: StatementAnalysis): boolean {
-  return analysis.severity === "safe" && analysis.kind === "mongo-other";
+  return analysis.severity === "info";
 }

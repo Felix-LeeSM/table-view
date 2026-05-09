@@ -431,15 +431,11 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
-    // Sprint 255 (2026-05-09) — `\c admin` analyzer 가 `kind: "other"` 로
-    // 분류되어 WARN dialog 가 mount 된다. dialog 의 Execute 버튼 클릭으로
-    // 기존 IPC 경로 진입.
-    const dialogExecuteBtn = await screen.findByRole("button", {
-      name: /execute/i,
-    });
-    await act(async () => {
-      dialogExecuteBtn.click();
-    });
+    // Sprint 254 (2026-05-09) — analyzer 의 `kind: "other"` default 가
+    // INFO (`severity: "info"`) 로 변경되었으므로 `\c admin` 는 WARN dialog
+    // 를 skip 하고 직접 IPC 발동 (Sprint 255 의 dialog mount 우회). Sprint
+    // 255 의 dialog mount 분기 회귀 0 — `kind: "other"` 가 더 이상 WARN
+    // 이 아니므로 dialog 가 발생하지 않는다.
 
     // Wait for verifyActiveDb to resolve (it's awaited inside the
     // applyDbMutationHint helper which the QueryTab fires post-execute).
@@ -487,13 +483,9 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
-    // Sprint 255 (2026-05-09) — `\c admin` 은 WARN dialog mount 후 Execute.
-    const dialogExecuteBtn = await screen.findByRole("button", {
-      name: /execute/i,
-    });
-    await act(async () => {
-      dialogExecuteBtn.click();
-    });
+    // Sprint 254 (2026-05-09) — `\c admin` 의 `kind: "other"` default 가
+    // INFO 로 변경되었으므로 dialog mount 우회 + 직접 IPC. Sprint 255 의
+    // dialog mount 회귀 0.
 
     // Verify ran and the active-db reverted to the backend's truth.
     await waitFor(() => {

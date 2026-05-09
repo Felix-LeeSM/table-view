@@ -1,9 +1,11 @@
 // AC-188-01 — `analyzeMongoPipeline` unit tests. Pin the cases that the
 // Sprint 188 contract enumerates so the danger taxonomy stays in sync with
-// what `useSafeModeGate` will block / confirm. Cases cover safe pipelines,
-// the two cover-stages ($out / $merge), positional irrelevance, multiple
-// violations (first wins), and malformed input shapes that the JSON parser
-// in QueryTab might let through. date 2026-05-01.
+// what `useSafeModeGate` will block / confirm. date 2026-05-01.
+//
+// Sprint 254 (2026-05-09) — Mongo classifier 도 SQL paradigm 과 동일한 3-tier
+// severity (`info` / `warn` / `danger`) 로 split. read-only aggregate /
+// find → INFO, write *-many (non-empty filter) → WARN, *-all / $out / $merge /
+// drop → DANGER. ADR 0023 grill Q2-(a).
 import { describe, it, expect } from "vitest";
 import {
   analyzeMongoOperation,
@@ -12,20 +14,20 @@ import {
 } from "./mongoSafety";
 
 describe("analyzeMongoPipeline", () => {
-  it("[AC-188-01a] empty pipeline → safe", () => {
+  it("[AC-188-01a] empty pipeline → info (Sprint 254: read-only)", () => {
     const a = analyzeMongoPipeline([]);
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("info");
     expect(a.kind).toBe("mongo-other");
     expect(a.reasons).toEqual([]);
   });
 
-  it("[AC-188-01b] read-only stages ($match / $sort / $project) → safe", () => {
+  it("[AC-188-01b] read-only stages ($match / $sort / $project) → info (Sprint 254)", () => {
     const a = analyzeMongoPipeline([
       { $match: { status: "active" } },
       { $sort: { name: 1 } },
       { $project: { _id: 0, name: 1 } },
     ]);
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("info");
     expect(a.kind).toBe("mongo-other");
   });
 
@@ -65,32 +67,30 @@ describe("analyzeMongoPipeline", () => {
     expect(a.kind).toBe("mongo-merge");
   });
 
-  it("[AC-188-01h] non-object stages (string, null, array) are ignored → safe", () => {
+  it("[AC-188-01h] non-object stages (string, null, array) are ignored → info (Sprint 254)", () => {
     const a = analyzeMongoPipeline(["$match", null, [{ $out: "x" }]]);
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("info");
   });
 
-  it("[AC-188-01i] empty object stage → safe (no first key)", () => {
+  it("[AC-188-01i] empty object stage → info (Sprint 254, no first key)", () => {
     const a = analyzeMongoPipeline([{}, { $match: {} }]);
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("info");
   });
 
-  it("[AC-188-01j] $unset / $addFields / $group → safe (write-shape but in-pipeline only)", () => {
+  it("[AC-188-01j] $unset / $addFields / $group → info (write-shape but in-pipeline only, Sprint 254)", () => {
     const a = analyzeMongoPipeline([
       { $addFields: { ts: new Date() } },
       { $unset: ["temp"] },
       { $group: { _id: "$category", n: { $sum: 1 } } },
     ]);
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("info");
   });
 });
 
-// AC-198-03 — `analyzeMongoOperation` unit tests. Sprint 198 ships 3 bulk-write
-// commands (deleteMany / updateMany / dropCollection) — each must be classified
-// before the Tauri shim ever fires so `useSafeModeGate.decide` can block / warn
-// the same way it does for RDB DELETE-without-WHERE. Cases mirror the contract:
-// drop is always danger, empty-filter many-ops are danger, non-empty filter is
-// safe. date 2026-05-02.
+// AC-198-03 — `analyzeMongoOperation` unit tests. date 2026-05-02.
+//
+// Sprint 254 (2026-05-09) — non-empty filter `*-many` 는 WARN (was safe).
+// 빈 filter `*-all` 은 DANGER 그대로.
 describe("analyzeMongoOperation", () => {
   it("[AC-198-03a] dropCollection → danger / mongo-drop", () => {
     const a = analyzeMongoOperation({ kind: "dropCollection" });
@@ -117,33 +117,33 @@ describe("analyzeMongoOperation", () => {
     expect(a.reasons[0]).toMatch(/updateMany without filter/);
   });
 
-  it("[AC-198-03d] deleteMany with non-empty filter → safe / mongo-delete-many", () => {
+  it("[AC-198-03d] deleteMany with non-empty filter → warn / mongo-delete-many (Sprint 254)", () => {
     const a = analyzeMongoOperation({
       kind: "deleteMany",
       filter: { _id: "abc" },
     });
-    expect(a.severity).toBe("safe");
+    // Sprint 254 — bounded *-many is WARN (was safe).
+    expect(a.severity).toBe("warn");
     expect(a.kind).toBe("mongo-delete-many");
     expect(a.reasons).toEqual([]);
   });
 
-  it("[AC-198-03e] updateMany with non-empty filter → safe / mongo-update-many", () => {
+  it("[AC-198-03e] updateMany with non-empty filter → warn / mongo-update-many (Sprint 254)", () => {
     const a = analyzeMongoOperation({
       kind: "updateMany",
       filter: { archived: false },
       patch: { reviewed: true },
     });
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("warn");
     expect(a.kind).toBe("mongo-update-many");
   });
 });
 
 // Sprint 255 (2026-05-09) — `isInfoMongoOperation` 휴리스틱은 raw editor 의
-// WARN dialog mount 직전에 read-only Mongo aggregate (find / pure-read
-// pipeline) 을 식별해 dialog skip 분기를 위해 신설. INFO = `analyzeMongoPipeline`
-// 가 `mongo-other` + safe 로 분류한 read-only pipeline. WARN candidate =
-// 그 외의 safe (예: 미래 *-many 구분이 추가될 경우). STOP candidate =
-// danger (`mongo-out` / `mongo-merge` / `mongo-drop` / `*-all`).
+// WARN dialog mount 직전에 read-only Mongo aggregate 을 식별해 dialog skip.
+//
+// Sprint 254 (2026-05-09) — 본문이 `severity === "info"` 단일 비교로 단순화
+// 됐지만 매핑은 동일.
 describe("isInfoMongoOperation (Sprint 255)", () => {
   it("[AC-255-02a] empty pipeline → INFO (no stages = read-only)", () => {
     expect(isInfoMongoOperation(analyzeMongoPipeline([]))).toBe(true);
@@ -184,7 +184,7 @@ describe("isInfoMongoOperation (Sprint 255)", () => {
     expect(isInfoMongoOperation(a)).toBe(false);
   });
 
-  it("[AC-255-02g] deleteMany WHERE (non-empty filter) → NOT INFO (WARN candidate)", () => {
+  it("[AC-255-02g] deleteMany WHERE (non-empty filter) → NOT INFO (WARN candidate, Sprint 254)", () => {
     const a = analyzeMongoOperation({
       kind: "deleteMany",
       filter: { _id: "abc" },
@@ -192,7 +192,7 @@ describe("isInfoMongoOperation (Sprint 255)", () => {
     expect(isInfoMongoOperation(a)).toBe(false);
   });
 
-  it("[AC-255-02h] updateMany WHERE (non-empty filter) → NOT INFO (WARN candidate)", () => {
+  it("[AC-255-02h] updateMany WHERE (non-empty filter) → NOT INFO (WARN candidate, Sprint 254)", () => {
     const a = analyzeMongoOperation({
       kind: "updateMany",
       filter: { archived: false },

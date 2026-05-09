@@ -1,5 +1,13 @@
 // AC-185-01 — sqlSafety analyzer 단위 테스트. 12 cases per Sprint 185 contract.
 // date 2026-05-01.
+//
+// Sprint 254 (2026-05-09) — `Severity` union 을 `"safe" | "danger"` 에서
+// 3-tier `"info" | "warn" | "danger"` 로 split. 기존 `"safe"` 어서션을 INFO
+// (read / metadata) 또는 WARN (write surface) 로 명시적으로 매핑한다. ADR
+// 0023 grill Q2-(a) — write 표면 (INSERT / UPDATE WHERE / DELETE WHERE / CREATE
+// / ALTER additive) 가 명시적으로 WARN 임을 union 으로 표현. DML CTE
+// 인식도 함께 추가 — `WITH x AS (UPDATE …) SELECT *` 는 INFO 가 아니라
+// wrapped statement 의 severity 와 정합.
 import { describe, it, expect } from "vitest";
 import { analyzeStatement, isDangerous, isInfoStatement } from "./sqlSafety";
 
@@ -12,10 +20,10 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(isDangerous(a)).toBe(true);
   });
 
-  it("[AC-185-01b] DELETE with WHERE → safe", () => {
+  it("[AC-185-01b] DELETE with WHERE → warn (Sprint 254: bounded write)", () => {
     const a = analyzeStatement("DELETE FROM users WHERE id = 1");
     expect(a.kind).toBe("delete");
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("warn");
     expect(a.reasons).toEqual([]);
     expect(isDangerous(a)).toBe(false);
   });
@@ -27,10 +35,10 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["UPDATE without WHERE clause"]);
   });
 
-  it("[AC-185-01d] UPDATE with WHERE → safe", () => {
+  it("[AC-185-01d] UPDATE with WHERE → warn (Sprint 254: bounded write)", () => {
     const a = analyzeStatement("UPDATE users SET active = false WHERE id = 1");
     expect(a.kind).toBe("update");
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("warn");
   });
 
   it("[AC-185-01e] DROP TABLE → danger", () => {
@@ -54,16 +62,16 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["TRUNCATE"]);
   });
 
-  it("[AC-185-01h] INSERT INTO → safe", () => {
+  it("[AC-185-01h] INSERT INTO → warn (Sprint 254: write surface)", () => {
     const a = analyzeStatement("INSERT INTO users (id, name) VALUES (1, 'a')");
     expect(a.kind).toBe("insert");
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("warn");
   });
 
-  it("[AC-185-01i] SELECT → safe", () => {
+  it("[AC-185-01i] SELECT → info (Sprint 254: read tier)", () => {
     const a = analyzeStatement("SELECT * FROM users");
     expect(a.kind).toBe("select");
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("info");
   });
 
   it("[AC-185-01j] case-insensitive (delete from t) → danger", () => {
@@ -83,40 +91,39 @@ describe("sqlSafety.analyzeStatement", () => {
       "/* block comment */ DELETE FROM users WHERE id = 1",
     );
     expect(b.kind).toBe("delete");
-    expect(b.severity).toBe("safe");
+    // Sprint 254 — bounded DELETE WHERE is now WARN (was safe).
+    expect(b.severity).toBe("warn");
   });
 
-  it("[AC-185-01l] subquery WHERE counted as outer WHERE present", () => {
+  it("[AC-185-01l] subquery WHERE counted as outer WHERE present (warn)", () => {
     const a = analyzeStatement(
       "DELETE FROM t WHERE id IN (SELECT id FROM u WHERE flag = 1)",
     );
     expect(a.kind).toBe("delete");
-    expect(a.severity).toBe("safe");
+    // Sprint 254 — bounded DELETE WHERE = WARN.
+    expect(a.severity).toBe("warn");
   });
 
-  it("empty SQL → other / safe (graceful)", () => {
+  it("empty SQL → other / info (graceful, Sprint 254)", () => {
     const a = analyzeStatement("");
     expect(a.kind).toBe("other");
-    expect(a.severity).toBe("safe");
+    // Sprint 254 — empty / unknown statements default to INFO so the
+    // SafeMode matrix never escalates an unrecognised input. WARN is
+    // reserved for *known* write surfaces.
+    expect(a.severity).toBe("info");
   });
 
-  it("ALTER / CREATE → ddl-other / safe", () => {
+  it("ALTER additive / CREATE → ddl-other / warn (Sprint 254)", () => {
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN x int");
     expect(a.kind).toBe("ddl-other");
-    expect(a.severity).toBe("safe");
+    expect(a.severity).toBe("warn");
     const b = analyzeStatement("CREATE INDEX idx_x ON users (x)");
     expect(b.kind).toBe("ddl-other");
-    expect(b.severity).toBe("safe");
+    expect(b.severity).toBe("warn");
   });
 
   // -------------------------------------------------------------------------
   // Sprint 187 — analyzer extension for structure-surface DDL.
-  // The structure editors (Columns / Indexes / Constraints) emit
-  // `DROP INDEX`, `ALTER TABLE … DROP COLUMN`, and `ALTER TABLE … DROP
-  // CONSTRAINT`. Sprint 185 / 186 only flagged `DROP TABLE/DATABASE/SCHEMA`
-  // and `DELETE/UPDATE` without WHERE, so structure-surface destructive ops
-  // slipped past the production warn / strict gate. AC-187-01 closes that
-  // gap. date 2026-05-01.
   // -------------------------------------------------------------------------
 
   it("[AC-187-01a] DROP INDEX → danger / ddl-drop", () => {
@@ -150,22 +157,182 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.reasons).toEqual(["ALTER TABLE DROP CONSTRAINT"]);
   });
 
-  it("[AC-187-01e] ALTER TABLE … ADD COLUMN stays ddl-other / safe (regression)", () => {
+  it("[AC-187-01e] ALTER TABLE … ADD COLUMN stays ddl-other / warn (Sprint 254)", () => {
     const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
     expect(a.kind).toBe("ddl-other");
-    expect(a.severity).toBe("safe");
+    // Sprint 254 — additive ALTER is WARN (write surface).
+    expect(a.severity).toBe("warn");
     expect(a.reasons).toEqual([]);
     expect(isDangerous(a)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 254 (2026-05-09) — 3-tier classifier corpus. ADR 0023 grill Q2-(a)
+  // "3-tier severity 채택" 의 정식 분류:
+  //   - INFO: SELECT / WITH …SELECT (no DML CTE) / EXPLAIN / SHOW / DESCRIBE / DESC.
+  //   - WARN: INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER additive.
+  //   - STOP (danger): DROP / TRUNCATE / WHERE-less DELETE·UPDATE / ALTER DROP /
+  //     GRANT / REVOKE.
+  // DML CTE (`WITH x AS (UPDATE …) SELECT *`) 는 INFO 가 아니어야 한다 — wrapped
+  // statement 의 first keyword (UPDATE/DELETE/INSERT) 에 따라 severity 결정.
+  // -------------------------------------------------------------------------
+
+  describe("Sprint 254 — 3-tier severity classifier", () => {
+    // ── INFO tier ─────────────────────────────────────────────────────────
+    it("[AC-254-01a] SELECT → info", () => {
+      const a = analyzeStatement("SELECT * FROM users");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-254-01b] WITH … SELECT (no DML CTE) → info", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1 AS n) SELECT n FROM t");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-254-01c] EXPLAIN → info", () => {
+      const a = analyzeStatement("EXPLAIN SELECT * FROM users");
+      expect(a.kind).toBe("info");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-254-01d] SHOW TABLES → info", () => {
+      const a = analyzeStatement("SHOW TABLES");
+      expect(a.kind).toBe("info");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-254-01e] DESCRIBE → info", () => {
+      const a = analyzeStatement("DESCRIBE users");
+      expect(a.kind).toBe("info");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-254-01f] DESC users (MySQL short form) → info", () => {
+      const a = analyzeStatement("DESC users");
+      expect(a.kind).toBe("info");
+      expect(a.severity).toBe("info");
+    });
+
+    // ── WARN tier ─────────────────────────────────────────────────────────
+    it("[AC-254-02a] INSERT INTO → warn", () => {
+      const a = analyzeStatement("INSERT INTO users (id) VALUES (1)");
+      expect(a.kind).toBe("insert");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-02b] UPDATE … WHERE → warn (bounded)", () => {
+      const a = analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1");
+      expect(a.kind).toBe("update");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-02c] DELETE … WHERE → warn (bounded)", () => {
+      const a = analyzeStatement("DELETE FROM users WHERE id = 1");
+      expect(a.kind).toBe("delete");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-02d] CREATE TABLE → warn", () => {
+      const a = analyzeStatement("CREATE TABLE foo (id int)");
+      expect(a.kind).toBe("ddl-other");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-02e] ALTER TABLE … ADD COLUMN (additive) → warn", () => {
+      const a = analyzeStatement("ALTER TABLE users ADD COLUMN nickname text");
+      expect(a.kind).toBe("ddl-other");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-02f] CREATE INDEX → warn", () => {
+      const a = analyzeStatement("CREATE INDEX idx_x ON users (x)");
+      expect(a.kind).toBe("ddl-other");
+      expect(a.severity).toBe("warn");
+    });
+
+    // ── STOP tier (danger 보존) ───────────────────────────────────────────
+    it("[AC-254-03a] DROP TABLE → danger", () => {
+      const a = analyzeStatement("DROP TABLE users");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-03b] TRUNCATE → danger", () => {
+      const a = analyzeStatement("TRUNCATE TABLE events");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-03c] DELETE without WHERE → danger", () => {
+      const a = analyzeStatement("DELETE FROM users");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-03d] UPDATE without WHERE → danger", () => {
+      const a = analyzeStatement("UPDATE users SET active = 0");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-03e] ALTER TABLE … DROP COLUMN → danger", () => {
+      const a = analyzeStatement("ALTER TABLE users DROP COLUMN email");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-03f] GRANT → danger", () => {
+      const a = analyzeStatement("GRANT SELECT ON users TO bob");
+      expect(a.kind).toBe("ddl-other");
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-03g] REVOKE → danger", () => {
+      const a = analyzeStatement("REVOKE SELECT ON users FROM bob");
+      expect(a.kind).toBe("ddl-other");
+      expect(a.severity).toBe("danger");
+    });
+
+    // ── DML CTE — `WITH x AS (UPDATE …) SELECT *` ─────────────────────────
+    it("[AC-254-04a] WITH x AS (UPDATE …) SELECT * → warn (DML CTE wrapped)", () => {
+      const a = analyzeStatement(
+        "WITH x AS (UPDATE users SET active = false WHERE id = 1 RETURNING id) SELECT * FROM x",
+      );
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-04b] WITH x AS (DELETE …) SELECT * → warn (DML CTE wrapped, bounded)", () => {
+      const a = analyzeStatement(
+        "WITH x AS (DELETE FROM users WHERE id = 1 RETURNING id) SELECT * FROM x",
+      );
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-04c] WITH x AS (DELETE …) SELECT * — DELETE no WHERE → danger (DML CTE)", () => {
+      const a = analyzeStatement(
+        "WITH x AS (DELETE FROM users RETURNING id) SELECT * FROM x",
+      );
+      expect(a.severity).toBe("danger");
+    });
+
+    it("[AC-254-04d] WITH x AS (INSERT …) SELECT * → warn (DML CTE wrapped)", () => {
+      const a = analyzeStatement(
+        "WITH x AS (INSERT INTO users (id) VALUES (1) RETURNING id) SELECT * FROM x",
+      );
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-254-04e] WITH x AS (SELECT 1) SELECT * — pure read CTE → info (regression)", () => {
+      const a = analyzeStatement("WITH x AS (SELECT 1 AS n) SELECT n FROM x");
+      expect(a.severity).toBe("info");
+    });
   });
 
   // -------------------------------------------------------------------------
   // Sprint 255 (2026-05-09) — `isInfoStatement` 휴리스틱은 raw editor 의 WARN
   // dialog mount 직전에 INFO (read-only / metadata) statement 을 식별해
   // dialog skip → 직접 IPC 로 우회하는 분기를 위해 신설. INFO corpus =
-  // SELECT / WITH …SELECT / EXPLAIN / SHOW / DESCRIBE / DESC. 그 외
-  // (INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE) 은 INFO 가 아님 — WARN
-  // 또는 STOP tier 로 흘러야 한다. ADR 0023 grill Q3-(b) "모든 환경 + 모든
-  // write 표면" 의 핵심 보호.
+  // SELECT / WITH …SELECT / EXPLAIN / SHOW / DESCRIBE / DESC.
+  //
+  // Sprint 254 (2026-05-09) — 본문 단순화 (severity === "info" 직접 비교)
+  // 후에도 매핑 동일 (kind="select" / kind="info" 모두 severity:"info").
   // -------------------------------------------------------------------------
 
   describe("isInfoStatement (Sprint 255)", () => {
@@ -251,8 +418,12 @@ describe("sqlSafety.analyzeStatement", () => {
       expect(isInfoStatement(analyzeStatement("DROP TABLE users"))).toBe(false);
     });
 
-    it("[AC-255-01o] empty input → NOT INFO (defensive)", () => {
-      expect(isInfoStatement(analyzeStatement(""))).toBe(false);
+    it("[AC-255-01o] empty input → INFO (Sprint 254 default)", () => {
+      // Sprint 254 — empty / unknown defaults to INFO (severity: "info").
+      // INFO heuristic returns true so the WARN dialog never mounts on
+      // an empty buffer; the upstream `if (!sql) return` already short-
+      // circuits the empty path so the change is defensive only.
+      expect(isInfoStatement(analyzeStatement(""))).toBe(true);
     });
   });
 });

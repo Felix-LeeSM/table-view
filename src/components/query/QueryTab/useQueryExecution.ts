@@ -9,11 +9,9 @@ import {
   aggregateDocuments,
 } from "@lib/tauri";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
-import {
-  analyzeMongoPipeline,
-  isInfoMongoOperation,
-} from "@lib/mongo/mongoSafety";
-import { analyzeStatement, isInfoStatement } from "@lib/sql/sqlSafety";
+import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
+import { analyzeStatement } from "@lib/sql/sqlSafety";
+import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
 import type { QueryTab } from "@stores/tabStore";
@@ -519,14 +517,17 @@ export function useQueryExecution({
         }
         // Sprint 255 — gate said `allow`. Apply INFO heuristic: read-only
         // pipeline → direct IPC; otherwise WARN dialog (MqlPreviewModal).
-        // Only severity:"safe" non-INFO triggers WARN; severity:"danger"
-        // pipelines that the gate allowed (e.g. $out on dev + warn —
-        // env-gated unguarded under ADR 0022) bypass WARN entirely so the
-        // existing destructive-on-dev-warn unguarded behavior stays intact.
-        // Under the current 2-tier severity classifier, `mongo-other` +
-        // safe is the only safe-tier path here, so WARN coverage is
-        // currently a thin slice. Sprint 254's 3-tier split will widen it.
-        if (analysis.severity === "safe" && !isInfoMongoOperation(analysis)) {
+        // Only severity:"warn" triggers WARN; severity:"danger" pipelines
+        // that the gate allowed (e.g. $out on dev + warn — env-gated
+        // unguarded under ADR 0022) bypass WARN entirely so the existing
+        // destructive-on-dev-warn unguarded behavior stays intact.
+        //
+        // Sprint 254 — Mongo `*-many` (non-empty filter) is now classified
+        // as severity:"warn" (was "safe"), so the WARN dialog finally
+        // covers Mongo bulk-write previews. INFO (`mongo-other`) skips
+        // dialog. Mongo paradigm has no dry-run IPC support so escalation
+        // is skipped (`escalateWarnIfLargeImpact` is rdb-only).
+        if (analysis.severity === "warn") {
           setPendingMongoWarn({ pipeline: parsed });
           return;
         }
@@ -628,6 +629,10 @@ export function useQueryExecution({
     let worstAction: "allow" | "confirm" | "block" = "allow";
     let worstReason = "";
     let hasWarn = false;
+    // Sprint 254 — bounded UPDATE/DELETE WHERE candidates for dry-run
+    // row-count escalation. We collect them during the classifier pass so
+    // we can probe each (in order) only if no STOP statement exists.
+    const escalationCandidates: { stmt: string; reason: string }[] = [];
     for (const stmt of statements) {
       const analysis = analyzeStatement(stmt);
       const decision = safeModeGate.decide(analysis);
@@ -640,18 +645,26 @@ export function useQueryExecution({
         worstAction = "confirm";
         worstReason = decision.reason;
       }
-      // INFO heuristic: only `select` / `info` (EXPLAIN / SHOW / DESCRIBE)
-      // skip the WARN dialog. Everything else under `severity: "safe"` is
-      // a write surface that benefits from a preview. `severity: "danger"`
-      // statements that the gate allowed (e.g. DROP TABLE on dev + warn /
-      // off — env-gated unguarded) bypass WARN entirely so ADR 0022 's
-      // "destructive on dev + warn = unguarded" stays intact.
-      if (
-        decision.action === "allow" &&
-        analysis.severity === "safe" &&
-        !isInfoStatement(analysis)
-      ) {
+      // Sprint 254 — `severity: "warn"` 직접 비교로 단순화. INFO (`severity:
+      // "info"`) 는 dialog skip; WARN (`severity: "warn"`) 은 dialog mount;
+      // STOP (`severity: "danger"`) 이 gate 통과 (e.g. DROP TABLE on dev +
+      // warn — env-gated unguarded under ADR 0022) 한 경우는 worst 아래
+      // 분기 (`if (worstAction === "confirm")`) 가 아닌 본 분기에서 WARN
+      // 으로 끌어올리지 않는다 — 즉 destructive-on-dev-warn unguarded 의
+      // direct IPC 발동 invariant 보존.
+      if (decision.action === "allow" && analysis.severity === "warn") {
         hasWarn = true;
+        // Sprint 254 — bounded UPDATE/DELETE 만 escalation 대상. INSERT /
+        // CREATE / ALTER additive 는 dry-run 비용 대비 ROI 낮음.
+        if (analysis.kind === "update" || analysis.kind === "delete") {
+          escalationCandidates.push({
+            stmt,
+            reason:
+              analysis.kind === "update"
+                ? "UPDATE affects 100+ rows (dry-run threshold)"
+                : "DELETE affects 100+ rows (dry-run threshold)",
+          });
+        }
       }
     }
     if (worstAction === "block") {
@@ -673,6 +686,24 @@ export function useQueryExecution({
       // is forbidden by AC-231-02).
       setPendingRdbConfirm({ statements, reason: worstReason });
       return;
+    }
+    // Sprint 254 — WARN-tier bounded UPDATE/DELETE escalation. Probe each
+    // candidate via dry-run; if any reports rowCount >= 100, escalate the
+    // whole batch to STOP (`pendingRdbConfirm`). Timeout / IPC unsupported
+    // → STOP fallback (conservative). Probes run sequentially because
+    // each shares the connection's transaction surface.
+    if (hasWarn && escalationCandidates.length > 0) {
+      for (const candidate of escalationCandidates) {
+        const escalated = await escalateWarnIfLargeImpact(
+          tab.connectionId,
+          candidate.stmt,
+          "warn",
+        );
+        if (escalated === "danger") {
+          setPendingRdbConfirm({ statements, reason: candidate.reason });
+          return;
+        }
+      }
     }
     // Sprint 255 — WARN tier: every statement gate-allowed and at least
     // one is a non-INFO write. Mount SqlPreviewDialog for the whole batch

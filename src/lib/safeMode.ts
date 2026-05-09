@@ -57,11 +57,17 @@ export function decideSafeModeAction(
   analysis: StatementAnalysis,
 ): SafeModeDecision {
   const isProduction = environment === "production";
+  // Sprint 254 (2026-05-09) — `severity` union split to 3-tier:
+  // `info` (read / metadata) / `warn` (bounded write surface) / `danger`
+  // (STOP). The matrix *result* is regression-zero — INFO and WARN both
+  // pass through here (`action: "allow"`); the WARN-tier raw editor
+  // SqlPreviewDialog mount is QueryTab-level (Sprint 255) so the
+  // decision function only differentiates STOP. ADR 0023 grill Q2-(a).
   const isDanger = analysis.severity === "danger";
 
-  // Read / safe-write are never gated. The analyzer marks INSERT, UPDATE
-  // WHERE, DELETE WHERE, CREATE, ALTER (additive), Mongo *-many, and
-  // SELECT / read pipelines as `safe`. Pass-through everywhere.
+  // Read / WARN write are never gated at the `decideSafeModeAction` layer.
+  // Pass-through everywhere — the QueryTab's `pendingRdbWarn` /
+  // `pendingMongoWarn` (Sprint 255) catches WARN at a higher surface.
   if (!isDanger) return { action: "allow" };
 
   // From here on: destructive (`severity === "danger"`).
