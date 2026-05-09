@@ -2228,7 +2228,16 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     fireEvent.click(within(panel).getByLabelText("Unique column: user_id"));
 
     // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
-    await waitFor(() => expect(mockAddConstraint).toHaveBeenCalledTimes(3));
+    // Intermediate debounce flushes (FK+CHECK, then FK+CHECK+UNIQUE) fire during real-timer
+    // awaits, so exact call count is non-deterministic. Assert on content instead.
+    await waitFor(() =>
+      expect(mockAddConstraint).toHaveBeenCalledWith(
+        expect.objectContaining({
+          constraint_name: "uq_orders_user",
+          preview_only: true,
+        }),
+      ),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
 
