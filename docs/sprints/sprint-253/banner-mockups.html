@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Production/Staging Warning Banner — 4 Variants</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --fg: #0f172a;
+        --muted: #94a3b8;
+        --border: #e2e8f0;
+        --secondary: #f8fafc;
+        --secondary-fg: #475569;
+        --primary: #4f46e5;
+        --success: #16a34a;
+        --success-fg: #ffffff;
+        --destructive: #ef4444;
+        --warning: #f97316;
+        --syntax-keyword: #7c3aed;
+        --syntax-string: #16a34a;
+        --syntax-number: #dc2626;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f1f5f9;
+        color: var(--fg);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial,
+          sans-serif;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 4px 0;
+      }
+      .legend {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 24px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(420px, 1fr));
+        gap: 24px;
+        max-width: 1100px;
+      }
+      .variant {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .variant-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--fg);
+        margin: 0;
+      }
+      .variant-desc {
+        font-size: 11px;
+        color: var(--muted);
+        margin: 0 0 4px 0;
+        line-height: 1.4;
+      }
+      /* Dialog shell — mimics PreviewDialog / DataGrid 인라인 preview */
+      .dialog {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -4px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .dialog-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .dialog-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--fg);
+        margin: 0;
+      }
+      .dialog-x {
+        background: transparent;
+        border: 0;
+        padding: 4px;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .dialog-body {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .dialog-footer {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+      }
+      .btn {
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .btn-cancel {
+        background: var(--secondary);
+        color: var(--secondary-fg);
+        border-color: var(--border);
+      }
+      .btn-execute {
+        background: var(--success);
+        color: var(--success-fg);
+      }
+      /* SQL preview body */
+      .sql {
+        background: var(--secondary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .kw {
+        color: var(--syntax-keyword);
+        font-weight: 600;
+      }
+      .str {
+        color: var(--syntax-string);
+      }
+      .num {
+        color: var(--syntax-number);
+      }
+      /* Variant A: in-body top banner */
+      .banner-prod {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 4px;
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--destructive);
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .banner-staging {
+        background: rgba(249, 115, 22, 0.1);
+        border: 1px solid rgba(249, 115, 22, 0.4);
+        border-radius: 4px;
+        padding: 10px 12px;
+        font-size: 12px;
+        color: var(--warning);
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .banner-icon {
+        flex-shrink: 0;
+        font-weight: 700;
+      }
+      .banner-text {
+        flex: 1;
+        line-height: 1.4;
+      }
+      .banner-text-strong {
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+      /* Variant B: header title color/badge */
+      .header-prod-title {
+        color: var(--destructive);
+        font-weight: 700;
+      }
+      .header-prod-sub {
+        font-size: 11px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .badge-prod {
+        background: var(--destructive);
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-left: 8px;
+      }
+      .badge-staging {
+        background: var(--warning);
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-left: 8px;
+      }
+      /* Variant D: outer border tone */
+      .dialog.tone-prod {
+        border-color: var(--destructive);
+        border-width: 2px;
+      }
+      .dialog.tone-staging {
+        border-color: var(--warning);
+        border-width: 2px;
+      }
+      /* Variant C: footer banner */
+      .footer-banner-prod {
+        background: rgba(239, 68, 68, 0.08);
+        color: var(--destructive);
+        font-size: 11px;
+        padding: 8px 16px;
+        border-top: 1px solid rgba(239, 68, 68, 0.3);
+        text-align: center;
+      }
+      .footer-banner-staging {
+        background: rgba(249, 115, 22, 0.08);
+        color: var(--warning);
+        font-size: 11px;
+        padding: 8px 16px;
+        border-top: 1px solid rgba(249, 115, 22, 0.3);
+        text-align: center;
+      }
+      .section-divider {
+        grid-column: 1 / -1;
+        height: 1px;
+        background: var(--border);
+        margin: 8px 0;
+      }
+      .env-pair {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .baseline-note {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin-bottom: 24px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #78350f;
+        max-width: 1100px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Production/Staging Warning Banner — 4 Variants</h1>
+    <p class="legend">
+      현재 baseline (4px 색띠) → 텍스트가 있는 색띤 메시지로 교체. 5 환경 →
+      production(빨강) / staging(주황) / 나머지 3개(무표시) 로 정리. 아래 4개
+      variant 를 비교해서 위치/스타일 결정.
+    </p>
+
+    <div class="baseline-note">
+      <strong>Baseline (제거 대상):</strong> 현재는 dialog 본문 최상단에 4px
+      높이의 색띠 1줄만 (production = #ef4444). 텍스트 없음.
+    </div>
+
+    <div class="grid">
+      <!-- ========== A: in-body top banner ========== -->
+      <div class="variant">
+        <p class="variant-title">A) Body 최상단 배너 (추천)</p>
+        <p class="variant-desc">
+          PreviewDialog 의 `error` / `commitError` 와 같은 패턴 — body 안에
+          배너로. Execute 버튼 한 번 클릭으로 끝. 색띠 제거.
+        </p>
+        <div class="env-pair">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h3 class="dialog-title">SQL Preview</h3>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <div class="banner-prod">
+                <span class="banner-icon">⚠</span>
+                <div class="banner-text">
+                  <div class="banner-text-strong">Production environment</div>
+                  This will modify live data on the production database.
+                </div>
+              </div>
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+          <div class="dialog">
+            <div class="dialog-header">
+              <h3 class="dialog-title">SQL Preview</h3>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <div class="banner-staging">
+                <span class="banner-icon">⚠</span>
+                <div class="banner-text">
+                  <div class="banner-text-strong">Staging environment</div>
+                  This will modify shared staging data.
+                </div>
+              </div>
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== B: header title transformation ========== -->
+      <div class="variant">
+        <p class="variant-title">B) Header 타이틀 색조</p>
+        <p class="variant-desc">
+          ConfirmDestructiveDialog 와 같은 패턴 — 타이틀 자체를 환경 색으로
+          교체. 텍스트 메시지는 sub-caption. 가장 헤드라인적.
+        </p>
+        <div class="env-pair">
+          <div class="dialog">
+            <div class="dialog-header">
+              <div>
+                <h3 class="dialog-title header-prod-title">
+                  PRODUCTION DATABASE
+                </h3>
+                <div class="header-prod-sub">SQL Preview · live data</div>
+              </div>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+          <div class="dialog">
+            <div class="dialog-header">
+              <div>
+                <h3
+                  class="dialog-title"
+                  style="color: var(--warning); font-weight: 700"
+                >
+                  STAGING DATABASE
+                </h3>
+                <div class="header-prod-sub">SQL Preview · shared data</div>
+              </div>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <!-- ========== C: footer banner ========== -->
+      <div class="variant">
+        <p class="variant-title">C) Footer 배너 (Execute 바로 위)</p>
+        <p class="variant-desc">
+          결정 순간에 가장 가깝게 노출. 사용자 발화 "수정하겠냐" 의 직관과
+          정렬. SQL 본문은 깔끔하게.
+        </p>
+        <div class="env-pair">
+          <div class="dialog">
+            <div class="dialog-header">
+              <h3 class="dialog-title">SQL Preview</h3>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="footer-banner-prod">
+              ⚠ <strong>Production</strong> — this will modify live data
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+          <div class="dialog">
+            <div class="dialog-header">
+              <h3 class="dialog-title">SQL Preview</h3>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="footer-banner-staging">
+              ⚠ <strong>Staging</strong> — this will modify shared staging data
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== D: outer tone + small badge ========== -->
+      <div class="variant">
+        <p class="variant-title">D) 외곽 tone + Header 배지</p>
+        <p class="variant-desc">
+          Dialog 외곽 border 자체를 색띤 2px 로 교체 + 타이틀 옆에 작은 PROD
+          배지. 본문은 깨끗. 가벼우면서도 시각 구분.
+        </p>
+        <div class="env-pair">
+          <div class="dialog tone-prod">
+            <div class="dialog-header">
+              <h3 class="dialog-title">
+                SQL Preview <span class="badge-prod">PROD</span>
+              </h3>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+          <div class="dialog tone-staging">
+            <div class="dialog-header">
+              <h3 class="dialog-title">
+                SQL Preview <span class="badge-staging">STAGING</span>
+              </h3>
+              <button class="dialog-x">✕</button>
+            </div>
+            <div class="dialog-body">
+              <pre class="sql"><span class="kw">UPDATE</span> public.articles <span class="kw">SET</span> title = <span class="str">'Getting Started 2'</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;</pre>
+            </div>
+            <div class="dialog-footer">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-execute">Execute</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
