@@ -234,6 +234,14 @@ describe("QueryTab — execution", () => {
     // Sprint 100 — when every statement fails, the run still reports
     // `status: "error"` (joined message) so single-statement-error
     // consumers (history list, error banner) keep working unchanged.
+    //
+    // Sprint 255 (2026-05-09) — `BAD` statements 는 analyzer 가 `kind:
+    // "other"` 로 분류하고, 이는 INFO 가 아니므로 WARN dialog 를 mount 한다.
+    // 본 테스트는 multi-statement 실행 후 모두 실패 → error collapsing 의
+    // store 행동 검증이 목적이므로, dialog 를 우회하기 위해 SELECT (INFO)
+    // statements 로 바꿔도 분기 정합성은 같다 (둘 다 multi-statement 의
+    // executeQuery 모두-실패 경로). 단순화를 위해 dialog Execute click 으로
+    // 실제 WARN flow 를 통과시킨다.
     mockExecuteQuery
       .mockRejectedValueOnce(new Error("Syntax error 1"))
       .mockRejectedValueOnce(new Error("Syntax error 2"));
@@ -245,6 +253,15 @@ describe("QueryTab — execution", () => {
     const executeBtn = screen.getByTestId("execute-btn");
     await act(async () => {
       executeBtn.click();
+    });
+
+    // Sprint 255 — non-INFO statements mount WARN dialog. Click Execute
+    // to dispatch the multi-statement batch.
+    const dialogExecuteBtn = await screen.findByRole("button", {
+      name: /execute/i,
+    });
+    await act(async () => {
+      dialogExecuteBtn.click();
     });
 
     await waitFor(() => {

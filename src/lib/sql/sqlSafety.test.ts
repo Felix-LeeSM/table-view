@@ -1,7 +1,7 @@
 // AC-185-01 — sqlSafety analyzer 단위 테스트. 12 cases per Sprint 185 contract.
 // date 2026-05-01.
 import { describe, it, expect } from "vitest";
-import { analyzeStatement, isDangerous } from "./sqlSafety";
+import { analyzeStatement, isDangerous, isInfoStatement } from "./sqlSafety";
 
 describe("sqlSafety.analyzeStatement", () => {
   it("[AC-185-01a] DELETE without WHERE → danger", () => {
@@ -156,5 +156,103 @@ describe("sqlSafety.analyzeStatement", () => {
     expect(a.severity).toBe("safe");
     expect(a.reasons).toEqual([]);
     expect(isDangerous(a)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 255 (2026-05-09) — `isInfoStatement` 휴리스틱은 raw editor 의 WARN
+  // dialog mount 직전에 INFO (read-only / metadata) statement 을 식별해
+  // dialog skip → 직접 IPC 로 우회하는 분기를 위해 신설. INFO corpus =
+  // SELECT / WITH …SELECT / EXPLAIN / SHOW / DESCRIBE / DESC. 그 외
+  // (INSERT/UPDATE/DELETE/CREATE/ALTER/DROP/TRUNCATE) 은 INFO 가 아님 — WARN
+  // 또는 STOP tier 로 흘러야 한다. ADR 0023 grill Q3-(b) "모든 환경 + 모든
+  // write 표면" 의 핵심 보호.
+  // -------------------------------------------------------------------------
+
+  describe("isInfoStatement (Sprint 255)", () => {
+    it("[AC-255-01a] SELECT → INFO", () => {
+      expect(isInfoStatement(analyzeStatement("SELECT * FROM users"))).toBe(
+        true,
+      );
+    });
+
+    it("[AC-255-01b] WITH …SELECT (no DML CTE) → INFO", () => {
+      expect(
+        isInfoStatement(
+          analyzeStatement("WITH t AS (SELECT 1 AS n) SELECT n FROM t"),
+        ),
+      ).toBe(true);
+    });
+
+    it("[AC-255-01c] EXPLAIN → INFO", () => {
+      expect(
+        isInfoStatement(analyzeStatement("EXPLAIN SELECT * FROM users")),
+      ).toBe(true);
+    });
+
+    it("[AC-255-01d] EXPLAIN ANALYZE → INFO", () => {
+      expect(
+        isInfoStatement(
+          analyzeStatement("EXPLAIN ANALYZE SELECT * FROM users"),
+        ),
+      ).toBe(true);
+    });
+
+    it("[AC-255-01e] SHOW → INFO", () => {
+      expect(isInfoStatement(analyzeStatement("SHOW TABLES"))).toBe(true);
+    });
+
+    it("[AC-255-01f] DESCRIBE → INFO", () => {
+      expect(isInfoStatement(analyzeStatement("DESCRIBE users"))).toBe(true);
+    });
+
+    it("[AC-255-01g] DESC (MySQL short form) → INFO", () => {
+      expect(isInfoStatement(analyzeStatement("DESC users"))).toBe(true);
+    });
+
+    it("[AC-255-01h] case-insensitive (lowercase explain) → INFO", () => {
+      expect(isInfoStatement(analyzeStatement("explain select 1"))).toBe(true);
+    });
+
+    it("[AC-255-01i] INSERT → NOT INFO (WARN candidate)", () => {
+      expect(
+        isInfoStatement(analyzeStatement("INSERT INTO users (id) VALUES (1)")),
+      ).toBe(false);
+    });
+
+    it("[AC-255-01j] UPDATE WHERE → NOT INFO (WARN candidate)", () => {
+      expect(
+        isInfoStatement(
+          analyzeStatement("UPDATE users SET name = 'a' WHERE id = 1"),
+        ),
+      ).toBe(false);
+    });
+
+    it("[AC-255-01k] DELETE WHERE → NOT INFO (WARN candidate)", () => {
+      expect(
+        isInfoStatement(analyzeStatement("DELETE FROM users WHERE id = 1")),
+      ).toBe(false);
+    });
+
+    it("[AC-255-01l] CREATE TABLE → NOT INFO (WARN candidate)", () => {
+      expect(
+        isInfoStatement(analyzeStatement("CREATE TABLE foo (id int)")),
+      ).toBe(false);
+    });
+
+    it("[AC-255-01m] ALTER TABLE … ADD COLUMN (additive) → NOT INFO (WARN candidate)", () => {
+      expect(
+        isInfoStatement(
+          analyzeStatement("ALTER TABLE users ADD COLUMN nickname text"),
+        ),
+      ).toBe(false);
+    });
+
+    it("[AC-255-01n] DROP TABLE → NOT INFO (STOP candidate, severity danger)", () => {
+      expect(isInfoStatement(analyzeStatement("DROP TABLE users"))).toBe(false);
+    });
+
+    it("[AC-255-01o] empty input → NOT INFO (defensive)", () => {
+      expect(isInfoStatement(analyzeStatement(""))).toBe(false);
+    });
   });
 });

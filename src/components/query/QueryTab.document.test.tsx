@@ -431,6 +431,16 @@ describe("QueryTab — document", () => {
       executeBtn.click();
     });
 
+    // Sprint 255 (2026-05-09) — `\c admin` analyzer 가 `kind: "other"` 로
+    // 분류되어 WARN dialog 가 mount 된다. dialog 의 Execute 버튼 클릭으로
+    // 기존 IPC 경로 진입.
+    const dialogExecuteBtn = await screen.findByRole("button", {
+      name: /execute/i,
+    });
+    await act(async () => {
+      dialogExecuteBtn.click();
+    });
+
     // Wait for verifyActiveDb to resolve (it's awaited inside the
     // applyDbMutationHint helper which the QueryTab fires post-execute).
     await waitFor(() => {
@@ -475,6 +485,14 @@ describe("QueryTab — document", () => {
     const executeBtn = screen.getByTestId("execute-btn");
     await act(async () => {
       executeBtn.click();
+    });
+
+    // Sprint 255 (2026-05-09) — `\c admin` 은 WARN dialog mount 후 Execute.
+    const dialogExecuteBtn = await screen.findByRole("button", {
+      name: /execute/i,
+    });
+    await act(async () => {
+      dialogExecuteBtn.click();
     });
 
     // Verify ran and the active-db reverted to the backend's truth.

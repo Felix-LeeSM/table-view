@@ -9,8 +9,11 @@ import {
   aggregateDocuments,
 } from "@lib/tauri";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
-import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
-import { analyzeStatement } from "@lib/sql/sqlSafety";
+import {
+  analyzeMongoPipeline,
+  isInfoMongoOperation,
+} from "@lib/mongo/mongoSafety";
+import { analyzeStatement, isInfoStatement } from "@lib/sql/sqlSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
 import type { QueryTab } from "@stores/tabStore";
@@ -83,6 +86,35 @@ export interface QueryExecution {
   } | null;
   confirmRdbDangerous: () => Promise<void>;
   cancelRdbDangerous: () => void;
+  /**
+   * Sprint 255 — raw RDB WARN-tier preview payload. ADR 0023 grill Q3-(b)
+   * "모든 환경 + 모든 write 표면" 의 핵심 보호. STOP-tier ConfirmDestructiveDialog
+   * 와 별개로, `severity: "safe"` 인 non-INFO statement (INSERT / UPDATE WHERE
+   * / DELETE WHERE / CREATE / ALTER additive) 직전에 SqlPreviewDialog 를
+   * mount 하기 위한 pending state. INFO (SELECT / WITH …SELECT /
+   * EXPLAIN / SHOW / DESCRIBE) 는 휴리스틱 (`isInfoStatement`) 로 식별 후 dialog
+   * skip → 직접 IPC. STOP (`severity: "danger"`) 는 기존
+   * `pendingRdbConfirm` 으로 routing — 두 dialog 동시 mount 금지 (STOP > WARN
+   * 우선).
+   */
+  pendingRdbWarn: {
+    statements: string[];
+  } | null;
+  confirmRdbWarn: () => Promise<void>;
+  cancelRdbWarn: () => void;
+  /**
+   * Sprint 255 — raw Mongo aggregate WARN-tier preview payload. Mirrors
+   * `pendingRdbWarn` for the document paradigm. INFO (find / read-only
+   * aggregate pipeline) 은 `isInfoMongoOperation` 로 dialog skip; STOP
+   * ($out / $merge) 은 기존 `pendingMongoConfirm`. `severity: "safe"` 이지만
+   * non-INFO 인 aggregate (현재 분류상 거의 없음 — 보존을 위한 발판이며
+   * Sprint 254 의 3-tier split 후 확장 예정) 만 본 dialog 발동.
+   */
+  pendingMongoWarn: {
+    pipeline: Record<string, unknown>[];
+  } | null;
+  confirmMongoWarn: () => Promise<void>;
+  cancelMongoWarn: () => void;
 }
 
 export function useQueryExecution({
@@ -152,6 +184,20 @@ export function useQueryExecution({
   const [pendingRdbConfirm, setPendingRdbConfirm] = useState<{
     statements: string[];
     reason: string;
+  } | null>(null);
+  // Sprint 255 — raw RDB / Mongo WARN-tier pending state. `null` until a
+  // non-INFO safe statement (INSERT / UPDATE WHERE / CREATE / ALTER additive
+  // for RDB; non-read-only aggregate for Mongo) is detected. Distinct from
+  // the STOP-tier `pendingRdbConfirm` / `pendingMongoConfirm` so the JSX
+  // can mount SqlPreviewDialog (RDB) / MqlPreviewModal (Mongo) without
+  // colliding with ConfirmDestructiveDialog. STOP > WARN priority is
+  // enforced inside `handleExecute`: if any statement is danger, only
+  // `pendingRdbConfirm` is set (WARN state untouched).
+  const [pendingRdbWarn, setPendingRdbWarn] = useState<{
+    statements: string[];
+  } | null>(null);
+  const [pendingMongoWarn, setPendingMongoWarn] = useState<{
+    pipeline: Record<string, unknown>[];
   } | null>(null);
 
   // Aggregate dispatch + book-keeping, extracted so the warn-confirm
@@ -365,6 +411,39 @@ export function useQueryExecution({
     setPendingRdbConfirm(null);
   }, []);
 
+  // Sprint 255 — WARN-tier confirm callback (RDB). Re-enters the same
+  // single / multi helper used by `confirmRdbDangerous`, so the user's
+  // input is dispatched verbatim after they review the SqlPreviewDialog.
+  // Multi-statement reuses `joinedSql` for history bookkeeping.
+  const confirmRdbWarn = useCallback(async () => {
+    const pending = pendingRdbWarn;
+    if (!pending) return;
+    setPendingRdbWarn(null);
+    if (pending.statements.length === 1) {
+      await runRdbSingleNow(pending.statements[0]!);
+      return;
+    }
+    await runRdbBatchNow(pending.statements, pending.statements.join(";\n"));
+  }, [pendingRdbWarn, runRdbSingleNow, runRdbBatchNow]);
+
+  const cancelRdbWarn = useCallback(() => {
+    setPendingRdbWarn(null);
+  }, []);
+
+  // Sprint 255 — WARN-tier confirm callback (Mongo aggregate). Mirrors
+  // `confirmMongoDangerous` but reuses the WARN pending pipeline. Mongo
+  // find path never triggers WARN (always INFO).
+  const confirmMongoWarn = useCallback(async () => {
+    const pending = pendingMongoWarn;
+    if (!pending) return;
+    setPendingMongoWarn(null);
+    await runMongoAggregateNow(pending.pipeline);
+  }, [pendingMongoWarn, runMongoAggregateNow]);
+
+  const cancelMongoWarn = useCallback(() => {
+    setPendingMongoWarn(null);
+  }, []);
+
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
     if (!sql) return;
@@ -420,7 +499,8 @@ export function useQueryExecution({
           });
           return;
         }
-        const decision = safeModeGate.decide(analyzeMongoPipeline(parsed));
+        const analysis = analyzeMongoPipeline(parsed);
+        const decision = safeModeGate.decide(analysis);
         if (decision.action === "block") {
           updateQueryState(tab.id, {
             status: "error",
@@ -428,11 +508,26 @@ export function useQueryExecution({
           });
           return;
         }
+        // STOP tier — destructive aggregate ($out / $merge) always routes
+        // to the existing ConfirmDestructiveDialog (Sprint 231).
         if (decision.action === "confirm") {
           setPendingMongoConfirm({
             pipeline: parsed,
             reason: decision.reason,
           });
+          return;
+        }
+        // Sprint 255 — gate said `allow`. Apply INFO heuristic: read-only
+        // pipeline → direct IPC; otherwise WARN dialog (MqlPreviewModal).
+        // Only severity:"safe" non-INFO triggers WARN; severity:"danger"
+        // pipelines that the gate allowed (e.g. $out on dev + warn —
+        // env-gated unguarded under ADR 0022) bypass WARN entirely so the
+        // existing destructive-on-dev-warn unguarded behavior stays intact.
+        // Under the current 2-tier severity classifier, `mongo-other` +
+        // safe is the only safe-tier path here, so WARN coverage is
+        // currently a thin slice. Sprint 254's 3-tier split will widen it.
+        if (analysis.severity === "safe" && !isInfoMongoOperation(analysis)) {
+          setPendingMongoWarn({ pipeline: parsed });
           return;
         }
         await runMongoAggregateNow(parsed);
@@ -522,10 +617,20 @@ export function useQueryExecution({
     // statement's reason so the dialog / error message stays concise.
     // The gate runs BEFORE `updateQueryState({ status: "running" })`, so
     // a block / confirm decision never strands the tab in `running`.
+    //
+    // Sprint 255 (ADR 0023 grill Q3-(b)) — extended to track WARN tier
+    // via `isInfoStatement`. Final priority across the batch is
+    // `STOP (block / confirm) > WARN (non-INFO safe) > INFO (read-only)`.
+    // STOP routes to `pendingRdbConfirm` (existing ConfirmDestructiveDialog);
+    // WARN routes to the new `pendingRdbWarn` (SqlPreviewDialog mount);
+    // INFO falls through to direct IPC. STOP and WARN are mutually
+    // exclusive — STOP wins, WARN state stays null.
     let worstAction: "allow" | "confirm" | "block" = "allow";
     let worstReason = "";
+    let hasWarn = false;
     for (const stmt of statements) {
-      const decision = safeModeGate.decide(analyzeStatement(stmt));
+      const analysis = analyzeStatement(stmt);
+      const decision = safeModeGate.decide(analysis);
       if (decision.action === "block") {
         worstAction = "block";
         worstReason = decision.reason;
@@ -534,6 +639,19 @@ export function useQueryExecution({
       if (decision.action === "confirm" && worstAction === "allow") {
         worstAction = "confirm";
         worstReason = decision.reason;
+      }
+      // INFO heuristic: only `select` / `info` (EXPLAIN / SHOW / DESCRIBE)
+      // skip the WARN dialog. Everything else under `severity: "safe"` is
+      // a write surface that benefits from a preview. `severity: "danger"`
+      // statements that the gate allowed (e.g. DROP TABLE on dev + warn /
+      // off — env-gated unguarded) bypass WARN entirely so ADR 0022 's
+      // "destructive on dev + warn = unguarded" stays intact.
+      if (
+        decision.action === "allow" &&
+        analysis.severity === "safe" &&
+        !isInfoStatement(analysis)
+      ) {
+        hasWarn = true;
       }
     }
     if (worstAction === "block") {
@@ -549,10 +667,19 @@ export function useQueryExecution({
       return;
     }
     if (worstAction === "confirm") {
+      // STOP wins over WARN — set only the destructive-confirm state.
       // One dialog per batch. The user types the reason verbatim once
       // and the batch runs as a unit (per-statement individual approval
       // is forbidden by AC-231-02).
       setPendingRdbConfirm({ statements, reason: worstReason });
+      return;
+    }
+    // Sprint 255 — WARN tier: every statement gate-allowed and at least
+    // one is a non-INFO write. Mount SqlPreviewDialog for the whole batch
+    // (single-line INFO statements are joined into the preview alongside
+    // the WARN ones so the user reviews exactly what executes).
+    if (hasWarn) {
+      setPendingRdbWarn({ statements });
       return;
     }
 
@@ -677,5 +804,11 @@ export function useQueryExecution({
     pendingRdbConfirm,
     confirmRdbDangerous,
     cancelRdbDangerous,
+    pendingRdbWarn,
+    confirmRdbWarn,
+    cancelRdbWarn,
+    pendingMongoWarn,
+    confirmMongoWarn,
+    cancelMongoWarn,
   };
 }

@@ -5,7 +5,11 @@
 // violations (first wins), and malformed input shapes that the JSON parser
 // in QueryTab might let through. date 2026-05-01.
 import { describe, it, expect } from "vitest";
-import { analyzeMongoOperation, analyzeMongoPipeline } from "./mongoSafety";
+import {
+  analyzeMongoOperation,
+  analyzeMongoPipeline,
+  isInfoMongoOperation,
+} from "./mongoSafety";
 
 describe("analyzeMongoPipeline", () => {
   it("[AC-188-01a] empty pipeline → safe", () => {
@@ -131,5 +135,69 @@ describe("analyzeMongoOperation", () => {
     });
     expect(a.severity).toBe("safe");
     expect(a.kind).toBe("mongo-update-many");
+  });
+});
+
+// Sprint 255 (2026-05-09) — `isInfoMongoOperation` 휴리스틱은 raw editor 의
+// WARN dialog mount 직전에 read-only Mongo aggregate (find / pure-read
+// pipeline) 을 식별해 dialog skip 분기를 위해 신설. INFO = `analyzeMongoPipeline`
+// 가 `mongo-other` + safe 로 분류한 read-only pipeline. WARN candidate =
+// 그 외의 safe (예: 미래 *-many 구분이 추가될 경우). STOP candidate =
+// danger (`mongo-out` / `mongo-merge` / `mongo-drop` / `*-all`).
+describe("isInfoMongoOperation (Sprint 255)", () => {
+  it("[AC-255-02a] empty pipeline → INFO (no stages = read-only)", () => {
+    expect(isInfoMongoOperation(analyzeMongoPipeline([]))).toBe(true);
+  });
+
+  it("[AC-255-02b] read-only pipeline ($match / $sort / $project) → INFO", () => {
+    const a = analyzeMongoPipeline([
+      { $match: { active: true } },
+      { $sort: { name: 1 } },
+      { $project: { _id: 0, name: 1 } },
+    ]);
+    expect(isInfoMongoOperation(a)).toBe(true);
+  });
+
+  it("[AC-255-02c] $group / $addFields / $unset (in-pipeline transformations) → INFO", () => {
+    const a = analyzeMongoPipeline([
+      { $addFields: { ts: 1 } },
+      { $unset: ["temp"] },
+      { $group: { _id: "$category", n: { $sum: 1 } } },
+    ]);
+    expect(isInfoMongoOperation(a)).toBe(true);
+  });
+
+  it("[AC-255-02d] $out → NOT INFO (danger / mongo-out)", () => {
+    const a = analyzeMongoPipeline([{ $out: "snapshot" }]);
+    expect(isInfoMongoOperation(a)).toBe(false);
+  });
+
+  it("[AC-255-02e] $merge → NOT INFO (danger / mongo-merge)", () => {
+    const a = analyzeMongoPipeline([
+      { $merge: { into: "target", whenMatched: "replace" } },
+    ]);
+    expect(isInfoMongoOperation(a)).toBe(false);
+  });
+
+  it("[AC-255-02f] dropCollection (operation, not pipeline) → NOT INFO", () => {
+    const a = analyzeMongoOperation({ kind: "dropCollection" });
+    expect(isInfoMongoOperation(a)).toBe(false);
+  });
+
+  it("[AC-255-02g] deleteMany WHERE (non-empty filter) → NOT INFO (WARN candidate)", () => {
+    const a = analyzeMongoOperation({
+      kind: "deleteMany",
+      filter: { _id: "abc" },
+    });
+    expect(isInfoMongoOperation(a)).toBe(false);
+  });
+
+  it("[AC-255-02h] updateMany WHERE (non-empty filter) → NOT INFO (WARN candidate)", () => {
+    const a = analyzeMongoOperation({
+      kind: "updateMany",
+      filter: { archived: false },
+      patch: { reviewed: true },
+    });
+    expect(isInfoMongoOperation(a)).toBe(false);
   });
 });

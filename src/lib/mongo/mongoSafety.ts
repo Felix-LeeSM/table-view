@@ -108,3 +108,22 @@ function isEmptyFilter(filter: Record<string, unknown>): boolean {
   // operation analyzer 는 caller 가 Record 보장 후 호출하므로 key 수만 본다.
   return Object.keys(filter).length === 0;
 }
+
+/**
+ * Sprint 255 — Mongo paradigm 의 INFO tier 식별 휴리스틱. raw MQL editor 의
+ * WARN dialog mount 분기에서 호출되어 read-only aggregate pipeline (find /
+ * pure-read pipeline: $match / $sort / $project / $group / $addFields /
+ * $unset 만으로 구성) 만 dialog skip → 직접 IPC 발동.
+ *
+ * INFO = `severity: "safe"` && `kind === "mongo-other"` — `analyzeMongoPipeline`
+ * 가 read-only pipeline 만 `mongo-other` + safe 로 분류하기 때문.
+ * `analyzeMongoOperation` 으로부터 온 `mongo-delete-many` / `mongo-update-many`
+ * (non-empty filter) 는 safe 지만 INFO 가 아님 → WARN 후보. `*-all` /
+ * `mongo-out` / `mongo-merge` / `mongo-drop` 은 danger 이므로 STOP.
+ *
+ * Mongo find path 는 `useQueryExecution` 에서 항상 INFO 로 처리 (이 helper
+ * 거치지 않음 — find 는 pipeline analyzer 가 적용되지 않는 경로).
+ */
+export function isInfoMongoOperation(analysis: StatementAnalysis): boolean {
+  return analysis.severity === "safe" && analysis.kind === "mongo-other";
+}

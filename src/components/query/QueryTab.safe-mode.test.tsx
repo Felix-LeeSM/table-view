@@ -221,7 +221,14 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
   // Was [AC-244-11..14] under Sprint 244 (block on safe DML/DDL);
   // reverted in Sprint 245 — safe writes flow through on production
   // regardless of mode, dialog only opens on destructive statements.
-  it("[AC-245-C4] production + strict + INSERT INTO → executeQuery called once (Sprint 244 block reverted)", async () => {
+  //
+  // Sprint 255 (2026-05-09) — ADR 0023 grill Q3-(b) "모든 환경 + 모든 write
+  // 표면" gap fill: raw editor 의 INSERT / UPDATE WHERE / CREATE / ALTER
+  // additive (= severity:"safe" 중 non-INFO) 가 SqlPreviewDialog (WARN tier)
+  // 를 mount 한다. 기존 tests 는 "preview 없이 직접 IPC" 를 기대했지만, 본
+  // sprint 부터는 dialog mount → Execute 클릭 → IPC 1회 호출 로 변경.
+  // ADR 0022 의 destructive-only ConfirmDestructiveDialog 동작은 회귀 0.
+  it("[AC-245-C4] production + strict + INSERT INTO → SqlPreviewDialog mount → Execute click → executeQuery 1회 호출 (Sprint 255)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
@@ -231,17 +238,22 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     await act(async () => {
       screen.getByTestId("execute-btn").click();
     });
+    // Destructive confirm dialog should NOT have mounted (this is WARN, not STOP).
+    expect(
+      screen.queryByTestId("confirm-destructive-confirm"),
+    ).not.toBeInTheDocument();
+    // SqlPreviewDialog mounted; click Execute.
+    const executeBtn = await screen.findByRole("button", { name: /execute/i });
+    await act(async () => {
+      executeBtn.click();
+    });
 
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
-    // No confirm dialog should have mounted.
-    expect(
-      screen.queryByTestId("confirm-destructive-confirm"),
-    ).not.toBeInTheDocument();
   });
 
-  it("[AC-245-C4-2] production + strict + UPDATE WHERE pk → executeQuery called once", async () => {
+  it("[AC-245-C4-2] production + strict + UPDATE WHERE pk → SqlPreviewDialog mount → Execute → executeQuery 1회 호출 (Sprint 255)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
@@ -251,13 +263,16 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     await act(async () => {
       screen.getByTestId("execute-btn").click();
     });
-
+    const executeBtn = await screen.findByRole("button", { name: /execute/i });
+    await act(async () => {
+      executeBtn.click();
+    });
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
   });
 
-  it("[AC-245-C4-3] production + strict + CREATE TABLE → executeQuery called once (additive DDL passes)", async () => {
+  it("[AC-245-C4-3] production + strict + CREATE TABLE → SqlPreviewDialog mount → Execute → executeQuery 1회 호출 (Sprint 255)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     seedConnection("production");
     useSafeModeStore.setState({ mode: "strict" });
@@ -267,7 +282,10 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     await act(async () => {
       screen.getByTestId("execute-btn").click();
     });
-
+    const executeBtn = await screen.findByRole("button", { name: /execute/i });
+    await act(async () => {
+      executeBtn.click();
+    });
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });

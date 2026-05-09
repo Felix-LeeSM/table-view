@@ -2,6 +2,11 @@ export type Severity = "safe" | "danger";
 
 export type StatementKind =
   | "select"
+  // Sprint 255 — `info` 는 SELECT 외 read-only / metadata 조회 (EXPLAIN /
+  // SHOW / DESCRIBE / DESC) 의 분류. `select` 와 같은 INFO tier 지만 식별
+  // helper (`isInfoStatement`) 에서 함께 true 로 처리된다. Mongo INFO 는
+  // 별도 helper (`isInfoMongoOperation`) 가 read-only pipeline 을 식별.
+  | "info"
   | "insert"
   | "update"
   | "delete"
@@ -117,9 +122,36 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     return { kind: "select", severity: "safe", reasons: [] };
   }
 
+  // Sprint 255 — read-only / metadata introspection 의 INFO tier. EXPLAIN /
+  // SHOW / DESCRIBE / DESC 모두 backend 에 commit 영향이 없으므로 raw editor
+  // 의 WARN dialog 를 skip 하고 직접 IPC 발동한다. `kind: "info"` 는 신규
+  // 분류 — 기존 `select` / `ddl-other` 분기 회귀 0 (위 분기에서 매칭되지
+  // 않은 statement 만 여기 도달). 다른 paradigm 의 introspection 명령
+  // (Mongo `db.runCommand("explain")`) 은 `mongoSafety` 의
+  // `isInfoMongoOperation` 가 별도로 처리.
+  if (/^(EXPLAIN|SHOW|DESCRIBE|DESC)\b/.test(upper)) {
+    return { kind: "info", severity: "safe", reasons: [] };
+  }
+
   return { kind: "other", severity: "safe", reasons: [] };
 }
 
 export function isDangerous(analysis: StatementAnalysis): boolean {
   return analysis.severity === "danger";
+}
+
+/**
+ * Sprint 255 — INFO tier 식별 휴리스틱. raw SQL editor 의 WARN dialog mount
+ * 분기에서 호출되어 `severity: "safe"` 인 statement 중 read-only /
+ * metadata-introspection 만 dialog skip → 직접 IPC 발동.
+ *
+ * INFO = `kind === "select"` (SELECT / WITH …SELECT no DML CTE; analyzer 가
+ * 이미 그렇게 분류) || `kind === "info"` (EXPLAIN / SHOW / DESCRIBE / DESC).
+ * 그 외 safe (INSERT / UPDATE WHERE / DELETE WHERE / CREATE / ALTER additive)
+ * 는 WARN tier — `false` 반환.
+ *
+ * `severity: "danger"` (STOP) 는 INFO 가 아니므로 false.
+ */
+export function isInfoStatement(analysis: StatementAnalysis): boolean {
+  return analysis.kind === "select" || analysis.kind === "info";
 }

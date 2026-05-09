@@ -14,6 +14,8 @@ import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
 import QueryResultGrid from "./QueryResultGrid";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
+import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import QueryTabToolbar from "./QueryTab/Toolbar";
 import QueryHistoryPanel from "./QueryTab/HistoryPanel";
 import { useQueryExecution } from "./QueryTab/useQueryExecution";
@@ -102,6 +104,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
     pendingRdbConfirm,
     confirmRdbDangerous,
     cancelRdbDangerous,
+    pendingRdbWarn,
+    confirmRdbWarn,
+    cancelRdbWarn,
+    pendingMongoWarn,
+    confirmMongoWarn,
+    cancelMongoWarn,
   } = useQueryExecution({ tab });
   const { editorRef, handleFormat } = useQueryEvents({ tab, updateQuerySql });
 
@@ -269,6 +277,47 @@ export default function QueryTab({ tab }: QueryTabProps) {
           paradigm="rdb"
           onConfirm={confirmRdbDangerous}
           onCancel={cancelRdbDangerous}
+        />
+      )}
+
+      {/* Sprint 255 — raw RDB WARN-tier preview dialog. Mounts ONLY when
+          the batch contains at least one non-INFO safe statement
+          (INSERT / UPDATE WHERE / CREATE / ALTER additive) AND no STOP
+          statement. STOP > WARN priority is enforced inside
+          `handleExecute`, so `pendingRdbWarn` is `null` when
+          `pendingRdbConfirm` is set — the two dialogs never co-mount.
+          INFO statements (SELECT / EXPLAIN / SHOW / DESCRIBE / WITH …
+          SELECT) bypass this dialog entirely (direct IPC). */}
+      {pendingRdbWarn && (
+        <SqlPreviewDialog
+          sql={pendingRdbWarn.statements.join(";\n")}
+          loading={false}
+          error={null}
+          commitError={null}
+          environment={connection?.environment ?? null}
+          onConfirm={confirmRdbWarn}
+          onCancel={cancelRdbWarn}
+        />
+      )}
+
+      {/* Sprint 255 — raw Mongo aggregate WARN-tier preview modal.
+          Mounts when `severity: "safe"` aggregate is non-INFO (currently
+          a thin slice — `analyzeMongoPipeline` classifies all safe
+          pipelines as `mongo-other` which `isInfoMongoOperation` treats
+          as INFO; Sprint 254's 3-tier split will widen WARN coverage).
+          Mongo find path never WARNs (always INFO); $out / $merge
+          ($out / $merge) route to `pendingMongoConfirm` (STOP). */}
+      {pendingMongoWarn && (
+        <MqlPreviewModal
+          previewLines={JSON.stringify(
+            pendingMongoWarn.pipeline,
+            null,
+            2,
+          ).split("\n")}
+          errors={[]}
+          onExecute={confirmMongoWarn}
+          onCancel={cancelMongoWarn}
+          loading={false}
         />
       )}
     </div>
