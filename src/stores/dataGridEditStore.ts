@@ -1,0 +1,180 @@
+/**
+ * Sprint 251 — In-memory store for the four DataGrid pending-edit slices.
+ *
+ * Lifts `pendingEdits` / `pendingNewRows` / `pendingDeletedRowKeys` /
+ * `undoStack` out of `useDataGridEdit`'s `useState` so a tab switch
+ * (which unmounts the grid component tree) no longer discards the user's
+ * in-flight work. The next mount of the SAME `(connectionId, schema, table)`
+ * key re-binds to the same entry; a different key starts empty.
+ *
+ * Lifecycle:
+ * - `getEntry(key)` returns the entry for `key` if present, otherwise the
+ *   shared `EMPTY_ENTRY` constant. Callers must NEVER mutate the returned
+ *   value — `setSlice` / `clearEntry` always replace the slice with a
+ *   freshly-allocated Map / Set / Array so React selector equality detects
+ *   the change.
+ * - `setSlice(key, slice, value)` updates exactly one slice on `key`,
+ *   leaving the other three intact. Lazily creates the entry from
+ *   `EMPTY_ENTRY` if missing.
+ * - `clearEntry(key)` resets all four slices on `key` to empty (used by
+ *   `clearAllPending` after a successful commit / explicit discard).
+ * - `purgeKey(key)` removes the entry from the map entirely (used by
+ *   `tabStore.removeTab` when the closing tab was the last consumer of
+ *   that key).
+ * - `purgeForConnection(connectionId)` deletes every entry whose key
+ *   starts with `${connectionId}::` (used by
+ *   `tabStore.clearTabsForConnection` when a connection is dropped).
+ *
+ * Out of scope for Sprint 251 (intentional):
+ * - localStorage persistence — the entry buffer is window-local.
+ * - Cross-window broadcast — pending state is per-workspace, not synced.
+ * - Mongo grid (read-only paradigm) reads but never writes pending state;
+ *   keeping it on the store is harmless (entry stays empty).
+ */
+import { create } from "zustand";
+
+/**
+ * Snapshot of the three diff slices captured BEFORE a mutating handler
+ * runs (Sprint 249, ADR 0022 Phase 5). Stored on `undoStack`. Must mirror
+ * the type that lives in `useDataGridEdit.ts` exactly — re-exported here
+ * so the store interface stays self-contained without a circular import.
+ */
+export interface EditSnapshot {
+  pendingEdits: ReadonlyMap<string, string | null>;
+  pendingNewRows: ReadonlyArray<unknown[]>;
+  pendingDeletedRowKeys: ReadonlySet<string>;
+}
+
+export interface PendingEntry {
+  pendingEdits: Map<string, string | null>;
+  pendingNewRows: unknown[][];
+  pendingDeletedRowKeys: Set<string>;
+  undoStack: EditSnapshot[];
+}
+
+/**
+ * Shared default entry. `getEntry(key)` returns this *exact* reference
+ * for any missing key so React selectors that compare by reference
+ * don't see a fresh object every render. Callers MUST treat it as
+ * read-only — every write goes through `setSlice` / `clearEntry`, both
+ * of which allocate fresh Map / Set / Array values.
+ */
+export const EMPTY_ENTRY: PendingEntry = Object.freeze({
+  pendingEdits: new Map<string, string | null>(),
+  pendingNewRows: [] as unknown[][],
+  pendingDeletedRowKeys: new Set<string>(),
+  undoStack: [] as EditSnapshot[],
+}) as PendingEntry;
+
+export interface DataGridEditStore {
+  entries: ReadonlyMap<string, PendingEntry>;
+  /**
+   * Read the entry for `key`, returning the shared {@link EMPTY_ENTRY}
+   * when absent. Reference equality on the empty default is intentional
+   * so unmounted grids on a key that never had pending work don't
+   * trigger spurious re-renders.
+   */
+  getEntry: (key: string) => PendingEntry;
+  /**
+   * Replace exactly one slice on `key`. Other slices are preserved (read
+   * from the existing entry, or `EMPTY_ENTRY` when missing). Always
+   * allocates a new entries Map so subscribers detect the change.
+   */
+  setSlice: <K extends keyof PendingEntry>(
+    key: string,
+    slice: K,
+    value: PendingEntry[K],
+  ) => void;
+  /**
+   * Reset every slice on `key` to empty. The entry is replaced with a
+   * fresh `PendingEntry` (NOT the frozen default) so subsequent
+   * `setSlice` calls don't accidentally try to mutate `EMPTY_ENTRY`.
+   */
+  clearEntry: (key: string) => void;
+  /** Remove the entry for `key` entirely. */
+  purgeKey: (key: string) => void;
+  /**
+   * Remove every entry whose key starts with `${connectionId}::`. Used
+   * when a connection is dropped wholesale.
+   */
+  purgeForConnection: (connectionId: string) => void;
+}
+
+/**
+ * Compose the canonical entry key. Centralised so `tabStore` and
+ * `useDataGridEdit` agree on the shape verbatim.
+ */
+export function entryKey(
+  connectionId: string,
+  schema: string,
+  table: string,
+): string {
+  return `${connectionId}::${schema}::${table}`;
+}
+
+/** Build a fresh empty entry — used by `clearEntry` so the entry is not the frozen default. */
+function freshEntry(): PendingEntry {
+  return {
+    pendingEdits: new Map(),
+    pendingNewRows: [],
+    pendingDeletedRowKeys: new Set(),
+    undoStack: [],
+  };
+}
+
+export const useDataGridEditStore = create<DataGridEditStore>((set, get) => ({
+  entries: new Map<string, PendingEntry>(),
+
+  getEntry: (key) => {
+    const entry = get().entries.get(key);
+    return entry ?? EMPTY_ENTRY;
+  },
+
+  setSlice: (key, slice, value) =>
+    set((state) => {
+      const existing = state.entries.get(key);
+      // Lazy entry construction: missing key → start from a fresh entry
+      // (NOT the frozen default — we need to mutate one slice on it).
+      const base: PendingEntry = existing ?? freshEntry();
+      const nextEntry: PendingEntry = { ...base, [slice]: value };
+      const nextEntries = new Map(state.entries);
+      nextEntries.set(key, nextEntry);
+      return { entries: nextEntries };
+    }),
+
+  clearEntry: (key) =>
+    set((state) => {
+      // Replace with a fresh entry rather than deleting the key — the
+      // semantics of `clearAllPending` in the hook is "reset all four
+      // slices to empty", not "purge". The entry stays addressable so
+      // a subsequent `setSlice` doesn't have to re-create it.
+      const nextEntries = new Map(state.entries);
+      nextEntries.set(key, freshEntry());
+      return { entries: nextEntries };
+    }),
+
+  purgeKey: (key) =>
+    set((state) => {
+      if (!state.entries.has(key)) return state;
+      const nextEntries = new Map(state.entries);
+      nextEntries.delete(key);
+      return { entries: nextEntries };
+    }),
+
+  purgeForConnection: (connectionId) =>
+    set((state) => {
+      const prefix = `${connectionId}::`;
+      let mutated = false;
+      const nextEntries = new Map(state.entries);
+      for (const key of state.entries.keys()) {
+        if (key.startsWith(prefix)) {
+          nextEntries.delete(key);
+          mutated = true;
+        }
+      }
+      // Identity short-circuit: no matching keys → keep the existing Map
+      // so subscribers don't re-render when the call is a no-op.
+      if (!mutated) return state;
+      return { entries: nextEntries };
+    }),
+}));

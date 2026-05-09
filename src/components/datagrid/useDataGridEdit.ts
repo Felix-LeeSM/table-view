@@ -1,5 +1,10 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTabStore } from "@stores/tabStore";
+import {
+  useDataGridEditStore,
+  entryKey as makeStoreEntryKey,
+  EMPTY_ENTRY,
+} from "@stores/dataGridEditStore";
 import { useCommitFlash } from "@/hooks/useCommitFlash";
 import { useDataGridSelection } from "@/hooks/useDataGridSelection";
 import { useDataGridPreviewCommit } from "@/hooks/useDataGridPreviewCommit";
@@ -377,31 +382,110 @@ export function useDataGridEdit({
   // + gate close-on-dirty without coupling to grid internals.
   const setTabDirty = useTabStore((s) => s.setTabDirty);
 
-  // Cell editing state
+  // Cell editing state — these stay in component-local useState. Only
+  // the four pending diff slices (pendingEdits / pendingNewRows /
+  // pendingDeletedRowKeys / undoStack) move to the cross-mount store
+  // (Sprint 251). `editingCell` / `editValue` are intrinsically per-mount
+  // input UI state and reset on remount is desirable.
   const [editingCell, setEditingCell] = useState<{
     row: number;
     col: number;
   } | null>(null);
   const [editValue, setEditValue] = useState<string | null>("");
-  const [pendingEdits, setPendingEdits] = useState<Map<string, string | null>>(
-    new Map(),
-  );
+
   // Per-cell coercion errors populated at commit time when an edit
   // fails `coerceToSqlLiteral`. Entries clear as the user re-edits.
+  // Stays in useState — coercion errors are commit-cycle ephemeral and
+  // the next mount should start clean.
   const [pendingEditErrors, setPendingEditErrors] = useState<
     Map<string, string>
   >(new Map());
-  const [pendingNewRows, setPendingNewRows] = useState<unknown[][]>([]);
-  const [pendingDeletedRowKeys, setPendingDeletedRowKeys] = useState<
-    Set<string>
-  >(new Set());
 
-  // Sprint 249 (ADR 0022 Phase 5) — undo stack for pending-state mutations.
-  // Captures a deep snapshot of the three pending slices at the moment a
-  // mutating handler runs; `undo()` LIFO-restores. Capped at
-  // `UNDO_STACK_MAX` entries to bound memory; `clearAllPending` empties
-  // the stack so commit / discard correctly orphan history.
-  const [undoStack, setUndoStack] = useState<EditSnapshot[]>([]);
+  // Sprint 251 — store-backed pending state. Compose the
+  // `(connectionId, schema, table)` entry key once per render. When any
+  // of the three identifiers is missing (e.g. a Mongo grid bound before
+  // collection load, or any future caller that mounts the hook with
+  // empty strings) we fall back to a per-mount instance key so the
+  // store remains a pure backing buffer; the previous useState semantics
+  // (state resets on remount) are preserved for that edge.
+  const fallbackInstanceKeyRef = useRef<string | null>(null);
+  if (fallbackInstanceKeyRef.current === null) {
+    fallbackInstanceKeyRef.current = `__instance__::${Math.random().toString(36).slice(2)}::${Date.now()}`;
+  }
+  const storeKey = useMemo(() => {
+    if (!connectionId || !schema || !table) {
+      return fallbackInstanceKeyRef.current!;
+    }
+    return makeStoreEntryKey(connectionId, schema, table);
+  }, [connectionId, schema, table]);
+
+  // Subscribe to the store entry. Selecting the entry (not individual
+  // slices) keeps the four reads coherent — every store mutation
+  // produces a new entry object, so each slice read below sees the same
+  // snapshot. The `getEntry` reader returns the shared `EMPTY_ENTRY`
+  // singleton when missing, so React equality stays stable across
+  // identity-preserving renders.
+  const entry =
+    useDataGridEditStore((s) => s.entries.get(storeKey)) ?? EMPTY_ENTRY;
+  const pendingEdits = entry.pendingEdits;
+  const pendingNewRows = entry.pendingNewRows;
+  const pendingDeletedRowKeys = entry.pendingDeletedRowKeys;
+  // Sprint 249 (ADR 0022 Phase 5) — undo stack lives on the store so a
+  // tab switch + re-mount preserves the user's history exactly. The
+  // 50-entry cap (`UNDO_STACK_MAX`) is enforced in `pushSnapshot` below.
+  const undoStack = entry.undoStack;
+
+  // Setter helpers — the inner hook body uses React-style
+  // `setState(value | updaterFn)` semantics extensively (e.g.
+  // `setPendingEdits((prev) => ...)`). The store API takes plain
+  // values, so we wrap each slice setter to accept either form and
+  // dispatch through `setSlice`.
+  const storeSetSlice = useDataGridEditStore((s) => s.setSlice);
+  const storeClearEntry = useDataGridEditStore((s) => s.clearEntry);
+  const setPendingEdits = useCallback(
+    (
+      next:
+        | Map<string, string | null>
+        | ((prev: Map<string, string | null>) => Map<string, string | null>),
+    ) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).pendingEdits;
+      const value = typeof next === "function" ? next(current) : next;
+      storeSetSlice(storeKey, "pendingEdits", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+  const setPendingNewRows = useCallback(
+    (next: unknown[][] | ((prev: unknown[][]) => unknown[][])) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).pendingNewRows;
+      const value = typeof next === "function" ? next(current) : next;
+      storeSetSlice(storeKey, "pendingNewRows", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+  const setPendingDeletedRowKeys = useCallback(
+    (next: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).pendingDeletedRowKeys;
+      const value = typeof next === "function" ? next(current) : next;
+      storeSetSlice(storeKey, "pendingDeletedRowKeys", value);
+    },
+    [storeKey, storeSetSlice],
+  );
+  const setUndoStack = useCallback(
+    (next: EditSnapshot[] | ((prev: EditSnapshot[]) => EditSnapshot[])) => {
+      const current = useDataGridEditStore
+        .getState()
+        .getEntry(storeKey).undoStack;
+      const value = typeof next === "function" ? next(current) : next;
+      storeSetSlice(storeKey, "undoStack", value);
+    },
+    [storeKey, storeSetSlice],
+  );
 
   // Multi-row selection lives in `useDataGridSelection` so the facade
   // stays paradigm-agnostic.
@@ -430,19 +514,17 @@ export function useDataGridEdit({
   // consumer, confirm/cancel, and commitError lifecycle. The facade
   // only forwards a cleanup callback and the cell/pending state.
   const clearAllPending = useCallback(() => {
-    setPendingEdits(new Map());
+    // Sprint 251 — `clearEntry` resets all four store-backed slices in
+    // a single atomic mutation so subscribers re-render once. Sprint 249
+    // semantics preserved: commit success / explicit discard orphans the
+    // undo stack (Cmd+Z must not resurrect prior pending state because
+    // the DB is the new baseline; discard is itself a "fresh slate").
+    storeClearEntry(storeKey);
     setPendingEditErrors(new Map());
-    setPendingNewRows([]);
-    setPendingDeletedRowKeys(new Set());
-    // Sprint 249: commit success / explicit discard tear down history —
-    // a Cmd+Z after commit must NOT resurrect the prior pending state
-    // (the DB is the new baseline) and discard is itself a "fresh slate"
-    // user gesture.
-    setUndoStack([]);
     clearSelection();
     setEditingCell(null);
     setEditValue("");
-  }, [clearSelection]);
+  }, [storeKey, storeClearEntry, clearSelection]);
 
   /**
    * Push a deep-copied snapshot of the current pending slices onto the
@@ -467,7 +549,7 @@ export function useDataGridEdit({
       if (next.length > UNDO_STACK_MAX) next.shift();
       return next;
     });
-  }, [pendingEdits, pendingNewRows, pendingDeletedRowKeys]);
+  }, [pendingEdits, pendingNewRows, pendingDeletedRowKeys, setUndoStack]);
 
   const undo = useCallback(() => {
     setUndoStack((prevStack) => {
@@ -481,7 +563,12 @@ export function useDataGridEdit({
       setPendingDeletedRowKeys(new Set(last.pendingDeletedRowKeys));
       return prevStack.slice(0, -1);
     });
-  }, []);
+  }, [
+    setPendingEdits,
+    setPendingNewRows,
+    setPendingDeletedRowKeys,
+    setUndoStack,
+  ]);
 
   const canUndo = undoStack.length > 0;
 
@@ -543,7 +630,14 @@ export function useDataGridEdit({
     }
     setEditingCell(null);
     setEditValue("");
-  }, [editingCell, editValue, data, pendingEdits, pushSnapshot]);
+  }, [
+    editingCell,
+    editValue,
+    data,
+    pendingEdits,
+    pushSnapshot,
+    setPendingEdits,
+  ]);
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
@@ -615,6 +709,7 @@ export function useDataGridEdit({
       promoteTab,
       pendingEdits,
       pushSnapshot,
+      setPendingEdits,
     ],
   );
 
@@ -637,7 +732,7 @@ export function useDataGridEdit({
     setPendingNewRows((prev) => [...prev, emptyRow]);
     // Promote preview tab on row add
     if (activeTabId) promoteTab(activeTabId);
-  }, [data, activeTabId, promoteTab, pushSnapshot]);
+  }, [data, activeTabId, promoteTab, pushSnapshot, setPendingNewRows]);
 
   const handleDeleteRow = useCallback(() => {
     if (selectedRowIds.size === 0) return;
@@ -662,6 +757,7 @@ export function useDataGridEdit({
     promoteTab,
     clearSelection,
     pushSnapshot,
+    setPendingDeletedRowKeys,
   ]);
 
   const handleDuplicateRow = useCallback(() => {
@@ -683,6 +779,7 @@ export function useDataGridEdit({
     promoteTab,
     clearSelection,
     pushSnapshot,
+    setPendingNewRows,
   ]);
 
   const hasPendingChanges =
@@ -768,6 +865,7 @@ export function useDataGridEdit({
     data,
     handleCommit,
     beginCommitFlash,
+    setPendingEdits,
   ]);
 
   return {

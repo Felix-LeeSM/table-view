@@ -17,6 +17,21 @@ import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+// Sprint 251 — tab lifecycle owns the cleanup of the cross-mount pending
+// edit buffer. The dataGridEditStore is a write-only sink from this side
+// (no back-edge to tabStore); the call is one-way and lives at the
+// natural lifecycle seam (`removeTab` / `clearTabsForConnection`),
+// matching the contract's "store 간 직접 참조" option (per
+// `docs/sprints/sprint-251/contract.md` — "import: store 간 직접 참조
+// 또는 lifecycle subscribe 패턴 (Generator 결정)"). The
+// `no-restricted-imports` rule is disabled with the same justification
+// that allows the `tabStore/persistence` sibling import below.
+/* eslint-disable no-restricted-imports */
+import {
+  useDataGridEditStore,
+  entryKey as makeDataGridEditKey,
+} from "./dataGridEditStore";
+/* eslint-enable no-restricted-imports */
 
 import type {
   TableTab,
@@ -144,7 +159,16 @@ export const useTabStore = create<TabState>((set, get) => ({
     });
   },
 
-  removeTab: (id) =>
+  removeTab: (id) => {
+    // Sprint 251 — capture the closing tab + the surviving tab list
+    // BEFORE the set() call so the dataGridEditStore purge decision
+    // observes the canonical pre-removal snapshot. The purge fires only
+    // when no surviving tab still targets the same
+    // `(connectionId, schema, table)` key (e.g. preview + persistent
+    // pair sharing one buffer must keep the buffer alive).
+    const stateBefore = get();
+    const closingTab = stateBefore.tabs.find((t) => t.id === id);
+    const survivors = stateBefore.tabs.filter((t) => t.id !== id);
     set((state) => {
       const tabToRemove = state.tabs.find((t) => t.id === id);
       const filtered = state.tabs.filter((t) => t.id !== id);
@@ -170,7 +194,33 @@ export const useTabStore = create<TabState>((set, get) => ({
         closedTabHistory: newHistory,
         dirtyTabIds,
       };
-    }),
+    });
+    // Sprint 251 — fire the dataGridEditStore purge after the tab list
+    // mutation. Only table tabs with all three identifiers compose a
+    // valid key (query tabs, structure-only tabs, etc. never carry
+    // pending grid state).
+    if (closingTab && closingTab.type === "table") {
+      const closingSchema = closingTab.schema;
+      const closingTable = closingTab.table;
+      if (closingSchema && closingTable) {
+        const closingKey = makeDataGridEditKey(
+          closingTab.connectionId,
+          closingSchema,
+          closingTable,
+        );
+        const stillUsed = survivors.some(
+          (t) =>
+            t.type === "table" &&
+            t.connectionId === closingTab.connectionId &&
+            t.schema === closingSchema &&
+            t.table === closingTable,
+        );
+        if (!stillUsed) {
+          useDataGridEditStore.getState().purgeKey(closingKey);
+        }
+      }
+    }
+  },
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
@@ -201,7 +251,11 @@ export const useTabStore = create<TabState>((set, get) => ({
       };
     }),
 
-  clearTabsForConnection: (connectionId) =>
+  clearTabsForConnection: (connectionId) => {
+    // Sprint 251 — capture whether any tab in this connection actually
+    // existed before the bulk filter so the dataGridEditStore purge
+    // is also a no-op when there's nothing to remove.
+    const hadAny = get().tabs.some((t) => t.connectionId === connectionId);
     set((state) => {
       const remaining = state.tabs.filter(
         (t) => t.connectionId !== connectionId,
@@ -239,7 +293,14 @@ export const useTabStore = create<TabState>((set, get) => ({
         activeTabId: newActive,
         dirtyTabIds,
       };
-    }),
+    });
+    // Sprint 251 — purge every dataGridEditStore entry whose key starts
+    // with `${connectionId}::`. The store guards itself with an identity
+    // short-circuit when no matching keys exist.
+    if (hadAny) {
+      useDataGridEditStore.getState().purgeForConnection(connectionId);
+    }
+  },
 
   setSubView: (tabId, subView) =>
     set((state) => ({

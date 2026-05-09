@@ -1,4 +1,18 @@
 import "@testing-library/jest-dom/vitest";
+import { beforeEach } from "vitest";
+import { useDataGridEditStore } from "@stores/dataGridEditStore";
+
+// Sprint 251 — `dataGridEditStore` is a singleton across the test process.
+// Without a per-test reset, pending state from one test leaks into the
+// next via the `(connectionId, schema, table)` keying — many existing
+// suites (`useDataGridEdit.undo.test.ts`, `useDataGridEdit.onblur.test.ts`,
+// `DataGrid.editing.test.tsx`, etc.) share the canonical
+// `("conn1", "public", "users")` fixture. Resetting in setup keeps those
+// tests byte-identical (no `beforeEach` edits required) while the new
+// store backs the per-mount lifecycle correctly.
+beforeEach(() => {
+  useDataGridEditStore.setState({ entries: new Map() });
+});
 
 // crypto.randomUUID polyfill for jsdom (used by FilterBar)
 if (typeof crypto.randomUUID !== "function") {
