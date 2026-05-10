@@ -138,7 +138,7 @@ describe("QueryTab — execution", () => {
 
   it("executes multiple statements sequentially", async () => {
     const secondResult: QueryResult = {
-      columns: [{ name: "n", data_type: "integer" }],
+      columns: [{ name: "n", data_type: "integer", category: "unknown" }],
       rows: [[42]],
       total_count: 1,
       execution_time_ms: 2,
@@ -274,7 +274,7 @@ describe("QueryTab — execution", () => {
     // Sprint 100 — every statement succeeds → statements[] has N
     // success entries and `result` mirrors the last successful result.
     const secondResult: QueryResult = {
-      columns: [{ name: "n", data_type: "integer" }],
+      columns: [{ name: "n", data_type: "integer", category: "unknown" }],
       rows: [[42]],
       total_count: 1,
       execution_time_ms: 2,
@@ -445,7 +445,7 @@ describe("QueryTab — execution", () => {
 
   it("records success history for all-success multi-statements", async () => {
     const secondResult: QueryResult = {
-      columns: [{ name: "n", data_type: "integer" }],
+      columns: [{ name: "n", data_type: "integer", category: "unknown" }],
       rows: [[42]],
       total_count: 1,
       execution_time_ms: 2,

@@ -52,8 +52,8 @@ function buildResult(
 ): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId" },
-      { name: "name", data_type: "string" },
+      { name: "_id", data_type: "ObjectId", category: "unknown" },
+      { name: "name", data_type: "string", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice"],

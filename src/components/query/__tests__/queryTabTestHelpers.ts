@@ -28,8 +28,8 @@ import type { Extension } from "@codemirror/state";
 
 export const MOCK_RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer" },
-    { name: "name", data_type: "text" },
+    { name: "id", data_type: "integer", category: "unknown" },
+    { name: "name", data_type: "text", category: "unknown" },
   ],
   rows: [[1, "Alice"]],
   total_count: 1,
@@ -39,8 +39,8 @@ export const MOCK_RESULT: QueryResult = {
 
 export const MOCK_DOC_RESULT = {
   columns: [
-    { name: "_id", data_type: "objectId" },
-    { name: "name", data_type: "string" },
+    { name: "_id", data_type: "objectId", category: "unknown" },
+    { name: "name", data_type: "string", category: "unknown" },
   ],
   rows: [[1, "Alice"]],
   raw_documents: [{ _id: 1, name: "Alice" }],

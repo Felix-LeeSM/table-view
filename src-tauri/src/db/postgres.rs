@@ -34,6 +34,7 @@
 //! cooperation, ADR-0018) and delegate. Behavior is identical to the
 //! pre-split monolith — the split is module-organisational only.
 
+mod category;
 mod connection;
 mod mutations;
 mod queries;

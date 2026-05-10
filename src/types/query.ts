@@ -1,10 +1,18 @@
+import type { ColumnCategory } from "@/lib/columnCategory";
+
 /**
  * Column metadata returned by a query execution.
  * Matches the Rust `QueryColumn` struct from `src-tauri/src/models/query.rs`.
+ *
+ * Sprint 238 — `category` 는 백엔드가 dialect 별 `data_type` 매핑 (`PG`,
+ * `Mongo`) 으로 채워 보낸다. DataGrid 의 default 폭 + text-align 에만 사용.
+ * Structure / Records 뷰는 raw `data_type` 을 그대로 노출 — `category` 로
+ * 치환 금지 (예: uuid 컬럼은 "uuid" 로 보여야 한다).
  */
 export interface QueryColumn {
   name: string;
   data_type: string;
+  category: ColumnCategory;
 }
 
 /**

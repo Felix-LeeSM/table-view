@@ -1,3 +1,5 @@
+import type { ColumnCategory } from "@/lib/columnCategory";
+
 /**
  * Document paradigm — wire types for the Tauri bridge.
  *
@@ -37,11 +39,12 @@ export interface CollectionInfo {
 
 /**
  * A single DataGrid column description surfaced by the document read-path.
- * Mirrors `QueryColumn { name, data_type }` on the Rust side.
+ * Mirrors the Rust `QueryColumn` struct (Sprint 238 added `category`).
  */
 export interface DocumentColumn {
   name: string;
   data_type: string;
+  category: ColumnCategory;
 }
 
 /**

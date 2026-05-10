@@ -49,6 +49,7 @@
 //! whether to render a muted/read-only cell and block inline edit; the
 //! frontend regex is `^\[\d+ items\]$` / exact match `"{...}"`.
 
+mod category;
 mod connection;
 mod mutations;
 mod queries;

@@ -11,6 +11,7 @@ use ::mongodb::options::FindOptions;
 use bson::{Bson, Document};
 use futures_util::stream::StreamExt;
 
+use super::category::map_mongo_data_type;
 use crate::error::AppError;
 use crate::models::QueryColumn;
 
@@ -244,9 +245,13 @@ pub(super) fn flatten_cell(b: &Bson) -> serde_json::Value {
 pub(super) fn columns_from_docs(docs: &[Document]) -> Vec<QueryColumn> {
     let cols = super::schema::infer_columns_from_samples(docs);
     cols.into_iter()
-        .map(|c| QueryColumn {
-            name: c.name,
-            data_type: c.data_type,
+        .map(|c| {
+            let category = map_mongo_data_type(&c.data_type);
+            QueryColumn {
+                name: c.name,
+                data_type: c.data_type,
+                category,
+            }
         })
         .collect()
 }
@@ -279,6 +284,7 @@ mod tests {
     use super::*;
     use crate::db::DocumentAdapter;
     use crate::error::AppError;
+    use crate::models::ColumnCategory;
     use bson::doc;
 
     #[tokio::test]
@@ -366,14 +372,17 @@ mod tests {
             QueryColumn {
                 name: "_id".into(),
                 data_type: "ObjectId".into(),
+                category: ColumnCategory::Unknown,
             },
             QueryColumn {
                 name: "name".into(),
                 data_type: "String".into(),
+                category: ColumnCategory::Unknown,
             },
             QueryColumn {
                 name: "missing".into(),
                 data_type: "String".into(),
+                category: ColumnCategory::Unknown,
             },
         ];
         let doc = doc! {

@@ -51,8 +51,8 @@ vi.mock("@lib/toast", () => ({
 
 const RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer" },
-    { name: "name", data_type: "text" },
+    { name: "id", data_type: "integer", category: "unknown" },
+    { name: "name", data_type: "text", category: "unknown" },
   ],
   rows: [
     [1, "Alice"],

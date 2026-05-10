@@ -28,8 +28,8 @@ function buildPagedResult(
   ]);
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId" },
-      { name: "name", data_type: "string" },
+      { name: "_id", data_type: "ObjectId", category: "unknown" },
+      { name: "name", data_type: "string", category: "unknown" },
     ],
     rows,
     raw_documents: rows.map((r) => ({ _id: r[0], name: r[1] })),

@@ -11,9 +11,9 @@ import type { RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 
 const RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer" },
-    { name: "name", data_type: "text" },
-    { name: "email", data_type: "varchar" },
+    { name: "id", data_type: "integer", category: "unknown" },
+    { name: "name", data_type: "text", category: "unknown" },
+    { name: "email", data_type: "varchar", category: "unknown" },
   ],
   rows: [
     [1, "Alice", "alice@example.com"],

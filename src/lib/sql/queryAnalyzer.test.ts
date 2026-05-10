@@ -24,7 +24,7 @@ function col(
 }
 
 function qcol(name: string, data_type = "text"): QueryColumn {
-  return { name, data_type };
+  return { name, data_type, category: "unknown" };
 }
 
 describe("parseSingleTableSelect", () => {

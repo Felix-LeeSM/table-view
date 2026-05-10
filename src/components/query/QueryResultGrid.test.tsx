@@ -18,6 +18,7 @@ vi.mock("@lib/tauri", async () => {
       {
         name: "id",
         data_type: "integer",
+        category: "unknown",
         nullable: false,
         default_value: null,
         is_primary_key: true,
@@ -28,6 +29,7 @@ vi.mock("@lib/tauri", async () => {
       {
         name: "name",
         data_type: "text",
+        category: "unknown",
         nullable: true,
         default_value: null,
         is_primary_key: false,
@@ -42,8 +44,8 @@ vi.mock("@lib/tauri", async () => {
 
 const SELECT_RESULT: QueryResult = {
   columns: [
-    { name: "id", data_type: "integer" },
-    { name: "name", data_type: "text" },
+    { name: "id", data_type: "integer", category: "unknown" },
+    { name: "name", data_type: "text", category: "unknown" },
   ],
   rows: [
     [1, "Alice"],

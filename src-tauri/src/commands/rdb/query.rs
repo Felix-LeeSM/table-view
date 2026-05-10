@@ -482,7 +482,7 @@ mod tests {
     use crate::commands::test_util::{document_default, state_with};
     use crate::db::testing::{clone_app_error, StubRdbAdapter};
     use crate::db::{ActiveAdapter, RdbQueryResult};
-    use crate::models::{QueryColumn, QueryType, TableData};
+    use crate::models::{ColumnCategory, QueryColumn, QueryType, TableData};
     use tokio_util::sync::CancellationToken;
 
     // ── execute_query — 5 contract scenarios ─────────────────────────────
@@ -513,6 +513,7 @@ mod tests {
                 columns: vec![QueryColumn {
                     name: "echo".into(),
                     data_type: "text".into(),
+                    category: ColumnCategory::Unknown,
                 }],
                 rows: vec![vec![serde_json::Value::String(sql.to_string())]],
                 total_count: 1,
@@ -633,6 +634,7 @@ mod tests {
                     columns: vec![QueryColumn {
                         name: "s".into(),
                         data_type: "text".into(),
+                        category: ColumnCategory::Unknown,
                     }],
                     rows: vec![vec![serde_json::Value::String(sql.clone())]],
                     total_count: 1,

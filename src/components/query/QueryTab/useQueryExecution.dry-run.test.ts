@@ -64,7 +64,7 @@ vi.mock("@lib/sql/sqlUtils", () => ({
 }));
 
 const SELECT_RESULT: QueryResult = {
-  columns: [{ name: "id", data_type: "integer" }],
+  columns: [{ name: "id", data_type: "integer", category: "unknown" }],
   rows: [[1]],
   total_count: 1,
   execution_time_ms: 3,

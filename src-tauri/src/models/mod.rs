@@ -6,7 +6,7 @@ pub use connection::{
     ConnectionConfig, ConnectionConfigPublic, ConnectionGroup, ConnectionStatus, DatabaseType,
     Paradigm, StorageData,
 };
-pub use query::{QueryColumn, QueryResult, QueryType};
+pub use query::{ColumnCategory, QueryColumn, QueryResult, QueryType};
 pub use schema::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
     ConstraintDefinition, CreateIndexRequest, CreateTablePlanConstraint, CreateTablePlanIndex,

@@ -4,6 +4,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Check,
+  Columns3,
   Loader2,
   X,
   Plus,
@@ -96,6 +97,12 @@ export interface DataGridToolbarProps {
    */
   onUndo?: () => void;
   canUndo?: boolean;
+  /**
+   * Sprint 238 AC-238-12 — `useColumnWidths.reset()` 트리거. callback 이
+   * 제공된 grid (records / document) 에서만 toolbar 버튼이 렌더된다 —
+   * structure 뷰 등 (c) 산식 적용 대상이 아닌 곳은 prop 을 omit.
+   */
+  onResetColumnWidths?: () => void;
 }
 
 export default function DataGridToolbar({
@@ -132,6 +139,7 @@ export default function DataGridToolbar({
   onDuplicateRow,
   onUndo,
   canUndo = false,
+  onResetColumnWidths,
 }: DataGridToolbarProps) {
   return (
     <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
@@ -261,6 +269,18 @@ export default function DataGridToolbar({
         )}
         {bulkOpsSlot}
         {exportSlot}
+        {onResetColumnWidths && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="relative text-muted-foreground"
+            onClick={onResetColumnWidths}
+            aria-label="Reset column widths"
+            title="Reset column widths to default"
+          >
+            <Columns3 />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon-xs"

@@ -24,10 +24,10 @@ function buildResult(
 ): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId" },
-      { name: "name", data_type: "string" },
-      { name: "meta", data_type: "document" },
-      { name: "tags", data_type: "array" },
+      { name: "_id", data_type: "ObjectId", category: "unknown" },
+      { name: "name", data_type: "string", category: "unknown" },
+      { name: "meta", data_type: "document", category: "unknown" },
+      { name: "tags", data_type: "array", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcdef" }, "Alice", "{...}", "[3 items]"],
@@ -56,10 +56,10 @@ function buildResult(
 function buildSecondPageResult(): DocumentQueryResult {
   return {
     columns: [
-      { name: "_id", data_type: "ObjectId" },
-      { name: "name", data_type: "string" },
-      { name: "meta", data_type: "document" },
-      { name: "tags", data_type: "array" },
+      { name: "_id", data_type: "ObjectId", category: "unknown" },
+      { name: "name", data_type: "string", category: "unknown" },
+      { name: "meta", data_type: "document", category: "unknown" },
+      { name: "tags", data_type: "array", category: "unknown" },
     ],
     rows: [
       [{ $oid: "65abcdef0123456789abcde1" }, "Carol", "{...}", "[1 items]"],

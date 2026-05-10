@@ -240,6 +240,31 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
     ).toBeInTheDocument();
   });
 
+  describe("Sprint 238 AC-238-12 — Reset column widths button", () => {
+    it("renders the Reset column widths button when onResetColumnWidths is provided", () => {
+      renderToolbar({ onResetColumnWidths: vi.fn() });
+      expect(
+        screen.getByRole("button", { name: /reset column widths/i }),
+      ).toBeInTheDocument();
+    });
+
+    it("invokes onResetColumnWidths on click", () => {
+      const handler = vi.fn();
+      renderToolbar({ onResetColumnWidths: handler });
+      fireEvent.click(
+        screen.getByRole("button", { name: /reset column widths/i }),
+      );
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not render the button when onResetColumnWidths is omitted", () => {
+      renderToolbar();
+      expect(
+        screen.queryByRole("button", { name: /reset column widths/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("[AC-179-03b] DOCUMENT_LABELS literal output is unchanged byte-for-byte", () => {
     // Anchors the derived constant's literal strings so DocumentDataGrid
     // (the existing consumer at DocumentDataGrid.tsx:273-276) sees no

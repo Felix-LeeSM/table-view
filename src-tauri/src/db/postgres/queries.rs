@@ -11,6 +11,7 @@ use sqlx::Row;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
+use super::category::map_pg_data_type;
 use crate::error::AppError;
 use crate::models::{
     ColumnInfo, FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
@@ -204,9 +205,14 @@ impl PostgresAdapter {
                         first_row
                             .columns()
                             .iter()
-                            .map(|col| QueryColumn {
-                                name: col.name().to_string(),
-                                data_type: col.type_info().to_string(),
+                            .map(|col| {
+                                let data_type = col.type_info().to_string();
+                                let category = map_pg_data_type(&data_type);
+                                QueryColumn {
+                                    name: col.name().to_string(),
+                                    data_type,
+                                    category,
+                                }
                             })
                             .collect()
                     } else {
