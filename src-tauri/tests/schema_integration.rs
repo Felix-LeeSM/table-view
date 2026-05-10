@@ -126,12 +126,14 @@ async fn test_get_table_columns() {
     assert!(id_col.is_primary_key);
     assert!(!id_col.is_foreign_key);
 
-    // Check name column (NOT NULL, no default)
+    // Check name column (NOT NULL, no default).
+    // Sprint 258 — format_type + normalize_pg_type 으로 length 포함된
+    // DDL-level 표기 (`varchar(100)`).
     let name_col = columns
         .iter()
         .find(|c| c.name == "name")
         .expect("name column missing");
-    assert_eq!(name_col.data_type, "character varying");
+    assert_eq!(name_col.data_type, "varchar(100)");
     assert!(!name_col.nullable);
     assert!(!name_col.is_primary_key);
 
