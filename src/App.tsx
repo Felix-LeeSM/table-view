@@ -165,17 +165,29 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [tabs, setActiveTab]);
 
-  // Cmd+R / Ctrl+R / F5 — context-aware refresh
+  // Cmd+R / Ctrl+R / F5 — context-aware refresh.
+  // Cmd+Shift+R / Ctrl+Shift+R — Sprint 258 (AC-258-08): broadcasts a
+  // `reset-column-widths` event so any mounted grid (RDB / Document /
+  // raw query result) can re-run its initial widths formula. We
+  // normalise via `e.key.toLowerCase()` because shift flips `e.key` to
+  // upper-case, and we'd otherwise miss the shortcut entirely.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isRefresh =
-        (e.key === "r" && (e.metaKey || e.ctrlKey)) || e.key === "F5";
-      if (!isRefresh) return;
+      const lowerKey = typeof e.key === "string" ? e.key.toLowerCase() : "";
+      const isRefreshKey =
+        (lowerKey === "r" && (e.metaKey || e.ctrlKey)) || e.key === "F5";
+      if (!isRefreshKey) return;
 
       // Skip if focus is inside a text input, textarea, select, or contenteditable
       if (isEditableTarget(e.target)) return;
 
       e.preventDefault();
+
+      // Cmd+Shift+R routes to widths reset, NOT data refetch.
+      if (lowerKey === "r" && e.shiftKey) {
+        window.dispatchEvent(new CustomEvent("reset-column-widths"));
+        return;
+      }
 
       const activeTab = activeTabId
         ? tabs.find((t) => t.id === activeTabId)

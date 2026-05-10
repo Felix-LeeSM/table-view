@@ -120,9 +120,19 @@ export default function DataGrid({
   // Sprint 238 — DataGridTable owns column-width state via
   // `useColumnWidths`. Reset is exposed via imperative handle and wired
   // to the toolbar's "Reset column widths" action (AC-238-12).
+  // Sprint 258 (AC-258-08) — same handle is also driven by the
+  // `reset-column-widths` window event (Cmd+Shift+R global shortcut).
   const dataGridTableRef = useRef<DataGridTableHandle | null>(null);
   const handleResetColumnWidths = useCallback(() => {
     dataGridTableRef.current?.resetColumnWidths();
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      dataGridTableRef.current?.resetColumnWidths();
+    };
+    window.addEventListener("reset-column-widths", handler);
+    return () => window.removeEventListener("reset-column-widths", handler);
   }, []);
 
   // Reset column order when table/schema changes

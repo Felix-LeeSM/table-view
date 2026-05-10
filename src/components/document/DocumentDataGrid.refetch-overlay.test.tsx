@@ -174,7 +174,9 @@ describe("DocumentDataGrid refetch overlay (sprint-176)", () => {
     // Spy on the row's onClick: in DocumentDataGrid the row click triggers
     // selection by toggling aria-selected. If the overlay swallows the
     // gesture, the row's aria-selected stays "false".
-    const rowAlice = screen.getByText("Alice").closest("tr") as HTMLElement;
+    const rowAlice = screen
+      .getByText("Alice")
+      .closest('[role="row"]') as HTMLElement;
     expect(rowAlice).toHaveAttribute("aria-selected", "false");
 
     const event = createEvent.click(overlay);

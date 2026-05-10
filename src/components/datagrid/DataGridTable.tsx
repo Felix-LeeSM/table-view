@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@components/ui/button";
@@ -18,7 +19,6 @@ import { ContextMenu } from "@components/shared/ContextMenu";
 import BlobViewerDialog from "./BlobViewerDialog";
 import CellDetailDialog from "./CellDetailDialog";
 import {
-  MIN_COL_WIDTH,
   VIRTUALIZE_THRESHOLD,
   ROW_HEIGHT_ESTIMATE,
 } from "./DataGridTable/columnUtils";
@@ -32,14 +32,13 @@ import HeaderRow from "./DataGridTable/HeaderRow";
 import DataRow, { type DataGridRowContext } from "./DataGridTable/DataRow";
 
 /**
- * RDB table grid + inline edit shell. The sub-files
- * (`DataGridTable/{columnUtils,useCellNavigation,useColumnResize,
- * contextMenu,DataRow,HeaderRow}`) split out helpers, hooks, context
- * menu, and the two row renderers; this entry holds the imports,
- * props, state, virtualizer wiring, and JSX shell.
+ * RDB grid + inline edit shell. Sprint 258 — `<table>` 폐기, CSS Grid 로
+ * 전환. 단일 `--cols` CSS variable 이 모든 row 의 grid-template-columns
+ * 를 통제하므로 column width 의 redistribute 가 layout engine 차원에서
+ * 차단된다.
  *
- * The `parseFkReference` re-export below is consumed by an external
- * contract test that imports it from this entry — keep the path stable.
+ * `parseFkReference` 는 외부 contract test 가 본 entry 에서 import 하므로
+ * 경로 안정성을 위해 re-export 만 유지.
  */
 
 export { parseFkReference } from "./DataGridTable/columnUtils";
@@ -52,10 +51,6 @@ export interface DataGridTableProps {
   editingCell: { row: number; col: number } | null;
   editValue: string | null;
   pendingEdits: Map<string, string | null>;
-  /**
-   * Per-cell coercion errors keyed by `"rowIdx-colIdx"`. When the active
-   * editing cell has an entry, an inline hint renders beneath the editor.
-   */
   pendingEditErrors?: Map<string, string>;
   selectedRowIds: Set<number>;
   pendingDeletedRowKeys: Set<string>;
@@ -63,22 +58,8 @@ export interface DataGridTableProps {
   page: number;
   schema: string;
   table: string;
-  /**
-   * Active filter count (structured + raw SQL). `> 0` paints the
-   * "0 rows match" branch with a Clear button; `=== 0` paints
-   * "Table is empty". The grid itself only checks `> 0`.
-   */
   activeFilterCount?: number;
-  /**
-   * Called by the Clear filter button in the filtered-empty branch.
-   * Parent must clear `filters`/`appliedFilters`/`rawSql`/`appliedRawSql`.
-   */
   onClearFilters?: () => void;
-  /**
-   * Called by the threshold-gated overlay's Cancel button. Parent
-   * aborts the in-flight `query_table_data`, clears loading, and
-   * reverts to the pre-fetch dataset.
-   */
   onCancelRefetch?: () => void;
   onSetEditValue: (v: string | null) => void;
   onSetEditNull: () => void;
@@ -102,9 +83,9 @@ export interface DataGridTableProps {
 }
 
 /**
- * Sprint 238 — imperative handle for the parent (DataGrid) to trigger
- * "Reset column widths" via the toolbar (AC-238-12). The hook itself
- * (`useColumnWidths`) owns the drag/reset state inside the table.
+ * Sprint 238 AC-238-12 — imperative handle for the parent (DataGrid) to
+ * trigger "Reset column widths" via the toolbar. Sprint 258 — also wired
+ * to the cmd+shift+r shortcut (AC-258-08).
  */
 export interface DataGridTableHandle {
   resetColumnWidths: () => void;
@@ -112,6 +93,14 @@ export interface DataGridTableHandle {
 
 function getColumnCategory(c: { category?: ColumnCategory }): ColumnCategory {
   return c.category ?? "unknown";
+}
+
+function readRootFontSizePx(): number {
+  if (typeof window === "undefined") return 16;
+  const measured = parseFloat(
+    getComputedStyle(document.documentElement).fontSize,
+  );
+  return Number.isFinite(measured) ? measured : 16;
 }
 
 const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
@@ -147,13 +136,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     },
     forwardedRef,
   ) {
-    const tableRef = useRef<HTMLTableElement>(null);
-
     // Active cell editor focus target. Only one cell edits at a time, so a
     // single ref is enough — wired to either the <input> or the NULL chip <div>.
-    // React's `autoFocus` prop only calls .focus() for form controls, so the
-    // NULL chip (a <div role="textbox">) would silently lose focus when flipping
-    // from input → chip via Cmd+Backspace without this.
     const editorFocusRef = useRef<HTMLElement | null>(null);
     const isNullEditor = editValue === null;
     useEffect(() => {
@@ -162,36 +146,28 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       }
     }, [editingCell, isNullEditor]);
 
-    // BLOB viewer state
     const [blobViewer, setBlobViewer] = useState<{
       data: unknown;
       columnName: string;
     } | null>(null);
 
-    // Cell detail viewer state — shows the full value of one cell in a dialog,
-    // since long text is otherwise truncated and unreadable in the grid.
     const [cellDetail, setCellDetail] = useState<{
       data: unknown;
       columnName: string;
       dataType: string;
     } | null>(null);
 
-    // The visual order: columnOrder[visualIdx] = dataIdx
-    // If columnOrder is empty/default, fall back to identity mapping
+    // Visual order: columnOrder[visualIdx] = dataIdx
     const visualCount = data.columns.length;
     const order =
       columnOrder.length === visualCount
         ? columnOrder
         : data.columns.map((_, i) => i);
 
-    // Scroll container for the virtualizer. The wrapper div (overflow-auto) is
-    // the actual scroll surface; the <table> inside lives at its natural size
-    // so sticky thead and column-resize logic continue to work unchanged.
+    // Outer scroll container = `<div role="grid">`. Owns `--cols` CSS
+    // variable. virtualizer 가 scrollElement 로 참조한다.
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    // Sprint 238 — column widths owned in-component via `useColumnWidths`.
-    // Drives `<th>` / `<td>` `style.width` and the AC-238-12 reset action
-    // exposed back to the parent via `forwardedRef`.
     const widthColumns = useMemo(
       () =>
         data.columns.map((c) => ({
@@ -204,46 +180,37 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       widths,
       setWidth,
       reset: resetColumnWidths,
-    } = useColumnWidths(widthColumns, scrollContainerRef);
+    } = useColumnWidths(widthColumns);
 
     useImperativeHandle(forwardedRef, () => ({ resetColumnWidths }), [
       resetColumnWidths,
     ]);
 
-    // Fallback to category default rem (× root font-size) when a brand-new
-    // column appears within the same DataGridTable instance and no width
-    // has been measured for it yet (AC-238-04 — schema change inside one
-    // mount keeps existing widths and falls back per-column for new ones;
-    // user can hit toolbar "Reset column widths" to re-run the (c) formula).
-    const getColumnWidth = useCallback(
-      (colName: string, category: ColumnCategory): number => {
-        const stored = widths[colName];
+    // Resolve the visual-order width array. New columns (schema 변경 후)
+    // fall back to category default rem — toolbar Reset (또는 cmd+shift+r)
+    // 으로 일괄 재계산.
+    const visualWidthsPx = useMemo(() => {
+      const rootFontSizePx = readRootFontSizePx();
+      return order.map((dIdx) => {
+        const col = data.columns[dIdx]!;
+        const stored = widths[col.name];
         if (stored != null) return stored;
-        const rootFontSizePx =
-          typeof window !== "undefined"
-            ? parseFloat(getComputedStyle(document.documentElement).fontSize)
-            : 16;
-        return getDefaultRem(category) * rootFontSizePx;
-      },
-      [widths],
+        return getDefaultRem(getColumnCategory(col)) * rootFontSizePx;
+      });
+    }, [order, data.columns, widths]);
+
+    const colsTemplate = useMemo(
+      () => visualWidthsPx.map((w) => `${w}px`).join(" "),
+      [visualWidthsPx],
     );
 
-    const getStartWidth = useCallback(
-      (colName: string): number | undefined => widths[colName],
-      [widths],
-    );
-
-    const { moveEditCursor } = useCellNavigation({
-      data,
-      order,
-      pendingEdits,
-      onSaveCurrentEdit,
-      onStartEdit,
-    });
+    const visualWidthsRef = useRef(visualWidthsPx);
+    visualWidthsRef.current = visualWidthsPx;
+    const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
 
     const { handleResizeStart } = useColumnResize({
-      tableRef,
-      getStartWidth,
+      outerRef: scrollContainerRef,
+      getCurrentWidths,
       onCommitWidth: setWidth,
     });
 
@@ -253,20 +220,23 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       onSelectRow,
     });
 
+    const { moveEditCursor } = useCellNavigation({
+      data,
+      order,
+      pendingEdits,
+      onSaveCurrentEdit,
+      onStartEdit,
+    });
+
     const copyToClipboard = useCallback((text: string) => {
       navigator.clipboard.writeText(text).catch(() => {
         // Clipboard API may fail in some environments; silently ignore
       });
     }, []);
 
-    // Pending new rows share the tbody scroll surface, so they count
-    // toward the virtualization threshold.
     const totalBodyRowCount = data.rows.length + pendingNewRows.length;
     const shouldVirtualize = totalBodyRowCount > VIRTUALIZE_THRESHOLD;
 
-    // We always wire up the virtualizer (count=0 when below threshold so it
-    // does no work) — calling hooks unconditionally keeps the React rules
-    // satisfied across the threshold transition.
     const rowVirtualizer = useVirtualizer({
       count: shouldVirtualize ? data.rows.length : 0,
       getScrollElement: () => scrollContainerRef.current,
@@ -274,26 +244,14 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       overscan: 10,
     });
 
-    // When the underlying dataset changes (sort/filter/page change), reset
-    // scroll position so the user always lands on the first row of the new
-    // result set instead of staring at a viewport that pointed into the old
-    // ordering. `data.executed_query` flips on every server fetch so it's a
-    // safe identity for "the rows changed".
     useEffect(() => {
       if (!shouldVirtualize) return;
       rowVirtualizer.scrollToIndex(0, { align: "start" });
-      // We intentionally only react to identity changes of the rendered set;
-      // including the virtualizer instance would re-fire on every render.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.executed_query, sorts, shouldVirtualize]);
 
-    // The overlay only paints after `loading` has been continuously true
-    // for 1s, so sub-second refetches don't flicker.
     const overlayVisible = useDelayedFlag(loading, 1000);
 
-    // The `useMemo` here is for ctx identity stability rather than
-    // reconciliation cost — `DataRow` doesn't memoize today, but stable
-    // ctx lets a future `React.memo` pass cut re-renders cleanly.
     const rowCtx: DataGridRowContext = useMemo(
       () => ({
         data,
@@ -306,7 +264,6 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         pendingDeletedRowKeys,
         selectedRowIds,
         editorFocusRef,
-        getColumnWidth,
         moveEditCursor,
         handleContextMenu,
         setBlobViewer,
@@ -328,7 +285,6 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         pendingEditErrors,
         pendingDeletedRowKeys,
         selectedRowIds,
-        getColumnWidth,
         moveEditCursor,
         handleContextMenu,
         onSelectRow,
@@ -341,143 +297,129 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       ],
     );
 
+    const colCount = data.columns.length;
+    const gridStyle = {
+      "--cols": colsTemplate,
+    } as CSSProperties;
+
     return (
-      <div className="relative flex-1 overflow-auto" ref={scrollContainerRef}>
+      <div
+        className="relative flex-1 overflow-auto text-sm"
+        ref={scrollContainerRef}
+        role="grid"
+        aria-rowcount={1 + data.rows.length + pendingNewRows.length}
+        aria-colcount={colCount}
+        style={gridStyle}
+      >
         <AsyncProgressOverlay
           visible={overlayVisible}
           onCancel={onCancelRefetch ?? (() => {})}
         />
-        <table
-          // Sprint 238 AC-238-11 — `min-w-full` removed (drove width
-          // redistribution mid-scroll). `table-fixed` only.
-          className="table-fixed border-collapse text-sm"
-          ref={tableRef}
-          role="grid"
-          aria-rowcount={1 + data.rows.length + pendingNewRows.length}
-          aria-colcount={data.columns.length}
-        >
-          <HeaderRow
-            data={data}
-            order={order}
-            sorts={sorts}
-            editingCell={editingCell}
-            onSort={onSort}
-            onSaveCurrentEdit={onSaveCurrentEdit}
-            onResizeStart={handleResizeStart}
-            getColumnWidth={getColumnWidth}
-          />
-          <tbody>
-            {shouldVirtualize
-              ? (() => {
-                  // Two `aria-hidden` spacer rows before/after the windowed
-                  // slice preserve the table's total scroll height. We can't
-                  // `position: absolute` a `<tr>` (table layout fights it),
-                  // and `transform`-ing the `<tbody>` would move every row
-                  // instead of leaving spacers — hence spacer rows.
-                  const virtualItems = rowVirtualizer.getVirtualItems();
-                  const totalSize = rowVirtualizer.getTotalSize();
-                  const paddingTop = virtualItems.length
-                    ? virtualItems[0]!.start
-                    : 0;
-                  const paddingBottom = virtualItems.length
-                    ? totalSize - virtualItems[virtualItems.length - 1]!.end
-                    : 0;
-                  return (
-                    <>
-                      {paddingTop > 0 && (
-                        <tr aria-hidden="true" style={{ height: paddingTop }}>
-                          <td
-                            colSpan={data.columns.length}
-                            style={{ padding: 0, border: 0 }}
-                          />
-                        </tr>
-                      )}
-                      {virtualItems.map((virtualRow) => (
-                        <DataRow
-                          key={`row-${page}-${virtualRow.index}`}
-                          rowIdx={virtualRow.index}
-                          ctx={rowCtx}
-                        />
-                      ))}
-                      {paddingBottom > 0 && (
-                        <tr
-                          aria-hidden="true"
-                          style={{ height: paddingBottom }}
-                        >
-                          <td
-                            colSpan={data.columns.length}
-                            style={{ padding: 0, border: 0 }}
-                          />
-                        </tr>
-                      )}
-                    </>
-                  );
-                })()
-              : data.rows.map((_row, rowIdx) => (
-                  <DataRow
-                    key={`row-${page}-${rowIdx}`}
-                    rowIdx={rowIdx}
-                    ctx={rowCtx}
-                  />
-                ))}
-            {data.rows.length === 0 && pendingNewRows.length === 0 && (
-              <tr role="row">
-                <td
-                  role="gridcell"
-                  aria-colindex={1}
-                  colSpan={data.columns.length}
-                  className="px-3 py-4 text-center text-xs text-muted-foreground"
-                >
-                  {activeFilterCount > 0 ? (
-                    // The Clear button sits next to the message so a user
-                    // who matched zero rows doesn't have to scroll back to
-                    // the FilterBar to recover.
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <span>0 rows match current filter</span>
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        aria-label="Clear filters"
-                        onClick={() => onClearFilters?.()}
-                      >
-                        Clear filter
-                      </Button>
-                    </div>
-                  ) : (
-                    "Table is empty"
-                  )}
-                </td>
-              </tr>
-            )}
+
+        <HeaderRow
+          data={data}
+          order={order}
+          sorts={sorts}
+          editingCell={editingCell}
+          onSort={onSort}
+          onSaveCurrentEdit={onSaveCurrentEdit}
+          onResizeStart={handleResizeStart}
+        />
+
+        {shouldVirtualize ? (
+          <div
+            role="rowgroup"
+            style={{
+              position: "relative",
+              height: rowVirtualizer.getTotalSize(),
+              width: "100%",
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+              <DataRow
+                key={`row-${page}-${virtualRow.index}`}
+                rowIdx={virtualRow.index}
+                ctx={rowCtx}
+                rowStyle={{
+                  position: "absolute",
+                  top: virtualRow.start,
+                  left: 0,
+                  right: 0,
+                  height: virtualRow.size,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div role="rowgroup">
+            {data.rows.map((_row, rowIdx) => (
+              <DataRow
+                key={`row-${page}-${rowIdx}`}
+                rowIdx={rowIdx}
+                ctx={rowCtx}
+              />
+            ))}
+          </div>
+        )}
+
+        {data.rows.length === 0 && pendingNewRows.length === 0 && (
+          <div role="row" className="border-b border-border">
+            <div
+              role="gridcell"
+              aria-colindex={1}
+              style={{ gridColumn: `1 / -1` }}
+              className="px-3 py-4 text-center text-xs text-muted-foreground"
+            >
+              {activeFilterCount > 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2">
+                  <span>0 rows match current filter</span>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    aria-label="Clear filters"
+                    onClick={() => onClearFilters?.()}
+                  >
+                    Clear filter
+                  </Button>
+                </div>
+              ) : (
+                "Table is empty"
+              )}
+            </div>
+          </div>
+        )}
+
+        {pendingNewRows.length > 0 && (
+          <div role="rowgroup">
             {pendingNewRows.map((newRow, newIdx) => (
-              <tr
+              <div
                 key={`new-row-${newIdx}`}
                 role="row"
                 aria-rowindex={data.rows.length + newIdx + 2}
                 className="border-b border-border bg-warning/5 hover:bg-muted"
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "var(--cols)",
+                }}
               >
                 {order.map((dIdx, visualIdx) => {
                   const cell = (newRow as unknown[])[dIdx];
-                  const col = data.columns[dIdx]!;
                   return (
-                    <td
+                    <div
                       key={`${dIdx}-${visualIdx}`}
                       role="gridcell"
                       aria-colindex={visualIdx + 1}
-                      className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground"
-                      style={{
-                        width: getColumnWidth(col.name, getColumnCategory(col)),
-                        minWidth: MIN_COL_WIDTH,
-                      }}
+                      className="overflow-hidden border-r border-border px-3 py-1 text-xs italic text-muted-foreground whitespace-nowrap text-ellipsis"
                     >
                       {cell == null ? "NULL" : String(cell)}
-                    </td>
+                    </div>
                   );
                 })}
-              </tr>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
+
         {contextMenu && (
           <ContextMenu
             x={contextMenu.x}

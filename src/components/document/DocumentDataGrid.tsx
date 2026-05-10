@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
 import { Loader2, Trash2, FileEdit } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
@@ -139,6 +147,50 @@ export default function DocumentDataGrid({
     (rowIdx: number) => `row-${page}-${rowIdx}`,
     [page],
   );
+
+  // Sprint 258 — column widths via shared hook + `--cols` CSS variable
+  // cascade. Document grid 은 drag-resize 미적용 (Sprint 238 AC-238-04 의
+  // RDB-only 정책 유지) — reset 은 toolbar 의 reset 버튼 / cmd+shift+r
+  // 이벤트로만 트리거.
+  const widthColumns = useMemo(
+    () =>
+      (data?.columns ?? []).map((c) => ({
+        name: c.name,
+        category: (c.category ?? "unknown") as ColumnCategory,
+      })),
+    [data?.columns],
+  );
+  const { widths, reset: resetColumnWidths } = useColumnWidths(widthColumns);
+
+  const colsTemplate = useMemo(() => {
+    if (!data) return "";
+    const rootFontSizePx =
+      typeof window !== "undefined"
+        ? (() => {
+            const measured = parseFloat(
+              getComputedStyle(document.documentElement).fontSize,
+            );
+            return Number.isFinite(measured) ? measured : 16;
+          })()
+        : 16;
+    return data.columns
+      .map((col) => {
+        const stored = widths[col.name];
+        if (stored != null) return `${stored}px`;
+        const cat = (col.category ?? "unknown") as ColumnCategory;
+        return `${getDefaultRem(cat) * rootFontSizePx}px`;
+      })
+      .join(" ");
+  }, [data, widths]);
+
+  // AC-258-08 — cmd+shift+r 단축키가 reset-column-widths 이벤트를
+  // dispatch 한다. App.tsx 의 핸들러가 active grid 와 무관하게 broadcast
+  // 하고, 각 mounted grid 가 자기 widths 를 리셋한다.
+  useEffect(() => {
+    const handler = () => resetColumnWidths();
+    window.addEventListener("reset-column-widths", handler);
+    return () => window.removeEventListener("reset-column-widths", handler);
+  }, [resetColumnWidths]);
 
   const handleStartEditCell = useCallback(
     (rowIdx: number, colIdx: number) => {
@@ -358,7 +410,13 @@ export default function DocumentDataGrid({
       )}
 
       {data && (
-        <div className="relative flex-1 overflow-auto">
+        <div
+          className="relative flex-1 overflow-auto text-sm"
+          role="grid"
+          aria-rowcount={1 + data.rows.length}
+          aria-colcount={data.columns.length}
+          style={{ "--cols": colsTemplate } as CSSProperties}
+        >
           {/* `AsyncProgressOverlay` paints only after `loading` has
               been continuously true for 1s and internally hardens
               against pointer-event leaks. Cancel clears loading
@@ -367,159 +425,176 @@ export default function DocumentDataGrid({
             visible={overlayVisible}
             onCancel={handleCancelRefetch}
           />
-          {/* Sprint 238 AC-238-11 — `min-w-full` removed (drove width
-              redistribution mid-scroll). `table-fixed` only. */}
-          <table className="table-fixed border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-secondary">
-              <tr>
-                {data.columns.map((col) => (
-                  <th
-                    key={col.name}
-                    className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
-                  >
-                    <div className="flex items-center gap-1">
-                      <span className="truncate">{col.name}</span>
-                    </div>
-                    <div className="mt-0.5 truncate text-3xs text-muted-foreground">
-                      {col.data_type}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row, rowIdx) => {
-                const selected = editState.selectedRowIds.has(rowIdx);
-                const isDeleted = editState.pendingDeletedRowKeys.has(
-                  rowKeyOf(rowIdx),
-                );
-                return (
-                  <tr
-                    key={`row-${page}-${rowIdx}`}
-                    aria-selected={selected}
-                    onClick={(e) =>
-                      editState.handleSelectRow(
-                        rowIdx,
-                        e.metaKey || e.ctrlKey,
-                        e.shiftKey,
-                      )
-                    }
-                    className={cn(
-                      "cursor-pointer border-b border-border hover:bg-muted",
-                      selected && "bg-accent dark:bg-accent/60",
-                      isDeleted &&
-                        "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",
-                    )}
-                  >
-                    {data.columns.map((col, colIdx) => {
-                      const cell = (row as unknown[])[colIdx];
-                      const isSentinel = isDocumentSentinel(cell);
-                      const isNull = cell == null;
-                      const key = editKey(rowIdx, colIdx);
-                      const isEditing =
-                        editState.editingCell?.row === rowIdx &&
-                        editState.editingCell?.col === colIdx;
-                      const hasPendingEdit = editState.pendingEdits.has(key);
-                      const pendingValue = hasPendingEdit
-                        ? (editState.pendingEdits.get(key) as string | null)
-                        : null;
 
-                      return (
-                        <td
-                          key={col.name}
-                          data-editing={isEditing ? "true" : undefined}
-                          className={cn(
-                            "overflow-hidden border-r border-border px-3 py-1 text-xs",
-                            isEditing &&
-                              "bg-primary/10 ring-2 ring-inset ring-primary",
-                            !isEditing && hasPendingEdit && "bg-highlight/20",
-                          )}
-                          title={
-                            isNull
-                              ? "null"
-                              : typeof cell === "object"
-                                ? JSON.stringify(cell)
-                                : String(cell)
-                          }
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            handleStartEditCell(rowIdx, colIdx);
-                          }}
-                        >
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              autoFocus
-                              aria-label={`Editing ${col.name}`}
-                              className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
-                              value={editState.editValue ?? ""}
-                              onChange={(e) =>
-                                editState.setEditValue(e.target.value)
+          <div role="rowgroup" className="sticky top-0 z-10 bg-secondary">
+            <div
+              role="row"
+              aria-rowindex={1}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "var(--cols)",
+              }}
+            >
+              {data.columns.map((col, visualIdx) => (
+                <div
+                  key={col.name}
+                  role="columnheader"
+                  aria-colindex={visualIdx + 1}
+                  className="flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
+                >
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="truncate">{col.name}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-3xs text-muted-foreground">
+                    {col.data_type}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div role="rowgroup">
+            {data.rows.map((row, rowIdx) => {
+              const selected = editState.selectedRowIds.has(rowIdx);
+              const isDeleted = editState.pendingDeletedRowKeys.has(
+                rowKeyOf(rowIdx),
+              );
+              return (
+                <div
+                  key={`row-${page}-${rowIdx}`}
+                  role="row"
+                  aria-rowindex={rowIdx + 2}
+                  aria-selected={selected}
+                  onClick={(e) =>
+                    editState.handleSelectRow(
+                      rowIdx,
+                      e.metaKey || e.ctrlKey,
+                      e.shiftKey,
+                    )
+                  }
+                  className={cn(
+                    "cursor-pointer border-b border-border hover:bg-muted",
+                    selected && "bg-accent dark:bg-accent/60",
+                    isDeleted &&
+                      "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",
+                  )}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "var(--cols)",
+                  }}
+                >
+                  {data.columns.map((col, colIdx) => {
+                    const cell = (row as unknown[])[colIdx];
+                    const isSentinel = isDocumentSentinel(cell);
+                    const isNull = cell == null;
+                    const key = editKey(rowIdx, colIdx);
+                    const isEditing =
+                      editState.editingCell?.row === rowIdx &&
+                      editState.editingCell?.col === colIdx;
+                    const hasPendingEdit = editState.pendingEdits.has(key);
+                    const pendingValue = hasPendingEdit
+                      ? (editState.pendingEdits.get(key) as string | null)
+                      : null;
+
+                    return (
+                      <div
+                        key={col.name}
+                        role="gridcell"
+                        aria-colindex={colIdx + 1}
+                        data-editing={isEditing ? "true" : undefined}
+                        className={cn(
+                          "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",
+                          isEditing &&
+                            "bg-primary/10 ring-2 ring-inset ring-primary",
+                          !isEditing && hasPendingEdit && "bg-highlight/20",
+                        )}
+                        title={
+                          isNull
+                            ? "null"
+                            : typeof cell === "object"
+                              ? JSON.stringify(cell)
+                              : String(cell)
+                        }
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleStartEditCell(rowIdx, colIdx);
+                        }}
+                      >
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            aria-label={`Editing ${col.name}`}
+                            className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                            value={editState.editValue ?? ""}
+                            onChange={(e) =>
+                              editState.setEditValue(e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                editState.saveCurrentEdit();
+                              } else if (e.key === "Escape") {
+                                e.stopPropagation();
+                                editState.cancelEdit();
                               }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  editState.saveCurrentEdit();
-                                } else if (e.key === "Escape") {
-                                  e.stopPropagation();
-                                  editState.cancelEdit();
-                                }
-                              }}
-                              onBlur={() => editState.saveCurrentEdit()}
-                            />
-                          ) : hasPendingEdit ? (
-                            pendingValue === null ? (
-                              <span
-                                className="italic text-muted-foreground"
-                                aria-label="NULL"
-                              >
-                                NULL
-                              </span>
-                            ) : (
-                              <span
-                                dir="auto"
-                                className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                              >
-                                {pendingValue}
-                              </span>
-                            )
-                          ) : isNull ? (
-                            <span className="italic text-muted-foreground">
-                              null
-                            </span>
-                          ) : isSentinel ? (
-                            <span className="italic text-muted-foreground">
-                              {String(cell)}
+                            }}
+                            onBlur={() => editState.saveCurrentEdit()}
+                          />
+                        ) : hasPendingEdit ? (
+                          pendingValue === null ? (
+                            <span
+                              className="italic text-muted-foreground"
+                              aria-label="NULL"
+                            >
+                              NULL
                             </span>
                           ) : (
                             <span
                               dir="auto"
-                              className="block overflow-hidden text-ellipsis whitespace-nowrap text-foreground [unicode-bidi:isolate]"
+                              className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
                             >
-                              {typeof cell === "object"
-                                ? safeStringifyCell(cell)
-                                : String(cell)}
+                              {pendingValue}
                             </span>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-              {data.rows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={data.columns.length || 1}
-                    className="px-3 py-4 text-center text-xs text-muted-foreground"
-                  >
-                    No documents
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                          )
+                        ) : isNull ? (
+                          <span className="italic text-muted-foreground">
+                            null
+                          </span>
+                        ) : isSentinel ? (
+                          <span className="italic text-muted-foreground">
+                            {String(cell)}
+                          </span>
+                        ) : (
+                          <span
+                            dir="auto"
+                            className="block overflow-hidden text-ellipsis whitespace-nowrap text-foreground [unicode-bidi:isolate]"
+                          >
+                            {typeof cell === "object"
+                              ? safeStringifyCell(cell)
+                              : String(cell)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {data.rows.length === 0 && (
+              <div role="row" className="border-b border-border">
+                <div
+                  role="gridcell"
+                  aria-colindex={1}
+                  style={{ gridColumn: "1 / -1" }}
+                  className="px-3 py-4 text-center text-xs text-muted-foreground"
+                >
+                  No documents
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

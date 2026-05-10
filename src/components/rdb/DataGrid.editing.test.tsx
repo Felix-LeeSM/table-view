@@ -381,7 +381,7 @@ describe("DataGrid", () => {
     });
 
     // The row should have a selected indicator
-    const row = firstRowCell.closest("tr")!;
+    const row = firstRowCell.closest('[role="row"]')!;
     expect(row.className).toContain("bg-accent/20");
   });
 
@@ -404,7 +404,7 @@ describe("DataGrid", () => {
     });
 
     // The row should have strikethrough style
-    const row = firstRowCell.closest("tr")!;
+    const row = firstRowCell.closest('[role="row"]')!;
     expect(row.className).toContain("line-through");
   });
 
@@ -423,7 +423,7 @@ describe("DataGrid", () => {
     });
 
     // All cells in that row should show strikethrough
-    const row = cells[0]!.closest("tr")!;
+    const row = cells[0]!.closest('[role="row"]')!;
     expect(row.className).toContain("line-through");
   });
 
@@ -602,9 +602,9 @@ describe("DataGrid", () => {
 
     const cells = screen.getAllByRole("gridcell");
     const rows = [
-      cells[0]!.closest("tr")!,
-      cells[3]!.closest("tr")!,
-      cells[6]!.closest("tr")!,
+      cells[0]!.closest('[role="row"]')!,
+      cells[3]!.closest('[role="row"]')!,
+      cells[6]!.closest('[role="row"]')!,
     ];
 
     // Click first row normally (selects it)
@@ -628,9 +628,9 @@ describe("DataGrid", () => {
 
     const cells = screen.getAllByRole("gridcell");
     const rows = [
-      cells[0]!.closest("tr")!,
-      cells[3]!.closest("tr")!,
-      cells[6]!.closest("tr")!,
+      cells[0]!.closest('[role="row"]')!,
+      cells[3]!.closest('[role="row"]')!,
+      cells[6]!.closest('[role="row"]')!,
     ];
 
     // Click first row (sets anchor)
@@ -656,9 +656,9 @@ describe("DataGrid", () => {
 
     const cells = screen.getAllByRole("gridcell");
     const rows = [
-      cells[0]!.closest("tr")!,
-      cells[3]!.closest("tr")!,
-      cells[6]!.closest("tr")!,
+      cells[0]!.closest('[role="row"]')!,
+      cells[3]!.closest('[role="row"]')!,
+      cells[6]!.closest('[role="row"]')!,
     ];
 
     // Select first row
@@ -708,9 +708,9 @@ describe("DataGrid", () => {
 
     const cells = screen.getAllByRole("gridcell");
     const rows = [
-      cells[0]!.closest("tr")!,
-      cells[3]!.closest("tr")!,
-      cells[6]!.closest("tr")!,
+      cells[0]!.closest('[role="row"]')!,
+      cells[3]!.closest('[role="row"]')!,
+      cells[6]!.closest('[role="row"]')!,
     ];
 
     // Multi-select first and third
@@ -778,12 +778,14 @@ describe("DataGrid", () => {
       renderDataGrid();
       await screen.findByText("3 rows");
       // Edit a cell so the toolbar Commit button has something to commit.
-      const tds = document.querySelectorAll("tbody tr:first-child td");
+      const tds = document.querySelectorAll(
+        '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+      );
       act(() => {
         fireEvent.doubleClick(tds[2]!);
       });
       const input = document.querySelector(
-        "tbody tr:first-child input",
+        '[role="row"][aria-rowindex="2"] input',
       ) as HTMLInputElement;
       act(() => {
         fireEvent.change(input, { target: { value: "Alicia" } });

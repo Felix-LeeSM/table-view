@@ -322,7 +322,9 @@ describe("DataGridTable — context menu", () => {
     expect(screen.getByText("Table is empty")).toBeInTheDocument();
 
     // Try right-clicking the empty-state row — no menu should appear
-    const noDataRow = screen.getByText("Table is empty").closest("tr");
+    const noDataRow = screen
+      .getByText("Table is empty")
+      .closest('[role="row"]');
     if (noDataRow) {
       fireEvent.contextMenu(noDataRow, { clientX: 100, clientY: 200 });
     }
@@ -356,7 +358,9 @@ describe("DataGridTable — context menu", () => {
   it("opens cell detail dialog when Show Cell Details is clicked", () => {
     renderTable();
     // Right-click directly on the second cell of row 0 ("Alice"), not the row.
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     fireEvent.contextMenu(tds[1]!, { clientX: 50, clientY: 50 });
 
     act(() => {

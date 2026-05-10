@@ -27,6 +27,9 @@ pub enum ColumnCategory {
     Object,
     Binary,
     Enum,
+    /// UUID 류 (PG `uuid`, Mongo `objectId`). text 보다 폭이 넓고
+    /// (36 자 고정 + dash 4 개), text-align left.
+    Uuid,
     #[default]
     Unknown,
 }
@@ -73,7 +76,7 @@ mod tests {
 
     #[test]
     fn all_column_categories_serialize_lowercase() {
-        // 8 종 + unknown = 9. Frontend ColumnCategory union 과 일치 검증.
+        // 9 종 + unknown = 10. Frontend ColumnCategory union 과 일치 검증.
         let pairs: &[(ColumnCategory, &str)] = &[
             (ColumnCategory::Int, "int"),
             (ColumnCategory::Float, "float"),
@@ -83,6 +86,7 @@ mod tests {
             (ColumnCategory::Object, "object"),
             (ColumnCategory::Binary, "binary"),
             (ColumnCategory::Enum, "enum"),
+            (ColumnCategory::Uuid, "uuid"),
             (ColumnCategory::Unknown, "unknown"),
         ];
         for (variant, expected) in pairs {

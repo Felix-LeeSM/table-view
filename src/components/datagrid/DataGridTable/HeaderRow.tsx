@@ -1,12 +1,11 @@
 import { useRef } from "react";
 import { Key } from "lucide-react";
-import type { ColumnCategory } from "@/lib/columnCategory";
 import type { SortInfo, TableData } from "@/types/schema";
-import { MIN_COL_WIDTH } from "./columnUtils";
 
 /**
- * `<thead>` for `DataGridTable`. Renders column headers, handles sort
- * clicks with 4px drag suppression, and exposes the resize handle.
+ * Sprint 258 — `<thead>` 폐기, `<div role="rowgroup">` + sticky header
+ * row. column widths 는 outer container 의 `--cols` CSS variable cascade
+ * 로 결정된다.
  *
  * Invariants:
  * - Sort fires only when click ↔ mousedown movement ≤ 4px, so dragging
@@ -22,8 +21,11 @@ export interface HeaderRowProps {
   editingCell: { row: number; col: number } | null;
   onSort: (columnName: string, shiftKey: boolean) => void;
   onSaveCurrentEdit: () => void;
-  onResizeStart: (e: React.MouseEvent, colName: string, colIdx: number) => void;
-  getColumnWidth: (colName: string, category: ColumnCategory) => number;
+  onResizeStart: (
+    e: React.MouseEvent,
+    colName: string,
+    visualIdx: number,
+  ) => void;
 }
 
 export default function HeaderRow({
@@ -34,55 +36,50 @@ export default function HeaderRow({
   onSort,
   onSaveCurrentEdit,
   onResizeStart,
-  getColumnWidth,
 }: HeaderRowProps) {
-  // Tracks mousedown position on column headers to distinguish clicks from drags.
-  // When movement exceeds 4px we suppress the sort so that dragging the header
-  // (e.g. to scroll horizontally) doesn't accidentally change sort order.
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
 
   return (
-    <thead className="sticky top-0 z-10 bg-secondary">
-      <tr role="row" aria-rowindex={1}>
+    <div role="rowgroup" className="sticky top-0 z-10 bg-secondary">
+      <div
+        role="row"
+        aria-rowindex={1}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "var(--cols)",
+        }}
+      >
         {order.map((dIdx, visualIdx) => {
           const col = data.columns[dIdx]!;
           const sortInfo = sorts.find((s) => s.column === col.name);
           const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
           return (
-            <th
+            <div
               key={col.name}
               role="columnheader"
               aria-colindex={visualIdx + 1}
-              className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
-              style={{
-                width: getColumnWidth(col.name, col.category ?? "unknown"),
-                minWidth: MIN_COL_WIDTH,
-              }}
+              className="relative flex cursor-pointer flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
               onMouseDown={(e) => {
                 sortMouseStartRef.current = { x: e.clientX, y: e.clientY };
               }}
               onClick={(e) => {
-                // Suppress sort when the user dragged the header rather
-                // than simply clicking it (movement threshold: 4 px).
                 if (sortMouseStartRef.current) {
                   const dx = Math.abs(e.clientX - sortMouseStartRef.current.x);
                   const dy = Math.abs(e.clientY - sortMouseStartRef.current.y);
                   sortMouseStartRef.current = null;
                   if (dx > 4 || dy > 4) return;
                 }
-                // If a cell is being edited, save it before changing sort
-                // so the input doesn't stay visible at the wrong position.
                 if (editingCell) onSaveCurrentEdit();
                 onSort(col.name, e.shiftKey);
               }}
               title={`Sort by ${col.name}`}
             >
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 min-w-0">
                 {col.is_primary_key && (
-                  <span title="Primary Key">
+                  <span title="Primary Key" className="shrink-0">
                     <Key
                       size={12}
-                      className="shrink-0 text-warning"
+                      className="text-warning"
                       aria-label="Primary Key"
                     />
                   </span>
@@ -101,16 +98,15 @@ export default function HeaderRow({
               >
                 {col.data_type}
               </div>
-              {/* Resize handle */}
               <div
                 className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
                 onMouseDown={(e) => onResizeStart(e, col.name, visualIdx)}
                 onClick={(e) => e.stopPropagation()}
               />
-            </th>
+            </div>
           );
         })}
-      </tr>
-    </thead>
+      </div>
+    </div>
   );
 }

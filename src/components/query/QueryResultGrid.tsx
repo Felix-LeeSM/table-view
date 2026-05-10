@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
 import type {
   QueryResult,
@@ -7,6 +7,8 @@ import type {
   QueryType,
 } from "@/types/query";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { getDefaultRem } from "@/lib/columnCategory";
 import {
   analyzeResultEditability,
   parseSingleTableSelect,
@@ -60,75 +62,126 @@ function ResultTable({ result }: { result: QueryResult }) {
     dataType: string;
   } | null>(null);
 
+  // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
+  // Read-only grid: drag-resize 미적용. cmd+shift+r 도 listen 안 함
+  // (query result 는 일시적 — 새 query 마다 columns 가 바뀌면 widths 가
+  // useColumnWidths 의 mount-only 정책에 따라 자연스레 재계산됨).
+  const widthColumns = useMemo(
+    () => result.columns.map((c) => ({ name: c.name, category: c.category })),
+    [result.columns],
+  );
+  const { widths } = useColumnWidths(widthColumns);
+
+  const colsTemplate = useMemo(() => {
+    const rootFontSizePx =
+      typeof window !== "undefined"
+        ? (() => {
+            const measured = parseFloat(
+              getComputedStyle(document.documentElement).fontSize,
+            );
+            return Number.isFinite(measured) ? measured : 16;
+          })()
+        : 16;
+    return result.columns
+      .map((col) => {
+        const stored = widths[col.name];
+        if (stored != null) return `${stored}px`;
+        return `${getDefaultRem(col.category) * rootFontSizePx}px`;
+      })
+      .join(" ");
+  }, [result.columns, widths]);
+
   return (
-    <div className="flex-1 overflow-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead className="sticky top-0 z-10 bg-secondary">
-          <tr>
-            {result.columns.map((col) => (
-              <th
-                key={col.name}
-                scope="col"
-                className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
-              >
-                <div>{col.name}</div>
-                <div className="mt-0.5 text-3xs text-muted-foreground">
-                  {col.data_type}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result.rows.map((row, rowIdx) => (
-            <tr
-              key={`row-${rowIdx}`}
-              className="border-b border-border hover:bg-muted"
+    <div
+      className="flex-1 overflow-auto text-sm"
+      role="grid"
+      aria-rowcount={1 + result.rows.length}
+      aria-colcount={result.columns.length}
+      style={{ "--cols": colsTemplate } as CSSProperties}
+    >
+      <div role="rowgroup" className="sticky top-0 z-10 bg-secondary">
+        <div
+          role="row"
+          aria-rowindex={1}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "var(--cols)",
+          }}
+        >
+          {result.columns.map((col, visualIdx) => (
+            <div
+              key={col.name}
+              role="columnheader"
+              aria-colindex={visualIdx + 1}
+              className="flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
             >
-              {row.map((cell, cellIdx) => {
-                const col = result.columns[cellIdx];
-                return (
-                  <td
-                    key={cellIdx}
-                    className="overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground cursor-pointer"
-                    title={`${formatCell(cell)}\n\n(double-click to expand)`}
-                    onDoubleClick={() => {
-                      if (col) {
-                        setCellDetail({
-                          data: cell,
-                          columnName: col.name,
-                          dataType: col.data_type,
-                        });
-                      }
-                    }}
-                  >
-                    {cell == null ? (
-                      <span className="italic text-muted-foreground">NULL</span>
-                    ) : (
-                      <span
-                        dir="auto"
-                        className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                      >
-                        {formatCell(cell)}
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
+              <div className="truncate">{col.name}</div>
+              <div className="mt-0.5 truncate text-3xs text-muted-foreground">
+                {col.data_type}
+              </div>
+            </div>
           ))}
-          {result.rows.length === 0 && (
-            <tr>
-              <td
-                colSpan={result.columns.length || 1}
-                className="px-3 py-4 text-center text-xs text-muted-foreground"
-              >
-                No data
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        </div>
+      </div>
+      <div role="rowgroup">
+        {result.rows.map((row, rowIdx) => (
+          <div
+            key={`row-${rowIdx}`}
+            role="row"
+            aria-rowindex={rowIdx + 2}
+            className="border-b border-border hover:bg-muted"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "var(--cols)",
+            }}
+          >
+            {row.map((cell, cellIdx) => {
+              const col = result.columns[cellIdx];
+              return (
+                <div
+                  key={cellIdx}
+                  role="gridcell"
+                  aria-colindex={cellIdx + 1}
+                  className="flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground cursor-pointer"
+                  title={`${formatCell(cell)}\n\n(double-click to expand)`}
+                  onDoubleClick={() => {
+                    if (col) {
+                      setCellDetail({
+                        data: cell,
+                        columnName: col.name,
+                        dataType: col.data_type,
+                      });
+                    }
+                  }}
+                >
+                  {cell == null ? (
+                    <span className="italic text-muted-foreground">NULL</span>
+                  ) : (
+                    <span
+                      dir="auto"
+                      className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                    >
+                      {formatCell(cell)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        {result.rows.length === 0 && (
+          <div role="row" className="border-b border-border">
+            <div
+              role="gridcell"
+              aria-colindex={1}
+              style={{ gridColumn: "1 / -1" }}
+              className="px-3 py-4 text-center text-xs text-muted-foreground"
+            >
+              No data
+            </div>
+          </div>
+        )}
+      </div>
       {cellDetail && (
         <CellDetailDialog
           open={cellDetail !== null}

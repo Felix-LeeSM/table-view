@@ -1,8 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
+import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { getDefaultRem } from "@/lib/columnCategory";
 import {
   Dialog,
   DialogContent,
@@ -96,6 +98,35 @@ export default function EditableQueryResultGrid({
 
   const rowKeyFn = useCallback((rowIdx: number) => `row-1-${rowIdx}`, []);
 
+  // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
+  // Editable raw-query grid: drag-resize 미적용 (Sprint 238 의 RDB-only
+  // 정책 유지). Reset 도 toolbar 부재 — 본 grid 는 일시적이라 widths 가
+  // mount 시점에 default rem 으로만 설정된다.
+  const widthColumns = useMemo(
+    () => result.columns.map((c) => ({ name: c.name, category: c.category })),
+    [result.columns],
+  );
+  const { widths } = useColumnWidths(widthColumns);
+
+  const colsTemplate = useMemo(() => {
+    const rootFontSizePx =
+      typeof window !== "undefined"
+        ? (() => {
+            const measured = parseFloat(
+              getComputedStyle(document.documentElement).fontSize,
+            );
+            return Number.isFinite(measured) ? measured : 16;
+          })()
+        : 16;
+    return result.columns
+      .map((col) => {
+        const stored = widths[col.name];
+        if (stored != null) return `${stored}px`;
+        return `${getDefaultRem(col.category) * rootFontSizePx}px`;
+      })
+      .join(" ");
+  }, [result.columns, widths]);
+
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
         {
@@ -179,146 +210,168 @@ export default function EditableQueryResultGrid({
         onRevertDelete={grid.handleRevertDelete}
       />
 
-      <div className="flex-1 overflow-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 z-10 bg-secondary">
-            <tr>
-              {result.columns.map((col) => {
-                const isPk = plan.pkColumns.includes(col.name);
-                return (
-                  <th
-                    key={col.name}
-                    scope="col"
-                    className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
-                  >
-                    <div className="flex items-center gap-1">
-                      {isPk && (
-                        <span
-                          title="Primary Key"
-                          className="text-warning"
-                          aria-label="Primary key"
-                        >
-                          🔑
-                        </span>
-                      )}
-                      <span>{col.name}</span>
-                    </div>
-                    <div className="mt-0.5 text-3xs text-muted-foreground">
-                      {col.data_type}
-                    </div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {result.rows.map((row, rowIdx) => {
-              const rk = rowKeyFn(rowIdx);
-              const isDeleted = grid.pendingDeletedRowKeys.has(rk);
+      <div
+        className="flex-1 overflow-auto text-sm"
+        role="grid"
+        aria-rowcount={1 + result.rows.length}
+        aria-colcount={result.columns.length}
+        style={{ "--cols": colsTemplate } as CSSProperties}
+      >
+        <div role="rowgroup" className="sticky top-0 z-10 bg-secondary">
+          <div
+            role="row"
+            aria-rowindex={1}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "var(--cols)",
+            }}
+          >
+            {result.columns.map((col, visualIdx) => {
+              const isPk = plan.pkColumns.includes(col.name);
               return (
-                <tr
-                  key={rk}
-                  className={`border-b border-border hover:bg-muted${
-                    isDeleted ? " line-through opacity-50" : ""
-                  }`}
+                <div
+                  key={col.name}
+                  role="columnheader"
+                  aria-colindex={visualIdx + 1}
+                  className="flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
                 >
-                  {row.map((cell, colIdx) => {
-                    const col = result.columns[colIdx]!;
-                    const key = editKey(rowIdx, colIdx);
-                    const isEditing =
-                      grid.editingCell?.row === rowIdx &&
-                      grid.editingCell?.col === colIdx;
-                    const hasPendingEdit = grid.pendingEdits.has(key);
-                    const cellStr = cellToEditString(cell);
-                    const displayValue = hasPendingEdit
-                      ? grid.pendingEdits.get(key)!
-                      : cellStr;
-
-                    return (
-                      <td
-                        key={colIdx}
-                        data-editing={isEditing ? "true" : undefined}
-                        className={`overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground ${
-                          isEditing
-                            ? "bg-primary/10 ring-2 ring-inset ring-primary"
-                            : hasPendingEdit
-                              ? "bg-highlight/20"
-                              : ""
-                        }`}
-                        title={formatCellDisplay(cell)}
-                        onDoubleClick={() => grid.startEdit(rowIdx, colIdx)}
-                        onClick={() => {
-                          if (grid.editingCell && !isEditing) {
-                            grid.saveCurrentEdit();
-                          }
-                        }}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setContextMenu({
-                            x: e.clientX,
-                            y: e.clientY,
-                            rowIdx,
-                            colIdx,
-                          });
-                        }}
+                  <div className="flex items-center gap-1 min-w-0">
+                    {isPk && (
+                      <span
+                        title="Primary Key"
+                        className="text-warning"
+                        aria-label="Primary key"
                       >
-                        {isEditing ? (
-                          <input
-                            type={getInputTypeForColumn(col.data_type)}
-                            className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
-                            value={grid.editValue}
-                            autoFocus
-                            aria-label={`Editing ${col.name}`}
-                            onChange={(e) => grid.setEditValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                grid.saveCurrentEdit();
-                              } else if (e.key === "Escape") {
-                                e.stopPropagation();
-                                grid.cancelEdit();
-                              }
-                            }}
-                          />
-                        ) : hasPendingEdit ? (
-                          <span
-                            dir="auto"
-                            className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                          >
-                            {displayValue}
-                          </span>
-                        ) : cell == null ? (
-                          <span className="italic text-muted-foreground">
-                            NULL
-                          </span>
-                        ) : (
-                          <span
-                            dir="auto"
-                            className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                          >
-                            {displayValue}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
+                        🔑
+                      </span>
+                    )}
+                    <span className="truncate">{col.name}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-3xs text-muted-foreground">
+                    {col.data_type}
+                  </div>
+                </div>
               );
             })}
-            {result.rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={result.columns.length || 1}
-                  className="px-3 py-4 text-center text-xs text-muted-foreground"
-                >
-                  No data
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+        </div>
+        <div role="rowgroup">
+          {result.rows.map((row, rowIdx) => {
+            const rk = rowKeyFn(rowIdx);
+            const isDeleted = grid.pendingDeletedRowKeys.has(rk);
+            return (
+              <div
+                key={rk}
+                role="row"
+                aria-rowindex={rowIdx + 2}
+                className={`border-b border-border hover:bg-muted${
+                  isDeleted ? " line-through opacity-50" : ""
+                }`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "var(--cols)",
+                }}
+              >
+                {row.map((cell, colIdx) => {
+                  const col = result.columns[colIdx]!;
+                  const key = editKey(rowIdx, colIdx);
+                  const isEditing =
+                    grid.editingCell?.row === rowIdx &&
+                    grid.editingCell?.col === colIdx;
+                  const hasPendingEdit = grid.pendingEdits.has(key);
+                  const cellStr = cellToEditString(cell);
+                  const displayValue = hasPendingEdit
+                    ? grid.pendingEdits.get(key)!
+                    : cellStr;
+
+                  return (
+                    <div
+                      key={colIdx}
+                      role="gridcell"
+                      aria-colindex={colIdx + 1}
+                      data-editing={isEditing ? "true" : undefined}
+                      className={`flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground ${
+                        isEditing
+                          ? "bg-primary/10 ring-2 ring-inset ring-primary"
+                          : hasPendingEdit
+                            ? "bg-highlight/20"
+                            : ""
+                      }`}
+                      title={formatCellDisplay(cell)}
+                      onDoubleClick={() => grid.startEdit(rowIdx, colIdx)}
+                      onClick={() => {
+                        if (grid.editingCell && !isEditing) {
+                          grid.saveCurrentEdit();
+                        }
+                      }}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          rowIdx,
+                          colIdx,
+                        });
+                      }}
+                    >
+                      {isEditing ? (
+                        <input
+                          type={getInputTypeForColumn(col.data_type)}
+                          className="w-full rounded-sm border-none bg-background px-1 py-0 text-xs text-foreground shadow-sm outline-none"
+                          value={grid.editValue}
+                          autoFocus
+                          aria-label={`Editing ${col.name}`}
+                          onChange={(e) => grid.setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              grid.saveCurrentEdit();
+                            } else if (e.key === "Escape") {
+                              e.stopPropagation();
+                              grid.cancelEdit();
+                            }
+                          }}
+                        />
+                      ) : hasPendingEdit ? (
+                        <span
+                          dir="auto"
+                          className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                        >
+                          {displayValue}
+                        </span>
+                      ) : cell == null ? (
+                        <span className="italic text-muted-foreground">
+                          NULL
+                        </span>
+                      ) : (
+                        <span
+                          dir="auto"
+                          className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                        >
+                          {displayValue}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {result.rows.length === 0 && (
+            <div role="row" className="border-b border-border">
+              <div
+                role="gridcell"
+                aria-colindex={1}
+                style={{ gridColumn: "1 / -1" }}
+                className="px-3 py-4 text-center text-xs text-muted-foreground"
+              >
+                No data
+              </div>
+            </div>
+          )}
+        </div>
         {contextMenu && (
           <ContextMenu
             x={contextMenu.x}

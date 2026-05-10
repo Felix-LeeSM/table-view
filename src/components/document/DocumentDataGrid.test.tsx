@@ -174,7 +174,7 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    const rowAlice = screen.getByText("Alice").closest("tr");
+    const rowAlice = screen.getByText("Alice").closest('[role="row"]');
     expect(rowAlice).not.toBeNull();
     expect(rowAlice).toHaveAttribute("aria-selected", "false");
 
@@ -210,7 +210,9 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    const rowAlice = screen.getByText("Alice").closest("tr") as HTMLElement;
+    const rowAlice = screen
+      .getByText("Alice")
+      .closest('[role="row"]') as HTMLElement;
     fireEvent.click(rowAlice);
 
     fireEvent.keyDown(document, { key: "l", metaKey: true });
@@ -249,7 +251,9 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    const rowAlice = screen.getByText("Alice").closest("tr") as HTMLElement;
+    const rowAlice = screen
+      .getByText("Alice")
+      .closest('[role="row"]') as HTMLElement;
     fireEvent.click(rowAlice);
     expect(rowAlice).toHaveAttribute("aria-selected", "true");
 
@@ -259,7 +263,9 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Carol")).toBeInTheDocument());
 
-    const rowCarol = screen.getByText("Carol").closest("tr") as HTMLElement;
+    const rowCarol = screen
+      .getByText("Carol")
+      .closest('[role="row"]') as HTMLElement;
     expect(rowCarol).toHaveAttribute("aria-selected", "false");
   });
 
@@ -486,10 +492,10 @@ describe("DocumentDataGrid", () => {
     fireEvent.change(editor, { target: { value: "Ada" } });
     fireEvent.keyDown(editor, { key: "Enter" });
 
-    // The pending cell text becomes "Ada"; its td carries bg-highlight.
+    // The pending cell text becomes "Ada"; its gridcell carries bg-highlight.
     const pendingText = await screen.findByText("Ada");
-    const td = pendingText.closest("td") as HTMLElement | null;
-    expect(td).not.toBeNull();
-    expect(td!.className).toMatch(/bg-highlight/);
+    const cell = pendingText.closest('[role="gridcell"]') as HTMLElement | null;
+    expect(cell).not.toBeNull();
+    expect(cell!.className).toMatch(/bg-highlight/);
   });
 });

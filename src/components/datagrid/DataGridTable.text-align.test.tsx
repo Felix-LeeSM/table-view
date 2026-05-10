@@ -94,7 +94,7 @@ describe("DataGridTable — text-align by ColumnCategory (AC-238-08)", () => {
     render(<DataGridTable {...baseProps} data={makeData()} />);
 
     const cells = document.querySelectorAll(
-      'tr[role="row"][aria-rowindex="2"] td[role="gridcell"]',
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
     );
     expect(cells).toHaveLength(4);
 
@@ -124,7 +124,7 @@ describe("DataGridTable — text-align by ColumnCategory (AC-238-08)", () => {
     render(<DataGridTable {...baseProps} data={legacyData} />);
 
     const firstCell = document.querySelector(
-      'tr[role="row"][aria-rowindex="2"] td[role="gridcell"]',
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
     );
     expect(firstCell).not.toBeNull();
     // unknown → 좌편향 (text-right / text-center 없음).

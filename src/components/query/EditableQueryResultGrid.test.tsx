@@ -70,7 +70,9 @@ describe("EditableQueryResultGrid", () => {
 
   it("enters edit mode on double-click and shows the editing input", () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!); // 'Alice' cell
     });
@@ -81,7 +83,9 @@ describe("EditableQueryResultGrid", () => {
 
   it("does NOT add a pending edit when value is unchanged", () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
 
     act(() => {
       fireEvent.doubleClick(tds[1]!);
@@ -101,7 +105,9 @@ describe("EditableQueryResultGrid", () => {
 
   it("adds pending edit when value changes; toolbar shows + commit opens preview", async () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -128,7 +134,9 @@ describe("EditableQueryResultGrid", () => {
 
   it("Discard clears pending changes", () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -153,7 +161,9 @@ describe("EditableQueryResultGrid", () => {
 
   it("right-click → Delete Row queues a deletion and shows commit toolbar", () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.contextMenu(tds[0]!, { clientX: 50, clientY: 50 });
     });
@@ -167,7 +177,9 @@ describe("EditableQueryResultGrid", () => {
 
   it("Cmd+S shortcut opens the SQL preview when there are pending changes", async () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -188,7 +200,9 @@ describe("EditableQueryResultGrid", () => {
     // Sprint 183 — single transaction batch (was: N × executeQuery loop).
     const onAfterCommit = vi.fn();
     renderGrid({ onAfterCommit });
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -234,7 +248,9 @@ describe("EditableQueryResultGrid", () => {
     useQueryHistoryStore.setState({ entries: [], globalLog: [] });
 
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -268,7 +284,9 @@ describe("EditableQueryResultGrid", () => {
   // the DB would reject with a syntax error on Commit.
   it("[AC-182-03a] does not open the editor on double-click when pkColumns is empty", () => {
     renderGrid({ plan: { ...PLAN, pkColumns: [] } });
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -279,7 +297,9 @@ describe("EditableQueryResultGrid", () => {
   // aria-disabled so a keyboard user sees the same gate. 2026-05-01.
   it("[AC-182-03b] marks context-menu Delete as aria-disabled when pkColumns is empty", () => {
     renderGrid({ plan: { ...PLAN, pkColumns: [] } });
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.contextMenu(tds[0]!, { clientX: 50, clientY: 50 });
     });
@@ -304,7 +324,9 @@ describe("EditableQueryResultGrid", () => {
   // still opens with the same UPDATE statement.
   it("[AC-182-06a] tray mounts but Commit/SQL preview path is unchanged", async () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -338,7 +360,9 @@ describe("EditableQueryResultGrid", () => {
   // user can review individual statements before committing.
   it("[AC-183-08d] Cmd+S → SQL preview lists each statement; Execute runs the batch", async () => {
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });
@@ -377,7 +401,9 @@ describe("EditableQueryResultGrid", () => {
       new Error("statement 1 of 1 failed: permission denied"),
     );
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.contextMenu(tds[0]!, { clientX: 0, clientY: 0 });
     });

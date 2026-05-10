@@ -130,7 +130,9 @@ describe("EditableQueryResultGrid — Sprint 185 Safe Mode gate", () => {
   async function clickExecute(buildSqls: string[]) {
     vi.mocked(buildRawEditSql).mockReturnValue(buildSqls);
     renderGrid();
-    const tds = document.querySelectorAll("tbody tr:first-child td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(tds[1]!);
     });

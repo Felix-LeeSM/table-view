@@ -75,7 +75,7 @@ describe("DataGridTable editing visual emphasis", () => {
     );
 
     const editingTd = document.querySelector(
-      'td[data-editing="true"]',
+      '[role="gridcell"][data-editing="true"]',
     ) as HTMLElement | null;
     expect(editingTd).not.toBeNull();
     expect(editingTd!.className).toMatch(/ring-primary/);
@@ -85,7 +85,9 @@ describe("DataGridTable editing visual emphasis", () => {
 
   it("non-editing cells do NOT carry the editing attribute", () => {
     render(<DataGridTable {...makeProps()} />);
-    const editingTds = document.querySelectorAll('td[data-editing="true"]');
+    const editingTds = document.querySelectorAll(
+      '[role="gridcell"][data-editing="true"]',
+    );
     expect(editingTds.length).toBe(0);
   });
 
@@ -111,7 +113,9 @@ describe("DataGridTable editing visual emphasis", () => {
         })}
       />,
     );
-    const tds = document.querySelectorAll("tbody td");
+    const tds = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     // The 2nd td of the 1st row is the pending cell
     const pendingTd = tds[1] as HTMLElement;
     expect(pendingTd.className).toMatch(/bg-highlight/);
@@ -227,7 +231,9 @@ describe("DataGridTable — NULL vs empty string distinction", () => {
     // No NULL label should render — this is an empty string, not NULL
     expect(screen.queryByLabelText("NULL")).not.toBeInTheDocument();
     // The pending cell exists and has the highlight bg (not editing, but pending)
-    const tds = container.querySelectorAll("tbody td");
+    const tds = container.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     expect(tds[1]!.className).toMatch(/bg-highlight/);
   });
 

@@ -116,7 +116,7 @@ describe("DataGrid", () => {
     const spinnerParent = spinners[0]!.parentElement!;
     expect(spinnerParent.className).not.toContain("absolute");
     // Table should not be rendered yet
-    expect(document.querySelector("table")).not.toBeInTheDocument();
+    expect(document.querySelector('[role="grid"]')).not.toBeInTheDocument();
   });
 
   // 16. Refetch (loading with existing data) keeps table in DOM
@@ -132,7 +132,7 @@ describe("DataGrid", () => {
     });
 
     // Table and its headers should still be in the DOM
-    expect(document.querySelector("table")).toBeInTheDocument();
+    expect(document.querySelector('[role="grid"]')).toBeInTheDocument();
     expect(screen.getByText("id")).toBeInTheDocument();
     expect(screen.getByText("name")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
@@ -164,7 +164,7 @@ describe("DataGrid", () => {
     );
 
     // Both table AND overlay spinner should exist.
-    expect(document.querySelector("table")).toBeInTheDocument();
+    expect(document.querySelector('[role="grid"]')).toBeInTheDocument();
     const spinners = document.querySelectorAll(".animate-spin");
     expect(spinners.length).toBe(1);
     // The spinner should be inside an absolutely-positioned overlay.
@@ -187,7 +187,7 @@ describe("DataGrid", () => {
     const spinners = document.querySelectorAll(".animate-spin");
     expect(spinners.length).toBe(0);
     // Table should still be present
-    expect(document.querySelector("table")).toBeInTheDocument();
+    expect(document.querySelector('[role="grid"]')).toBeInTheDocument();
   });
 
   // 19. Error display unchanged after refetch failure
@@ -216,27 +216,16 @@ describe("DataGrid", () => {
     expect(resizeHandles.length).toBe(3); // one per column
   });
 
-  // 20a. Column resize: mousedown starts drag and applies width on mousemove
+  // 20a. Sprint 258 — drag-resize 가 outer container 의 `--cols` CSS
+  // variable 첫 토큰 px 를 증가시킨다.
   it("starts column resize drag and applies width via DOM", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
     const resizeHandle = document.querySelectorAll(".cursor-col-resize")[0]!;
-
-    // jsdom returns 0 for getBoundingClientRect — mock a realistic column width
-    const th = document.querySelector("th:nth-child(1)") as HTMLElement;
-    th.getBoundingClientRect = () =>
-      ({
-        width: 150,
-        height: 0,
-        top: 0,
-        left: 0,
-        bottom: 0,
-        right: 150,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }) as DOMRect;
+    const outer = document.querySelector('[role="grid"]') as HTMLElement;
+    const startCols = outer.style.getPropertyValue("--cols").trim();
+    const startFirstPx = parseFloat(startCols.split(/\s+/)[0] ?? "0");
 
     // Trigger mousedown — this registers document-level listeners
     fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
@@ -245,23 +234,20 @@ describe("DataGrid", () => {
     expect(document.body.style.cursor).toBe("col-resize");
     expect(document.body.style.userSelect).toBe("none");
 
-    // Simulate mousemove on document (wider than start: 150 + 80 = 230)
+    // Simulate mousemove on document (delta +80 → first column +80px)
     fireEvent.mouseMove(document, { clientX: 280 });
 
-    expect(th).toBeTruthy();
-    expect(parseInt(th.style.width, 10)).toBeGreaterThan(150);
+    const afterCols = outer.style.getPropertyValue("--cols").trim();
+    const afterFirstPx = parseFloat(afterCols.split(/\s+/)[0] ?? "0");
+    expect(afterFirstPx).toBeGreaterThan(startFirstPx);
 
-    // Clean up: manually trigger mouseup to remove listeners
-    // We use dispatchEvent directly to avoid the re-render race
-    document.removeEventListener("mousemove", () => {});
+    // Cleanup
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
   });
 
-  // Sprint 238 (2026-05-10): drag-resize 가 negative delta 에서도 crash 하지
-  // 않으며, AC-238-04 user-free policy 에 따라 0 까지 허용한다 (시각적
-  // 가드는 td/th 의 inline `min-width: MIN_COL_WIDTH` 가 담당; inline
-  // `style.width` 는 user-driven raw 값).
+  // Sprint 238 / 258: drag-resize 가 negative delta 에서도 crash 하지
+  // 않으며, AC-258-04 user-free policy 에 따라 0 까지 허용한다.
   it("handles resize that drags below initial width without crashing", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
@@ -275,11 +261,12 @@ describe("DataGrid", () => {
     // computed delta would push width below 0.
     fireEvent.mouseMove(document, { clientX: 100 });
 
-    const th = document.querySelector("th:nth-child(1)") as HTMLElement;
+    const outer = document.querySelector('[role="grid"]') as HTMLElement;
+    const cols = outer.style.getPropertyValue("--cols").trim();
+    const firstPx = parseFloat(cols.split(/\s+/)[0] ?? "0");
     // Width must be a finite, non-negative pixel value.
-    const width = parseFloat(th.style.width);
-    expect(Number.isFinite(width)).toBe(true);
-    expect(width).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(firstPx)).toBe(true);
+    expect(firstPx).toBeGreaterThanOrEqual(0);
 
     // Cleanup
     document.body.style.cursor = "";

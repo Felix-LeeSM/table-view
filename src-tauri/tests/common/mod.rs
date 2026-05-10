@@ -21,6 +21,7 @@ use table_view_lib::db::mongodb::MongoAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::DbAdapter;
 use table_view_lib::models::{ConnectionConfig, DatabaseType};
+use testcontainers::core::{ImageExt, ReuseDirective};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::mongo::Mongo as MongoImage;
@@ -70,9 +71,18 @@ async fn pg_endpoint() -> Option<PgEndpoint> {
     }
 
     // 2) testcontainers — lazy 시작.
+    //    Sprint 258 — testcontainers-rs 는 Ryuk(외부 watchdog) 미지원이라
+    //    Drop 만이 cleanup 메커니즘이고 panic/SIGKILL 시 컨테이너가 leak
+    //    된다. `ReuseDirective::Always` 로 spec hash 가 동일한 컨테이너를
+    //    재사용하면 leak 이 누적되지 않고 PG 1개로 수렴한다. Drop 시 stop
+    //    하지 않으므로 명시적 정리는 `docker rm -f` 라벨 sweep 으로.
     let cell = PG_CONTAINER
         .get_or_init(|| async {
-            match PostgresImage::default().start().await {
+            match PostgresImage::default()
+                .with_reuse(ReuseDirective::Always)
+                .start()
+                .await
+            {
                 Ok(c) => Some(Arc::new(c)),
                 Err(e) => {
                     println!(
@@ -121,10 +131,15 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
     }
 
     // 2) testcontainers — lazy 시작. testcontainers-modules의 기본 Mongo
-    //    image는 auth 비활성, 익명 연결 가능.
+    //    image는 auth 비활성, 익명 연결 가능. `ReuseDirective::Always` 는
+    //    PG 와 동일 사유 (Ryuk 미지원 → leak 누적 차단).
     let cell = MONGO_CONTAINER
         .get_or_init(|| async {
-            match MongoImage::default().start().await {
+            match MongoImage::default()
+                .with_reuse(ReuseDirective::Always)
+                .start()
+                .await
+            {
                 Ok(c) => Some(Arc::new(c)),
                 Err(e) => {
                     println!(

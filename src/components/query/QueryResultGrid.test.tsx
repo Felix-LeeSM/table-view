@@ -166,7 +166,9 @@ describe("QueryResultGrid", () => {
     );
 
     // Double-click the first row's name cell ("Alice").
-    const firstRowCells = document.querySelectorAll("tbody tr:first-child td");
+    const firstRowCells = document.querySelectorAll(
+      '[role="row"][aria-rowindex="2"] [role="gridcell"]',
+    );
     act(() => {
       fireEvent.doubleClick(firstRowCells[1]!);
     });

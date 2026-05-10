@@ -67,7 +67,9 @@ function makeProps(overrides: Record<string, unknown> = {}) {
 }
 
 function getColumnHeaders(): HTMLElement[] {
-  return Array.from(document.querySelectorAll("thead th")) as HTMLElement[];
+  return Array.from(
+    document.querySelectorAll('[role="columnheader"]'),
+  ) as HTMLElement[];
 }
 
 describe("DataGridTable — column sort vs drag discrimination", () => {

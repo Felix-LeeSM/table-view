@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -9,13 +10,14 @@ import {
   deriveEditorSeed,
   getInputTypeForColumn,
 } from "../useDataGridEdit";
-import { MIN_COL_WIDTH, isBlobColumn, parseFkReference } from "./columnUtils";
+import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
 /**
- * Body row for `DataGridTable`. Renders one `<tr>` and dispatches each
- * cell across 5 modes: editing-null, editing-typed, hasPendingEdit,
- * blob, and plain.
+ * Sprint 258 — `<tr>` / `<td>` 폐기. row 는 `<div role="row">` 자체 grid
+ * (`grid-template-columns: var(--cols)`), cell 은 `<div role="gridcell">`.
+ * column width 는 outer container 의 `--cols` CSS variable cascade 만으로
+ * 결정 — cell 별 explicit width style 없음.
  *
  * Invariants:
  * - row key = `row-${page}-${rowIdx}`. Page change remounts the row so
@@ -35,7 +37,6 @@ export interface DataGridRowContext {
   pendingDeletedRowKeys: Set<string>;
   selectedRowIds: Set<number>;
   editorFocusRef: React.RefObject<HTMLElement | null>;
-  getColumnWidth: (colName: string, category: ColumnCategory) => number;
   moveEditCursor: (
     currentRow: number,
     currentDataCol: number,
@@ -68,9 +69,14 @@ export interface DataGridRowContext {
 export interface DataRowProps {
   rowIdx: number;
   ctx: DataGridRowContext;
+  /**
+   * Sprint 258 — virtualizer 가 absolute positioning 을 적용할 때 주입한다.
+   * 비-virtualized branch 에서는 omit.
+   */
+  rowStyle?: CSSProperties;
 }
 
-export default function DataRow({ rowIdx, ctx }: DataRowProps) {
+export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
   const {
     data,
     page,
@@ -82,7 +88,6 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
     pendingDeletedRowKeys,
     selectedRowIds,
     editorFocusRef,
-    getColumnWidth,
     moveEditCursor,
     handleContextMenu,
     setBlobViewer,
@@ -101,17 +106,20 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
   const isDeleted = pendingDeletedRowKeys.has(rk);
   const isSelected = selectedRowIds.has(rowIdx);
 
+  const mergedStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "var(--cols)",
+    ...rowStyle,
+  };
+
   return (
-    <tr
-      key={rk}
+    <div
       role="row"
       aria-rowindex={rowIdx + 2}
       className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+      style={mergedStyle}
       onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
       onContextMenu={(e) => {
-        // Fallback when the right-click lands between cells.
-        // Cell-level handlers below override this when the click
-        // hits a real td so the context menu reflects that cell.
         handleContextMenu(e, rowIdx, 0);
       }}
     >
@@ -132,9 +140,9 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
         const align = getTextAlign(category);
         const alignClass =
           align === "right"
-            ? " text-right"
+            ? " justify-end text-right"
             : align === "center"
-              ? " text-center"
+              ? " justify-center text-center"
               : "";
 
         const fkRef =
@@ -143,22 +151,18 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
             : null;
 
         return (
-          <td
+          <div
             key={`${dIdx}-${visualIdx}`}
             role="gridcell"
             aria-colindex={visualIdx + 1}
             data-editing={isEditing ? "true" : undefined}
-            className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
+            className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
               isEditing
                 ? " bg-primary/10 ring-2 ring-inset ring-primary"
                 : hasPendingEdit
                   ? " bg-highlight/20"
                   : ""
             }`}
-            style={{
-              width: getColumnWidth(col.name, category),
-              minWidth: MIN_COL_WIDTH,
-            }}
             title={
               cell == null
                 ? "NULL"
@@ -173,16 +177,12 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
               }
             }}
             onContextMenu={(e) => {
-              // Stop the row-level handler from overwriting our
-              // accurate per-cell coordinates with colIdx=0.
               e.stopPropagation();
               handleContextMenu(e, rowIdx, dIdx);
             }}
           >
             {isEditing ? (
               (() => {
-                // Coercion error from the prior commit attempt. Cleared
-                // entry-by-entry as the user types, so it auto-disappears.
                 const errorMessage = pendingEditErrors?.get(key);
                 return (
                   <div className="flex flex-col">
@@ -195,11 +195,6 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                         role="textbox"
                         aria-label={`Editing ${col.name} — currently NULL`}
                         tabIndex={0}
-                        // Sprint 250 (AC-250-01): blur on the NULL chip
-                        // routes to the same commit entry point as
-                        // Tab/Enter. `saveCurrentEdit` is idempotent
-                        // (editingCell-null guard inside) so re-blur
-                        // after the editor closes is a safe no-op.
                         onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
                           if (e.key === "Tab") {
@@ -225,7 +220,6 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                             (e.metaKey || e.ctrlKey) &&
                             e.key === "Backspace"
                           ) {
-                            // Already NULL — just eat the shortcut.
                             e.preventDefault();
                           } else if (
                             e.key.length === 1 &&
@@ -233,10 +227,6 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                             !e.ctrlKey &&
                             !e.altKey
                           ) {
-                            // Printable key flips NULL → typed editor with a
-                            // type-aware seed (so e.g. a date column lands on a
-                            // date picker rather than a text input with the raw
-                            // character).
                             e.preventDefault();
                             const { seed, accept } = deriveEditorSeed(
                               col.data_type,
@@ -267,12 +257,6 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                         value={editValue}
                         aria-label={`Editing ${col.name}`}
                         onChange={(e) => onSetEditValue(e.target.value)}
-                        // Sprint 250 (AC-250-01): blur (clicking another
-                        // cell, the toolbar, or empty space) commits the
-                        // edit identically to Tab/Enter. `saveCurrentEdit`
-                        // first-line guards on editingCell, so the
-                        // post-commit re-render that fires another blur
-                        // is a no-op (AC-250-05 race guard).
                         onBlur={onSaveCurrentEdit}
                         onKeyDown={(e) => {
                           if (
@@ -363,8 +347,6 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    // FK jump icon stays at 40% opacity so users can
-                    // discover it without hovering; hover bumps to 100%.
                     className="shrink-0 opacity-40 transition-opacity group-hover/cell:opacity-100 text-muted-foreground hover:text-foreground"
                     aria-label={`Open referenced row in ${fkRef.schema}.${fkRef.table}`}
                     title={`Go to ${fkRef.schema}.${fkRef.table} (${fkRef.column})`}
@@ -383,9 +365,9 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                 )}
               </span>
             )}
-          </td>
+          </div>
         );
       })}
-    </tr>
+    </div>
   );
 }

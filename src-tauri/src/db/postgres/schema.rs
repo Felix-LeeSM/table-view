@@ -14,7 +14,7 @@ use crate::models::{
     ViewInfo,
 };
 
-use super::category::map_pg_data_type;
+use super::category::{map_pg_data_type, normalize_pg_type};
 use super::connection::is_pg_database_permission_denied;
 use super::PostgresAdapter;
 
@@ -141,11 +141,23 @@ impl PostgresAdapter {
         table: &str,
         schema: &str,
     ) -> Result<Vec<ColumnInfo>, AppError> {
+        // Sprint 258 — `information_schema.columns.data_type` 는 generic
+        // 명 ("character varying") 만 노출. `pg_catalog.format_type` 으로
+        // 길이/정밀도/배열 표기 (`varchar(200)`, `numeric(10,2)`,
+        // `text[]`) 까지 DDL-level 그대로 가져온다.
         let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
-            "SELECT column_name, data_type, is_nullable, column_default \
-             FROM information_schema.columns \
-             WHERE table_schema = $1 AND table_name = $2 \
-             ORDER BY ordinal_position",
+            "SELECT a.attname, \
+                    pg_catalog.format_type(a.atttypid, a.atttypmod), \
+                    CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END, \
+                    pg_get_expr(d.adbin, d.adrelid) \
+             FROM pg_catalog.pg_attribute a \
+             JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+             LEFT JOIN pg_catalog.pg_attrdef d \
+               ON d.adrelid = a.attrelid AND d.adnum = a.attnum \
+             WHERE n.nspname = $1 AND c.relname = $2 \
+               AND a.attnum > 0 AND NOT a.attisdropped \
+             ORDER BY a.attnum",
         )
         .bind(schema)
         .bind(table)
@@ -253,7 +265,11 @@ impl PostgresAdapter {
                 };
                 let comment = comment_map.get(&name).and_then(Option::clone);
                 let check_clauses = check_map.remove(&name).unwrap_or_default();
+                // Sprint 258 — category 매핑은 raw format_type 결과 (parameter
+                // 표기 포함) 에서 base 만 추출하므로 정규화 전후 무관. 사용자
+                // 표시용 data_type 은 단축형으로 정규화.
                 let category = map_pg_data_type(&data_type);
+                let data_type = normalize_pg_type(&data_type);
                 ColumnInfo {
                     name,
                     data_type,
@@ -277,12 +293,21 @@ impl PostgresAdapter {
     ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
         let pool = self.active_pool().await?;
 
-        // Basic column info for all tables in the schema
+        // Sprint 258 — DDL-level type 노출용 `pg_catalog.format_type`
+        // 사용 (information_schema.columns.data_type 는 generic 명만 노출).
         let col_rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
-            "SELECT table_name, column_name, data_type, is_nullable, column_default \
-             FROM information_schema.columns \
-             WHERE table_schema = $1 \
-             ORDER BY table_name, ordinal_position",
+            "SELECT c.relname, a.attname, \
+                    pg_catalog.format_type(a.atttypid, a.atttypmod), \
+                    CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END, \
+                    pg_get_expr(d.adbin, d.adrelid) \
+             FROM pg_catalog.pg_attribute a \
+             JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+             LEFT JOIN pg_catalog.pg_attrdef d \
+               ON d.adrelid = a.attrelid AND d.adnum = a.attnum \
+             WHERE n.nspname = $1 AND c.relkind = 'r' \
+               AND a.attnum > 0 AND NOT a.attisdropped \
+             ORDER BY c.relname, a.attnum",
         )
         .bind(schema)
         .fetch_all(&pool)
@@ -397,6 +422,7 @@ impl PostgresAdapter {
                 .unwrap_or_default();
 
             let category = map_pg_data_type(&data_type);
+            let data_type = normalize_pg_type(&data_type);
             result.entry(table_name).or_default().push(ColumnInfo {
                 name: col_name,
                 data_type,
@@ -673,11 +699,21 @@ impl PostgresAdapter {
     ) -> Result<Vec<ColumnInfo>, AppError> {
         let pool = self.active_pool().await?;
 
+        // Sprint 258 — DDL-level type 노출용 format_type. view 도 동일 패턴.
         let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
-            "SELECT column_name, data_type, is_nullable, column_default \
-             FROM information_schema.columns \
-             WHERE table_schema = $1 AND table_name = $2 \
-             ORDER BY ordinal_position",
+            "SELECT a.attname, \
+                    pg_catalog.format_type(a.atttypid, a.atttypmod), \
+                    CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END, \
+                    pg_get_expr(d.adbin, d.adrelid) \
+             FROM pg_catalog.pg_attribute a \
+             JOIN pg_catalog.pg_class c ON c.oid = a.attrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+             LEFT JOIN pg_catalog.pg_attrdef d \
+               ON d.adrelid = a.attrelid AND d.adnum = a.attnum \
+             WHERE n.nspname = $1 AND c.relname = $2 \
+               AND c.relkind IN ('v', 'm') \
+               AND a.attnum > 0 AND NOT a.attisdropped \
+             ORDER BY a.attnum",
         )
         .bind(schema)
         .bind(view_name)
@@ -710,6 +746,7 @@ impl PostgresAdapter {
             .map(|(name, data_type, is_nullable, default_value)| {
                 let comment = comments.get(&name).cloned().flatten();
                 let category = map_pg_data_type(&data_type);
+                let data_type = normalize_pg_type(&data_type);
                 ColumnInfo {
                     name,
                     data_type,

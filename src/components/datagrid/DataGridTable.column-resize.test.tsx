@@ -1,7 +1,7 @@
-// Sprint 238 (2026-05-10) — column-resize 동작은 useColumnWidths 훅이 owning
-// 하고 외부 store 연결을 끊었다. 따라서 prev 테스트의 `onColumnWidthsChange`
-// mock 호출 단언은 더 이상 가능하지 않다. 대체로 drag → DOM 의 <th> style.width
-// 가 변경되었는지를 검증한다 (사용자 가시성).
+// Sprint 258 (2026-05-11) — DataGrid 가 `<table>` 폐기 + CSS Grid 로 전환.
+// drag-resize 의 결과는 outer container 의 `--cols` CSS variable 갱신.
+// 본 테스트는 drag → mouseup 시 `--cols` 의 첫 column px 가 증가했고
+// 두 번째 column px 는 변하지 않았다는 사실을 잡는다.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
@@ -71,11 +71,19 @@ function getResizeHandles(): HTMLElement[] {
   ) as HTMLElement[];
 }
 
-function getThs(): HTMLElement[] {
-  return Array.from(document.querySelectorAll("th")) as HTMLElement[];
+function getOuterGrid(): HTMLElement {
+  const el = document.querySelector('[role="grid"]') as HTMLElement | null;
+  if (!el) throw new Error("outer role=grid not found");
+  return el;
 }
 
-describe("DataGridTable — Column Resize (Sprint 238 useColumnWidths owned)", () => {
+function parseColsPx(outer: HTMLElement): number[] {
+  const raw = outer.style.getPropertyValue("--cols").trim();
+  if (!raw) return [];
+  return raw.split(/\s+/).map((tok) => parseFloat(tok));
+}
+
+describe("DataGridTable — Column Resize (Sprint 258 CSS Grid)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -85,15 +93,17 @@ describe("DataGridTable — Column Resize (Sprint 238 useColumnWidths owned)", (
     document.body.style.userSelect = "";
   });
 
-  it("drag → mouseup 가 자기 column <th> style.width 만 변경한다 (AC-238-04, AC-238-11)", () => {
+  it("drag → mouseup 가 자기 column 의 --cols px 만 변경한다 (AC-258-02, AC-258-04)", () => {
     render(<DataGridTable {...defaultProps} />);
 
     const handles = getResizeHandles();
     expect(handles.length).toBeGreaterThanOrEqual(1);
     const handle = handles[0]!;
 
-    const idWidthBefore = getThs()[0]!.style.width;
-    const nameWidthBefore = getThs()[1]!.style.width;
+    const before = parseColsPx(getOuterGrid());
+    expect(before.length).toBe(2);
+    const idBefore = before[0]!;
+    const nameBefore = before[1]!;
 
     act(() => {
       handle.dispatchEvent(
@@ -117,15 +127,12 @@ describe("DataGridTable — Column Resize (Sprint 238 useColumnWidths owned)", (
       );
     });
 
-    const idWidthAfter = getThs()[0]!.style.width;
-    const nameWidthAfter = getThs()[1]!.style.width;
-
-    // id column 폭이 drag 만큼 증가했다 (drag 결과 적용).
-    const idPxBefore = parseFloat(idWidthBefore);
-    const idPxAfter = parseFloat(idWidthAfter);
-    expect(idPxAfter).toBeGreaterThan(idPxBefore);
-    // 인접 column 폭은 변하지 않는다 (column 독립성).
-    expect(nameWidthAfter).toBe(nameWidthBefore);
+    const after = parseColsPx(getOuterGrid());
+    expect(after.length).toBe(2);
+    // id column +100px (drag delta).
+    expect(after[0]!).toBeGreaterThan(idBefore);
+    // 인접 column 의 px 는 변하지 않는다 (column 독립성).
+    expect(after[1]!).toBe(nameBefore);
   });
 
   it("does not crash when mouseup fires without prior mousemove (regression)", () => {

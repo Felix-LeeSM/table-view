@@ -7,6 +7,7 @@ export type ColumnCategory =
   | "object"
   | "binary"
   | "enum"
+  | "uuid"
   | "unknown";
 
 const DEFAULT_REM: Record<ColumnCategory, number> = {
@@ -19,6 +20,8 @@ const DEFAULT_REM: Record<ColumnCategory, number> = {
   unknown: 12.5,
   text: 15,
   object: 15,
+  // UUID 36자 고정 (8-4-4-4-12 + 4 dashes). text 보다 더 넓게.
+  uuid: 18,
 };
 
 export function getDefaultRem(category: ColumnCategory): number {
@@ -34,29 +37,20 @@ export function getTextAlign(category: ColumnCategory): TextAlign {
 }
 
 /**
- * AC-238-03 (c) 산식 — pure 함수.
+ * Sprint 258 — column 별 default rem 을 rootFontSize 로 px 변환.
  *
- * 1. 각 column 의 category default rem → px (rootFontSize).
- * 2. sum(defaultPx) < containerPx → 전체 column 을 비례 확대 (container 채움).
- * 3. sum(defaultPx) ≥ containerPx → default 그대로 (horizontal scroll).
+ * Sprint 238 의 컨테이너 fit (sum < containerPx 일 때 비례 확대) 폐기.
+ * `<table>` → CSS Grid 전환 (sprint-258) 후에는 columns 합 < container
+ * 면 우측 잔여 공간 (사용자 의도), 합 > container 면 horizontal scroll.
+ * Stretch redistribution 의 _근거 자체_ 가 사라졌다.
  */
 export function computeInitialWidths(
   columns: ReadonlyArray<{ name: string; category: ColumnCategory }>,
-  containerPx: number,
   rootFontSizePx: number,
 ): Record<string, number> {
   const result: Record<string, number> = {};
-  if (columns.length === 0) return result;
-
-  const defaultsPx = columns.map(
-    (c) => getDefaultRem(c.category) * rootFontSizePx,
-  );
-  const sum = defaultsPx.reduce((acc, n) => acc + n, 0);
-
-  const scale = sum > 0 && sum < containerPx ? containerPx / sum : 1;
-  columns.forEach((col, i) => {
-    const px = defaultsPx[i] ?? 0;
-    result[col.name] = px * scale;
+  columns.forEach((col) => {
+    result[col.name] = getDefaultRem(col.category) * rootFontSizePx;
   });
   return result;
 }
