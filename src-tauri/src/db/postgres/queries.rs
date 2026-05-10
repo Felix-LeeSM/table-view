@@ -831,6 +831,7 @@ impl PostgresAdapter {
 mod tests {
     use super::*;
     use crate::db::postgres::PostgresAdapter;
+    use crate::models::ColumnCategory;
 
     // [AC-183-07a] — empty input must short-circuit without acquiring a
     // pool or starting a transaction; matches the contract's "no-op
@@ -988,6 +989,7 @@ mod tests {
             fk_reference: None,
             comment: None,
             check_clauses: Vec::new(),
+            category: ColumnCategory::Int,
         }
     }
 
@@ -1002,6 +1004,7 @@ mod tests {
             fk_reference: None,
             comment: None,
             check_clauses: Vec::new(),
+            category: ColumnCategory::Text,
         }
     }
 

@@ -188,6 +188,7 @@ mod tests {
     use crate::commands::test_util::{document_default, rdb_default, state_with};
     use crate::db::testing::{clone_app_error, StubDocumentAdapter};
     use crate::db::{ActiveAdapter, NamespaceInfo};
+    use crate::models::ColumnCategory;
 
     // ── list_mongo_databases — 5 scenarios ───────────────────────────────
 
@@ -343,6 +344,7 @@ mod tests {
                 fk_reference: None,
                 comment: None,
                 check_clauses: Vec::new(),
+                category: ColumnCategory::Unknown,
             }])
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;

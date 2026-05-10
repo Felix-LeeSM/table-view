@@ -14,6 +14,7 @@ use crate::models::{
     ViewInfo,
 };
 
+use super::category::map_pg_data_type;
 use super::connection::is_pg_database_permission_denied;
 use super::PostgresAdapter;
 
@@ -252,6 +253,7 @@ impl PostgresAdapter {
                 };
                 let comment = comment_map.get(&name).and_then(Option::clone);
                 let check_clauses = check_map.remove(&name).unwrap_or_default();
+                let category = map_pg_data_type(&data_type);
                 ColumnInfo {
                     name,
                     data_type,
@@ -262,6 +264,7 @@ impl PostgresAdapter {
                     fk_reference,
                     comment,
                     check_clauses,
+                    category,
                 }
             })
             .collect())
@@ -393,6 +396,7 @@ impl PostgresAdapter {
                 .remove(&(table_name.clone(), col_name.clone()))
                 .unwrap_or_default();
 
+            let category = map_pg_data_type(&data_type);
             result.entry(table_name).or_default().push(ColumnInfo {
                 name: col_name,
                 data_type,
@@ -403,6 +407,7 @@ impl PostgresAdapter {
                 fk_reference,
                 comment,
                 check_clauses,
+                category,
             });
         }
 
@@ -704,6 +709,7 @@ impl PostgresAdapter {
             .into_iter()
             .map(|(name, data_type, is_nullable, default_value)| {
                 let comment = comments.get(&name).cloned().flatten();
+                let category = map_pg_data_type(&data_type);
                 ColumnInfo {
                     name,
                     data_type,
@@ -714,6 +720,7 @@ impl PostgresAdapter {
                     fk_reference: None,
                     comment,
                     check_clauses: Vec::new(),
+                    category,
                 }
             })
             .collect())

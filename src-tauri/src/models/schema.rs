@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::ColumnCategory;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SchemaInfo {
     pub name: String,
@@ -31,6 +33,13 @@ pub struct ColumnInfo {
     /// populate the field) deserializing to an empty vector.
     #[serde(default)]
     pub check_clauses: Vec<String>,
+    /// Sprint 238 AC-238-02 — display category for the DataGrid (drives
+    /// default width + text-align). Independent of `data_type`, which is
+    /// preserved verbatim for structure / records views. `#[serde(default)]`
+    /// keeps older payloads (and callers that don't enrich) parsing as
+    /// `Unknown`.
+    #[serde(default)]
+    pub category: ColumnCategory,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -509,6 +518,7 @@ mod tests {
             fk_reference: None,
             comment: Some("Primary user identifier".to_string()),
             check_clauses: vec!["CHECK ((user_id > 0))".to_string()],
+            category: ColumnCategory::Int,
         };
         let json = serde_json::to_string(&col).unwrap();
         let deserialized: ColumnInfo = serde_json::from_str(&json).unwrap();
@@ -541,6 +551,7 @@ mod tests {
             fk_reference: None,
             comment: None,
             check_clauses: Vec::new(),
+            category: ColumnCategory::Text,
         };
         let json = serde_json::to_string(&col).unwrap();
         let deserialized: ColumnInfo = serde_json::from_str(&json).unwrap();
@@ -587,6 +598,7 @@ mod tests {
                     fk_reference: None,
                     comment: None,
                     check_clauses: Vec::new(),
+                    category: ColumnCategory::Int,
                 },
                 ColumnInfo {
                     name: "name".to_string(),
@@ -598,6 +610,7 @@ mod tests {
                     fk_reference: None,
                     comment: Some("User display name".to_string()),
                     check_clauses: Vec::new(),
+                    category: ColumnCategory::Text,
                 },
             ],
             rows: vec![

@@ -379,7 +379,7 @@ mod tests {
     use crate::commands::test_util::{document_default, rdb_default, state_with};
     use crate::db::testing::{clone_app_error, StubRdbAdapter};
     use crate::db::{ActiveAdapter, NamespaceInfo};
-    use crate::models::{ConstraintInfo, FunctionInfo, IndexInfo};
+    use crate::models::{ColumnCategory, ConstraintInfo, FunctionInfo, IndexInfo};
     use std::collections::HashMap;
 
     // ── list_schemas witness — 5 contract + boundary scenarios ────────────
@@ -664,6 +664,7 @@ mod tests {
                 fk_reference: None,
                 comment: None,
                 check_clauses: Vec::new(),
+                category: ColumnCategory::Unknown,
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
@@ -788,6 +789,7 @@ mod tests {
                 fk_reference: None,
                 comment: None,
                 check_clauses: Vec::new(),
+                category: ColumnCategory::Unknown,
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;

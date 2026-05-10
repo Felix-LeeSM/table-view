@@ -16,7 +16,7 @@ pub enum QueryType {
 /// Display category for a column — drives DataGrid layout (default width
 /// and text-align). Independent of the raw `data_type`, which is preserved
 /// verbatim for structure / records views (Sprint 238 AC-238-02).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ColumnCategory {
     Int,
@@ -27,6 +27,7 @@ pub enum ColumnCategory {
     Object,
     Binary,
     Enum,
+    #[default]
     Unknown,
 }
 

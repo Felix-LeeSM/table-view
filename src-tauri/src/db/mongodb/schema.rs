@@ -14,6 +14,7 @@ use crate::error::AppError;
 use crate::models::{ColumnInfo, TableInfo};
 
 use super::super::NamespaceInfo;
+use super::category::map_mongo_data_type;
 use super::queries::{bson_type_name, validate_ns};
 use super::MongoAdapter;
 
@@ -174,6 +175,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
         let counts = type_counts.get("_id").cloned().unwrap_or_default();
         let data_type = modal_type(&counts).unwrap_or("ObjectId");
         let nullable = *null_or_absent.get("_id").unwrap_or(&false);
+        let category = map_mongo_data_type(data_type);
         columns.push(ColumnInfo {
             name: "_id".into(),
             data_type: data_type.to_string(),
@@ -184,6 +186,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             fk_reference: None,
             comment: None,
             check_clauses: Vec::new(),
+            category,
         });
     } else {
         columns.push(ColumnInfo {
@@ -198,6 +201,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             fk_reference: None,
             comment: None,
             check_clauses: Vec::new(),
+            category: map_mongo_data_type("ObjectId"),
         });
     }
 
@@ -208,6 +212,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
         let counts = type_counts.get(name).cloned().unwrap_or_default();
         let data_type = modal_type(&counts).unwrap_or("Null");
         let nullable = *null_or_absent.get(name).unwrap_or(&true);
+        let category = map_mongo_data_type(data_type);
         columns.push(ColumnInfo {
             name: name.clone(),
             data_type: data_type.to_string(),
@@ -218,6 +223,7 @@ pub(super) fn infer_columns_from_samples(samples: &[Document]) -> Vec<ColumnInfo
             fk_reference: None,
             comment: None,
             check_clauses: Vec::new(),
+            category,
         });
     }
 

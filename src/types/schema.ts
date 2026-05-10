@@ -1,3 +1,5 @@
+import type { ColumnCategory } from "@/lib/columnCategory";
+
 export interface SchemaInfo {
   name: string;
 }
@@ -25,6 +27,14 @@ export interface ColumnInfo {
    * / non-PG adapters compatible) — read with `?? []` on the consumer side.
    */
   check_clauses?: string[];
+  /**
+   * Sprint 238 AC-238-02 — display category for the DataGrid (drives
+   * default width + text-align). Independent of `data_type`, which is
+   * preserved verbatim for structure / records views. Backend-optional
+   * (`#[serde(default)]` → `unknown`) so older payloads / fixtures
+   * continue parsing.
+   */
+  category?: ColumnCategory;
 }
 
 export interface IndexInfo {
