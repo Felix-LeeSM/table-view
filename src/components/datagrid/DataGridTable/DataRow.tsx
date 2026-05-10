@@ -1,6 +1,6 @@
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
-import { truncateCell } from "@lib/format";
+import { safeStringifyCell } from "@lib/jsonCell";
 import type { TableData } from "@/types/schema";
 import {
   editKey,
@@ -317,7 +317,12 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                   NULL
                 </span>
               ) : (
-                <span className="line-clamp-3">{pendingValue}</span>
+                <span
+                  dir="auto"
+                  className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                >
+                  {pendingValue}
+                </span>
               )
             ) : isBlob && cell != null ? (
               <Button
@@ -336,13 +341,14 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
             ) : cell == null ? (
               <span className="italic text-muted-foreground">NULL</span>
             ) : (
-              <span className="flex items-center gap-1">
-                <span className="line-clamp-3">
-                  {truncateCell(
-                    typeof cell === "object" && cell !== null
-                      ? JSON.stringify(cell, null, 2)
-                      : String(cell),
-                  )}
+              <span className="flex items-center gap-1 min-w-0">
+                <span
+                  dir="auto"
+                  className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                >
+                  {typeof cell === "object" && cell !== null
+                    ? safeStringifyCell(cell)
+                    : String(cell)}
                 </span>
                 {fkRef && onNavigateToFk && (
                   <Button

@@ -165,15 +165,14 @@ describe("DataGrid", () => {
     expect(nulls[0]!.tagName).toBe("SPAN");
   });
 
-  // 6. JSONB object display
-  it("renders JSONB objects as JSON.stringify output", async () => {
+  // 6. JSONB object display — Sprint 238 AC-238-07: compact 1-line JSON.
+  it("renders JSONB objects as compact one-line JSON (Sprint 238)", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
-    // JSON.stringify with indent produces multiline text — use title attribute for matching
     const cells = screen.getAllByRole("gridcell");
     const cellTexts = cells.map((c) => c.textContent);
-    expect(cellTexts).toContain(JSON.stringify({ key: "value" }, null, 2));
-    expect(cellTexts).toContain(JSON.stringify([1, 2, 3], null, 2));
+    expect(cellTexts).toContain(JSON.stringify({ key: "value" }));
+    expect(cellTexts).toContain(JSON.stringify([1, 2, 3]));
   });
 
   // 13. Executed query bar toggles visibility

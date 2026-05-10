@@ -525,10 +525,11 @@ describe("DataGrid", () => {
     expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
   });
 
-  // ── Sprint 44: Data Grid UX ──
+  // ── Sprint 44: Data Grid UX (Sprint 238 으로 char-truncate 폐기) ──
 
-  // 54. Truncates long cell values at 200 chars
-  it("truncates cell values longer than 200 characters", async () => {
+  // 54. Sprint 238 — long cell 은 full text 를 DOM 에 보존, CSS ellipsis 로
+  // 시각적 cap 처리. char-truncate(200) 와 line-clamp-3 모두 제거 (AC-238-05/06).
+  it("preserves full cell text in DOM and exposes via title (CSS ellipsis handles overflow)", async () => {
     const longText = "A".repeat(250);
     mockQueryTableData.mockResolvedValue({
       ...MOCK_DATA,
@@ -540,11 +541,12 @@ describe("DataGrid", () => {
 
     const cells = screen.getAllByRole("gridcell");
     const nameCell = cells[1]!;
-    // Display should be truncated
-    const displayedText = nameCell.querySelector(".line-clamp-3")?.textContent;
-    expect(displayedText).toBe("A".repeat(200) + "...");
-    // Title should have full value
+    // Full text in DOM (browser CSS hides overflow visually).
+    expect(nameCell.textContent).toContain(longText);
+    // Title still carries full value for hover.
     expect(nameCell).toHaveAttribute("title", longText);
+    // line-clamp-3 마커 부재 — Sprint 238 로 폐기됨.
+    expect(nameCell.querySelector(".line-clamp-3")).toBeNull();
   });
 
   // 55. Data type header has truncate class

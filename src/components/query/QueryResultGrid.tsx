@@ -6,7 +6,7 @@ import type {
   QueryStatementResult,
   QueryType,
 } from "@/types/query";
-import { truncateCell } from "@lib/format";
+import { safeStringifyCell } from "@lib/jsonCell";
 import {
   analyzeResultEditability,
   parseSingleTableSelect,
@@ -44,11 +44,11 @@ function queryTypeLabel(qt: QueryType): string {
   return "Query";
 }
 
-/** Format a cell value for display. */
+/** Format a cell value for display. Sprint 238: compact JSON 1-line. */
 function formatCell(cell: unknown): string {
   if (cell == null) return "NULL";
   if (typeof cell === "object" && cell !== null) {
-    return JSON.stringify(cell, null, 2);
+    return safeStringifyCell(cell);
   }
   return String(cell);
 }
@@ -105,8 +105,11 @@ function ResultTable({ result }: { result: QueryResult }) {
                     {cell == null ? (
                       <span className="italic text-muted-foreground">NULL</span>
                     ) : (
-                      <span className="line-clamp-3">
-                        {truncateCell(formatCell(cell))}
+                      <span
+                        dir="auto"
+                        className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                      >
+                        {formatCell(cell)}
                       </span>
                     )}
                   </td>

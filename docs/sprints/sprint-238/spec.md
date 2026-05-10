@@ -160,3 +160,4 @@ SELECT 쿼리 결과
 - "Reset column widths" 키보드 단축키 — 이번 sprint 는 toolbar 버튼만 (AC-238-12). 단축키 (예: cmd+shift+R) 는 별도 backlog
 - Structure view 의 column widths 정책 — 별도 컴포넌트 (ColumnsEditor 등) 사용 중, (c) 산식 적용 대상 아님. 필요 시 별도 sprint
 - **`data_type` raw 노출 강화** — 현재 PG sqlx `type_info().to_string()` 은 "INT4" / "VARCHAR" / "TIMESTAMP" 같이 normalize 된 표시명을 반환. 사용자가 원하는 "serial" / "bigserial" / "smallint" / "timestamptz" 같이 DDL-level raw type 을 노출하려면 PG `pg_attribute` + `pg_type` join 으로 별도 조회 필요 (예: `format_type(atttypid, atttypmod)`). 이번 sprint 는 normalize 표시 그대로 통과시키고, raw 노출은 별도 sprint 에서 다룬다 (사용자 요청, 2026-05-10)
+- **큰 정수 (i64 / bigint / Int64 / Decimal128) wire-format 정밀도 보존** — 현재 Rust → JSON → JS 경로에서 i64 가 JS Number 로 파싱되며 2^53 - 1 (Number.MAX_SAFE_INTEGER) 을 넘는 값이 손실됨. 백엔드가 큰 정수를 string 으로 직렬화하고 frontend 가 BigInt 로 parse 해서 cell 에 표시하는 변경은 IPC contract 변경 + 모든 cell renderer 수정 필요. 별도 sprint 에서 다룬다 (사용자 노트, 2026-05-10)

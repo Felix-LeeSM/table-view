@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { Button } from "@components/ui/button";
+import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
 import {
   Dialog,
@@ -37,7 +38,7 @@ export interface EditableQueryResultGridProps {
 
 function formatCellDisplay(cell: unknown): string {
   if (cell == null) return "NULL";
-  if (typeof cell === "object") return JSON.stringify(cell, null, 2);
+  if (typeof cell === "object") return safeStringifyCell(cell);
   return String(cell);
 }
 
@@ -282,13 +283,23 @@ export default function EditableQueryResultGrid({
                             }}
                           />
                         ) : hasPendingEdit ? (
-                          <span className="line-clamp-3">{displayValue}</span>
+                          <span
+                            dir="auto"
+                            className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                          >
+                            {displayValue}
+                          </span>
                         ) : cell == null ? (
                           <span className="italic text-muted-foreground">
                             NULL
                           </span>
                         ) : (
-                          <span className="line-clamp-3">{displayValue}</span>
+                          <span
+                            dir="auto"
+                            className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                          >
+                            {displayValue}
+                          </span>
                         )}
                       </td>
                     );

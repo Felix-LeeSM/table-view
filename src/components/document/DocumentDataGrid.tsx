@@ -3,6 +3,7 @@ import { Loader2, Trash2, FileEdit } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { isDocumentSentinel } from "@/types/document";
+import { safeStringifyCell } from "@lib/jsonCell";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
@@ -474,7 +475,10 @@ export default function DocumentDataGrid({
                                 NULL
                               </span>
                             ) : (
-                              <span className="line-clamp-3">
+                              <span
+                                dir="auto"
+                                className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                              >
                                 {pendingValue}
                               </span>
                             )
@@ -487,9 +491,12 @@ export default function DocumentDataGrid({
                               {String(cell)}
                             </span>
                           ) : (
-                            <span className="line-clamp-3 text-foreground">
+                            <span
+                              dir="auto"
+                              className="block overflow-hidden text-ellipsis whitespace-nowrap text-foreground [unicode-bidi:isolate]"
+                            >
                               {typeof cell === "object"
-                                ? JSON.stringify(cell)
+                                ? safeStringifyCell(cell)
                                 : String(cell)}
                             </span>
                           )}
