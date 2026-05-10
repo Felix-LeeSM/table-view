@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Key } from "lucide-react";
+import type { ColumnCategory } from "@/lib/columnCategory";
 import type { SortInfo, TableData } from "@/types/schema";
 import { MIN_COL_WIDTH } from "./columnUtils";
 
@@ -22,7 +23,7 @@ export interface HeaderRowProps {
   onSort: (columnName: string, shiftKey: boolean) => void;
   onSaveCurrentEdit: () => void;
   onResizeStart: (e: React.MouseEvent, colName: string, colIdx: number) => void;
-  getColumnWidth: (colName: string, dataType?: string) => number;
+  getColumnWidth: (colName: string, category: ColumnCategory) => number;
 }
 
 export default function HeaderRow({
@@ -54,7 +55,7 @@ export default function HeaderRow({
               aria-colindex={visualIdx + 1}
               className="relative cursor-pointer border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground hover:bg-muted"
               style={{
-                width: getColumnWidth(col.name, col.data_type),
+                width: getColumnWidth(col.name, col.category ?? "unknown"),
                 minWidth: MIN_COL_WIDTH,
               }}
               onMouseDown={(e) => {

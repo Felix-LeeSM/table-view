@@ -258,8 +258,11 @@ describe("DataGrid", () => {
     document.body.style.userSelect = "";
   });
 
-  // 20b. Column resize: mousedown with no tableRef does not crash
-  it("handles resize when tableRef is null during mousemove", async () => {
+  // Sprint 238 (2026-05-10): drag-resize 가 negative delta 에서도 crash 하지
+  // 않으며, AC-238-04 user-free policy 에 따라 0 까지 허용한다 (시각적
+  // 가드는 td/th 의 inline `min-width: MIN_COL_WIDTH` 가 담당; inline
+  // `style.width` 는 user-driven raw 값).
+  it("handles resize that drags below initial width without crashing", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
@@ -268,12 +271,15 @@ describe("DataGrid", () => {
     // Trigger mousedown
     fireEvent.mouseDown(resizeHandle, { clientX: 200, buttons: 1 });
 
-    // Simulate mousemove — should not crash even if applyWidth does DOM work
+    // Simulate mousemove far to the left — should not crash even if the
+    // computed delta would push width below 0.
     fireEvent.mouseMove(document, { clientX: 100 });
 
-    // Width should be clamped to MIN_COL_WIDTH (60)
     const th = document.querySelector("th:nth-child(1)") as HTMLElement;
-    expect(parseInt(th.style.width, 10)).toBe(60);
+    // Width must be a finite, non-negative pixel value.
+    const width = parseFloat(th.style.width);
+    expect(Number.isFinite(width)).toBe(true);
+    expect(width).toBeGreaterThanOrEqual(0);
 
     // Cleanup
     document.body.style.cursor = "";

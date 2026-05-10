@@ -1,3 +1,8 @@
+// Sprint 238 (2026-05-10) — column-resize 동작은 useColumnWidths 훅이 owning
+// 하고 외부 store 연결을 끊었다. 따라서 prev 테스트의 `onColumnWidthsChange`
+// mock 호출 단언은 더 이상 가능하지 않다. 대체로 drag → DOM 의 <th> style.width
+// 가 변경되었는지를 검증한다 (사용자 가시성).
+
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
 import DataGridTable from "./DataGridTable";
@@ -14,6 +19,7 @@ const MOCK_DATA: TableData = {
       is_foreign_key: false,
       fk_reference: null,
       comment: null,
+      category: "int",
     },
     {
       name: "name",
@@ -24,6 +30,7 @@ const MOCK_DATA: TableData = {
       is_foreign_key: false,
       fk_reference: null,
       comment: null,
+      category: "text",
     },
   ],
   rows: [[1, "Alice"]],
@@ -37,7 +44,6 @@ const defaultProps = {
   data: MOCK_DATA,
   loading: false,
   sorts: [],
-  columnWidths: {} as Record<string, number>,
   columnOrder: [0, 1] as number[],
   editingCell: null as { row: number; col: number } | null,
   editValue: "",
@@ -55,7 +61,6 @@ const defaultProps = {
   onStartEdit: vi.fn(),
   onSelectRow: vi.fn(),
   onSort: vi.fn(),
-  onColumnWidthsChange: vi.fn(),
   onDeleteRow: vi.fn(),
   onDuplicateRow: vi.fn(),
 };
@@ -66,32 +71,31 @@ function getResizeHandles(): HTMLElement[] {
   ) as HTMLElement[];
 }
 
-describe("DataGridTable — Column Resize", () => {
+function getThs(): HTMLElement[] {
+  return Array.from(document.querySelectorAll("th")) as HTMLElement[];
+}
+
+describe("DataGridTable — Column Resize (Sprint 238 useColumnWidths owned)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    // Clean up any lingering document event listeners
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
   });
 
-  it("calls onColumnWidthsChange with correct colName on mouseup", () => {
-    const onColumnWidthsChange = vi.fn();
-    render(
-      <DataGridTable
-        {...defaultProps}
-        onColumnWidthsChange={onColumnWidthsChange}
-      />,
-    );
+  it("drag → mouseup 가 자기 column <th> style.width 만 변경한다 (AC-238-04, AC-238-11)", () => {
+    render(<DataGridTable {...defaultProps} />);
 
     const handles = getResizeHandles();
     expect(handles.length).toBeGreaterThanOrEqual(1);
     const handle = handles[0]!;
 
+    const idWidthBefore = getThs()[0]!.style.width;
+    const nameWidthBefore = getThs()[1]!.style.width;
+
     act(() => {
-      // Start resize on the first column ("id")
       handle.dispatchEvent(
         new MouseEvent("mousedown", {
           bubbles: true,
@@ -102,39 +106,30 @@ describe("DataGridTable — Column Resize", () => {
     });
 
     act(() => {
-      // Drag 50px to the right
       document.dispatchEvent(
-        new MouseEvent("mousemove", { bubbles: true, clientX: 150 }),
+        new MouseEvent("mousemove", { bubbles: true, clientX: 200 }),
       );
     });
 
     act(() => {
-      // Release — this previously crashed with "null is not an object"
       document.dispatchEvent(
-        new MouseEvent("mouseup", { bubbles: true, clientX: 150 }),
+        new MouseEvent("mouseup", { bubbles: true, clientX: 200 }),
       );
     });
 
-    expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
-    const call = onColumnWidthsChange.mock.calls[0];
-    expect(call).toBeDefined();
-    const updater = call![0] as (
-      prev: Record<string, number>,
-    ) => Record<string, number>;
-    const result = updater({});
-    // The first column is "id"
-    expect(Object.keys(result)).toContain("id");
+    const idWidthAfter = getThs()[0]!.style.width;
+    const nameWidthAfter = getThs()[1]!.style.width;
+
+    // id column 폭이 drag 만큼 증가했다 (drag 결과 적용).
+    const idPxBefore = parseFloat(idWidthBefore);
+    const idPxAfter = parseFloat(idWidthAfter);
+    expect(idPxAfter).toBeGreaterThan(idPxBefore);
+    // 인접 column 폭은 변하지 않는다 (column 독립성).
+    expect(nameWidthAfter).toBe(nameWidthBefore);
   });
 
-  it("does not crash when mouseup fires after ref is cleared (regression)", () => {
-    // Regression test: resizingRef.current must be captured before being nulled
-    const onColumnWidthsChange = vi.fn();
-    render(
-      <DataGridTable
-        {...defaultProps}
-        onColumnWidthsChange={onColumnWidthsChange}
-      />,
-    );
+  it("does not crash when mouseup fires without prior mousemove (regression)", () => {
+    render(<DataGridTable {...defaultProps} />);
 
     const handle = getResizeHandles()[0]!;
 
@@ -148,7 +143,6 @@ describe("DataGridTable — Column Resize", () => {
       );
     });
 
-    // Fire mouseup immediately without any mousemove — should not throw
     expect(() => {
       act(() => {
         document.dispatchEvent(
@@ -156,55 +150,5 @@ describe("DataGridTable — Column Resize", () => {
         );
       });
     }).not.toThrow();
-
-    expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
-  });
-
-  it("second resize uses stored columnWidths as startWidth (Issue 003)", () => {
-    // Render with columnWidths already set to 200 for the "id" column
-    // (simulates a previously-completed first resize).
-    const onColumnWidthsChange = vi.fn();
-    render(
-      <DataGridTable
-        {...defaultProps}
-        columnWidths={{ id: 200 }}
-        onColumnWidthsChange={onColumnWidthsChange}
-      />,
-    );
-
-    const handle = getResizeHandles()[0]!;
-
-    act(() => {
-      handle.dispatchEvent(
-        new MouseEvent("mousedown", {
-          bubbles: true,
-          cancelable: true,
-          clientX: 500,
-        }),
-      );
-    });
-
-    act(() => {
-      document.dispatchEvent(
-        new MouseEvent("mousemove", { bubbles: true, clientX: 530 }), // +30px
-      );
-    });
-
-    act(() => {
-      document.dispatchEvent(
-        new MouseEvent("mouseup", { bubbles: true, clientX: 530 }),
-      );
-    });
-
-    expect(onColumnWidthsChange).toHaveBeenCalledTimes(1);
-    const updater = onColumnWidthsChange.mock.calls[0]![0] as (
-      prev: Record<string, number>,
-    ) => Record<string, number>;
-    const result = updater({});
-    // startWidth was 200 (from columnWidths prop), so final width should be 230.
-    // DOM style.width may not be set in jsdom, so final falls back to startWidth.
-    // Either 230 (if mousemove updated DOM) or 200 (jsdom fallback) is acceptable;
-    // what must NOT happen is a default calc (~88px) as startWidth.
-    expect(result["id"]).toBeGreaterThanOrEqual(200);
   });
 });

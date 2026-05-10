@@ -1,6 +1,7 @@
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { getTextAlign, type ColumnCategory } from "@/lib/columnCategory";
 import type { TableData } from "@/types/schema";
 import {
   editKey,
@@ -34,7 +35,7 @@ export interface DataGridRowContext {
   pendingDeletedRowKeys: Set<string>;
   selectedRowIds: Set<number>;
   editorFocusRef: React.RefObject<HTMLElement | null>;
-  getColumnWidth: (colName: string, dataType?: string) => number;
+  getColumnWidth: (colName: string, category: ColumnCategory) => number;
   moveEditCursor: (
     currentRow: number,
     currentDataCol: number,
@@ -127,6 +128,14 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
           : null;
         const editStartValue = hasPendingEdit ? pendingValue : cellEditValue;
         const isBlob = isBlobColumn(col.data_type);
+        const category: ColumnCategory = col.category ?? "unknown";
+        const align = getTextAlign(category);
+        const alignClass =
+          align === "right"
+            ? " text-right"
+            : align === "center"
+              ? " text-center"
+              : "";
 
         const fkRef =
           col.is_foreign_key && col.fk_reference && cell != null
@@ -139,7 +148,7 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
             role="gridcell"
             aria-colindex={visualIdx + 1}
             data-editing={isEditing ? "true" : undefined}
-            className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${
+            className={`group/cell overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
               isEditing
                 ? " bg-primary/10 ring-2 ring-inset ring-primary"
                 : hasPendingEdit
@@ -147,7 +156,7 @@ export default function DataRow({ rowIdx, ctx }: DataRowProps) {
                   : ""
             }`}
             style={{
-              width: getColumnWidth(col.name, col.data_type),
+              width: getColumnWidth(col.name, category),
               minWidth: MIN_COL_WIDTH,
             }}
             title={

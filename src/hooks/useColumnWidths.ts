@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useLayoutEffect, useState, type RefObject } from "react";
 
 import {
   computeInitialWidths,
@@ -23,9 +23,13 @@ function measureAndCompute(
   const el = containerRef.current;
   if (!el) return {};
   const containerPx = el.getBoundingClientRect().width;
-  const rootFontSizePx = parseFloat(
+  const measured = parseFloat(
     getComputedStyle(document.documentElement).fontSize,
   );
+  // jsdom (and rare CSS resets) leave `fontSize` empty → NaN. Browsers
+  // default to 16px for `:root`, so fall back to that to keep the
+  // (c) formula numerically valid.
+  const rootFontSizePx = Number.isFinite(measured) ? measured : 16;
   return computeInitialWidths(columns, containerPx, rootFontSizePx);
 }
 
@@ -46,6 +50,21 @@ export function useColumnWidths(
   const [widths, setWidths] = useState<Record<string, number>>(() =>
     measureAndCompute(containerRef, columns),
   );
+
+  // Production path: when the parent passes a `useRef(null)` that only
+  // populates after the first render, the lazy `useState` initializer
+  // returns `{}`. Re-measure once after layout so the (c) formula runs
+  // against the real container width before paint.
+  useLayoutEffect(() => {
+    setWidths((prev) =>
+      Object.keys(prev).length > 0
+        ? prev
+        : measureAndCompute(containerRef, columns),
+    );
+    // Mount-only — schema changes / container resizes do NOT re-measure
+    // (AC-238-04). `reset()` is the explicit re-measurement trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setWidth = useCallback((name: string, px: number) => {
     setWidths((prev) => ({ ...prev, [name]: px }));

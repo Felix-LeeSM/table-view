@@ -21,7 +21,9 @@ import type {
   TableData,
 } from "@/types/schema";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
-import DataGridTable from "@components/datagrid/DataGridTable";
+import DataGridTable, {
+  type DataGridTableHandle,
+} from "@components/datagrid/DataGridTable";
 import { useDataGridEdit } from "@components/datagrid/useDataGridEdit";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
@@ -112,13 +114,19 @@ export default function DataGrid({
   const [filterMode, setFilterMode] = useState<FilterMode>("structured");
   const [rawSql, setRawSql] = useState("");
   const [appliedRawSql, setAppliedRawSql] = useState("");
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [columnOrder, setColumnOrder] = useState<number[]>([]);
   const [showQuickLook, setShowQuickLook] = useState(false);
 
-  // Reset column widths and order when table/schema changes
+  // Sprint 238 — DataGridTable owns column-width state via
+  // `useColumnWidths`. Reset is exposed via imperative handle and wired
+  // to the toolbar's "Reset column widths" action (AC-238-12).
+  const dataGridTableRef = useRef<DataGridTableHandle | null>(null);
+  const handleResetColumnWidths = useCallback(() => {
+    dataGridTableRef.current?.resetColumnWidths();
+  }, []);
+
+  // Reset column order when table/schema changes
   useEffect(() => {
-    setColumnWidths({});
     setColumnOrder([]);
   }, [connectionId, table, schema]);
 
@@ -487,6 +495,7 @@ export default function DataGrid({
         onDuplicateRow={editState.handleDuplicateRow}
         onUndo={editState.undo}
         canUndo={editState.canUndo}
+        onResetColumnWidths={handleResetColumnWidths}
       />
 
       {/* Filter bar */}
@@ -523,10 +532,10 @@ export default function DataGrid({
 
       {data && (
         <DataGridTable
+          ref={dataGridTableRef}
           data={data}
           loading={loading}
           sorts={sorts}
-          columnWidths={columnWidths}
           columnOrder={columnOrder}
           editingCell={editState.editingCell}
           editValue={editState.editValue}
@@ -545,7 +554,6 @@ export default function DataGrid({
           onStartEdit={editState.handleStartEdit}
           onSelectRow={editState.handleSelectRow}
           onSort={handleSort}
-          onColumnWidthsChange={setColumnWidths}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
           onNavigateToFk={handleNavigateToFk}
