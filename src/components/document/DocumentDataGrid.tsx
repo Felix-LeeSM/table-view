@@ -367,7 +367,9 @@ export default function DocumentDataGrid({
             visible={overlayVisible}
             onCancel={handleCancelRefetch}
           />
-          <table className="min-w-full table-fixed border-collapse text-sm">
+          {/* Sprint 238 AC-238-11 — `min-w-full` removed (drove width
+              redistribution mid-scroll). `table-fixed` only. */}
+          <table className="table-fixed border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-secondary">
               <tr>
                 {data.columns.map((col) => (
