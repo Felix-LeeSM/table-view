@@ -135,6 +135,108 @@ describe("DataGridTable — Column Resize (Sprint 258 CSS Grid)", () => {
     expect(after[1]!).toBe(nameBefore);
   });
 
+  // Sprint 259 — sprint-258 follow-up #6: drag *중* mousemove 단계에서도
+  // 다른 column 의 --cols px 가 변하지 않는다 (mouseup 전 imperative
+  // setProperty 가 자기 column 의 token 만 mutate).
+  it("drag 중 (mousemove) 에 자기 column 의 --cols px 만 갱신, 다른 column 은 불변 (AC-258-02 mid-drag)", () => {
+    render(<DataGridTable {...defaultProps} />);
+
+    const handle = getResizeHandles()[0]!;
+    const before = parseColsPx(getOuterGrid());
+    const nameBefore = before[1]!;
+
+    act(() => {
+      handle.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 100,
+        }),
+      );
+    });
+
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { bubbles: true, clientX: 250 }),
+      );
+    });
+
+    // mouseup 전 시점의 --cols 단언.
+    const mid = parseColsPx(getOuterGrid());
+    expect(mid.length).toBe(2);
+    expect(mid[0]!).toBeGreaterThan(before[0]!);
+    expect(mid[1]!).toBe(nameBefore);
+
+    // cleanup mouseup.
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent("mouseup", { bubbles: true, clientX: 250 }),
+      );
+    });
+  });
+
+  // Sprint 259 — sprint-258 follow-up #6: 3+ 컬럼 케이스에서도 single
+  // column drag 가 나머지 모든 column 의 px 를 변경하지 않는다 (column
+  // 독립성이 컬럼 수 무관함).
+  it("3 컬럼 케이스에서 single column drag 가 나머지 두 column 의 --cols 를 변경하지 않는다", () => {
+    const threeColData: TableData = {
+      ...MOCK_DATA,
+      columns: [
+        ...MOCK_DATA.columns,
+        {
+          name: "extra",
+          data_type: "text",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+          category: "text",
+        },
+      ],
+      rows: [[1, "Alice", "x"]],
+    };
+    render(
+      <DataGridTable
+        {...defaultProps}
+        data={threeColData}
+        columnOrder={[0, 1, 2]}
+      />,
+    );
+
+    const handle = getResizeHandles()[1]!; // middle column drag.
+    const before = parseColsPx(getOuterGrid());
+    expect(before.length).toBe(3);
+
+    act(() => {
+      handle.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 200,
+        }),
+      );
+    });
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent("mousemove", { bubbles: true, clientX: 300 }),
+      );
+    });
+    act(() => {
+      document.dispatchEvent(
+        new MouseEvent("mouseup", { bubbles: true, clientX: 300 }),
+      );
+    });
+
+    const after = parseColsPx(getOuterGrid());
+    expect(after.length).toBe(3);
+    // 인접한 두 column 은 모두 불변.
+    expect(after[0]!).toBe(before[0]!);
+    expect(after[1]!).toBeGreaterThan(before[1]!);
+    expect(after[2]!).toBe(before[2]!);
+  });
+
   it("does not crash when mouseup fires without prior mousemove (regression)", () => {
     render(<DataGridTable {...defaultProps} />);
 

@@ -6,6 +6,25 @@
 
 use crate::models::ColumnCategory;
 
+/// Sprint 259 — `format_type` 은 SERIAL 의 underlying type (`integer` /
+/// `bigint` / `smallint`) 만 노출하므로, default 가 `nextval(...)` 인
+/// 정수 컬럼을 원래의 `serial` / `bigserial` / `smallserial` DDL 표기로
+/// 복원한다. category 매핑에는 영향 없음 (정수 → Int 그대로).
+pub fn restore_serial(data_type: String, default_value: Option<&str>) -> String {
+    let is_nextval = default_value
+        .map(|d| d.trim_start().to_ascii_lowercase().starts_with("nextval("))
+        .unwrap_or(false);
+    if !is_nextval {
+        return data_type;
+    }
+    match data_type.as_str() {
+        "smallint" => "smallserial".to_string(),
+        "integer" => "serial".to_string(),
+        "bigint" => "bigserial".to_string(),
+        _ => data_type,
+    }
+}
+
 /// `pg_catalog.format_type` 의 raw 출력 (`character varying(200)`,
 /// `timestamp with time zone` …) 을 psql `\d` 와 일치하는 단축형으로
 /// 변환한다. DDL-level 표기성은 유지하되 사용자 가독성을 높인다.
@@ -233,5 +252,53 @@ mod tests {
         ] {
             assert_eq!(normalize_pg_type(s), s);
         }
+    }
+
+    #[test]
+    fn restore_serial_restores_integer_with_nextval_default_sprint_259() {
+        // SERIAL / BIGSERIAL / SMALLSERIAL 은 format_type 이 underlying
+        // 정수 type 만 반환 → nextval(...) default 패턴 검출 시 복원.
+        assert_eq!(
+            restore_serial(
+                "integer".to_string(),
+                Some("nextval('public.foo_id_seq'::regclass)")
+            ),
+            "serial"
+        );
+        assert_eq!(
+            restore_serial(
+                "bigint".to_string(),
+                Some("nextval('public.foo_id_seq'::regclass)")
+            ),
+            "bigserial"
+        );
+        assert_eq!(
+            restore_serial(
+                "smallint".to_string(),
+                Some("nextval('public.foo_id_seq'::regclass)")
+            ),
+            "smallserial"
+        );
+    }
+
+    #[test]
+    fn restore_serial_passes_through_when_no_nextval_sprint_259() {
+        // default 가 nextval 이 아니거나 없으면 정수 type 그대로.
+        assert_eq!(restore_serial("integer".to_string(), Some("42")), "integer");
+        assert_eq!(restore_serial("integer".to_string(), None), "integer");
+        // non-integer type 은 nextval default 가 있어도 pass-through.
+        assert_eq!(
+            restore_serial("text".to_string(), Some("nextval('foo_seq'::regclass)")),
+            "text"
+        );
+    }
+
+    #[test]
+    fn restore_serial_is_case_insensitive_to_default_prefix_sprint_259() {
+        // pg_get_expr 의 출력은 일관되게 소문자 nextval 이지만 보강.
+        assert_eq!(
+            restore_serial("integer".to_string(), Some("NEXTVAL('foo_seq'::regclass)")),
+            "serial"
+        );
     }
 }

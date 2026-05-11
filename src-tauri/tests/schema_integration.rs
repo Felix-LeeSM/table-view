@@ -116,12 +116,14 @@ async fn test_get_table_columns() {
     // Should have 3 columns
     assert_eq!(columns.len(), 3, "Expected 3 columns, got {columns:?}");
 
-    // Check id column (PK)
+    // Check id column (PK).
+    // Sprint 259 — restore_serial 가 nextval(...) default 검출 시
+    // underlying `integer` → `serial` 로 복원.
     let id_col = columns
         .iter()
         .find(|c| c.name == "id")
         .expect("id column missing");
-    assert_eq!(id_col.data_type, "integer");
+    assert_eq!(id_col.data_type, "serial");
     assert!(!id_col.nullable);
     assert!(id_col.is_primary_key);
     assert!(!id_col.is_foreign_key);

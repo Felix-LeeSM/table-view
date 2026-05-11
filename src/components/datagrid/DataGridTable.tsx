@@ -176,11 +176,14 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         })),
       [data.columns],
     );
+    // Sprint 259 — schema.table 단위 localStorage 영속. 다른 테이블로
+    // navigate 시 key 자동 swap (useColumnWidths 내부의 effect).
+    const persistenceKey = `rdb:${schema}:${table}`;
     const {
       widths,
       setWidth,
       reset: resetColumnWidths,
-    } = useColumnWidths(widthColumns);
+    } = useColumnWidths(widthColumns, persistenceKey);
 
     useImperativeHandle(forwardedRef, () => ({ resetColumnWidths }), [
       resetColumnWidths,

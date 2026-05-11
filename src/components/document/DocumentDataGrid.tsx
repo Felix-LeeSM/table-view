@@ -160,7 +160,12 @@ export default function DocumentDataGrid({
       })),
     [data?.columns],
   );
-  const { widths, reset: resetColumnWidths } = useColumnWidths(widthColumns);
+  // Sprint 259 — database.collection 단위 영속.
+  const persistenceKey = `document:${database}:${collection}`;
+  const { widths, reset: resetColumnWidths } = useColumnWidths(
+    widthColumns,
+    persistenceKey,
+  );
 
   const colsTemplate = useMemo(() => {
     if (!data) return "";

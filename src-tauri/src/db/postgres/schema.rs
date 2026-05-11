@@ -14,7 +14,7 @@ use crate::models::{
     ViewInfo,
 };
 
-use super::category::{map_pg_data_type, normalize_pg_type};
+use super::category::{map_pg_data_type, normalize_pg_type, restore_serial};
 use super::connection::is_pg_database_permission_denied;
 use super::PostgresAdapter;
 
@@ -268,8 +268,10 @@ impl PostgresAdapter {
                 // Sprint 258 — category 매핑은 raw format_type 결과 (parameter
                 // 표기 포함) 에서 base 만 추출하므로 정규화 전후 무관. 사용자
                 // 표시용 data_type 은 단축형으로 정규화.
+                // Sprint 259 — nextval(...) default 패턴 검출 시 정수 → serial.
                 let category = map_pg_data_type(&data_type);
                 let data_type = normalize_pg_type(&data_type);
+                let data_type = restore_serial(data_type, default_value.as_deref());
                 ColumnInfo {
                     name,
                     data_type,
@@ -423,6 +425,7 @@ impl PostgresAdapter {
 
             let category = map_pg_data_type(&data_type);
             let data_type = normalize_pg_type(&data_type);
+            let data_type = restore_serial(data_type, default_value.as_deref());
             result.entry(table_name).or_default().push(ColumnInfo {
                 name: col_name,
                 data_type,
@@ -747,6 +750,7 @@ impl PostgresAdapter {
                 let comment = comments.get(&name).cloned().flatten();
                 let category = map_pg_data_type(&data_type);
                 let data_type = normalize_pg_type(&data_type);
+                let data_type = restore_serial(data_type, default_value.as_deref());
                 ColumnInfo {
                     name,
                     data_type,

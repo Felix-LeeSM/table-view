@@ -22,8 +22,12 @@ pub fn map_mongo_data_type(data_type: &str) -> ColumnCategory {
         | "JavaScriptCodeWithScope"
         | "DbPointer" => ColumnCategory::Object,
         "Binary" => ColumnCategory::Binary,
-        // String / ObjectId (24 hex chars) / Symbol — spec: uuid 류 → text 흡수.
-        "String" | "ObjectId" | "Symbol" => ColumnCategory::Text,
+        // Sprint 259 — ObjectId 는 id 식별자 (24 hex chars 고정폭) 로
+        // Uuid category 와 의미 동등. PG uuid 와 동일 width 정책 (default
+        // 18rem, left-align) 으로 통일.
+        "ObjectId" => ColumnCategory::Uuid,
+        // String / Symbol — 가변 길이 텍스트.
+        "String" | "Symbol" => ColumnCategory::Text,
         // Null / Undefined / MaxKey / MinKey — sentinel, 폭 산식에 의미 없음.
         _ => ColumnCategory::Unknown,
     }
@@ -72,11 +76,18 @@ mod tests {
     }
 
     #[test]
-    fn maps_string_and_objectid_and_symbol_to_text() {
-        // AC-238-02: 가독 가능한 텍스트류 (uuid 흡수 패턴) 는 Text.
-        for s in ["String", "ObjectId", "Symbol"] {
+    fn maps_string_and_symbol_to_text() {
+        // 가변 길이 텍스트류 (Sprint 259 — ObjectId 는 Uuid category 로 분리).
+        for s in ["String", "Symbol"] {
             assert_eq!(map_mongo_data_type(s), ColumnCategory::Text, "{s}");
         }
+    }
+
+    #[test]
+    fn maps_objectid_to_uuid_category_sprint_259() {
+        // Sprint 259 — ObjectId 는 id 식별자 (24 hex chars 고정폭) 로
+        // PG uuid 와 동일 width 정책. text 와 분리.
+        assert_eq!(map_mongo_data_type("ObjectId"), ColumnCategory::Uuid);
     }
 
     #[test]
