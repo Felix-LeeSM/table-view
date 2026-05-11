@@ -20,6 +20,7 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
+import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
 
 /**
  * RDB / SQL-paradigm query editor. Imports only SQL-aware extensions —
@@ -60,12 +61,21 @@ export interface SqlQueryEditorProps {
 const buildSqlLang = (
   dialect: SQLDialect,
   ns: SQLNamespace | undefined,
-): Extension =>
+): Extension => [
   sqlLanguage({
     dialect,
     schema: ns,
     upperCaseKeywords: true,
-  });
+  }),
+  // 2026-05-11 — supplement lang-sql's built-in `schemaCompletionSource`,
+  // which only resolves a target table behind `FROM`. Without this,
+  // `UPDATE users SET <cursor>` and `INSERT INTO users (<cursor>)` get
+  // no column candidates. The source is scoped to the active SQL
+  // language so it stays dormant outside SQL contexts.
+  dialect.language.data.of({
+    autocomplete: updateColumnCompletionSource(() => ns),
+  }),
+];
 
 const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
   function SqlQueryEditor(
