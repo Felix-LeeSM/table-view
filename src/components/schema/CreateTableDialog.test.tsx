@@ -1990,10 +1990,23 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     );
 
     // Sprint 239 — preview pane defaults open; auto-debounced fetch settles via waitFor below.
-
+    // 2026-05-11 — intermediate debounce flushes (FK, FK+CHECK, FK+CHECK+UNIQUE)
+    // fire during real-timer awaits, so exact call counts are non-deterministic
+    // under heavy parallel pre-push load (rust-coverage 동시 실행 시 reproducible).
+    // Assert on terminal state instead — every constraint name eventually shows
+    // up in a preview call, matching the `018455a` fix applied at AC-229-08.
     await waitFor(() => {
-      expect(mockCreateTable).toHaveBeenCalledTimes(1);
-      expect(mockAddConstraint).toHaveBeenCalledTimes(3);
+      expect(mockCreateTable).toHaveBeenCalledWith(
+        expect.objectContaining({ preview_only: true }),
+      );
+      for (const name of ["fk_orders_user", "chk_age", "uq_orders_user"]) {
+        expect(mockAddConstraint).toHaveBeenCalledWith(
+          expect.objectContaining({
+            constraint_name: name,
+            preview_only: true,
+          }),
+        );
+      }
     });
 
     // 0 indexes declared → no createIndex calls.
@@ -2261,8 +2274,14 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
       (commitCalls[1]![0] as { constraint_name: string }).constraint_name,
     ).toBe("chk_age");
 
-    // CREATE TABLE was NOT rolled back — 1 preview + 1 commit = 2 calls.
-    expect(mockCreateTable).toHaveBeenCalledTimes(2);
+    // CREATE TABLE was NOT rolled back. We assert the commit-side call
+    // happened exactly once — preview-side call counts are debounce-
+    // sensitive under heavy parallel load (same flake class fixed at
+    // AC-229-08 in 018455a).
+    const createTableCommitCalls = mockCreateTable.mock.calls.filter(
+      (c) => (c[0] as { preview_only: boolean }).preview_only === false,
+    );
+    expect(createTableCommitCalls).toHaveLength(1);
 
     // Modal stays open + no rollback.
     expect(onClose).not.toHaveBeenCalled();
