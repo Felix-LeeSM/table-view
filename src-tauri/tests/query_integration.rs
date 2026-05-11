@@ -644,11 +644,19 @@ async fn test_execute_query_batch_commits_all_statements() {
     }
 
     // Verify rows actually persisted.
+    // Sprint 261 (ADR 0026) — COUNT(*) returns bigint, which is now
+    // wire-encoded as a JSON string token to preserve precision past
+    // ±(2^53-1). Parse the string for the integer assertion.
     let count = adapter
         .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
         .await
         .expect("count");
-    assert_eq!(count.rows[0][0].as_i64(), Some(3));
+    let n: i64 = count.rows[0][0]
+        .as_str()
+        .expect("COUNT(*) must be wire-encoded as string")
+        .parse()
+        .expect("count string must parse as i64");
+    assert_eq!(n, 3);
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)
@@ -691,15 +699,18 @@ async fn test_execute_query_batch_rolls_back_on_mid_failure() {
         "expected error to cite index, got: {msg}"
     );
 
+    // Sprint 261 (ADR 0026) — COUNT(*) returns bigint, wire-encoded as
+    // JSON string token to preserve precision. Parse before asserting 0.
     let count = adapter
         .execute_query(&format!("SELECT COUNT(*) AS n FROM {table}"), None)
         .await
         .expect("count");
-    assert_eq!(
-        count.rows[0][0].as_i64(),
-        Some(0),
-        "rollback must leave the table empty"
-    );
+    let n: i64 = count.rows[0][0]
+        .as_str()
+        .expect("COUNT(*) must be wire-encoded as string")
+        .parse()
+        .expect("count string must parse as i64");
+    assert_eq!(n, 0, "rollback must leave the table empty");
 
     adapter
         .execute_query(&format!("DROP TABLE {table}"), None)

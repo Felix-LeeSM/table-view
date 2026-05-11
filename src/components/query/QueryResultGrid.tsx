@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import Decimal from "decimal.js";
 import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
 import type {
   QueryResult,
@@ -54,9 +55,14 @@ function queryTypeLabel(qt: QueryType): string {
   return "Query";
 }
 
-/** Format a cell value for display. Sprint 238: compact JSON 1-line. */
+/** Format a cell value for display. Sprint 238: compact JSON 1-line.
+ * Sprint 261 (ADR 0026) — Decimal is `typeof === "object"` so it must
+ * be detected before the generic object branch (which would emit a
+ * quoted JSON string). BigInt is `typeof === "bigint"` and falls through
+ * to `String(cell)` losslessly via BigInt.toString. */
 function formatCell(cell: unknown): string {
   if (cell == null) return "NULL";
+  if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "object" && cell !== null) {
     return safeStringifyCell(cell);
   }

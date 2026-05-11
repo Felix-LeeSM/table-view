@@ -14,6 +14,8 @@ import type {
 import type { DocumentId } from "@/types/documentMutate";
 import type { ColumnInfo } from "@/types/schema";
 
+import { wrapNumericCells } from "./numericWrap";
+
 /** List every database visible to the connected MongoDB user. */
 export async function listMongoDatabases(
   connectionId: string,
@@ -57,12 +59,13 @@ export async function findDocuments(
   collection: string,
   body?: FindBody,
 ): Promise<DocumentQueryResult> {
-  return invoke<DocumentQueryResult>("find_documents", {
+  const result = await invoke<DocumentQueryResult>("find_documents", {
     connectionId,
     database,
     collection,
     body: body ?? null,
   });
+  return wrapNumericCells(result);
 }
 
 /**
@@ -76,12 +79,13 @@ export async function aggregateDocuments(
   collection: string,
   pipeline: Record<string, unknown>[],
 ): Promise<DocumentQueryResult> {
-  return invoke<DocumentQueryResult>("aggregate_documents", {
+  const result = await invoke<DocumentQueryResult>("aggregate_documents", {
     connectionId,
     database,
     collection,
     pipeline,
   });
+  return wrapNumericCells(result);
 }
 
 // ── Document paradigm — mutate ─────────────────────────────────────────────

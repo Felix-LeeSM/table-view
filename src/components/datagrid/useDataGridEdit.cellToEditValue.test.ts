@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { describe, it, expect } from "vitest";
 import {
   cellToEditValue,
@@ -35,6 +36,25 @@ describe("cellToEditValue — preserves null/empty-string distinction", () => {
   it("pretty-prints objects and arrays as JSON", () => {
     expect(cellToEditValue({ a: 1 })).toBe('{\n  "a": 1\n}');
     expect(cellToEditValue([1, 2])).toBe("[\n  1,\n  2\n]");
+  });
+
+  // Sprint 261 (ADR 0026) — BigInt 셀 (bigint / int8 컬럼) 의 edit-path
+  // 직렬화. `String(BigInt(...))` → digit-only string. SQL UPDATE 의
+  // numeric literal 자리에 그대로 들어가도록 의도.
+  it("returns digit string for BigInt cells", () => {
+    expect(cellToEditValue(9223372036854775807n)).toBe("9223372036854775807");
+    expect(cellToEditValue(0n)).toBe("0");
+  });
+
+  // Sprint 261 (ADR 0026) — Decimal 셀 (numeric / decimal / Decimal128
+  // 컬럼) 의 edit-path 직렬화. `Decimal.toString()` 은 base-10 무손실
+  // 표현. trailing zero 는 Decimal 정규화 결과를 그대로 사용 (0.10 →
+  // "0.1").
+  it("returns base-10 string for Decimal cells", () => {
+    expect(cellToEditValue(new Decimal("123.456"))).toBe("123.456");
+    expect(cellToEditValue(new Decimal("9999999999999999.99999999"))).toBe(
+      "9999999999999999.99999999",
+    );
   });
 });
 

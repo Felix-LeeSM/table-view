@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { QueryResult } from "@/types/query";
 import type { FilterCondition, TableData } from "@/types/schema";
 
+import { wrapNumericCells } from "./numericWrap";
+
 export async function queryTableData(
   connectionId: string,
   table: string,
@@ -12,7 +14,7 @@ export async function queryTableData(
   filters?: FilterCondition[],
   rawWhere?: string,
 ): Promise<TableData> {
-  return invoke<TableData>("query_table_data", {
+  const result = await invoke<TableData>("query_table_data", {
     connectionId,
     table,
     schema,
@@ -22,6 +24,7 @@ export async function queryTableData(
     filters: filters ?? null,
     rawWhere: rawWhere ?? null,
   });
+  return wrapNumericCells(result);
 }
 
 // Query execution
@@ -30,11 +33,12 @@ export async function executeQuery(
   sql: string,
   queryId: string,
 ): Promise<QueryResult> {
-  return invoke<QueryResult>("execute_query", {
+  const result = await invoke<QueryResult>("execute_query", {
     connectionId,
     sql,
     queryId,
   });
+  return wrapNumericCells(result);
 }
 
 export async function cancelQuery(queryId: string): Promise<string> {
@@ -50,11 +54,12 @@ export async function executeQueryBatch(
   statements: string[],
   queryId: string,
 ): Promise<QueryResult[]> {
-  return invoke<QueryResult[]>("execute_query_batch", {
+  const results = await invoke<QueryResult[]>("execute_query_batch", {
     connectionId,
     statements,
     queryId,
   });
+  return results.map(wrapNumericCells);
 }
 
 // Sprint 247 (ADR 0022 Phase 3) — dry-run a batch of SQL statements
@@ -73,9 +78,10 @@ export async function executeQueryDryRun(
   statements: string[],
   queryId: string,
 ): Promise<QueryResult[]> {
-  return invoke<QueryResult[]>("execute_query_dry_run", {
+  const results = await invoke<QueryResult[]>("execute_query_dry_run", {
     connectionId,
     statements,
     queryId,
   });
+  return results.map(wrapNumericCells);
 }

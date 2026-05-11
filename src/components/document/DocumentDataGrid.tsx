@@ -6,6 +6,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import Decimal from "decimal.js";
 import { Loader2, Trash2, FileEdit } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
@@ -546,9 +547,11 @@ export default function DocumentDataGrid({
                         title={
                           isNull
                             ? "null"
-                            : typeof cell === "object"
-                              ? JSON.stringify(cell)
-                              : String(cell)
+                            : cell instanceof Decimal
+                              ? cell.toString()
+                              : typeof cell === "object"
+                                ? JSON.stringify(cell)
+                                : String(cell)
                         }
                         onDoubleClick={(e) => {
                           e.stopPropagation();
@@ -606,9 +609,11 @@ export default function DocumentDataGrid({
                             dir="auto"
                             className="block overflow-hidden text-ellipsis whitespace-nowrap text-foreground [unicode-bidi:isolate]"
                           >
-                            {typeof cell === "object"
-                              ? safeStringifyCell(cell)
-                              : String(cell)}
+                            {cell instanceof Decimal
+                              ? cell.toString()
+                              : typeof cell === "object"
+                                ? safeStringifyCell(cell)
+                                : String(cell)}
                           </span>
                         )}
                       </div>

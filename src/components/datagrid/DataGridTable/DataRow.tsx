@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Decimal from "decimal.js";
 import { Binary, ArrowUpRight } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -16,6 +17,32 @@ import {
   ROW_HEIGHT_ESTIMATE,
 } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
+
+/**
+ * Sprint 261 (ADR 0026) — render a cell that may carry BigInt / Decimal
+ * precision wrappers. Decimal is `typeof === "object"` so it must be
+ * detected before the generic object branch (which would call
+ * `safeStringifyCell` and emit a quoted JSON string). BigInt is
+ * `typeof === "bigint"` and routes through `String(cell)` losslessly.
+ */
+function renderCell(cell: unknown): string {
+  if (cell instanceof Decimal) return cell.toString();
+  if (typeof cell === "object" && cell !== null) return safeStringifyCell(cell);
+  return String(cell);
+}
+
+/**
+ * Sprint 261 (ADR 0026) — title (tooltip) rendering matches `renderCell`
+ * but uses pretty-printed JSON for generic objects so the multi-line
+ * inspector view stays intact for nested documents.
+ */
+function renderCellTitle(cell: unknown): string {
+  if (cell == null) return "NULL";
+  if (cell instanceof Decimal) return cell.toString();
+  if (typeof cell === "object" && cell !== null)
+    return JSON.stringify(cell, null, 2);
+  return String(cell);
+}
 
 /**
  * Sprint 258 — `<tr>` / `<td>` 폐기. row 는 `<div role="row">` 자체 grid
@@ -179,13 +206,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                   ? " bg-highlight/20"
                   : ""
             }`}
-            title={
-              cell == null
-                ? "NULL"
-                : typeof cell === "object" && cell !== null
-                  ? JSON.stringify(cell, null, 2)
-                  : String(cell)
-            }
+            title={renderCellTitle(cell)}
             onDoubleClick={() => onStartEdit(rowIdx, dIdx, editStartValue)}
             onClick={() => {
               if (editingCell) {
@@ -355,9 +376,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
                   dir="auto"
                   className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
                 >
-                  {typeof cell === "object" && cell !== null
-                    ? safeStringifyCell(cell)
-                    : String(cell)}
+                  {renderCell(cell)}
                 </span>
                 {fkRef && onNavigateToFk && (
                   <Button

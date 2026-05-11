@@ -1347,3 +1347,159 @@ async fn test_get_table_columns_populates_fk_reference_in_child() {
         .ok();
     adapter.disconnect_pool().await.unwrap();
 }
+
+// ── Sprint 261 (ADR 0026) — numeric wire-format integration tests ────────
+//
+// 작성 2026-05-11. `query_table_data` / `execute_query` 가 bigint / numeric
+// 컬럼 cell 을 `Value::String` 으로 wire 에 올리고, int4 같은 안전 범위
+// 컬럼은 `Value::Number` 그대로 유지한다는 invariant 를 PG live DB 로 검증.
+// ADR 0026 의 "JSON.parse 정밀도 손실 없이 frontend 에서 BigInt/Decimal 로
+// wrap 가능" 전제의 기반.
+
+#[tokio::test]
+async fn test_query_table_data_bigint_value_is_string_wire() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("wire_bigint");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (id BIGINT PRIMARY KEY)"
+        ))
+        .await
+        .expect("create bigint table");
+    // i64::MAX = 9223372036854775807, > 2^53-1 = 9007199254740991.
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (id) VALUES (9223372036854775807)"
+        ))
+        .await
+        .expect("insert bigint");
+
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, None, None, None)
+        .await
+        .expect("query_table_data bigint");
+    assert_eq!(data.rows.len(), 1);
+    let cell = &data.rows[0][0];
+    assert!(
+        cell.is_string(),
+        "bigint cell must be wire-encoded as JSON string, got: {cell:?}"
+    );
+    assert_eq!(cell.as_str(), Some("9223372036854775807"));
+
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_query_table_data_numeric_value_is_string_wire() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("wire_numeric");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (id INT PRIMARY KEY, amount NUMERIC(38, 18))"
+        ))
+        .await
+        .expect("create numeric table");
+    // High-precision decimal not representable as IEEE 754 binary float.
+    adapter
+        .execute(&format!(
+            "INSERT INTO \"{table_name}\" (id, amount) VALUES (1, 123456789.123456789012345678)"
+        ))
+        .await
+        .expect("insert numeric");
+
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, None, None, None)
+        .await
+        .expect("query_table_data numeric");
+    assert_eq!(data.rows.len(), 1);
+    // amount is column 1.
+    let cell = &data.rows[0][1];
+    assert!(
+        cell.is_string(),
+        "numeric cell must be wire-encoded as JSON string, got: {cell:?}"
+    );
+    // Exact base-10 representation is byte-preserved.
+    assert_eq!(cell.as_str(), Some("123456789.123456789012345678"));
+
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_query_table_data_int4_value_remains_number_wire() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let table_name = unique_table_name("wire_int4");
+
+    adapter
+        .execute(&format!(
+            "CREATE TABLE \"{table_name}\" (id INT PRIMARY KEY)"
+        ))
+        .await
+        .expect("create int4 table");
+    adapter
+        .execute(&format!("INSERT INTO \"{table_name}\" (id) VALUES (42)"))
+        .await
+        .expect("insert int4");
+
+    let data = adapter
+        .query_table_data(&table_name, "public", 1, 50, None, None, None)
+        .await
+        .expect("query_table_data int4");
+    assert_eq!(data.rows.len(), 1);
+    let cell = &data.rows[0][0];
+    assert!(
+        cell.is_number(),
+        "int4 cell must remain JSON number (safe within ±2^53-1), got: {cell:?}"
+    );
+    assert_eq!(cell.as_i64(), Some(42));
+
+    adapter
+        .execute(&format!("DROP TABLE \"{table_name}\""))
+        .await
+        .ok();
+    adapter.disconnect_pool().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_execute_query_bigint_select_emits_string_wire() {
+    // execute_query path (free-form SELECT) — `SELECT 9223372036854775807::bigint`.
+    // ADR 0026 의 두 번째 적용 site. `Pg::type_info().to_string()` 이
+    // bigint 컬럼에 대해 "INT8" 을 반환하므로 헬퍼의 `lower == "int8"`
+    // 분기에 매칭.
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let result = adapter
+        .execute_query("SELECT 9223372036854775807::bigint AS big", None)
+        .await
+        .expect("execute_query bigint literal");
+    assert_eq!(result.rows.len(), 1);
+    let cell = &result.rows[0][0];
+    assert!(
+        cell.is_string(),
+        "execute_query bigint cell must be string wire, got: {cell:?}"
+    );
+    assert_eq!(cell.as_str(), Some("9223372036854775807"));
+
+    adapter.disconnect_pool().await.unwrap();
+}

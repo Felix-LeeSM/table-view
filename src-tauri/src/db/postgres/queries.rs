@@ -105,6 +105,44 @@ fn strip_trailing_terminator(sql: &str) -> &str {
     sql.trim_end_matches(|c: char| c == ';' || c.is_whitespace())
 }
 
+/// Sprint 261 (ADR 0026) — convert a `Value::Number` cell to
+/// `Value::String(n.to_string())` when its column `data_type` belongs to a
+/// precision-sensitive family (PG `bigint`/`int8`/`bigserial`,
+/// `numeric`/`decimal`). All other cells (and other variants) pass through
+/// unchanged.
+///
+/// Why: `row_to_json(q)::text` represents PG `bigint` (i64) and `numeric`
+/// (arbitrary-precision base-10) as raw JSON number tokens. The native
+/// `JSON.parse` on the JS side coerces them to IEEE 754 f64, losing
+/// precision above ±(2^53-1) for `bigint` and the entire base-10 mantissa
+/// for `numeric`. Emitting them as JSON string tokens preserves the digits
+/// byte-for-byte; the frontend wrapper (`wrapNumericCells`) inspects the
+/// same `data_type` and wraps the resulting JS string as `BigInt(...)` or
+/// `new Decimal(...)`. `int2`/`int4`/`real`/`double precision` are NOT
+/// stringified — they round-trip losslessly through f64 and match JS's
+/// `Number` representation directly.
+pub(super) fn stringify_numeric_if_precision_sensitive(
+    cell: serde_json::Value,
+    data_type: &str,
+) -> serde_json::Value {
+    if !matches!(cell, serde_json::Value::Number(_)) {
+        return cell;
+    }
+    let lower = data_type.to_ascii_lowercase();
+    let is_precision_sensitive = lower == "bigint"
+        || lower == "int8"
+        || lower == "bigserial"
+        || lower.contains("numeric")
+        || lower.contains("decimal");
+    if !is_precision_sensitive {
+        return cell;
+    }
+    if let serde_json::Value::Number(n) = &cell {
+        return serde_json::Value::String(n.to_string());
+    }
+    cell
+}
+
 /// Maps PostgreSQL `data_type` strings (from `information_schema.columns`) to
 /// the corresponding cast target type name. Returns `None` for text-like types
 /// where no cast is needed (binding as `text` is fine).
@@ -229,16 +267,23 @@ impl PostgresAdapter {
                         .fetch_all(&pool)
                         .await?;
 
-                    let col_names: Vec<&str> = columns.iter().map(|c| c.name.as_str()).collect();
                     let json_rows: Vec<Vec<serde_json::Value>> = json_rows_raw
                         .iter()
                         .map(|json_str| {
                             let obj: serde_json::Map<String, serde_json::Value> =
                                 serde_json::from_str(json_str).unwrap_or_default();
-                            col_names
+                            columns
                                 .iter()
-                                .map(|name| {
-                                    obj.get(*name).cloned().unwrap_or(serde_json::Value::Null)
+                                .map(|col| {
+                                    let raw = obj
+                                        .get(&col.name)
+                                        .cloned()
+                                        .unwrap_or(serde_json::Value::Null);
+                                    // Sprint 261 (ADR 0026) — bigint /
+                                    // numeric cells are pre-stringified so
+                                    // native JSON.parse on the JS side
+                                    // preserves digit-for-digit precision.
+                                    stringify_numeric_if_precision_sensitive(raw, &col.data_type)
                                 })
                                 .collect()
                         })
@@ -707,9 +752,14 @@ impl PostgresAdapter {
                 columns
                     .iter()
                     .map(|col| {
-                        obj.get(&col.name)
+                        let raw = obj
+                            .get(&col.name)
                             .cloned()
-                            .unwrap_or(serde_json::Value::Null)
+                            .unwrap_or(serde_json::Value::Null);
+                        // Sprint 261 (ADR 0026) — bigint / numeric cells
+                        // are pre-stringified so native JSON.parse on the
+                        // JS side preserves digit-for-digit precision.
+                        stringify_numeric_if_precision_sensitive(raw, &col.data_type)
                     })
                     .collect()
             })
@@ -1181,5 +1231,118 @@ mod tests {
         assert_eq!(pg_cast_type("jsonb"), None);
         assert_eq!(pg_cast_type("money"), None);
         assert_eq!(pg_cast_type(""), None);
+    }
+
+    // ── Sprint 261 (ADR 0026) — numeric stringify helper ─────────────────
+    // 작성: 2026-05-11. `row_to_json(q)::text` 가 bigint/numeric 을 raw
+    // JSON number 로 직렬화하면 native JSON.parse 단계에서 IEEE 754 f64
+    // 변환으로 정밀도가 소실된다. helper 는 `column.data_type` 을 보고
+    // 정밀도 위험 컬럼 cell 만 `Value::String(n.to_string())` 으로
+    // pre-stringify 해서 wire 위에 string token 으로 올린다. 4 site
+    // (execute_query, query_table_data, stream_table_rows) 에서 같은
+    // 헬퍼를 재사용하므로 분기 의미를 여기 한 곳에 묶어둔다.
+
+    fn n(i: i64) -> serde_json::Value {
+        serde_json::Value::Number(i.into())
+    }
+
+    // [AC-261-02-PG-01] — bigint i64 max (>2^53-1) 값이 string 으로 wire 에
+    // 올라간다. JS BigInt 로 wrap 되기 전 단계에서 digits 가 보존되는지의
+    // 핵심 가드. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_bigint_at_i64_max_emits_string() {
+        let cell = n(i64::MAX);
+        let out = stringify_numeric_if_precision_sensitive(cell, "bigint");
+        assert_eq!(
+            out,
+            serde_json::Value::String("9223372036854775807".to_string())
+        );
+    }
+
+    // [AC-261-02-PG-01] — int8 alias 도 동일하게 처리. PG 가 보고하는
+    // `Pg::type_info()` 가 `INT8` 이라 lower-case 후 매칭. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_int8_alias_emits_string() {
+        let out = stringify_numeric_if_precision_sensitive(n(42), "INT8");
+        assert_eq!(out, serde_json::Value::String("42".to_string()));
+    }
+
+    // [AC-261-02-PG-01] — bigserial 도 i64 라 같은 정밀도 위험. PK 의
+    // 일반 형태이므로 별도 케이스로 고정. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_bigserial_emits_string() {
+        let out = stringify_numeric_if_precision_sensitive(n(1), "bigserial");
+        assert_eq!(out, serde_json::Value::String("1".to_string()));
+    }
+
+    // [AC-261-02-PG-02] — numeric / decimal / numeric(p,s) 모두 base-10
+    // 임의 정밀도라 f64 변환 불가. substring 매칭으로 `numeric(20,18)` 같은
+    // parameterized 표현도 잡는다. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_decimal_family_emits_string() {
+        let out = stringify_numeric_if_precision_sensitive(n(123), "numeric");
+        assert_eq!(out, serde_json::Value::String("123".to_string()));
+
+        let out = stringify_numeric_if_precision_sensitive(n(123), "decimal");
+        assert_eq!(out, serde_json::Value::String("123".to_string()));
+
+        let out = stringify_numeric_if_precision_sensitive(n(456), "numeric(20,18)");
+        assert_eq!(out, serde_json::Value::String("456".to_string()));
+    }
+
+    // [AC-261-02-PG-03] — int4 / int2 / real / double precision / float8 /
+    // float4 는 IEEE 754 f64 안전 범위이거나 정확히 같은 표현. wire 에서
+    // 그대로 number 토큰 유지 → JS Number 로 무손실. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_safe_number_families_pass_through() {
+        for dt in &[
+            "int4",
+            "integer",
+            "int2",
+            "smallint",
+            "real",
+            "double precision",
+            "float8",
+            "float4",
+        ] {
+            let out = stringify_numeric_if_precision_sensitive(n(123), dt);
+            assert_eq!(out, n(123), "data_type {} should not be stringified", dt);
+        }
+    }
+
+    // [AC-261-02-PG-04] — number 가 아닌 cell (이미 string / null / object)
+    // 은 정밀도 위험 컬럼이어도 그대로 통과. row_to_json 이 null 이나
+    // 기존 string 으로 보내는 케이스 (예: 빈 cell, jsonb stringify 결과)
+    // 가 잘못 변환되지 않도록 가드. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_non_number_cell_passes_through() {
+        for cell in &[
+            serde_json::Value::String("9223372036854775807".to_string()),
+            serde_json::Value::Null,
+            serde_json::Value::Bool(true),
+            serde_json::json!({"nested": 1}),
+        ] {
+            let out = stringify_numeric_if_precision_sensitive(cell.clone(), "bigint");
+            assert_eq!(
+                &out, cell,
+                "non-number cell {:?} must pass through unchanged",
+                cell
+            );
+        }
+    }
+
+    // [AC-261-02-PG-05] — 알 수 없는 data_type ("jsonb", "money", "") 은
+    // 정밀도 위험으로 분류 안 함. PG `money` 는 사용자 비활성, jsonb 는
+    // 별도 sprint (nested 정밀도) 로 미룸. Date 2026-05-11.
+    #[test]
+    fn stringify_numeric_unknown_type_passes_through() {
+        let out = stringify_numeric_if_precision_sensitive(n(123), "jsonb");
+        assert_eq!(out, n(123));
+
+        let out = stringify_numeric_if_precision_sensitive(n(123), "money");
+        assert_eq!(out, n(123));
+
+        let out = stringify_numeric_if_precision_sensitive(n(123), "");
+        assert_eq!(out, n(123));
     }
 }

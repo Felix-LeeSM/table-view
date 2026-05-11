@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import Decimal from "decimal.js";
 import { useTabStore } from "@stores/tabStore";
 import {
   useDataGridEditStore,
@@ -161,6 +162,11 @@ export function deriveEditorSeed(dataType: string, key: string): EditorSeed {
  */
 export function cellToEditString(cell: unknown): string {
   if (cell == null) return "";
+  // Sprint 261 (ADR 0026) — Decimal is `typeof === "object"` so it must be
+  // detected before the generic object branch (which would call
+  // `JSON.stringify` and emit `{}`). `BigInt` is `typeof === "bigint"` and
+  // already falls through to `String(cell)` correctly.
+  if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "object") return JSON.stringify(cell, null, 2);
   return String(cell);
 }
@@ -172,6 +178,9 @@ export function cellToEditString(cell: unknown): string {
  */
 export function cellToEditValue(cell: unknown): string | null {
   if (cell == null) return null;
+  // Sprint 261 (ADR 0026) — same Decimal-before-object ordering as
+  // `cellToEditString`.
+  if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "object") return JSON.stringify(cell, null, 2);
   return String(cell);
 }

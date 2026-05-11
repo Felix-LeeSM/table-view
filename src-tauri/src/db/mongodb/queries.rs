@@ -222,16 +222,29 @@ pub(super) fn bson_type_name(b: &Bson) -> &'static str {
 /// Flatten a single BSON value into the JSON cell shape the grid consumes.
 ///
 /// Invariant (Sprint 66 contract):
-///   * `Bson::Document(_) → Value::String("{...}")` (sentinel)
-///   * `Bson::Array(arr)  → Value::String("[N items]")` (sentinel)
-///   * anything else      → canonical extended JSON through
-///     `bson::Bson::into_canonical_extjson` so that
-///     `ObjectId` ≈ `{"$oid": "..."}` and `DateTime`
-///     ≈ `{"$date": "..."}` match Quick Look later.
+/// - `Bson::Document(_) → Value::String("{...}")` (sentinel)
+/// - `Bson::Array(arr)  → Value::String("[N items]")` (sentinel)
+/// - 수치 타입 (Sprint 261 ADR 0026):
+///   - `Bson::Int64(n)` → `Value::String(n.to_string())` — frontend wrapper 가 BigInt 로 wrap.
+///   - `Bson::Decimal128(d)` → `Value::String(d.to_string())` — frontend wrapper 가 Decimal 로 wrap.
+///   - `Bson::Int32(n)` → raw JSON number — JS Number 안전 범위.
+///   - `Bson::Double(d)` → raw JSON number — JS Number 와 IEEE 754 동일 표현.
+///   - canonical extjson 의 `{"$numberLong": ...}` / `{"$numberInt": ...}` /
+///     `{"$numberDouble": ...}` / `{"$numberDecimal": ...}` wrapper 모두 우회.
+///     NaN / Infinity 같은 non-finite Double 만 fallback 으로 extjson 유지.
+/// - 비-수치 discriminator-bearing 타입 (ObjectId / DateTime / Binary / ...) →
+///   canonical extended JSON 유지: `ObjectId` ≈ `{"$oid": "..."}` /
+///   `DateTime` ≈ `{"$date": "..."}` (Quick Look 트리 뷰어가 의존).
 pub(super) fn flatten_cell(b: &Bson) -> serde_json::Value {
     match b {
         Bson::Document(_) => serde_json::Value::String("{...}".into()),
         Bson::Array(arr) => serde_json::Value::String(format!("[{} items]", arr.len())),
+        Bson::Int64(n) => serde_json::Value::String(n.to_string()),
+        Bson::Decimal128(d) => serde_json::Value::String(d.to_string()),
+        Bson::Int32(n) => serde_json::Value::Number((*n).into()),
+        Bson::Double(d) => serde_json::Number::from_f64(*d)
+            .map(serde_json::Value::Number)
+            .unwrap_or_else(|| b.clone().into_canonical_extjson()),
         other => other.clone().into_canonical_extjson(),
     }
 }
@@ -358,12 +371,68 @@ mod tests {
             flatten_cell(&Bson::String("hi".into())),
             serde_json::json!("hi")
         );
-        // Int64 becomes extended JSON `{"$numberLong": "..."}`.
-        let long = flatten_cell(&Bson::Int64(42));
+        // ObjectId / DateTime / Binary 등 비-수치 discriminator-bearing 타입은
+        // canonical extjson wrapper 유지 (Sprint 261 ADR 0026 — 수치만 unwrap).
+        let oid_bson =
+            Bson::ObjectId(bson::oid::ObjectId::parse_str("65abcdef0123456789abcdef").unwrap());
+        let oid = flatten_cell(&oid_bson);
         assert!(
-            long.get("$numberLong").is_some(),
-            "Int64 should serialise as canonical extended JSON: {long}"
+            oid.get("$oid").is_some(),
+            "ObjectId should remain extjson wrapper: {oid}"
         );
+    }
+
+    // Sprint 261 (ADR 0026) — Int64 / Decimal128 은 wire 위에서 plain JSON
+    // string 으로 보낸다 (precision-preserving). canonical extjson 의
+    // `{"$numberLong": "..."}` / `{"$numberDecimal": "..."}` wrapper 우회.
+    // Frontend wrapper 가 column metadata 기반으로 BigInt / Decimal 로 wrap.
+    #[test]
+    fn flatten_cell_int64_emits_plain_string_sprint_261() {
+        assert_eq!(
+            flatten_cell(&Bson::Int64(42)),
+            serde_json::Value::String("42".into())
+        );
+        // 정밀도 초과 케이스 (i64 max 근처).
+        assert_eq!(
+            flatten_cell(&Bson::Int64(9223372036854775807)),
+            serde_json::Value::String("9223372036854775807".into())
+        );
+        // 음수.
+        assert_eq!(
+            flatten_cell(&Bson::Int64(-9223372036854775808)),
+            serde_json::Value::String("-9223372036854775808".into())
+        );
+    }
+
+    #[test]
+    fn flatten_cell_decimal128_emits_plain_string_sprint_261() {
+        // Decimal128 → "123.456..." plain string. canonical extjson 의
+        // `{"$numberDecimal": "..."}` 우회.
+        let d128 = Bson::Decimal128("123.456789012345678901234567890".parse().unwrap());
+        let result = flatten_cell(&d128);
+        match result {
+            serde_json::Value::String(s) => {
+                assert!(
+                    s.contains("123.45"),
+                    "Decimal128 should be plain string, got: {s}"
+                );
+            }
+            other => panic!("expected Value::String, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn flatten_cell_int32_remains_raw_number_sprint_261() {
+        // Int32 는 JS Number 안전 범위라 raw number 유지 — 무손실 round-trip.
+        assert_eq!(flatten_cell(&Bson::Int32(42)), serde_json::json!(42));
+    }
+
+    #[test]
+    fn flatten_cell_double_remains_raw_number_sprint_261() {
+        // Double 은 JS Number = IEEE 754 64-bit 동일 표현 — 무손실.
+        // 1.5 (정확히 표현 가능한 dyadic rational) 로 clippy::approx_constant
+        // 회피.
+        assert_eq!(flatten_cell(&Bson::Double(1.5)), serde_json::json!(1.5));
     }
 
     #[test]

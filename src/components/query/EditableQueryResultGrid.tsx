@@ -5,6 +5,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import Decimal from "decimal.js";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
@@ -47,6 +48,9 @@ export interface EditableQueryResultGridProps {
 
 function formatCellDisplay(cell: unknown): string {
   if (cell == null) return "NULL";
+  // Sprint 261 (ADR 0026) — Decimal is `typeof === "object"`; detect
+  // before the generic object branch. BigInt falls through to `String(cell)`.
+  if (cell instanceof Decimal) return cell.toString();
   if (typeof cell === "object") return safeStringifyCell(cell);
   return String(cell);
 }
