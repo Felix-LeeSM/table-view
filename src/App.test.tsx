@@ -445,7 +445,11 @@ describe("App global shortcuts", () => {
     expect(useTabStore.getState().activeTabId).toBe("tab-1");
   });
 
-  it("Cmd+1 with focus inside an editable target is a no-op", () => {
+  // 2026-05-11 회귀 — Cmd+1..9 는 SQL 에디터(CodeMirror contenteditable)나
+  // DataGrid 셀 편집 중에도 작동해야 한다. Cmd+W 와 마찬가지로 단축키 자체가
+  // 에디터 내에서 보존해야 할 의미가 없고, 편집 중 빠르게 탭을 전환하는 것이
+  // 핵심 use case 다.
+  it("Cmd+1 switches tabs even when focus is inside an input", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
     useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
@@ -453,6 +457,7 @@ describe("App global shortcuts", () => {
 
     const input = document.createElement("input");
     document.body.appendChild(input);
+    input.focus();
     act(() => {
       fireEvent(
         input,
@@ -465,8 +470,34 @@ describe("App global shortcuts", () => {
       );
     });
 
-    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+    expect(useTabStore.getState().activeTabId).toBe("tab-1");
     document.body.removeChild(input);
+  });
+
+  it("Cmd+2 switches tabs even when focus is inside a contenteditable target (CodeMirror / DataGrid)", () => {
+    const t1 = makeTableTab({ id: "tab-1" });
+    const t2 = makeTableTab({ id: "tab-2", table: "two" });
+    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-1" });
+    render(<App />);
+
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    document.body.appendChild(editor);
+    editor.focus();
+    act(() => {
+      fireEvent(
+        editor,
+        new KeyboardEvent("keydown", {
+          key: "2",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+    document.body.removeChild(editor);
   });
 
   // ── Sprint 134: Cmd+K is now a no-op ──
@@ -609,5 +640,158 @@ describe("App global shortcuts", () => {
     expect(useThemeStore.getState().mode).toBe("dark");
 
     window.removeEventListener("commit-changes", handler);
+  });
+
+  // ── 2026-05-11: 단축키 focus 정책 매트릭스 ──
+  //
+  // 2026-05-11 버그 회귀의 교훈: Cmd+1..9 가 contenteditable (CodeMirror /
+  // 인라인 셀) 안에서 안 먹히던 이유는 *구현* 에 맞춰 "editable 안에서는
+  // no-op" 단언이 잠겨있었기 때문이다. 의도 단위 매트릭스를 한 군데
+  // 모아두면 새 단축키 추가 시 행 하나만 채우면 회귀가 자동으로 잡힌다.
+  //
+  // 각 행:
+  //   - key           : 단축키 (e.g. "w", "1", "i")
+  //   - shift / alt   : modifier (Cmd/Ctrl 는 항상 포함)
+  //   - focusPolicy
+  //       "always"           — editable 안에서도 가로채야 함 (preventDefault).
+  //       "skip-in-editable" — editable 안에서는 흘려보내야 함 (no preventDefault).
+  //
+  // 단언은 *preventDefault 호출 여부* 만 본다 (side effect 는 개별 기존
+  // 테스트가 이미 커버). 그래서 "interception 계약" 만 매트릭스로 잠금.
+  type FocusPolicy = "always" | "skip-in-editable";
+  interface ShortcutCase {
+    label: string;
+    key: string;
+    shift?: boolean;
+    alt?: boolean;
+    focusPolicy: FocusPolicy;
+  }
+
+  const SHORTCUTS: ShortcutCase[] = [
+    // Cmd+W — 항상 가로채야 함 (macOS native Close-Window 차단).
+    { label: "Cmd+W (close tab)", key: "w", focusPolicy: "always" },
+    // Cmd+1..9 — 2026-05-11 회귀: editable 안에서도 가로채야 함.
+    { label: "Cmd+1 (tab switch)", key: "1", focusPolicy: "always" },
+    { label: "Cmd+9 (tab switch)", key: "9", focusPolicy: "always" },
+    // Cmd+T — editable 안에서는 흘려보냄 (에디터에 "t" 가 입력되게).
+    {
+      label: "Cmd+T (new query tab)",
+      key: "t",
+      focusPolicy: "skip-in-editable",
+    },
+    // Cmd+. — editable 안에서는 흘려보냄.
+    {
+      label: "Cmd+. (cancel query)",
+      key: ".",
+      focusPolicy: "skip-in-editable",
+    },
+    // Cmd+R — editable 안에서는 흘려보냄.
+    { label: "Cmd+R (refresh)", key: "r", focusPolicy: "skip-in-editable" },
+    // Cmd+I — editable 안에서는 흘려보냄.
+    { label: "Cmd+I (format SQL)", key: "i", focusPolicy: "skip-in-editable" },
+    // Cmd+N / S / P — editable 안에서는 흘려보냄.
+    {
+      label: "Cmd+N (new connection)",
+      key: "n",
+      focusPolicy: "skip-in-editable",
+    },
+    {
+      label: "Cmd+S (commit changes)",
+      key: "s",
+      focusPolicy: "skip-in-editable",
+    },
+    { label: "Cmd+P (quick open)", key: "p", focusPolicy: "skip-in-editable" },
+  ];
+
+  function dispatchAndCheckPrevented(
+    target: EventTarget,
+    sc: ShortcutCase,
+  ): boolean {
+    const ev = new KeyboardEvent("keydown", {
+      key: sc.key,
+      metaKey: true,
+      shiftKey: sc.shift === true,
+      altKey: sc.alt === true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      target.dispatchEvent(ev);
+    });
+    return ev.defaultPrevented;
+  }
+
+  describe("shortcut focus policy matrix (2026-05-11 회귀 가드)", () => {
+    // Seed enough tabs so Cmd+1/9 don't no-op for "no target tab".
+    function seedTabs() {
+      const fillerTabs = Array.from({ length: 9 }, (_, i) =>
+        makeTableTab({
+          id: `tab-${i + 1}`,
+          table: `t${i + 1}`,
+          connectionId: `conn${i + 1}`,
+        }),
+      );
+      useTabStore.setState({
+        tabs: fillerTabs,
+        activeTabId: "tab-5",
+      });
+    }
+
+    SHORTCUTS.forEach((sc) => {
+      it(`${sc.label}: focusPolicy="${sc.focusPolicy}"`, () => {
+        seedTabs();
+        render(<App />);
+
+        // 1) No editable focus — should always be intercepted by the
+        // matching handler.
+        const baseline = dispatchAndCheckPrevented(document, sc);
+        expect(baseline, `${sc.label} must be intercepted at document`).toBe(
+          true,
+        );
+
+        // 2) Focus inside <input>.
+        const input = document.createElement("input");
+        document.body.appendChild(input);
+        input.focus();
+        const insideInput = dispatchAndCheckPrevented(input, sc);
+        document.body.removeChild(input);
+
+        // 3) Focus inside contenteditable (mimics CodeMirror / inline cell).
+        // jsdom does NOT compute `isContentEditable` from the attribute,
+        // so we surface the property the same way Chrome/Safari does on a
+        // focused contenteditable element — mirrors the workaround in
+        // `lib/keyboard/__tests__/isEditableTarget.test.ts`.
+        const editor = document.createElement("div");
+        editor.setAttribute("contenteditable", "true");
+        Object.defineProperty(editor, "isContentEditable", {
+          configurable: true,
+          get: () => true,
+        });
+        document.body.appendChild(editor);
+        editor.focus();
+        const insideEditable = dispatchAndCheckPrevented(editor, sc);
+        document.body.removeChild(editor);
+
+        if (sc.focusPolicy === "always") {
+          expect(
+            insideInput,
+            `${sc.label} must STILL preventDefault inside <input>`,
+          ).toBe(true);
+          expect(
+            insideEditable,
+            `${sc.label} must STILL preventDefault inside contenteditable`,
+          ).toBe(true);
+        } else {
+          expect(
+            insideInput,
+            `${sc.label} must NOT preventDefault inside <input>`,
+          ).toBe(false);
+          expect(
+            insideEditable,
+            `${sc.label} must NOT preventDefault inside contenteditable`,
+          ).toBe(false);
+        }
+      });
+    });
   });
 });

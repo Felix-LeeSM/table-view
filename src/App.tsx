@@ -148,13 +148,17 @@ export default function App() {
 
   // Cmd+1..9 / Ctrl+1..9 — switch to the N-th workspace tab (1-indexed).
   // Top-row digits only; `Numpad1`.. are intentionally NOT matched.
+  //
+  // Unlike most global shortcuts we intentionally do NOT skip on
+  // `isEditableTarget`: the SQL editor (CodeMirror `contenteditable`) and
+  // inline-edit DataGrid cells hold focus during normal use, and Cmd+1..9
+  // has no in-editor meaning to preserve. Same rationale as Cmd+W above.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.shiftKey || e.altKey) return;
       const digit = e.key;
       if (digit < "1" || digit > "9") return;
-      if (isEditableTarget(e.target)) return;
       const index = Number(digit) - 1;
       const tab = tabs[index];
       if (!tab) return;

@@ -166,6 +166,32 @@ describe("TabBar", () => {
     expect(useTabStore.getState().tabs).toHaveLength(0);
   });
 
+  // 2026-05-11 — regression. The pointer-events drag migration started
+  // calling `setPointerCapture(e.pointerId)` on the tab div in
+  // `pointerdown`. When the pointerdown bubbled up from the close
+  // button, the capture rerouted the following `pointerup` to the tab
+  // div, and the synthesized `click` then fired on the tab div instead
+  // of the close button — the user-visible symptom was "X 버튼이 안
+  // 닫힘". The fix bails out of drag setup whenever pointerdown
+  // originates inside an interactive child (`.closest('button')`),
+  // which leaves the close button's own click path intact. The
+  // bare-click test above passes via `fireEvent.click` alone and
+  // therefore does not exercise the pointer-events path, so we add an
+  // explicit pointerdown → pointerup → click sequence here.
+  it("closes tab via close button under full pointer-events sequence", () => {
+    addTableTab({ title: "Users", table: "users" });
+
+    render(<TabBar />);
+    const closeBtn = screen.getByLabelText("Close Users");
+    act(() => {
+      fireEvent.pointerDown(closeBtn, { button: 0, pointerId: 1 });
+      fireEvent.pointerUp(closeBtn, { button: 0, pointerId: 1 });
+      fireEvent.click(closeBtn);
+    });
+
+    expect(useTabStore.getState().tabs).toHaveLength(0);
+  });
+
   it("renders query tab with correct icon", () => {
     addTableTab({ title: "Users", table: "users" });
     useTabStore.getState().addQueryTab("conn1");
@@ -384,23 +410,64 @@ describe("TabBar", () => {
     });
   }
 
+  // 2026-05-11 — drag-reorder migrated mouse → pointer events with
+  // `setPointerCapture` so a release outside the WKWebView window can
+  // never leave the ghost stranded. All three regression cases below
+  // exercise the new contract via `fireEvent.pointer*`.
+  //
+  // Helper layout used by every drag-DnD case: three 100px-wide tabs.
+  // We must mock getBoundingClientRect because the new pointerup path
+  // resolves drop target via per-tab rects (jsdom returns 0 by default).
+  function mockTabRects(
+    rects: { left: number; right: number; width: number }[],
+  ) {
+    const tabEls = document.querySelectorAll<HTMLElement>("[data-tab-id]");
+    tabEls.forEach((el, i) => {
+      const r = rects[i];
+      if (!r) return;
+      el.getBoundingClientRect = () =>
+        ({
+          left: r.left,
+          right: r.right,
+          top: 0,
+          bottom: 32,
+          width: r.width,
+          height: 32,
+          x: r.left,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    });
+  }
+
   it("reorders tabs when dragging first tab onto third", () => {
     setThreeTabs();
     render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
 
     const before = useTabStore.getState().tabs.map((t) => t.id);
     const tabs = screen.getAllByRole("tab");
     expect(tabs).toHaveLength(3);
 
     act(() => {
-      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
-      fireEvent.mouseMove(document, { clientX: 10 }); // dx=10 > 4 → isDragging
-      fireEvent.mouseEnter(tabs[2]!);
-      fireEvent.mouseUp(tabs[2]!);
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // dx=200 > 8 → isDragging.
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 250 });
+      // Release with cursor over t3's right half → "after t3" → [t2, t3, t1].
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 260 });
     });
 
     const after = useTabStore.getState().tabs.map((t) => t.id);
-    // t1 moves to where t3 was → [t2, t3, t1]
+    // t1 moves past t3 → [t2, t3, t1]
     expect(after).toEqual([before[1], before[2], before[0]]);
   });
 
@@ -408,13 +475,24 @@ describe("TabBar", () => {
     setThreeTabs();
     render(<TabBar />);
 
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
     const before = useTabStore.getState().tabs.map((t) => t.id);
     const tabs = screen.getAllByRole("tab");
 
     act(() => {
-      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
-      fireEvent.mouseMove(document, { clientX: 10 }); // isDragging = true
-      fireEvent.mouseUp(tabs[0]!); // same tab → no reorder
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // dx=20 > 8 → isDragging, but release lands back over t1.
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 70 });
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 30 });
     });
 
     expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
@@ -424,17 +502,241 @@ describe("TabBar", () => {
     setThreeTabs();
     render(<TabBar />);
 
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
     const { activeTabId } = useTabStore.getState();
     const tabs = screen.getAllByRole("tab");
 
     act(() => {
-      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
-      fireEvent.mouseMove(document, { clientX: 10 });
-      fireEvent.mouseEnter(tabs[2]!);
-      fireEvent.mouseUp(tabs[2]!);
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 250 });
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 260 });
     });
 
     expect(useTabStore.getState().activeTabId).toBe(activeTabId);
+  });
+
+  // 2026-05-11 — drag-end 불변식 매트릭스 헬퍼.
+  //
+  // 어떤 종료 경로 (pointerup, pointercancel, 임계값 미달 release,
+  // viewport 밖 release 등) 든 다음 4 개 상태가 동시에 reset 되어야 한다.
+  // ghost 와 cursor cleanup 누락이 2026-05-11 user report 의 핵심 증상.
+  function expectCleanDragState() {
+    expect(document.querySelector("[aria-hidden][class*='fixed']")).toBeNull();
+    expect(document.body.style.cursor).toBe("");
+    expect(document.body.style.userSelect).toBe("");
+    // No tab should still carry the dragging dim (opacity-50).
+    const dimmed = document.querySelectorAll(
+      "[role='tab'][class*='opacity-50']",
+    );
+    expect(dimmed.length).toBe(0);
+  }
+
+  // 2026-05-11 회귀 — pre-2026-05-11 회귀: 트랙패드 클릭이 1–6px 미세
+  // 이동을 동반하면 4px 임계값을 넘어 ghost 가 잠시 표시됐다. 새 8px
+  // 임계값 하에서 같은 미세 이동은 ghost 를 트리거하지 않아야 한다.
+  it("does not start dragging when cursor drifts under the 8px threshold (2026-05-11)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    const tabs = screen.getAllByRole("tab");
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // 7px drift — below threshold.
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 57 });
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 57 });
+    });
+
+    // No ghost mounted at any point.
+    expectCleanDragState();
+  });
+
+  // 2026-05-11 — pointerdown 즉시 native text-selection 차단.
+  //
+  // `setPointerCapture` 는 pointer 이벤트만 라우팅하고 브라우저의
+  // selection 로직 (mousedown 에서 anchor → mousemove 로 확장) 은
+  // 그대로 동작한다. 임계값 (`dx > 8`) 을 넘은 뒤에 `userSelect=none` 을
+  // 거는 pre-2026-05-11 구현은 selection 이 이미 시작된 뒤라 무효였다.
+  // 회귀 가드: pointerdown 시점에 즉시 `userSelect=none` 이어야 한다.
+  it("suppresses native text selection from pointerdown (not after threshold)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    const tabs = screen.getAllByRole("tab");
+    expect(document.body.style.userSelect).toBe("");
+
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+    });
+    // BEFORE any pointermove — selection must already be suppressed.
+    expect(document.body.style.userSelect).toBe("none");
+
+    // Cleanup restores.
+    act(() => {
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 50 });
+    });
+    expect(document.body.style.userSelect).toBe("");
+  });
+
+  // 2026-05-11 — 임계값 경계 매트릭스. 코드는 `dx > 8` 이므로:
+  //   dx = 7  → drag 안 시작
+  //   dx = 8  → drag 안 시작 (경계 미포함)
+  //   dx = 9  → drag 시작
+  // 각 경계에서 ghost mount 여부 + cleanup 불변식 둘 다 단언.
+  it.each([
+    { dx: 7, shouldDrag: false, label: "below threshold (7px)" },
+    { dx: 8, shouldDrag: false, label: "exactly at threshold (8px)" },
+    { dx: 9, shouldDrag: true, label: "just over threshold (9px)" },
+  ])("drag-threshold boundary: $label", ({ dx, shouldDrag }) => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 50 + dx });
+    });
+
+    if (shouldDrag) {
+      // Ghost present, originating tab dimmed.
+      expect(
+        document.querySelector("[aria-hidden][class*='fixed']"),
+      ).not.toBeNull();
+    } else {
+      // No drag — ghost never mounted.
+      expect(
+        document.querySelector("[aria-hidden][class*='fixed']"),
+      ).toBeNull();
+    }
+
+    // Release — cleanup invariant must hold regardless of branch.
+    act(() => {
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 50 + dx });
+    });
+    expectCleanDragState();
+  });
+
+  // 2026-05-11 회귀 — drop 후 ghost 가 cursor 를 계속 따라다니던 버그.
+  // WKWebView 가 native mouseup 을 swallow 했을 때 cleanup 이 누락되어
+  // dragStateRef + ghostStyle 이 살아남았다. pointer event + capture 는
+  // pointerup 이 capturing element 로 보장 delivery 되므로 구조적으로 차단.
+  // 그래도 cleanup 이 모든 release 경로에서 실제로 호출되는지 회귀 가드.
+  it("cleans up ghost and drag state after pointerup, even at non-tab coordinates (2026-05-11)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const tabs = screen.getAllByRole("tab");
+
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 150 });
+      // Release way outside any tab — sim user dropping over a different
+      // window / off-screen. pointer capture routes pointerup back to
+      // the captured element; cleanup must still run.
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 9999 });
+    });
+
+    expectCleanDragState();
+  });
+
+  // 2026-05-11 회귀 — pointercancel 경로 (OS 가 드래그를 가로채는 경우)
+  // 에서도 cleanup 이 호출되어야 한다.
+  it("cleans up on pointercancel without reordering (2026-05-11)", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const tabs = screen.getAllByRole("tab");
+
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 250 });
+      fireEvent.pointerCancel(tabs[0]!, { pointerId: 1, clientX: 250 });
+    });
+
+    // No reorder happened.
+    expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+    expectCleanDragState();
+  });
+
+  // 2026-05-11 — onClick 이 drag 직후 발화해도 (DOM 표준 동작) 탭이
+  // 재활성화되면 안 된다. justDraggedRef 가드가 click 을 한 번 swallow.
+  it("does not re-activate the dragged tab via the click event that follows pointerup", () => {
+    setThreeTabs();
+    render(<TabBar />);
+
+    mockTabRects([
+      { left: 0, right: 100, width: 100 },
+      { left: 100, right: 200, width: 100 },
+      { left: 200, right: 300, width: 100 },
+    ]);
+
+    // Start with t2 active, drag t1 onto t3, then synthesize the trailing
+    // click — activeTabId should NOT collapse to t1.
+    useTabStore.setState({ activeTabId: "t2" });
+    const tabs = screen.getAllByRole("tab");
+
+    act(() => {
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 250 });
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 260 });
+      // Browser fires `click` on the originating element after pointerup
+      // when down + up landed on the same element. We replay that here.
+      fireEvent.click(tabs[0]!);
+    });
+
+    // moveTab repositioned t1 to the end → active tab still t2 (untouched).
+    expect(useTabStore.getState().activeTabId).toBe("t2");
   });
 
   // ── Sprint 97: dirty indicator + close gate ──
@@ -864,42 +1166,14 @@ describe("TabBar", () => {
   //
   // 13-question grill Q13 결과: drag 후 strip 의 "탭이 없는 빈 영역"
   // (마지막 탭 우측 또는 두 탭 사이 시각적 gap) 에서 mouse release 시,
-  // 현재는 silent no-op (사용자 mental model 깨짐). Chrome/VSCode 표준
-  // 동작에 맞춰 cursor X 기반 가장 가까운 탭 결정 → before/after 로
-  // moveTab 호출.
-  //
-  // 설계 결정:
-  // - per-tab onMouseUp 은 e.stopPropagation() 으로 strip 의 onMouseUp
-  //   bubble 을 차단 (탭 위 release 의 중복 reorder 방지).
-  // - strip onMouseUp 은 *빈 영역* release 전용. dragStateRef 가 isDragging
-  //   인지 가드. cursor X 가 마지막 탭의 right edge 이상이면 끝으로 (after).
-  //   아니면 첫 midpoint ≥ cursor X 인 탭 앞 (before).
+  // pre-2026-05-11 은 strip-level onMouseUp 이 처리. 2026-05-11 pointer
+  // event 마이그레이션 후엔 `setPointerCapture` 가 pointerup 을 capturing
+  // 탭으로 라우팅하므로 동일 로직이 per-tab onPointerUp 안에서 cursor X
+  // 기반으로 결정한다 (strip-level handler 는 제거됨).
   //
   // jsdom 의 getBoundingClientRect 는 기본값이 0 이라 명시 mock 필수.
   // 작성 일자: 2026-05-09 (/tdd 흐름 — 본 case 들이 먼저 fail → 구현 → green).
-
-  function mockTabRects(
-    rects: { left: number; right: number; width: number }[],
-  ) {
-    // 각 [data-tab-id] element 에 명시 boundingClientRect 부여.
-    const tabEls = document.querySelectorAll<HTMLElement>("[data-tab-id]");
-    tabEls.forEach((el, i) => {
-      const r = rects[i];
-      if (!r) return;
-      el.getBoundingClientRect = () =>
-        ({
-          left: r.left,
-          right: r.right,
-          top: 0,
-          bottom: 32,
-          width: r.width,
-          height: 32,
-          x: r.left,
-          y: 0,
-          toJSON: () => ({}),
-        }) as DOMRect;
-    });
-  }
+  // 갱신 일자: 2026-05-11 (mouse → pointer 마이그레이션).
 
   it("drag release on empty area past the last tab moves source to the end (AC-253-04)", () => {
     setThreeTabs();
@@ -913,16 +1187,19 @@ describe("TabBar", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab");
-    const tablist = screen.getByRole("tablist");
     const before = useTabStore.getState().tabs.map((t) => t.id);
 
     act(() => {
-      // Start drag on t1.
-      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
-      // Move > 4px to flip isDragging.
-      fireEvent.mouseMove(document, { clientX: 10 });
-      // Release on the empty area of the tablist, past t3's right edge.
-      fireEvent.mouseUp(tablist, { clientX: 350 });
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      // Move > 8px to flip isDragging.
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 200 });
+      // Release past t3's right edge. With pointer capture, pointerup
+      // lands back on the originating tab regardless of cursor location.
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 350 });
     });
 
     const after = useTabStore.getState().tabs.map((t) => t.id);
@@ -935,8 +1212,8 @@ describe("TabBar", () => {
     render(<TabBar />);
 
     // Layout: t1 [0..100], t2 [100..200], t3 [200..300]. Cursor at 210 →
-    // past t2 midpoint (150) but ≤ t3 midpoint (250). Expected: insert
-    // before t3 (the first tab whose midpoint ≥ cursor X).
+    // past t2 midpoint (150) but in t3's left half. Expected: insert
+    // before t3.
     mockTabRects([
       { left: 0, right: 100, width: 100 },
       { left: 100, right: 200, width: 100 },
@@ -944,15 +1221,17 @@ describe("TabBar", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab");
-    const tablist = screen.getByRole("tablist");
     const before = useTabStore.getState().tabs.map((t) => t.id);
 
     act(() => {
-      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
-      fireEvent.mouseMove(document, { clientX: 10 });
-      // Release on tablist (NOT on a tab) at X=210 — the visual gap
-      // immediately after t2 / immediately before t3.
-      fireEvent.mouseUp(tablist, { clientX: 210 });
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 150 });
+      // Release at X=210 — t3's left half.
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 210 });
     });
 
     const after = useTabStore.getState().tabs.map((t) => t.id);
@@ -960,7 +1239,7 @@ describe("TabBar", () => {
     expect(after).toEqual([before[1], before[0], before[2]]);
   });
 
-  it("strip onMouseUp without an active drag is a no-op (AC-253-04)", () => {
+  it("pointerup without a prior pointerdown is a no-op (AC-253-04)", () => {
     setThreeTabs();
     render(<TabBar />);
 
@@ -970,24 +1249,21 @@ describe("TabBar", () => {
       { left: 200, right: 300, width: 100 },
     ]);
 
-    const tablist = screen.getByRole("tablist");
+    const tabs = screen.getAllByRole("tab");
     const before = useTabStore.getState().tabs.map((t) => t.id);
 
-    // No mouseDown / mouseMove → dragStateRef.isDragging is never true.
+    // No pointerDown → dragStateRef stays null.
     act(() => {
-      fireEvent.mouseUp(tablist, { clientX: 350 });
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 350 });
     });
 
     expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
   });
 
-  it("releasing on a tab itself only triggers ONE moveTab (no double reorder via bubble) (AC-253-05)", () => {
+  it("releasing on a tab's right half moves source after it (AC-253-05)", () => {
     setThreeTabs();
     render(<TabBar />);
 
-    // Layout matches the gap-test fixture so the strip's onMouseUp would
-    // — if it ran — also choose an "after" target. We assert that it does
-    // NOT run on bubble: the per-tab handler must stopPropagation.
     mockTabRects([
       { left: 0, right: 100, width: 100 },
       { left: 100, right: 200, width: 100 },
@@ -998,14 +1274,14 @@ describe("TabBar", () => {
     const before = useTabStore.getState().tabs.map((t) => t.id);
 
     act(() => {
-      fireEvent.mouseDown(tabs[0]!, { button: 0, clientX: 0 });
-      fireEvent.mouseMove(document, { clientX: 10 });
-      // Release directly on t3. clientX inside t3 (250 — midpoint), so
-      // per-tab handler picks "after" → [t2, t3, t1]. If the strip's
-      // onMouseUp also fires on bubble at clientX=250, it would also pick
-      // "before t3" (midpoint=250 ≥ cursorX=250) → moveTab called twice
-      // → wrong final order. Bubble guard MUST prevent that.
-      fireEvent.mouseUp(tabs[2]!, { clientX: 250 });
+      fireEvent.pointerDown(tabs[0]!, {
+        button: 0,
+        pointerId: 1,
+        clientX: 50,
+      });
+      fireEvent.pointerMove(tabs[0]!, { pointerId: 1, clientX: 250 });
+      // Release at X=270 — t3's right half → insert after t3.
+      fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 270 });
     });
 
     const after = useTabStore.getState().tabs.map((t) => t.id);
