@@ -454,8 +454,12 @@ function buildItemRow(
     item,
     itemKind,
     isSelected: selection.selectedNodeId === itemId,
+    // 2026-05-11 — views share the table-tab shape (same schema/table
+    // fields, just `objectKind: "view"`), so they participate in the
+    // active-tab highlight identically. Functions open as query tabs
+    // and stay on the click-based `isSelected` path.
     isActive:
-      itemKind === "table" &&
+      (itemKind === "table" || itemKind === "view") &&
       selection.activeSchema === schemaName &&
       selection.activeTable === item.name,
   };

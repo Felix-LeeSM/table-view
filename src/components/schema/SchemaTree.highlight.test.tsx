@@ -394,6 +394,65 @@ describe("SchemaTree — highlight", () => {
     expect(usersItem).not.toHaveClass("font-semibold");
   });
 
+  // 2026-05-11 — Regression. Pre-fix `handleTableClick` /
+  // `handleTableDoubleClick` set `selectedNodeId` to the clicked node,
+  // and the item highlight OR-merged `selectedNodeId` with the active-
+  // tab match. The last-opened table therefore stayed highlighted even
+  // after the user switched to a different tab. The fix drops the
+  // setter for table/view clicks (highlight now follows active-tab
+  // identity only) so the previously-clicked row goes dark on switch.
+  it(
+    "clears the previously-opened table's highlight after switching to a " +
+      "different tab via setActiveTab",
+    async () => {
+      setSchemaStoreState({
+        schemas: { conn1: [{ name: "public" }] },
+        tables: {
+          "conn1:public": [
+            { name: "users", schema: "public", row_count: null },
+            { name: "orders", schema: "public", row_count: null },
+          ],
+        },
+      });
+
+      await act(async () => {
+        render(<SchemaTree connectionId="conn1" />);
+      });
+
+      // Double-click users — opens a permanent tab and makes it active.
+      const usersItem = screen.getByLabelText("users table");
+      await act(async () => {
+        fireEvent.doubleClick(usersItem);
+      });
+      expect(usersItem).toHaveClass("bg-primary/10");
+
+      // Double-click orders — opens its own permanent tab and becomes
+      // the new active tab. Users should lose the highlight here.
+      const ordersItem = screen.getByLabelText("orders table");
+      await act(async () => {
+        fireEvent.doubleClick(ordersItem);
+      });
+      expect(ordersItem).toHaveClass("bg-primary/10");
+      expect(usersItem).not.toHaveClass("bg-primary/10");
+
+      // Switch back to the users tab via the store (simulates Cmd+1).
+      const usersTab = useTabStore
+        .getState()
+        .tabs.find((t) => t.type === "table" && t.table === "users");
+      expect(usersTab).toBeTruthy();
+      await act(async () => {
+        useTabStore.getState().setActiveTab(usersTab!.id);
+      });
+
+      // Only users should be highlighted now — orders' highlight
+      // tracked the previous active-tab state and must clear.
+      expect(screen.getByLabelText("users table")).toHaveClass("bg-primary/10");
+      expect(screen.getByLabelText("orders table")).not.toHaveClass(
+        "bg-primary/10",
+      );
+    },
+  );
+
   // AC-ACTIVE-03: Highlight updates when active tab changes
   it("updates highlight when active tab changes to a different table", async () => {
     setSchemaStoreState({

@@ -363,8 +363,12 @@ export function getVisibleRows({
           item,
           itemKind,
           isSelected: selectedNodeId === itemId,
+          // 2026-05-11 — views open as table-type tabs (same `schema`/
+          // `table` shape, just `objectKind: "view"`), so the view row
+          // should also light up when its tab is active. Functions open
+          // as query tabs and don't participate.
           isActive:
-            itemKind === "table" &&
+            (itemKind === "table" || itemKind === "view") &&
             activeSchema === schema.name &&
             activeTable === item.name,
         });

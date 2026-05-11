@@ -263,6 +263,14 @@ export function renderItemRow(
 
   const indentClass = flat ? "pl-3" : "pl-10";
 
+  // 2026-05-11 — split the highlight rule by itemKind. Tables and views
+  // open as table-type tabs, so their highlight follows `isActive`
+  // (active-tab match) exclusively — `selectedNodeId` is no longer set
+  // on table/view clicks, which prevented a stale highlight from
+  // surviving tab switches. Functions open as query tabs (no active-tab
+  // match possible) so they stay on the click-driven `isSelected` path.
+  const isHighlighted = isFunc ? row.isSelected : row.isActive;
+
   return (
     <ContextMenu key={row.key}>
       <ContextMenuTrigger asChild>
@@ -271,7 +279,7 @@ export function renderItemRow(
           className={cn(
             "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pr-3 hover:bg-muted",
             indentClass,
-            row.isSelected || row.isActive
+            isHighlighted
               ? "bg-primary/10 text-primary font-semibold"
               : "text-foreground",
           )}

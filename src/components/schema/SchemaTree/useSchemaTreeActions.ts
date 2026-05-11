@@ -149,11 +149,17 @@ export function useSchemaTreeActions({
   const handleRefresh = refreshConnection;
   const handleRefreshSchema = refreshSchema;
 
+  // 2026-05-11 — for table/view clicks we *clear* selectedNodeId rather
+  // than setting it to the clicked node. The sidebar item highlight is
+  // driven from `activeTab.schema` + `activeTab.table` (see
+  // `treeRows.ts` `isActive` / `rows.tsx`); leaving selectedNodeId set
+  // produced a stale highlight that survived tab switches (the OR rule
+  // kept the last-clicked table lit even after the user moved to a
+  // different tab). Clearing also displaces any prior schema/category
+  // selection so AC-SEL-03 still holds.
   const handleTableClick = useCallback(
     (tableName: string, schemaName: string) => {
-      setSelectedNodeId(
-        nodeIdToString({ type: "table", schema: schemaName, table: tableName }),
-      );
+      setSelectedNodeId(null);
       addTab({
         title: `${schemaName}.${tableName}`,
         connectionId,
@@ -170,9 +176,7 @@ export function useSchemaTreeActions({
 
   const handleTableDoubleClick = useCallback(
     (tableName: string, schemaName: string) => {
-      setSelectedNodeId(
-        nodeIdToString({ type: "table", schema: schemaName, table: tableName }),
-      );
+      setSelectedNodeId(null);
       addTab({
         title: `${schemaName}.${tableName}`,
         connectionId,
@@ -190,9 +194,7 @@ export function useSchemaTreeActions({
 
   const handleOpenStructure = useCallback(
     (tableName: string, schemaName: string) => {
-      setSelectedNodeId(
-        nodeIdToString({ type: "table", schema: schemaName, table: tableName }),
-      );
+      setSelectedNodeId(null);
       addTab({
         title: `${schemaName}.${tableName}`,
         connectionId,
@@ -228,9 +230,7 @@ export function useSchemaTreeActions({
 
   const handleViewClick = useCallback(
     (viewName: string, schemaName: string) => {
-      setSelectedNodeId(
-        nodeIdToString({ type: "view", schema: schemaName, view: viewName }),
-      );
+      setSelectedNodeId(null);
       addTab({
         title: `${schemaName}.${viewName}`,
         connectionId,
@@ -248,9 +248,7 @@ export function useSchemaTreeActions({
 
   const handleOpenViewStructure = useCallback(
     (viewName: string, schemaName: string) => {
-      setSelectedNodeId(
-        nodeIdToString({ type: "view", schema: schemaName, view: viewName }),
-      );
+      setSelectedNodeId(null);
       addTab({
         title: `${schemaName}.${viewName}`,
         connectionId,
