@@ -21,12 +21,17 @@ use table_view_lib::db::mongodb::MongoAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::DbAdapter;
 use table_view_lib::models::{ConnectionConfig, DatabaseType};
-use testcontainers::core::{ImageExt, ReuseDirective};
+use testcontainers::core::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::mongo::Mongo as MongoImage;
 use testcontainers_modules::postgres::Postgres as PostgresImage;
 use tokio::sync::OnceCell;
+
+/// 우리 통합 테스트가 띄운 컨테이너를 식별하는 라벨 키. owner-pid 와 함께
+/// 박아 두면 self-sweep 이 "내 컨테이너 / 남의 컨테이너" 를 구분할 수 있다.
+const OWNED_LABEL: &str = "table-view.tests";
+const OWNER_PID_LABEL: &str = "table-view.tests.owner-pid";
 
 #[derive(Clone, Debug)]
 struct PgEndpoint {
@@ -48,9 +53,69 @@ struct MongoEndpoint {
 }
 
 /// 컨테이너 핸들을 process 종료까지 살려두기 위해 `Arc<...>` 로 보관.
-/// Drop 시 testcontainers가 컨테이너를 자동 stop+rm 한다.
+/// Drop 시 testcontainers 가 stop+rm 을 시도하지만 tokio runtime 종료
+/// 타이밍에 따라 leak 되는 경우가 있다 (sprint-258 측정 결과 매 run 마다
+/// PG 2 + Mongo 1 영구 누적). owner-pid 라벨 + 시작 시 dead-owner sweep 으로
+/// 누적을 차단한다.
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
+static SWEEP_DONE: OnceCell<()> = OnceCell::const_new();
+
+/// owner PID 가 죽은 우리 컨테이너만 `docker rm -f` 로 정리.
+/// 살아있는 PID 의 컨테이너에는 손대지 않으므로 동시 실행 중인 다른
+/// 테스트 binary 와 race-safe.
+async fn sweep_dead_owners() {
+    let listing = match tokio::process::Command::new("docker")
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            &format!("label={}", OWNED_LABEL),
+            "--format",
+            &format!("{{{{.ID}}}}\t{{{{.Label \"{}\"}}}}", OWNER_PID_LABEL),
+        ])
+        .output()
+        .await
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return,
+    };
+    let stdout = String::from_utf8_lossy(&listing.stdout);
+    for line in stdout.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let (Some(id), Some(pid_str)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let pid_str = pid_str.trim();
+        if pid_str.is_empty() {
+            continue;
+        }
+        let alive = tokio::process::Command::new("kill")
+            .args(["-0", pid_str])
+            .status()
+            .await
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !alive {
+            let _ = tokio::process::Command::new("docker")
+                .args(["rm", "-f", id])
+                .status()
+                .await;
+        }
+    }
+}
+
+async fn ensure_sweep_once() {
+    SWEEP_DONE
+        .get_or_init(|| async {
+            sweep_dead_owners().await;
+        })
+        .await;
+}
+
+fn current_pid_label() -> String {
+    std::process::id().to_string()
+}
 
 async fn pg_endpoint() -> Option<PgEndpoint> {
     // 1) 외부 PG 재사용 — `PGHOST`/`PGPORT`/... 가 모두 있으면 그 값을 그대로.
@@ -70,16 +135,15 @@ async fn pg_endpoint() -> Option<PgEndpoint> {
         });
     }
 
-    // 2) testcontainers — lazy 시작.
-    //    Sprint 258 — testcontainers-rs 는 Ryuk(외부 watchdog) 미지원이라
-    //    Drop 만이 cleanup 메커니즘이고 panic/SIGKILL 시 컨테이너가 leak
-    //    된다. `ReuseDirective::Always` 로 spec hash 가 동일한 컨테이너를
-    //    재사용하면 leak 이 누적되지 않고 PG 1개로 수렴한다. Drop 시 stop
-    //    하지 않으므로 명시적 정리는 `docker rm -f` 라벨 sweep 으로.
+    // 2) testcontainers — lazy 시작. owner-pid 라벨을 박고, 시작 전에
+    //    dead-owner sweep 으로 이전 run 의 좀비를 정리한다.
+    ensure_sweep_once().await;
+    let pid = current_pid_label();
     let cell = PG_CONTAINER
         .get_or_init(|| async {
             match PostgresImage::default()
-                .with_reuse(ReuseDirective::Always)
+                .with_label(OWNED_LABEL, "1")
+                .with_label(OWNER_PID_LABEL, &pid)
                 .start()
                 .await
             {
@@ -131,12 +195,15 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
     }
 
     // 2) testcontainers — lazy 시작. testcontainers-modules의 기본 Mongo
-    //    image는 auth 비활성, 익명 연결 가능. `ReuseDirective::Always` 는
-    //    PG 와 동일 사유 (Ryuk 미지원 → leak 누적 차단).
+    //    image는 auth 비활성, 익명 연결 가능. PG 와 동일한 owner-pid 라벨
+    //    + dead-owner sweep 으로 좀비 누적 차단.
+    ensure_sweep_once().await;
+    let pid = current_pid_label();
     let cell = MONGO_CONTAINER
         .get_or_init(|| async {
             match MongoImage::default()
-                .with_reuse(ReuseDirective::Always)
+                .with_label(OWNED_LABEL, "1")
+                .with_label(OWNER_PID_LABEL, &pid)
                 .start()
                 .await
             {

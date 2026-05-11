@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-09
+updated: 2026-05-11
 ---
 
 # ADR 인덱스
@@ -30,6 +30,7 @@ updated: 2026-05-09
 | [0021](./0021-export-envelope-auto-mnemonic-no-ttl/memory.md) | Export envelope: 자동 생성 BIP39 mnemonic + Argon2id OWASP first profile, TTL/max_uses 미도입 | Accepted | 2026-05-05 | — |
 | [0022](./0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md) | Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호 | Accepted | 2026-05-09 | — |
 | [0023](./0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md) | Production Warning — environment-aware chrome + WARN dialog 게이트 | Accepted | 2026-05-09 | — |
+| [0024](./0024-testcontainers-pid-label-sweep/memory.md) | 통합 테스트 컨테이너 cleanup — owner-pid 라벨 + 시작 시 dead-owner sweep | Accepted | 2026-05-11 | — |
 
 ## 역사 (Superseded / Deprecated)
 
