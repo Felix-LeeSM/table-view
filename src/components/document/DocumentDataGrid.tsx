@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -11,6 +12,7 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
@@ -148,10 +150,9 @@ export default function DocumentDataGrid({
     [page],
   );
 
-  // Sprint 258 — column widths via shared hook + `--cols` CSS variable
-  // cascade. Document grid 은 drag-resize 미적용 (Sprint 238 AC-238-04 의
-  // RDB-only 정책 유지) — reset 은 toolbar 의 reset 버튼 / cmd+shift+r
-  // 이벤트로만 트리거.
+  // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
+  // Sprint 260 (AC-260-02) — drag-resize 도 활성. 결과는 `document:<db>:<coll>`
+  // 단위 localStorage 에 persist (Sprint 259 의 영속 키 유지).
   const widthColumns = useMemo(
     () =>
       (data?.columns ?? []).map((c) => ({
@@ -160,15 +161,17 @@ export default function DocumentDataGrid({
       })),
     [data?.columns],
   );
-  // Sprint 259 — database.collection 단위 영속.
   const persistenceKey = `document:${database}:${collection}`;
-  const { widths, reset: resetColumnWidths } = useColumnWidths(
-    widthColumns,
-    persistenceKey,
-  );
+  const {
+    widths,
+    setWidth,
+    reset: resetColumnWidths,
+  } = useColumnWidths(widthColumns, persistenceKey);
 
-  const colsTemplate = useMemo(() => {
-    if (!data) return "";
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const visualWidthsPx = useMemo(() => {
+    if (!data) return [] as number[];
     const rootFontSizePx =
       typeof window !== "undefined"
         ? (() => {
@@ -178,15 +181,28 @@ export default function DocumentDataGrid({
             return Number.isFinite(measured) ? measured : 16;
           })()
         : 16;
-    return data.columns
-      .map((col) => {
-        const stored = widths[col.name];
-        if (stored != null) return `${stored}px`;
-        const cat = (col.category ?? "unknown") as ColumnCategory;
-        return `${getDefaultRem(cat) * rootFontSizePx}px`;
-      })
-      .join(" ");
+    return data.columns.map((col) => {
+      const stored = widths[col.name];
+      if (stored != null) return stored;
+      const cat = (col.category ?? "unknown") as ColumnCategory;
+      return getDefaultRem(cat) * rootFontSizePx;
+    });
   }, [data, widths]);
+
+  const colsTemplate = useMemo(
+    () => visualWidthsPx.map((w) => `${w}px`).join(" "),
+    [visualWidthsPx],
+  );
+
+  const visualWidthsRef = useRef(visualWidthsPx);
+  visualWidthsRef.current = visualWidthsPx;
+  const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
+
+  const { handleResizeStart } = useColumnResize({
+    outerRef: scrollContainerRef,
+    getCurrentWidths,
+    onCommitWidth: setWidth,
+  });
 
   // AC-258-08 — cmd+shift+r 단축키가 reset-column-widths 이벤트를
   // dispatch 한다. App.tsx 의 핸들러가 active grid 와 무관하게 broadcast
@@ -416,6 +432,7 @@ export default function DocumentDataGrid({
 
       {data && (
         <div
+          ref={scrollContainerRef}
           className="relative flex-1 overflow-auto text-sm"
           role="grid"
           aria-rowcount={1 + data.rows.length}
@@ -445,7 +462,7 @@ export default function DocumentDataGrid({
                   key={col.name}
                   role="columnheader"
                   aria-colindex={visualIdx + 1}
-                  className="flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
+                  className="relative flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
                 >
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="truncate">{col.name}</span>
@@ -453,6 +470,12 @@ export default function DocumentDataGrid({
                   <div className="mt-0.5 truncate text-3xs text-muted-foreground">
                     {col.data_type}
                   </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
+                    onMouseDown={(e) =>
+                      handleResizeStart(e, col.name, visualIdx)
+                    }
+                  />
                 </div>
               ))}
             </div>

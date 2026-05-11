@@ -31,6 +31,7 @@ updated: 2026-05-11
 | [0022](./0022-safe-mode-destructive-only-confirm-with-dry-run/memory.md) | Safe Mode — destructive 만 confirm + dry-run preview, safe write 는 Cmd+Z 보호 | Accepted | 2026-05-09 | — |
 | [0023](./0023-production-warning-environment-aware-chrome-and-warn-dialog/memory.md) | Production Warning — environment-aware chrome + WARN dialog 게이트 | Accepted | 2026-05-09 | — |
 | [0024](./0024-testcontainers-pid-label-sweep/memory.md) | 통합 테스트 컨테이너 cleanup — owner-pid 라벨 + 시작 시 dead-owner sweep | Accepted | 2026-05-11 | — |
+| [0025](./0025-datagrid-self-managed-no-tanstack/memory.md) | DataGrid layout/sorting/filtering/virtualization 자체 관리 — TanStack Table 도입 안 함 | Accepted | 2026-05-11 | — |
 
 ## 역사 (Superseded / Deprecated)
 

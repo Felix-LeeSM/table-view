@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { AlertTriangle, Info, Loader2, Pencil } from "lucide-react";
 import type {
   QueryResult,
@@ -8,6 +15,7 @@ import type {
 } from "@/types/query";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
 import { getDefaultRem } from "@/lib/columnCategory";
 import {
   analyzeResultEditability,
@@ -63,16 +71,18 @@ function ResultTable({ result }: { result: QueryResult }) {
   } | null>(null);
 
   // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
-  // Read-only grid: drag-resize 미적용. cmd+shift+r 도 listen 안 함
-  // (query result 는 일시적 — 새 query 마다 columns 가 바뀌면 widths 가
-  // useColumnWidths 의 mount-only 정책에 따라 자연스레 재계산됨).
+  // Sprint 260 (AC-260-02) — drag-resize 도 활성, 단 read-only query
+  // 결과는 stable identity 가 없어 (다음 query 마다 columns 가 바뀜)
+  // persistenceKey 없이 in-memory only. cmd+shift+r reset 도 미연결.
   const widthColumns = useMemo(
     () => result.columns.map((c) => ({ name: c.name, category: c.category })),
     [result.columns],
   );
-  const { widths } = useColumnWidths(widthColumns);
+  const { widths, setWidth } = useColumnWidths(widthColumns);
 
-  const colsTemplate = useMemo(() => {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const visualWidthsPx = useMemo(() => {
     const rootFontSizePx =
       typeof window !== "undefined"
         ? (() => {
@@ -82,17 +92,31 @@ function ResultTable({ result }: { result: QueryResult }) {
             return Number.isFinite(measured) ? measured : 16;
           })()
         : 16;
-    return result.columns
-      .map((col) => {
-        const stored = widths[col.name];
-        if (stored != null) return `${stored}px`;
-        return `${getDefaultRem(col.category) * rootFontSizePx}px`;
-      })
-      .join(" ");
+    return result.columns.map((col) => {
+      const stored = widths[col.name];
+      if (stored != null) return stored;
+      return getDefaultRem(col.category) * rootFontSizePx;
+    });
   }, [result.columns, widths]);
+
+  const colsTemplate = useMemo(
+    () => visualWidthsPx.map((w) => `${w}px`).join(" "),
+    [visualWidthsPx],
+  );
+
+  const visualWidthsRef = useRef(visualWidthsPx);
+  visualWidthsRef.current = visualWidthsPx;
+  const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
+
+  const { handleResizeStart } = useColumnResize({
+    outerRef: scrollContainerRef,
+    getCurrentWidths,
+    onCommitWidth: setWidth,
+  });
 
   return (
     <div
+      ref={scrollContainerRef}
       className="flex-1 overflow-auto text-sm"
       role="grid"
       aria-rowcount={1 + result.rows.length}
@@ -113,12 +137,16 @@ function ResultTable({ result }: { result: QueryResult }) {
               key={col.name}
               role="columnheader"
               aria-colindex={visualIdx + 1}
-              className="flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
+              className="relative flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
             >
               <div className="truncate">{col.name}</div>
               <div className="mt-0.5 truncate text-3xs text-muted-foreground">
                 {col.data_type}
               </div>
+              <div
+                className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
+                onMouseDown={(e) => handleResizeStart(e, col.name, visualIdx)}
+              />
             </div>
           ))}
         </div>

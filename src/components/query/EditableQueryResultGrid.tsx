@@ -1,9 +1,16 @@
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { X, Save, Trash2, Maximize2, Pencil } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { safeStringifyCell } from "@lib/jsonCell";
 import type { QueryResult } from "@/types/query";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
 import { getDefaultRem } from "@/lib/columnCategory";
 import {
   Dialog,
@@ -99,16 +106,18 @@ export default function EditableQueryResultGrid({
   const rowKeyFn = useCallback((rowIdx: number) => `row-1-${rowIdx}`, []);
 
   // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
-  // Editable raw-query grid: drag-resize 미적용 (Sprint 238 의 RDB-only
-  // 정책 유지). Reset 도 toolbar 부재 — 본 grid 는 일시적이라 widths 가
-  // mount 시점에 default rem 으로만 설정된다.
+  // Sprint 260 (AC-260-02) — drag-resize 활성. raw query 결과는 stable
+  // identity 가 없어 persistenceKey 없이 in-memory only. Reset 도 toolbar
+  // 부재라 자동 적용 — widths 가 새 query 마다 default rem 으로 재계산된다.
   const widthColumns = useMemo(
     () => result.columns.map((c) => ({ name: c.name, category: c.category })),
     [result.columns],
   );
-  const { widths } = useColumnWidths(widthColumns);
+  const { widths, setWidth } = useColumnWidths(widthColumns);
 
-  const colsTemplate = useMemo(() => {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const visualWidthsPx = useMemo(() => {
     const rootFontSizePx =
       typeof window !== "undefined"
         ? (() => {
@@ -118,14 +127,27 @@ export default function EditableQueryResultGrid({
             return Number.isFinite(measured) ? measured : 16;
           })()
         : 16;
-    return result.columns
-      .map((col) => {
-        const stored = widths[col.name];
-        if (stored != null) return `${stored}px`;
-        return `${getDefaultRem(col.category) * rootFontSizePx}px`;
-      })
-      .join(" ");
+    return result.columns.map((col) => {
+      const stored = widths[col.name];
+      if (stored != null) return stored;
+      return getDefaultRem(col.category) * rootFontSizePx;
+    });
   }, [result.columns, widths]);
+
+  const colsTemplate = useMemo(
+    () => visualWidthsPx.map((w) => `${w}px`).join(" "),
+    [visualWidthsPx],
+  );
+
+  const visualWidthsRef = useRef(visualWidthsPx);
+  visualWidthsRef.current = visualWidthsPx;
+  const getCurrentWidths = useCallback(() => visualWidthsRef.current, []);
+
+  const { handleResizeStart } = useColumnResize({
+    outerRef: scrollContainerRef,
+    getCurrentWidths,
+    onCommitWidth: setWidth,
+  });
 
   const contextMenuItems: ContextMenuItem[] = contextMenu
     ? [
@@ -211,6 +233,7 @@ export default function EditableQueryResultGrid({
       />
 
       <div
+        ref={scrollContainerRef}
         className="flex-1 overflow-auto text-sm"
         role="grid"
         aria-rowcount={1 + result.rows.length}
@@ -233,7 +256,7 @@ export default function EditableQueryResultGrid({
                   key={col.name}
                   role="columnheader"
                   aria-colindex={visualIdx + 1}
-                  className="flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
+                  className="relative flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
                 >
                   <div className="flex items-center gap-1 min-w-0">
                     {isPk && (
@@ -250,6 +273,12 @@ export default function EditableQueryResultGrid({
                   <div className="mt-0.5 truncate text-3xs text-muted-foreground">
                     {col.data_type}
                   </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
+                    onMouseDown={(e) =>
+                      handleResizeStart(e, col.name, visualIdx)
+                    }
+                  />
                 </div>
               );
             })}
