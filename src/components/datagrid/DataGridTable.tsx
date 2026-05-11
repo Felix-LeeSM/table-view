@@ -366,7 +366,11 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         )}
 
         {data.rows.length === 0 && pendingNewRows.length === 0 && (
-          <div role="row" className="border-b border-border">
+          <div
+            role="row"
+            className="border-b border-border"
+            style={{ minWidth: "max-content" }}
+          >
             <div
               role="gridcell"
               aria-colindex={1}
@@ -403,6 +407,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
                 style={{
                   display: "grid",
                   gridTemplateColumns: "var(--cols)",
+                  minWidth: "max-content",
                 }}
               >
                 {order.map((dIdx, visualIdx) => {

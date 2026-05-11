@@ -448,13 +448,19 @@ export default function DocumentDataGrid({
             onCancel={handleCancelRefetch}
           />
 
-          <div role="rowgroup" className="sticky top-0 z-10 bg-secondary">
+          <div
+            role="rowgroup"
+            className="sticky top-0 z-10 bg-secondary"
+            style={{ minWidth: "max-content" }}
+          >
             <div
               role="row"
               aria-rowindex={1}
               style={{
                 display: "grid",
                 gridTemplateColumns: "var(--cols)",
+                // Sprint 261 — bg-secondary 가 horizontal scroll 끝까지 그려지도록.
+                minWidth: "max-content",
               }}
             >
               {data.columns.map((col, visualIdx) => (
@@ -509,6 +515,7 @@ export default function DocumentDataGrid({
                   style={{
                     display: "grid",
                     gridTemplateColumns: "var(--cols)",
+                    minWidth: "max-content",
                   }}
                 >
                   {data.columns.map((col, colIdx) => {
@@ -611,7 +618,11 @@ export default function DocumentDataGrid({
               );
             })}
             {data.rows.length === 0 && (
-              <div role="row" className="border-b border-border">
+              <div
+                role="row"
+                className="border-b border-border"
+                style={{ minWidth: "max-content" }}
+              >
                 <div
                   role="gridcell"
                   aria-colindex={1}

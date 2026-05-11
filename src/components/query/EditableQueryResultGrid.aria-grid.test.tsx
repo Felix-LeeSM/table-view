@@ -102,6 +102,23 @@ describe("EditableQueryResultGrid ARIA grid roles (Sprint 260 AC-260-03)", () =>
     expect(cells[2]).toHaveTextContent("alice@example.com");
   });
 
+  // Sprint 261 (2026-05-11) — bug fix: horizontal overflow 시 row 박스가
+  // parent width 에서 끊겨 hover:bg-muted / border-b 가 잘리던 문제. 모든
+  // row 가 min-width: max-content 으로 grid tracks 합만큼 늘어나야 한다.
+  it("모든 row 가 min-width: max-content (horizontal overflow bg 회귀 가드)", () => {
+    render(
+      <EditableQueryResultGrid
+        result={RESULT}
+        connectionId="conn1"
+        plan={PLAN}
+      />,
+    );
+    const rows = screen.getAllByRole("row");
+    for (const r of rows) {
+      expect((r as HTMLElement).style.minWidth).toBe("max-content");
+    }
+  });
+
   it("empty result 의 row 이 단일 role=gridcell + aria-colindex=1", () => {
     const emptyResult: QueryResult = { ...RESULT, rows: [], total_count: 0 };
     render(

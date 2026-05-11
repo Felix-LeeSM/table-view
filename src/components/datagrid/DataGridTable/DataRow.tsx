@@ -109,6 +109,9 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
   const mergedStyle: CSSProperties = {
     display: "grid",
     gridTemplateColumns: "var(--cols)",
+    // Sprint 261 — sum-of-cols > parent width 시 row 박스가 grid tracks 합만큼
+    // 늘어나야 border-b / hover:bg-muted 가 끝까지 그려진다.
+    minWidth: "max-content",
     ...rowStyle,
   };
 

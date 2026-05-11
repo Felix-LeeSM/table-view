@@ -40,13 +40,19 @@ export default function HeaderRow({
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
 
   return (
-    <div role="rowgroup" className="sticky top-0 z-10 bg-secondary">
+    <div
+      role="rowgroup"
+      className="sticky top-0 z-10 bg-secondary"
+      style={{ minWidth: "max-content" }}
+    >
       <div
         role="row"
         aria-rowindex={1}
         style={{
           display: "grid",
           gridTemplateColumns: "var(--cols)",
+          // Sprint 261 — bg-secondary 가 horizontal scroll 끝까지 그려지도록.
+          minWidth: "max-content",
         }}
       >
         {order.map((dIdx, visualIdx) => {
