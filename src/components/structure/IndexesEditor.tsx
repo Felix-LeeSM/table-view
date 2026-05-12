@@ -214,6 +214,7 @@ function CreateIndexModal({
 
 interface IndexesEditorProps {
   connectionId: string;
+  database: string;
   table: string;
   schema: string;
   indexes: IndexInfo[];
@@ -225,6 +226,7 @@ interface IndexesEditorProps {
 
 export default function IndexesEditor({
   connectionId,
+  database,
   table,
   schema,
   indexes,
@@ -324,7 +326,7 @@ export default function IndexesEditor({
 
   const handleOpenCreateIndex = async () => {
     if (columns.length === 0) {
-      const cols = await getTableColumns(connectionId, table, schema);
+      const cols = await getTableColumns(connectionId, database, table, schema);
       onColumnsChange(cols);
     }
     setShowCreateIndexModal(true);

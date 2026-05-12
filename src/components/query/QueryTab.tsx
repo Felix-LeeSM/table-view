@@ -79,10 +79,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
   // `dbType` flows in so the autocomplete namespace surfaces
   // dialect-specific keywords (PG: RETURNING/ILIKE; MySQL: AUTO_INCREMENT;
   // SQLite: PRAGMA / WITHOUT ROWID).
-  const schemaNamespace = useSqlAutocomplete(tab.connectionId, {
-    dialect: sqlDialect,
-    dbType: connection?.db_type,
-  });
+  const schemaNamespace = useSqlAutocomplete(
+    tab.connectionId,
+    tab.database ?? "",
+    {
+      dialect: sqlDialect,
+      dbType: connection?.db_type,
+    },
+  );
   // Cached Mongo field names for autocomplete. We project the single
   // cache slice for this tab to a string array so the hook's memo key is
   // stable against unrelated cache updates. RDB tabs compute `undefined`
@@ -230,6 +234,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
         <QueryResultGrid
           queryState={tab.queryState}
           connectionId={tab.connectionId}
+          database={tab.database}
           sql={tab.sql}
           onAfterCommit={handleExecute}
           // Sprint 248 (ADR 0022 Phase 4) — surface the dry-run flag so

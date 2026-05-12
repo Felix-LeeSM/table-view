@@ -65,6 +65,7 @@ async function renderEditorAndOpenPreview() {
   const view = render(
     <ConstraintsEditor
       connectionId="conn-1"
+      database="db-1"
       table="users"
       schema="public"
       constraints={[SAMPLE_CONSTRAINT]}

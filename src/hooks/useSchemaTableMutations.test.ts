@@ -11,10 +11,9 @@ import type { TableInfo } from "@/types/schema";
 // (listTables result wins) + fallback path (listTables throw → optimistic
 // filter/map) + cache miss (`?? []` defends).
 //
-// Mock pattern follows `useConnectionMutations.test.ts` — `vi.hoisted` +
-// factory `vi.mock("@stores/schemaStore", ...)` + `vi.mock("@lib/tauri",
-// ...)`. The schemaStore mock exposes selector + `getState` + `setState`
-// because the hook writes the cache via `useSchemaStore.setState(...)`.
+// 2026-05-12 — Sprint 263. `tables` is now nested
+// `Record<connId, Record<db, Record<schema, TableInfo[]>>>`; the hook's
+// `dropTable` / `renameTable` accept `(connId, db, table, schema[, newName])`.
 
 const {
   mockStoreDrop,
@@ -29,7 +28,13 @@ const {
   const state: {
     tables: Record<
       string,
-      { name: string; schema: string; row_count: number | null }[]
+      Record<
+        string,
+        Record<
+          string,
+          { name: string; schema: string; row_count: number | null }[]
+        >
+      >
     >;
   } = { tables: {} };
   return {
@@ -80,6 +85,27 @@ function makeTable(
   return { name, schema, row_count } as TableInfo;
 }
 
+/** Helper — seed the nested `tables[connId][db][schema]` slot. */
+function seedTables(
+  connId: string,
+  db: string,
+  schema: string,
+  tables: TableInfo[],
+): void {
+  storeState.tables = {
+    ...storeState.tables,
+    [connId]: {
+      ...storeState.tables[connId],
+      [db]: { ...storeState.tables[connId]?.[db], [schema]: tables },
+    },
+  };
+}
+
+/** Helper — read the nested slot. */
+function getTables(connId: string, db: string, schema: string): TableInfo[] {
+  return (storeState.tables[connId]?.[db]?.[schema] ?? []) as TableInfo[];
+}
+
 describe("useSchemaTableMutations", () => {
   beforeEach(() => {
     mockStoreDrop.mockReset();
@@ -92,12 +118,12 @@ describe("useSchemaTableMutations", () => {
     // Default: store actions resolve (the thinned schemaStore body just
     // forwards to tauri.dropTable / tauri.renameTable).
     mockStoreDrop.mockImplementation(
-      async (cid: string, t: string, s: string) => {
+      async (cid: string, _db: string, t: string, s: string) => {
         await mockTauriDrop(cid, t, s);
       },
     );
     mockStoreRename.mockImplementation(
-      async (cid: string, t: string, s: string, n: string) => {
+      async (cid: string, _db: string, t: string, s: string, n: string) => {
         await mockTauriRename(cid, t, s, n);
       },
     );
@@ -108,12 +134,10 @@ describe("useSchemaTableMutations", () => {
   });
 
   it("dropTable refreshes table list on success", async () => {
-    storeState.tables = {
-      "conn1:public": [
-        makeTable("users", "public", 10),
-        makeTable("orders", "public", 5),
-      ],
-    };
+    seedTables("conn1", "db1", "public", [
+      makeTable("users", "public", 10),
+      makeTable("orders", "public", 5),
+    ]);
 
     mockTauriListTables.mockResolvedValueOnce([
       makeTable("orders", "public", 5),
@@ -121,34 +145,32 @@ describe("useSchemaTableMutations", () => {
 
     const { result } = renderHook(() => useSchemaTableMutations());
     await act(async () => {
-      await result.current.dropTable("conn1", "users", "public");
+      await result.current.dropTable("conn1", "db1", "users", "public");
     });
 
     expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
     expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public");
-    expect(storeState.tables["conn1:public"]).toHaveLength(1);
-    expect(storeState.tables["conn1:public"]![0]!.name).toBe("orders");
+    expect(getTables("conn1", "db1", "public")).toHaveLength(1);
+    expect(getTables("conn1", "db1", "public")[0]!.name).toBe("orders");
   });
 
   it("dropTable removes table optimistically when refresh fails", async () => {
-    storeState.tables = {
-      "conn1:public": [
-        makeTable("users", "public", 10),
-        makeTable("orders", "public", 5),
-      ],
-    };
+    seedTables("conn1", "db1", "public", [
+      makeTable("users", "public", 10),
+      makeTable("orders", "public", 5),
+    ]);
 
     mockTauriListTables.mockRejectedValueOnce(new Error("Refresh failed"));
 
     const { result } = renderHook(() => useSchemaTableMutations());
     await act(async () => {
-      await result.current.dropTable("conn1", "users", "public");
+      await result.current.dropTable("conn1", "db1", "users", "public");
     });
 
     expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
     // Optimistically removed from cache
-    expect(storeState.tables["conn1:public"]).toHaveLength(1);
-    expect(storeState.tables["conn1:public"]![0]!.name).toBe("orders");
+    expect(getTables("conn1", "db1", "public")).toHaveLength(1);
+    expect(getTables("conn1", "db1", "public")[0]!.name).toBe("orders");
   });
 
   it("dropTable handles missing cache key gracefully", async () => {
@@ -158,18 +180,16 @@ describe("useSchemaTableMutations", () => {
 
     const { result } = renderHook(() => useSchemaTableMutations());
     await act(async () => {
-      await result.current.dropTable("conn1", "users", "public");
+      await result.current.dropTable("conn1", "db1", "users", "public");
     });
 
     expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
-    // No crash, table list stays empty for this key
-    expect(storeState.tables["conn1:public"]).toHaveLength(0);
+    // No crash, table list stays empty for this slot
+    expect(getTables("conn1", "db1", "public")).toHaveLength(0);
   });
 
   it("renameTable refreshes table list on success", async () => {
-    storeState.tables = {
-      "conn1:public": [makeTable("users", "public", 10)],
-    };
+    seedTables("conn1", "db1", "public", [makeTable("users", "public", 10)]);
 
     mockTauriListTables.mockResolvedValueOnce([
       makeTable("people", "public", 10),
@@ -177,7 +197,13 @@ describe("useSchemaTableMutations", () => {
 
     const { result } = renderHook(() => useSchemaTableMutations());
     await act(async () => {
-      await result.current.renameTable("conn1", "users", "public", "people");
+      await result.current.renameTable(
+        "conn1",
+        "db1",
+        "users",
+        "public",
+        "people",
+      );
     });
 
     expect(mockTauriRename).toHaveBeenCalledWith(
@@ -187,19 +213,23 @@ describe("useSchemaTableMutations", () => {
       "people",
     );
     expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public");
-    expect(storeState.tables["conn1:public"]![0]!.name).toBe("people");
+    expect(getTables("conn1", "db1", "public")[0]!.name).toBe("people");
   });
 
   it("renameTable updates table name optimistically when refresh fails", async () => {
-    storeState.tables = {
-      "conn1:public": [makeTable("users", "public", 10)],
-    };
+    seedTables("conn1", "db1", "public", [makeTable("users", "public", 10)]);
 
     mockTauriListTables.mockRejectedValueOnce(new Error("Refresh failed"));
 
     const { result } = renderHook(() => useSchemaTableMutations());
     await act(async () => {
-      await result.current.renameTable("conn1", "users", "public", "people");
+      await result.current.renameTable(
+        "conn1",
+        "db1",
+        "users",
+        "public",
+        "people",
+      );
     });
 
     expect(mockTauriRename).toHaveBeenCalledWith(
@@ -208,7 +238,7 @@ describe("useSchemaTableMutations", () => {
       "public",
       "people",
     );
-    expect(storeState.tables["conn1:public"]![0]!.name).toBe("people");
+    expect(getTables("conn1", "db1", "public")[0]!.name).toBe("people");
   });
 
   it("renameTable handles missing cache key gracefully", async () => {
@@ -218,7 +248,13 @@ describe("useSchemaTableMutations", () => {
 
     const { result } = renderHook(() => useSchemaTableMutations());
     await act(async () => {
-      await result.current.renameTable("conn1", "users", "public", "people");
+      await result.current.renameTable(
+        "conn1",
+        "db1",
+        "users",
+        "public",
+        "people",
+      );
     });
 
     expect(mockTauriRename).toHaveBeenCalledWith(
@@ -228,6 +264,6 @@ describe("useSchemaTableMutations", () => {
       "people",
     );
     // No crash, empty array mapped to empty array
-    expect(storeState.tables["conn1:public"]).toHaveLength(0);
+    expect(getTables("conn1", "db1", "public")).toHaveLength(0);
   });
 });

@@ -4,6 +4,9 @@
 // 통합으로 단언한다. SchemaTree.test.tsx 도 hook 동작을 간접적으로 단언
 // 하지만 (UI 가 가시화되는 상태만), 본 테스트는 hook 의 fault 분기
 // (load reject → toast.error) 를 직접 단언한다. date 2026-05-02.
+//
+// 2026-05-12 — Sprint 263. hook signature 가 `(connId, db)` 로 확장됐고
+// schemaStore 가 `(connId, db, schema)` 로 nested 됐다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useSchemaCache } from "./useSchemaCache";
@@ -56,15 +59,15 @@ beforeEach(() => {
 
 describe("useSchemaCache", () => {
   it("[AC-191-02-1] mount triggers loadSchemas + per-schema loadTables", async () => {
-    const { result } = renderHook(() => useSchemaCache("conn1"));
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
     await waitFor(() => {
       expect(result.current.schemas.length).toBe(1);
     });
     // After mount the store should be hydrated with the public schema and
     // its tables (loadTables + prefetchSchemaColumns are auto-fired).
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn1"]).toEqual([{ name: "public" }]);
-    expect(state.tables["conn1:public"]).toEqual([]);
+    expect(state.schemas.conn1?.db1).toEqual([{ name: "public" }]);
+    expect(state.tables.conn1?.db1?.public).toEqual([]);
   });
 
   it("[AC-191-02-2] refreshSchema evicts cached entries before reloading", async () => {
@@ -72,16 +75,22 @@ describe("useSchemaCache", () => {
     // loadTables/loadViews/loadFunctions calls land.
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "stale", schema: "public", row_count: null }],
+        conn1: {
+          db1: {
+            public: [{ name: "stale", schema: "public", row_count: null }],
+          },
+        },
       },
       views: {
-        "conn1:public": [
-          { name: "v_stale", schema: "public", definition: null },
-        ],
+        conn1: {
+          db1: {
+            public: [{ name: "v_stale", schema: "public", definition: null }],
+          },
+        },
       },
-      functions: { "conn1:public": [] },
+      functions: { conn1: { db1: { public: [] } } },
     });
-    const { result } = renderHook(() => useSchemaCache("conn1"));
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
 
     act(() => {
       result.current.refreshSchema("public");
@@ -92,8 +101,8 @@ describe("useSchemaCache", () => {
       // Post-reload the entries are repopulated by the (mocked) tauri
       // adapters with their default empty payloads — confirming both the
       // eviction and the fresh load happened.
-      expect(state.tables["conn1:public"]).toEqual([]);
-      expect(state.views["conn1:public"]).toEqual([]);
+      expect(state.tables.conn1?.db1?.public).toEqual([]);
+      expect(state.views.conn1?.db1?.public).toEqual([]);
     });
   });
 
@@ -102,15 +111,19 @@ describe("useSchemaCache", () => {
     const listTables = tauri.listTables as ReturnType<typeof vi.fn>;
     // Pre-populate the cache so expandSchema's lazy guard short-circuits.
     useSchemaStore.setState({
-      schemas: { conn1: [{ name: "public" }] },
+      schemas: { conn1: { db1: [{ name: "public" }] } },
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
-      views: { "conn1:public": [] },
-      functions: { "conn1:public": [] },
+      views: { conn1: { db1: { public: [] } } },
+      functions: { conn1: { db1: { public: [] } } },
     });
 
-    const { result } = renderHook(() => useSchemaCache("conn1"));
+    const { result } = renderHook(() => useSchemaCache("conn1", "db1"));
     listTables.mockClear();
 
     await act(async () => {
@@ -133,7 +146,7 @@ describe("useSchemaCache", () => {
     const listSchemas = tauri.listSchemas as ReturnType<typeof vi.fn>;
     listSchemas.mockRejectedValueOnce(new Error("backend offline"));
 
-    renderHook(() => useSchemaCache("conn1"));
+    renderHook(() => useSchemaCache("conn1", "db1"));
 
     await waitFor(() => {
       expect(useSchemaStore.getState().error).toMatch(/backend offline/);

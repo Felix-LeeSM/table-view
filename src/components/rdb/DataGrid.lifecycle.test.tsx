@@ -125,6 +125,7 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
     expect(mockQueryTableData).toHaveBeenCalledWith(
       "conn1",
+      "db1",
       "users",
       "public",
       1,
@@ -292,9 +293,9 @@ describe("DataGrid", () => {
     const lastCall = mockQueryTableData.mock.calls[
       mockQueryTableData.mock.calls.length - 1
     ] as unknown[];
-    expect(lastCall[6]).toBeUndefined();
-    // raw SQL slot (8th arg) must also be cleared.
     expect(lastCall[7]).toBeUndefined();
+    // raw SQL slot (9th arg, post-Sprint-263 db insertion) must also be cleared.
+    expect(lastCall[8]).toBeUndefined();
 
     // After the unfiltered fetch resolves, the unfiltered rows render.
     await screen.findByText("3 rows");
@@ -368,7 +369,7 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
 
     const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
-    expect(firstCall[5]).toBeUndefined();
+    expect(firstCall[6]).toBeUndefined();
     // No sort indicator on any column header.
     expect(screen.queryByText("▲")).not.toBeInTheDocument();
     expect(screen.queryByText("▼")).not.toBeInTheDocument();

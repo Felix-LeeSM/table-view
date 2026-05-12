@@ -46,17 +46,20 @@ export default function QuickOpen() {
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
 
   // Build the searchable inventory from every connected schema's cached objects.
+  // Sprint 263 — schemaStore is now `(connId, db, schema)` nested. QuickOpen
+  // surfaces objects from each connection's *activeDb* only (cross-db search
+  // would need parallel pre-fetch and is out of scope for this sprint).
   const items = useMemo<QuickOpenItem[]>(() => {
     const result: QuickOpenItem[] = [];
-    const connectedConns = connections.filter(
-      (c) => activeStatuses[c.id]?.type === "connected",
-    );
 
-    for (const conn of connectedConns) {
-      // Tables
-      for (const key of Object.keys(tables)) {
-        if (!key.startsWith(`${conn.id}:`)) continue;
-        const list = tables[key] ?? [];
+    for (const conn of connections) {
+      const status = activeStatuses[conn.id];
+      if (status?.type !== "connected") continue;
+      const db = status.activeDb;
+      if (!db) continue;
+
+      const tablesBySchema = tables[conn.id]?.[db] ?? {};
+      for (const list of Object.values(tablesBySchema)) {
         for (const t of list) {
           result.push({
             kind: "table",
@@ -67,10 +70,9 @@ export default function QuickOpen() {
           });
         }
       }
-      // Views
-      for (const key of Object.keys(views)) {
-        if (!key.startsWith(`${conn.id}:`)) continue;
-        const list = views[key] ?? [];
+
+      const viewsBySchema = views[conn.id]?.[db] ?? {};
+      for (const list of Object.values(viewsBySchema)) {
         for (const v of list) {
           result.push({
             kind: "view",
@@ -81,10 +83,9 @@ export default function QuickOpen() {
           });
         }
       }
-      // Functions / Procedures
-      for (const key of Object.keys(functions)) {
-        if (!key.startsWith(`${conn.id}:`)) continue;
-        const list = functions[key] ?? [];
+
+      const functionsBySchema = functions[conn.id]?.[db] ?? {};
+      for (const list of Object.values(functionsBySchema)) {
         for (const f of list) {
           const kind: QuickOpenItemKind =
             f.kind === "procedure" ? "procedure" : "function";

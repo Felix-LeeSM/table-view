@@ -1059,10 +1059,10 @@ describe("SchemaTree — actions", () => {
     });
 
     // Post-commit `refreshSchema("public")` resolves into
-    // `loadTables(connectionId, "public")`.
+    // `loadTables(connectionId, db, "public")` (Sprint 263 — db dimension).
     await waitFor(() => {
       const callsForPublic = loadTablesSpy.mock.calls.filter(
-        (c) => c[0] === "conn1" && c[1] === "public",
+        (c) => c[0] === "conn1" && c[2] === "public",
       );
       expect(callsForPublic).toHaveLength(1);
     });

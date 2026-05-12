@@ -1,3 +1,7 @@
+// useSqlAutocomplete — namespace builder for CodeMirror SQL completions.
+// Sprint 263 (2026-05-12) — schemaStore caches now nest by `(connId, db)`,
+// so the hook signature is `(connectionId, db, arg?)` and store seeds use
+// `{ conn1: { db1: { schema: [...] } } }`.
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { MySQL, PostgreSQL, SQLite } from "@codemirror/lang-sql";
@@ -14,24 +18,26 @@ describe("useSqlAutocomplete", () => {
   });
 
   it("returns namespace with functions but no tables when no tables loaded", () => {
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
-    // Functions are always present
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     expect(result.current).toHaveProperty("COUNT");
-    // No table entries
     expect(result.current).not.toHaveProperty("users");
   });
 
   it("includes table names for the given connection", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [
-          { name: "users", schema: "public", row_count: 100 },
-          { name: "orders", schema: "public", row_count: 50 },
-        ],
+        conn1: {
+          db1: {
+            public: [
+              { name: "users", schema: "public", row_count: 100 },
+              { name: "orders", schema: "public", row_count: 50 },
+            ],
+          },
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     expect(result.current).toHaveProperty("users");
     expect(result.current).toHaveProperty("orders");
   });
@@ -39,11 +45,15 @@ describe("useSqlAutocomplete", () => {
   it("includes schema-qualified names", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 100 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 100 }],
+          },
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     expect(result.current).toHaveProperty("users");
     expect(result.current).toHaveProperty("public.users");
   });
@@ -51,41 +61,72 @@ describe("useSqlAutocomplete", () => {
   it("excludes tables from other connections", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 100 }],
-        "conn2:public": [
-          { name: "products", schema: "public", row_count: 200 },
-        ],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 100 }],
+          },
+        },
+        conn2: {
+          db1: {
+            public: [{ name: "products", schema: "public", row_count: 200 }],
+          },
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     expect(result.current).toHaveProperty("users");
     expect(result.current).not.toHaveProperty("products");
   });
 
   it("updates when tables change", () => {
     const { result, rerender } = renderHook(
-      ({ connId }) => useSqlAutocomplete(connId),
-      { initialProps: { connId: "conn1" } },
+      ({ connId, db }) => useSqlAutocomplete(connId, db),
+      { initialProps: { connId: "conn1", db: "db1" } },
     );
 
-    // Initially no tables (only functions)
     expect(result.current).not.toHaveProperty("users");
 
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 100 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 100 }],
+          },
+        },
       },
     });
 
-    rerender({ connId: "conn1" });
+    rerender({ connId: "conn1", db: "db1" });
     expect(result.current).toHaveProperty("users");
+  });
+
+  // -- Sprint 263 regression: db-scoped exclusion -----------------------
+  // The same connection can hold multiple databases. Autocomplete must
+  // only surface tables for the active db.
+  it("excludes tables from other databases on the same connection", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+          db2: {
+            public: [{ name: "audit_log", schema: "public", row_count: 9 }],
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    expect(result.current).toHaveProperty("users");
+    expect(result.current).not.toHaveProperty("audit_log");
   });
 
   // -- Sprint 37: Enhanced SQL Autocomplete --
 
   it("includes common SQL functions in namespace", () => {
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
 
     const ns = result.current;
     expect(ns).toHaveProperty("COUNT");
@@ -111,12 +152,16 @@ describe("useSqlAutocomplete", () => {
   it("includes table columns when tableColumns provided", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 100 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 100 }],
+          },
+        },
       },
     });
 
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { users: ["id", "name", "email"] }),
+      useSqlAutocomplete("conn1", "db1", { users: ["id", "name", "email"] }),
     );
 
     const ns = result.current;
@@ -135,15 +180,18 @@ describe("useSqlAutocomplete", () => {
   it("handles empty tableColumns gracefully", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 100 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 100 }],
+          },
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1", {}));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1", {}));
 
     const ns = result.current;
     expect(ns).toHaveProperty("users");
-    // users should still exist but without column details
     expect((ns as Record<string, Record<string, unknown>>).users).toEqual({});
   });
 
@@ -152,35 +200,45 @@ describe("useSqlAutocomplete", () => {
   it("uses tableColumnsCache when no explicit override is supplied", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn1:public:users": [
-          {
-            name: "id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "email",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-          {
-            name: "email",
-            data_type: "text",
-            nullable: true,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
-          },
-        ],
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     const ns = result.current as Record<string, Record<string, unknown>>;
     expect(ns.users).toHaveProperty("id");
     expect(ns.users).toHaveProperty("email");
@@ -190,25 +248,35 @@ describe("useSqlAutocomplete", () => {
   it("ignores cached columns from other connections", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn2:public:users": [
-          {
-            name: "secret",
-            data_type: "text",
-            nullable: true,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        conn2: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "secret",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     const ns = result.current as Record<string, Record<string, unknown>>;
     expect(ns.users).toBeDefined();
     expect(ns.users).not.toHaveProperty("secret");
@@ -217,26 +285,36 @@ describe("useSqlAutocomplete", () => {
   it("explicit tableColumns override beats cache", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn1:public:users": [
-          {
-            name: "cached_col",
-            data_type: "text",
-            nullable: true,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "cached_col",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
 
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { users: ["override_col"] }),
+      useSqlAutocomplete("conn1", "db1", { users: ["override_col"] }),
     );
     const ns = result.current as Record<string, Record<string, unknown>>;
     expect(ns.users).toHaveProperty("override_col");
@@ -246,27 +324,37 @@ describe("useSqlAutocomplete", () => {
   it("includes view names with cached columns", () => {
     useSchemaStore.setState({
       views: {
-        "conn1:public": [
-          { name: "active_users", schema: "public", definition: null },
-        ],
+        conn1: {
+          db1: {
+            public: [
+              { name: "active_users", schema: "public", definition: null },
+            ],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn1:public:active_users": [
-          {
-            name: "user_id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        conn1: {
+          db1: {
+            public: {
+              active_users: [
+                {
+                  name: "user_id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
 
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     const ns = result.current as Record<string, Record<string, unknown>>;
     expect(ns.active_users).toBeDefined();
     expect(ns.active_users).toHaveProperty("user_id");
@@ -280,17 +368,19 @@ describe("useSqlAutocomplete", () => {
   it("emits a backtick-quoted alias for mixed-case MySQL tables", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "Users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "Users", schema: "public", row_count: 1 }],
+          },
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { dialect: MySQL }),
+      useSqlAutocomplete("conn1", "db1", { dialect: MySQL }),
     );
     const ns = result.current as Record<string, unknown>;
     expect(ns).toHaveProperty("Users");
     expect(ns).toHaveProperty("`Users`");
-    // The quoted alias is a structured `{ self, children }` node so
-    // CodeMirror renders it as a distinct completion candidate.
     const aliased = (ns as Record<string, { self?: { apply?: string } }>)[
       "`Users`"
     ];
@@ -301,11 +391,15 @@ describe("useSqlAutocomplete", () => {
   it("emits a double-quoted alias for mixed-case Postgres tables", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "Users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "Users", schema: "public", row_count: 1 }],
+          },
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { dialect: PostgreSQL }),
+      useSqlAutocomplete("conn1", "db1", { dialect: PostgreSQL }),
     );
     const ns = result.current as Record<string, unknown>;
     expect(ns).toHaveProperty('"Users"');
@@ -320,11 +414,15 @@ describe("useSqlAutocomplete", () => {
   it("emits a quoted alias for mixed-case SQLite tables", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "MyTable", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "MyTable", schema: "public", row_count: 1 }],
+          },
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { dialect: SQLite }),
+      useSqlAutocomplete("conn1", "db1", { dialect: SQLite }),
     );
     const ns = result.current as Record<string, unknown>;
     expect(ns).toHaveProperty("`MyTable`");
@@ -335,11 +433,15 @@ describe("useSqlAutocomplete", () => {
   it("does not emit a quoted alias for already-lowercase MySQL identifiers", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { dialect: MySQL }),
+      useSqlAutocomplete("conn1", "db1", { dialect: MySQL }),
     );
     const ns = result.current as Record<string, unknown>;
     expect(ns).toHaveProperty("users");
@@ -350,10 +452,14 @@ describe("useSqlAutocomplete", () => {
   it("omits quoted aliases entirely when no dialect is supplied", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "Users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "Users", schema: "public", row_count: 1 }],
+          },
+        },
       },
     });
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     const ns = result.current as Record<string, unknown>;
     expect(ns).toHaveProperty("Users");
     expect(ns).not.toHaveProperty("`Users`");
@@ -364,13 +470,17 @@ describe("useSqlAutocomplete", () => {
   it("emits a quoted alias for mixed-case MySQL views", () => {
     useSchemaStore.setState({
       views: {
-        "conn1:public": [
-          { name: "ActiveUsers", schema: "public", definition: null },
-        ],
+        conn1: {
+          db1: {
+            public: [
+              { name: "ActiveUsers", schema: "public", definition: null },
+            ],
+          },
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { dialect: MySQL }),
+      useSqlAutocomplete("conn1", "db1", { dialect: MySQL }),
     );
     const ns = result.current as Record<string, unknown>;
     expect(ns).toHaveProperty("ActiveUsers");
@@ -382,11 +492,15 @@ describe("useSqlAutocomplete", () => {
   it("keeps pre-Sprint-82 tableColumns record arg working", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { users: ["id", "email"] }),
+      useSqlAutocomplete("conn1", "db1", { users: ["id", "email"] }),
     );
     const ns = result.current as Record<string, Record<string, unknown>>;
     expect(ns.users).toHaveProperty("id");
@@ -402,7 +516,7 @@ describe("useSqlAutocomplete", () => {
   // bypasses the quoting branch.
   it("does NOT auto-quote uppercase SQL keywords for PG dialect", () => {
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", {
+      useSqlAutocomplete("conn1", "db1", {
         dialect: PostgreSQL,
         dbType: "postgresql",
       }),
@@ -411,16 +525,13 @@ describe("useSqlAutocomplete", () => {
       string,
       { self?: { label?: string; apply?: string; type?: string } }
     >;
-    // SELECT must be present and its `apply` must be the bare keyword,
-    // NOT `"SELECT"`. Earlier shape `ns.SELECT = {}` triggered the
-    // dialect's quote-on-uppercase rule and produced apply='"SELECT"'.
     expect(ns).toHaveProperty("SELECT");
     expect(ns.SELECT?.self?.apply).toBe("SELECT");
     expect(ns.SELECT?.self?.type).toBe("keyword");
   });
 
   it("does NOT auto-quote uppercase SQL function names", () => {
-    const { result } = renderHook(() => useSqlAutocomplete("conn1"));
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
     const ns = result.current as Record<
       string,
       { self?: { label?: string; apply?: string; type?: string } }
@@ -446,37 +557,47 @@ describe("useSqlAutocomplete", () => {
   it("emits a fully-quoted schema-qualified key for PG dialect (AC-233-01)", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [
-          { name: "brief_news_tasks", schema: "public", row_count: 1 },
-        ],
+        conn1: {
+          db1: {
+            public: [
+              { name: "brief_news_tasks", schema: "public", row_count: 1 },
+            ],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn1:public:brief_news_tasks": [
-          {
-            name: "id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        conn1: {
+          db1: {
+            public: {
+              brief_news_tasks: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "title",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-          {
-            name: "title",
-            data_type: "text",
-            nullable: true,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
-          },
-        ],
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", {
+      useSqlAutocomplete("conn1", "db1", {
         dialect: PostgreSQL,
         dbType: "postgresql",
       }),
@@ -486,10 +607,6 @@ describe("useSqlAutocomplete", () => {
     const node = (ns as Record<string, { children?: Record<string, unknown> }>)[
       '"public"."brief_news_tasks"'
     ];
-    // The key holds a `{ self, children }` namespace whose `children`
-    // expose the cached columns. (Unlike bare keys that map directly to
-    // a column SQLNamespace, the quoted form must be wrapped to bypass
-    // CodeMirror's nameCompletion auto-quote rule.)
     expect(node?.children).toBeDefined();
     expect(node?.children).toHaveProperty("id");
     expect(node?.children).toHaveProperty("title");
@@ -500,28 +617,37 @@ describe("useSqlAutocomplete", () => {
   it("emits a fully-quoted schema-qualified key for SQLite dialect (AC-233-02)", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:main": [{ name: "events", schema: "main", row_count: 0 }],
+        conn1: {
+          db1: {
+            main: [{ name: "events", schema: "main", row_count: 0 }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn1:main:events": [
-          {
-            name: "ts",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        conn1: {
+          db1: {
+            main: {
+              events: [
+                {
+                  name: "ts",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", { dialect: SQLite, dbType: "sqlite" }),
+      useSqlAutocomplete("conn1", "db1", { dialect: SQLite, dbType: "sqlite" }),
     );
     const ns = result.current as Record<string, unknown>;
-    // SQLite `identifierQuotes` first char is backtick.
     expect(ns).toHaveProperty("`main`.`events`");
     const node = (ns as Record<string, { children?: Record<string, unknown> }>)[
       "`main`.`events`"
@@ -537,14 +663,17 @@ describe("useSqlAutocomplete", () => {
   it("registers fully-quoted key with empty children when columns are not cached (AC-233-03)", () => {
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [
-          { name: "brief_news_tasks", schema: "public", row_count: 0 },
-        ],
+        conn1: {
+          db1: {
+            public: [
+              { name: "brief_news_tasks", schema: "public", row_count: 0 },
+            ],
+          },
+        },
       },
-      // No tableColumnsCache entry for this table.
     });
     const { result } = renderHook(() =>
-      useSqlAutocomplete("conn1", {
+      useSqlAutocomplete("conn1", "db1", {
         dialect: PostgreSQL,
         dbType: "postgresql",
       }),

@@ -281,7 +281,7 @@ describe("DataGrid", () => {
     // Find the latest call with orderBy
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[5]).toBe("id ASC");
+    expect(lastCall[6]).toBe("id ASC");
   });
 
   // ── Sprint 76: Per-tab sort state ──
@@ -330,7 +330,7 @@ describe("DataGrid", () => {
 
     // Backend: first call's orderBy reflects the restored sort.
     const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
-    expect(firstCall[5]).toBe("name DESC");
+    expect(firstCall[6]).toBe("name DESC");
   });
 
   // AC-03 — multi-column sort persisted on a tab is restored with
@@ -360,7 +360,7 @@ describe("DataGrid", () => {
 
     // orderBy preserves the order and direction for the backend.
     const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
-    expect(firstCall[5]).toBe("id ASC, name DESC");
+    expect(firstCall[6]).toBe("id ASC, name DESC");
   });
 
   // AC-02 / AC-03 — two tabs, two independent sorts. Simulate the
@@ -388,7 +388,7 @@ describe("DataGrid", () => {
     expect(await screen.findByText("▲")).toBeInTheDocument();
     const aCalls = mockQueryTableData.mock.calls;
     let lastCall = aCalls[aCalls.length - 1] as unknown[];
-    expect(lastCall[5]).toBe("id ASC");
+    expect(lastCall[6]).toBe("id ASC");
 
     // Simulate tab switch by remounting with tab B active.
     unmount();
@@ -401,7 +401,7 @@ describe("DataGrid", () => {
     expect(await screen.findByText("▼")).toBeInTheDocument();
     const bCalls = mockQueryTableData.mock.calls;
     lastCall = bCalls[bCalls.length - 1] as unknown[];
-    expect(lastCall[5]).toBe("name DESC");
+    expect(lastCall[6]).toBe("name DESC");
 
     // Tab A's state object is untouched by tab B's render.
     const tabA = mockTabStoreState.tabs.find((t) => t.id === "tab-A")!;

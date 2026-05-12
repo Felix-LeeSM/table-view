@@ -107,6 +107,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           {tab.subView === "records" ? (
             <DataGrid
               connectionId={tab.connectionId}
+              database={tab.database ?? ""}
               table={tab.table!}
               schema={tab.schema!}
               initialFilters={tab.initialFilters}
@@ -114,12 +115,14 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
           ) : tab.objectKind === "view" ? (
             <ViewStructurePanel
               connectionId={tab.connectionId}
+              database={tab.database ?? ""}
               view={tab.table!}
               schema={tab.schema!}
             />
           ) : (
             <StructurePanel
               connectionId={tab.connectionId}
+              database={tab.database ?? ""}
               table={tab.table!}
               schema={tab.schema!}
             />

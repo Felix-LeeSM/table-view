@@ -13,52 +13,78 @@ import type {
 import type { QueryResult } from "@/types/query";
 import * as tauri from "@lib/tauri";
 
+/**
+ * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을
+ * `(connId, db)` 별로 분리한다. 같은 connection 의 db1 ↔ db2 toggle 시
+ * 캐시가 재사용되어 reload wait 가 사라진다.
+ *
+ * Cache key shape:
+ *   schemas:           Record<connId, Record<db, SchemaInfo[]>>
+ *   tables:            Record<connId, Record<db, Record<schema, TableInfo[]>>>
+ *   views:             Record<connId, Record<db, Record<schema, ViewInfo[]>>>
+ *   functions:         Record<connId, Record<db, Record<schema, FunctionInfo[]>>>
+ *   tableColumnsCache: Record<connId, Record<db, Record<schema, Record<table, ColumnInfo[]>>>>
+ *
+ * Sprint 262 의 workspaceStore `Record<conn, Record<db, ...>>` 패턴과
+ * 동일. flat `"conn:db:schema"` 문자열 키 회피 — separator 충돌 없음.
+ *
+ * Backend tauri command 시그니처는 변경 없음. backend connection pool 의
+ * active DB 를 사용하며, 프론트엔드는 fetch 시점의 activeDb 를 캐시 키로
+ * 잠는다. activeDb 와 backend pool 의 동기성은 DbSwitcher 의
+ * `await switchActiveDb()` → `setActiveDb()` 순서가 보장.
+ */
+
+type ByDb<V> = Record<string, V>;
+type ByConn<V> = Record<string, ByDb<V>>;
+type BySchema<V> = Record<string, V>;
+type ByTable<V> = Record<string, V>;
+
 interface SchemaState {
-  schemas: Record<string, SchemaInfo[]>;
-  tables: Record<string, TableInfo[]>;
-  views: Record<string, ViewInfo[]>;
-  functions: Record<string, FunctionInfo[]>;
-  /**
-   * Column metadata cache, keyed by `${connectionId}:${schema}:${table}`.
-   * Populated on demand by `getTableColumns` so that downstream consumers
-   * (e.g. SQL autocomplete) can resolve `table.column` candidates without
-   * re-fetching from the backend.
-   */
-  tableColumnsCache: Record<string, ColumnInfo[]>;
+  schemas: ByConn<SchemaInfo[]>;
+  tables: ByConn<BySchema<TableInfo[]>>;
+  views: ByConn<BySchema<ViewInfo[]>>;
+  functions: ByConn<BySchema<FunctionInfo[]>>;
+  tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
   loading: boolean;
   error: string | null;
 
-  loadSchemas: (connectionId: string) => Promise<void>;
-  loadTables: (connectionId: string, schema: string) => Promise<void>;
-  loadViews: (connectionId: string, schema: string) => Promise<void>;
-  loadFunctions: (connectionId: string, schema: string) => Promise<void>;
+  loadSchemas: (connId: string, db: string) => Promise<void>;
+  loadTables: (connId: string, db: string, schema: string) => Promise<void>;
+  loadViews: (connId: string, db: string, schema: string) => Promise<void>;
+  loadFunctions: (connId: string, db: string, schema: string) => Promise<void>;
   getTableColumns: (
-    connectionId: string,
+    connId: string,
+    db: string,
     table: string,
     schema: string,
   ) => Promise<ColumnInfo[]>;
   getTableIndexes: (
-    connectionId: string,
+    connId: string,
+    db: string,
     table: string,
     schema: string,
   ) => Promise<IndexInfo[]>;
   getTableConstraints: (
-    connectionId: string,
+    connId: string,
+    db: string,
     table: string,
     schema: string,
   ) => Promise<ConstraintInfo[]>;
   getViewColumns: (
-    connectionId: string,
+    connId: string,
+    db: string,
     schema: string,
     viewName: string,
   ) => Promise<ColumnInfo[]>;
   getViewDefinition: (
-    connectionId: string,
+    connId: string,
+    db: string,
     schema: string,
     viewName: string,
   ) => Promise<string>;
   queryTableData: (
-    connectionId: string,
+    connId: string,
+    db: string,
     table: string,
     schema: string,
     page?: number,
@@ -68,90 +94,154 @@ interface SchemaState {
     rawWhere?: string,
   ) => Promise<TableData>;
   dropTable: (
-    connectionId: string,
+    connId: string,
+    db: string,
     table: string,
     schema: string,
   ) => Promise<void>;
   executeQuery: (
-    connectionId: string,
+    connId: string,
     sql: string,
     queryId: string,
   ) => Promise<QueryResult>;
-  // Batch variant that runs all statements inside a single BEGIN/COMMIT
-  // transaction. All-or-nothing.
   executeQueryBatch: (
-    connectionId: string,
+    connId: string,
     statements: string[],
     queryId: string,
   ) => Promise<QueryResult[]>;
   renameTable: (
-    connectionId: string,
+    connId: string,
+    db: string,
     table: string,
     schema: string,
     newName: string,
   ) => Promise<void>;
-  clearSchema: (connectionId: string) => void;
+
   /**
-   * Drop every cached schema/table/view/function/column entry for
-   * `connectionId`. Same semantics as `clearSchema` but the separate
-   * name lets callers communicate "DB switched" vs "disconnected" so
-   * the two paths can diverge later without churn.
+   * Drop every cached entry keyed under `connId` (all DBs). Used on
+   * connection delete / disconnect. Same body as `clearForConnection`
+   * — the alias survives for caller intent ("disconnect" vs "DB switch").
    */
-  clearForConnection: (connectionId: string) => void;
+  clearSchema: (connId: string) => void;
+  clearForConnection: (connId: string) => void;
+  /**
+   * Sprint 263 — evict a single `(connId, db)` slot. DbSwitcher does NOT
+   * call this on a normal DB toggle (caches survive for toggle re-use);
+   * this is reserved for paths that need explicit per-db invalidation.
+   */
+  clearForWorkspace: (connId: string, db: string) => void;
   /**
    * Drop cached `tables` / `views` / `functions` for one
-   * (connectionId, schemaName) pair so the next list-call hits the
-   * backend. Encapsulates cache-shape knowledge that would otherwise
-   * leak into UI-side `setState` calls.
+   * `(connId, db, schemaName)` triple. Encapsulates cache-shape
+   * knowledge so UI-side `setState` calls don't grow eviction logic.
    */
-  evictSchemaForName: (connectionId: string, schemaName: string) => void;
+  evictSchemaForName: (connId: string, db: string, schemaName: string) => void;
   prefetchSchemaColumns: (
-    connectionId: string,
+    connId: string,
+    db: string,
     schema: string,
   ) => Promise<void>;
 }
 
-/**
- * Drop every cache entry keyed by `connectionId`. Single-sourced so
- * `clearSchema` (disconnect path) and `clearForConnection` (DB switch)
- * can't drift in eviction behaviour.
- */
-function clearConnectionEntries(
-  state: Pick<
-    SchemaState,
-    "schemas" | "tables" | "views" | "functions" | "tableColumnsCache"
-  >,
-  connectionId: string,
-): Pick<
-  SchemaState,
-  "schemas" | "tables" | "views" | "functions" | "tableColumnsCache"
-> {
-  const newSchemas = { ...state.schemas };
-  delete newSchemas[connectionId];
-  const newTables = { ...state.tables };
-  const newViews = { ...state.views };
-  const newFunctions = { ...state.functions };
-  const newColumnsCache = { ...state.tableColumnsCache };
-  for (const key of Object.keys(newTables)) {
-    if (key.startsWith(`${connectionId}:`)) delete newTables[key];
-  }
-  for (const key of Object.keys(newViews)) {
-    if (key.startsWith(`${connectionId}:`)) delete newViews[key];
-  }
-  for (const key of Object.keys(newFunctions)) {
-    if (key.startsWith(`${connectionId}:`)) delete newFunctions[key];
-  }
-  for (const key of Object.keys(newColumnsCache)) {
-    if (key.startsWith(`${connectionId}:`)) delete newColumnsCache[key];
-  }
+// ---------------------------------------------------------------------------
+// Internal helpers — immutable nested-map patching. Each helper returns the
+// updated outer map (new reference) so React subscribers re-render only on
+// real change.
+// ---------------------------------------------------------------------------
+
+function setConnDb<V>(
+  outer: ByConn<V>,
+  connId: string,
+  db: string,
+  value: V,
+): ByConn<V> {
   return {
-    schemas: newSchemas,
-    tables: newTables,
-    views: newViews,
-    functions: newFunctions,
-    tableColumnsCache: newColumnsCache,
+    ...outer,
+    [connId]: { ...(outer[connId] ?? {}), [db]: value },
   };
 }
+
+function setConnDbSchema<V>(
+  outer: ByConn<BySchema<V>>,
+  connId: string,
+  db: string,
+  schema: string,
+  value: V,
+): ByConn<BySchema<V>> {
+  const connSlot = outer[connId] ?? {};
+  const dbSlot = connSlot[db] ?? {};
+  return {
+    ...outer,
+    [connId]: {
+      ...connSlot,
+      [db]: { ...dbSlot, [schema]: value },
+    },
+  };
+}
+
+function setConnDbSchemaTable<V>(
+  outer: ByConn<BySchema<ByTable<V>>>,
+  connId: string,
+  db: string,
+  schema: string,
+  table: string,
+  value: V,
+): ByConn<BySchema<ByTable<V>>> {
+  const connSlot = outer[connId] ?? {};
+  const dbSlot = connSlot[db] ?? {};
+  const schemaSlot = dbSlot[schema] ?? {};
+  return {
+    ...outer,
+    [connId]: {
+      ...connSlot,
+      [db]: {
+        ...dbSlot,
+        [schema]: { ...schemaSlot, [table]: value },
+      },
+    },
+  };
+}
+
+function deleteConn<V>(outer: ByConn<V>, connId: string): ByConn<V> {
+  if (!(connId in outer)) return outer;
+  const next = { ...outer };
+  delete next[connId];
+  return next;
+}
+
+function deleteConnDb<V>(
+  outer: ByConn<V>,
+  connId: string,
+  db: string,
+): ByConn<V> {
+  const connSlot = outer[connId];
+  if (!connSlot || !(db in connSlot)) return outer;
+  const nextConn = { ...connSlot };
+  delete nextConn[db];
+  return { ...outer, [connId]: nextConn };
+}
+
+function deleteConnDbSchema<V>(
+  outer: ByConn<BySchema<V>>,
+  connId: string,
+  db: string,
+  schema: string,
+): ByConn<BySchema<V>> {
+  const connSlot = outer[connId];
+  if (!connSlot) return outer;
+  const dbSlot = connSlot[db];
+  if (!dbSlot || !(schema in dbSlot)) return outer;
+  const nextDb = { ...dbSlot };
+  delete nextDb[schema];
+  return {
+    ...outer,
+    [connId]: { ...connSlot, [db]: nextDb },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
 export const useSchemaStore = create<SchemaState>((set) => ({
   schemas: {},
@@ -162,12 +252,12 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   loading: false,
   error: null,
 
-  loadSchemas: async (connectionId) => {
+  loadSchemas: async (connId, db) => {
     set({ loading: true, error: null });
     try {
-      const schemas = await tauri.listSchemas(connectionId);
+      const schemas = await tauri.listSchemas(connId);
       set((state) => ({
-        schemas: { ...state.schemas, [connectionId]: schemas },
+        schemas: setConnDb(state.schemas, connId, db, schemas),
         loading: false,
       }));
     } catch (e) {
@@ -175,13 +265,12 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     }
   },
 
-  loadTables: async (connectionId, schema) => {
+  loadTables: async (connId, db, schema) => {
     set({ loading: true, error: null });
     try {
-      const tables = await tauri.listTables(connectionId, schema);
-      const key = `${connectionId}:${schema}`;
+      const tables = await tauri.listTables(connId, schema);
       set((state) => ({
-        tables: { ...state.tables, [key]: tables },
+        tables: setConnDbSchema(state.tables, connId, db, schema, tables),
         loading: false,
       }));
     } catch (e) {
@@ -189,61 +278,72 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     }
   },
 
-  loadViews: async (connectionId, schema) => {
+  loadViews: async (connId, db, schema) => {
     try {
-      const views = await tauri.listViews(connectionId, schema);
-      const key = `${connectionId}:${schema}`;
+      const views = await tauri.listViews(connId, schema);
       set((state) => ({
-        views: { ...state.views, [key]: views },
+        views: setConnDbSchema(state.views, connId, db, schema, views),
       }));
     } catch (e) {
       set({ error: String(e) });
     }
   },
 
-  loadFunctions: async (connectionId, schema) => {
+  loadFunctions: async (connId, db, schema) => {
     try {
-      const functions = await tauri.listFunctions(connectionId, schema);
-      const key = `${connectionId}:${schema}`;
+      const functions = await tauri.listFunctions(connId, schema);
       set((state) => ({
-        functions: { ...state.functions, [key]: functions },
+        functions: setConnDbSchema(
+          state.functions,
+          connId,
+          db,
+          schema,
+          functions,
+        ),
       }));
     } catch (e) {
       set({ error: String(e) });
     }
   },
 
-  getTableColumns: async (connectionId, table, schema) => {
-    const columns = await tauri.getTableColumns(connectionId, table, schema);
-    // Cache for SQL autocomplete and other consumers
-    const cacheKey = `${connectionId}:${schema}:${table}`;
+  getTableColumns: async (connId, db, table, schema) => {
+    const columns = await tauri.getTableColumns(connId, table, schema);
     set((state) => ({
-      tableColumnsCache: {
-        ...state.tableColumnsCache,
-        [cacheKey]: columns,
-      },
+      tableColumnsCache: setConnDbSchemaTable(
+        state.tableColumnsCache,
+        connId,
+        db,
+        schema,
+        table,
+        columns,
+      ),
     }));
     return columns;
   },
 
-  getTableIndexes: async (connectionId, table, schema) => {
-    return tauri.getTableIndexes(connectionId, table, schema);
+  // Sprint 263 — frontend cache key takes `(connId, db, schema, table)`,
+  // but the backend tauri command stays connection-scoped (active pool
+  // already binds a db). `db` is therefore accepted but discarded at the
+  // tauri seam.
+  getTableIndexes: async (connId, _db, table, schema) => {
+    return tauri.getTableIndexes(connId, table, schema);
   },
 
-  getTableConstraints: async (connectionId, table, schema) => {
-    return tauri.getTableConstraints(connectionId, table, schema);
+  getTableConstraints: async (connId, _db, table, schema) => {
+    return tauri.getTableConstraints(connId, table, schema);
   },
 
-  getViewColumns: async (connectionId, schema, viewName) => {
-    return tauri.getViewColumns(connectionId, schema, viewName);
+  getViewColumns: async (connId, _db, schema, viewName) => {
+    return tauri.getViewColumns(connId, schema, viewName);
   },
 
-  getViewDefinition: async (connectionId, schema, viewName) => {
-    return tauri.getViewDefinition(connectionId, schema, viewName);
+  getViewDefinition: async (connId, _db, schema, viewName) => {
+    return tauri.getViewDefinition(connId, schema, viewName);
   },
 
   queryTableData: async (
-    connectionId,
+    connId,
+    _db,
     table,
     schema,
     page,
@@ -253,7 +353,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     rawWhere,
   ) => {
     return tauri.queryTableData(
-      connectionId,
+      connId,
       table,
       schema,
       page,
@@ -265,56 +365,78 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   },
 
   // Sprint 223 — reload+fallback moved to `useSchemaTableMutations`.
-  dropTable: (cid, table, schema) => tauri.dropTable(cid, table, schema),
+  dropTable: (cid, _db, table, schema) => tauri.dropTable(cid, table, schema),
 
-  executeQuery: async (connectionId, sql, queryId) => {
-    return tauri.executeQuery(connectionId, sql, queryId);
+  executeQuery: async (connId, sql, queryId) => {
+    return tauri.executeQuery(connId, sql, queryId);
   },
 
-  executeQueryBatch: async (connectionId, statements, queryId) => {
-    return tauri.executeQueryBatch(connectionId, statements, queryId);
+  executeQueryBatch: async (connId, statements, queryId) => {
+    return tauri.executeQueryBatch(connId, statements, queryId);
   },
 
   // Sprint 223 — see `dropTable` comment.
-  renameTable: (cid, t, s, n) => tauri.renameTable(cid, t, s, n),
+  renameTable: (cid, _db, t, s, n) => tauri.renameTable(cid, t, s, n),
 
-  clearSchema: (connectionId) => {
-    set((state) => clearConnectionEntries(state, connectionId));
+  clearSchema: (connId) => {
+    set((state) => ({
+      schemas: deleteConn(state.schemas, connId),
+      tables: deleteConn(state.tables, connId),
+      views: deleteConn(state.views, connId),
+      functions: deleteConn(state.functions, connId),
+      tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
+    }));
   },
 
-  clearForConnection: (connectionId) => {
-    // Identical body to `clearSchema` today; the two names stay separate
-    // so callers can communicate intent ("DB switched" vs "disconnected").
-    set((state) => clearConnectionEntries(state, connectionId));
+  clearForConnection: (connId) => {
+    set((state) => ({
+      schemas: deleteConn(state.schemas, connId),
+      tables: deleteConn(state.tables, connId),
+      views: deleteConn(state.views, connId),
+      functions: deleteConn(state.functions, connId),
+      tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
+    }));
   },
 
-  evictSchemaForName: (connectionId, schemaName) => {
-    const key = `${connectionId}:${schemaName}`;
-    set((state) => {
-      const newTables = { ...state.tables };
-      delete newTables[key];
-      const newViews = { ...state.views };
-      delete newViews[key];
-      const newFunctions = { ...state.functions };
-      delete newFunctions[key];
-      return { tables: newTables, views: newViews, functions: newFunctions };
-    });
+  clearForWorkspace: (connId, db) => {
+    set((state) => ({
+      schemas: deleteConnDb(state.schemas, connId, db),
+      tables: deleteConnDb(state.tables, connId, db),
+      views: deleteConnDb(state.views, connId, db),
+      functions: deleteConnDb(state.functions, connId, db),
+      tableColumnsCache: deleteConnDb(state.tableColumnsCache, connId, db),
+    }));
   },
 
-  prefetchSchemaColumns: async (connectionId, schema) => {
+  evictSchemaForName: (connId, db, schemaName) => {
+    set((state) => ({
+      tables: deleteConnDbSchema(state.tables, connId, db, schemaName),
+      views: deleteConnDbSchema(state.views, connId, db, schemaName),
+      functions: deleteConnDbSchema(state.functions, connId, db, schemaName),
+    }));
+  },
+
+  prefetchSchemaColumns: async (connId, db, schema) => {
     try {
-      const result = await tauri.listSchemaColumns(connectionId, schema);
-      const newEntries: Record<string, ColumnInfo[]> = {};
-      for (const [tableName, columns] of Object.entries(result)) {
-        newEntries[`${connectionId}:${schema}:${tableName}`] = columns;
-      }
-      if (Object.keys(newEntries).length > 0) {
-        set((state) => ({
-          tableColumnsCache: { ...state.tableColumnsCache, ...newEntries },
-        }));
-      }
+      const result = await tauri.listSchemaColumns(connId, schema);
+      const tableEntries = Object.entries(result);
+      if (tableEntries.length === 0) return;
+      set((state) => {
+        let next = state.tableColumnsCache;
+        for (const [tableName, columns] of tableEntries) {
+          next = setConnDbSchemaTable(
+            next,
+            connId,
+            db,
+            schema,
+            tableName,
+            columns,
+          );
+        }
+        return { tableColumnsCache: next };
+      });
     } catch {
-      // prefetch is best-effort; silently ignore failures
+      // best-effort prefetch — silently ignore failures.
     }
   },
 }));

@@ -224,6 +224,8 @@ function indexMatchesPk(idx: IndexDraft, pk: string[]): boolean {
 export interface CreateTableDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
+  /** Active database — schemaStore cache key dimension (Sprint 263). */
+  database: string;
   /** Right-clicked schema name; default selection of the schema dropdown. */
   schemaName: string;
   /**
@@ -248,6 +250,7 @@ type TabKey = "columns" | "keys" | "indexes" | "foreign_keys";
 
 export default function CreateTableDialog({
   connectionId,
+  database,
   schemaName,
   availableSchemas,
   open,
@@ -446,7 +449,7 @@ export default function CreateTableDialog({
     });
   };
 
-  const fkPicker = useFkReferencePicker(connectionId);
+  const fkPicker = useFkReferencePicker(connectionId, database);
   // Sprint 230 — dynamic PG type list. Hook returns the merged
   // canonical-first + live-extras list (or canonical exactly while
   // the fetch is in flight / on error). Pass through as `typesSource`
@@ -739,35 +742,32 @@ export default function CreateTableDialog({
   // re-renders when a lazy `loadTables` / `getTableColumns` populates
   // a previously-empty slot — so the dropdowns auto-fill without the
   // user having to re-open the row.
+  // Sprint 263 — schemaStore is now nested `(connId, db, schema, table)`.
   const tablesByConnAndSchema = useSchemaStore((s) => s.tables);
   const tableColumnsCache = useSchemaStore((s) => s.tableColumnsCache);
 
   /** Slice keyed by `<refSchema>` — each entry is `string[]` (table names). */
   const refTablesByKey = useMemo<Record<string, string[]>>(() => {
     const out: Record<string, string[]> = {};
-    for (const [storeKey, list] of Object.entries(tablesByConnAndSchema)) {
-      // storeKey is `${connectionId}:${schema}` — we surface only the
-      // entries belonging to the active connection.
-      if (!storeKey.startsWith(`${connectionId}:`)) continue;
-      const refSchema = storeKey.slice(connectionId.length + 1);
+    const tablesBySchema =
+      tablesByConnAndSchema[connectionId]?.[database] ?? {};
+    for (const [refSchema, list] of Object.entries(tablesBySchema)) {
       out[refSchema] = list.map((t) => t.name);
     }
     return out;
-  }, [tablesByConnAndSchema, connectionId]);
+  }, [tablesByConnAndSchema, connectionId, database]);
 
   /** Slice keyed by `<refSchema>:<refTable>` — each entry is `string[]`. */
   const refColumnsByKey = useMemo<Record<string, string[]>>(() => {
     const out: Record<string, string[]> = {};
-    for (const [storeKey, list] of Object.entries(tableColumnsCache)) {
-      if (!storeKey.startsWith(`${connectionId}:`)) continue;
-      // storeKey = `${connectionId}:${schema}:${table}` — strip connId
-      // prefix and key on `${schema}:${table}` to match the body's
-      // `${fk.ref_schema}:${fk.ref_table}` look-up.
-      const remainder = storeKey.slice(connectionId.length + 1);
-      out[remainder] = list.map((c) => c.name);
+    const columnsBySchema = tableColumnsCache[connectionId]?.[database] ?? {};
+    for (const [refSchema, tablesInSchema] of Object.entries(columnsBySchema)) {
+      for (const [refTable, list] of Object.entries(tablesInSchema)) {
+        out[`${refSchema}:${refTable}`] = list.map((c) => c.name);
+      }
     }
     return out;
-  }, [tableColumnsCache, connectionId]);
+  }, [tableColumnsCache, connectionId, database]);
 
   /**
    * The list of constraint drafts (FK + CHECK + UNIQUE) that the chain

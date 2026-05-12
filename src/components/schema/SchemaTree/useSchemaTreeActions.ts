@@ -106,29 +106,13 @@ export interface SchemaTreeActions {
 export function useSchemaTreeActions({
   connectionId,
 }: UseSchemaTreeActionsArgs): SchemaTreeActions {
-  const {
-    schemas,
-    loadingSchemas,
-    loadingTables,
-    refreshConnection,
-    refreshSchema,
-    expandSchema: loadExpandedSchema,
-  } = useSchemaCache(connectionId);
-
-  const functions = useSchemaStore((s) => s.functions);
-  const addTab = useWorkspaceStore((s) => s.addTab);
-  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
-  const updateQuerySql = useWorkspaceStore((s) => s.updateQuerySql);
-  const setExpandedStore = useWorkspaceStore((s) => s.setExpanded);
-  const setSelectedNodeStore = useWorkspaceStore((s) => s.setSelectedNode);
-  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
-
-  // Sprint 262 Slice B — per-workspace sidebar state. `expanded` + `selectedNode`
-  // 은 workspaceStore 의 `sidebar` axis 가 `(connId, activeDb)` 별로 보관한다.
-  // DbSwitcher 가 activeDb 를 바꾸면 derived key 가 바뀌고 selector 재구독으로
-  // 자동 swap; 같은 workspace 으로 돌아오면 직전 상태가 보존된다. `key` 가
-  // null 이면 (focused connection 미설정 등) 모든 write 는 no-op — local
-  // useState 시절에도 mount 가 안 됐을 시나리오라 회귀가 아니다.
+  // Sprint 262 Slice B — per-workspace sidebar state. Sprint 263 — schema
+  // cache 도 같은 `(connId, db)` 키로 분리됐으므로, workspaceKey 해석은
+  // useSchemaCache 호출 *이전* 으로 끈다. `workspaceKey` 가 null 인
+  // transient 구간 (focused connection 의 activeDb 가 아직 미해석) 에는
+  // db slot 으로 `""` 를 흘려보낸다 — useSchemaCache 의 auto-load 가 이
+  // sentinel 을 보면 fetch 를 건너뛴다. activeDb 가 해석되면 effect 가
+  // 재실행되며 정상 load 가 트리거된다.
   //
   // `workspaceKey` 는 ref 에 미러링한다. 그 결과 `setExpandedSchemas` /
   // `setSelectedNodeId` 가 key 변동에 영향받지 않는 **stable callback** 이
@@ -141,6 +125,23 @@ export function useSchemaTreeActions({
   useEffect(() => {
     workspaceKeyRef.current = workspaceKey;
   }, [workspaceKey]);
+
+  const {
+    schemas,
+    loadingSchemas,
+    loadingTables,
+    refreshConnection,
+    refreshSchema,
+    expandSchema: loadExpandedSchema,
+  } = useSchemaCache(connectionId, workspaceKey?.db ?? "");
+
+  const functions = useSchemaStore((s) => s.functions);
+  const addTab = useWorkspaceStore((s) => s.addTab);
+  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
+  const updateQuerySql = useWorkspaceStore((s) => s.updateQuerySql);
+  const setExpandedStore = useWorkspaceStore((s) => s.setExpanded);
+  const setSelectedNodeStore = useWorkspaceStore((s) => s.setSelectedNode);
+  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const expandedArray = useWorkspaceStore((s) =>
     workspaceKey
@@ -374,8 +375,7 @@ export function useSchemaTreeActions({
       const ws = useWorkspaceStore.getState().workspaces[connectionId]?.[db];
       const newTab = ws?.tabs[ws.tabs.length - 1];
       if (newTab && newTab.type === "query") {
-        const key = `${connectionId}:${schemaName}`;
-        const funcs = functions[key] ?? [];
+        const funcs = functions[connectionId]?.[db]?.[schemaName] ?? [];
         const func = funcs.find((f) => f.name === funcName);
         if (func?.source) {
           updateQuerySql(connectionId, db, newTab.id, func.source);

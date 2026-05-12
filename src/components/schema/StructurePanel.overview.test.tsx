@@ -39,6 +39,7 @@ describe("StructurePanel", () => {
 
     expect(mockGetTableColumns).toHaveBeenCalledWith(
       "conn-1",
+      "db-1",
       "users",
       "public",
     );
@@ -102,6 +103,7 @@ describe("StructurePanel", () => {
 
     expect(mockGetTableIndexes).toHaveBeenCalledWith(
       "conn-1",
+      "db-1",
       "users",
       "public",
     );
@@ -148,6 +150,7 @@ describe("StructurePanel", () => {
 
     expect(mockGetTableConstraints).toHaveBeenCalledWith(
       "conn-1",
+      "db-1",
       "users",
       "public",
     );
@@ -466,6 +469,7 @@ describe("StructurePanel", () => {
         render(
           <StructurePanel
             connectionId="conn-1"
+            database="db-1"
             table="users"
             schema="public"
             paradigm="document"
@@ -493,6 +497,7 @@ describe("StructurePanel", () => {
       render(
         <StructurePanel
           connectionId="conn-1"
+          database="db-1"
           table="users"
           schema="public"
           paradigm="rdb"
@@ -511,7 +516,12 @@ describe("StructurePanel", () => {
 
       // Render without the prop entirely.
       render(
-        <StructurePanel connectionId="conn-1" table="users" schema="public" />,
+        <StructurePanel
+          connectionId="conn-1"
+          database="db-1"
+          table="users"
+          schema="public"
+        />,
       );
 
       expect(screen.getByRole("tab", { name: "Columns" })).toBeInTheDocument();

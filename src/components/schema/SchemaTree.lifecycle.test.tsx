@@ -35,7 +35,7 @@ describe("SchemaTree — lifecycle", () => {
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
     });
-    expect(mockLoadSchemas).toHaveBeenCalledWith("conn1");
+    expect(mockLoadSchemas).toHaveBeenCalledWith("conn1", "db1");
   });
 
   it("does not call loadSchemas again on re-render with same connectionId", async () => {
@@ -125,19 +125,28 @@ describe("SchemaTree — lifecycle", () => {
         conn2: [{ name: "dbo" }],
       },
     });
+    // Sprint 263 — `useWorkspaceKeyForConnection` resolves the db
+    // dimension from `activeStatuses[connectionId].activeDb`, so a
+    // connection switch needs both connections seeded with a status.
+    useConnectionStore.setState((s) => ({
+      activeStatuses: {
+        ...s.activeStatuses,
+        conn2: { type: "connected", activeDb: "db1" },
+      },
+    }));
 
     let rerenderFn: (ui: React.ReactElement) => void;
     await act(async () => {
       const { rerender } = render(<SchemaTree connectionId="conn1" />);
       rerenderFn = rerender;
     });
-    expect(mockLoadSchemas).toHaveBeenCalledWith("conn1");
+    expect(mockLoadSchemas).toHaveBeenCalledWith("conn1", "db1");
 
     await act(async () => {
       rerenderFn!(<SchemaTree connectionId="conn2" />);
     });
 
-    expect(mockLoadSchemas).toHaveBeenCalledWith("conn2");
+    expect(mockLoadSchemas).toHaveBeenCalledWith("conn2", "db1");
   });
 
   // =========================================================================

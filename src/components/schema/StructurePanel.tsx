@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
 
 interface StructurePanelProps {
   connectionId: string;
+  database: string;
   table: string;
   schema: string;
   /**
@@ -27,6 +28,7 @@ type SubTab = "columns" | "indexes" | "constraints";
 
 export default function StructurePanel({
   connectionId,
+  database,
   table,
   schema,
   paradigm,
@@ -59,17 +61,32 @@ export default function StructurePanel({
     setError(null);
     try {
       if (activeSubTab === "columns") {
-        const cols = await getTableColumns(connectionId, table, schema);
+        const cols = await getTableColumns(
+          connectionId,
+          database,
+          table,
+          schema,
+        );
         if (fetchIdRef.current !== fetchId) return;
         setColumns(cols);
         setHasFetchedColumns(true);
       } else if (activeSubTab === "indexes") {
-        const idx = await getTableIndexes(connectionId, table, schema);
+        const idx = await getTableIndexes(
+          connectionId,
+          database,
+          table,
+          schema,
+        );
         if (fetchIdRef.current !== fetchId) return;
         setIndexes(idx);
         setHasFetchedIndexes(true);
       } else {
-        const cons = await getTableConstraints(connectionId, table, schema);
+        const cons = await getTableConstraints(
+          connectionId,
+          database,
+          table,
+          schema,
+        );
         if (fetchIdRef.current !== fetchId) return;
         setConstraints(cons);
         setHasFetchedConstraints(true);
@@ -89,6 +106,7 @@ export default function StructurePanel({
     }
   }, [
     connectionId,
+    database,
     table,
     schema,
     activeSubTab,
@@ -204,6 +222,7 @@ export default function StructurePanel({
         hasFetchedIndexes && (
           <IndexesEditor
             connectionId={connectionId}
+            database={database}
             table={table}
             schema={schema}
             indexes={indexes}
@@ -218,6 +237,7 @@ export default function StructurePanel({
         hasFetchedConstraints && (
           <ConstraintsEditor
             connectionId={connectionId}
+            database={database}
             table={table}
             schema={schema}
             constraints={constraints}

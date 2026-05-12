@@ -162,7 +162,7 @@ describe("DataGrid", () => {
     // Should have been called with page=2
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[3]).toBe(2);
+    expect(lastCall[4]).toBe(2);
   });
 
   // 12. Props change resets page
@@ -171,14 +171,21 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
 
     // Change table prop
-    rerender(<DataGrid connectionId="conn1" table="orders" schema="public" />);
+    rerender(
+      <DataGrid
+        connectionId="conn1"
+        database="db1"
+        table="orders"
+        schema="public"
+      />,
+    );
     await screen.findByText("3 rows");
 
     // The latest call should be with page=1 for the new table
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[1]).toBe("orders");
-    expect(lastCall[3]).toBe(1);
+    expect(lastCall[2]).toBe("orders");
+    expect(lastCall[4]).toBe(1);
   });
 
   // 22. Props change resets column widths
@@ -187,13 +194,20 @@ describe("DataGrid", () => {
     await screen.findByText("3 rows");
 
     // Rerender with different table
-    rerender(<DataGrid connectionId="conn1" table="orders" schema="public" />);
+    rerender(
+      <DataGrid
+        connectionId="conn1"
+        database="db1"
+        table="orders"
+        schema="public"
+      />,
+    );
     await screen.findByText("3 rows");
 
     // Should have called with new table name
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[1]).toBe("orders");
+    expect(lastCall[2]).toBe("orders");
   });
 
   // ── Sprint 26: Pagination Enhancement ──
@@ -228,7 +242,7 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[4]).toBe(300);
+    expect(lastCall[5]).toBe(300);
   });
 
   // 31. Renders first/last page buttons
@@ -266,7 +280,7 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[3]).toBe(1);
+    expect(lastCall[4]).toBe(1);
   });
 
   // 33. Last page button goes to last page
@@ -284,7 +298,7 @@ describe("DataGrid", () => {
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
     // totalPages = ceil(500/300) = 2
-    expect(lastCall[3]).toBe(2);
+    expect(lastCall[4]).toBe(2);
   });
 
   // 34. Jump to page input works
@@ -304,6 +318,6 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[3]).toBe(3);
+    expect(lastCall[4]).toBe(3);
   });
 });

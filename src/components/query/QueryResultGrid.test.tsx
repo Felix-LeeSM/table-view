@@ -184,6 +184,7 @@ describe("QueryResultGrid", () => {
       <QueryResultGrid
         queryState={{ status: "completed", result: SELECT_RESULT }}
         connectionId="conn1"
+        database="db1"
         sql="SELECT id, name FROM public.users"
       />,
     );

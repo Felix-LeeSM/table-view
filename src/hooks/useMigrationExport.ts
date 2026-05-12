@@ -36,11 +36,13 @@ export type ExportInclude = "ddl" | "dml" | "both";
 export interface UseMigrationExportReturn {
   exportSchema: (
     connectionId: string,
+    database: string,
     schema: string,
     include: ExportInclude,
   ) => Promise<void>;
   exportDatabase: (
     connectionId: string,
+    database: string,
     schemas: string[],
     include: ExportInclude,
   ) => Promise<void>;
@@ -68,21 +70,23 @@ interface SchemaMeta {
 
 async function loadSchemaMetadata(
   connectionId: string,
+  database: string,
   schema: string,
 ): Promise<DdlExportTable[]> {
   const store = useSchemaStore.getState();
-  const cacheKey = `${connectionId}:${schema}`;
-  let tables = store.tables[cacheKey];
+  let tables = store.tables[connectionId]?.[database]?.[schema];
   if (!tables) {
-    await store.loadTables(connectionId, schema);
-    tables = useSchemaStore.getState().tables[cacheKey] ?? [];
+    await store.loadTables(connectionId, database, schema);
+    tables =
+      useSchemaStore.getState().tables[connectionId]?.[database]?.[schema] ??
+      [];
   }
   return Promise.all(
     tables.map(async (t): Promise<DdlExportTable> => {
       const [columns, indexes, constraints] = await Promise.all([
-        store.getTableColumns(connectionId, t.name, schema),
-        store.getTableIndexes(connectionId, t.name, schema),
-        store.getTableConstraints(connectionId, t.name, schema),
+        store.getTableColumns(connectionId, database, t.name, schema),
+        store.getTableIndexes(connectionId, database, t.name, schema),
+        store.getTableConstraints(connectionId, database, t.name, schema),
       ]);
       return { name: t.name, columns, indexes, constraints };
     }),
@@ -131,14 +135,23 @@ export function useMigrationExport(): UseMigrationExportReturn {
   };
 
   const exportSchema = useCallback(
-    async (connectionId: string, schema: string, include: ExportInclude) => {
+    async (
+      connectionId: string,
+      database: string,
+      schema: string,
+      include: ExportInclude,
+    ) => {
       if (isExporting) return;
       const resolved = resolveDialect(connectionId);
       if (!resolved) return;
 
       setIsExporting(true);
       try {
-        const ddlTables = await loadSchemaMetadata(connectionId, schema);
+        const ddlTables = await loadSchemaMetadata(
+          connectionId,
+          database,
+          schema,
+        );
         if (ddlTables.length === 0) {
           toast.info(`Export: schema "${schema}" has no tables`);
           return;
@@ -204,7 +217,12 @@ export function useMigrationExport(): UseMigrationExportReturn {
   );
 
   const exportDatabase = useCallback(
-    async (connectionId: string, schemas: string[], include: ExportInclude) => {
+    async (
+      connectionId: string,
+      database: string,
+      schemas: string[],
+      include: ExportInclude,
+    ) => {
       if (isExporting) return;
       if (schemas.length === 0) {
         toast.info("Export: no schemas to export");
@@ -218,7 +236,7 @@ export function useMigrationExport(): UseMigrationExportReturn {
         const metas: SchemaMeta[] = await Promise.all(
           schemas.map(async (schema) => ({
             schema,
-            ddlTables: await loadSchemaMetadata(connectionId, schema),
+            ddlTables: await loadSchemaMetadata(connectionId, database, schema),
           })),
         );
         const totalTables = metas.reduce(

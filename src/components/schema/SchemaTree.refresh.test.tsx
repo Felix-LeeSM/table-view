@@ -52,7 +52,7 @@ describe("SchemaTree — refresh", () => {
     });
 
     expect(mockLoadSchemas).toHaveBeenCalledTimes(2);
-    expect(mockLoadSchemas).toHaveBeenLastCalledWith("conn1");
+    expect(mockLoadSchemas).toHaveBeenLastCalledWith("conn1", "db1");
   });
 
   // -----------------------------------------------------------------------
@@ -169,6 +169,6 @@ describe("SchemaTree — refresh", () => {
     });
 
     // loadTables should be called for this specific schema
-    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "public");
+    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "public");
   });
 });

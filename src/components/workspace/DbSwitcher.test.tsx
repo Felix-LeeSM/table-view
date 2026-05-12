@@ -396,13 +396,23 @@ describe("DbSwitcher", () => {
     }
   });
 
-  it("clears the schema cache for the connection after a successful switch", async () => {
+  // Sprint 263 — DbSwitcher no longer wipes the per-connection schema
+  // cache on toggle. schemaStore caches are now `(connId, db)` keyed; the
+  // sidebar re-subscribes to the new slot via the workspace key, and an
+  // already-populated slot is reused instantly across toggles. This test
+  // (was AC-262-pre-263 "clears … on switch") now anchors that the
+  // *previously-loaded* db1 cache survives a db1 → db2 toggle.
+  it("preserves schema caches across a successful DB toggle (AC-263-04)", async () => {
     setStores({ paradigm: "rdb", connected: true, activeDb: "postgres" });
-    // Seed a couple of schema entries so we can verify they're cleared.
+    // Seed db1's slot — after the switch this MUST still exist.
     useSchemaStore.setState({
-      schemas: { c1: [{ name: "public" }] },
+      schemas: { c1: { postgres: [{ name: "public" }] } },
       tables: {
-        "c1:public": [{ name: "users", schema: "public", row_count: null }],
+        c1: {
+          postgres: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
       },
       views: {},
       functions: {},
@@ -427,8 +437,9 @@ describe("DbSwitcher", () => {
       fireEvent.click(warehouse);
     });
     const schemaState = useSchemaStore.getState();
-    expect(schemaState.schemas["c1"]).toBeUndefined();
-    expect(schemaState.tables["c1:public"]).toBeUndefined();
+    // Previous db1 cache is intact — toggle did not wipe it.
+    expect(schemaState.schemas.c1?.postgres).toEqual([{ name: "public" }]);
+    expect(schemaState.tables.c1?.postgres?.public).toHaveLength(1);
   });
 
   // -- Sprint 131 — Document paradigm switch --
@@ -484,9 +495,13 @@ describe("DbSwitcher", () => {
     // sidebar happens to be showing both connections at once.
     setStores({ paradigm: "document", connected: true, activeDb: "analytics" });
     useSchemaStore.setState({
-      schemas: { other: [{ name: "public" }] },
+      schemas: { other: { db1: [{ name: "public" }] } },
       tables: {
-        "other:public": [{ name: "users", schema: "public", row_count: null }],
+        other: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
       },
       views: {},
       functions: {},
@@ -512,7 +527,7 @@ describe("DbSwitcher", () => {
     });
     // schemaStore must remain untouched.
     const schemaState = useSchemaStore.getState();
-    expect(schemaState.schemas["other"]).toEqual([{ name: "public" }]);
+    expect(schemaState.schemas.other?.db1).toEqual([{ name: "public" }]);
   });
 
   it("does NOT clear the document store on an RDB paradigm switch", async () => {

@@ -51,6 +51,8 @@ import { useConnectionStore } from "@stores/connectionStore";
 export interface DropTableDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
+  /** Active database — schemaStore cache key dimension (Sprint 263). */
+  database: string;
   /** Schema name (display + payload). */
   schemaName: string;
   /** Current table name (typing-confirm target + payload). */
@@ -63,6 +65,7 @@ export interface DropTableDialogProps {
 
 export default function DropTableDialog({
   connectionId,
+  database,
   schemaName,
   tableName,
   open,
@@ -124,7 +127,12 @@ export default function DropTableDialog({
           return { sql: result.sql };
         },
         () => async () => {
-          await dropTableMutation(connectionId, tableName, schemaName);
+          await dropTableMutation(
+            connectionId,
+            database,
+            tableName,
+            schemaName,
+          );
         },
       );
     }, 250);

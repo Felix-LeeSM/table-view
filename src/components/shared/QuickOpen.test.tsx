@@ -38,9 +38,29 @@ function makeConn(id: string, name: string): ConnectionConfig {
   };
 }
 
+// Sprint 263 — `tables` / `views` / `functions` are nested by `(connId, db,
+// schema)`. The test helper still accepts the legacy flat key shape
+// (`"connId:schema"`) and translates internally to nested form so callsites
+// stay terse, defaulting the db dimension to `db1`.
+function expandFlat<V>(
+  flat: Record<string, V[]>,
+  db: string,
+): Record<string, Record<string, Record<string, V[]>>> {
+  const out: Record<string, Record<string, Record<string, V[]>>> = {};
+  for (const [key, list] of Object.entries(flat)) {
+    const [connId, schema] = key.split(":");
+    if (!connId || !schema) continue;
+    out[connId] = out[connId] ?? {};
+    out[connId][db] = out[connId][db] ?? {};
+    out[connId][db][schema] = list;
+  }
+  return out;
+}
+
 function setupStores(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
+  activeDb?: string;
   tables?: Record<string, { name: string; schema: string }[]>;
   views?: Record<string, { name: string; schema: string }[]>;
   functions?: Record<
@@ -50,10 +70,11 @@ function setupStores(opts: {
 }) {
   const conns = opts.connections ?? [];
   const active = new Set(opts.active ?? []);
+  const db = opts.activeDb ?? "db1";
   const statuses: Record<string, ConnectionStatus> = {};
   for (const c of conns) {
     statuses[c.id] = active.has(c.id)
-      ? { type: "connected" }
+      ? { type: "connected", activeDb: db }
       : { type: "disconnected" };
   }
   useConnectionStore.setState({
@@ -62,29 +83,38 @@ function setupStores(opts: {
   });
   useSchemaStore.setState({
     schemas: {},
-    tables: Object.fromEntries(
-      Object.entries(opts.tables ?? {}).map(([k, v]) => [
-        k,
-        v.map((t) => ({ ...t, row_count: null })),
-      ]),
+    tables: expandFlat(
+      Object.fromEntries(
+        Object.entries(opts.tables ?? {}).map(([k, v]) => [
+          k,
+          v.map((t) => ({ ...t, row_count: null })),
+        ]),
+      ),
+      db,
     ),
-    views: Object.fromEntries(
-      Object.entries(opts.views ?? {}).map(([k, v]) => [
-        k,
-        v.map((vw) => ({ ...vw, definition: null })),
-      ]),
+    views: expandFlat(
+      Object.fromEntries(
+        Object.entries(opts.views ?? {}).map(([k, v]) => [
+          k,
+          v.map((vw) => ({ ...vw, definition: null })),
+        ]),
+      ),
+      db,
     ),
-    functions: Object.fromEntries(
-      Object.entries(opts.functions ?? {}).map(([k, v]) => [
-        k,
-        v.map((f) => ({
-          ...f,
-          arguments: null,
-          returnType: null,
-          language: null,
-          source: f.source ?? null,
-        })),
-      ]),
+    functions: expandFlat(
+      Object.fromEntries(
+        Object.entries(opts.functions ?? {}).map(([k, v]) => [
+          k,
+          v.map((f) => ({
+            ...f,
+            arguments: null,
+            returnType: null,
+            language: null,
+            source: f.source ?? null,
+          })),
+        ]),
+      ),
+      db,
     ),
     loading: false,
     error: null,

@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
 import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useDocumentStore } from "@stores/documentStore";
 import {
   Tooltip,
@@ -73,7 +72,6 @@ export default function DbSwitcher() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const setActiveDb = useConnectionStore((s) => s.setActiveDb);
-  const clearSchemaForConnection = useSchemaStore((s) => s.clearForConnection);
   const clearDocumentConnection = useDocumentStore((s) => s.clearConnection);
   // When no active tab is open, fall back to the focused connection so the
   // switcher shows the database name immediately after opening the workspace
@@ -179,9 +177,14 @@ export default function DbSwitcher() {
       // Successful path:
       //   1. backend swaps the active sub-pool (PG)
       //   2. `setActiveDb` flips the trigger label
-      //   3. `clearForConnection` drops the schema cache so the sidebar
-      //      reloads against the new DB
-      //   4. close popover + success toast
+      //   3. close popover + success toast
+      // Sprint 263 — schemaStore caches are now `(connId, db)` keyed, so a
+      // DB toggle no longer needs to wipe the whole connection's cache.
+      // The sidebar re-subscribes to the new slot via the workspace key;
+      // an already-populated slot is reused instantly. Document store
+      // still uses a connection-scoped cache, so its clear-on-switch path
+      // remains (until Mongo migrates to the same shape — see Sprint 263
+      // Out of Scope).
       // Failure path: leave the popover open so the inline error chip can
       // render alongside the toast — the user may want to re-try a
       // different db without losing the list.
@@ -197,16 +200,7 @@ export default function DbSwitcher() {
       try {
         await switchActiveDb(activeConn.id, dbName);
         setActiveDb(activeConn.id, dbName);
-        // Paradigm-aware cache clear. RDB sidebar reads through
-        // `schemaStore`; document sidebar reads through `documentStore`.
-        // Calling the wrong store would either no-op (rdb path on a Mongo
-        // connection leaves the collections cache intact, masking the DB
-        // swap) or wipe unrelated state. Search/Kv don't reach this branch
-        // because the trigger is `aria-disabled` for those paradigms
-        // (see `enabled` check at the top of the component).
-        if (paradigm === "rdb") {
-          clearSchemaForConnection(activeConn.id);
-        } else if (paradigm === "document") {
+        if (paradigm === "document") {
           clearDocumentConnection(activeConn.id);
         }
         setOpen(false);
@@ -216,14 +210,7 @@ export default function DbSwitcher() {
         toast.error(`Failed to switch DB: ${message}`);
       }
     },
-    [
-      activeConn,
-      activeDb,
-      paradigm,
-      setActiveDb,
-      clearSchemaForConnection,
-      clearDocumentConnection,
-    ],
+    [activeConn, activeDb, paradigm, setActiveDb, clearDocumentConnection],
   );
 
   // Read-only fallback — Search/Kv paradigms, no connection, or

@@ -559,7 +559,12 @@ describe("StructurePanel", () => {
   // -----------------------------------------------------------------------
   it("resets editing state when table prop changes", async () => {
     const { rerender } = render(
-      <StructurePanel connectionId="conn-1" table="users" schema="public" />,
+      <StructurePanel
+        connectionId="conn-1"
+        database="db-1"
+        table="users"
+        schema="public"
+      />,
     );
 
     await act(async () => {
@@ -576,7 +581,12 @@ describe("StructurePanel", () => {
     // Rerender with a different table
     await act(async () => {
       rerender(
-        <StructurePanel connectionId="conn-1" table="orders" schema="public" />,
+        <StructurePanel
+          connectionId="conn-1"
+          database="db-1"
+          table="orders"
+          schema="public"
+        />,
       );
     });
 

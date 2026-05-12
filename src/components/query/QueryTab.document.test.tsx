@@ -589,7 +589,10 @@ describe("QueryTab — document", () => {
     // on a real match, and the store starts empty so a non-empty value
     // would survive. We seed a sentinel before the click.
     useSchemaStore.setState((s) => ({
-      schemas: { ...s.schemas, conn1: [{ name: "public" }] },
+      schemas: {
+        ...s.schemas,
+        conn1: { ...(s.schemas.conn1 ?? {}), db1: [{ name: "public" }] },
+      },
     }));
     expect(useSchemaStore.getState().schemas.conn1).toBeDefined();
   });

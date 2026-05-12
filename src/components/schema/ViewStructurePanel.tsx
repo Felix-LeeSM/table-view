@@ -7,6 +7,7 @@ import { Button } from "@components/ui/button";
 
 interface ViewStructurePanelProps {
   connectionId: string;
+  database: string;
   view: string;
   schema: string;
 }
@@ -20,6 +21,7 @@ const SUB_TABS: { key: ViewSubTab; label: string }[] = [
 
 export default function ViewStructurePanel({
   connectionId,
+  database,
   view,
   schema,
 }: ViewStructurePanelProps) {
@@ -36,10 +38,15 @@ export default function ViewStructurePanel({
     setError(null);
     try {
       if (activeSubTab === "columns") {
-        const cols = await getViewColumns(connectionId, schema, view);
+        const cols = await getViewColumns(connectionId, database, schema, view);
         setColumns(cols);
       } else {
-        const def = await getViewDefinition(connectionId, schema, view);
+        const def = await getViewDefinition(
+          connectionId,
+          database,
+          schema,
+          view,
+        );
         setDefinition(def);
       }
     } catch (e) {
@@ -48,6 +55,7 @@ export default function ViewStructurePanel({
     setLoading(false);
   }, [
     connectionId,
+    database,
     view,
     schema,
     activeSubTab,

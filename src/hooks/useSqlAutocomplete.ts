@@ -130,11 +130,15 @@ function identifierNeedsQuoting(name: string): boolean {
  * round-trips through case-sensitive catalogs intact.
  *
  * @param connectionId The active connection identifier.
+ * @param db The active database name. Sprint 263 — schemaStore caches are
+ *           now keyed by `(connId, db)`, so the namespace is scoped to a
+ *           single workspace's catalog.
  * @param arg Either a legacy `Record<string, string[]>` override or
  *            the structured `UseSqlAutocompleteOptions` shape.
  */
 export function useSqlAutocomplete(
   connectionId: string,
+  db: string,
   arg?: AutocompleteArg,
 ): SQLNamespace {
   const tables = useSchemaStore((s) => s.tables);
@@ -174,24 +178,20 @@ export function useSqlAutocomplete(
       }
     }
 
-    // Build a lookup of cached columns for *this* connection, indexed by
-    // both unqualified table name and schema-qualified name.
+    // Build a lookup of cached columns for *this* connection + db, indexed
+    // by both unqualified table name and schema-qualified name.
     const cachedColumnsByName: Record<
       string,
       Record<string, SQLNamespace>
     > = {};
-    const prefix = `${connectionId}:`;
-    for (const [key, columns] of Object.entries(columnsCache)) {
-      if (!key.startsWith(prefix)) continue;
-      const rest = key.slice(prefix.length); // "schema:table"
-      const sepIdx = rest.indexOf(":");
-      if (sepIdx === -1) continue;
-      const schemaName = rest.slice(0, sepIdx);
-      const tableName = rest.slice(sepIdx + 1);
-      const colNs: Record<string, SQLNamespace> = {};
-      for (const c of columns) colNs[c.name] = {};
-      cachedColumnsByName[tableName] = colNs;
-      cachedColumnsByName[`${schemaName}.${tableName}`] = colNs;
+    const columnsByDb = columnsCache[connectionId]?.[db] ?? {};
+    for (const [schemaName, tablesInSchema] of Object.entries(columnsByDb)) {
+      for (const [tableName, columns] of Object.entries(tablesInSchema)) {
+        const colNs: Record<string, SQLNamespace> = {};
+        for (const c of columns) colNs[c.name] = {};
+        cachedColumnsByName[tableName] = colNs;
+        cachedColumnsByName[`${schemaName}.${tableName}`] = colNs;
+      }
     }
 
     // Helper: pick columns for a given object name. Explicit `tableColumns`
@@ -263,9 +263,8 @@ export function useSqlAutocomplete(
     };
 
     // Tables
-    for (const [key, tableList] of Object.entries(tables)) {
-      if (!key.startsWith(`${connectionId}:`)) continue;
-      const schemaName = key.slice(connectionId.length + 1);
+    const tablesByDb = tables[connectionId]?.[db] ?? {};
+    for (const [schemaName, tableList] of Object.entries(tablesByDb)) {
       for (const table of tableList) {
         const qualified = `${schemaName}.${table.name}`;
         const colNs = pickColumns(table.name, qualified);
@@ -277,9 +276,8 @@ export function useSqlAutocomplete(
     }
 
     // Views — exposed identically so `SELECT * FROM active_users` autocompletes
-    for (const [key, viewList] of Object.entries(views)) {
-      if (!key.startsWith(`${connectionId}:`)) continue;
-      const schemaName = key.slice(connectionId.length + 1);
+    const viewsByDb = views[connectionId]?.[db] ?? {};
+    for (const [schemaName, viewList] of Object.entries(viewsByDb)) {
       for (const v of viewList) {
         const qualified = `${schemaName}.${v.name}`;
         const colNs = pickColumns(v.name, qualified);
@@ -297,6 +295,7 @@ export function useSqlAutocomplete(
     views,
     columnsCache,
     connectionId,
+    db,
     tableColumns,
     dialect,
     dbType,

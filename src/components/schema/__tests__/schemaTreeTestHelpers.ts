@@ -5,10 +5,25 @@
 // the original mega-test verbatim — no behaviour change. Each axis file
 // imports these and re-applies them in its own `beforeEach` so worker
 // isolation + `vi.clearAllMocks()` keep state from leaking across cases.
+//
+// Sprint 263 (2026-05-12) — schemaStore cache shape changed from
+// flat `{ "conn:schema": [...] }` to nested `{ conn: { db: { schema: [...] } } }`
+// per ADR 0027. To keep the existing axis tests untouched, the helper
+// auto-translates the legacy seed shapes (e.g. `schemas: { conn1: [...] }`
+// or `tables: { "conn1:public": [...] }`) into the new nested form under
+// the default db sentinel `"db1"`. New tests can pass the nested shape
+// directly — passthrough leaves it intact.
 import { vi } from "vitest";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import type {
+  ColumnInfo,
+  FunctionInfo,
+  SchemaInfo,
+  TableInfo,
+  ViewInfo,
+} from "@/types/schema";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,7 +35,114 @@ export const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 export const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 export const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
 
+// Default db sentinel — matches the `activeStatuses.conn1.activeDb` seeded
+// by `resetStores` below so SchemaTree's `useWorkspaceKeyForConnection`
+// resolves to the same workspace bucket the helper writes into.
+const DEFAULT_DB = "db1";
+
+function isFlatSchemasShape(
+  value: unknown,
+): value is Record<string, SchemaInfo[]> {
+  if (typeof value !== "object" || value === null) return false;
+  for (const v of Object.values(value as Record<string, unknown>)) {
+    if (Array.isArray(v)) return true;
+    // Nested shape: every value is itself a Record<db, SchemaInfo[]>.
+    if (typeof v !== "object" || v === null) return false;
+  }
+  return false;
+}
+
+function translateSchemas(
+  raw: unknown,
+): Record<string, Record<string, SchemaInfo[]>> {
+  if (!raw || typeof raw !== "object") return {};
+  if (isFlatSchemasShape(raw)) {
+    const out: Record<string, Record<string, SchemaInfo[]>> = {};
+    for (const [connId, list] of Object.entries(
+      raw as Record<string, SchemaInfo[]>,
+    )) {
+      out[connId] = { [DEFAULT_DB]: list };
+    }
+    return out;
+  }
+  return raw as Record<string, Record<string, SchemaInfo[]>>;
+}
+
+type FlatBySchema<V> = Record<string, V[]>;
+type NestedBySchema<V> = Record<string, Record<string, Record<string, V[]>>>;
+
+function isFlatColonShape(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    // Flat shape keys are `"conn:schema"` (1 colon). Nested-shape outer
+    // keys are bare connection IDs without colons.
+    if (key.includes(":")) return true;
+  }
+  return false;
+}
+
+function translateBySchema<V>(raw: unknown): NestedBySchema<V> {
+  if (!raw || typeof raw !== "object") return {};
+  if (isFlatColonShape(raw)) {
+    const out: NestedBySchema<V> = {};
+    for (const [composite, list] of Object.entries(raw as FlatBySchema<V>)) {
+      const [connId, schema] = composite.split(":");
+      if (!connId || !schema) continue;
+      out[connId] ??= {};
+      out[connId]![DEFAULT_DB] ??= {};
+      out[connId]![DEFAULT_DB]![schema] = list;
+    }
+    return out;
+  }
+  return raw as NestedBySchema<V>;
+}
+
+type FlatColumnsCache = Record<string, ColumnInfo[]>;
+type NestedColumnsCache = Record<
+  string,
+  Record<string, Record<string, Record<string, ColumnInfo[]>>>
+>;
+
+function translateColumnsCache(raw: unknown): NestedColumnsCache {
+  if (!raw || typeof raw !== "object") return {};
+  // Flat shape: `"conn:schema:table"` (2 colons).
+  if (isFlatColonShape(raw)) {
+    const out: NestedColumnsCache = {};
+    for (const [composite, list] of Object.entries(raw as FlatColumnsCache)) {
+      const parts = composite.split(":");
+      if (parts.length !== 3) continue;
+      const [connId, schema, table] = parts;
+      if (!connId || !schema || !table) continue;
+      out[connId] ??= {};
+      out[connId]![DEFAULT_DB] ??= {};
+      out[connId]![DEFAULT_DB]![schema] ??= {};
+      out[connId]![DEFAULT_DB]![schema]![table] = list;
+    }
+    return out;
+  }
+  return raw as NestedColumnsCache;
+}
+
 export function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
+  const translated: Record<string, unknown> = { ...overrides };
+  if ("schemas" in overrides) {
+    translated.schemas = translateSchemas(overrides.schemas);
+  }
+  if ("tables" in overrides) {
+    translated.tables = translateBySchema<TableInfo>(overrides.tables);
+  }
+  if ("views" in overrides) {
+    translated.views = translateBySchema<ViewInfo>(overrides.views);
+  }
+  if ("functions" in overrides) {
+    translated.functions = translateBySchema<FunctionInfo>(overrides.functions);
+  }
+  if ("tableColumnsCache" in overrides) {
+    translated.tableColumnsCache = translateColumnsCache(
+      overrides.tableColumnsCache,
+    );
+  }
+
   useSchemaStore.setState({
     schemas: {},
     tables: {},
@@ -28,7 +150,7 @@ export function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
     functions: {},
     loading: false,
     error: null,
-    ...overrides,
+    ...translated,
     // Preserve mocked actions
     loadSchemas: mockLoadSchemas,
     loadTables: mockLoadTables,

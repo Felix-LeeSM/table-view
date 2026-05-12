@@ -102,6 +102,7 @@ function renderDialog(
   const view = render(
     <DropTableDialog
       connectionId="conn-1"
+      database="db-1"
       schemaName={schemaName}
       tableName={tableName}
       open

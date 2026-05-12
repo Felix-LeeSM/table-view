@@ -30,7 +30,61 @@ const mockLoadViews = vi.fn().mockResolvedValue(undefined);
 const mockLoadFunctions = vi.fn().mockResolvedValue(undefined);
 const mockPrefetchSchemaColumns = vi.fn().mockResolvedValue(undefined);
 
+// Sprint 263 — translate flat-key seeds into the new `(connId, db)`-nested
+// cache shape under `db1` and auto-seed activeStatuses for any conn id
+// referenced in the schemas overlay so SchemaTree's workspace key resolves.
+const DEFAULT_DB = "db1";
+function translateFlatSeeds(
+  overrides: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...overrides };
+  if ("schemas" in overrides && overrides.schemas) {
+    const schemas = overrides.schemas as Record<string, unknown>;
+    const sample = Object.values(schemas)[0];
+    if (Array.isArray(sample)) {
+      const next: Record<string, Record<string, unknown>> = {};
+      for (const [cid, list] of Object.entries(schemas)) {
+        next[cid] = { [DEFAULT_DB]: list };
+      }
+      out.schemas = next;
+    }
+  }
+  for (const axis of ["tables", "views", "functions"] as const) {
+    if (axis in overrides && overrides[axis]) {
+      const raw = overrides[axis] as Record<string, unknown>;
+      const keys = Object.keys(raw);
+      if (keys.some((k) => k.includes(":"))) {
+        const next: Record<
+          string,
+          Record<string, Record<string, unknown>>
+        > = {};
+        for (const [composite, list] of Object.entries(raw)) {
+          const [cid, schema] = composite.split(":");
+          if (!cid || !schema) continue;
+          next[cid] ??= {};
+          next[cid]![DEFAULT_DB] ??= {};
+          next[cid]![DEFAULT_DB]![schema] = list;
+        }
+        out[axis] = next;
+      }
+    }
+  }
+  return out;
+}
+function seedActiveStatusesFor(connIds: Iterable<string>) {
+  useConnectionStore.setState((s) => {
+    const next = { ...s.activeStatuses };
+    for (const id of connIds) {
+      next[id] ??= { type: "connected", activeDb: DEFAULT_DB };
+    }
+    return { activeStatuses: next };
+  });
+}
 function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
+  const translated = translateFlatSeeds(overrides);
+  if (translated.schemas) {
+    seedActiveStatusesFor(Object.keys(translated.schemas as object));
+  }
   useSchemaStore.setState({
     schemas: {},
     tables: {},
@@ -38,7 +92,7 @@ function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
     functions: {},
     loading: false,
     error: null,
-    ...overrides,
+    ...translated,
     loadSchemas: mockLoadSchemas,
     loadTables: mockLoadTables,
     loadViews: mockLoadViews,

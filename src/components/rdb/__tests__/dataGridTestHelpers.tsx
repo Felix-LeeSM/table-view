@@ -167,6 +167,12 @@ export function renderDataGrid(
   props: Partial<Parameters<typeof DataGrid>[0]> = {},
 ) {
   return render(
-    <DataGrid connectionId="conn1" table="users" schema="public" {...props} />,
+    <DataGrid
+      connectionId="conn1"
+      database="db1"
+      table="users"
+      schema="public"
+      {...props}
+    />,
   );
 }

@@ -22,17 +22,19 @@ import { useSchemaStore } from "@stores/schemaStore";
  *   only when the columns cache is empty for the key. Returns the
  *   promise so the caller can flip a per-row loading flag around it.
  */
-export function useFkReferencePicker(connectionId: string) {
+export function useFkReferencePicker(connectionId: string, database: string) {
   const ensureTablesLoaded = useCallback(
     (refSchema: string): Promise<void> => {
       const trimmed = refSchema.trim();
       if (trimmed.length === 0) return Promise.resolve();
-      const key = `${connectionId}:${trimmed}`;
-      const cached = useSchemaStore.getState().tables[key];
+      const cached =
+        useSchemaStore.getState().tables[connectionId]?.[database]?.[trimmed];
       if (cached && cached.length > 0) return Promise.resolve();
-      return useSchemaStore.getState().loadTables(connectionId, trimmed);
+      return useSchemaStore
+        .getState()
+        .loadTables(connectionId, database, trimmed);
     },
-    [connectionId],
+    [connectionId, database],
   );
 
   const loadColumnsIfMissing = useCallback(
@@ -40,13 +42,15 @@ export function useFkReferencePicker(connectionId: string) {
       const schema = refSchema.trim();
       const table = refTable.trim();
       if (schema.length === 0 || table.length === 0) return false;
-      const cacheKey = `${connectionId}:${schema}:${table}`;
-      const cached = useSchemaStore.getState().tableColumnsCache[cacheKey];
+      const cached =
+        useSchemaStore.getState().tableColumnsCache[connectionId]?.[database]?.[
+          schema
+        ]?.[table];
       if (cached && cached.length > 0) return false;
       try {
         await useSchemaStore
           .getState()
-          .getTableColumns(connectionId, table, schema);
+          .getTableColumns(connectionId, database, table, schema);
         return true;
       } catch {
         // Best-effort lazy load — failures fall through to the body's
@@ -54,7 +58,7 @@ export function useFkReferencePicker(connectionId: string) {
         return false;
       }
     },
-    [connectionId],
+    [connectionId, database],
   );
 
   return { ensureTablesLoaded, loadColumnsIfMissing };

@@ -191,6 +191,8 @@ export interface BuildVisibleRowsArgs {
   expandedSchemas: Set<string>;
   expandedCategories: Record<string, Set<CategoryKey>>;
   loadingTables: ReadonlySet<string>;
+  // Sprint 263 — per-`(connId, db)` schema slice already sliced by the
+  // caller. Keys are bare schema names; no `connId:` prefix.
   tables: Record<string, TableInfo[]>;
   views: Record<string, ViewInfo[]>;
   functions: Record<string, FunctionInfo[]>;
@@ -216,7 +218,6 @@ export function getVisibleRows({
   tables,
   views,
   functions,
-  connectionId,
   selectedNodeId,
   activeSchema,
   activeTable,
@@ -232,8 +233,7 @@ export function getVisibleRows({
     const schemaId = nodeIdToString({ type: "schema", schema: schema.name });
     const isExpanded = expandedSchemas.has(schema.name);
     const isLoadingTables = loadingTables.has(schema.name);
-    const tableKey = `${connectionId}:${schema.name}`;
-    const schemaTables: TableInfo[] = tables[tableKey] ?? [];
+    const schemaTables: TableInfo[] = tables[schema.name] ?? [];
 
     rows.push({
       kind: "schema",
@@ -265,9 +265,8 @@ export function getVisibleRows({
       });
       const isCatSelected = selectedNodeId === categoryId;
 
-      const schemaKey = `${connectionId}:${schema.name}`;
-      const schemaViews: ViewInfo[] = views[schemaKey] ?? [];
-      const schemaFunctions: FunctionInfo[] = functions[schemaKey] ?? [];
+      const schemaViews: ViewInfo[] = views[schema.name] ?? [];
+      const schemaFunctions: FunctionInfo[] = functions[schema.name] ?? [];
 
       const isTableCat = cat.key === "tables";
       const isViewCat = cat.key === "views";

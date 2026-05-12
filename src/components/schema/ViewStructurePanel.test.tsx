@@ -49,6 +49,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -76,6 +77,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -95,6 +97,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -122,6 +125,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="empty_view"
         />,
@@ -143,6 +147,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -168,6 +173,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -184,6 +190,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -217,6 +224,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -246,6 +254,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,
@@ -285,6 +294,7 @@ describe("ViewStructurePanel", () => {
       render(
         <ViewStructurePanel
           connectionId="conn1"
+          database="db1"
           schema="public"
           view="active_users"
         />,

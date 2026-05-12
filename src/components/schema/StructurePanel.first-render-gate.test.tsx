@@ -96,7 +96,12 @@ beforeEach(() => {
 
 function renderPanel() {
   return render(
-    <StructurePanel connectionId="conn-1" table="users" schema="public" />,
+    <StructurePanel
+      connectionId="conn-1"
+      database="db-1"
+      table="users"
+      schema="public"
+    />,
   );
 }
 

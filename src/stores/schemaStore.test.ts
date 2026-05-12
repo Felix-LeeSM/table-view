@@ -169,33 +169,33 @@ describe("schemaStore", () => {
   });
 
   it("loads schemas from backend", async () => {
-    await useSchemaStore.getState().loadSchemas("conn1");
+    await useSchemaStore.getState().loadSchemas("conn1", "db1");
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn1"]).toHaveLength(2);
-    expect(state.schemas["conn1"]![0]!.name).toBe("public");
-    expect(state.schemas["conn1"]![1]!.name).toBe("test_schema");
+    expect(state.schemas.conn1?.db1).toHaveLength(2);
+    expect(state.schemas.conn1?.db1![0]!.name).toBe("public");
+    expect(state.schemas.conn1?.db1![1]!.name).toBe("test_schema");
   });
 
   it("loads tables for schema", async () => {
-    await useSchemaStore.getState().loadTables("conn1", "public");
+    await useSchemaStore.getState().loadTables("conn1", "db1", "public");
     const state = useSchemaStore.getState();
-    const key = "conn1:public";
-    expect(state.tables[key]).toHaveLength(2);
-    expect(state.tables[key]![0]!.name).toBe("users");
-    expect(state.tables[key]![0]!.row_count).toBe(42);
+    const list = state.tables.conn1?.db1?.public;
+    expect(list).toHaveLength(2);
+    expect(list![0]!.name).toBe("users");
+    expect(list![0]!.row_count).toBe(42);
   });
 
   it("clears schema data", async () => {
     // Load some data first
-    await useSchemaStore.getState().loadSchemas("conn1");
-    await useSchemaStore.getState().loadTables("conn1", "public");
+    await useSchemaStore.getState().loadSchemas("conn1", "db1");
+    await useSchemaStore.getState().loadTables("conn1", "db1", "public");
 
     // Clear
     useSchemaStore.getState().clearSchema("conn1");
 
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn1"]).toBeUndefined();
-    expect(state.tables["conn1:public"]).toBeUndefined();
+    expect(state.schemas.conn1?.db1).toBeUndefined();
+    expect(state.tables.conn1?.db1?.public).toBeUndefined();
   });
 
   it("handles load error", async () => {
@@ -204,7 +204,7 @@ describe("schemaStore", () => {
       new Error("Connection refused"),
     );
 
-    await useSchemaStore.getState().loadSchemas("conn1");
+    await useSchemaStore.getState().loadSchemas("conn1", "db1");
     const state = useSchemaStore.getState();
     expect(state.error).toContain("Connection refused");
   });
@@ -213,7 +213,7 @@ describe("schemaStore", () => {
     const { getTableColumns } = await import("@lib/tauri");
     const columns = await useSchemaStore
       .getState()
-      .getTableColumns("conn1", "users", "public");
+      .getTableColumns("conn1", "db1", "users", "public");
 
     expect(getTableColumns).toHaveBeenCalledWith("conn1", "users", "public");
     expect(columns).toHaveLength(1);
@@ -222,36 +222,39 @@ describe("schemaStore", () => {
   });
 
   it("getTableColumns populates tableColumnsCache for autocomplete", async () => {
-    await useSchemaStore.getState().getTableColumns("conn1", "users", "public");
+    await useSchemaStore
+      .getState()
+      .getTableColumns("conn1", "db1", "users", "public");
     const state = useSchemaStore.getState();
-    expect(state.tableColumnsCache["conn1:public:users"]).toBeDefined();
-    expect(state.tableColumnsCache["conn1:public:users"]).toHaveLength(1);
-    expect(state.tableColumnsCache["conn1:public:users"]![0]!.name).toBe("id");
+    expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeDefined();
+    expect(state.tableColumnsCache.conn1?.db1?.public?.users).toHaveLength(1);
+    expect(state.tableColumnsCache.conn1?.db1?.public?.users![0]!.name).toBe(
+      "id",
+    );
   });
 
   it("clearSchema also drops cached columns for that connection", async () => {
     useSchemaStore.setState({
       tableColumnsCache: {
-        "conn1:public:users": [],
-        "conn1:public:orders": [],
-        "conn2:public:items": [],
+        conn1: { db1: { public: { users: [], orders: [] } } },
+        conn2: { db1: { public: { items: [] } } },
       },
     });
 
     useSchemaStore.getState().clearSchema("conn1");
 
     const state = useSchemaStore.getState();
-    expect(state.tableColumnsCache["conn1:public:users"]).toBeUndefined();
-    expect(state.tableColumnsCache["conn1:public:orders"]).toBeUndefined();
+    expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeUndefined();
+    expect(state.tableColumnsCache.conn1?.db1?.public?.orders).toBeUndefined();
     // Other connection preserved
-    expect(state.tableColumnsCache["conn2:public:items"]).toBeDefined();
+    expect(state.tableColumnsCache.conn2?.db1?.public?.items).toBeDefined();
   });
 
   it("delegates queryTableData", async () => {
     const { queryTableData } = await import("@lib/tauri");
     const data = await useSchemaStore
       .getState()
-      .queryTableData("conn1", "users", "public", 1, 50, "id");
+      .queryTableData("conn1", "db1", "users", "public", 1, 50, "id");
 
     expect(queryTableData).toHaveBeenCalledWith(
       "conn1",
@@ -271,7 +274,7 @@ describe("schemaStore", () => {
     const { getTableIndexes } = await import("@lib/tauri");
     const indexes = await useSchemaStore
       .getState()
-      .getTableIndexes("conn1", "users", "public");
+      .getTableIndexes("conn1", "db1", "users", "public");
 
     expect(getTableIndexes).toHaveBeenCalledWith("conn1", "users", "public");
     expect(indexes).toHaveLength(1);
@@ -283,7 +286,7 @@ describe("schemaStore", () => {
     const { getTableConstraints } = await import("@lib/tauri");
     const constraints = await useSchemaStore
       .getState()
-      .getTableConstraints("conn1", "users", "public");
+      .getTableConstraints("conn1", "db1", "users", "public");
 
     expect(getTableConstraints).toHaveBeenCalledWith(
       "conn1",
@@ -307,7 +310,16 @@ describe("schemaStore", () => {
 
     await useSchemaStore
       .getState()
-      .queryTableData("conn1", "users", "public", 1, 50, undefined, filters);
+      .queryTableData(
+        "conn1",
+        "db1",
+        "users",
+        "public",
+        1,
+        50,
+        undefined,
+        filters,
+      );
 
     expect(queryTableData).toHaveBeenCalledWith(
       "conn1",
@@ -328,6 +340,7 @@ describe("schemaStore", () => {
       .getState()
       .queryTableData(
         "conn1",
+        "db1",
         "users",
         "public",
         1,
@@ -358,64 +371,86 @@ describe("schemaStore", () => {
     // cache. date 2026-05-02.
     useSchemaStore.setState({
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
-        "conn1:private": [{ name: "secrets", schema: "private", row_count: 5 }],
-        "conn2:public": [{ name: "orders", schema: "public", row_count: 10 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+            private: [{ name: "secrets", schema: "private", row_count: 5 }],
+          },
+        },
+        conn2: {
+          db1: {
+            public: [{ name: "orders", schema: "public", row_count: 10 }],
+          },
+        },
       },
       views: {
-        "conn1:public": [
-          { name: "v_users", schema: "public", definition: null },
-        ],
-        "conn1:private": [
-          { name: "v_secrets", schema: "private", definition: null },
-        ],
+        conn1: {
+          db1: {
+            public: [{ name: "v_users", schema: "public", definition: null }],
+            private: [
+              { name: "v_secrets", schema: "private", definition: null },
+            ],
+          },
+        },
       },
       functions: {
-        "conn1:public": [
-          {
-            name: "fn_one",
-            schema: "public",
-            arguments: null,
-            returnType: null,
-            language: null,
-            source: null,
-            kind: "function",
+        conn1: {
+          db1: {
+            public: [
+              {
+                name: "fn_one",
+                schema: "public",
+                arguments: null,
+                returnType: null,
+                language: null,
+                source: null,
+                kind: "function",
+              },
+            ],
           },
-        ],
+        },
       },
     });
 
-    useSchemaStore.getState().evictSchemaForName("conn1", "public");
+    useSchemaStore.getState().evictSchemaForName("conn1", "db1", "public");
 
     const state = useSchemaStore.getState();
-    expect(state.tables["conn1:public"]).toBeUndefined();
-    expect(state.views["conn1:public"]).toBeUndefined();
-    expect(state.functions["conn1:public"]).toBeUndefined();
+    expect(state.tables.conn1?.db1?.public).toBeUndefined();
+    expect(state.views.conn1?.db1?.public).toBeUndefined();
+    expect(state.functions.conn1?.db1?.public).toBeUndefined();
     // Sibling schema and other connection are preserved.
-    expect(state.tables["conn1:private"]).toHaveLength(1);
-    expect(state.views["conn1:private"]).toHaveLength(1);
-    expect(state.tables["conn2:public"]).toHaveLength(1);
+    expect(state.tables.conn1?.db1?.private).toHaveLength(1);
+    expect(state.views.conn1?.db1?.private).toHaveLength(1);
+    expect(state.tables.conn2?.db1?.public).toHaveLength(1);
   });
 
   it("clearSchema removes connection-related tables", async () => {
     // Set up tables for multiple schemas of same connection
     useSchemaStore.setState({
-      schemas: { conn1: [{ name: "public" }] },
+      schemas: { conn1: { db1: [{ name: "public" }] } },
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
-        "conn1:private": [{ name: "secrets", schema: "private", row_count: 5 }],
-        "conn2:public": [{ name: "orders", schema: "public", row_count: 10 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+            private: [{ name: "secrets", schema: "private", row_count: 5 }],
+          },
+        },
+        conn2: {
+          db1: {
+            public: [{ name: "orders", schema: "public", row_count: 10 }],
+          },
+        },
       },
     });
 
     useSchemaStore.getState().clearSchema("conn1");
 
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn1"]).toBeUndefined();
-    expect(state.tables["conn1:public"]).toBeUndefined();
-    expect(state.tables["conn1:private"]).toBeUndefined();
+    expect(state.schemas.conn1?.db1).toBeUndefined();
+    expect(state.tables.conn1?.db1?.public).toBeUndefined();
+    expect(state.tables.conn1?.db1?.private).toBeUndefined();
     // Other connection should be unaffected
-    expect(state.tables["conn2:public"]).toHaveLength(1);
+    expect(state.tables.conn2?.db1?.public).toHaveLength(1);
   });
 
   it("delegates executeQuery", async () => {
@@ -448,7 +483,7 @@ describe("schemaStore", () => {
       new Error("Schema not found"),
     );
 
-    await useSchemaStore.getState().loadTables("conn1", "missing");
+    await useSchemaStore.getState().loadTables("conn1", "db1", "missing");
     const state = useSchemaStore.getState();
     expect(state.error).toContain("Schema not found");
   });
@@ -462,7 +497,7 @@ describe("schemaStore", () => {
     (listSchemas as ReturnType<typeof vi.fn>).mockReturnValueOnce(loadPromise);
 
     // Start loading
-    const call = useSchemaStore.getState().loadSchemas("conn1");
+    const call = useSchemaStore.getState().loadSchemas("conn1", "db1");
     expect(useSchemaStore.getState().loading).toBe(true);
 
     // Resolve
@@ -477,7 +512,7 @@ describe("schemaStore", () => {
       new Error("fail"),
     );
 
-    await useSchemaStore.getState().loadSchemas("conn1");
+    await useSchemaStore.getState().loadSchemas("conn1", "db1");
     expect(useSchemaStore.getState().loading).toBe(false);
     expect(useSchemaStore.getState().error).toContain("fail");
   });
@@ -490,7 +525,7 @@ describe("schemaStore", () => {
     const { listTables } = await import("@lib/tauri");
     (listTables as ReturnType<typeof vi.fn>).mockReturnValueOnce(loadPromise);
 
-    const call = useSchemaStore.getState().loadTables("conn1", "public");
+    const call = useSchemaStore.getState().loadTables("conn1", "db1", "public");
     expect(useSchemaStore.getState().loading).toBe(true);
 
     resolveLoad!([{ name: "users", schema: "public", row_count: 1 }]);
@@ -499,25 +534,25 @@ describe("schemaStore", () => {
   });
 
   it("loads views for schema", async () => {
-    await useSchemaStore.getState().loadViews("conn1", "public");
+    await useSchemaStore.getState().loadViews("conn1", "db1", "public");
     const state = useSchemaStore.getState();
-    const key = "conn1:public";
-    expect(state.views[key]).toHaveLength(1);
-    expect(state.views[key]![0]!.name).toBe("active_users");
-    expect(state.views[key]![0]!.definition).toBe(
+    const list = state.views.conn1?.db1?.public;
+    expect(list).toHaveLength(1);
+    expect(list![0]!.name).toBe("active_users");
+    expect(list![0]!.definition).toBe(
       "SELECT * FROM users WHERE active = true",
     );
   });
 
   it("loads functions for schema", async () => {
-    await useSchemaStore.getState().loadFunctions("conn1", "public");
+    await useSchemaStore.getState().loadFunctions("conn1", "db1", "public");
     const state = useSchemaStore.getState();
-    const key = "conn1:public";
-    expect(state.functions[key]).toHaveLength(2);
-    expect(state.functions[key]![0]!.name).toBe("calculate_total");
-    expect(state.functions[key]![0]!.kind).toBe("function");
-    expect(state.functions[key]![1]!.name).toBe("do_migration");
-    expect(state.functions[key]![1]!.kind).toBe("procedure");
+    const list = state.functions.conn1?.db1?.public;
+    expect(list).toHaveLength(2);
+    expect(list![0]!.name).toBe("calculate_total");
+    expect(list![0]!.kind).toBe("function");
+    expect(list![1]!.name).toBe("do_migration");
+    expect(list![1]!.kind).toBe("procedure");
   });
 
   it("handles loadViews error", async () => {
@@ -526,7 +561,7 @@ describe("schemaStore", () => {
       new Error("Views not accessible"),
     );
 
-    await useSchemaStore.getState().loadViews("conn1", "public");
+    await useSchemaStore.getState().loadViews("conn1", "db1", "public");
     const state = useSchemaStore.getState();
     expect(state.error).toContain("Views not accessible");
   });
@@ -537,51 +572,67 @@ describe("schemaStore", () => {
       new Error("Functions not accessible"),
     );
 
-    await useSchemaStore.getState().loadFunctions("conn1", "public");
+    await useSchemaStore.getState().loadFunctions("conn1", "db1", "public");
     const state = useSchemaStore.getState();
     expect(state.error).toContain("Functions not accessible");
   });
 
   it("clearSchema removes views and functions for connection", async () => {
     useSchemaStore.setState({
-      schemas: { conn1: [{ name: "public" }] },
+      schemas: { conn1: { db1: [{ name: "public" }] } },
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: 1 }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: 1 }],
+          },
+        },
       },
       views: {
-        "conn1:public": [
-          { name: "active_users", schema: "public", definition: "SELECT 1" },
-        ],
+        conn1: {
+          db1: {
+            public: [
+              {
+                name: "active_users",
+                schema: "public",
+                definition: "SELECT 1",
+              },
+            ],
+          },
+        },
       },
       functions: {
-        "conn1:public": [
-          {
-            name: "calc",
-            schema: "public",
-            arguments: null,
-            returnType: null,
-            language: "sql",
-            source: "SELECT 1",
-            kind: "function",
+        conn1: {
+          db1: {
+            public: [
+              {
+                name: "calc",
+                schema: "public",
+                arguments: null,
+                returnType: null,
+                language: "sql",
+                source: "SELECT 1",
+                kind: "function",
+              },
+            ],
           },
-        ],
+        },
       },
     });
 
     useSchemaStore.getState().clearSchema("conn1");
 
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn1"]).toBeUndefined();
-    expect(state.tables["conn1:public"]).toBeUndefined();
-    expect(state.views["conn1:public"]).toBeUndefined();
-    expect(state.functions["conn1:public"]).toBeUndefined();
+    expect(state.schemas.conn1?.db1).toBeUndefined();
+    expect(state.tables.conn1?.db1?.public).toBeUndefined();
+    expect(state.views.conn1?.db1?.public).toBeUndefined();
+    expect(state.functions.conn1?.db1?.public).toBeUndefined();
   });
 
   it("delegates getViewColumns", async () => {
     const { getViewColumns } = await import("@lib/tauri");
     const columns = await useSchemaStore
       .getState()
-      .getViewColumns("conn1", "public", "active_users");
+      .getViewColumns("conn1", "db1", "public", "active_users");
 
     expect(getViewColumns).toHaveBeenCalledWith(
       "conn1",
@@ -598,7 +649,7 @@ describe("schemaStore", () => {
     const { getViewDefinition } = await import("@lib/tauri");
     const sql = await useSchemaStore
       .getState()
-      .getViewDefinition("conn1", "public", "active_users");
+      .getViewDefinition("conn1", "db1", "public", "active_users");
 
     expect(getViewDefinition).toHaveBeenCalledWith(
       "conn1",
@@ -617,49 +668,65 @@ describe("schemaStore", () => {
     await expect(
       useSchemaStore
         .getState()
-        .getViewColumns("conn1", "public", "missing_view"),
+        .getViewColumns("conn1", "db1", "public", "missing_view"),
     ).rejects.toThrow("View does not exist");
   });
 
   it("clearSchema only removes matching connection views/functions", async () => {
     useSchemaStore.setState({
       views: {
-        "conn1:public": [{ name: "v1", schema: "public", definition: null }],
-        "conn2:public": [{ name: "v2", schema: "public", definition: null }],
+        conn1: {
+          db1: {
+            public: [{ name: "v1", schema: "public", definition: null }],
+          },
+        },
+        conn2: {
+          db1: {
+            public: [{ name: "v2", schema: "public", definition: null }],
+          },
+        },
       },
       functions: {
-        "conn1:public": [
-          {
-            name: "f1",
-            schema: "public",
-            arguments: null,
-            returnType: null,
-            language: "sql",
-            source: null,
-            kind: "function",
+        conn1: {
+          db1: {
+            public: [
+              {
+                name: "f1",
+                schema: "public",
+                arguments: null,
+                returnType: null,
+                language: "sql",
+                source: null,
+                kind: "function",
+              },
+            ],
           },
-        ],
-        "conn2:public": [
-          {
-            name: "f2",
-            schema: "public",
-            arguments: null,
-            returnType: null,
-            language: "sql",
-            source: null,
-            kind: "function",
+        },
+        conn2: {
+          db1: {
+            public: [
+              {
+                name: "f2",
+                schema: "public",
+                arguments: null,
+                returnType: null,
+                language: "sql",
+                source: null,
+                kind: "function",
+              },
+            ],
           },
-        ],
+        },
       },
     });
 
     useSchemaStore.getState().clearSchema("conn1");
 
     const state = useSchemaStore.getState();
-    expect(state.views["conn1:public"]).toBeUndefined();
-    expect(state.views["conn2:public"]).toHaveLength(1);
-    expect(state.functions["conn1:public"]).toBeUndefined();
-    expect(state.functions["conn2:public"]).toHaveLength(1);
+    expect(state.views.conn1?.db1?.public).toBeUndefined();
+    expect(state.views.conn2?.db1?.public).toHaveLength(1);
+    expect(state.functions.conn1?.db1?.public).toBeUndefined();
+    expect(state.functions.conn2?.db1?.public).toHaveLength(1);
   });
 
   // -- Sprint 130 — clearForConnection (DB switch path) --
@@ -667,61 +734,77 @@ describe("schemaStore", () => {
   it("clearForConnection drops every cached entry for the connection", () => {
     useSchemaStore.setState({
       schemas: {
-        conn1: [{ name: "public" }],
-        conn2: [{ name: "public" }],
+        conn1: { db1: [{ name: "public" }] },
+        conn2: { db1: [{ name: "public" }] },
       },
       tables: {
-        "conn1:public": [{ name: "users", schema: "public", row_count: null }],
-        "conn1:reporting": [
-          { name: "orders", schema: "reporting", row_count: null },
-        ],
-        "conn2:public": [{ name: "users", schema: "public", row_count: null }],
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+            reporting: [
+              { name: "orders", schema: "reporting", row_count: null },
+            ],
+          },
+        },
+        conn2: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
       },
       views: {
-        "conn1:public": [
-          {
-            name: "v1",
-            schema: "public",
-            definition: null,
+        conn1: {
+          db1: {
+            public: [
+              {
+                name: "v1",
+                schema: "public",
+                definition: null,
+              },
+            ],
           },
-        ],
+        },
       },
       functions: {
-        "conn1:public": [
-          {
-            name: "fn1",
-            schema: "public",
-            arguments: null,
-            returnType: null,
-            language: "sql",
-            source: null,
-            kind: "function",
+        conn1: {
+          db1: {
+            public: [
+              {
+                name: "fn1",
+                schema: "public",
+                arguments: null,
+                returnType: null,
+                language: "sql",
+                source: null,
+                kind: "function",
+              },
+            ],
           },
-        ],
+        },
       },
       tableColumnsCache: {
-        "conn1:public:users": [],
-        "conn2:public:users": [],
+        conn1: { db1: { public: { users: [] } } },
+        conn2: { db1: { public: { users: [] } } },
       },
     });
 
     useSchemaStore.getState().clearForConnection("conn1");
 
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn1"]).toBeUndefined();
-    expect(state.schemas["conn2"]).toHaveLength(1);
-    expect(state.tables["conn1:public"]).toBeUndefined();
-    expect(state.tables["conn1:reporting"]).toBeUndefined();
-    expect(state.tables["conn2:public"]).toHaveLength(1);
-    expect(state.views["conn1:public"]).toBeUndefined();
-    expect(state.functions["conn1:public"]).toBeUndefined();
-    expect(state.tableColumnsCache["conn1:public:users"]).toBeUndefined();
-    expect(state.tableColumnsCache["conn2:public:users"]).toEqual([]);
+    expect(state.schemas.conn1?.db1).toBeUndefined();
+    expect(state.schemas.conn2?.db1).toHaveLength(1);
+    expect(state.tables.conn1?.db1?.public).toBeUndefined();
+    expect(state.tables.conn1?.db1?.reporting).toBeUndefined();
+    expect(state.tables.conn2?.db1?.public).toHaveLength(1);
+    expect(state.views.conn1?.db1?.public).toBeUndefined();
+    expect(state.functions.conn1?.db1?.public).toBeUndefined();
+    expect(state.tableColumnsCache.conn1?.db1?.public?.users).toBeUndefined();
+    expect(state.tableColumnsCache.conn2?.db1?.public?.users).toEqual([]);
   });
 
   it("clearForConnection is a no-op when the connection has no cached entries", () => {
     useSchemaStore.setState({
-      schemas: { conn2: [{ name: "public" }] },
+      schemas: { conn2: { db1: [{ name: "public" }] } },
       tables: {},
       views: {},
       functions: {},
@@ -729,6 +812,6 @@ describe("schemaStore", () => {
     });
     useSchemaStore.getState().clearForConnection("conn1");
     const state = useSchemaStore.getState();
-    expect(state.schemas["conn2"]).toHaveLength(1);
+    expect(state.schemas.conn2?.db1).toHaveLength(1);
   });
 });

@@ -68,6 +68,7 @@ async function renderEditorAndOpenPreview() {
   const view = render(
     <IndexesEditor
       connectionId="conn-1"
+      database="db-1"
       table="users"
       schema="public"
       indexes={[SAMPLE_INDEX]}

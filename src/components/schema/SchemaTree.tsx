@@ -47,16 +47,30 @@ interface SchemaTreeProps {
   connectionId: string;
 }
 
+// Stable empty reference for the per-schema slice — avoids re-running
+// the body's `useMemo`s when the slot for this `(connId, db)` is still
+// unpopulated.
+const EMPTY_BY_SCHEMA = Object.freeze({}) as Record<string, never>;
+
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const actions = useSchemaTreeActions({ connectionId });
   // Destructure the fields effects depend on. Using the whole `actions`
   // object as a dep would re-run effects every render.
-  const { setExpandedSchemas, refreshConnection } = actions;
+  const { setExpandedSchemas, refreshConnection, workspaceKey } = actions;
 
   // Read-only selectors for tree body rendering; writes live in the hook.
-  const tables = useSchemaStore((s) => s.tables);
-  const views = useSchemaStore((s) => s.views);
-  const functions = useSchemaStore((s) => s.functions);
+  // Sprint 263 — pre-slice the per-`(connId, db)` portion of each cache
+  // so downstream `treeRows` / `body` can index by bare schema name.
+  const db = workspaceKey?.db ?? "";
+  const tables = useSchemaStore(
+    (s) => s.tables[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
+  );
+  const views = useSchemaStore(
+    (s) => s.views[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
+  );
+  const functions = useSchemaStore(
+    (s) => s.functions[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
+  );
 
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
@@ -221,6 +235,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           onClick={() =>
                             exportDatabaseWithInclude(
                               connectionId,
+                              db,
                               actions.schemas.map((s) => s.name),
                               "ddl",
                             )
@@ -237,6 +252,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           onClick={() =>
                             exportDatabaseWithInclude(
                               connectionId,
+                              db,
                               actions.schemas.map((s) => s.name),
                               "dml",
                             )
@@ -253,6 +269,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           onClick={() =>
                             exportDatabaseWithInclude(
                               connectionId,
+                              db,
                               actions.schemas.map((s) => s.name),
                               "both",
                             )
@@ -285,7 +302,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           aria-label={`Export ${s.name} DDL`}
                           title="Schema only (DDL — CREATE TABLE/INDEX/FK)"
                           onClick={() =>
-                            exportSchemaWithInclude(connectionId, s.name, "ddl")
+                            exportSchemaWithInclude(
+                              connectionId,
+                              db,
+                              s.name,
+                              "ddl",
+                            )
                           }
                         >
                           <FileText size={12} />
@@ -297,7 +319,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           aria-label={`Export ${s.name} data`}
                           title="Data only (DML — INSERT)"
                           onClick={() =>
-                            exportSchemaWithInclude(connectionId, s.name, "dml")
+                            exportSchemaWithInclude(
+                              connectionId,
+                              db,
+                              s.name,
+                              "dml",
+                            )
                           }
                         >
                           <Rows3 size={12} />
@@ -311,6 +338,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
                           onClick={() =>
                             exportSchemaWithInclude(
                               connectionId,
+                              db,
                               s.name,
                               "both",
                             )
@@ -367,18 +395,21 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
           DDL preview + Safe Mode dispatch via `useDdlPreviewExecution`). */}
       <RenameTableDialogSlot
         connectionId={connectionId}
+        database={db}
         renameTableDialog={actions.renameTableDialog}
         onClose={() => actions.setRenameTableDialog(null)}
       />
 
       <DropTableDialogSlot
         connectionId={connectionId}
+        database={db}
         dropTableDialog={actions.dropTableDialog}
         onClose={() => actions.setDropTableDialog(null)}
       />
 
       <CreateTableDialogSlot
         connectionId={connectionId}
+        database={db}
         createTableDialog={actions.createTableDialog}
         onClose={() => actions.setCreateTableDialog(null)}
         onRefresh={async (schemaName) => {

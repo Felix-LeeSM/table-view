@@ -33,11 +33,13 @@ import * as tauri from "@lib/tauri";
 export function useSchemaTableMutations(): {
   dropTable: (
     connectionId: string,
+    database: string,
     table: string,
     schema: string,
   ) => Promise<void>;
   renameTable: (
     connectionId: string,
+    database: string,
     table: string,
     schema: string,
     newName: string,
@@ -49,26 +51,36 @@ export function useSchemaTableMutations(): {
   const dropTable = useCallback(
     async (
       connectionId: string,
+      database: string,
       table: string,
       schema: string,
     ): Promise<void> => {
-      await storeDrop(connectionId, table, schema);
-      const key = `${connectionId}:${schema}`;
+      await storeDrop(connectionId, database, table, schema);
       try {
         const tables = await tauri.listTables(connectionId, schema);
         useSchemaStore.setState((state) => ({
-          tables: { ...state.tables, [key]: tables },
+          tables: setNested3(
+            state.tables,
+            connectionId,
+            database,
+            schema,
+            tables,
+          ),
         }));
       } catch {
         // Reload failed — patch the cache optimistically so the UI loses
         // the dropped row even though we couldn't refetch the truth.
         useSchemaStore.setState((state) => {
-          const current = state.tables[key] ?? [];
+          const current =
+            state.tables[connectionId]?.[database]?.[schema] ?? [];
           return {
-            tables: {
-              ...state.tables,
-              [key]: current.filter((t) => t.name !== table),
-            },
+            tables: setNested3(
+              state.tables,
+              connectionId,
+              database,
+              schema,
+              current.filter((t) => t.name !== table),
+            ),
           };
         });
       }
@@ -79,28 +91,38 @@ export function useSchemaTableMutations(): {
   const renameTable = useCallback(
     async (
       connectionId: string,
+      database: string,
       table: string,
       schema: string,
       newName: string,
     ): Promise<void> => {
-      await storeRename(connectionId, table, schema, newName);
-      const key = `${connectionId}:${schema}`;
+      await storeRename(connectionId, database, table, schema, newName);
       try {
         const tables = await tauri.listTables(connectionId, schema);
         useSchemaStore.setState((state) => ({
-          tables: { ...state.tables, [key]: tables },
+          tables: setNested3(
+            state.tables,
+            connectionId,
+            database,
+            schema,
+            tables,
+          ),
         }));
       } catch {
         // Reload failed — patch the renamed row in place optimistically.
         useSchemaStore.setState((state) => {
-          const current = state.tables[key] ?? [];
+          const current =
+            state.tables[connectionId]?.[database]?.[schema] ?? [];
           return {
-            tables: {
-              ...state.tables,
-              [key]: current.map((t) =>
+            tables: setNested3(
+              state.tables,
+              connectionId,
+              database,
+              schema,
+              current.map((t) =>
                 t.name === table ? { ...t, name: newName } : t,
               ),
-            },
+            ),
           };
         });
       }
@@ -109,4 +131,26 @@ export function useSchemaTableMutations(): {
   );
 
   return { dropTable, renameTable };
+}
+
+// Sprint 263 — immutable triple-nested setter that mirrors the schemaStore
+// internal `setConnDbSchema`. Kept local so the hook stays a thin
+// orchestration layer and the store body remains untouched.
+function setNested3<V>(
+  outer: Record<string, Record<string, Record<string, V>>>,
+  connId: string,
+  db: string,
+  schema: string,
+  value: V,
+): Record<string, Record<string, Record<string, V>>> {
+  return {
+    ...outer,
+    [connId]: {
+      ...outer[connId],
+      [db]: {
+        ...outer[connId]?.[db],
+        [schema]: value,
+      },
+    },
+  };
 }

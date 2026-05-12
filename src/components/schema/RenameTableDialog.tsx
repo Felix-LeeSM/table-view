@@ -48,6 +48,8 @@ const IDENTIFIER_MAX_BYTES = 63;
 export interface RenameTableDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
+  /** Active database — schemaStore cache key dimension (Sprint 263). */
+  database: string;
   /** Schema name (display + payload). */
   schemaName: string;
   /** Current table name (display + payload + rename-to-self check). */
@@ -75,6 +77,7 @@ function validateIdentifier(value: string): string | null {
 
 export default function RenameTableDialog({
   connectionId,
+  database,
   schemaName,
   tableName,
   open,
@@ -145,6 +148,7 @@ export default function RenameTableDialog({
         () => async () => {
           await renameTableMutation(
             connectionId,
+            database,
             tableName,
             schemaName,
             trimmed,

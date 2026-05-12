@@ -27,13 +27,17 @@ describe("SchemaTree — workspace-keyed sidebar state (Slice B)", () => {
   });
 
   it("collapsing a schema in db1 swaps cleanly to db2 and restores on swap back", async () => {
-    // Both DBs share the same schema list for test simplicity — `useSchemaCache`
-    // is connection-keyed (not db-keyed) in the current codebase, so the
-    // schemas survive the activeDb flip and the auto-expand effect fires
-    // on both workspaces. (Slice B 의 scope 는 sidebar state per-workspace
-    // 화 — schema cache 의 db-aware 화는 별도 sprint.)
+    // Sprint 263 — schemaStore caches are now `(connId, db)`-keyed, so
+    // seed both db1 and db2 with the same schema list. The activeDb
+    // flip below switches workspaces and the auto-expand effect must
+    // fire against the new db's freshly-keyed cache.
     setSchemaStoreState({
-      schemas: { conn1: [{ name: "public" }, { name: "analytics" }] },
+      schemas: {
+        conn1: {
+          db1: [{ name: "public" }, { name: "analytics" }],
+          db2: [{ name: "public" }, { name: "analytics" }],
+        },
+      },
       tables: {},
     });
 

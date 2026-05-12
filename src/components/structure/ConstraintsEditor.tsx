@@ -320,6 +320,7 @@ function AddConstraintModal({
 
 interface ConstraintsEditorProps {
   connectionId: string;
+  database: string;
   table: string;
   schema: string;
   constraints: ConstraintInfo[];
@@ -331,6 +332,7 @@ interface ConstraintsEditorProps {
 
 export default function ConstraintsEditor({
   connectionId,
+  database,
   table,
   schema,
   constraints,
@@ -429,7 +431,7 @@ export default function ConstraintsEditor({
 
   const handleOpenAddConstraint = async () => {
     if (columns.length === 0) {
-      const cols = await getTableColumns(connectionId, table, schema);
+      const cols = await getTableColumns(connectionId, database, table, schema);
       onColumnsChange(cols);
     }
     setShowAddConstraintModal(true);

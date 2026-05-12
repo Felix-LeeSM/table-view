@@ -110,7 +110,6 @@ function SchemaSection(props: SchemaSectionProps) {
     expandedSchemas,
     loadingTables,
     tables,
-    connectionId,
     selectedNodeId,
     ctx,
   } = props;
@@ -119,8 +118,7 @@ function SchemaSection(props: SchemaSectionProps) {
   // expanded so categories/tables render under the sidebar root.
   const isExpanded =
     treeShape === "with-schema" ? expandedSchemas.has(schema.name) : true;
-  const tableKey = `${connectionId}:${schema.name}`;
-  const schemaTables: TableInfo[] = tables[tableKey] ?? [];
+  const schemaTables: TableInfo[] = tables[schema.name] ?? [];
   const isLoadingTables = loadingTables.has(schema.name);
   const schemaId = nodeIdToString({ type: "schema", schema: schema.name });
   const isSchemaSelected = selectedNodeId === schemaId;
@@ -232,7 +230,6 @@ function CategoryCascade({
   isLoadingTables,
   views,
   functions,
-  connectionId,
   selectedNodeId,
   activeSchema,
   activeTable,
@@ -249,9 +246,8 @@ function CategoryCascade({
     );
   }
 
-  const schemaKey = `${connectionId}:${schema.name}`;
-  const schemaViews: ViewInfo[] = views[schemaKey] ?? [];
-  const schemaFunctions: FunctionInfo[] = functions[schemaKey] ?? [];
+  const schemaViews: ViewInfo[] = views[schema.name] ?? [];
+  const schemaFunctions: FunctionInfo[] = functions[schema.name] ?? [];
 
   return (
     <div>

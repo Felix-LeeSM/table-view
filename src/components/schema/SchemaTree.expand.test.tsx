@@ -105,7 +105,7 @@ describe("SchemaTree — expand", () => {
       fireEvent.click(schemaButton);
     });
 
-    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "public");
+    expect(mockLoadTables).toHaveBeenCalledWith("conn1", "db1", "public");
   });
 
   it("does not call loadTables when expanding a schema that already has cached tables", async () => {
@@ -761,7 +761,7 @@ describe("SchemaTree — expand", () => {
       fireEvent.click(schemaButton);
     });
 
-    expect(mockLoadViews).toHaveBeenCalledWith("conn1", "public");
-    expect(mockLoadFunctions).toHaveBeenCalledWith("conn1", "public");
+    expect(mockLoadViews).toHaveBeenCalledWith("conn1", "db1", "public");
+    expect(mockLoadFunctions).toHaveBeenCalledWith("conn1", "db1", "public");
   });
 });

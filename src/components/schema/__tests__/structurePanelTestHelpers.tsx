@@ -128,6 +128,7 @@ export function setStoreState(overrides: Record<string, unknown> = {}) {
 export function renderPanel(
   props: {
     connectionId?: string;
+    database?: string;
     table?: string;
     schema?: string;
   } = {},
@@ -135,6 +136,7 @@ export function renderPanel(
   return render(
     <StructurePanel
       connectionId={props.connectionId ?? "conn-1"}
+      database={props.database ?? "db-1"}
       table={props.table ?? "users"}
       schema={props.schema ?? "public"}
     />,

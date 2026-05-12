@@ -21,6 +21,7 @@ import DropTableDialog from "../DropTableDialog";
  */
 interface CreateTableDialogSlotProps {
   connectionId: string;
+  database: string;
   createTableDialog: { schemaName: string } | null;
   onClose: () => void;
   onRefresh: (schemaName: string) => Promise<void> | void;
@@ -28,14 +29,17 @@ interface CreateTableDialogSlotProps {
 
 export function CreateTableDialogSlot({
   connectionId,
+  database,
   createTableDialog,
   onClose,
   onRefresh,
 }: CreateTableDialogSlotProps) {
   // Sprint 227 — populate the modal's Target schema dropdown from the
-  // window-local schema store. Same selector pattern as the original
-  // implementation; left intact (Sprint 226 invariant).
-  const schemaInfos = useSchemaStore((s) => s.schemas[connectionId]);
+  // window-local schema store. Sprint 263 — schemas are now keyed by
+  // `(connId, db)`.
+  const schemaInfos = useSchemaStore(
+    (s) => s.schemas[connectionId]?.[database],
+  );
   const availableSchemaNames = useMemo(
     () => (schemaInfos ?? []).map((info) => info.name),
     [schemaInfos],
@@ -44,6 +48,7 @@ export function CreateTableDialogSlot({
   return (
     <CreateTableDialog
       connectionId={connectionId}
+      database={database}
       schemaName={createTableDialog.schemaName}
       availableSchemas={availableSchemaNames}
       open
@@ -61,12 +66,14 @@ export function CreateTableDialogSlot({
  */
 interface RenameTableDialogSlotProps {
   connectionId: string;
+  database: string;
   renameTableDialog: { schemaName: string; tableName: string } | null;
   onClose: () => void;
 }
 
 export function RenameTableDialogSlot({
   connectionId,
+  database,
   renameTableDialog,
   onClose,
 }: RenameTableDialogSlotProps) {
@@ -74,6 +81,7 @@ export function RenameTableDialogSlot({
   return (
     <RenameTableDialog
       connectionId={connectionId}
+      database={database}
       schemaName={renameTableDialog.schemaName}
       tableName={renameTableDialog.tableName}
       open
@@ -88,12 +96,14 @@ export function RenameTableDialogSlot({
  */
 interface DropTableDialogSlotProps {
   connectionId: string;
+  database: string;
   dropTableDialog: { schemaName: string; tableName: string } | null;
   onClose: () => void;
 }
 
 export function DropTableDialogSlot({
   connectionId,
+  database,
   dropTableDialog,
   onClose,
 }: DropTableDialogSlotProps) {
@@ -101,6 +111,7 @@ export function DropTableDialogSlot({
   return (
     <DropTableDialog
       connectionId={connectionId}
+      database={database}
       schemaName={dropTableDialog.schemaName}
       tableName={dropTableDialog.tableName}
       open

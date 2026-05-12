@@ -226,15 +226,20 @@ function renderDialog(
     onRefresh: () => Promise<void>;
     schemaName: string;
     availableSchemas: string[];
+    database: string;
   }> = {},
 ) {
   const onClose = overrides.onClose ?? vi.fn();
   const onRefresh = overrides.onRefresh ?? vi.fn().mockResolvedValue(undefined);
   const schemaName = overrides.schemaName ?? "public";
   const availableSchemas = overrides.availableSchemas;
+  // Sprint 263 — schemaStore caches are now `(connId, db)` keyed; the
+  // dialog needs the active db to look up FK reference candidates.
+  const database = overrides.database ?? "db-1";
   const view = render(
     <CreateTableDialog
       connectionId="conn-1"
+      database={database}
       schemaName={schemaName}
       availableSchemas={availableSchemas}
       open
@@ -1695,33 +1700,41 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     // `orders` under public, with id+line_no as columns.
     useSchemaStore.setState({
       tables: {
-        "conn-1:public": [
-          { name: "orders", schema: "public", row_count: null },
-        ],
+        "conn-1": {
+          "db-1": {
+            public: [{ name: "orders", schema: "public", row_count: null }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn-1:public:orders": [
-          {
-            name: "id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        "conn-1": {
+          "db-1": {
+            public: {
+              orders: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "line_no",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-          {
-            name: "line_no",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
-          },
-        ],
+        },
       },
     });
 
@@ -1911,21 +1924,31 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     useSchemaStore.setState({
       tables: {
-        "conn-1:public": [{ name: "users", schema: "public", row_count: null }],
+        "conn-1": {
+          "db-1": {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn-1:public:users": [
-          {
-            name: "id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        "conn-1": {
+          "db-1": {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
 
@@ -2049,21 +2072,31 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     useSchemaStore.setState({
       tables: {
-        "conn-1:public": [{ name: "users", schema: "public", row_count: null }],
+        "conn-1": {
+          "db-1": {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn-1:public:users": [
-          {
-            name: "id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        "conn-1": {
+          "db-1": {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
 
@@ -2175,21 +2208,31 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
     useSchemaStore.setState({
       tables: {
-        "conn-1:public": [{ name: "users", schema: "public", row_count: null }],
+        "conn-1": {
+          "db-1": {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
       },
       tableColumnsCache: {
-        "conn-1:public:users": [
-          {
-            name: "id",
-            data_type: "integer",
-            nullable: false,
-            default_value: null,
-            is_primary_key: true,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        "conn-1": {
+          "db-1": {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
           },
-        ],
+        },
       },
     });
 
@@ -2293,10 +2336,14 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
   it("reference table picker populates from useSchemaStore.tables cache (AC-229-09)", async () => {
     useSchemaStore.setState({
       tables: {
-        "conn-1:public": [
-          { name: "users", schema: "public", row_count: null },
-          { name: "products", schema: "public", row_count: null },
-        ],
+        "conn-1": {
+          "db-1": {
+            public: [
+              { name: "users", schema: "public", row_count: null },
+              { name: "products", schema: "public", row_count: null },
+            ],
+          },
+        },
       },
     });
 
@@ -2321,7 +2368,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
 
   it("reference schema selection triggers loadTables on cache miss (AC-229-09)", async () => {
     const loadTables = vi
-      .fn<(connectionId: string, schema: string) => Promise<void>>()
+      .fn<(connectionId: string, db: string, schema: string) => Promise<void>>()
       .mockResolvedValue(undefined);
     useSchemaStore.setState({
       tables: {},
@@ -2343,7 +2390,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     fireEvent.click(await screen.findByRole("option", { name: "analytics" }));
 
     await waitFor(() => {
-      expect(loadTables).toHaveBeenCalledWith("conn-1", "analytics");
+      expect(loadTables).toHaveBeenCalledWith("conn-1", "db-1", "analytics");
     });
   });
 

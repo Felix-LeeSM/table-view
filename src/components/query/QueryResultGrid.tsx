@@ -33,6 +33,9 @@ interface QueryResultGridProps {
   queryState: QueryState;
   /** Connection used to look up PK metadata and run edit statements. */
   connectionId?: string;
+  /** Database (schemaStore cache key dimension) — required when
+   *  `connectionId` is supplied for editable-result lookups. */
+  database?: string;
   /** SQL of the executed query — used to detect a single-table SELECT. */
   sql?: string;
   /** Called after a raw-result edit is committed so the parent can refresh. */
@@ -273,11 +276,13 @@ function DdlMessage() {
 function SelectResultArea({
   result,
   connectionId,
+  database,
   sql,
   onAfterCommit,
 }: {
   result: QueryResult;
   connectionId?: string;
+  database?: string;
   sql?: string;
   onAfterCommit?: () => void;
 }) {
@@ -295,21 +300,32 @@ function SelectResultArea({
   }, [sql]);
 
   useEffect(() => {
-    if (!parsed || !connectionId) return;
-    const cacheKey = `${connectionId}:${parsed.schema}:${parsed.table}`;
-    if (!tableColumnsCache[cacheKey]) {
-      getTableColumns(connectionId, parsed.table, parsed.schema).catch(() => {
+    if (!parsed || !connectionId || !database) return;
+    const cached =
+      tableColumnsCache[connectionId]?.[database]?.[parsed.schema]?.[
+        parsed.table
+      ];
+    if (!cached) {
+      getTableColumns(
+        connectionId,
+        database,
+        parsed.table,
+        parsed.schema,
+      ).catch(() => {
         // If the lookup fails we leave the cache empty; the editability
         // analyser surfaces this as "Loading column metadata…".
       });
     }
-  }, [parsed, connectionId, tableColumnsCache, getTableColumns]);
+  }, [parsed, connectionId, database, tableColumnsCache, getTableColumns]);
 
   const tableColumns = useMemo(() => {
-    if (!parsed || !connectionId) return null;
-    const cacheKey = `${connectionId}:${parsed.schema}:${parsed.table}`;
-    return tableColumnsCache[cacheKey] ?? null;
-  }, [parsed, connectionId, tableColumnsCache]);
+    if (!parsed || !connectionId || !database) return null;
+    return (
+      tableColumnsCache[connectionId]?.[database]?.[parsed.schema]?.[
+        parsed.table
+      ] ?? null
+    );
+  }, [parsed, connectionId, database, tableColumnsCache]);
 
   const editability = useMemo(
     () =>
@@ -387,11 +403,13 @@ function SelectResultArea({
 function CompletedSingleResult({
   result,
   connectionId,
+  database,
   sql,
   onAfterCommit,
 }: {
   result: QueryResult;
   connectionId?: string;
+  database?: string;
   sql?: string;
   onAfterCommit?: () => void;
 }) {
@@ -419,6 +437,7 @@ function CompletedSingleResult({
         <SelectResultArea
           result={result}
           connectionId={connectionId}
+          database={database}
           sql={sql}
           onAfterCommit={onAfterCommit}
         />
@@ -464,10 +483,12 @@ function statementBadge(stmt: QueryStatementResult): string {
 function CompletedMultiResult({
   statements,
   connectionId,
+  database,
   onAfterCommit,
 }: {
   statements: QueryStatementResult[];
   connectionId?: string;
+  database?: string;
   onAfterCommit?: () => void;
 }) {
   return (
@@ -533,6 +554,7 @@ function CompletedMultiResult({
             <CompletedSingleResult
               result={stmt.result}
               connectionId={connectionId}
+              database={database}
               sql={stmt.sql}
               onAfterCommit={onAfterCommit}
             />
@@ -546,6 +568,7 @@ function CompletedMultiResult({
 export default function QueryResultGrid({
   queryState,
   connectionId,
+  database,
   sql,
   onAfterCommit,
   isDryRun: isDryRunProp,
@@ -593,12 +616,14 @@ export default function QueryResultGrid({
         <CompletedMultiResult
           statements={queryState.statements}
           connectionId={connectionId}
+          database={database}
           onAfterCommit={onAfterCommit}
         />
       ) : (
         <CompletedSingleResult
           result={queryState.result}
           connectionId={connectionId}
+          database={database}
           sql={sql}
           onAfterCommit={onAfterCommit}
         />

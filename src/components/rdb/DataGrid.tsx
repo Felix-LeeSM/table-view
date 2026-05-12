@@ -38,6 +38,7 @@ import { DEFAULT_PAGE_SIZE } from "@lib/gridPolicy";
 
 interface DataGridProps {
   connectionId: string;
+  database: string;
   table: string;
   schema: string;
   initialFilters?: FilterCondition[];
@@ -45,6 +46,7 @@ interface DataGridProps {
 
 export default function DataGrid({
   connectionId,
+  database,
   table,
   schema,
   initialFilters,
@@ -216,6 +218,7 @@ export default function DataGrid({
           : undefined;
       const result = await queryTableData(
         connectionId,
+        database,
         table,
         schema,
         page,
@@ -238,6 +241,7 @@ export default function DataGrid({
     }
   }, [
     connectionId,
+    database,
     table,
     schema,
     page,
