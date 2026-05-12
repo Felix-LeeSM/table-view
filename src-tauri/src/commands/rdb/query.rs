@@ -45,6 +45,7 @@ async fn execute_query_inner(
     connection_id: &str,
     sql: &str,
     query_id: &str,
+    expected_database: Option<&str>,
 ) -> Result<QueryResult, AppError> {
     info!(
         connection_id = %connection_id,
@@ -70,10 +71,26 @@ async fn execute_query_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
-            .execute_sql(sql, child_token.as_ref())
-            .await
+        let adapter = active.as_rdb()?;
+        // Sprint 266 — opt-in db-mismatch guard. When the caller passes
+        // `expected_database` we sample the adapter's current db inside
+        // the same lock acquisition and refuse the execute if the backend
+        // pool has been swapped out from under us (e.g. concurrent
+        // `switch_active_db` from DbSwitcher). PG's sub-pool model
+        // already routes by db, but MySQL/SQLite carry stateful `USE` /
+        // `ATTACH` semantics — this guard is the cheapest correctness
+        // floor without rewriting every RDB command signature.
+        if let Some(expected) = expected_database {
+            let actual = adapter.current_database().await?.unwrap_or_default();
+            if actual != expected {
+                release_cancel_token(state, &cancel_handle).await;
+                return Err(AppError::DbMismatch {
+                    expected: expected.to_string(),
+                    actual,
+                });
+            }
+        }
+        adapter.execute_sql(sql, child_token.as_ref()).await
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -107,14 +124,27 @@ async fn execute_query_inner(
 ///
 /// # Returns
 /// * `QueryResult` - Query execution results including columns, rows, timing
+/// Sprint 266 — `expected_database` is an optional db-mismatch guard. When
+/// the caller provides it the backend verifies the adapter's active db
+/// matches before dispatching the query; mismatch surfaces as
+/// `AppError::DbMismatch`. Passing `None` preserves the pre-Sprint-266
+/// fast-path (no current_database probe).
 #[tauri::command]
 pub async fn execute_query(
     state: State<'_, AppState>,
     connection_id: String,
     sql: String,
     query_id: String,
+    expected_database: Option<String>,
 ) -> Result<QueryResult, AppError> {
-    execute_query_inner(state.inner(), &connection_id, &sql, &query_id).await
+    execute_query_inner(
+        state.inner(),
+        &connection_id,
+        &sql,
+        &query_id,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn execute_query_batch_inner(
@@ -122,6 +152,7 @@ async fn execute_query_batch_inner(
     connection_id: &str,
     statements: &[String],
     query_id: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<QueryResult>, AppError> {
     info!(
         connection_id = %connection_id,
@@ -154,8 +185,21 @@ async fn execute_query_batch_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
+        let adapter = active.as_rdb()?;
+        // Sprint 266 — opt-in db-mismatch guard. Sampled once at batch
+        // start; mid-batch `USE other_db` style stateful statements stay
+        // unguarded (per spec §AC-266-03).
+        if let Some(expected) = expected_database {
+            let actual = adapter.current_database().await?.unwrap_or_default();
+            if actual != expected {
+                release_cancel_token(state, &cancel_handle).await;
+                return Err(AppError::DbMismatch {
+                    expected: expected.to_string(),
+                    actual,
+                });
+            }
+        }
+        adapter
             .execute_sql_batch(statements, child_token.as_ref())
             .await
     };
@@ -189,14 +233,23 @@ async fn execute_query_batch_inner(
 /// applied earlier statements before the failure surfaced; that left rows
 /// in inconsistent state on partial failure. The batch command makes the
 /// commit atomic.
+/// Sprint 266 — see `execute_query` doc on `expected_database`.
 #[tauri::command]
 pub async fn execute_query_batch(
     state: State<'_, AppState>,
     connection_id: String,
     statements: Vec<String>,
     query_id: String,
+    expected_database: Option<String>,
 ) -> Result<Vec<QueryResult>, AppError> {
-    execute_query_batch_inner(state.inner(), &connection_id, &statements, &query_id).await
+    execute_query_batch_inner(
+        state.inner(),
+        &connection_id,
+        &statements,
+        &query_id,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn execute_query_dry_run_inner(
@@ -490,7 +543,7 @@ mod tests {
     #[tokio::test]
     async fn execute_query_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        match execute_query_inner(&state, "absent", "SELECT 1", "q1").await {
+        match execute_query_inner(&state, "absent", "SELECT 1", "q1", None).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -500,7 +553,7 @@ mod tests {
     async fn execute_query_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            execute_query_inner(&state, "doc", "SELECT 1", "q1").await,
+            execute_query_inner(&state, "doc", "SELECT 1", "q1", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -522,7 +575,7 @@ mod tests {
             })
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = execute_query_inner(&state, "c", "SELECT 42", "q1")
+        let r = execute_query_inner(&state, "c", "SELECT 42", "q1", None)
             .await
             .unwrap();
         assert_eq!(r.rows[0][0], serde_json::Value::String("SELECT 42".into()));
@@ -535,7 +588,7 @@ mod tests {
         let cloned = clone_app_error(&err);
         s.execute_sql_fn = Some(Box::new(move |_| Err(clone_app_error(&cloned))));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        match execute_query_inner(&state, "c", "SELECT 1", "q1").await {
+        match execute_query_inner(&state, "c", "SELECT 1", "q1", None).await {
             Err(AppError::Database(msg)) => {
                 assert_eq!(msg, "syntax error at or near \"FORM\"")
             }
@@ -548,7 +601,7 @@ mod tests {
         // validation 이 lookup 보다 *먼저* 실행됨. 미등록 connection 이라도
         // empty SQL 이면 Validation 이 surface 되어야 함 (NotFound 아님).
         let state = AppState::new();
-        match execute_query_inner(&state, "absent", "   ", "q1").await {
+        match execute_query_inner(&state, "absent", "   ", "q1", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("SQL query cannot be empty"))
             }
@@ -561,9 +614,93 @@ mod tests {
         // 정상 종료 시 query_tokens 에서 등록된 id 가 사라져야 retry path 가
         // 깨끗하게 다음 시도 가능 (AC-180-05).
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(StubRdbAdapter::default()))).await;
-        let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-eq").await;
+        let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-eq", None).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("qid-eq"));
+    }
+
+    // ── Sprint 266 — expected_database 가드 ──────────────────────────────
+    //
+    // 작성 이유 (2026-05-12): DbSwitcher 가 backend pool 의 active db 를
+    // 바꾸는 사이에 in-flight 쿼리가 도착하면 잘못된 db 에서 실행될 race.
+    // Sprint 263 OoS #3 + Sprint 264 OoS #2 가 같은 갭을 다른 각도에서 제기.
+    // 본 sprint 는 opt-in 가드만 — None 이면 기존 경로 그대로, Some 이면
+    // current_database 와 비교해 mismatch 시 DbMismatch 반환.
+
+    #[tokio::test]
+    async fn execute_query_expected_db_mismatch_returns_dbmismatch() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        // execute_sql 이 호출되면 가드가 새는 것 — 의도된 sentinel.
+        s.execute_sql_fn = Some(Box::new(|_| {
+            panic!("execute_sql must not run when expected_database mismatches")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match execute_query_inner(&state, "c", "SELECT 1", "q1", Some("db2")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "db2");
+                assert_eq!(actual, "db1");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_query_expected_db_match_executes_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        s.execute_sql_fn = Some(Box::new(|sql: &str| {
+            Ok(RdbQueryResult {
+                columns: vec![QueryColumn {
+                    name: "echo".into(),
+                    data_type: "text".into(),
+                    category: ColumnCategory::Unknown,
+                }],
+                rows: vec![vec![serde_json::Value::String(sql.to_string())]],
+                total_count: 1,
+                execution_time_ms: 0,
+                query_type: QueryType::Select,
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = execute_query_inner(&state, "c", "SELECT 1", "q1", Some("db1"))
+            .await
+            .unwrap();
+        assert_eq!(r.rows[0][0], serde_json::Value::String("SELECT 1".into()));
+    }
+
+    #[tokio::test]
+    async fn execute_query_expected_db_none_skips_check_backwards_compat() {
+        // current_database_fn 이 호출되면 안 됨 — None 인 경우 fast-path 유지.
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| {
+            panic!("current_database must not be probed when expected_database is None")
+        }));
+        s.execute_sql_fn = Some(Box::new(|_| {
+            Ok(RdbQueryResult {
+                columns: vec![],
+                rows: vec![],
+                total_count: 0,
+                execution_time_ms: 0,
+                query_type: QueryType::Select,
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        assert!(execute_query_inner(&state, "c", "SELECT 1", "q1", None)
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test]
+    async fn execute_query_expected_db_mismatch_releases_cancel_token() {
+        // 가드가 일찍 short-circuit 해도 register 된 token 은 release 되어야
+        // 다음 시도가 깨끗하게 가능.
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let _ = execute_query_inner(&state, "c", "SELECT 1", "qid-mismatch", Some("db2")).await;
+        let tokens = state.query_tokens.lock().await;
+        assert!(!tokens.contains_key("qid-mismatch"));
     }
 
     // ── execute_query_batch — input validation + dispatch ────────────────
@@ -572,7 +709,7 @@ mod tests {
     async fn execute_query_batch_empty_connection_id_rejected() {
         let state = AppState::new();
         let stmts = vec!["SELECT 1".to_string()];
-        match execute_query_batch_inner(&state, "  ", &stmts, "qb").await {
+        match execute_query_batch_inner(&state, "  ", &stmts, "qb", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Connection ID cannot be empty"))
             }
@@ -583,7 +720,7 @@ mod tests {
     #[tokio::test]
     async fn execute_query_batch_empty_statements_rejected() {
         let state = AppState::new();
-        match execute_query_batch_inner(&state, "c", &[], "qb").await {
+        match execute_query_batch_inner(&state, "c", &[], "qb", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Query batch cannot be empty"))
             }
@@ -596,7 +733,7 @@ mod tests {
         // 3개 중 2번째가 비어있을 때 "Statement 2 of 3" 메시지에 위치 포함.
         let state = AppState::new();
         let stmts = vec!["SELECT 1".into(), "  ".into(), "SELECT 3".into()];
-        match execute_query_batch_inner(&state, "c", &stmts, "qb").await {
+        match execute_query_batch_inner(&state, "c", &stmts, "qb", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Statement 2 of 3"), "위치 누락: {msg}")
             }
@@ -609,7 +746,7 @@ mod tests {
         let state = AppState::new();
         let stmts = vec!["SELECT 1".to_string()];
         assert!(matches!(
-            execute_query_batch_inner(&state, "absent", &stmts, "qb").await,
+            execute_query_batch_inner(&state, "absent", &stmts, "qb", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -619,7 +756,7 @@ mod tests {
         let state = state_with("doc", document_default()).await;
         let stmts = vec!["SELECT 1".to_string()];
         assert!(matches!(
-            execute_query_batch_inner(&state, "doc", &stmts, "qb").await,
+            execute_query_batch_inner(&state, "doc", &stmts, "qb", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -645,12 +782,61 @@ mod tests {
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         let stmts = vec!["A".into(), "B".into()];
-        let r = execute_query_batch_inner(&state, "c", &stmts, "qb")
+        let r = execute_query_batch_inner(&state, "c", &stmts, "qb", None)
             .await
             .unwrap();
         assert_eq!(r.len(), 2);
         assert_eq!(r[0].rows[0][0], serde_json::Value::String("A".into()));
         assert_eq!(r[1].rows[0][0], serde_json::Value::String("B".into()));
+    }
+
+    // ── Sprint 266 — execute_query_batch mismatch guard ──────────────────
+    //
+    // 작성 이유 (2026-05-12): single-query 가드 (위 execute_query_expected_db_*)
+    // 를 batch path 로 mirror. batch 의 일부 statement 가 `USE other_db`
+    // 같은 stateful 명령이라도 사전 검증은 batch 시작 시점 1 회만 (spec
+    // §AC-266-03).
+
+    #[tokio::test]
+    async fn execute_query_batch_expected_db_mismatch_returns_dbmismatch() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        s.execute_sql_batch_fn = Some(Box::new(|_| {
+            panic!("execute_sql_batch must not run on db mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["SELECT 1".to_string()];
+        match execute_query_batch_inner(&state, "c", &stmts, "qb", Some("db2")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "db2");
+                assert_eq!(actual, "db1");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_query_batch_expected_db_match_executes_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("db1".into()))));
+        s.execute_sql_batch_fn = Some(Box::new(|stmts: &[String]| {
+            Ok(stmts
+                .iter()
+                .map(|_| RdbQueryResult {
+                    columns: vec![],
+                    rows: vec![],
+                    total_count: 0,
+                    execution_time_ms: 0,
+                    query_type: QueryType::Select,
+                })
+                .collect())
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["SELECT 1".to_string(), "SELECT 2".to_string()];
+        let r = execute_query_batch_inner(&state, "c", &stmts, "qb", Some("db1"))
+            .await
+            .unwrap();
+        assert_eq!(r.len(), 2);
     }
 
     // ── Sprint 247 (ADR 0022 Phase 3) — dry-run dispatch tests ───────────

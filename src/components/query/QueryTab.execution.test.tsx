@@ -165,16 +165,19 @@ describe("QueryTab — execution", () => {
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(2);
     });
+    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenNthCalledWith(
       1,
       "conn1",
       "SELECT 1",
+      expect.any(String),
       expect.any(String),
     );
     expect(mockExecuteQuery).toHaveBeenNthCalledWith(
       2,
       "conn1",
       "SELECT 2",
+      expect.any(String),
       expect.any(String),
     );
 

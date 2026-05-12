@@ -28,15 +28,23 @@ export async function queryTableData(
 }
 
 // Query execution
+//
+// Sprint 266 — `expectedDatabase` is an opt-in db-mismatch guard. When
+// provided the backend verifies the adapter's active db matches before
+// dispatch; mismatch surfaces as `AppError::DbMismatch` (rendered as
+// `"Database mismatch: expected 'X', backend pool has 'Y'"`). Omitting
+// it preserves the pre-Sprint-266 fast-path.
 export async function executeQuery(
   connectionId: string,
   sql: string,
   queryId: string,
+  expectedDatabase?: string,
 ): Promise<QueryResult> {
   const result = await invoke<QueryResult>("execute_query", {
     connectionId,
     sql,
     queryId,
+    expectedDatabase: expectedDatabase ?? null,
   });
   return wrapNumericCells(result);
 }
@@ -53,11 +61,13 @@ export async function executeQueryBatch(
   connectionId: string,
   statements: string[],
   queryId: string,
+  expectedDatabase?: string,
 ): Promise<QueryResult[]> {
   const results = await invoke<QueryResult[]>("execute_query_batch", {
     connectionId,
     statements,
     queryId,
+    expectedDatabase: expectedDatabase ?? null,
   });
   return results.map(wrapNumericCells);
 }

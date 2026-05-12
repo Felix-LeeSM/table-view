@@ -158,10 +158,12 @@ describe("QueryTab — lifecycle", () => {
       executeBtn.click();
     });
 
-    // Should call executeQuery with correct args
+    // Should call executeQuery with correct args.
+    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenCalledWith(
       "conn1",
       "SELECT 1",
+      expect.any(String),
       expect.any(String),
     );
 

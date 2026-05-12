@@ -184,9 +184,11 @@ describe("QueryTab — toolbar", () => {
       runBtn.click();
     });
 
+    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenCalledWith(
       "conn1",
       "SELECT 1",
+      expect.any(String),
       expect.any(String),
     );
   });

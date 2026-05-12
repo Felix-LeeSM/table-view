@@ -219,9 +219,11 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
     await waitFor(() => {
       expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
     });
+    // Sprint 266 — 4th arg is `expectedDatabase` (opt-in db mismatch guard).
     expect(mockExecuteQuery).toHaveBeenCalledWith(
       "conn1",
       "UPDATE users SET name = 'a' WHERE id = 1",
+      expect.any(String),
       expect.any(String),
     );
   });

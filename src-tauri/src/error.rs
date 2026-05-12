@@ -23,6 +23,13 @@ pub enum AppError {
     #[error("Unsupported operation: {0}")]
     Unsupported(String),
 
+    /// Sprint 266 — backend pool 의 활성 db 가 frontend 의 기대 db 와 다른
+    /// 상태에서 RDB 실행 명령이 도착했을 때. `execute_query` /
+    /// `execute_query_batch` 의 사전 검증이 throw. UI 는 `expected` / `actual`
+    /// 을 모두 표시해 race 의 양쪽을 보여줘야 함.
+    #[error("Database mismatch: expected '{expected}', backend pool has '{actual}'")]
+    DbMismatch { expected: String, actual: String },
+
     #[error("Window error: {0}")]
     Window(String),
 

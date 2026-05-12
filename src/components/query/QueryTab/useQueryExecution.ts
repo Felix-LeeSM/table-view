@@ -336,7 +336,16 @@ export function useQueryExecution({
       const startTime = Date.now();
       updateQueryState(tab.id, { status: "running", queryId });
       try {
-        const result = await executeQuery(tab.connectionId, stmt, queryId);
+        // Sprint 266 — opt-in db-mismatch guard. `workspaceDb` is the
+        // (resolved) active db for this tab; passing it lets the backend
+        // refuse the query if the connection pool has been swapped to a
+        // different db between user click and dispatch.
+        const result = await executeQuery(
+          tab.connectionId,
+          stmt,
+          queryId,
+          workspaceDb ?? undefined,
+        );
         completeQuery(tab.id, queryId, result);
         recordHistory({
           sql: stmt,
@@ -366,6 +375,7 @@ export function useQueryExecution({
       tab.id,
       tab.connectionId,
       tab.paradigm,
+      workspaceDb,
       updateQueryState,
       completeQuery,
       failQuery,
@@ -396,6 +406,7 @@ export function useQueryExecution({
             tab.connectionId,
             stmt,
             stmtQueryId,
+            workspaceDb ?? undefined,
           );
           lastResult = result;
           statementResults.push({
@@ -445,6 +456,7 @@ export function useQueryExecution({
       tab.id,
       tab.connectionId,
       tab.paradigm,
+      workspaceDb,
       updateQueryState,
       completeMultiStatementQuery,
       recordHistory,
