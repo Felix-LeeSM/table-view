@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
   executeQuery,
   executeQueryDryRun,
@@ -8,6 +10,8 @@ import {
   findDocuments,
   aggregateDocuments,
 } from "@lib/tauri";
+import { verifyActiveDb } from "@lib/api/verifyActiveDb";
+import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
@@ -23,6 +27,30 @@ import {
   isRecordArray,
   dispatchDbMutationHint,
 } from "./queryHelpers";
+
+/**
+ * Sprint 267 — DbMismatch recovery: when backend rejects with
+ * `AppError::DbMismatch` (Sprint 266 가드 has detected that the connection
+ * pool's active db diverged from what the frontend tab requested), pull
+ * the backend's actual db via `verifyActiveDb` and sync the frontend
+ * stores so the user's next click dispatches against the correct
+ * expectedDatabase. Fire-and-forget — verify failures stay invisible so
+ * the query result panel survives a network blip.
+ */
+async function syncMismatchedActiveDb(connectionId: string): Promise<void> {
+  try {
+    const actual = await verifyActiveDb(connectionId);
+    if (!actual) return;
+    useConnectionStore.getState().setActiveDb(connectionId, actual);
+    useSchemaStore.getState().clearForConnection(connectionId);
+    toast.warning(
+      `Active DB synced to '${actual}'. Re-run the query if needed.`,
+    );
+  } catch {
+    // Best-effort — verify failure must not turn into a second user-facing
+    // failure on top of the original DbMismatch.
+  }
+}
 import { logger } from "@lib/logger";
 
 /**
@@ -354,17 +382,20 @@ export function useQueryExecution({
           status: "success",
         });
       } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
+        const message = err instanceof Error ? err.message : String(err);
+        failQuery(tab.id, queryId, message);
         recordHistory({
           sql: stmt,
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "error",
         });
+        // Sprint 267 — Sprint 266 의 가드가 backend 의 active db 변동을
+        // 알려준 것. 즉시 verify + sync 하여 다음 user click 이 올바른
+        // expectedDatabase 로 dispatch 되도록.
+        if (parseDbMismatch(message)) {
+          void syncMismatchedActiveDb(tab.connectionId);
+        }
       }
       // Run DB-change detection regardless of query success — `\c x` can
       // surface as a PG syntax error yet still flip the active pool on
@@ -416,12 +447,19 @@ export function useQueryExecution({
             durationMs: Date.now() - stmtStart,
           });
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
           statementResults.push({
             sql: stmt,
             status: "error",
-            error: err instanceof Error ? err.message : String(err),
+            error: message,
             durationMs: Date.now() - stmtStart,
           });
+          // Sprint 267 — mismatch sync (per statement-level catch).
+          // 같은 mismatch 가 batch 안에서 반복되어도 setActiveDb 는 동일
+          // 결과 idempotent — overhead 만 약간 더 큰 round-trip 수준.
+          if (parseDbMismatch(message)) {
+            void syncMismatchedActiveDb(tab.connectionId);
+          }
         }
       }
 

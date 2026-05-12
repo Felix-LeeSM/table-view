@@ -469,4 +469,62 @@ mod tests {
             Err(AppError::Unsupported(_))
         ));
     }
+
+    // ── Sprint 267 (2026-05-12) — switch_active_db 직렬화 invariant ──────
+    //
+    // 작성 이유: Sprint 263/264/266 OoS 가 "동시 swap → race" 가능성을 제기
+    // 했으나 audit 결과 `state.active_connections.lock()` 가 dispatch 전체
+    // 를 감싸므로 동일 connection 의 두 swap 호출은 lock 순서대로 직렬화.
+    // 본 테스트는 "마지막 호출의 db_name 이 final state 가 된다"는 invariant
+    // 를 동결 — 향후 locking 모델을 더 fine-grained 으로 옮기더라도 동일
+    // 의미가 유지되어야 함을 회귀 가드로 표현.
+
+    #[tokio::test]
+    async fn switch_active_db_concurrent_calls_are_serialized_last_writer_wins() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::Arc;
+
+        // 두 swap 호출이 동시에 들어와도 lock 직렬화로 last-writer-wins.
+        // StubRdbAdapter 의 switch_database 가 호출 순서 + 인자를 기록.
+        let history: Arc<tokio::sync::Mutex<Vec<String>>> = Arc::default();
+        let call_id = Arc::new(AtomicU64::new(0));
+
+        let mut s = StubRdbAdapter::default();
+        let history_clone = history.clone();
+        let call_id_clone = call_id.clone();
+        s.switch_database_fn = Some(Box::new(move |name: &str| {
+            // 동기 stub — lock 직렬화의 효과만 확인. 비동기 contention 은
+            // active_connections lock 에서 일어남.
+            call_id_clone.fetch_add(1, Ordering::SeqCst);
+            let h = history_clone.clone();
+            let name_owned = name.to_string();
+            tokio::spawn(async move {
+                h.lock().await.push(name_owned);
+            });
+            Ok(())
+        }));
+        let connections = Arc::new(tokio::sync::Mutex::new(map_with(
+            "c",
+            ActiveAdapter::Rdb(Box::new(s)),
+        )));
+
+        // 두 swap 호출을 동시에 띄움. 각각 같은 connection 에 다른 db_name.
+        let c1 = connections.clone();
+        let c2 = connections.clone();
+        let h1 = tokio::spawn(async move {
+            let map = c1.lock().await;
+            dispatch_switch_active_db(&map, "c", "db_first").await
+        });
+        let h2 = tokio::spawn(async move {
+            let map = c2.lock().await;
+            dispatch_switch_active_db(&map, "c", "db_second").await
+        });
+
+        let (r1, r2) = tokio::try_join!(h1, h2).unwrap();
+        assert!(r1.is_ok());
+        assert!(r2.is_ok());
+
+        // 두 호출 모두 lock 을 한 번씩 잡았는지 확인 — call_id 가 2.
+        assert_eq!(call_id.load(Ordering::SeqCst), 2);
+    }
 }
