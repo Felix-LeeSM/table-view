@@ -962,6 +962,320 @@ describe("useSqlAutocomplete", () => {
     expect(node?.children).not.toHaveProperty("db2_col");
   });
 
+  // ── Sprint 268 (2026-05-13) — intra-DB schema collision ─────────────────
+  // 작성 이유: Sprint 264 OoS #1 — 같은 `(connId, db)` 안에서 두 schema 가
+  // 동일한 table 이름을 가질 때 (예: `public.users`, `auth.users`),
+  // 기존 `cachedColumnsByName[bareName] = colNs` last-writer-wins 가
+  // schema-qualified lookup 까지 오염시켰음. Cache shape 을
+  // schema-preserving 으로 바꾼 뒤에도 회귀가 없는지 4 case 로 잠근다.
+  //
+  // 채택한 ambiguity policy: Policy A — bare key `ns["users"]` 는 모든
+  // candidate schema 의 컬럼을 column-name 기준 dedupe 한 union 으로
+  // 노출한다. Rationale: silently dropping a candidate column is a worse
+  // failure mode than offering a superset; 사용자는 어차피
+  // `qualifiedName` 으로 좁힐 수 있다.
+
+  // AC-268-01 — Same-DB schema collision: qualified lookup MUST return
+  // the schema-correct column set, not the cross-schema overwrite.
+  it("schema-qualified lookup returns schema-correct columns under intra-DB collision (AC-268-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+            auth: [{ name: "users", schema: "auth", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "name",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+            auth: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "login_ip",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns["public.users"]).toHaveProperty("id");
+    expect(ns["public.users"]).toHaveProperty("name");
+    expect(ns["public.users"]).not.toHaveProperty("login_ip");
+
+    expect(ns["auth.users"]).toHaveProperty("id");
+    expect(ns["auth.users"]).toHaveProperty("login_ip");
+    expect(ns["auth.users"]).not.toHaveProperty("name");
+  });
+
+  // AC-268-02 — Bare-key ambiguity policy is Policy A (union deduped by
+  // column name). With public.users {id, name} + auth.users
+  // {id, login_ip}, ns["users"] exposes {id, name, login_ip}. The
+  // single-writer-wins pre-fix behaviour must NOT survive.
+  it("bare key under multi-schema collision exposes the union of candidate columns (AC-268-02)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+            auth: [{ name: "users", schema: "auth", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "name",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+            auth: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "login_ip",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toHaveProperty("id");
+    expect(ns.users).toHaveProperty("name");
+    expect(ns.users).toHaveProperty("login_ip");
+    // dedupe: id appears in both schemas but only once
+    expect(Object.keys(ns.users!)).toHaveLength(3);
+  });
+
+  // AC-268-03 — Single-schema parity: when only one schema holds the
+  // table, both bare and schema-qualified lookup expose the same set,
+  // identical to pre-Sprint-268 behaviour.
+  it("single-schema parity — ns.users and ns['public.users'] match the cache (AC-268-03)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "name",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toHaveProperty("id");
+    expect(ns.users).toHaveProperty("name");
+    expect(Object.keys(ns.users!)).toHaveLength(2);
+    expect(ns["public.users"]).toHaveProperty("id");
+    expect(ns["public.users"]).toHaveProperty("name");
+    expect(Object.keys(ns["public.users"]!)).toHaveLength(2);
+  });
+
+  // AC-268-04 — PG fully-quoted path: same intra-DB collision rule
+  // applies to `"public"."users"` vs `"auth"."users"`.
+  it("fully-quoted PG keys return schema-correct columns under intra-DB collision (AC-268-04)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+            auth: [{ name: "users", schema: "auth", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "name",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+            auth: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "login_ip",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", "db1", {
+        dialect: PostgreSQL,
+        dbType: "postgresql",
+      }),
+    );
+    const ns = result.current as Record<
+      string,
+      { children?: Record<string, unknown> }
+    >;
+    expect(ns).toHaveProperty('"public"."users"');
+    expect(ns).toHaveProperty('"auth"."users"');
+    expect(ns['"public"."users"']?.children).toHaveProperty("id");
+    expect(ns['"public"."users"']?.children).toHaveProperty("name");
+    expect(ns['"public"."users"']?.children).not.toHaveProperty("login_ip");
+
+    expect(ns['"auth"."users"']?.children).toHaveProperty("id");
+    expect(ns['"auth"."users"']?.children).toHaveProperty("login_ip");
+    expect(ns['"auth"."users"']?.children).not.toHaveProperty("name");
+  });
+
   // AC-264-01 #6 — views axis 도 동일 격리.
   it("views isolate same-name across DBs (AC-264-01)", () => {
     useSchemaStore.setState({

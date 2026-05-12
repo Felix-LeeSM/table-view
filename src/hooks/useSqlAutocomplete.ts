@@ -178,21 +178,58 @@ export function useSqlAutocomplete(
       }
     }
 
-    // Build a lookup of cached columns for *this* connection + db, indexed
-    // by both unqualified table name and schema-qualified name.
-    const cachedColumnsByName: Record<
-      string,
-      Record<string, SQLNamespace>
-    > = {};
+    // Sprint 268 (2026-05-13) — schema-preserving cache shape.
+    // Previously `cachedColumnsByName[bareName]` was overwritten on each
+    // schema iteration ("last-writer-wins"). When two schemas in the same
+    // `(connId, db)` held a table of the same name (e.g. `public.users` +
+    // `auth.users`), the bare `ns["users"]` silently took whichever
+    // schema iterated last. The new shape keeps both axes distinct:
+    //   - `byQualified["schema.table"]` — exact, schema-correct columns.
+    //   - `byBareName["table"]` — list of candidate column sets, one per
+    //     schema that holds a table of that name. Resolved via Policy A
+    //     (see `pickBareColumns` below).
+    // Shape choice rationale: `Record<"schema.table", colNs>` plus a
+    // sibling `Record<bare, colNs[]>` is the minimum change that keeps
+    // the lookup keyed by *string* (matches `pickColumns(objectName,
+    // qualifiedName)` callsite) while still allowing a per-schema list
+    // for the bare path.
+    const byQualified: Record<string, Record<string, SQLNamespace>> = {};
+    const byBareName: Record<string, Record<string, SQLNamespace>[]> = {};
     const columnsByDb = columnsCache[connectionId]?.[db] ?? {};
     for (const [schemaName, tablesInSchema] of Object.entries(columnsByDb)) {
       for (const [tableName, columns] of Object.entries(tablesInSchema)) {
         const colNs: Record<string, SQLNamespace> = {};
         for (const c of columns) colNs[c.name] = {};
-        cachedColumnsByName[tableName] = colNs;
-        cachedColumnsByName[`${schemaName}.${tableName}`] = colNs;
+        byQualified[`${schemaName}.${tableName}`] = colNs;
+        (byBareName[tableName] ??= []).push(colNs);
       }
     }
+
+    // Sprint 268 (2026-05-13) — bare-key ambiguity policy = Policy A
+    // (union of all candidate columns across schemas, deduped by column
+    // name). Rationale: silently dropping a column candidate is a worse
+    // failure mode than offering a superset; the user can always
+    // schema-qualify to narrow. Policy B (empty namespace when
+    // ambiguous) was considered but rejected — it would regress the
+    // single-schema parity case if the user typed the bare name (a
+    // common path before opening the SchemaTree).
+    const pickBareColumns = (
+      bareName: string,
+    ): Record<string, SQLNamespace> | undefined => {
+      const candidates = byBareName[bareName];
+      if (!candidates || candidates.length === 0) return undefined;
+      if (candidates.length === 1) return candidates[0];
+      // Multi-schema collision: union, deduped by column name. First
+      // occurrence wins for equal-keyed columns (their namespace values
+      // are `{}` anyway, so order is observationally irrelevant).
+      const merged: Record<string, SQLNamespace> = {};
+      for (const colNs of candidates) {
+        for (const colName of Object.keys(colNs)) {
+          if (!(colName in merged)) merged[colName] = colNs[colName]!;
+        }
+      }
+      return merged;
+    };
 
     // Helper: pick columns for a given object name. Explicit `tableColumns`
     // override beats the cache so tests can stub deterministically.
@@ -205,11 +242,7 @@ export function useSqlAutocomplete(
         for (const c of tableColumns[objectName]!) colNs[c] = {};
         return colNs;
       }
-      return (
-        cachedColumnsByName[qualifiedName] ??
-        cachedColumnsByName[objectName] ??
-        {}
-      );
+      return byQualified[qualifiedName] ?? pickBareColumns(objectName) ?? {};
     };
 
     // For mixed-case names, emit a dialect-quoted alias alongside the
@@ -262,31 +295,69 @@ export function useSqlAutocomplete(
       }
     };
 
-    // Tables
+    // Sprint 268 (2026-05-13) — track candidate column-sets per bare name
+    // across schemas so the bare-key registration can apply Policy A
+    // (union deduped by column name) after the per-schema loop. Built
+    // separately for tables vs views so a view never silently unions
+    // into a table of the same name (preserves the pre-Sprint-268
+    // "don't overwrite a table of the same name" rule below).
+    const bareTableCandidates: Record<string, Record<string, SQLNamespace>[]> =
+      {};
+    const bareViewCandidates: Record<string, Record<string, SQLNamespace>[]> =
+      {};
+
+    // Tables — qualified + dialect-quoted entries are schema-correct
+    // per iteration. The bare-name entry `ns[table.name]` is deferred
+    // until after the loop so Policy A can union all candidate schemas.
     const tablesByDb = tables[connectionId]?.[db] ?? {};
     for (const [schemaName, tableList] of Object.entries(tablesByDb)) {
       for (const table of tableList) {
         const qualified = `${schemaName}.${table.name}`;
         const colNs = pickColumns(table.name, qualified);
-        ns[table.name] = colNs;
         ns[qualified] = colNs;
         addQuotedAlias(table.name, colNs);
         addFullyQuotedAlias(schemaName, table.name, colNs);
+        (bareTableCandidates[table.name] ??= []).push(colNs);
       }
     }
 
-    // Views — exposed identically so `SELECT * FROM active_users` autocompletes
+    // Views — exposed identically so `SELECT * FROM active_users`
+    // autocompletes. Same deferred-bare-key treatment as tables.
     const viewsByDb = views[connectionId]?.[db] ?? {};
     for (const [schemaName, viewList] of Object.entries(viewsByDb)) {
       for (const v of viewList) {
         const qualified = `${schemaName}.${v.name}`;
         const colNs = pickColumns(v.name, qualified);
-        // Don't overwrite a table of the same name (rare but possible)
-        if (!ns[v.name]) ns[v.name] = colNs;
         if (!ns[qualified]) ns[qualified] = colNs;
         addQuotedAlias(v.name, colNs);
         addFullyQuotedAlias(schemaName, v.name, colNs);
+        (bareViewCandidates[v.name] ??= []).push(colNs);
       }
+    }
+
+    // Sprint 268 (2026-05-13) — register bare-name entries under Policy A.
+    // Single candidate: trivial passthrough (preserves AC-268-03
+    // single-schema parity). Multi-candidate: union deduped by column
+    // name. Tables register first so a view never overwrites a table
+    // of the same name (mirrors the pre-Sprint-268 `if (!ns[v.name])`
+    // guard).
+    const unionColumns = (
+      candidates: Record<string, SQLNamespace>[],
+    ): Record<string, SQLNamespace> => {
+      if (candidates.length === 1) return candidates[0]!;
+      const merged: Record<string, SQLNamespace> = {};
+      for (const colNs of candidates) {
+        for (const colName of Object.keys(colNs)) {
+          if (!(colName in merged)) merged[colName] = colNs[colName]!;
+        }
+      }
+      return merged;
+    };
+    for (const [bareName, candidates] of Object.entries(bareTableCandidates)) {
+      ns[bareName] = unionColumns(candidates);
+    }
+    for (const [bareName, candidates] of Object.entries(bareViewCandidates)) {
+      if (!ns[bareName]) ns[bareName] = unionColumns(candidates);
     }
 
     return ns as SQLNamespace;
