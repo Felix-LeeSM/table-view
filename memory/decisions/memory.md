@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-11
+updated: 2026-05-12
 ---
 
 # ADR 인덱스
@@ -33,6 +33,7 @@ updated: 2026-05-11
 | [0024](./0024-testcontainers-pid-label-sweep/memory.md) | 통합 테스트 컨테이너 cleanup — owner-pid 라벨 + 시작 시 dead-owner sweep | Accepted | 2026-05-11 | — |
 | [0025](./0025-datagrid-self-managed-no-tanstack/memory.md) | DataGrid layout/sorting/filtering/virtualization 자체 관리 — TanStack Table 도입 안 함 | Accepted | 2026-05-11 | — |
 | [0026](./0026-numeric-wire-string-type-aware-wrap/memory.md) | 수치 wire-format — string token + frontend type-aware wrap (BigInt / Decimal / Number) | Accepted | 2026-05-11 | — |
+| [0027](./0027-per-workspace-state-store/memory.md) | Per-workspace state — workspaceStore (tabStore 흡수) keyed by (connId, db) with explicit-API | Accepted | 2026-05-12 | — |
 
 ## 역사 (Superseded / Deprecated)
 
