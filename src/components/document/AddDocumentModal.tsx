@@ -74,7 +74,7 @@ export default function AddDocumentModal({
 
   const fieldsCacheEntry = useDocumentStore((s) =>
     connectionId && database && collection
-      ? s.fieldsCache[`${connectionId}:${database}:${collection}`]
+      ? s.fieldsCache[connectionId]?.[database]?.[collection]
       : undefined,
   );
   const fieldNames = useMemo<readonly string[]>(() => {

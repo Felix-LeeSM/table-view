@@ -158,8 +158,12 @@ describe("DocumentDatabaseTree", () => {
     fireEvent.click(screen.getByLabelText("table_view_test database"));
 
     await waitFor(() => {
-      const key = "conn-mongo:table_view_test";
-      expect(useDocumentStore.getState().collections[key]).toBeDefined();
+      // Sprint 265 — nested `(connId, db)` cache shape.
+      expect(
+        useDocumentStore.getState().collections["conn-mongo"]?.[
+          "table_view_test"
+        ],
+      ).toBeDefined();
     });
   });
 
@@ -478,9 +482,12 @@ describe("DocumentDatabaseTree", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("users collection")).toBeInTheDocument(),
     );
-    // Cache populated under the (conn, table_view_test) key.
-    const beforeKey = "conn-mongo:table_view_test";
-    expect(useDocumentStore.getState().collections[beforeKey]).toBeDefined();
+    // Cache populated under the nested (conn, table_view_test) path.
+    expect(
+      useDocumentStore.getState().collections["conn-mongo"]?.[
+        "table_view_test"
+      ],
+    ).toBeDefined();
 
     // DbSwitcher swap pipeline — clear cache then flip activeDb.
     await act(async () => {
@@ -493,9 +500,11 @@ describe("DocumentDatabaseTree", () => {
     });
 
     // Stale collections for the prior DB are gone — the cache no longer
-    // carries the (conn, table_view_test) key, so a render that doesn't
+    // carries the (conn, table_view_test) path, so a render that doesn't
     // re-fetch can never paint stale `users` rows.
-    expect(useDocumentStore.getState().collections[beforeKey]).toBeUndefined();
+    expect(
+      useDocumentStore.getState().collections["conn-mongo"],
+    ).toBeUndefined();
     // The collection row from the previous DB is no longer in the DOM —
     // the tree collapsed when the database list re-fetched.
     await waitFor(() =>

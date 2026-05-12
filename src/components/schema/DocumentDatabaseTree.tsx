@@ -164,8 +164,7 @@ export default function DocumentDatabaseTree({
       {filteredDatabases.map((db) => {
         const isExpanded = expandedDbs.has(db.name);
         const isLoading = loadingDbs.has(db.name);
-        const key = `${connectionId}:${db.name}`;
-        const allCollections = collectionsByDb[key] ?? [];
+        const allCollections = collectionsByDb[db.name] ?? [];
         // If the query matched the DB name, show every collection. If it
         // only matched some collection names, narrow the list to those.
         const dbNameMatches =

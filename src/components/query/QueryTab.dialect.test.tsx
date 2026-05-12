@@ -276,34 +276,39 @@ describe("QueryTab — dialect", () => {
     const before = mockEditorProps.lastMongoExtensions;
     expect(before).toBeDefined();
 
-    // Populate fieldsCache with the tab's cacheKey. The memo dep is the
-    // whole `fieldsCache` object so the identity change triggers a
-    // recompute and produces a new mongoExtensions array.
+    // Populate fieldsCache with the tab's nested (conn, db, collection)
+    // path. The memo dep is the whole `fieldsCache` object so the identity
+    // change triggers a recompute and produces a new mongoExtensions array.
+    // Sprint 265 — cache lifted from flat colon-keys to nested maps.
     await act(async () => {
       useDocumentStore.setState({
         fieldsCache: {
-          "conn-mongo:table_view_test:users": [
-            {
-              name: "_id",
-              data_type: "objectId",
-              nullable: false,
-              default_value: null,
-              is_primary_key: true,
-              is_foreign_key: false,
-              fk_reference: null,
-              comment: null,
+          "conn-mongo": {
+            table_view_test: {
+              users: [
+                {
+                  name: "_id",
+                  data_type: "objectId",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "email",
+                  data_type: "string",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
             },
-            {
-              name: "email",
-              data_type: "string",
-              nullable: true,
-              default_value: null,
-              is_primary_key: false,
-              is_foreign_key: false,
-              fk_reference: null,
-              comment: null,
-            },
-          ],
+          },
         },
       });
       rerender(<QueryTab tab={docTab} />);
@@ -329,18 +334,22 @@ describe("QueryTab — dialect", () => {
     await act(async () => {
       useDocumentStore.setState({
         fieldsCache: {
-          "someOther:conn:users": [
-            {
-              name: "ignored",
-              data_type: "string",
-              nullable: true,
-              default_value: null,
-              is_primary_key: false,
-              is_foreign_key: false,
-              fk_reference: null,
-              comment: null,
+          someOther: {
+            conn: {
+              users: [
+                {
+                  name: "ignored",
+                  data_type: "string",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
             },
-          ],
+          },
         },
       });
       rerender(<QueryTab tab={rdbTab} />);

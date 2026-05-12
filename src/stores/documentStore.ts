@@ -11,22 +11,36 @@ import * as tauri from "@lib/tauri";
 /**
  * Zustand store backing the document paradigm read path.
  *
- * Mirrors the `schemaStore` keying convention:
- *   - `databases` is keyed by `connectionId`.
- *   - `collections` and `fieldsCache` are keyed by `${connectionId}:${db}`
- *     and `${connectionId}:${db}:${collection}` respectively.
+ * Sprint 265 (ADR 0027 extension) — cache shape lifted from colon-keyed
+ * strings to `(connId, db, collection)` nested maps. Mirrors the
+ * schemaStore / workspaceStore convention so separator collisions in
+ * connection / database names cannot corrupt cache keys and connection
+ * cleanup collapses to a single `delete state[connId]`.
+ *
+ * Aggregate results live in a separate axis from find results — same
+ * `(connId, db, collection)` path but the inner map is keyed by the
+ * stringified pipeline so two distinct pipelines for the same collection
+ * stay distinct, and a find result can never leak into an aggregate-mode
+ * grid render or vice versa.
  *
  * Every async action guards against stale responses by snapshotting a
- * monotonically-increasing request id on entry and dropping the write when
- * the latest id for that key no longer matches. This prevents a slow
- * response from overwriting a fresher one when the user double-clicks or
- * switches collections quickly.
+ * monotonically-increasing request id on entry and dropping the write
+ * when the latest id for that key no longer matches. Counter keys remain
+ * flat strings — they are internal identifiers with no cross-cutting
+ * consumer.
  */
+type ByCollection<V> = Record<string, V>;
+type ByDb<V> = Record<string, V>;
+type ByConn<V> = Record<string, V>;
+
 interface DocumentState {
-  databases: Record<string, DatabaseInfo[]>;
-  collections: Record<string, CollectionInfo[]>;
-  fieldsCache: Record<string, ColumnInfo[]>;
-  queryResults: Record<string, DocumentQueryResult>;
+  databases: ByConn<DatabaseInfo[]>;
+  collections: ByConn<ByDb<CollectionInfo[]>>;
+  fieldsCache: ByConn<ByDb<ByCollection<ColumnInfo[]>>>;
+  queryResults: ByConn<ByDb<ByCollection<DocumentQueryResult>>>;
+  aggregateResults: ByConn<
+    ByDb<ByCollection<Record<string, DocumentQueryResult>>>
+  >;
   loading: boolean;
   error: string | null;
 
@@ -53,9 +67,9 @@ interface DocumentState {
   clearConnection: (connectionId: string) => void;
 }
 
-// Per-key request counters. Using a module-scoped map (not Zustand state)
-// keeps the increment/compare cycle synchronous — critical for the stale
-// guard to work without tearing under rapid successive invocations.
+// Per-key request counters. Module-scoped map (not Zustand state) keeps
+// the increment/compare cycle synchronous — critical for the stale guard
+// to work without tearing under rapid successive invocations.
 const requestCounters = new Map<string, number>();
 
 function nextRequestId(key: string): number {
@@ -69,11 +83,72 @@ function isLatestRequest(key: string, requestId: number): boolean {
   return requestCounters.get(key) === requestId;
 }
 
+// Immutable nested setter helpers. Each clones only the spine — `connId
+// → db → ...` — so unrelated branches keep referential equality, which
+// keeps Zustand selectors stable.
+function setNested2<V>(
+  outer: ByConn<ByDb<V>>,
+  connId: string,
+  db: string,
+  value: V,
+): ByConn<ByDb<V>> {
+  return {
+    ...outer,
+    [connId]: {
+      ...(outer[connId] ?? {}),
+      [db]: value,
+    },
+  };
+}
+
+function setNested3<V>(
+  outer: ByConn<ByDb<ByCollection<V>>>,
+  connId: string,
+  db: string,
+  col: string,
+  value: V,
+): ByConn<ByDb<ByCollection<V>>> {
+  return {
+    ...outer,
+    [connId]: {
+      ...(outer[connId] ?? {}),
+      [db]: {
+        ...(outer[connId]?.[db] ?? {}),
+        [col]: value,
+      },
+    },
+  };
+}
+
+function setNested4<V>(
+  outer: ByConn<ByDb<ByCollection<Record<string, V>>>>,
+  connId: string,
+  db: string,
+  col: string,
+  innerKey: string,
+  value: V,
+): ByConn<ByDb<ByCollection<Record<string, V>>>> {
+  return {
+    ...outer,
+    [connId]: {
+      ...(outer[connId] ?? {}),
+      [db]: {
+        ...(outer[connId]?.[db] ?? {}),
+        [col]: {
+          ...(outer[connId]?.[db]?.[col] ?? {}),
+          [innerKey]: value,
+        },
+      },
+    },
+  };
+}
+
 export const useDocumentStore = create<DocumentState>((set) => ({
   databases: {},
   collections: {},
   fieldsCache: {},
   queryResults: {},
+  aggregateResults: {},
   loading: false,
   error: null,
 
@@ -95,8 +170,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   },
 
   loadCollections: async (connectionId, database) => {
-    const cacheKey = `${connectionId}:${database}`;
-    const key = `collections:${cacheKey}`;
+    const key = `collections:${connectionId}:${database}`;
     const reqId = nextRequestId(key);
     set({ loading: true, error: null });
     try {
@@ -106,7 +180,12 @@ export const useDocumentStore = create<DocumentState>((set) => ({
       );
       if (!isLatestRequest(key, reqId)) return;
       set((state) => ({
-        collections: { ...state.collections, [cacheKey]: collections },
+        collections: setNested2(
+          state.collections,
+          connectionId,
+          database,
+          collections,
+        ),
         loading: false,
       }));
     } catch (e) {
@@ -116,8 +195,7 @@ export const useDocumentStore = create<DocumentState>((set) => ({
   },
 
   inferFields: async (connectionId, database, collection, sampleSize) => {
-    const cacheKey = `${connectionId}:${database}:${collection}`;
-    const key = `fields:${cacheKey}`;
+    const key = `fields:${connectionId}:${database}:${collection}`;
     const reqId = nextRequestId(key);
     const columns = await tauri.inferCollectionFields(
       connectionId,
@@ -127,15 +205,20 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     );
     if (isLatestRequest(key, reqId)) {
       set((state) => ({
-        fieldsCache: { ...state.fieldsCache, [cacheKey]: columns },
+        fieldsCache: setNested3(
+          state.fieldsCache,
+          connectionId,
+          database,
+          collection,
+          columns,
+        ),
       }));
     }
     return columns;
   },
 
   runFind: async (connectionId, database, collection, body) => {
-    const cacheKey = `${connectionId}:${database}:${collection}`;
-    const key = `find:${cacheKey}`;
+    const key = `find:${connectionId}:${database}:${collection}`;
     const reqId = nextRequestId(key);
     const result = await tauri.findDocuments(
       connectionId,
@@ -145,23 +228,30 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     );
     if (isLatestRequest(key, reqId)) {
       set((state) => ({
-        queryResults: { ...state.queryResults, [cacheKey]: result },
+        queryResults: setNested3(
+          state.queryResults,
+          connectionId,
+          database,
+          collection,
+          result,
+        ),
       }));
     }
     return result;
   },
 
   /**
-   * Run an aggregation pipeline. Mirrors `runFind`'s stale-guard pattern so
-   * a slow response can never overwrite a newer fast one. The result is
-   * stashed under an `agg:`-prefixed cache key so it stays distinct from
-   * the `find` result for the same `${connectionId}:${database}:${collection}`
-   * tuple — both wire types are `DocumentQueryResult`, and mixing them
-   * would let a cached find result leak into an aggregate-mode grid render.
+   * Run an aggregation pipeline. Mirrors `runFind`'s stale-guard pattern.
+   * Result lives in `aggregateResults`, a separate axis from the find
+   * cache — both wire types are `DocumentQueryResult`, and mixing them
+   * would let a cached find result leak into an aggregate-mode grid
+   * render (or vice versa). Within `aggregateResults` the innermost key
+   * is the stringified pipeline so two distinct pipelines for the same
+   * collection stay distinct.
    */
   runAggregate: async (connectionId, database, collection, pipeline) => {
-    const cacheKey = `agg:${connectionId}:${database}:${collection}:${JSON.stringify(pipeline)}`;
-    const key = `aggregate:${cacheKey}`;
+    const pipelineKey = JSON.stringify(pipeline);
+    const key = `aggregate:${connectionId}:${database}:${collection}:${pipelineKey}`;
     const reqId = nextRequestId(key);
     const result = await tauri.aggregateDocuments(
       connectionId,
@@ -171,7 +261,14 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     );
     if (isLatestRequest(key, reqId)) {
       set((state) => ({
-        queryResults: { ...state.queryResults, [cacheKey]: result },
+        aggregateResults: setNested4(
+          state.aggregateResults,
+          connectionId,
+          database,
+          collection,
+          pipelineKey,
+          result,
+        ),
       }));
     }
     return result;
@@ -181,33 +278,31 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     set((state) => {
       const databases = { ...state.databases };
       delete databases[connectionId];
-      const prefix = `${connectionId}:`;
-      const aggPrefix = `agg:${connectionId}:`;
-      const collections = Object.fromEntries(
-        Object.entries(state.collections).filter(
-          ([k]) => !k.startsWith(prefix),
-        ),
-      );
-      const fieldsCache = Object.fromEntries(
-        Object.entries(state.fieldsCache).filter(
-          ([k]) => !k.startsWith(prefix),
-        ),
-      );
-      const queryResults = Object.fromEntries(
-        Object.entries(state.queryResults).filter(
-          ([k]) => !k.startsWith(prefix) && !k.startsWith(aggPrefix),
-        ),
-      );
-      return { databases, collections, fieldsCache, queryResults };
+      const collections = { ...state.collections };
+      delete collections[connectionId];
+      const fieldsCache = { ...state.fieldsCache };
+      delete fieldsCache[connectionId];
+      const queryResults = { ...state.queryResults };
+      delete queryResults[connectionId];
+      const aggregateResults = { ...state.aggregateResults };
+      delete aggregateResults[connectionId];
+      return {
+        databases,
+        collections,
+        fieldsCache,
+        queryResults,
+        aggregateResults,
+      };
     });
-    // Also reset request counters so the next load starts fresh.
+    // Also reset request counters so the next load starts fresh. Counter
+    // keys are flat strings (internal identifiers) — sweep by prefix.
     for (const key of [...requestCounters.keys()]) {
       if (
         key === `databases:${connectionId}` ||
         key.startsWith(`collections:${connectionId}:`) ||
         key.startsWith(`fields:${connectionId}:`) ||
         key.startsWith(`find:${connectionId}:`) ||
-        key.startsWith(`aggregate:agg:${connectionId}:`)
+        key.startsWith(`aggregate:${connectionId}:`)
       ) {
         requestCounters.delete(key);
       }
@@ -223,6 +318,7 @@ export function __resetDocumentStoreForTests(): void {
     collections: {},
     fieldsCache: {},
     queryResults: {},
+    aggregateResults: {},
     loading: false,
     error: null,
   });

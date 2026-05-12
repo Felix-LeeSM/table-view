@@ -452,10 +452,13 @@ describe("DbSwitcher", () => {
       databases: {
         c1: [{ name: "analytics" }, { name: "warehouse" }],
       },
+      // Sprint 265 — nested `(connId, db)` cache shape.
       collections: {
-        "c1:analytics": [
-          { name: "events", database: "analytics", document_count: null },
-        ],
+        c1: {
+          analytics: [
+            { name: "events", database: "analytics", document_count: null },
+          ],
+        },
       },
       fieldsCache: {},
       queryResults: {},
@@ -486,7 +489,7 @@ describe("DbSwitcher", () => {
     // so the sidebar re-fetches against the new active DB.
     const docState = useDocumentStore.getState();
     expect(docState.databases["c1"]).toBeUndefined();
-    expect(docState.collections["c1:analytics"]).toBeUndefined();
+    expect(docState.collections["c1"]).toBeUndefined();
   });
 
   it("does NOT clear the schema store on a Mongo paradigm switch", async () => {

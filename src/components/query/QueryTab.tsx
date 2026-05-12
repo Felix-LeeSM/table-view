@@ -96,8 +96,8 @@ export default function QueryTab({ tab }: QueryTabProps) {
     if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
       return undefined;
     }
-    const cacheKey = `${tab.connectionId}:${tab.database}:${tab.collection}`;
-    const columns = fieldsCache[cacheKey];
+    const columns =
+      fieldsCache[tab.connectionId]?.[tab.database]?.[tab.collection];
     if (!columns) return undefined;
     return columns.map((c) => c.name);
   }, [

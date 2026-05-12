@@ -12,6 +12,10 @@ import type { CollectionInfo, DatabaseInfo } from "@/types/document";
  */
 export interface UseDocumentDatabaseTreeData {
   databases: DatabaseInfo[];
+  /** Per-database collection lists for *this* connection. Sprint 265 lifted
+   *  the documentStore cache from flat `"connId:db"` keys to nested
+   *  `(connId, db)` maps, so the hook now projects `state.collections[connId]`
+   *  — keyed by `dbName` only. */
   collectionsByDb: Record<string, CollectionInfo[] | undefined>;
   loadingRoot: boolean;
   loadingDbs: Set<string>;
@@ -29,11 +33,16 @@ export interface UseDocumentDatabaseTreeData {
   filteredDatabases: DatabaseInfo[];
 }
 
+const EMPTY_COLLECTIONS_BY_DB: Record<string, CollectionInfo[] | undefined> =
+  {};
+
 export function useDocumentDatabaseTreeData(
   connectionId: string,
 ): UseDocumentDatabaseTreeData {
   const databases = useDocumentStore((s) => s.databases[connectionId]);
-  const collectionsByDb = useDocumentStore((s) => s.collections);
+  const collectionsByDb = useDocumentStore(
+    (s) => s.collections[connectionId] ?? EMPTY_COLLECTIONS_BY_DB,
+  );
   const loadDatabases = useDocumentStore((s) => s.loadDatabases);
   const loadCollections = useDocumentStore((s) => s.loadCollections);
 
@@ -79,8 +88,7 @@ export function useDocumentDatabaseTreeData(
         return;
       }
       setExpandedDbs((prev) => new Set(prev).add(dbName));
-      const key = `${connectionId}:${dbName}`;
-      if (!collectionsByDb[key]) {
+      if (!collectionsByDb[dbName]) {
         setLoadingDbs((prev) => new Set(prev).add(dbName));
         try {
           await loadCollections(connectionId, dbName);
@@ -109,11 +117,10 @@ export function useDocumentDatabaseTreeData(
     if (!isFiltering) return databaseList;
     return databaseList.filter((db) => {
       if (db.name.toLowerCase().includes(lowerQuery)) return true;
-      const key = `${connectionId}:${db.name}`;
-      const collections = collectionsByDb[key] ?? [];
+      const collections = collectionsByDb[db.name] ?? [];
       return collections.some((c) => c.name.toLowerCase().includes(lowerQuery));
     });
-  }, [databaseList, isFiltering, lowerQuery, collectionsByDb, connectionId]);
+  }, [databaseList, isFiltering, lowerQuery, collectionsByDb]);
 
   // Track which DBs we auto-expanded so clearing the query restores the
   // user's manual expansion state (without collapsing what they opened
@@ -134,8 +141,7 @@ export function useDocumentDatabaseTreeData(
     }
     const toExpand: string[] = [];
     for (const db of databaseList) {
-      const key = `${connectionId}:${db.name}`;
-      const collections = collectionsByDb[key] ?? [];
+      const collections = collectionsByDb[db.name] ?? [];
       const hasCollectionMatch = collections.some((c) =>
         c.name.toLowerCase().includes(lowerQuery),
       );
@@ -154,7 +160,7 @@ export function useDocumentDatabaseTreeData(
     // the very expansion it just produced would loop. The next user
     // interaction re-reads the latest state on the following render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFiltering, lowerQuery, databaseList, collectionsByDb, connectionId]);
+  }, [isFiltering, lowerQuery, databaseList, collectionsByDb]);
 
   const setSelectedNodeIdStable = useCallback(
     (id: string) => setSelectedNodeId(id),

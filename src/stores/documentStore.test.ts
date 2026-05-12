@@ -1,11 +1,14 @@
+// Sprint 265 (2026-05-12) — documentStore cache shape lifted from flat
+// colon-keyed strings to `(connId, db, collection)` nested maps. Existing
+// stale-guard / clearConnection semantics preserved; assertions migrated
+// to the nested form. Aggregate results moved to a dedicated axis
+// (`aggregateResults`) so find / aggregate caches can never alias.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "./documentStore";
 
-// Hoisted mocks — each test can override the default return by reassigning
-// the inner `vi.fn()` before calling the action under test.
 vi.mock("@lib/tauri", () => ({
   listMongoDatabases: vi.fn(() =>
     Promise.resolve([{ name: "admin" }, { name: "table_view_test" }]),
@@ -77,19 +80,18 @@ describe("documentStore", () => {
     expect(state.error).toContain("boom");
   });
 
-  it("loadCollections stores collections keyed by connectionId:database", async () => {
+  it("loadCollections stores collections under collections[connId][db]", async () => {
     await useDocumentStore
       .getState()
       .loadCollections("conn-1", "table_view_test");
     const state = useDocumentStore.getState();
-    expect(state.collections["conn-1:table_view_test"]).toHaveLength(1);
-    expect(state.collections["conn-1:table_view_test"]?.[0]?.name).toBe(
+    expect(state.collections["conn-1"]?.["table_view_test"]).toHaveLength(1);
+    expect(state.collections["conn-1"]?.["table_view_test"]?.[0]?.name).toBe(
       "users",
     );
   });
 
   it("loadCollections stale response does not overwrite a newer response", async () => {
-    // First call: slow (resolves after the second).
     let resolveSlow: (value: unknown) => void = () => {};
     const slow = new Promise((r) => {
       resolveSlow = r;
@@ -104,25 +106,25 @@ describe("documentStore", () => {
     const p2 = useDocumentStore.getState().loadCollections("conn-1", "db");
     await p2; // fresh write lands
     expect(
-      useDocumentStore.getState().collections["conn-1:db"]?.[0]?.name,
+      useDocumentStore.getState().collections["conn-1"]?.["db"]?.[0]?.name,
     ).toBe("fresh");
 
     // Now let the slow call resolve — its stale write should be dropped.
     resolveSlow([{ name: "stale", database: "db", document_count: 0 }]);
     await p1;
     expect(
-      useDocumentStore.getState().collections["conn-1:db"]?.[0]?.name,
+      useDocumentStore.getState().collections["conn-1"]?.["db"]?.[0]?.name,
     ).toBe("fresh");
   });
 
-  it("inferFields caches by connection:db:collection and returns the columns", async () => {
+  it("inferFields caches under fieldsCache[connId][db][collection] and returns the columns", async () => {
     const returned = await useDocumentStore
       .getState()
       .inferFields("conn-1", "db", "users");
     expect(returned).toHaveLength(1);
     expect(returned[0]?.name).toBe("_id");
     expect(
-      useDocumentStore.getState().fieldsCache["conn-1:db:users"],
+      useDocumentStore.getState().fieldsCache["conn-1"]?.["db"]?.["users"],
     ).toHaveLength(1);
   });
 
@@ -132,7 +134,8 @@ describe("documentStore", () => {
       .runFind("conn-1", "db", "users");
     expect(result.total_count).toBe(1);
     expect(
-      useDocumentStore.getState().queryResults["conn-1:db:users"]?.rows,
+      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
+        ?.rows,
     ).toHaveLength(1);
   });
 
@@ -156,7 +159,8 @@ describe("documentStore", () => {
     const p2 = useDocumentStore.getState().runFind("conn-1", "db", "users");
     await p2;
     expect(
-      useDocumentStore.getState().queryResults["conn-1:db:users"]?.total_count,
+      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
+        ?.total_count,
     ).toBe(42);
 
     resolveSlow({
@@ -168,7 +172,8 @@ describe("documentStore", () => {
     });
     await p1;
     expect(
-      useDocumentStore.getState().queryResults["conn-1:db:users"]?.total_count,
+      useDocumentStore.getState().queryResults["conn-1"]?.["db"]?.["users"]
+        ?.total_count,
     ).toBe(42);
   });
 
@@ -182,12 +187,12 @@ describe("documentStore", () => {
 
     const s = useDocumentStore.getState();
     expect(s.databases["conn-1"]).toBeUndefined();
-    expect(Object.keys(s.collections)).toHaveLength(0);
-    expect(Object.keys(s.fieldsCache)).toHaveLength(0);
-    expect(Object.keys(s.queryResults)).toHaveLength(0);
+    expect(s.collections["conn-1"]).toBeUndefined();
+    expect(s.fieldsCache["conn-1"]).toBeUndefined();
+    expect(s.queryResults["conn-1"]).toBeUndefined();
   });
 
-  // -- Sprint 73: runAggregate -----------------------------------------------
+  // -- Sprint 73: runAggregate ----------------------------------------------
 
   it("runAggregate calls aggregateDocuments with the pipeline and caches the result", async () => {
     const pipeline = [{ $match: { active: true } }, { $limit: 10 }];
@@ -203,10 +208,11 @@ describe("documentStore", () => {
     );
     expect(result.total_count).toBe(1);
 
-    // Cache key is prefixed with `agg:` so it does not collide with find.
-    const cacheKey = `agg:conn-1:db:users:${JSON.stringify(pipeline)}`;
+    const pipelineKey = JSON.stringify(pipeline);
     expect(
-      useDocumentStore.getState().queryResults[cacheKey]?.rows,
+      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
+        "users"
+      ]?.[pipelineKey]?.rows,
     ).toHaveLength(1);
   });
 
@@ -235,12 +241,13 @@ describe("documentStore", () => {
       .runAggregate("conn-1", "db", "users", pipeline);
     await p2;
 
-    const cacheKey = `agg:conn-1:db:users:${JSON.stringify(pipeline)}`;
+    const pipelineKey = JSON.stringify(pipeline);
     expect(
-      useDocumentStore.getState().queryResults[cacheKey]?.total_count,
+      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
+        "users"
+      ]?.[pipelineKey]?.total_count,
     ).toBe(77);
 
-    // Let the first (slow) call resolve last — its write must be dropped.
     resolveSlow({
       columns: [],
       rows: [],
@@ -250,12 +257,13 @@ describe("documentStore", () => {
     });
     await p1;
     expect(
-      useDocumentStore.getState().queryResults[cacheKey]?.total_count,
+      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
+        "users"
+      ]?.[pipelineKey]?.total_count,
     ).toBe(77);
   });
 
   it("runAggregate caches separately from runFind for the same collection", async () => {
-    // Reset the default mocks so each path gets its own distinguishing result.
     vi.mocked(tauri.findDocuments).mockResolvedValueOnce({
       columns: [],
       rows: [],
@@ -277,22 +285,61 @@ describe("documentStore", () => {
       .runAggregate("conn-1", "db", "users", [{ $match: {} }]);
 
     const s = useDocumentStore.getState();
-    // find caches under bare `connectionId:db:collection`.
-    expect(s.queryResults["conn-1:db:users"]?.total_count).toBe(3);
-    // aggregate caches under an `agg:` prefix so the two never collide.
-    const aggKey = `agg:conn-1:db:users:${JSON.stringify([{ $match: {} }])}`;
-    expect(s.queryResults[aggKey]?.total_count).toBe(7);
+    // find caches under queryResults at the (connId, db, collection) path.
+    expect(s.queryResults["conn-1"]?.["db"]?.["users"]?.total_count).toBe(3);
+    // aggregate caches under its own axis so the two never alias.
+    const pipelineKey = JSON.stringify([{ $match: {} }]);
+    expect(
+      s.aggregateResults["conn-1"]?.["db"]?.["users"]?.[pipelineKey]
+        ?.total_count,
+    ).toBe(7);
   });
 
   it("clearConnection also drops cached aggregate results", async () => {
     await useDocumentStore
       .getState()
       .runAggregate("conn-1", "db", "users", [{ $match: {} }]);
-    const aggKey = `agg:conn-1:db:users:${JSON.stringify([{ $match: {} }])}`;
-    expect(useDocumentStore.getState().queryResults[aggKey]).toBeDefined();
+    const pipelineKey = JSON.stringify([{ $match: {} }]);
+    expect(
+      useDocumentStore.getState().aggregateResults["conn-1"]?.["db"]?.[
+        "users"
+      ]?.[pipelineKey],
+    ).toBeDefined();
 
     useDocumentStore.getState().clearConnection("conn-1");
 
-    expect(useDocumentStore.getState().queryResults[aggKey]).toBeUndefined();
+    expect(
+      useDocumentStore.getState().aggregateResults["conn-1"],
+    ).toBeUndefined();
+  });
+
+  // -- Sprint 265 — cross-connection isolation (new) -----------------------
+
+  it("loadCollections for different connections don't share cache slots (AC-265-01)", async () => {
+    vi.mocked(tauri.listMongoCollections)
+      .mockResolvedValueOnce([
+        { name: "users", database: "db", document_count: 1 },
+      ])
+      .mockResolvedValueOnce([
+        { name: "products", database: "db", document_count: 2 },
+      ]);
+
+    await useDocumentStore.getState().loadCollections("conn-A", "db");
+    await useDocumentStore.getState().loadCollections("conn-B", "db");
+
+    const s = useDocumentStore.getState();
+    expect(s.collections["conn-A"]?.["db"]?.[0]?.name).toBe("users");
+    expect(s.collections["conn-B"]?.["db"]?.[0]?.name).toBe("products");
+  });
+
+  it("clearConnection preserves other connections' caches (AC-265-01)", async () => {
+    await useDocumentStore.getState().loadCollections("conn-A", "db");
+    await useDocumentStore.getState().loadCollections("conn-B", "db");
+
+    useDocumentStore.getState().clearConnection("conn-A");
+
+    const s = useDocumentStore.getState();
+    expect(s.collections["conn-A"]).toBeUndefined();
+    expect(s.collections["conn-B"]?.["db"]).toBeDefined();
   });
 });

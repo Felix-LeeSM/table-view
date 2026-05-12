@@ -49,7 +49,7 @@ export function useDocumentGridData({
 }: UseDocumentGridDataParams): UseDocumentGridDataResult {
   const runFind = useDocumentStore((s) => s.runFind);
   const queryResult = useDocumentStore(
-    (s) => s.queryResults[`${connectionId}:${database}:${collection}`],
+    (s) => s.queryResults[connectionId]?.[database]?.[collection],
   );
 
   const [loading, setLoading] = useState(false);

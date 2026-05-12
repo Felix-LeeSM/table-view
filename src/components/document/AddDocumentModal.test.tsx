@@ -205,30 +205,35 @@ describe("AddDocumentModal", () => {
   });
 
   it("surfaces fieldsCache field names when connection scope is provided", () => {
+    // Sprint 265 — nested `(connId, db, collection)` cache shape.
     useDocumentStore.setState({
       fieldsCache: {
-        "c1:db1:users": [
-          {
-            name: "active",
-            data_type: "Bool",
-            nullable: true,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
+        c1: {
+          db1: {
+            users: [
+              {
+                name: "active",
+                data_type: "Bool",
+                nullable: true,
+                default_value: null,
+                is_primary_key: false,
+                is_foreign_key: false,
+                fk_reference: null,
+                comment: null,
+              },
+              {
+                name: "email",
+                data_type: "Utf8",
+                nullable: true,
+                default_value: null,
+                is_primary_key: false,
+                is_foreign_key: false,
+                fk_reference: null,
+                comment: null,
+              },
+            ],
           },
-          {
-            name: "email",
-            data_type: "Utf8",
-            nullable: true,
-            default_value: null,
-            is_primary_key: false,
-            is_foreign_key: false,
-            fk_reference: null,
-            comment: null,
-          },
-        ],
+        },
       },
     });
 
@@ -254,7 +259,7 @@ describe("AddDocumentModal", () => {
     const before = view.state.sliceDoc(0, headPos);
     expect(before).toBe('{"');
     // The fields exist in the cache → derived fieldNames must be available.
-    const cache = useDocumentStore.getState().fieldsCache["c1:db1:users"];
+    const cache = useDocumentStore.getState().fieldsCache.c1?.db1?.users;
     expect(cache?.map((c) => c.name)).toEqual(["active", "email"]);
   });
 

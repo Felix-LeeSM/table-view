@@ -72,7 +72,7 @@ export default function DocumentDataGrid({
 }: DocumentDataGridProps) {
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const fieldsCacheEntry = useDocumentStore(
-    (s) => s.fieldsCache[`${connectionId}:${database}:${collection}`],
+    (s) => s.fieldsCache[connectionId]?.[database]?.[collection],
   );
 
   const safeModeGate = useSafeModeGate(connectionId);
