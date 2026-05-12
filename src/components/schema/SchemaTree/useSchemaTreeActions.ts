@@ -1,9 +1,16 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
+import {
+  resolveActiveDb,
+  useWorkspaceKeyForConnection,
+  useWorkspaceStore,
+  type WorkspaceKey,
+} from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
 import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
+
+const EMPTY_EXPANDED: readonly string[] = Object.freeze([]);
 
 /**
  * Handlers + dialog state for `SchemaTree`. Sprint 235 collapses the
@@ -26,6 +33,12 @@ interface UseSchemaTreeActionsArgs {
 }
 
 export interface SchemaTreeActions {
+  // Sprint 262 Slice B — derived `(connId, db)` for the connection this
+  // hook is wired to. Exposed so callers (SchemaTree mount effects) can
+  // depend on it without re-deriving the connectionStore selectors.
+  // `null` when no activeDb is resolvable (focused conn isn't connected).
+  workspaceKey: WorkspaceKey | null;
+
   // Selection state
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
@@ -106,15 +119,97 @@ export function useSchemaTreeActions({
   const addTab = useWorkspaceStore((s) => s.addTab);
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
   const updateQuerySql = useWorkspaceStore((s) => s.updateQuerySql);
+  const setExpandedStore = useWorkspaceStore((s) => s.setExpanded);
+  const setSelectedNodeStore = useWorkspaceStore((s) => s.setSelectedNode);
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
-  const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
-    new Set(),
+  // Sprint 262 Slice B — per-workspace sidebar state. `expanded` + `selectedNode`
+  // 은 workspaceStore 의 `sidebar` axis 가 `(connId, activeDb)` 별로 보관한다.
+  // DbSwitcher 가 activeDb 를 바꾸면 derived key 가 바뀌고 selector 재구독으로
+  // 자동 swap; 같은 workspace 으로 돌아오면 직전 상태가 보존된다. `key` 가
+  // null 이면 (focused connection 미설정 등) 모든 write 는 no-op — local
+  // useState 시절에도 mount 가 안 됐을 시나리오라 회귀가 아니다.
+  //
+  // `workspaceKey` 는 ref 에 미러링한다. 그 결과 `setExpandedSchemas` /
+  // `setSelectedNodeId` 가 key 변동에 영향받지 않는 **stable callback** 이
+  // 된다 — SchemaTree 의 auto-expand 효과들이 deps 로 이걸 받기 때문에,
+  // setter 가 key 마다 새 identity 를 가지면 (db1 → db2 → db1 라운드트립에
+  // 효과가 재실행되며 collapse 가 매번 덮어써짐) AC-262-05 의 보존 조건이
+  // 깨진다. ref 패턴이 그 경로를 차단한다.
+  const workspaceKey = useWorkspaceKeyForConnection(connectionId);
+  const workspaceKeyRef = useRef(workspaceKey);
+  useEffect(() => {
+    workspaceKeyRef.current = workspaceKey;
+  }, [workspaceKey]);
+
+  const expandedArray = useWorkspaceStore((s) =>
+    workspaceKey
+      ? (s.workspaces[workspaceKey.connId]?.[workspaceKey.db]?.sidebar
+          .expanded ?? EMPTY_EXPANDED)
+      : EMPTY_EXPANDED,
   );
+  const expandedSchemas = useMemo(
+    () => new Set(expandedArray),
+    [expandedArray],
+  );
+  const setExpandedSchemas = useCallback(
+    (update: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+      const key = workspaceKeyRef.current;
+      if (!key) return;
+      let next: Set<string>;
+      if (typeof update === "function") {
+        const current =
+          useWorkspaceStore.getState().workspaces[key.connId]?.[key.db]?.sidebar
+            .expanded ?? [];
+        next = update(new Set(current));
+      } else {
+        next = update;
+      }
+      setExpandedStore(key.connId, key.db, Array.from(next));
+    },
+    [setExpandedStore],
+  );
+
+  const selectedNodeId = useWorkspaceStore((s) =>
+    workspaceKey
+      ? (s.workspaces[workspaceKey.connId]?.[workspaceKey.db]?.sidebar
+          .selectedNode ?? null)
+      : null,
+  );
+  const setSelectedNodeId = useCallback(
+    (id: string | null) => {
+      const key = workspaceKeyRef.current;
+      if (!key) return;
+      setSelectedNodeStore(key.connId, key.db, id);
+    },
+    [setSelectedNodeStore],
+  );
+
+  // Sprint 262 Slice B — fresh-workspace seed of "all schemas expanded".
+  // 한 component-instance 동안 같은 `(connId, db)` 는 단 한 번만 시드한다.
+  // Why ref-based (vs. checking store): seedWorkspace test helper 가 빈
+  // sidebar 인 workspace 엔트리를 미리 만들어두는 경우가 있어서, store
+  // 의 `expanded.length === 0` 만으로는 "한 번도 시드 안 됨" 과 "유저가
+  // 다 collapse 함" 을 구분할 수 없다. session-scoped ref 는 그 차이를
+  // 명확히 한다 — 한 번 시드한 워크스페이스는 그 이후 매 마운트마다 유저
+  // 상태가 덮이지 않는다 (AC-262-05).
+  const seededKeysRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!workspaceKey) return;
+    if (schemas.length === 0) return;
+    const keyStr = `${workspaceKey.connId}:${workspaceKey.db}`;
+    if (seededKeysRef.current.has(keyStr)) return;
+    seededKeysRef.current.add(keyStr);
+    setExpandedStore(
+      workspaceKey.connId,
+      workspaceKey.db,
+      schemas.map((s) => s.name),
+    );
+  }, [workspaceKey, schemas, setExpandedStore]);
+
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, Set<CategoryKey>>
   >({});
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   // Sprint 235 — collapsed dialog state. Each modal owns its own form
   // state internally; this hook only tracks "which row was right-
   // clicked" so the slot wrappers can mount the right modal.
@@ -143,7 +238,7 @@ export function useSchemaTreeActions({
       setExpandedSchemas(newExpanded);
       void loadExpandedSchema(schemaName);
     },
-    [expandedSchemas, loadExpandedSchema],
+    [expandedSchemas, loadExpandedSchema, setExpandedSchemas],
   );
 
   const handleRefresh = refreshConnection;
@@ -171,7 +266,7 @@ export function useSchemaTreeActions({
       });
       markConnectionUsed(connectionId);
     },
-    [addTab, markConnectionUsed, connectionId],
+    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
   );
 
   const handleTableDoubleClick = useCallback(
@@ -189,7 +284,7 @@ export function useSchemaTreeActions({
       });
       markConnectionUsed(connectionId);
     },
-    [addTab, markConnectionUsed, connectionId],
+    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
   );
 
   const handleOpenStructure = useCallback(
@@ -206,7 +301,7 @@ export function useSchemaTreeActions({
       });
       markConnectionUsed(connectionId);
     },
-    [addTab, markConnectionUsed, connectionId],
+    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
   );
 
   // Sprint 235 — opener for the new DropTableDialog. The legacy version
@@ -243,7 +338,7 @@ export function useSchemaTreeActions({
       });
       markConnectionUsed(connectionId);
     },
-    [addTab, markConnectionUsed, connectionId],
+    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
   );
 
   const handleOpenViewStructure = useCallback(
@@ -261,7 +356,7 @@ export function useSchemaTreeActions({
       });
       markConnectionUsed(connectionId);
     },
-    [addTab, markConnectionUsed, connectionId],
+    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
   );
 
   const handleFunctionClick = useCallback(
@@ -287,7 +382,14 @@ export function useSchemaTreeActions({
         }
       }
     },
-    [connectionId, addQueryTab, markConnectionUsed, updateQuerySql, functions],
+    [
+      connectionId,
+      addQueryTab,
+      markConnectionUsed,
+      updateQuerySql,
+      functions,
+      setSelectedNodeId,
+    ],
   );
 
   const handleCreateTable = useCallback((schemaName: string) => {
@@ -314,7 +416,7 @@ export function useSchemaTreeActions({
         }),
       );
     },
-    [],
+    [setSelectedNodeId],
   );
 
   const isCategoryExpanded = useCallback(
@@ -326,6 +428,9 @@ export function useSchemaTreeActions({
   );
 
   return {
+    // Slice B — derived workspace identity for the wired connection.
+    workspaceKey,
+
     // Selection
     selectedNodeId,
     setSelectedNodeId,

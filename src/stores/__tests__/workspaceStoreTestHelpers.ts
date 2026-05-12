@@ -133,11 +133,19 @@ export function seedWorkspace(
       },
     };
   });
+  // Sprint 262 Slice B — preserve prior sidebar/closedTabHistory/dirtyTabIds
+  // on re-seed. Without this, tests that call `seedWorkspace(...)` a second
+  // time mid-test to update tabs/activeTabId would silently wipe the
+  // SchemaTree's per-workspace sidebar state (now stored here, no longer
+  // in component-local useState). Tests that *intend* a full reset call
+  // `useWorkspaceStore.setState({ workspaces: {} })` in `beforeEach`.
+  const priorWorkspace = useWorkspaceStore.getState().workspaces[connId]?.[db];
+  const baseWorkspace = priorWorkspace ?? emptyWorkspace();
   return {
     workspaces: {
       [connId]: {
         [db]: {
-          ...emptyWorkspace(),
+          ...baseWorkspace,
           tabs,
           activeTabId,
           ...extras,

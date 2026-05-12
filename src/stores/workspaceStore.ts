@@ -812,6 +812,31 @@ export function useCurrentWorkspaceKey(): WorkspaceKey | null {
 }
 
 /**
+ * Resolve the `(connId, db)` workspace key for an explicit connection —
+ * mirrors `useCurrentWorkspaceKey()` but lets the caller name the
+ * connection (e.g. `SchemaTree` receives `connectionId` as a prop and
+ * must key sidebar state by *that* connection, not whichever one is
+ * focused). Picks `activeStatuses[connId].activeDb` first, then the
+ * connection's stored default `database`. `null` when neither resolves.
+ */
+export function useWorkspaceKeyForConnection(
+  connId: string | null,
+): WorkspaceKey | null {
+  return useConnectionStore(
+    useShallow((state) => {
+      if (!connId) return null;
+      const status = state.activeStatuses[connId];
+      if (status?.type === "connected" && status.activeDb) {
+        return { connId, db: status.activeDb };
+      }
+      const fallback = state.connections.find((c) => c.id === connId)?.database;
+      if (!fallback) return null;
+      return { connId, db: fallback };
+    }),
+  );
+}
+
+/**
  * Read the `WorkspaceState` for the currently focused `(connId, db)`,
  * or `null` when no key resolves or no workspace has been written yet
  * (lazy create — `addTab` / `toggleExpand` / etc. seed the entry).

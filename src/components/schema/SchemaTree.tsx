@@ -12,6 +12,7 @@ import { useSchemaStore } from "@stores/schemaStore";
 import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMigrationExport } from "@/hooks/useMigrationExport";
+import { useSidebarScrollPersistence } from "@/hooks/useSidebarScrollPersistence";
 import {
   Popover,
   PopoverTrigger,
@@ -49,10 +50,8 @@ interface SchemaTreeProps {
 export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const actions = useSchemaTreeActions({ connectionId });
   // Destructure the fields effects depend on. Using the whole `actions`
-  // object as a dep would re-run effects every render and the
-  // schemas-loaded auto-expand below would immediately undo any user
-  // collapse.
-  const { schemas, setExpandedSchemas, refreshConnection } = actions;
+  // object as a dep would re-run effects every render.
+  const { setExpandedSchemas, refreshConnection } = actions;
 
   // Read-only selectors for tree body rendering; writes live in the hook.
   const tables = useSchemaStore((s) => s.tables);
@@ -107,25 +106,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     }
   }, [activeSchema, setExpandedSchemas]);
 
-  // Auto-expand every loaded schema regardless of shape. For
-  // `no-schema`/`flat` the schema row is hidden but expansion is what
-  // triggers `loadTables`; for `with-schema` (PG) it spares users from
-  // clicking every chevron on first load. This only seeds the initial
-  // state — `handleExpandSchema` still collapses on click.
-  useEffect(() => {
-    if (schemas.length === 0) return;
-    setExpandedSchemas((prev) => {
-      let mutated = false;
-      const next = new Set(prev);
-      for (const s of schemas) {
-        if (!next.has(s.name)) {
-          next.add(s.name);
-          mutated = true;
-        }
-      }
-      return mutated ? next : prev;
-    });
-  }, [treeShape, schemas, setExpandedSchemas]);
+  // Sprint 262 Slice B: 첫 방문 워크스페이스에 "모든 스키마 expanded" 시드는
+  // `useSchemaTreeActions` 내부의 session-scoped ref 가 처리한다. 여기에
+  // 중복 효과를 두면 user 의 collapse 가 매 store 업데이트마다 다시 덮이는
+  // 회귀가 발생.
 
   // The flat visible-rows list is computed unconditionally — a single
   // walk over already-derived state — so the threshold check is one
@@ -160,6 +144,15 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     overscan: 8,
   });
 
+  // Sprint 262 Slice B — sidebar scrollTop persistence per `(connId, db)`.
+  // The hook handles one-shot restore on workspace key change + write-back
+  // on every scroll event. `.ts` seam, see `useSidebarScrollPersistence`
+  // for rationale.
+  const handleScroll = useSidebarScrollPersistence(
+    scrollContainerRef,
+    actions.workspaceKey,
+  );
+
   const ctx: SchemaTreeRowsContext = {
     dbType,
     toggleCategory: actions.toggleCategory,
@@ -182,6 +175,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   return (
     <div
       ref={scrollContainerRef}
+      onScroll={handleScroll}
       className="flex flex-col select-none overflow-y-auto"
     >
       {/* sr-only connection name for accessibility */}
