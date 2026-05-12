@@ -20,8 +20,12 @@
 // `@lib/sql/sqlUtils.splitSqlStatements`, `@lib/toast.toast.info`, and
 // `useSafeModeGate` (no-op since dry-run never invokes the gate).
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useToastStore } from "@lib/toast";
 import { useQueryExecution } from "./useQueryExecution";
@@ -81,13 +85,13 @@ const DML_RESULT: QueryResult = {
 
 function seedTab(overrides: Parameters<typeof makeQueryTab>[0] = {}) {
   const tab = makeQueryTab(overrides);
-  useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+  useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
   return tab;
 }
 
 function seedDocTab(overrides: Parameters<typeof makeDocTab>[0] = {}) {
   const tab = makeDocTab(overrides);
-  useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+  useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
   return tab;
 }
 
@@ -98,7 +102,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     cancelQueryMock.mockReset();
     findDocumentsMock.mockReset();
     aggregateDocumentsMock.mockReset();
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     useQueryHistoryStore.setState({ entries: [] });
     useToastStore.setState({ toasts: [] });
   });
@@ -135,7 +139,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
 
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
     // QueryState left untouched (no transition out of running).
-    const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id);
+    const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id);
     expect(
       updated && updated.type === "query" && updated.queryState.status,
     ).toBe("running");
@@ -173,13 +177,13 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     );
 
     await waitFor(() => {
-      const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id);
+      const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id);
       if (!updated || updated.type !== "query") {
         throw new Error("tab missing");
       }
       expect(updated.queryState.status).toBe("completed");
     });
-    const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id)!;
+    const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id)!;
     if (updated.type !== "query") throw new Error("not query");
     if (updated.queryState.status !== "completed") {
       throw new Error("not completed");
@@ -206,11 +210,11 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     });
 
     await waitFor(() => {
-      const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id);
+      const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id);
       if (!updated || updated.type !== "query") throw new Error("missing");
       expect(updated.queryState.status).toBe("error");
     });
-    const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id)!;
+    const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id)!;
     if (updated.type !== "query" || updated.queryState.status !== "error") {
       throw new Error("not error");
     }
@@ -242,11 +246,11 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     );
 
     await waitFor(() => {
-      const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id);
+      const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id);
       if (!updated || updated.type !== "query") throw new Error("missing");
       expect(updated.queryState.status).toBe("completed");
     });
-    const updated = useTabStore.getState().tabs.find((t) => t.id === tab.id)!;
+    const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id)!;
     if (updated.type !== "query" || updated.queryState.status !== "completed") {
       throw new Error("not completed");
     }

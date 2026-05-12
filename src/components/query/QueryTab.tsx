@@ -1,6 +1,9 @@
 import { useMemo, useRef } from "react";
-import type { QueryTab } from "@stores/tabStore";
-import { useTabStore } from "@stores/tabStore";
+import type { QueryTab } from "@stores/workspaceStore";
+import {
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -43,9 +46,21 @@ interface QueryTabProps {
 }
 
 export default function QueryTab({ tab }: QueryTabProps) {
-  const updateQuerySql = useTabStore((s) => s.updateQuerySql);
-  const setQueryMode = useTabStore((s) => s.setQueryMode);
-  const loadQueryIntoTab = useTabStore((s) => s.loadQueryIntoTab);
+  const workspaceKey = useCurrentWorkspaceKey();
+  const updateQuerySqlAction = useWorkspaceStore((s) => s.updateQuerySql);
+  const setQueryModeAction = useWorkspaceStore((s) => s.setQueryMode);
+  const loadQueryIntoTab = useWorkspaceStore((s) => s.loadQueryIntoTab);
+  const updateQuerySql = (tabId: string, sql: string) => {
+    if (!workspaceKey) return;
+    updateQuerySqlAction(workspaceKey.connId, workspaceKey.db, tabId, sql);
+  };
+  const setQueryMode = (
+    tabId: string,
+    mode: Parameters<typeof setQueryModeAction>[3],
+  ) => {
+    if (!workspaceKey) return;
+    setQueryModeAction(workspaceKey.connId, workspaceKey.db, tabId, mode);
+  };
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
   const historyEntries = useQueryHistoryStore((s) => s.entries);

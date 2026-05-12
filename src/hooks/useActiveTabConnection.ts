@@ -14,20 +14,16 @@
  */
 import type { ConnectionConfig } from "@/types/connection";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useActiveTab } from "@stores/workspaceStore";
 
 export function useActiveTabConnection(): ConnectionConfig | null {
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const tabConnectionId = useTabStore((s) => {
-    if (!s.activeTabId) return null;
-    const tab = s.tabs.find((t) => t.id === s.activeTabId);
-    return tab ? tab.connectionId : null;
-  });
+  const activeTab = useActiveTab();
+  const tabConnectionId = activeTab?.connectionId ?? null;
   const connection = useConnectionStore((s) =>
     tabConnectionId
       ? (s.connections.find((c) => c.id === tabConnectionId) ?? null)
       : null,
   );
-  if (!activeTabId) return null;
+  if (!activeTab) return null;
   return connection;
 }

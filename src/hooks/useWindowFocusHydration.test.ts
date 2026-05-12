@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  getTestWorkspace,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { renderHook, act } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
 
@@ -69,7 +73,7 @@ describe("useWindowFocusHydration", () => {
       focusedConnId: null,
       activeStatuses: {},
     });
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: null,
       activeStatuses: null,
@@ -261,24 +265,28 @@ describe("useWindowFocusHydration", () => {
   // back to the old connection, showing the wrong paradigm.  (2026-04-29)
   it("clears stale tabs when focusedConnId changes to a different connection on hydration", () => {
     // Pre-condition: workspace has a PG tab active
-    useTabStore.setState({
-      tabs: [
-        {
-          id: "tab-pg-1",
-          connectionId: "conn-pg",
-          title: "public.users",
-          type: "table",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-          isPreview: false,
-          paradigm: "rdb",
-          sorts: [],
-        },
-      ],
-      activeTabId: "tab-pg-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "tab-pg-1",
+            connectionId: "conn-pg",
+            title: "public.users",
+            type: "table",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            isPreview: false,
+            paradigm: "rdb",
+            sorts: [],
+          },
+        ],
+        "tab-pg-1",
+        "conn-pg",
+        "db1",
+      ),
+    );
 
     // Hydrate to a different connection (MongoDB)
     mockReadConnectionSession.mockReturnValue({
@@ -289,7 +297,10 @@ describe("useWindowFocusHydration", () => {
     renderHook(() => useWindowFocusHydration());
 
     // The PG tab should have been cleared
-    const { tabs } = useTabStore.getState();
+    const wsAfter = useWorkspaceStore.getState().workspaces;
+    const tabs = Object.values(wsAfter).flatMap((byDb) =>
+      Object.values(byDb).flatMap((ws) => ws.tabs),
+    );
     expect(tabs.find((t) => t.connectionId === "conn-pg")).toBeUndefined();
     // focusedConnId must stay as Mongo, not overridden back to PG
     expect(useConnectionStore.getState().focusedConnId).toBe("conn-mongo");
@@ -298,24 +309,28 @@ describe("useWindowFocusHydration", () => {
   // Reason: hydration that does not change the connection should not destroy tabs.
   it("keeps tabs when focusedConnId stays the same after hydration", () => {
     useConnectionStore.setState({ focusedConnId: "conn-pg" });
-    useTabStore.setState({
-      tabs: [
-        {
-          id: "tab-pg-1",
-          connectionId: "conn-pg",
-          title: "public.users",
-          type: "table",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-          isPreview: false,
-          paradigm: "rdb",
-          sorts: [],
-        },
-      ],
-      activeTabId: "tab-pg-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "tab-pg-1",
+            connectionId: "conn-pg",
+            title: "public.users",
+            type: "table",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            isPreview: false,
+            paradigm: "rdb",
+            sorts: [],
+          },
+        ],
+        "tab-pg-1",
+        "conn-pg",
+        "db1",
+      ),
+    );
 
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-pg",
@@ -324,32 +339,36 @@ describe("useWindowFocusHydration", () => {
 
     renderHook(() => useWindowFocusHydration());
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
-    expect(useTabStore.getState().tabs[0]!.connectionId).toBe("conn-pg");
+    expect(getTestWorkspace("conn-pg").tabs).toHaveLength(1);
+    expect(getTestWorkspace("conn-pg").tabs[0]!.connectionId).toBe("conn-pg");
   });
 
   // Reason: focus events that change the connection should also clean up.
   it("clears stale tabs when focusedConnId changes on a subsequent focus event", () => {
     // First hydration: PG
     useConnectionStore.setState({ focusedConnId: "conn-pg" });
-    useTabStore.setState({
-      tabs: [
-        {
-          id: "tab-pg-1",
-          connectionId: "conn-pg",
-          title: "public.users",
-          type: "table",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-          isPreview: false,
-          paradigm: "rdb",
-          sorts: [],
-        },
-      ],
-      activeTabId: "tab-pg-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "tab-pg-1",
+            connectionId: "conn-pg",
+            title: "public.users",
+            type: "table",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            isPreview: false,
+            paradigm: "rdb",
+            sorts: [],
+          },
+        ],
+        "tab-pg-1",
+        "conn-pg",
+        "db1",
+      ),
+    );
 
     mockReadConnectionSession.mockReturnValue({
       focusedConnId: "conn-pg",
@@ -357,7 +376,7 @@ describe("useWindowFocusHydration", () => {
     });
 
     const { unmount } = renderHook(() => useWindowFocusHydration());
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace("conn-pg", "db1").tabs).toHaveLength(1);
 
     // Now the launcher switches to Mongo while workspace is hidden
     mockReadConnectionSession.mockReturnValue({
@@ -369,8 +388,8 @@ describe("useWindowFocusHydration", () => {
       window.dispatchEvent(new Event("focus"));
     });
 
-    // PG tabs gone, focusedConnId is Mongo
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    // PG tabs gone (workspace slot cleared), focusedConnId is Mongo
+    expect(getTestWorkspace("conn-pg", "db1").tabs).toHaveLength(0);
     expect(useConnectionStore.getState().focusedConnId).toBe("conn-mongo");
 
     unmount();

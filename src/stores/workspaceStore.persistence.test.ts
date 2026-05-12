@@ -16,7 +16,7 @@ import { useWorkspaceStore } from "./workspaceStore";
 import {
   installFakeLocalStorage,
   restoreLocalStorage,
-} from "./__tests__/tabStoreTestHelpers";
+} from "./__tests__/workspaceStoreTestHelpers";
 import type { TableTabInit } from "./workspaceStore/types";
 
 function makeInit(overrides: Partial<TableTabInit> = {}): TableTabInit {

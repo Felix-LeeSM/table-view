@@ -19,8 +19,11 @@ import type { Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
-import type { QueryMode, QueryTab, Tab, TableTab } from "./tabStore/types";
 import type {
+  QueryMode,
+  QueryTab,
+  Tab,
+  TableTab,
   WorkspaceState,
   WorkspaceStoreState,
 } from "./workspaceStore/types";
@@ -43,8 +46,14 @@ import {
 /* eslint-enable no-restricted-imports */
 
 export type {
+  QueryMode,
+  QueryTab,
   SidebarState,
+  Tab,
+  TableTab,
   TableTabInit,
+  TabObjectKind,
+  TabSubView,
   WorkspaceState,
   WorkspaceStoreState,
 } from "./workspaceStore/types";
@@ -61,6 +70,27 @@ function emptyWorkspace(): WorkspaceState {
 
 let tabCounter = 0;
 let queryCounter = 0;
+
+/**
+ * Resolve the active database for `connectionId`. Prefers the live
+ * `activeDb` (set by `switchActiveDb` after a successful pool open) and
+ * falls back to the connection's stored default `database`. Returns
+ * `""` when nothing matches — keeps `addTab` autofill crash-free for
+ * connections that haven't completed `connectToDatabase` yet.
+ *
+ * Mirrors the original `tabStore/persistence.ts` lookup. Cross-store
+ * dependency is read-only and contained to the one path that needs
+ * autofill (addTab / addQueryTab); explicit-API callers pass `db`
+ * directly and bypass this entirely.
+ */
+export function resolveActiveDb(connectionId: string): string {
+  const conn = useConnectionStore.getState();
+  const status = conn.activeStatuses[connectionId];
+  if (status?.type === "connected" && status.activeDb) {
+    return status.activeDb;
+  }
+  return conn.connections.find((c) => c.id === connectionId)?.database ?? "";
+}
 
 /**
  * Patch a single workspace at `(connId, db)`. Lazy-creates the workspace
@@ -110,8 +140,14 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
   addTab: (connId, init) => {
     tabCounter++;
     const id = `tab-${tabCounter}`;
-    const db = init.database ?? "";
-    const { permanent, ...tabFields } = init;
+    // Autofill db for RDB tabs when caller omitted it. Document tabs
+    // always carry their own db (set by callers that know the Mongo
+    // database name); leaving those untouched preserves the original
+    // tabStore semantics.
+    const isRdb = (init.paradigm ?? "rdb") === "rdb";
+    const db = init.database ?? (isRdb ? resolveActiveDb(connId) : "");
+    const { permanent, ...rest } = init;
+    const tabFields = { ...rest, database: db };
     set((state) => {
       const next = withWorkspace(state, connId, db, (ws) => {
         // 1. Existing tab matching (table, subView). Reactivate (or
@@ -139,11 +175,15 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         }
 
         // 2. Preview slot replacement — non-permanent additions reuse
-        //    any existing preview slot for the same subView.
+        //    any existing preview slot for the same (connectionId,
+        //    subView). 두 조건이 모두 맞는 preview 만 재사용해서, 다른
+        //    connection 의 preview 가 잘못 덮어써지지 않도록 한다 (legacy
+        //    tabStore 와 동일한 의미).
         if (!permanent) {
           const previewIdx = ws.tabs.findIndex(
             (t): t is TableTab =>
               t.type === "table" &&
+              t.connectionId === tabFields.connectionId &&
               t.isPreview === true &&
               (t.subView ?? "records") === (tabFields.subView ?? "records"),
           );
@@ -806,4 +846,32 @@ export function useActiveTab(): Tab | null {
   const ws = useCurrentWorkspace();
   if (!ws || !ws.activeTabId) return null;
   return ws.tabs.find((t) => t.id === ws.activeTabId) ?? null;
+}
+
+const EMPTY_TABS: readonly Tab[] = Object.freeze([]);
+const EMPTY_STRINGS: readonly string[] = Object.freeze([]);
+
+/**
+ * Stable empty-array fallbacks so callers iterating `tabs` /
+ * `dirtyTabIds` / `closedTabHistory` don't churn renders when the
+ * workspace is missing.
+ */
+export function useCurrentTabs(): readonly Tab[] {
+  const ws = useCurrentWorkspace();
+  return ws?.tabs ?? EMPTY_TABS;
+}
+
+export function useActiveTabId(): string | null {
+  const ws = useCurrentWorkspace();
+  return ws?.activeTabId ?? null;
+}
+
+export function useDirtyTabIds(): readonly string[] {
+  const ws = useCurrentWorkspace();
+  return ws?.dirtyTabIds ?? EMPTY_STRINGS;
+}
+
+export function useClosedTabHistory(): readonly Tab[] {
+  const ws = useCurrentWorkspace();
+  return ws?.closedTabHistory ?? EMPTY_TABS;
 }

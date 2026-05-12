@@ -7,9 +7,14 @@
 // row coloration. Cases are byte-equivalent to the originals — no
 // behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+  getAllTabsForConnection,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
   MOCK_RESULT,
@@ -141,7 +146,7 @@ describe("QueryTab — history", () => {
   it("adds entry to history after successful query execution", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -161,7 +166,7 @@ describe("QueryTab — history", () => {
   it("adds entry to history after failed query execution", async () => {
     mockExecuteQuery.mockRejectedValueOnce(new Error("Syntax error"));
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -180,7 +185,7 @@ describe("QueryTab — history", () => {
   it("history panel shows entries with SQL and execution time", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -215,7 +220,7 @@ describe("QueryTab — history", () => {
   it("history row text is selectable (not wrapped in a button)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -243,7 +248,7 @@ describe("QueryTab — history", () => {
   it("clicking the Load button on a history row updates editor SQL", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -263,7 +268,7 @@ describe("QueryTab — history", () => {
       loadBtn.click();
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("SELECT 1");
@@ -273,7 +278,7 @@ describe("QueryTab — history", () => {
   it("double-clicking a history row updates editor SQL", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab({ sql: "SELECT 2" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -296,7 +301,7 @@ describe("QueryTab — history", () => {
       );
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("SELECT 2");
@@ -306,7 +311,7 @@ describe("QueryTab — history", () => {
   it("clear history removes all entries", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -332,7 +337,7 @@ describe("QueryTab — history", () => {
   it("records rdb/sql metadata on history entry after RDB execute", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -359,7 +364,7 @@ describe("QueryTab — history", () => {
   it("records document/find metadata + database + collection on successful find", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     const tab = makeDocTab({ sql: '{"active":true}' });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -394,7 +399,7 @@ describe("QueryTab — history", () => {
       queryMode: "aggregate",
       sql: '[{"$match":{"active":true}}]',
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -421,7 +426,7 @@ describe("QueryTab — history", () => {
   it("double-click on a history row routes through loadQueryIntoTab (AC-09 in-place)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab({ sql: "SELECT original" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -434,7 +439,9 @@ describe("QueryTab — history", () => {
     // Replace the tab's sql with a distinct value so we can observe the
     // restore overwriting it.
     await act(async () => {
-      useTabStore.getState().updateQuerySql("query-1", "CHANGED");
+      useWorkspaceStore
+        .getState()
+        .updateQuerySql("conn1", "db1", "query-1", "CHANGED");
     });
 
     await act(async () => {
@@ -452,7 +459,7 @@ describe("QueryTab — history", () => {
     });
 
     // Same paradigm + same connection → in-place update, tab count unchanged.
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     expect(state.activeTabId).toBe("query-1");
     const qt = state.tabs[0];
@@ -468,7 +475,7 @@ describe("QueryTab — history", () => {
   it("Load into editor button routes through loadQueryIntoTab (AC-09 in-place)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -479,7 +486,9 @@ describe("QueryTab — history", () => {
     });
 
     await act(async () => {
-      useTabStore.getState().updateQuerySql("query-1", "CHANGED");
+      useWorkspaceStore
+        .getState()
+        .updateQuerySql("conn1", "db1", "query-1", "CHANGED");
     });
 
     await act(async () => {
@@ -493,7 +502,7 @@ describe("QueryTab — history", () => {
       loadBtn.click();
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     // Same paradigm + same connection → in-place update, tab count unchanged.
     expect(state.tabs).toHaveLength(1);
     expect(state.activeTabId).toBe("query-1");
@@ -531,10 +540,7 @@ describe("QueryTab — history", () => {
     // ids minted by `addQueryTab` (which mint `query-${counter}` starting
     // at 1).
     const rdbTab = makeQueryTab({ id: "query-rdb-original" });
-    useTabStore.setState({
-      tabs: [rdbTab],
-      activeTabId: "query-rdb-original",
-    });
+    useWorkspaceStore.setState(seedWorkspace([rdbTab], "query-rdb-original"));
     render(<QueryTab tab={rdbTab} />);
 
     await act(async () => {
@@ -551,17 +557,22 @@ describe("QueryTab — history", () => {
       );
     });
 
-    const state = useTabStore.getState();
-    expect(state.tabs).toHaveLength(2);
+    // ADR 0027 — the spawned document tab lives in its own workspace
+    // (conn-mongo, table_view_test); the original RDB tab stays in
+    // (conn1, db1). Total tabs across both connections = 2.
+    const rdbWs = getTestWorkspace("conn1", "db1");
+    const docTabs = getAllTabsForConnection("conn-mongo");
+    expect(rdbWs.tabs).toHaveLength(1);
+    expect(docTabs).toHaveLength(1);
     // Original RDB tab is untouched (AC-10).
-    const original = state.tabs.find((t) => t.id === "query-rdb-original");
+    const original = rdbWs.tabs.find((t) => t.id === "query-rdb-original");
     expect(original).toBeDefined();
     if (original && original.type === "query") {
       expect(original.paradigm).toBe("rdb");
       expect(original.sql).toBe("SELECT 1");
     }
     // New tab inherits the entry's paradigm + queryMode + db/coll (AC-08).
-    const spawned = state.tabs.find((t) => t.id === state.activeTabId);
+    const spawned = docTabs[0];
     expect(spawned?.type).toBe("query");
     if (spawned && spawned.type === "query") {
       expect(spawned.id).not.toBe("query-rdb-original");
@@ -593,7 +604,7 @@ describe("QueryTab — history", () => {
     });
 
     const tab = makeQueryTab({ sql: "CHANGED" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -610,7 +621,7 @@ describe("QueryTab — history", () => {
     // Same connection + default paradigm ("rdb") matches the active RDB tab,
     // so the restore should succeed via the in-place branch and write the
     // legacy SQL onto the active tab without throwing.
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     const qt = state.tabs[0];
     if (qt && qt.type === "query") {
@@ -640,7 +651,7 @@ describe("QueryTab — history", () => {
       ],
     });
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -679,7 +690,7 @@ describe("QueryTab — history", () => {
     // connection-agnostic entries list (useQueryHistoryStore.entries), so
     // any active tab will surface this document entry.
     const tab = makeDocTab({ id: "query-1" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {

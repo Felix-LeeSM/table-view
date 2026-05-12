@@ -3,7 +3,7 @@ import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { SQLDialect, SQLNamespace } from "@codemirror/lang-sql";
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/tabStore";
+import type { QueryMode } from "@stores/workspaceStore";
 import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";

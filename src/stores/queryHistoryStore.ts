@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/tabStore";
+import type { QueryMode } from "@stores/workspaceStore";
 
 /**
  * `"cancelled"` widens the status so a user-aborted query records

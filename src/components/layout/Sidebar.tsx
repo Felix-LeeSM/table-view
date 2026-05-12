@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import {
+  resolveActiveDb,
+  useActiveTab,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
@@ -52,12 +56,9 @@ export default function Sidebar() {
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
-  const activeTab = useTabStore((s) => {
-    const id = s.activeTabId;
-    return id ? s.tabs.find((t) => t.id === id) : null;
-  });
+  const activeTab = useActiveTab();
   const activeTabConnId = activeTab?.connectionId ?? null;
-  const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
   // MRU marking lives on each caller (not inside tabStore.addQueryTab) —
   // the "+ Query" button explicitly marks the focused connection used so
   // the launcher Recent rail / EmptyState CTA reflect the user's continued
@@ -168,7 +169,8 @@ export default function Sidebar() {
               disabled={!selectedConnected}
               onClick={() => {
                 if (selectedConnected && focusedConnId) {
-                  addQueryTab(focusedConnId);
+                  const db = resolveActiveDb(focusedConnId);
+                  addQueryTab(focusedConnId, db);
                   markConnectionUsed(focusedConnId);
                 }
               }}

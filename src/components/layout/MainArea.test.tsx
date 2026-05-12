@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { useEffect } from "react";
 import MainArea from "./MainArea";
 import {
-  useTabStore,
+  useWorkspaceStore,
   type TableTab,
   type QueryTab as QueryTabType,
-} from "@stores/tabStore";
+} from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore, __resetMruStoreForTests } from "@stores/mruStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
@@ -143,8 +147,11 @@ function setConnections(opts: {
   const active = new Set(opts.active ?? []);
   const statuses: Record<string, ConnectionStatus> = {};
   for (const c of conns) {
+    // ADR 0027 — `useCurrentWorkspaceKey()` needs `activeDb`. Default
+    // each connected status to `db1` so `addQueryTab` lands in a
+    // resolvable workspace slot.
     statuses[c.id] = active.has(c.id)
-      ? { type: "connected" }
+      ? { type: "connected", activeDb: "db1" }
       : { type: "disconnected" };
   }
   useConnectionStore.setState({
@@ -155,11 +162,7 @@ function setConnections(opts: {
 
 describe("MainArea", () => {
   beforeEach(() => {
-    useTabStore.setState({
-      tabs: [],
-      activeTabId: null,
-      dirtyTabIds: new Set(),
-    });
+    useWorkspaceStore.setState({ workspaces: {} });
     setConnections({});
     // Sprint 119 (#SHELL-1) — reset MRU before each test so a stale MRU
     // from a prior test cannot leak into the EmptyState fallback chain.
@@ -189,7 +192,7 @@ describe("MainArea", () => {
 
   it("shows empty state when tabs exist but none are active", () => {
     const tab = makeTableTab({ id: "tab-1" });
-    useTabStore.setState({ tabs: [tab], activeTabId: null });
+    useWorkspaceStore.setState(seedWorkspace([tab], null));
 
     render(<MainArea />);
 
@@ -199,7 +202,7 @@ describe("MainArea", () => {
   // AC-06: table tab renders DataGrid + sub-tabs
   it("renders DataGrid for a table tab with records subView", () => {
     const tab = makeTableTab({ subView: "records" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -220,7 +223,7 @@ describe("MainArea", () => {
 
   it("renders StructurePanel for a table tab with structure subView", () => {
     const tab = makeTableTab({ subView: "structure" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -233,7 +236,7 @@ describe("MainArea", () => {
 
   it("renders sub-tab bar with Records and Structure tabs for table tab", () => {
     const tab = makeTableTab({ subView: "records" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -250,7 +253,7 @@ describe("MainArea", () => {
 
   it("marks Records tab as selected when subView is records", () => {
     const tab = makeTableTab({ subView: "records" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -262,7 +265,7 @@ describe("MainArea", () => {
 
   it("marks Structure tab as selected when subView is structure", () => {
     const tab = makeTableTab({ subView: "structure" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -274,7 +277,7 @@ describe("MainArea", () => {
 
   it("switches to structure subView when Structure tab is clicked", () => {
     const tab = makeTableTab({ subView: "records" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -283,7 +286,7 @@ describe("MainArea", () => {
       fireEvent.click(structureTab);
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
     expect(updatedTab).toBeDefined();
     if (updatedTab && updatedTab.type === "table") {
@@ -293,7 +296,7 @@ describe("MainArea", () => {
 
   it("switches to records subView when Records tab is clicked", () => {
     const tab = makeTableTab({ subView: "structure" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -302,7 +305,7 @@ describe("MainArea", () => {
       fireEvent.click(recordsTab);
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
     expect(updatedTab).toBeDefined();
     if (updatedTab && updatedTab.type === "table") {
@@ -312,7 +315,7 @@ describe("MainArea", () => {
 
   it("toggles subView with ArrowRight key on Records tab", () => {
     const tab = makeTableTab({ subView: "records" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -321,7 +324,7 @@ describe("MainArea", () => {
       fireEvent.keyDown(recordsTab, { key: "ArrowRight" });
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
     if (updatedTab && updatedTab.type === "table") {
       expect(updatedTab.subView).toBe("structure");
@@ -330,7 +333,7 @@ describe("MainArea", () => {
 
   it("toggles subView with ArrowLeft key on Structure tab", () => {
     const tab = makeTableTab({ subView: "structure" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -339,7 +342,7 @@ describe("MainArea", () => {
       fireEvent.keyDown(structureTab, { key: "ArrowLeft" });
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === tab.id);
     if (updatedTab && updatedTab.type === "table") {
       expect(updatedTab.subView).toBe("records");
@@ -349,7 +352,7 @@ describe("MainArea", () => {
   // AC-07: query tab renders QueryTab
   it("renders QueryTab for a query tab", () => {
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -358,7 +361,7 @@ describe("MainArea", () => {
 
   it("passes correct tab data to QueryTab", () => {
     const tab = makeQueryTab({ sql: "SELECT * FROM users" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -378,7 +381,7 @@ describe("MainArea", () => {
 
   it("renders TabBar when tabs exist", () => {
     const tab = makeTableTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -389,7 +392,7 @@ describe("MainArea", () => {
 
   it("does not render table content when table tab has no table name", () => {
     const tab = makeTableTab({ table: undefined });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -399,7 +402,7 @@ describe("MainArea", () => {
 
   it("does not render table content when table tab has no schema", () => {
     const tab = makeTableTab({ schema: undefined });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -413,7 +416,7 @@ describe("MainArea", () => {
       table: "active_users",
       title: "active_users",
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -431,7 +434,7 @@ describe("MainArea", () => {
       objectKind: "view",
       table: "active_users",
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -441,7 +444,7 @@ describe("MainArea", () => {
 
   it("falls back to StructurePanel when objectKind is omitted (legacy tab)", () => {
     const tab = makeTableTab({ subView: "structure" });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<MainArea />);
 
@@ -469,7 +472,7 @@ describe("MainArea", () => {
         connectionId: "conn1",
         table: "orders",
       });
-      useTabStore.setState({ tabs: [tabA, tabB], activeTabId: tabA.id });
+      useWorkspaceStore.setState(seedWorkspace([tabA, tabB], tabA.id));
 
       render(<MainArea />);
 
@@ -478,7 +481,24 @@ describe("MainArea", () => {
       ]);
 
       act(() => {
-        useTabStore.setState({ activeTabId: tabB.id });
+        useWorkspaceStore.setState((state) => ({
+          workspaces: {
+            ...state.workspaces,
+            conn1: {
+              ...state.workspaces.conn1,
+              db1: {
+                ...(state.workspaces.conn1?.db1 ?? {
+                  tabs: [],
+                  activeTabId: null,
+                  closedTabHistory: [],
+                  dirtyTabIds: [],
+                  sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+                }),
+                activeTabId: tabB.id,
+              },
+            },
+          },
+        }));
       });
 
       // Must include a SECOND mount entry — proves React unmounted A and
@@ -504,19 +524,19 @@ describe("MainArea", () => {
         connectionId: "conn1",
         table: "orders",
       });
-      useTabStore.setState({ tabs: [tabA, tabB], activeTabId: tabA.id });
+      useWorkspaceStore.setState(seedWorkspace([tabA, tabB], tabA.id));
 
       // Simulate the state the buggy code would produce: tab A is dirty
       // because its useDataGridEdit effect ran with `activeTabId === A`.
       act(() => {
-        useTabStore.getState().setTabDirty(tabA.id, true);
+        useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabA.id, true);
       });
 
       render(<MainArea />);
 
       // Sanity — A is dirty.
-      expect(useTabStore.getState().dirtyTabIds.has(tabA.id)).toBe(true);
-      expect(useTabStore.getState().dirtyTabIds.has(tabB.id)).toBe(false);
+      expect(getTestWorkspace().dirtyTabIds.includes(tabA.id)).toBe(true);
+      expect(getTestWorkspace().dirtyTabIds.includes(tabB.id)).toBe(false);
 
       // Swap to B. After the fix, A's grid unmounts and its effect
       // cleanup clears A. B mounts fresh with empty pendingEdits and
@@ -524,10 +544,27 @@ describe("MainArea", () => {
       // dirty" — A's marker may or may not survive (the cleanup clears
       // it). The user-visible bug is resolved either way.
       act(() => {
-        useTabStore.setState({ activeTabId: tabB.id });
+        useWorkspaceStore.setState((state) => ({
+          workspaces: {
+            ...state.workspaces,
+            conn1: {
+              ...state.workspaces.conn1,
+              db1: {
+                ...(state.workspaces.conn1?.db1 ?? {
+                  tabs: [],
+                  activeTabId: null,
+                  closedTabHistory: [],
+                  dirtyTabIds: [],
+                  sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+                }),
+                activeTabId: tabB.id,
+              },
+            },
+          },
+        }));
       });
 
-      expect(useTabStore.getState().dirtyTabIds.has(tabB.id)).toBe(false);
+      expect(getTestWorkspace().dirtyTabIds.includes(tabB.id)).toBe(false);
     });
   });
 
@@ -558,7 +595,8 @@ describe("MainArea", () => {
         fireEvent.click(screen.getByRole("button", { name: /new query/i }));
       });
 
-      const state = useTabStore.getState();
+      // ADR 0027 — tab lands in workspace ("c1", db1).
+      const state = getTestWorkspace("c1", "db1");
       expect(state.tabs).toHaveLength(1);
       expect(state.tabs[0]!.type).toBe("query");
       expect(state.tabs[0]!.connectionId).toBe("c1");
@@ -597,7 +635,7 @@ describe("MainArea", () => {
         fireEvent.click(screen.getByRole("button", { name: /new query/i }));
       });
 
-      const state = useTabStore.getState();
+      const state = getTestWorkspace("c2", "db1");
       expect(state.tabs[0]!.connectionId).toBe("c2");
     });
   });
@@ -630,7 +668,7 @@ describe("MainArea", () => {
         fireEvent.click(screen.getByRole("button", { name: /new query/i }));
       });
 
-      const state = useTabStore.getState();
+      const state = getTestWorkspace("c3", "db1");
       expect(state.tabs[0]!.connectionId).toBe("c3");
     });
 

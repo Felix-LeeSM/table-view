@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 
 /**
@@ -32,11 +32,11 @@ export function useWindowFocusHydration(): void {
       const newConnId = useConnectionStore.getState().focusedConnId;
 
       if (newConnId && newConnId !== prevConnId) {
-        const { tabs } = useTabStore.getState();
-        const staleConnIds = new Set(
-          tabs.map((t) => t.connectionId).filter((cid) => cid !== newConnId),
+        const { workspaces } = useWorkspaceStore.getState();
+        const staleConnIds = Object.keys(workspaces).filter(
+          (cid) => cid !== newConnId,
         );
-        const clear = useTabStore.getState().clearTabsForConnection;
+        const clear = useWorkspaceStore.getState().clearForConnection;
         for (const cid of staleConnIds) {
           clear(cid);
         }

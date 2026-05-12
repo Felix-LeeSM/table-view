@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import QuerySyntax from "@components/shared/QuerySyntax";
 import type { QueryHistoryEntry } from "@stores/queryHistoryStore";
-import type { QueryMode } from "@stores/tabStore";
+import type { QueryMode } from "@stores/workspaceStore";
 import type { Paradigm } from "@/types/connection";
 
 interface LoadQueryArgs {

@@ -7,7 +7,7 @@ import {
 import { verifyActiveDb } from "@lib/api/verifyActiveDb";
 import { toast } from "@lib/toast";
 import type { Paradigm } from "@/types/connection";
-import type { QueryTab } from "@stores/tabStore";
+import type { QueryTab } from "@stores/workspaceStore";
 
 /**
  * `QueryTab` module-top helpers:

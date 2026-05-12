@@ -1,12 +1,22 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import {
+  getTestWorkspace,
+  seedConnection,
+  seedWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import TabBar from "./TabBar";
-import { useTabStore, type TableTab } from "@stores/tabStore";
+import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
 
 function addTableTab(overrides: Partial<Omit<TableTab, "id">> = {}) {
-  useTabStore.getState().addTab({
+  // Workspace key is hardcoded to conn1/db1 so legacy tests that mixed
+  // tabs from different connections (via `connectionId` overrides on the
+  // init payload) still surface every tab through `useCurrentTabs()`.
+  // Tests asserting per-workspace separation should use `seedWorkspace`
+  // / `addTab(connId, ...)` directly.
+  useWorkspaceStore.getState().addTab("conn1", {
     title: "Test Tab",
     connectionId: "conn1",
     type: "table",
@@ -27,11 +37,7 @@ function fireAuxClick(element: Element, button: number) {
 
 describe("TabBar", () => {
   beforeEach(() => {
-    useTabStore.setState({
-      tabs: [],
-      activeTabId: null,
-      dirtyTabIds: new Set<string>(),
-    });
+    useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({
       connections: [],
       groups: [],
@@ -39,6 +45,7 @@ describe("TabBar", () => {
       loading: false,
       error: null,
     } as Partial<Parameters<typeof useConnectionStore.setState>[0]>);
+    seedConnection("conn1", "db1");
   });
 
   it("renders nothing when no tabs", () => {
@@ -98,13 +105,13 @@ describe("TabBar", () => {
 
     render(<TabBar />);
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(2);
 
     const ordersTab = screen.getByText("orders").closest("[role='tab']")!;
     fireAuxClick(ordersTab, 1);
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(screen.queryByText("orders")).not.toBeInTheDocument();
   });
 
@@ -125,7 +132,7 @@ describe("TabBar", () => {
     const ordersTab = screen.getByText("orders").closest("[role='tab']")!;
     fireAuxClick(ordersTab, 2);
 
-    expect(useTabStore.getState().tabs).toHaveLength(2);
+    expect(getTestWorkspace().tabs).toHaveLength(2);
   });
 
   it("activates tab on click", () => {
@@ -142,7 +149,7 @@ describe("TabBar", () => {
 
     render(<TabBar />);
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const firstTabId = state.tabs[0]!.id;
 
     // Click the first tab (second tab is currently active)
@@ -151,7 +158,7 @@ describe("TabBar", () => {
       fireEvent.click(usersTab);
     });
 
-    expect(useTabStore.getState().activeTabId).toBe(firstTabId);
+    expect(getTestWorkspace().activeTabId).toBe(firstTabId);
   });
 
   it("closes tab via close button", () => {
@@ -163,7 +170,7 @@ describe("TabBar", () => {
       fireEvent.click(closeBtn);
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    expect(getTestWorkspace().tabs).toHaveLength(0);
   });
 
   // 2026-05-11 — regression. The pointer-events drag migration started
@@ -189,12 +196,12 @@ describe("TabBar", () => {
       fireEvent.click(closeBtn);
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    expect(getTestWorkspace().tabs).toHaveLength(0);
   });
 
   it("renders query tab with correct icon", () => {
     addTableTab({ title: "Users", table: "users" });
-    useTabStore.getState().addQueryTab("conn1");
+    useWorkspaceStore.getState().addQueryTab("conn1", "db1");
 
     render(<TabBar />);
     const tabs = screen.getAllByRole("tab");
@@ -300,9 +307,9 @@ describe("TabBar", () => {
     addTableTab({ title: "public.users", table: "users" });
 
     // Promote the tab to permanent
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const tabId = state.tabs[0]!.id;
-    useTabStore.getState().promoteTab(tabId);
+    useWorkspaceStore.getState().promoteTab("conn1", "db1", tabId);
 
     render(<TabBar />);
     const titleEl = screen.getByText("users");
@@ -314,7 +321,7 @@ describe("TabBar", () => {
   it("promotes preview tab on double-click", () => {
     addTableTab({ title: "public.users", table: "users" });
     // New tab is preview by default
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect((state.tabs[0] as TableTab).isPreview).toBe(true);
 
     render(<TabBar />);
@@ -323,15 +330,15 @@ describe("TabBar", () => {
       fireEvent.doubleClick(tab);
     });
 
-    const updatedTab = useTabStore.getState().tabs[0] as TableTab;
+    const updatedTab = getTestWorkspace().tabs[0] as TableTab;
     expect(updatedTab.isPreview).toBe(false);
   });
 
   it("does not change permanent tab on double-click", () => {
     addTableTab({ title: "public.users", table: "users" });
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const tabId = state.tabs[0]!.id;
-    useTabStore.getState().promoteTab(tabId);
+    useWorkspaceStore.getState().promoteTab("conn1", "db1", tabId);
 
     render(<TabBar />);
     const tab = screen.getByText("users").closest("[role='tab']")!;
@@ -339,13 +346,13 @@ describe("TabBar", () => {
       fireEvent.doubleClick(tab);
     });
 
-    const updatedTab = useTabStore.getState().tabs[0] as TableTab;
+    const updatedTab = getTestWorkspace().tabs[0] as TableTab;
     expect(updatedTab.isPreview).toBe(false);
   });
 
   it("does not call promoteTab on query tab double-click", () => {
     addTableTab({ title: "Users", table: "users" });
-    useTabStore.getState().addQueryTab("conn1");
+    useWorkspaceStore.getState().addQueryTab("conn1", "db1");
 
     render(<TabBar />);
     const tabs = screen.getAllByRole("tab");
@@ -356,7 +363,7 @@ describe("TabBar", () => {
     });
 
     // Query tab should still exist and be active
-    expect(useTabStore.getState().tabs[1]!.type).toBe("query");
+    expect(getTestWorkspace().tabs[1]!.type).toBe("query");
   });
 
   // ── Sprint 253 (AC-253-03): Sprint 45 tooltip test retired ──
@@ -369,45 +376,46 @@ describe("TabBar", () => {
   // Helper: set tabs directly in the store to bypass the preview-replacement
   // logic in addTab (which collapses multiple same-connection tabs into one).
   function setThreeTabs() {
-    useTabStore.setState({
-      tabs: [
-        {
-          id: "t1",
-          type: "table",
-          title: "users",
-          connectionId: "conn1",
-          closable: true,
-          subView: "records" as const,
-          isPreview: false,
-          schema: "public",
-          table: "users",
-        },
-        {
-          id: "t2",
-          type: "table",
-          title: "orders",
-          connectionId: "conn1",
-          closable: true,
-          subView: "records" as const,
-          isPreview: false,
-          schema: "public",
-          table: "orders",
-        },
-        {
-          id: "t3",
-          type: "table",
-          title: "products",
-          connectionId: "conn1",
-          closable: true,
-          subView: "records" as const,
-          isPreview: false,
-          schema: "public",
-          table: "products",
-        },
-      ],
-      activeTabId: "t1",
-      closedTabHistory: [],
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "t1",
+            type: "table",
+            title: "users",
+            connectionId: "conn1",
+            closable: true,
+            subView: "records" as const,
+            isPreview: false,
+            schema: "public",
+            table: "users",
+          },
+          {
+            id: "t2",
+            type: "table",
+            title: "orders",
+            connectionId: "conn1",
+            closable: true,
+            subView: "records" as const,
+            isPreview: false,
+            schema: "public",
+            table: "orders",
+          },
+          {
+            id: "t3",
+            type: "table",
+            title: "products",
+            connectionId: "conn1",
+            closable: true,
+            subView: "records" as const,
+            isPreview: false,
+            schema: "public",
+            table: "products",
+          },
+        ],
+        "t1",
+      ),
+    );
   }
 
   // 2026-05-11 — drag-reorder migrated mouse → pointer events with
@@ -450,7 +458,7 @@ describe("TabBar", () => {
       { left: 200, right: 300, width: 100 },
     ]);
 
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
     const tabs = screen.getAllByRole("tab");
     expect(tabs).toHaveLength(3);
 
@@ -466,7 +474,7 @@ describe("TabBar", () => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 260 });
     });
 
-    const after = useTabStore.getState().tabs.map((t) => t.id);
+    const after = getTestWorkspace().tabs.map((t) => t.id);
     // t1 moves past t3 → [t2, t3, t1]
     expect(after).toEqual([before[1], before[2], before[0]]);
   });
@@ -481,7 +489,7 @@ describe("TabBar", () => {
       { left: 200, right: 300, width: 100 },
     ]);
 
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
     const tabs = screen.getAllByRole("tab");
 
     act(() => {
@@ -495,7 +503,7 @@ describe("TabBar", () => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 30 });
     });
 
-    expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+    expect(getTestWorkspace().tabs.map((t) => t.id)).toEqual(before);
   });
 
   it("activeTabId is unchanged after drag reorder", () => {
@@ -508,7 +516,7 @@ describe("TabBar", () => {
       { left: 200, right: 300, width: 100 },
     ]);
 
-    const { activeTabId } = useTabStore.getState();
+    const { activeTabId } = getTestWorkspace();
     const tabs = screen.getAllByRole("tab");
 
     act(() => {
@@ -521,7 +529,7 @@ describe("TabBar", () => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 260 });
     });
 
-    expect(useTabStore.getState().activeTabId).toBe(activeTabId);
+    expect(getTestWorkspace().activeTabId).toBe(activeTabId);
   });
 
   // 2026-05-11 — drag-end 불변식 매트릭스 헬퍼.
@@ -687,7 +695,7 @@ describe("TabBar", () => {
       { left: 200, right: 300, width: 100 },
     ]);
 
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
     const tabs = screen.getAllByRole("tab");
 
     act(() => {
@@ -701,7 +709,7 @@ describe("TabBar", () => {
     });
 
     // No reorder happened.
-    expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+    expect(getTestWorkspace().tabs.map((t) => t.id)).toEqual(before);
     expectCleanDragState();
   });
 
@@ -719,7 +727,24 @@ describe("TabBar", () => {
 
     // Start with t2 active, drag t1 onto t3, then synthesize the trailing
     // click — activeTabId should NOT collapse to t1.
-    useTabStore.setState({ activeTabId: "t2" });
+    useWorkspaceStore.setState((state) => ({
+      workspaces: {
+        ...state.workspaces,
+        conn1: {
+          ...state.workspaces.conn1,
+          db1: {
+            ...(state.workspaces.conn1?.db1 ?? {
+              tabs: [],
+              activeTabId: null,
+              closedTabHistory: [],
+              dirtyTabIds: [],
+              sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+            }),
+            activeTabId: "t2",
+          },
+        },
+      },
+    }));
     const tabs = screen.getAllByRole("tab");
 
     act(() => {
@@ -736,7 +761,7 @@ describe("TabBar", () => {
     });
 
     // moveTab repositioned t1 to the end → active tab still t2 (untouched).
-    expect(useTabStore.getState().activeTabId).toBe("t2");
+    expect(getTestWorkspace().activeTabId).toBe("t2");
   });
 
   // ── Sprint 97: dirty indicator + close gate ──
@@ -746,9 +771,9 @@ describe("TabBar", () => {
   // edits at a glance.
   it("renders a dirty mark for tabs in dirtyTabIds (AC-01)", () => {
     addTableTab({ title: "Users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, true);
     });
 
     render(<TabBar />);
@@ -763,9 +788,9 @@ describe("TabBar", () => {
   // next render, without needing a tab switch / remount.
   it("removes the dirty mark when dirtyTabIds clears (AC-03)", () => {
     addTableTab({ title: "Users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, true);
     });
 
     const { rerender } = render(<TabBar />);
@@ -774,7 +799,7 @@ describe("TabBar", () => {
 
     // Clean → mark must vanish.
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, false);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, false);
     });
     rerender(<TabBar />);
     tab = screen.getByText("users").closest("[role='tab']")!;
@@ -794,9 +819,9 @@ describe("TabBar", () => {
       table: "orders",
       connectionId: "conn2",
     });
-    const dirtyId = useTabStore.getState().tabs[0]!.id;
+    const dirtyId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().setTabDirty(dirtyId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", dirtyId, true);
     });
 
     render(<TabBar />);
@@ -824,12 +849,29 @@ describe("TabBar", () => {
       table: "orders",
       connectionId: "conn2",
     });
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getTestWorkspace().tabs;
     const dirtyId = tabs[0]!.id; // "users" — will be DIRTY
     const activeId = tabs[1]!.id; // "orders" — will be ACTIVE
     act(() => {
-      useTabStore.setState({ activeTabId: activeId });
-      useTabStore.getState().setTabDirty(dirtyId, true);
+      useWorkspaceStore.setState((state) => ({
+        workspaces: {
+          ...state.workspaces,
+          conn1: {
+            ...state.workspaces.conn1,
+            db1: {
+              ...(state.workspaces.conn1?.db1 ?? {
+                tabs: [],
+                activeTabId: null,
+                closedTabHistory: [],
+                dirtyTabIds: [],
+                sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+              }),
+              activeTabId: activeId,
+            },
+          },
+        },
+      }));
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", dirtyId, true);
     });
 
     render(<TabBar />);
@@ -863,12 +905,29 @@ describe("TabBar", () => {
       table: "events",
       connectionId: "conn3",
     });
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getTestWorkspace().tabs;
     const activeId = tabs[2]!.id; // "events" — active + clean
     const dirtyId = tabs[0]!.id; // "users" — dirty + NOT active
     act(() => {
-      useTabStore.setState({ activeTabId: activeId });
-      useTabStore.getState().setTabDirty(dirtyId, true);
+      useWorkspaceStore.setState((state) => ({
+        workspaces: {
+          ...state.workspaces,
+          conn1: {
+            ...state.workspaces.conn1,
+            db1: {
+              ...(state.workspaces.conn1?.db1 ?? {
+                tabs: [],
+                activeTabId: null,
+                closedTabHistory: [],
+                dirtyTabIds: [],
+                sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+              }),
+              activeTabId: activeId,
+            },
+          },
+        },
+      }));
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", dirtyId, true);
     });
 
     render(<TabBar />);
@@ -896,7 +955,7 @@ describe("TabBar", () => {
       fireEvent.click(closeBtn);
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    expect(getTestWorkspace().tabs).toHaveLength(0);
     // Dialog must NOT appear for a clean close.
     expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
   });
@@ -905,13 +964,13 @@ describe("TabBar", () => {
   // and close" → tab is actually removed.
   it("dirty close opens ConfirmDialog and removes tab on confirm (AC-02)", () => {
     addTableTab({ title: "Users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, true);
     });
 
     render(<TabBar />);
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
 
     const closeBtn = screen.getByLabelText("Close Users");
     act(() => {
@@ -919,7 +978,7 @@ describe("TabBar", () => {
     });
 
     // Tab still present — gate held the close.
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
 
     // Confirm → close completes.
@@ -930,18 +989,18 @@ describe("TabBar", () => {
       fireEvent.click(confirmBtn);
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    expect(getTestWorkspace().tabs).toHaveLength(0);
     // dirtyTabIds is cleaned up by removeTab.
-    expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(false);
+    expect(getTestWorkspace().dirtyTabIds.includes(tabId)).toBe(false);
   });
 
   // AC-02 — cancel branch: dirty close → ConfirmDialog → click "Cancel" →
   // tab stays open, dirty state preserved.
   it("dirty close cancel keeps the tab open (AC-02)", () => {
     addTableTab({ title: "Users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, true);
     });
 
     render(<TabBar />);
@@ -958,8 +1017,8 @@ describe("TabBar", () => {
     });
 
     // Tab survives, still dirty.
-    expect(useTabStore.getState().tabs).toHaveLength(1);
-    expect(useTabStore.getState().dirtyTabIds.has(tabId)).toBe(true);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
+    expect(getTestWorkspace().dirtyTabIds.includes(tabId)).toBe(true);
     // Dialog torn down.
     expect(screen.queryByText("Discard unsaved changes?")).toBeNull();
   });
@@ -967,9 +1026,13 @@ describe("TabBar", () => {
   // ── Sprint 123: paradigm visual cues ──
 
   it("renders a Mongo paradigm marker for document-paradigm tabs", () => {
+    // Document tabs are partitioned by `database`; production callers
+    // always pass it (see DocumentDatabaseTree). Mirror that here so
+    // the tab lands in the active workspace key (conn1, db1).
     addTableTab({
       title: "users",
       table: "users",
+      database: "db1",
       connectionId: "conn1",
       paradigm: "document",
     });
@@ -993,23 +1056,24 @@ describe("TabBar", () => {
   });
 
   it("labels a Mongo query tab as a query (not a collection)", () => {
-    useTabStore.setState({
-      tabs: [
-        {
-          id: "q1",
-          type: "query",
-          title: "find()",
-          connectionId: "conn1",
-          closable: true,
-          sql: "{}",
-          queryState: { status: "idle" },
-          paradigm: "document",
-          queryMode: "find",
-        },
-      ],
-      activeTabId: "q1",
-      closedTabHistory: [],
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "q1",
+            type: "query",
+            title: "find()",
+            connectionId: "conn1",
+            closable: true,
+            sql: "{ }",
+            queryState: { status: "idle" },
+            paradigm: "document",
+            queryMode: "find",
+          },
+        ],
+        "q1",
+      ),
+    );
 
     render(<TabBar />);
     expect(screen.getByLabelText("MongoDB query tab")).toBeInTheDocument();
@@ -1041,10 +1105,10 @@ describe("TabBar", () => {
 
   it("preview cue and dirty marker coexist on the same tab (AC-S136-06)", () => {
     addTableTab({ title: "public.users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     // Mark dirty while leaving the preview flag untouched.
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, true);
     });
 
     render(<TabBar />);
@@ -1077,9 +1141,9 @@ describe("TabBar", () => {
 
   it("permanent table tab does NOT carry data-preview (AC-147-3)", () => {
     addTableTab({ title: "public.users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().promoteTab(tabId);
+      useWorkspaceStore.getState().promoteTab("conn1", "db1", tabId);
     });
 
     render(<TabBar />);
@@ -1088,12 +1152,10 @@ describe("TabBar", () => {
   });
 
   it("query tab never carries data-preview (only table tabs are previewable)", () => {
-    useTabStore.getState().addQueryTab("conn1");
+    useWorkspaceStore.getState().addQueryTab("conn1", "db1");
 
     render(<TabBar />);
-    const queryTab = useTabStore
-      .getState()
-      .tabs.find((t) => t.type === "query")!;
+    const queryTab = getTestWorkspace().tabs.find((t) => t.type === "query")!;
     const tab = screen.getByText(queryTab.title).closest("[role='tab']")!;
     expect(tab).not.toHaveAttribute("data-preview");
   });
@@ -1127,9 +1189,9 @@ describe("TabBar", () => {
   it("permanent tab does not have preview-specific attributes (AC-13-07)", () => {
     addTableTab({ title: "public.users", table: "users" });
     // Promote to permanent.
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().promoteTab(tabId);
+      useWorkspaceStore.getState().promoteTab("conn1", "db1", tabId);
     });
 
     render(<TabBar />);
@@ -1149,16 +1211,16 @@ describe("TabBar", () => {
 
   it("middle-click on dirty tab triggers the confirm gate", () => {
     addTableTab({ title: "Users", table: "users" });
-    const tabId = useTabStore.getState().tabs[0]!.id;
+    const tabId = getTestWorkspace().tabs[0]!.id;
     act(() => {
-      useTabStore.getState().setTabDirty(tabId, true);
+      useWorkspaceStore.getState().setTabDirty("conn1", "db1", tabId, true);
     });
 
     render(<TabBar />);
     const tab = screen.getByText("users").closest("[role='tab']")!;
     fireAuxClick(tab, 1);
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(screen.getByText("Discard unsaved changes?")).toBeInTheDocument();
   });
 
@@ -1187,7 +1249,7 @@ describe("TabBar", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab");
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
 
     act(() => {
       fireEvent.pointerDown(tabs[0]!, {
@@ -1202,7 +1264,7 @@ describe("TabBar", () => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 350 });
     });
 
-    const after = useTabStore.getState().tabs.map((t) => t.id);
+    const after = getTestWorkspace().tabs.map((t) => t.id);
     // t1 → end of strip → [t2, t3, t1].
     expect(after).toEqual([before[1], before[2], before[0]]);
   });
@@ -1221,7 +1283,7 @@ describe("TabBar", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab");
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
 
     act(() => {
       fireEvent.pointerDown(tabs[0]!, {
@@ -1234,7 +1296,7 @@ describe("TabBar", () => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 210 });
     });
 
-    const after = useTabStore.getState().tabs.map((t) => t.id);
+    const after = getTestWorkspace().tabs.map((t) => t.id);
     // t1 inserted before t3 → [t2, t1, t3].
     expect(after).toEqual([before[1], before[0], before[2]]);
   });
@@ -1250,14 +1312,14 @@ describe("TabBar", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab");
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
 
     // No pointerDown → dragStateRef stays null.
     act(() => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 350 });
     });
 
-    expect(useTabStore.getState().tabs.map((t) => t.id)).toEqual(before);
+    expect(getTestWorkspace().tabs.map((t) => t.id)).toEqual(before);
   });
 
   it("releasing on a tab's right half moves source after it (AC-253-05)", () => {
@@ -1271,7 +1333,7 @@ describe("TabBar", () => {
     ]);
 
     const tabs = screen.getAllByRole("tab");
-    const before = useTabStore.getState().tabs.map((t) => t.id);
+    const before = getTestWorkspace().tabs.map((t) => t.id);
 
     act(() => {
       fireEvent.pointerDown(tabs[0]!, {
@@ -1284,7 +1346,7 @@ describe("TabBar", () => {
       fireEvent.pointerUp(tabs[0]!, { pointerId: 1, clientX: 270 });
     });
 
-    const after = useTabStore.getState().tabs.map((t) => t.id);
+    const after = getTestWorkspace().tabs.map((t) => t.id);
     // Single moveTab → t1 after t3 → [t2, t3, t1].
     expect(after).toEqual([before[1], before[2], before[0]]);
   });

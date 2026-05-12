@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import Sidebar from "./Sidebar";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 // jsdom in this project's setup ships an incomplete localStorage (getItem etc.
@@ -77,8 +81,12 @@ function setStores(opts: {
   const active = new Set(opts.active ?? []);
   const statuses: Record<string, ConnectionStatus> = {};
   for (const c of conns) {
+    // ADR 0027 — connected status must carry `activeDb` so
+    // `useCurrentWorkspaceKey()` resolves the workspace slot. Default
+    // every connected connection to its own `db1` sub-pool — tests can
+    // override per-connection via `useConnectionStore.setState` after.
     statuses[c.id] = active.has(c.id)
-      ? { type: "connected" }
+      ? { type: "connected", activeDb: "db1" }
       : { type: "disconnected" };
   }
   useConnectionStore.setState({
@@ -86,7 +94,7 @@ function setStores(opts: {
     activeStatuses: statuses,
     focusedConnId: null,
   });
-  useTabStore.setState({ tabs: [], activeTabId: null });
+  useWorkspaceStore.setState({ workspaces: {} });
 }
 
 // Sprint 125 — Sidebar is now Workspace-only (schemas mode). Connection
@@ -137,22 +145,30 @@ describe("Sidebar (schemas-only)", () => {
     });
     render(<Sidebar />);
 
+    // Seed the active tab in the CURRENTLY focused workspace (c1, db1)
+    // but with `connectionId: "c2"` so the auto-sync effect observes a
+    // mismatch and re-focuses to c2. Mirrors the legacy "active tab
+    // belongs to a different connection" path.
     act(() => {
-      useTabStore.setState({
-        tabs: [
-          {
-            type: "table",
-            id: "tab-x",
-            title: "x",
-            connectionId: "c2",
-            closable: true,
-            schema: "public",
-            table: "users",
-            subView: "records",
-          },
-        ],
-        activeTabId: "tab-x",
-      });
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-x",
+              title: "x",
+              connectionId: "c2",
+              closable: true,
+              schema: "public",
+              table: "users",
+              subView: "records",
+            },
+          ],
+          "tab-x",
+          "c1",
+          "db1",
+        ),
+      );
     });
 
     expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
@@ -191,7 +207,8 @@ describe("Sidebar (schemas-only)", () => {
         fireEvent.click(btn);
       });
 
-      const state = useTabStore.getState();
+      // ADR 0027 — tabs live in workspace ("c1", db1).
+      const state = getTestWorkspace("c1", "db1");
       expect(state.tabs).toHaveLength(1);
       expect(state.tabs[0]!.type).toBe("query");
       expect(state.tabs[0]!.connectionId).toBe("c1");

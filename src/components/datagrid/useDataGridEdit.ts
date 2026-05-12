@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Decimal from "decimal.js";
-import { useTabStore } from "@stores/tabStore";
+import {
+  useActiveTabId,
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 import {
   useDataGridEditStore,
   entryKey as makeStoreEntryKey,
@@ -385,11 +389,26 @@ export function useDataGridEdit({
   fetchData,
   paradigm = "rdb",
 }: UseDataGridEditParams): DataGridEditState {
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const promoteTab = useTabStore((s) => s.promoteTab);
+  const activeTabId = useActiveTabId();
+  const workspaceKey = useCurrentWorkspaceKey();
+  const promoteTabAction = useWorkspaceStore((s) => s.promoteTab);
+  const setTabDirtyAction = useWorkspaceStore((s) => s.setTabDirty);
+  const promoteTab = useCallback(
+    (tabId: string) => {
+      if (!workspaceKey) return;
+      promoteTabAction(workspaceKey.connId, workspaceKey.db, tabId);
+    },
+    [workspaceKey, promoteTabAction],
+  );
   // Surface dirty state to the store so TabBar can render the dirty dot
   // + gate close-on-dirty without coupling to grid internals.
-  const setTabDirty = useTabStore((s) => s.setTabDirty);
+  const setTabDirty = useCallback(
+    (tabId: string, dirty: boolean) => {
+      if (!workspaceKey) return;
+      setTabDirtyAction(workspaceKey.connId, workspaceKey.db, tabId, dirty);
+    },
+    [workspaceKey, setTabDirtyAction],
+  );
 
   // Cell editing state — these stay in component-local useState. Only
   // the four pending diff slices (pendingEdits / pendingNewRows /

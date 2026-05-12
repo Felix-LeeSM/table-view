@@ -4,9 +4,13 @@
 // spinners, auto-expand on mount, and rendering of view/function/
 // procedure rows. Cases are byte-equivalent to the originals.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   mockLoadSchemas,
   mockLoadTables,
@@ -225,7 +229,7 @@ describe("SchemaTree — expand", () => {
       fireEvent.keyDown(tableItem, { key: "Enter" });
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const tab = state.tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
   });
@@ -540,21 +544,23 @@ describe("SchemaTree — expand", () => {
     });
 
     // Set active tab AFTER store is set up
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "table",
-          id: "tab-1",
-          title: "public.users",
-          connectionId: "conn1",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-        },
-      ],
-      activeTabId: "tab-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+        ],
+        "tab-1",
+      ),
+    );
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -583,21 +589,23 @@ describe("SchemaTree — expand", () => {
     // Set active tab to public.users — pre-S144 this would have been the
     // only signal expanding `public`. Post-S144, both schemas expand
     // unconditionally.
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "table",
-          id: "tab-1",
-          title: "public.users",
-          connectionId: "conn1",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-        },
-      ],
-      activeTabId: "tab-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+        ],
+        "tab-1",
+      ),
+    );
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);

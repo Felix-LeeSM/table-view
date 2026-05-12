@@ -3,7 +3,7 @@ import { render, screen, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { ConnectionConfig, DatabaseType } from "@/types/connection";
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ function setSchemaStoreState(overrides: Record<string, unknown> = {}) {
 
 function resetStores() {
   setSchemaStoreState();
-  useTabStore.setState({ tabs: [], activeTabId: null });
+  useWorkspaceStore.setState({ workspaces: {} });
   useConnectionStore.setState({ connections: [] });
 }
 

@@ -8,6 +8,10 @@
 // byte-equivalent to the originals.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
+import {
   render,
   screen,
   fireEvent,
@@ -15,7 +19,7 @@ import {
   act,
 } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   mockLoadSchemas,
   mockLoadTables,
@@ -320,21 +324,23 @@ describe("SchemaTree — highlight", () => {
     });
 
     // Pre-set an active tab pointing to public.users
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "table",
-          id: "tab-1",
-          title: "public.users",
-          connectionId: "conn1",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-        },
-      ],
-      activeTabId: "tab-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "public.users",
+            connectionId: "conn1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+        ],
+        "tab-1",
+      ),
+    );
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -366,22 +372,24 @@ describe("SchemaTree — highlight", () => {
     });
 
     // Set a query tab as active
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "query",
-          id: "query-1",
-          title: "Query 1",
-          connectionId: "conn1",
-          closable: true,
-          sql: "SELECT 1",
-          queryState: { status: "idle" },
-          paradigm: "rdb",
-          queryMode: "sql",
-        },
-      ],
-      activeTabId: "query-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "query",
+            id: "query-1",
+            title: "Query 1",
+            connectionId: "conn1",
+            closable: true,
+            sql: "SELECT 1",
+            queryState: { status: "idle" },
+            paradigm: "rdb",
+            queryMode: "sql",
+          },
+        ],
+        "query-1",
+      ),
+    );
 
     await act(async () => {
       render(<SchemaTree connectionId="conn1" />);
@@ -436,12 +444,12 @@ describe("SchemaTree — highlight", () => {
       expect(usersItem).not.toHaveClass("bg-primary/10");
 
       // Switch back to the users tab via the store (simulates Cmd+1).
-      const usersTab = useTabStore
-        .getState()
-        .tabs.find((t) => t.type === "table" && t.table === "users");
+      const usersTab = getTestWorkspace().tabs.find(
+        (t) => t.type === "table" && t.table === "users",
+      );
       expect(usersTab).toBeTruthy();
       await act(async () => {
-        useTabStore.getState().setActiveTab(usersTab!.id);
+        useWorkspaceStore.getState().setActiveTab("conn1", "db1", usersTab!.id);
       });
 
       // Only users should be highlighted now — orders' highlight
@@ -466,33 +474,9 @@ describe("SchemaTree — highlight", () => {
     });
 
     // Start with users tab active
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "table",
-          id: "tab-1",
-          title: "public.users",
-          connectionId: "conn1",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-        },
-      ],
-      activeTabId: "tab-1",
-    });
-
-    const { rerender } = await act(async () => {
-      return render(<SchemaTree connectionId="conn1" />);
-    });
-
-    // Users should be highlighted
-    expect(screen.getByLabelText("users table")).toHaveClass("bg-primary/10");
-
-    // Switch active tab to orders
-    await act(async () => {
-      useTabStore.setState({
-        tabs: [
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
           {
             type: "table",
             id: "tab-1",
@@ -503,19 +487,47 @@ describe("SchemaTree — highlight", () => {
             table: "users",
             subView: "records",
           },
-          {
-            type: "table",
-            id: "tab-2",
-            title: "public.orders",
-            connectionId: "conn1",
-            closable: true,
-            schema: "public",
-            table: "orders",
-            subView: "records",
-          },
         ],
-        activeTabId: "tab-2",
-      });
+        "tab-1",
+      ),
+    );
+
+    const { rerender } = await act(async () => {
+      return render(<SchemaTree connectionId="conn1" />);
+    });
+
+    // Users should be highlighted
+    expect(screen.getByLabelText("users table")).toHaveClass("bg-primary/10");
+
+    // Switch active tab to orders
+    await act(async () => {
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-1",
+              title: "public.users",
+              connectionId: "conn1",
+              closable: true,
+              schema: "public",
+              table: "users",
+              subView: "records",
+            },
+            {
+              type: "table",
+              id: "tab-2",
+              title: "public.orders",
+              connectionId: "conn1",
+              closable: true,
+              schema: "public",
+              table: "orders",
+              subView: "records",
+            },
+          ],
+          "tab-2",
+        ),
+      );
     });
 
     await act(async () => {

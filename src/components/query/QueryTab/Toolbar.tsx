@@ -11,7 +11,7 @@ import {
   FlaskConical,
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
-import type { QueryTab, QueryMode } from "@stores/tabStore";
+import type { QueryTab, QueryMode } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 
 /**

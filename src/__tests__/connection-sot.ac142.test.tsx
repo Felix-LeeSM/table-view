@@ -10,11 +10,15 @@
  * Each `it(...)` name embeds the AC label (AC-142-N) for grep-ability.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import HomePage from "@/pages/HomePage";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
@@ -72,12 +76,7 @@ beforeEach(() => {
     activeStatuses: {},
     focusedConnId: null,
   });
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
-    dirtyTabIds: new Set<string>(),
-  });
+  useWorkspaceStore.setState({ workspaces: {} });
   vi.mocked(windowControls.showWindow).mockClear();
   vi.mocked(windowControls.hideWindow).mockClear();
   vi.mocked(windowControls.focusWindow).mockClear();
@@ -143,35 +142,38 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
       },
     });
     // Pre-populate two tabs owned by c1.
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "table",
-          id: "tab-1",
-          title: "users",
-          connectionId: "c1",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-          paradigm: "rdb",
-        },
-        {
-          type: "query",
-          id: "query-1",
-          title: "Query 1",
-          connectionId: "c1",
-          closable: true,
-          sql: "SELECT 1",
-          queryState: { status: "idle" },
-          paradigm: "rdb",
-          queryMode: "sql",
-        },
-      ],
-      activeTabId: "tab-1",
-      closedTabHistory: [],
-      dirtyTabIds: new Set<string>(),
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "users",
+            connectionId: "c1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            paradigm: "rdb",
+          },
+          {
+            type: "query",
+            id: "query-1",
+            title: "Query 1",
+            connectionId: "c1",
+            closable: true,
+            sql: "SELECT 1",
+            queryState: { status: "idle" },
+            paradigm: "rdb",
+            queryMode: "sql",
+          },
+        ],
+        "tab-1",
+        "conn1",
+        "db1",
+        { closedTabHistory: [], dirtyTabIds: [] },
+      ),
+    );
 
     render(<HomePage />);
 
@@ -182,9 +184,9 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     });
 
     // Stale c1 tabs are closed. Active tab is null (c2 has no tabs yet).
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getTestWorkspace().tabs;
     expect(tabs).toHaveLength(0);
-    expect(useTabStore.getState().activeTabId).toBeNull();
+    expect(getTestWorkspace().activeTabId).toBeNull();
     // Workspace becomes the active surface (focused on c2). Sprint 154
     // moved the surface activation to the `@lib/window-controls` seam —
     // the user-observable invariant ("the workspace shows up after
@@ -198,26 +200,34 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       focusedConnId: "c1",
-      activeStatuses: { c1: { type: "connected" } },
+      // ADR 0027 — `useCurrentWorkspaceKey()` needs `activeDb`; without
+      // it the workspace cannot be resolved and the re-activation flow
+      // can't observe the seeded tab.
+      activeStatuses: { c1: { type: "connected", activeDb: "db1" } },
     });
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "query",
-          id: "query-1",
-          title: "Query 1",
-          connectionId: "c1",
-          closable: true,
-          sql: "SELECT 1",
-          queryState: { status: "idle" },
-          paradigm: "rdb",
-          queryMode: "sql",
-        },
-      ],
-      activeTabId: "query-1",
-      closedTabHistory: [],
-      dirtyTabIds: new Set<string>(),
-    });
+    // Seed the tab under c1's own workspace (the connection whose tabs
+    // we're guarding against reset).
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "query",
+            id: "query-1",
+            title: "Query 1",
+            connectionId: "c1",
+            closable: true,
+            sql: "SELECT 1",
+            queryState: { status: "idle" },
+            paradigm: "rdb",
+            queryMode: "sql",
+          },
+        ],
+        "query-1",
+        "c1",
+        "db1",
+        { closedTabHistory: [], dirtyTabIds: [] },
+      ),
+    );
 
     render(<HomePage />);
     await act(async () => {
@@ -225,8 +235,9 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     });
 
     // Same-id activation must not blow away its own tabs.
-    expect(useTabStore.getState().tabs).toHaveLength(1);
-    expect(useTabStore.getState().activeTabId).toBe("query-1");
+    const ws = getTestWorkspace("c1", "db1");
+    expect(ws.tabs).toHaveLength(1);
+    expect(ws.activeTabId).toBe("query-1");
     // Sprint 154 — workspace surface activation expressed via seam call.
     expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
   });

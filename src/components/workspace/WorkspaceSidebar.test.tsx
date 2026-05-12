@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent } from "@testing-library/react";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
-import type { TableTab } from "@stores/tabStore";
+import type { TableTab } from "@stores/workspaceStore";
 
 // Mock the heavy paradigm-specific trees so this suite stays fast and
 // doesn't pull in network / virtualization machinery. The wrappers
@@ -86,10 +87,10 @@ function setupStore(opts: {
 
 function setActiveTab(tab: TableTab | null) {
   if (tab === null) {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     return;
   }
-  useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+  useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 }
 
 describe("WorkspaceSidebar", () => {

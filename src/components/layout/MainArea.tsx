@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import TabBar from "./TabBar";
-import { useTabStore, type TableTab, type TabSubView } from "@stores/tabStore";
+import type { TableTab, TabSubView } from "@stores/workspaceStore";
+import {
+  resolveActiveDb,
+  useActiveTabId,
+  useCurrentTabs,
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
 import { Plus } from "lucide-react";
@@ -132,7 +139,7 @@ function EmptyState() {
   // the CTA's single-action observable transition (click → new tab + MRU
   // shift) is preserved.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
-  const addQueryTab = useTabStore((s) => s.addQueryTab);
+  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
 
   // MRU-first policy with first-connected fallback. The MRU id is null on
   // first run (or after a reset); stale-MRU (the previously-used connection
@@ -165,7 +172,8 @@ function EmptyState() {
             size="sm"
             className="mt-1"
             onClick={() => {
-              addQueryTab(target.id);
+              const db = resolveActiveDb(target.id);
+              addQueryTab(target.id, db);
               markConnectionUsed(target.id);
             }}
           >
@@ -183,9 +191,10 @@ function EmptyState() {
 }
 
 export default function MainArea() {
-  const tabs = useTabStore((s) => s.tabs);
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const setSubView = useTabStore((s) => s.setSubView);
+  const tabs = useCurrentTabs();
+  const activeTabId = useActiveTabId();
+  const workspaceKey = useCurrentWorkspaceKey();
+  const setSubView = useWorkspaceStore((s) => s.setSubView);
   const [showGlobalLog, setShowGlobalLog] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -216,7 +225,15 @@ export default function MainArea() {
           <TableTabView
             key={activeTab.id}
             tab={activeTab}
-            onSubViewChange={(subView) => setSubView(activeTab.id, subView)}
+            onSubViewChange={(subView) => {
+              if (!workspaceKey) return;
+              setSubView(
+                workspaceKey.connId,
+                workspaceKey.db,
+                activeTab.id,
+                subView,
+              );
+            }}
           />
         ) : activeTab?.type === "query" ? (
           <QueryTab key={activeTab.id} tab={activeTab} />

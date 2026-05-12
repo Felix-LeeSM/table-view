@@ -11,7 +11,10 @@
 // pulls them above any import; each axis file declares the 7 factories at
 // its module top-level instead.
 import { vi } from "vitest";
-import { useTabStore, type QueryTab as QueryTabType } from "@stores/tabStore";
+import {
+  useWorkspaceStore,
+  type QueryTab as QueryTabType,
+} from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -144,7 +147,7 @@ export function makeDocTab(
 // ---------------------------------------------------------------------------
 
 export function resetQueryTabStores(): void {
-  useTabStore.setState({ tabs: [], activeTabId: null });
+  useWorkspaceStore.setState({ workspaces: {} });
   useQueryHistoryStore.setState({ entries: [] });
   useConnectionStore.setState({ connections: [] });
   // Sprint 231 — reset Safe Mode mode so the persisted localStorage state

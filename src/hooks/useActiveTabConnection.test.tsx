@@ -1,5 +1,5 @@
 // Sprint 256 (2026-05-09): `useActiveTabConnection` — combine
-// `useTabStore.activeTabId` + `useConnectionStore.connections` →
+// `useWorkspaceStore.activeTabId` + `useConnectionStore.connections` →
 // `Connection | null`. Drives the EnvironmentChromeStripe + prod window
 // border + ExecuteButton callsites. Tests cover: happy path (tab →
 // connection), absent active tab → null, connection deleted while tab
@@ -11,12 +11,13 @@
 // activation on tab switch).
 
 import { describe, it, expect, beforeEach } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { renderHook, act } from "@testing-library/react";
 import { useActiveTabConnection } from "./useActiveTabConnection";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
-import type { Tab } from "@stores/tabStore";
+import type { Tab } from "@stores/workspaceStore";
 
 function makeConnection(
   id: string,
@@ -55,7 +56,7 @@ function makeQueryTab(id: string, connectionId: string): Tab {
 }
 
 beforeEach(() => {
-  useTabStore.setState({ tabs: [], activeTabId: null });
+  useWorkspaceStore.setState({ workspaces: {} });
   useConnectionStore.setState({
     connections: [],
     activeStatuses: {},
@@ -72,10 +73,7 @@ describe("useActiveTabConnection", () => {
   it("returns the connection for the active tab", () => {
     const conn = makeConnection("c1", "production");
     useConnectionStore.setState({ connections: [conn] });
-    useTabStore.setState({
-      tabs: [makeQueryTab("t1", "c1")],
-      activeTabId: "t1",
-    });
+    useWorkspaceStore.setState(seedWorkspace([makeQueryTab("t1", "c1")], "t1"));
 
     const { result } = renderHook(() => useActiveTabConnection());
     expect(result.current?.id).toBe("c1");
@@ -87,10 +85,9 @@ describe("useActiveTabConnection", () => {
     // — the hook must not blow up; instead it falls back to null so the
     // chrome stripe disappears.
     useConnectionStore.setState({ connections: [] });
-    useTabStore.setState({
-      tabs: [makeQueryTab("t1", "ghost")],
-      activeTabId: "t1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace([makeQueryTab("t1", "ghost")], "t1"),
+    );
 
     const { result } = renderHook(() => useActiveTabConnection());
     expect(result.current).toBeNull();
@@ -103,16 +100,28 @@ describe("useActiveTabConnection", () => {
     const dev = makeConnection("dev", "development");
     const prod = makeConnection("prod", "production");
     useConnectionStore.setState({ connections: [dev, prod] });
-    useTabStore.setState({
-      tabs: [makeQueryTab("t-dev", "dev"), makeQueryTab("t-prod", "prod")],
-      activeTabId: "t-dev",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [makeQueryTab("t-dev", "dev"), makeQueryTab("t-prod", "prod")],
+        "t-dev",
+      ),
+    );
 
     const { result } = renderHook(() => useActiveTabConnection());
     expect(result.current?.environment).toBe("development");
 
+    // seedWorkspace placed the workspace at ("dev", "db1") because the
+    // first tab's connectionId is "dev"; flip activeTabId there.
     act(() => {
-      useTabStore.setState({ activeTabId: "t-prod" });
+      useWorkspaceStore.setState((state) => ({
+        workspaces: {
+          ...state.workspaces,
+          dev: {
+            ...state.workspaces.dev,
+            db1: { ...state.workspaces.dev!.db1!, activeTabId: "t-prod" },
+          },
+        },
+      }));
     });
 
     expect(result.current?.environment).toBe("production");
@@ -121,10 +130,7 @@ describe("useActiveTabConnection", () => {
   it("re-subscribes when the connection list mutates (deletion → null)", () => {
     const conn = makeConnection("c1", "staging");
     useConnectionStore.setState({ connections: [conn] });
-    useTabStore.setState({
-      tabs: [makeQueryTab("t1", "c1")],
-      activeTabId: "t1",
-    });
+    useWorkspaceStore.setState(seedWorkspace([makeQueryTab("t1", "c1")], "t1"));
 
     const { result } = renderHook(() => useActiveTabConnection());
     expect(result.current?.id).toBe("c1");

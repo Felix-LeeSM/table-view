@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useTabStore } from "@stores/tabStore";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
 import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
@@ -103,9 +103,9 @@ export function useSchemaTreeActions({
   } = useSchemaCache(connectionId);
 
   const functions = useSchemaStore((s) => s.functions);
-  const addTab = useTabStore((s) => s.addTab);
-  const addQueryTab = useTabStore((s) => s.addQueryTab);
-  const updateQuerySql = useTabStore((s) => s.updateQuerySql);
+  const addTab = useWorkspaceStore((s) => s.addTab);
+  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
+  const updateQuerySql = useWorkspaceStore((s) => s.updateQuerySql);
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
   const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(
@@ -160,7 +160,7 @@ export function useSchemaTreeActions({
   const handleTableClick = useCallback(
     (tableName: string, schemaName: string) => {
       setSelectedNodeId(null);
-      addTab({
+      addTab(connectionId, {
         title: `${schemaName}.${tableName}`,
         connectionId,
         type: "table",
@@ -177,7 +177,7 @@ export function useSchemaTreeActions({
   const handleTableDoubleClick = useCallback(
     (tableName: string, schemaName: string) => {
       setSelectedNodeId(null);
-      addTab({
+      addTab(connectionId, {
         title: `${schemaName}.${tableName}`,
         connectionId,
         type: "table",
@@ -195,7 +195,7 @@ export function useSchemaTreeActions({
   const handleOpenStructure = useCallback(
     (tableName: string, schemaName: string) => {
       setSelectedNodeId(null);
-      addTab({
+      addTab(connectionId, {
         title: `${schemaName}.${tableName}`,
         connectionId,
         type: "table",
@@ -231,7 +231,7 @@ export function useSchemaTreeActions({
   const handleViewClick = useCallback(
     (viewName: string, schemaName: string) => {
       setSelectedNodeId(null);
-      addTab({
+      addTab(connectionId, {
         title: `${schemaName}.${viewName}`,
         connectionId,
         type: "table",
@@ -249,7 +249,7 @@ export function useSchemaTreeActions({
   const handleOpenViewStructure = useCallback(
     (viewName: string, schemaName: string) => {
       setSelectedNodeId(null);
-      addTab({
+      addTab(connectionId, {
         title: `${schemaName}.${viewName}`,
         connectionId,
         type: "table",
@@ -273,16 +273,17 @@ export function useSchemaTreeActions({
           functionName: funcName,
         }),
       );
-      addQueryTab(connectionId);
+      const db = resolveActiveDb(connectionId);
+      addQueryTab(connectionId, db);
       markConnectionUsed(connectionId);
-      const latestTabs = useTabStore.getState().tabs;
-      const newTab = latestTabs[latestTabs.length - 1];
+      const ws = useWorkspaceStore.getState().workspaces[connectionId]?.[db];
+      const newTab = ws?.tabs[ws.tabs.length - 1];
       if (newTab && newTab.type === "query") {
         const key = `${connectionId}:${schemaName}`;
         const funcs = functions[key] ?? [];
         const func = funcs.find((f) => f.name === funcName);
         if (func?.source) {
-          updateQuerySql(newTab.id, func.source);
+          updateQuerySql(connectionId, db, newTab.id, func.source);
         }
       }
     },

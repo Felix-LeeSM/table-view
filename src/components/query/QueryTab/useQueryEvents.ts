@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { EditorView } from "@codemirror/view";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { cancelQuery } from "@lib/tauri";
 import { formatSql, uglifySql } from "@lib/sql/sqlUtils";
-import type { QueryTab } from "@stores/tabStore";
+import type { QueryTab } from "@stores/workspaceStore";
 
 /**
  * `QueryTab` 의 window event listener + handleFormat 캡슐화.
@@ -70,7 +70,19 @@ export function useQueryEvents({
     if (tab.paradigm === "document") return;
     const handler = () => {
       // Only format if this tab is the active tab
-      const { activeTabId } = useTabStore.getState();
+      const wsState = useWorkspaceStore.getState();
+      // Resolve the currently focused workspace's active tab id. Listeners
+      // fire on every tab subscribed; gating on the FOCUSED workspace's
+      // activeTabId ensures only the visible tab responds.
+      const focusedConnId =
+        // The focused conn lives on connectionStore but we can derive
+        // active tab id by scanning every workspace; for the format/uglify
+        // shortcuts what matters is "is THIS tab the active one in ITS
+        // workspace?" Original behavior gated on global activeTabId.
+        Object.values(wsState.workspaces).flatMap((byDb) =>
+          Object.values(byDb).map((ws) => ws.activeTabId),
+        );
+      const activeTabId = focusedConnId.find((id) => id === tab.id) ?? null;
       if (activeTabId !== tab.id) return;
       if (!tab.sql.trim()) return;
 
@@ -99,7 +111,19 @@ export function useQueryEvents({
   useEffect(() => {
     if (tab.paradigm === "document") return;
     const handler = () => {
-      const { activeTabId } = useTabStore.getState();
+      const wsState = useWorkspaceStore.getState();
+      // Resolve the currently focused workspace's active tab id. Listeners
+      // fire on every tab subscribed; gating on the FOCUSED workspace's
+      // activeTabId ensures only the visible tab responds.
+      const focusedConnId =
+        // The focused conn lives on connectionStore but we can derive
+        // active tab id by scanning every workspace; for the format/uglify
+        // shortcuts what matters is "is THIS tab the active one in ITS
+        // workspace?" Original behavior gated on global activeTabId.
+        Object.values(wsState.workspaces).flatMap((byDb) =>
+          Object.values(byDb).map((ws) => ws.activeTabId),
+        );
+      const activeTabId = focusedConnId.find((id) => id === tab.id) ?? null;
       if (activeTabId !== tab.id) return;
       if (!tab.sql.trim()) return;
       const uglified = uglifySql(tab.sql);

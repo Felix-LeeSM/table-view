@@ -4,9 +4,13 @@
 // column shape, and the resize-handle layout. Cases are byte-equivalent
 // to the originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   MOCK_RESULT,
   mockExecuteQuery,
@@ -146,7 +150,7 @@ describe("QueryTab — lifecycle", () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
     // Add the tab to the store so updateQueryState works
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -163,7 +167,7 @@ describe("QueryTab — lifecycle", () => {
 
     // Wait for async completion
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       expect(updatedTab).toBeDefined();
       if (updatedTab && updatedTab.type === "query") {
@@ -175,7 +179,7 @@ describe("QueryTab — lifecycle", () => {
   it("handles query execution error", async () => {
     mockExecuteQuery.mockRejectedValueOnce(new Error("Syntax error"));
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -184,7 +188,7 @@ describe("QueryTab — lifecycle", () => {
     });
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("error");
@@ -215,10 +219,7 @@ describe("QueryTab — lifecycle", () => {
     render(<QueryTab tab={tab} />);
 
     // First add the tab to the store so the component can find it
-    useTabStore.setState({
-      tabs: [tab],
-      activeTabId: "query-1",
-    });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
 
     act(() => {
       window.dispatchEvent(
@@ -235,7 +236,7 @@ describe("QueryTab — lifecycle", () => {
     const tab = makeQueryTab({
       queryState: { status: "running", queryId: "query-1-1234" },
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     act(() => {

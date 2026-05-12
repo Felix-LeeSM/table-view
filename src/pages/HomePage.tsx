@@ -9,7 +9,7 @@ import {
   Sun,
 } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
@@ -61,8 +61,8 @@ export default function HomePage() {
 
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
-  const tabs = useTabStore((s) => s.tabs);
-  const clearTabsForConnection = useTabStore((s) => s.clearTabsForConnection);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const clearForConnection = useWorkspaceStore((s) => s.clearForConnection);
 
   const themeId = useThemeStore((s) => s.themeId);
   const themeMode = useThemeStore((s) => s.mode);
@@ -112,11 +112,9 @@ export default function HomePage() {
       // workspace tab's owner, close those stale tabs so the new workspace
       // doesn't inherit cross-connection state. Same-connection
       // reactivation keeps existing tabs untouched.
-      const staleConnIds = new Set(
-        tabs.filter((t) => t.connectionId !== id).map((t) => t.connectionId),
-      );
+      const staleConnIds = Object.keys(workspaces).filter((cid) => cid !== id);
       for (const cid of staleConnIds) {
-        clearTabsForConnection(cid);
+        clearForConnection(cid);
       }
       setFocusedConn(id);
       activatingRef.current = true;
@@ -151,7 +149,7 @@ export default function HomePage() {
         }
       })();
     },
-    [setFocusedConn, tabs, clearTabsForConnection],
+    [setFocusedConn, workspaces, clearForConnection],
   );
 
   const activeEntry =

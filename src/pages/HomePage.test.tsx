@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "./HomePage";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
@@ -115,12 +115,7 @@ function resetStores() {
     activeStatuses: {},
     focusedConnId: null,
   });
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
-    dirtyTabIds: new Set<string>(),
-  });
+  useWorkspaceStore.setState({ workspaces: {} });
 }
 
 describe("HomePage", () => {

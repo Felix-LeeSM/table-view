@@ -33,6 +33,7 @@
 // Table cases remain byte-equivalent in intent — only the post-action
 // dialog assertions are mechanically updated.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   render,
   screen,
@@ -107,7 +108,6 @@ vi.mock("@lib/tauri", () => ({
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import {
   mockLoadSchemas,
@@ -159,7 +159,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(tableButton);
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const tab = state.tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
@@ -249,7 +249,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Structure"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const tab = state.tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
@@ -275,7 +275,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Data"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const tab = state.tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
@@ -595,7 +595,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(viewItem);
     });
 
-    const tabState = useTabStore.getState();
+    const tabState = getTestWorkspace();
     expect(tabState.tabs).toHaveLength(1);
     expect(tabState.tabs[0]!.type).toBe("table");
     if (tabState.tabs[0]!.type === "table") {
@@ -638,7 +638,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(funcItem);
     });
 
-    const tabState = useTabStore.getState();
+    const tabState = getTestWorkspace();
     expect(tabState.tabs).toHaveLength(1);
     expect(tabState.tabs[0]!.type).toBe("query");
     if (tabState.tabs[0]!.type === "query") {
@@ -684,7 +684,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(viewItem);
     });
 
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    const tab = getTestWorkspace().tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
       expect(tab.subView).toBe("records");
@@ -705,7 +705,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Structure"));
     });
 
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    const tab = getTestWorkspace().tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
       expect(tab.subView).toBe("structure");
@@ -726,7 +726,7 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByText("Data"));
     });
 
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    const tab = getTestWorkspace().tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
       expect(tab.subView).toBe("records");

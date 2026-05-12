@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import WorkspacePage from "./WorkspacePage";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useThemeStore } from "@stores/themeStore";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 import * as windowControls from "@lib/window-controls";
@@ -51,7 +55,7 @@ vi.mock("@lib/window-controls", () => ({
 }));
 
 function resetStores() {
-  useTabStore.setState({ tabs: [], activeTabId: null });
+  useWorkspaceStore.setState({ workspaces: {} });
   useThemeStore.setState({
     themeId: "slate",
     mode: "dark",
@@ -103,21 +107,23 @@ describe("WorkspacePage", () => {
   });
 
   it("clicking [← Connections] does NOT clear tabStore (tabs persist across screen swaps)", () => {
-    useTabStore.setState({
-      tabs: [
-        {
-          type: "table",
-          id: "tab-1",
-          title: "users",
-          connectionId: "c1",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-        },
-      ],
-      activeTabId: "tab-1",
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            type: "table",
+            id: "tab-1",
+            title: "users",
+            connectionId: "c1",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+          },
+        ],
+        "tab-1",
+      ),
+    );
 
     render(<WorkspacePage />);
     act(() => {
@@ -126,7 +132,8 @@ describe("WorkspacePage", () => {
       );
     });
 
-    const state = useTabStore.getState();
+    // seedWorkspace auto-derives connId from `firstTab.connectionId` ("c1").
+    const state = getTestWorkspace("c1", "db1");
     expect(state.tabs).toHaveLength(1);
     expect(state.tabs[0]!.id).toBe("tab-1");
     expect(state.activeTabId).toBe("tab-1");

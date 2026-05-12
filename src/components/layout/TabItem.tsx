@@ -1,5 +1,5 @@
 import { X, Table2, Code2, Leaf } from "lucide-react";
-import { type Tab, type TableTab } from "@stores/tabStore";
+import { type Tab, type TableTab } from "@stores/workspaceStore";
 import { Button } from "@components/ui/button";
 import type { TabDragHandlers } from "./useTabDrag";
 

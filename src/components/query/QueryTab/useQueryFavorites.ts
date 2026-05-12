@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { useTabStore } from "@stores/tabStore";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
-import type { QueryTab } from "@stores/tabStore";
+import type { QueryTab } from "@stores/workspaceStore";
 
 /**
  * `QueryTab` 의 favorites state + handler + toggle event 캡슐화.
@@ -40,7 +40,7 @@ export interface QueryFavoritesState {
 export function useQueryFavorites({
   tab,
 }: UseQueryFavoritesArgs): QueryFavoritesState {
-  const updateQuerySql = useTabStore((s) => s.updateQuerySql);
+  const updateQuerySqlAction = useWorkspaceStore((s) => s.updateQuerySql);
   const addFavorite = useFavoritesStore((s) => s.addFavorite);
   const favorites = useFavoritesStore((s) => s.favorites);
 
@@ -59,16 +59,20 @@ export function useQueryFavorites({
 
   const handleLoadFavoriteSql = useCallback(
     (sql: string) => {
-      updateQuerySql(tab.id, sql);
+      const db = tab.database ?? resolveActiveDb(tab.connectionId);
+      updateQuerySqlAction(tab.connectionId, db, tab.id, sql);
     },
-    [tab.id, updateQuerySql],
+    [tab.id, tab.connectionId, tab.database, updateQuerySqlAction],
   );
 
   // Toggle favorites panel event listener (Cmd+Shift+F)
   useEffect(() => {
     const handler = () => {
-      const { activeTabId } = useTabStore.getState();
-      if (activeTabId !== tab.id) return;
+      const wsState = useWorkspaceStore.getState();
+      const isActive = Object.values(wsState.workspaces).some((byDb) =>
+        Object.values(byDb).some((ws) => ws.activeTabId === tab.id),
+      );
+      if (!isActive) return;
       setShowFavorites((v) => !v);
       setShowSaveForm(false);
     };

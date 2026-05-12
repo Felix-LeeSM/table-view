@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Database, MousePointerClick, Plug } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
 import { assertNever } from "@lib/paradigm";
 import DocumentSidebar from "./DocumentSidebar";
@@ -42,12 +42,8 @@ export default function WorkspaceSidebar({
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const { connect: connectToDatabase } = useConnectionLifecycle();
-  const activeTabConnId = useTabStore((s) => {
-    const id = s.activeTabId;
-    if (!id) return null;
-    const tab = s.tabs.find((t) => t.id === id);
-    return tab?.connectionId ?? null;
-  });
+  const activeTab = useActiveTab();
+  const activeTabConnId = activeTab?.connectionId ?? null;
 
   if (connections.length === 0) {
     return (

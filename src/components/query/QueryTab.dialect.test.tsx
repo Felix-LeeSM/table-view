@@ -7,6 +7,7 @@
 // fieldsCache isolation from RDB tabs). Cases are byte-equivalent to
 // the originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, act } from "@testing-library/react";
 import {
   MySQL,
@@ -17,7 +18,7 @@ import {
 } from "@codemirror/lang-sql";
 import type { Extension } from "@codemirror/state";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentStore } from "@stores/documentStore";
 import {
@@ -233,7 +234,7 @@ describe("QueryTab — dialect", () => {
 
   it("passes a 2-entry mongoExtensions array to MongoQueryEditor on document tabs", () => {
     const docTab = makeDocTab();
-    useTabStore.setState({ tabs: [docTab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
     render(<QueryTab tab={docTab} />);
     expect(mockEditorProps.lastParadigm).toBe("document");
     expect(mockEditorProps.lastMongoExtensions).toBeDefined();
@@ -246,7 +247,7 @@ describe("QueryTab — dialect", () => {
   // memo. Flipping queryMode produces a new extension array identity.
   it("rebuilds mongoExtensions identity when queryMode flips find→aggregate", async () => {
     const docTab = makeDocTab({ queryMode: "find" });
-    useTabStore.setState({ tabs: [docTab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
     const { rerender } = render(<QueryTab tab={docTab} />);
     const findExt = mockEditorProps.lastMongoExtensions;
     expect(findExt).toBeDefined();
@@ -254,7 +255,7 @@ describe("QueryTab — dialect", () => {
     // Flip to aggregate — the mongoExtensions memo key should change and a
     // new array reference should be pushed down to the editor.
     const aggTab = makeDocTab({ queryMode: "aggregate" });
-    useTabStore.setState({ tabs: [aggTab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([aggTab], "query-1"));
     await act(async () => {
       rerender(<QueryTab tab={aggTab} />);
     });
@@ -270,7 +271,7 @@ describe("QueryTab — dialect", () => {
   // mongoAutocomplete.test.ts; here we only need to assert wiring.
   it("feeds documentStore.fieldsCache into mongoExtensions for document tabs", async () => {
     const docTab = makeDocTab();
-    useTabStore.setState({ tabs: [docTab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
     const { rerender } = render(<QueryTab tab={docTab} />);
     const before = mockEditorProps.lastMongoExtensions;
     expect(before).toBeDefined();
@@ -320,7 +321,7 @@ describe("QueryTab — dialect", () => {
   // rather than gated behind a `paradigm` check inside the editor.
   it("does not pull fieldsCache into the SQL editor for RDB tabs", async () => {
     const rdbTab = makeQueryTab();
-    useTabStore.setState({ tabs: [rdbTab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([rdbTab], "query-1"));
     const { rerender } = render(<QueryTab tab={rdbTab} />);
     expect(mockEditorProps.lastParadigm).toBe("rdb");
     expect(mockEditorProps.lastMongoExtensions).toBeUndefined();

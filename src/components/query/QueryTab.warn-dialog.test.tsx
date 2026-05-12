@@ -21,9 +21,13 @@
 // `severity: "safe"` 인 non-INFO 만 WARN dialog 발동. INFO/STOP 분기는 위와
 // 같이 회귀 테스트로 가드.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import {
@@ -156,13 +160,13 @@ function seedDocConnection(env: string | null) {
 
 function seedTab(sql: string) {
   const tab = makeQueryTab({ sql });
-  useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+  useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
   return tab;
 }
 
 function seedDocTab(sql: string, queryMode: "find" | "aggregate") {
   const tab = makeDocTab({ sql, queryMode });
-  useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+  useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
   return tab;
 }
 
@@ -285,7 +289,7 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
       expect(screen.queryByText("Review SQL Changes")).not.toBeInTheDocument();
     });
     // Tab 은 idle 로 유지 (running 으로 transit 안 함).
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
+    const updated = getTestWorkspace().tabs.find((t) => t.id === "query-1");
     if (updated && updated.type === "query") {
       expect(updated.queryState.status).toBe("idle");
     }

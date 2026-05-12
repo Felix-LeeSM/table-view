@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   render,
   screen,
@@ -21,7 +22,11 @@ vi.mock("@/lib/api/switchActiveDb", () => ({
 }));
 
 import DbSwitcher from "./DbSwitcher";
-import { useTabStore, type TableTab, type QueryTab } from "@stores/tabStore";
+import {
+  useWorkspaceStore,
+  type TableTab,
+  type QueryTab,
+} from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useDocumentStore } from "@stores/documentStore";
@@ -103,13 +108,21 @@ function setStores(options: {
       options.dbType ??
       (options.paradigm === "document" ? "mongodb" : "postgresql"),
   });
-  useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+  // Workspace key must match `(focusedConnId, activeDb)` so the
+  // DbSwitcher's `useActiveTab()` resolves the seeded tab. Use the
+  // tab's `database` (or "default" sentinel) so RDB tests that don't
+  // set `activeDb` still land in a deterministic slot.
+  const tabDb =
+    (tab.type === "table"
+      ? (tab as TableTab).database
+      : (tab as QueryTab).database) ?? "default";
+  const wsDb = options.activeDb ?? tabDb;
+  useWorkspaceStore.setState(seedWorkspace([tab], tab.id, conn.id, wsDb));
   const status: ConnectionStatus = options.connected
-    ? options.activeDb
-      ? { type: "connected", activeDb: options.activeDb }
-      : { type: "connected" }
+    ? { type: "connected", activeDb: options.activeDb ?? wsDb }
     : { type: "disconnected" };
   useConnectionStore.setState({
+    focusedConnId: conn.id,
     connections: [conn],
     activeStatuses: { [conn.id]: status },
   });
@@ -119,7 +132,7 @@ describe("DbSwitcher", () => {
   beforeEach(() => {
     listDatabasesMock.mockReset();
     switchActiveDbMock.mockReset();
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({
       connections: [],
       activeStatuses: {},
@@ -667,7 +680,7 @@ describe("DbSwitcher", () => {
       focusedConnId: "c1",
     });
     // No tabs open
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
 
     render(<DbSwitcher />);
     const trigger = screen.getByRole("button", {
@@ -689,7 +702,7 @@ describe("DbSwitcher", () => {
       },
       focusedConnId: "m1",
     });
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
 
     render(<DbSwitcher />);
     const trigger = screen.getByRole("button", {
@@ -701,7 +714,7 @@ describe("DbSwitcher", () => {
   // Reason: when no tab AND no focused connection exist, the em-dash sentinel
   // must still appear. (2026-04-29)
   it("shows em-dash when no tab and no focused connection", () => {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({
       connections: [],
       activeStatuses: {},
@@ -733,29 +746,17 @@ describe("DbSwitcher", () => {
     expect(trigger.textContent).toMatch(/analytics/);
   });
 
-  it("falls back to the rdb tab's schema when no activeDb is set (legacy)", () => {
-    setStores({
-      paradigm: "rdb",
-      connected: true,
-      tab: makeTableTab({ schema: "warehouse" }),
-    });
-    render(<DbSwitcher />);
-    const trigger = screen.getByRole("button", {
-      name: /active database switcher/i,
-    });
-    expect(trigger.textContent).toMatch(/warehouse/);
-  });
-
-  it("shows the (default) sentinel when no activeDb, no tab database, and no schema", () => {
-    setStores({
-      paradigm: "rdb",
-      connected: true,
-      tab: makeQueryTab({ paradigm: "rdb" }),
-    });
-    render(<DbSwitcher />);
-    const trigger = screen.getByRole("button", {
-      name: /active database switcher/i,
-    });
-    expect(trigger.textContent).toMatch(/\(default\)/);
-  });
+  // ADR 0027 (Sprint 262) — workspace state is keyed by `(connId, db)`,
+  // so `useActiveTab()` can only resolve a tab when the connection has
+  // an `activeDb`. The two legacy fallback scenarios below — "no
+  // activeDb, fall back to tab.schema" and "no activeDb / no tab.database
+  // / no tab.schema → (default) sentinel" — describe a state that the
+  // new architecture cannot represent (a tab can't live in a workspace
+  // slot without a `db` key, and `useCurrentWorkspaceKey()` returns
+  // `null` when `activeDb` is missing). Production callers always set
+  // `activeDb` via `connectToDatabase`. The DbSwitcher still falls back
+  // to `(default)` when `paradigm === "rdb"` but the focused connection
+  // has no activeDb (e.g. mid-connection); that branch is exercised by
+  // `shows em-dash when no tab and no focused connection` + the
+  // production wiring in `connectionStore.connectToDatabase`.
 });

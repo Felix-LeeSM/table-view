@@ -45,7 +45,7 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "@/pages/HomePage";
 import WorkspacePage from "@/pages/WorkspacePage";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import * as windowControls from "@lib/window-controls";
 import type { ConnectionConfig } from "@/types/connection";
 
@@ -126,12 +126,7 @@ beforeEach(() => {
     activeStatuses: {},
     focusedConnId: null,
   });
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
-    dirtyTabIds: new Set<string>(),
-  });
+  useWorkspaceStore.setState({ workspaces: {} });
 });
 
 afterEach(() => {

@@ -4,7 +4,11 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
-import { useTabStore, type Tab } from "@stores/tabStore";
+import type { Tab } from "@stores/workspaceStore";
+import {
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 
 // 8px drag-start threshold. The pre-2026-05-11 4px floor produced phantom
 // ghosts when a high-DPI trackpad click drifted 2–6px; 8px matches the de
@@ -75,7 +79,8 @@ interface DragState {
  * bounding box.
  */
 export function useTabDrag(): UseTabDragResult {
-  const moveTab = useTabStore((s) => s.moveTab);
+  const moveTab = useWorkspaceStore((s) => s.moveTab);
+  const workspaceKey = useCurrentWorkspaceKey();
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -224,7 +229,15 @@ export function useTabDrag(): UseTabDragResult {
           justDraggedRef.current = false;
         }, 0);
         const drop = resolveDropTarget(src.tabId, e.clientX);
-        if (drop) moveTab(src.tabId, drop.targetId, drop.side);
+        if (drop && workspaceKey) {
+          moveTab(
+            workspaceKey.connId,
+            workspaceKey.db,
+            src.tabId,
+            drop.targetId,
+            drop.side,
+          );
+        }
       }
       cleanup(el, e.pointerId);
     },

@@ -22,6 +22,7 @@ import {
   mockPromoteTab,
   mockUpdateTabSorts,
   mockSetTabDirty,
+  mockAddTab,
   resetDataGridMocks,
   renderDataGrid,
 } from "./__tests__/dataGridTestHelpers";
@@ -67,19 +68,31 @@ function resetMockTabStore() {
   mockUpdateTabSorts.mockClear();
   subscribers.clear();
 }
-function mockTabStoreView() {
+function mockWorkspaceView() {
   return {
-    tabs: mockTabStoreState.tabs,
-    activeTabId: mockTabStoreState.activeTabId,
+    workspaces: {
+      conn1: {
+        db1: {
+          tabs: mockTabStoreState.tabs,
+          activeTabId: mockTabStoreState.activeTabId,
+          closedTabHistory: [],
+          dirtyTabIds: [],
+          sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+        },
+      },
+    },
+    addTab: mockAddTab,
     promoteTab: mockPromoteTab,
     updateTabSorts: mockUpdateTabSorts,
     setTabDirty: mockSetTabDirty,
   };
 }
-vi.mock("@stores/tabStore", async () => {
+vi.mock("@stores/workspaceStore", async () => {
   const React = await import("react");
   return {
-    useTabStore: Object.assign(
+    useActiveTabId: () => mockTabStoreState.activeTabId,
+    useCurrentWorkspaceKey: () => ({ connId: "conn1", db: "db1" }),
+    useWorkspaceStore: Object.assign(
       (selector: (state: Record<string, unknown>) => unknown) => {
         const [, forceRerender] = React.useReducer((n: number) => n + 1, 0);
         React.useEffect(() => {
@@ -89,10 +102,10 @@ vi.mock("@stores/tabStore", async () => {
             subscribers.delete(fn);
           };
         }, []);
-        return selector(mockTabStoreView());
+        return selector(mockWorkspaceView());
       },
       {
-        getState: () => mockTabStoreView(),
+        getState: () => mockWorkspaceView(),
       },
     ),
   };

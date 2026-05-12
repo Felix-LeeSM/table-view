@@ -3,9 +3,10 @@
 // state, shortcut hint, and the Run button click → handleExecute path.
 // Cases are byte-equivalent to the originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import {
   MOCK_RESULT,
   mockExecuteQuery,
@@ -175,7 +176,7 @@ describe("QueryTab — toolbar", () => {
   it("Run button click triggers handleExecute", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const runBtn = screen.getByLabelText("Run query");
@@ -246,7 +247,7 @@ describe("QueryTab — toolbar", () => {
       },
     ]);
     const tab = makeQueryTab({ sql: "DELETE FROM users WHERE id = 1" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const dryRunBtn = screen.getByLabelText("Dry run query");

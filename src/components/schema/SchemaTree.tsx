@@ -9,7 +9,7 @@ import {
   Rows3,
 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useTabStore } from "@stores/tabStore";
+import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMigrationExport } from "@/hooks/useMigrationExport";
 import {
@@ -84,10 +84,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   } = useMigrationExport();
 
   // Track active tab for highlight & auto-expand
-  const activeTab = useTabStore((s) => {
-    const tabId = s.activeTabId;
-    return tabId ? s.tabs.find((t) => t.id === tabId) : null;
-  });
+  const activeTab = useActiveTab();
   const activeSchema = activeTab?.type === "table" ? activeTab.schema : null;
   const activeTable = activeTab?.type === "table" ? activeTab.table : null;
 

@@ -27,9 +27,13 @@
 // Sprint 230 code calls executeQuery directly, so the
 // `not.toHaveBeenCalled()` assertion captures the red state.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
@@ -153,7 +157,7 @@ function seedConnection(env: string | null) {
 
 function seedTab(sql: string) {
   const tab = makeQueryTab({ sql });
-  useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+  useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
   return tab;
 }
 
@@ -189,7 +193,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
         screen.getByTestId("confirm-destructive-confirm"),
       ).toBeInTheDocument();
     });
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updated = state.tabs.find((t) => t.id === "query-1");
     if (updated && updated.type === "query") {
       expect(updated.queryState.status).toBe("idle");
@@ -510,7 +514,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
       ).not.toBeInTheDocument();
     });
     // Tab state stays idle (running invariant: never entered running).
-    const updated = useTabStore.getState().tabs.find((t) => t.id === "query-1");
+    const updated = getTestWorkspace().tabs.find((t) => t.id === "query-1");
     if (updated && updated.type === "query") {
       expect(updated.queryState.status).toBe("idle");
     }

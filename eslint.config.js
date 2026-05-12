@@ -109,7 +109,7 @@ export default tseslint.config(
   // coupling을 만들지 않으므로 `allowTypeImports`로 허용.
   {
     files: ["src/stores/**/*.ts"],
-    ignores: ["**/*.test.ts"],
+    ignores: ["**/*.test.ts", "src/stores/**/__tests__/**"],
     rules: {
       "no-restricted-imports": [
         "error",

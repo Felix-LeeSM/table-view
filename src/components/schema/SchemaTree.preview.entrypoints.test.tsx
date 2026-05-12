@@ -15,11 +15,12 @@
 //   AC-156-04e  Click a view (not table) → tab behavior
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore, type TableTab } from "@stores/tabStore";
+import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 
 // ── Store mocks ────────────────────────────────────────────────────────────
 
@@ -60,17 +61,17 @@ function resetStores() {
     loadFunctions: mockLoadFunctions,
     prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
-    dirtyTabIds: new Set<string>(),
+  useWorkspaceStore.setState({ workspaces: {} });
+  // ADR 0027 — workspace key resolves via `(focusedConnId, activeDb)`.
+  useConnectionStore.setState({
+    connections: [],
+    focusedConnId: "conn1",
+    activeStatuses: { conn1: { type: "connected", activeDb: "db1" } },
   });
-  useConnectionStore.setState({ connections: [] });
 }
 
 function getTableTab(index = 0): TableTab {
-  const tab = useTabStore.getState().tabs[index]!;
+  const tab = getTestWorkspace().tabs[index]!;
   if (tab.type !== "table") throw new Error("Expected TableTab");
   return tab;
 }
@@ -122,7 +123,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByText("Data"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     expect(getTableTab().isPreview).toBe(true);
     expect(getTableTab().table).toBe("users");
@@ -146,7 +147,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByText("Structure"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     expect(getTableTab().subView).toBe("structure");
     expect(getTableTab().table).toBe("users");
@@ -175,7 +176,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(ordersItem);
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().table).toBe("orders");
     expect(getTableTab().isPreview).toBe(true);
 
@@ -189,7 +190,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     });
 
     // Should still be 1 tab — the preview slot swapped from orders → users.
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().table).toBe("users");
     expect(getTableTab().isPreview).toBe(true);
   });
@@ -207,14 +208,14 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("users table"));
     });
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().isPreview).toBe(true);
 
     // Step 2: double-click "users" → promote.
     await act(async () => {
       fireEvent.doubleClick(screen.getByLabelText("users table"));
     });
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().isPreview).toBe(false);
 
     // Step 3: click "orders" → new preview tab alongside the permanent "users".
@@ -222,7 +223,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByLabelText("orders table"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(2);
 
     // Find the permanent and preview tabs.
@@ -242,7 +243,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByLabelText("products table"));
     });
 
-    const state2 = useTabStore.getState();
+    const state2 = getTestWorkspace();
     expect(state2.tabs).toHaveLength(2);
 
     const previewAfterSwap = state2.tabs.find(
@@ -278,7 +279,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(viewItem);
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     const tab = getTableTab();
     expect(tab.table).toBe("active_users");
@@ -323,14 +324,14 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("active_users view"));
     });
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
 
     // Click second view — must swap, not accumulate.
     await act(async () => {
       fireEvent.click(screen.getByLabelText("recent_orders view"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     expect(getTableTab().table).toBe("recent_orders");
   });
@@ -351,7 +352,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByText("Data"));
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().table).toBe("users");
 
     // Now click "orders" via regular click — must swap, not accumulate.
@@ -359,7 +360,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByLabelText("orders table"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     expect(getTableTab().table).toBe("orders");
     expect(getTableTab().isPreview).toBe(true);
@@ -380,7 +381,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     await act(async () => {
       fireEvent.doubleClick(screen.getByLabelText("users table"));
     });
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().isPreview).toBe(false);
 
     // Now click a view.
@@ -392,7 +393,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByLabelText("active_users view"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     // Should be 2 tabs: permanent "users" + preview "active_users".
     expect(state.tabs).toHaveLength(2);
   });
@@ -409,7 +410,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("users table"));
     });
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().subView).toBe("records");
     expect(getTableTab().isPreview).toBe(true);
 
@@ -422,7 +423,7 @@ describe("AC-156-04*: SchemaTree preview entry points diagnostic", () => {
       fireEvent.click(screen.getByText("Structure"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     // Sprint 158 fix: addTab now includes subView in the exact-match and
     // preview-swap checks. A Data preview (records) and Structure tab are
     // treated as separate tabs, so clicking "Structure" after a Data preview

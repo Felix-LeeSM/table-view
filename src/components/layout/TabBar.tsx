@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { Table2, Code2 } from "lucide-react";
-import { useTabStore, type Tab, type TableTab } from "@stores/tabStore";
+import {
+  useActiveTabId,
+  useCurrentTabs,
+  useCurrentWorkspaceKey,
+  useDirtyTabIds,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
+import type { Tab, TableTab } from "@stores/workspaceStore";
 import ConfirmDialog from "@components/ui/dialog/ConfirmDialog";
 import TabItem from "./TabItem";
 import { useTabDrag } from "./useTabDrag";
@@ -18,12 +25,13 @@ import { useTabDrag } from "./useTabDrag";
  * `TabItem`; drag state + reorder math lives in `useTabDrag`.
  */
 export default function TabBar() {
-  const tabs = useTabStore((s) => s.tabs);
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const setActiveTab = useTabStore((s) => s.setActiveTab);
-  const removeTab = useTabStore((s) => s.removeTab);
-  const promoteTab = useTabStore((s) => s.promoteTab);
-  const dirtyTabIds = useTabStore((s) => s.dirtyTabIds);
+  const tabs = useCurrentTabs();
+  const activeTabId = useActiveTabId();
+  const workspaceKey = useCurrentWorkspaceKey();
+  const setActiveTab = useWorkspaceStore((s) => s.setActiveTab);
+  const removeTab = useWorkspaceStore((s) => s.removeTab);
+  const promoteTab = useWorkspaceStore((s) => s.promoteTab);
+  const dirtyTabIds = useDirtyTabIds();
 
   const {
     scrollRef,
@@ -40,11 +48,12 @@ export default function TabBar() {
   const [pendingClose, setPendingClose] = useState<Tab | null>(null);
 
   const requestCloseTab = (tab: Tab) => {
-    if (dirtyTabIds.has(tab.id)) {
+    if (dirtyTabIds.includes(tab.id)) {
       setPendingClose(tab);
       return;
     }
-    removeTab(tab.id);
+    if (!workspaceKey) return;
+    removeTab(workspaceKey.connId, workspaceKey.db, tab.id);
   };
 
   // Scroll active tab into view when it changes (e.g. new tab added off-screen)
@@ -88,7 +97,7 @@ export default function TabBar() {
               key={tab.id}
               tab={tab}
               isActive={tab.id === activeTabId}
-              isDirty={dirtyTabIds.has(tab.id)}
+              isDirty={dirtyTabIds.includes(tab.id)}
               isDragging={draggingId === tab.id}
               displayTitle={displayTitle}
               onActivate={() => {
@@ -96,11 +105,13 @@ export default function TabBar() {
                 // event fires after pointerup, and a drag that lands on
                 // the originating tab would otherwise re-activate it.
                 if (shouldSuppressClick()) return;
-                setActiveTab(tab.id);
+                if (!workspaceKey) return;
+                setActiveTab(workspaceKey.connId, workspaceKey.db, tab.id);
               }}
               onPromote={() => {
                 if (tab.type === "table" && (tab as TableTab).isPreview) {
-                  promoteTab(tab.id);
+                  if (!workspaceKey) return;
+                  promoteTab(workspaceKey.connId, workspaceKey.db, tab.id);
                 }
               }}
               onRequestClose={() => requestCloseTab(tab)}
@@ -123,7 +134,8 @@ export default function TabBar() {
           onConfirm={() => {
             const id = pendingClose.id;
             setPendingClose(null);
-            removeTab(id);
+            if (!workspaceKey) return;
+            removeTab(workspaceKey.connId, workspaceKey.db, id);
           }}
           onCancel={() => setPendingClose(null)}
         />

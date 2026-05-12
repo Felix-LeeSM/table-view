@@ -8,8 +8,72 @@ import type {
   QueryState,
   QueryStatementResult,
 } from "@/types/query";
-import type { SortInfo } from "@/types/schema";
-import type { QueryMode, Tab, TableTab, TabSubView } from "../tabStore/types";
+import type { FilterCondition, SortInfo } from "@/types/schema";
+
+// ---------------------------------------------------------------------------
+// Tab types — discriminated union so consumers can narrow on `tab.type`
+// ---------------------------------------------------------------------------
+
+export type TabSubView = "records" | "structure";
+
+/**
+ * Distinguishes between a base table and a view. Both share the tab
+ * shape, but the Structure sub-view renders differently (read-only
+ * columns + definition SQL for views vs. editable columns + indexes +
+ * constraints for tables). Defaults to "table" when omitted (legacy
+ * persisted tabs).
+ */
+export type TabObjectKind = "table" | "view";
+
+/** A tab that shows table data / structure. */
+export interface TableTab {
+  type: "table";
+  id: string;
+  title: string;
+  connectionId: string;
+  closable: boolean;
+  schema?: string;
+  table?: string;
+  /** MongoDB database name (document paradigm only). */
+  database?: string;
+  /** MongoDB collection name (document paradigm only). */
+  collection?: string;
+  subView: TabSubView;
+  /** Whether this tab points at a base table or a view. */
+  objectKind?: TabObjectKind;
+  /** When true, clicking another table in the same connection replaces this tab. */
+  isPreview?: boolean;
+  /** Pre-applied filters when the tab is opened (e.g. from FK navigation). */
+  initialFilters?: FilterCondition[];
+  /** Paradigm of the connection. */
+  paradigm?: Paradigm;
+  /** Per-tab sort state. */
+  sorts?: SortInfo[];
+}
+
+/**
+ * Execution mode for a query tab. SQL statements belong to `"sql"`;
+ * document paradigms split into a MongoDB `find` body and an aggregation
+ * `pipeline`. Routes the editor + execute path.
+ */
+export type QueryMode = "sql" | "find" | "aggregate";
+
+/** A tab that hosts the SQL / document query editor. */
+export interface QueryTab {
+  type: "query";
+  id: string;
+  title: string;
+  connectionId: string;
+  closable: boolean;
+  sql: string;
+  queryState: QueryState;
+  paradigm: Paradigm;
+  queryMode: QueryMode;
+  database?: string;
+  collection?: string;
+}
+
+export type Tab = TableTab | QueryTab;
 
 export type SidebarState = {
   selectedNode: string | null;

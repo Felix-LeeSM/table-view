@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { TableInfo } from "@/types/schema";
 
@@ -60,8 +61,13 @@ function resetStores() {
     loadFunctions: mockLoadFunctions,
     prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
-  useTabStore.setState({ tabs: [], activeTabId: null });
-  useConnectionStore.setState({ connections: [] });
+  useWorkspaceStore.setState({ workspaces: {} });
+  // ADR 0027 — workspace key resolves via `(focusedConnId, activeDb)`.
+  useConnectionStore.setState({
+    connections: [],
+    focusedConnId: "conn1",
+    activeStatuses: { conn1: { type: "connected", activeDb: "db1" } },
+  });
 }
 
 function makeTables(count: number): TableInfo[] {
@@ -329,7 +335,7 @@ describe("SchemaTree virtualization (sprint-115)", () => {
       fireEvent.keyDown(firstButton, { key: "Enter" });
     });
 
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "table");
+    const tab = getTestWorkspace().tabs.find((t) => t.type === "table");
     expect(tab).toBeDefined();
     if (tab && tab.type === "table") {
       expect(tab.table).toBe(expectedName);

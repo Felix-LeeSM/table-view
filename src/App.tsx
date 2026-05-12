@@ -6,7 +6,13 @@ import ShortcutCheatsheet from "./components/shared/ShortcutCheatsheet";
 import QueryLog from "./components/query/QueryLog";
 import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "./stores/connectionStore";
-import { useTabStore } from "./stores/tabStore";
+import {
+  resolveActiveDb,
+  useActiveTabId,
+  useCurrentTabs,
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "./stores/workspaceStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
 import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
@@ -26,14 +32,15 @@ export default function App() {
   // longer emit it implicitly, so the three handlers below pair the call.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
 
-  const activeTabId = useTabStore((s) => s.activeTabId);
-  const tabs = useTabStore((s) => s.tabs);
-  const removeTab = useTabStore((s) => s.removeTab);
-  const addQueryTab = useTabStore((s) => s.addQueryTab);
-  const setActiveTab = useTabStore((s) => s.setActiveTab);
-  const reopenLastClosedTab = useTabStore((s) => s.reopenLastClosedTab);
-  const addTab = useTabStore((s) => s.addTab);
-  const updateQuerySql = useTabStore((s) => s.updateQuerySql);
+  const activeTabId = useActiveTabId();
+  const tabs = useCurrentTabs();
+  const workspaceKey = useCurrentWorkspaceKey();
+  const removeTab = useWorkspaceStore((s) => s.removeTab);
+  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
+  const setActiveTab = useWorkspaceStore((s) => s.setActiveTab);
+  const reopenLastClosedTab = useWorkspaceStore((s) => s.reopenLastClosedTab);
+  const addTab = useWorkspaceStore((s) => s.addTab);
+  const updateQuerySql = useWorkspaceStore((s) => s.updateQuerySql);
   const themeMode = useThemeStore((s) => s.mode);
   const setThemeMode = useThemeStore((s) => s.setMode);
 
@@ -64,14 +71,14 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "w") {
         e.preventDefault();
-        if (activeTabId) {
-          removeTab(activeTabId);
+        if (activeTabId && workspaceKey) {
+          removeTab(workspaceKey.connId, workspaceKey.db, activeTabId);
         }
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, removeTab]);
+  }, [activeTabId, workspaceKey, removeTab]);
 
   // Cmd+T / Ctrl+T — new query tab
   useEffect(() => {
@@ -84,7 +91,8 @@ export default function App() {
           : null;
         const connectionId = activeTab?.connectionId ?? "";
         if (connectionId) {
-          addQueryTab(connectionId);
+          const db = resolveActiveDb(connectionId);
+          addQueryTab(connectionId, db);
           markConnectionUsed(connectionId);
         }
       }
@@ -163,11 +171,12 @@ export default function App() {
       const tab = tabs[index];
       if (!tab) return;
       e.preventDefault();
-      setActiveTab(tab.id);
+      if (!workspaceKey) return;
+      setActiveTab(workspaceKey.connId, workspaceKey.db, tab.id);
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [tabs, setActiveTab]);
+  }, [tabs, workspaceKey, setActiveTab]);
 
   // Cmd+R / Ctrl+R / F5 — context-aware refresh.
   // Cmd+Shift+R / Ctrl+Shift+R — Sprint 258 (AC-258-08): broadcasts a
@@ -245,12 +254,13 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "T") {
         if (isEditableTarget(e.target)) return;
         e.preventDefault();
-        reopenLastClosedTab();
+        if (!workspaceKey) return;
+        reopenLastClosedTab(workspaceKey.connId, workspaceKey.db);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [reopenLastClosedTab]);
+  }, [workspaceKey, reopenLastClosedTab]);
 
   // Cmd+Shift+F / Ctrl+Shift+F — toggle favorites panel
   useEffect(() => {
@@ -309,7 +319,7 @@ export default function App() {
         }>
       ).detail;
       const { connectionId, schema, table, objectKind } = detail;
-      addTab({
+      addTab(connectionId, {
         type: "table",
         connectionId,
         schema,
@@ -336,16 +346,17 @@ export default function App() {
           title: string;
         }>
       ).detail;
-      addQueryTab(connectionId);
+      const db = resolveActiveDb(connectionId);
+      addQueryTab(connectionId, db);
       markConnectionUsed(connectionId);
       // The selector-bound `tabs` snapshot doesn't include the just-added
       // tab until React's next commit, but we need its id to seed the SQL
       // body. Read the store directly for this one call.
       // eslint-disable-next-line no-restricted-syntax
-      const latestTabs = useTabStore.getState().tabs;
-      const newTab = latestTabs[latestTabs.length - 1];
+      const ws = useWorkspaceStore.getState().workspaces[connectionId]?.[db];
+      const newTab = ws?.tabs[ws.tabs.length - 1];
       if (newTab && newTab.type === "query" && source) {
-        updateQuerySql(newTab.id, source);
+        updateQuerySql(connectionId, db, newTab.id, source);
       }
     };
     window.addEventListener("quickopen-function", handler);

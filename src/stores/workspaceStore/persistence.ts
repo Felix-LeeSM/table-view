@@ -9,8 +9,7 @@
  *     downstream consumers can drop guards.
  */
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode, Tab } from "../tabStore/types";
-import type { WorkspaceState } from "./types";
+import type { QueryMode, Tab, WorkspaceState } from "./types";
 
 export const STORAGE_KEY = "table-view-workspaces";
 

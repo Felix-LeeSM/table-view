@@ -1,5 +1,5 @@
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/tabStore";
+import type { QueryMode } from "@stores/workspaceStore";
 import SqlSyntax from "./SqlSyntax";
 import MongoSyntax from "./MongoSyntax";
 

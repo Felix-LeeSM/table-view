@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { useTabStore } from "@stores/tabStore";
+import { useCallback, useMemo, useState } from "react";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import {
   executeQuery,
@@ -14,7 +14,7 @@ import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
-import type { QueryTab } from "@stores/tabStore";
+import type { QueryTab } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
 import {
@@ -118,19 +118,80 @@ export interface QueryExecution {
 export function useQueryExecution({
   tab,
 }: UseQueryExecutionArgs): QueryExecution {
-  const updateQueryState = useTabStore((s) => s.updateQueryState);
-  // Lifecycle actions; their queryId guards encode the stale-response
-  // policy that used to be inlined as direct `useTabStore.setState` calls.
-  const completeQuery = useTabStore((s) => s.completeQuery);
-  const failQuery = useTabStore((s) => s.failQuery);
-  const completeMultiStatementQuery = useTabStore(
+  // The query tab's workspace coordinate. For Mongo tabs `tab.database`
+  // is the user-selected db; for RDB it carries the active sub-pool. We
+  // resolve once per tab change so the lifecycle wrappers don't recompute
+  // each call.
+  const workspaceDb = useMemo(
+    () => tab.database ?? resolveActiveDb(tab.connectionId),
+    [tab.database, tab.connectionId],
+  );
+  const wsConnId = tab.connectionId;
+  const updateQueryStateAction = useWorkspaceStore((s) => s.updateQueryState);
+  const completeQueryAction = useWorkspaceStore((s) => s.completeQuery);
+  const failQueryAction = useWorkspaceStore((s) => s.failQuery);
+  const completeMultiStatementQueryAction = useWorkspaceStore(
     (s) => s.completeMultiStatementQuery,
   );
-  // Sprint 248 — explicit dry-run completion path. Mirrors
-  // `completeQuery` / `completeMultiStatementQuery` but stamps
-  // `isDryRun: true` so `<QueryResultGrid>` can render the rolled-back
-  // banner.
-  const completeQueryDryRun = useTabStore((s) => s.completeQueryDryRun);
+  const completeQueryDryRunAction = useWorkspaceStore(
+    (s) => s.completeQueryDryRun,
+  );
+  const updateQueryState = useCallback(
+    (tabId: string, state: Parameters<typeof updateQueryStateAction>[3]) => {
+      updateQueryStateAction(wsConnId, workspaceDb, tabId, state);
+    },
+    [updateQueryStateAction, wsConnId, workspaceDb],
+  );
+  const completeQuery = useCallback(
+    (
+      tabId: string,
+      queryId: string,
+      result: Parameters<typeof completeQueryAction>[4],
+    ) => {
+      completeQueryAction(wsConnId, workspaceDb, tabId, queryId, result);
+    },
+    [completeQueryAction, wsConnId, workspaceDb],
+  );
+  const failQuery = useCallback(
+    (tabId: string, queryId: string, errorMessage: string) => {
+      failQueryAction(wsConnId, workspaceDb, tabId, queryId, errorMessage);
+    },
+    [failQueryAction, wsConnId, workspaceDb],
+  );
+  const completeMultiStatementQuery = useCallback(
+    (
+      tabId: string,
+      queryId: string,
+      payload: Parameters<typeof completeMultiStatementQueryAction>[4],
+    ) => {
+      completeMultiStatementQueryAction(
+        wsConnId,
+        workspaceDb,
+        tabId,
+        queryId,
+        payload,
+      );
+    },
+    [completeMultiStatementQueryAction, wsConnId, workspaceDb],
+  );
+  const completeQueryDryRun = useCallback(
+    (
+      tabId: string,
+      queryId: string,
+      result: Parameters<typeof completeQueryDryRunAction>[4],
+      statements?: Parameters<typeof completeQueryDryRunAction>[5],
+    ) => {
+      completeQueryDryRunAction(
+        wsConnId,
+        workspaceDb,
+        tabId,
+        queryId,
+        result,
+        statements,
+      );
+    },
+    [completeQueryDryRunAction, wsConnId, workspaceDb],
+  );
   // History recording is the caller's responsibility (the tabStore no
   // longer reaches across stores). We rebuild the payload here so the
   // 8 call sites can pass only the variable fields below.

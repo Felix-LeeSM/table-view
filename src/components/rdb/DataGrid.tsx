@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { useTabStore } from "@stores/tabStore";
+import {
+  useCurrentWorkspaceKey,
+  useWorkspaceStore,
+} from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
 import { cancelQuery } from "@lib/tauri";
@@ -47,8 +50,9 @@ export default function DataGrid({
   initialFilters,
 }: DataGridProps) {
   const queryTableData = useSchemaStore((s) => s.queryTableData);
-  const addTab = useTabStore((s) => s.addTab);
-  const updateTabSorts = useTabStore((s) => s.updateTabSorts);
+  const addTab = useWorkspaceStore((s) => s.addTab);
+  const updateTabSorts = useWorkspaceStore((s) => s.updateTabSorts);
+  const workspaceKey = useCurrentWorkspaceKey();
   // MRU marking lives on each caller (not inside tabStore.addTab). FK
   // navigation opens a new persistent tab against (potentially) a
   // different table on the same connection; we mark used so the launcher
@@ -68,8 +72,11 @@ export default function DataGrid({
   // component unmounts/remounts when the user navigates away and back).
   // `tab.sorts` is the single source of truth; `setSorts` delegates to the
   // store action so sibling tabs are never touched.
-  const activeTabSorts = useTabStore((s) => {
-    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+  const activeTabSorts = useWorkspaceStore((s) => {
+    if (!workspaceKey) return undefined;
+    const ws = s.workspaces[workspaceKey.connId]?.[workspaceKey.db];
+    if (!ws || !ws.activeTabId) return undefined;
+    const tab = ws.tabs.find((t) => t.id === ws.activeTabId);
     if (!tab || tab.type !== "table") return undefined;
     return tab.sorts;
   });
@@ -84,17 +91,19 @@ export default function DataGrid({
       // render-time `sorts` so two synchronous updates compose correctly.
       // selector closure는 같은 render cycle에 stale 값을 가지므로 functional
       // setter로 store action 시그니처를 바꾸기 전까지 getState로 fresh read.
+      if (!workspaceKey) return;
       // eslint-disable-next-line no-restricted-syntax -- 두 동기 setSorts 호출 합성 위해 fresh read 필요
-      const state = useTabStore.getState();
-      const tabId = state.activeTabId;
+      const state = useWorkspaceStore.getState();
+      const ws = state.workspaces[workspaceKey.connId]?.[workspaceKey.db];
+      const tabId = ws?.activeTabId ?? null;
       if (!tabId) return;
-      const tab = state.tabs.find((t) => t.id === tabId);
+      const tab = ws?.tabs.find((t) => t.id === tabId);
       const prev: SortInfo[] =
         tab && tab.type === "table" ? (tab.sorts ?? []) : [];
       const next = typeof updater === "function" ? updater(prev) : updater;
-      updateTabSorts(tabId, next);
+      updateTabSorts(workspaceKey.connId, workspaceKey.db, tabId, next);
     },
-    [updateTabSorts],
+    [workspaceKey, updateTabSorts],
   );
   const [data, setData] = useState<TableData | null>(null);
   const [page, setPage] = useState(1);
@@ -409,7 +418,7 @@ export default function DataGrid({
       refColumn: string,
       cellValue: string,
     ) => {
-      addTab({
+      addTab(connectionId, {
         type: "table",
         connectionId,
         schema: refSchema,

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@components/ui/button";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { cn } from "@lib/utils";
 import { useDocumentDatabaseTreeData } from "./DocumentDatabaseTree/useDocumentDatabaseTreeData";
@@ -21,7 +21,7 @@ interface DocumentDatabaseTreeProps {
 export default function DocumentDatabaseTree({
   connectionId,
 }: DocumentDatabaseTreeProps) {
-  const addTab = useTabStore((s) => s.addTab);
+  const addTab = useWorkspaceStore((s) => s.addTab);
   // MRU marking is the caller's responsibility — `addTab` no longer emits
   // it implicitly, so each tab-open path here pairs the call.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
@@ -31,7 +31,7 @@ export default function DocumentDatabaseTree({
 
   const handleCollectionOpen = useCallback(
     (dbName: string, collectionName: string) => {
-      addTab({
+      addTab(connectionId, {
         type: "table",
         title: `${dbName}.${collectionName}`,
         connectionId,
@@ -54,7 +54,7 @@ export default function DocumentDatabaseTree({
 
   const handleCollectionDoubleClick = useCallback(
     (dbName: string, collectionName: string) => {
-      addTab({
+      addTab(connectionId, {
         type: "table",
         title: `${dbName}.${collectionName}`,
         connectionId,

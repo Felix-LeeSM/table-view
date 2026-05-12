@@ -36,10 +36,11 @@ vi.mock("@stores/schemaStore", () => ({
     }),
 }));
 
-vi.mock("@stores/tabStore", () => ({
-  useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
+vi.mock("@stores/workspaceStore", () => ({
+  useActiveTabId: () => "tab-1",
+  useCurrentWorkspaceKey: () => ({ connId: "conn1", db: "db1" }),
+  useWorkspaceStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      activeTabId: "tab-1",
       promoteTab: vi.fn(),
       setTabDirty: vi.fn(),
     }),

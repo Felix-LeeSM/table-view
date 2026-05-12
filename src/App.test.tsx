@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+  getAllTabsForConnection,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, fireEvent, act } from "@testing-library/react";
 import App from "./App";
-import { useTabStore, type TableTab, type QueryTab } from "./stores/tabStore";
+import {
+  useWorkspaceStore,
+  type TableTab,
+  type QueryTab,
+} from "./stores/workspaceStore";
 import { useThemeStore } from "./stores/themeStore";
 
 // Mock page components to isolate shortcut testing — App.tsx now mounts only
@@ -87,7 +96,7 @@ function fireShortcut(key: string, metaKey = true) {
 
 describe("App global shortcuts", () => {
   beforeEach(() => {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     // Sprint 155 — `App` is only mounted under the workspace `WebviewWindow`
     // (per `AppRouter.tsx`), so the workspace context is implied by the
     // file-under-test rendering `<App />`. The legacy app-shell screen seed
@@ -96,11 +105,11 @@ describe("App global shortcuts", () => {
 
   it("Cmd+W closes the active tab", () => {
     const tab = makeTableTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
     render(<App />);
 
     fireShortcut("w");
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    expect(getTestWorkspace().tabs).toHaveLength(0);
   });
 
   // 2026-05-01 회귀 — 쿼리 실행 후 SQL 에디터(contenteditable)에 포커스가
@@ -110,7 +119,7 @@ describe("App global shortcuts", () => {
   // 처리해야 한다.
   it("Cmd+W intercepts even when focus is in a contenteditable target", () => {
     const tab = makeTableTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
     render(<App />);
 
     const editor = document.createElement("div");
@@ -129,18 +138,18 @@ describe("App global shortcuts", () => {
     });
 
     expect(event.defaultPrevented).toBe(true);
-    expect(useTabStore.getState().tabs).toHaveLength(0);
+    expect(getTestWorkspace().tabs).toHaveLength(0);
 
     document.body.removeChild(editor);
   });
 
   it("Cmd+T creates a new query tab using active tab's connectionId", () => {
     const tab = makeTableTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
     render(<App />);
 
     fireShortcut("t");
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(2);
     const queryTab = state.tabs.find((t) => t.type === "query");
     expect(queryTab).toBeDefined();
@@ -156,7 +165,7 @@ describe("App global shortcuts", () => {
     const tab = makeQueryTab({
       queryState: { status: "running", queryId: "q-123" },
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<App />);
 
     fireShortcut(".");
@@ -174,7 +183,7 @@ describe("App global shortcuts", () => {
     window.addEventListener("refresh-data", handler);
 
     const tab = makeTableTab({ subView: "records" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
     render(<App />);
 
     fireShortcut("r");
@@ -337,13 +346,16 @@ describe("App global shortcuts", () => {
         }),
       );
     });
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "table") as
-      | TableTab
-      | undefined;
+    // ADR 0027 — tab lands in workspace ("c1", <activeDb>) which the
+    // test never seeds; flatten across all `c1` slots so the assertion
+    // doesn't depend on the exact `db` autofill.
+    const tab = getAllTabsForConnection("c1").find(
+      (t) => t.type === "table",
+    ) as TableTab | undefined;
     expect(tab).toBeDefined();
     expect(tab!.objectKind).toBe("table");
     expect(tab!.subView).toBe("records");
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
   });
 
   it("navigate-table preserves explicit objectKind=view", () => {
@@ -360,12 +372,12 @@ describe("App global shortcuts", () => {
         }),
       );
     });
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "table") as
-      | TableTab
-      | undefined;
+    const tab = getAllTabsForConnection("c1").find(
+      (t) => t.type === "table",
+    ) as TableTab | undefined;
     expect(tab).toBeDefined();
     expect(tab!.objectKind).toBe("view");
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
   });
 
   it("quickopen-function opens a query tab with the source pre-filled", () => {
@@ -381,12 +393,12 @@ describe("App global shortcuts", () => {
         }),
       );
     });
-    const tab = useTabStore.getState().tabs.find((t) => t.type === "query") as
-      | QueryTab
-      | undefined;
+    const tab = getAllTabsForConnection("c1").find(
+      (t) => t.type === "query",
+    ) as QueryTab | undefined;
     expect(tab).toBeDefined();
     expect(tab!.sql).toBe("BEGIN RETURN 1; END");
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
   });
 
   // ── Sprint 133: Cmd+1..9 → workspace tab switch ──
@@ -395,32 +407,32 @@ describe("App global shortcuts", () => {
     const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
     const t2 = makeTableTab({ id: "tab-2", table: "beta" });
     const t3 = makeTableTab({ id: "tab-3", table: "gamma" });
-    useTabStore.setState({ tabs: [t1, t2, t3], activeTabId: "tab-3" });
+    useWorkspaceStore.setState(seedWorkspace([t1, t2, t3], "tab-3"));
     render(<App />);
 
     fireShortcut("1");
-    expect(useTabStore.getState().activeTabId).toBe("tab-1");
+    expect(getTestWorkspace().activeTabId).toBe("tab-1");
   });
 
   it("Cmd+2 activates the second tab in the workspace", () => {
     const t1 = makeTableTab({ id: "tab-1", table: "alpha" });
     const t2 = makeTableTab({ id: "tab-2", table: "beta" });
-    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([t1, t2], "tab-1"));
     render(<App />);
 
     fireShortcut("2");
-    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+    expect(getTestWorkspace().activeTabId).toBe("tab-2");
   });
 
   it("Cmd+5 with only 3 tabs is a no-op", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
     const t3 = makeTableTab({ id: "tab-3", table: "three" });
-    useTabStore.setState({ tabs: [t1, t2, t3], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([t1, t2, t3], "tab-1"));
     render(<App />);
 
     fireShortcut("5");
-    expect(useTabStore.getState().activeTabId).toBe("tab-1");
+    expect(getTestWorkspace().activeTabId).toBe("tab-1");
   });
 
   it("Cmd+1 in home is a no-op (Sprint 154 — App only mounts in workspace window; legacy regression guard)", () => {
@@ -437,12 +449,12 @@ describe("App global shortcuts", () => {
     // workspace window context (the only place App.tsx now runs). To
     // assert the legacy "home is no-op" semantic we'd need to NOT mount
     // App — so the test now covers the workspace path only.
-    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
+    useWorkspaceStore.setState(seedWorkspace([t1, t2], "tab-2"));
     render(<App />);
 
     fireShortcut("1");
     // Workspace context: Cmd+1 selects the first tab.
-    expect(useTabStore.getState().activeTabId).toBe("tab-1");
+    expect(getTestWorkspace().activeTabId).toBe("tab-1");
   });
 
   // 2026-05-11 회귀 — Cmd+1..9 는 SQL 에디터(CodeMirror contenteditable)나
@@ -452,7 +464,7 @@ describe("App global shortcuts", () => {
   it("Cmd+1 switches tabs even when focus is inside an input", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
-    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-2" });
+    useWorkspaceStore.setState(seedWorkspace([t1, t2], "tab-2"));
     render(<App />);
 
     const input = document.createElement("input");
@@ -470,14 +482,14 @@ describe("App global shortcuts", () => {
       );
     });
 
-    expect(useTabStore.getState().activeTabId).toBe("tab-1");
+    expect(getTestWorkspace().activeTabId).toBe("tab-1");
     document.body.removeChild(input);
   });
 
   it("Cmd+2 switches tabs even when focus is inside a contenteditable target (CodeMirror / DataGrid)", () => {
     const t1 = makeTableTab({ id: "tab-1" });
     const t2 = makeTableTab({ id: "tab-2", table: "two" });
-    useTabStore.setState({ tabs: [t1, t2], activeTabId: "tab-1" });
+    useWorkspaceStore.setState(seedWorkspace([t1, t2], "tab-1"));
     render(<App />);
 
     const editor = document.createElement("div");
@@ -496,7 +508,7 @@ describe("App global shortcuts", () => {
       );
     });
 
-    expect(useTabStore.getState().activeTabId).toBe("tab-2");
+    expect(getTestWorkspace().activeTabId).toBe("tab-2");
     document.body.removeChild(editor);
   });
 
@@ -731,10 +743,7 @@ describe("App global shortcuts", () => {
           connectionId: `conn${i + 1}`,
         }),
       );
-      useTabStore.setState({
-        tabs: fillerTabs,
-        activeTabId: "tab-5",
-      });
+      useWorkspaceStore.setState(seedWorkspace(fillerTabs, "tab-5"));
     }
 
     SHORTCUTS.forEach((sc) => {

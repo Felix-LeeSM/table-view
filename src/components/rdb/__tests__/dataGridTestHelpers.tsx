@@ -10,11 +10,11 @@
 //
 // ES hoisting note: `vi.mock(...)` factories cannot live in a helper
 // module. Each axis file declares the 3 factories
-// (`./FilterBar` / `@stores/schemaStore` / `@stores/tabStore`) at its
+// (`./FilterBar` / `@stores/schemaStore` / `@stores/workspaceStore`) at its
 // own module top-level and references the mock functions exported
 // from this helper. The Sprint 76 reactive `mockTabStoreState` +
 // `subscribers` + `useReducer` rerender pattern also stays at each
-// axis file's module top because the `vi.mock("@stores/tabStore", ...)`
+// axis file's module top because the `vi.mock("@stores/workspaceStore", ...)`
 // factory captures the closure inline.
 //
 // Cross-store import policy (Sprint 221 lint rule answer): this file
@@ -118,11 +118,13 @@ export const mockUpdateTabSorts = vi.fn();
 
 export const mockSetTabDirty = vi.fn();
 
+export const mockAddTab = vi.fn();
+
 // ---------------------------------------------------------------------------
 // Reset helper — mirrors the original `beforeEach` body verbatim. Each
 // axis file calls this before every test in addition to clearing its
 // own Sprint-76 reactive `mockTabStoreState` (which lives at the axis
-// file's module top because the `vi.mock("@stores/tabStore", ...)`
+// file's module top because the `vi.mock("@stores/workspaceStore", ...)`
 // factory captures it through the closure).
 // ---------------------------------------------------------------------------
 
@@ -153,6 +155,7 @@ export function resetDataGridMocks(): void {
     ),
   );
   mockPromoteTab.mockReset();
+  mockAddTab.mockReset();
 }
 
 // ---------------------------------------------------------------------------

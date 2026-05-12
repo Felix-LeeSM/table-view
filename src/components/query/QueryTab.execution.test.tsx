@@ -5,9 +5,13 @@
 // uglify-sql window event. Cases are byte-equivalent to the originals —
 // no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import type { QueryResult } from "@/types/query";
@@ -149,7 +153,7 @@ describe("QueryTab — execution", () => {
       .mockResolvedValueOnce(secondResult);
 
     const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -176,7 +180,7 @@ describe("QueryTab — execution", () => {
 
     // Final state should show the last result
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("completed");
@@ -200,7 +204,7 @@ describe("QueryTab — execution", () => {
 
     useSafeModeStore.setState({ mode: "warn" });
     const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -209,7 +213,7 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       expect(updatedTab).toBeDefined();
       if (updatedTab && updatedTab.type === "query") {
@@ -249,7 +253,7 @@ describe("QueryTab — execution", () => {
       .mockRejectedValueOnce(new Error("Syntax error 2"));
 
     const tab = makeQueryTab({ sql: "BAD 1; BAD 2" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -258,7 +262,7 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("error");
@@ -285,7 +289,7 @@ describe("QueryTab — execution", () => {
       .mockResolvedValueOnce(secondResult);
 
     const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -294,7 +298,7 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("completed");
@@ -312,7 +316,7 @@ describe("QueryTab — execution", () => {
 
   it("formats SQL on format-sql event when tab is active", async () => {
     const tab = makeQueryTab({ sql: "select * from users" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     act(() => {
@@ -320,7 +324,7 @@ describe("QueryTab — execution", () => {
     });
 
     // Check that the SQL was formatted (our mock uppercases it)
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("SELECT * FROM USERS");
@@ -329,7 +333,7 @@ describe("QueryTab — execution", () => {
 
   it("ignores format-sql event when tab is not active", () => {
     const tab = makeQueryTab({ sql: "select * from users" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "other-tab" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "other-tab"));
     render(<QueryTab tab={tab} />);
 
     act(() => {
@@ -337,7 +341,7 @@ describe("QueryTab — execution", () => {
     });
 
     // SQL should remain unchanged
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("select * from users");
@@ -346,7 +350,7 @@ describe("QueryTab — execution", () => {
 
   it("ignores format-sql event when SQL is empty", () => {
     const tab = makeQueryTab({ sql: "   " });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     act(() => {
@@ -354,7 +358,7 @@ describe("QueryTab — execution", () => {
     });
 
     // SQL should remain unchanged (whitespace-only)
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("   ");
@@ -368,7 +372,7 @@ describe("QueryTab — execution", () => {
     const tab = makeQueryTab({
       queryState: { status: "running", queryId: "query-1-1234" },
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const cancelBtn = screen.getByLabelText("Cancel query");
@@ -384,7 +388,7 @@ describe("QueryTab — execution", () => {
     const tab = makeQueryTab({
       queryState: { status: "running", queryId: "query-1-1234" },
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const cancelBtn = screen.getByLabelText("Cancel query");
@@ -401,7 +405,7 @@ describe("QueryTab — execution", () => {
     const tab = makeQueryTab({
       queryState: { status: "running", queryId: "query-1-1234" },
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     // Should not throw even though cancelQuery rejects
@@ -427,7 +431,7 @@ describe("QueryTab — execution", () => {
 
     useSafeModeStore.setState({ mode: "warn" });
     const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -456,7 +460,7 @@ describe("QueryTab — execution", () => {
       .mockResolvedValueOnce(secondResult);
 
     const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -477,7 +481,7 @@ describe("QueryTab — execution", () => {
   it("handles non-Error rejection in single statement", async () => {
     mockExecuteQuery.mockRejectedValueOnce("string error");
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -486,7 +490,7 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("error");
@@ -511,7 +515,7 @@ describe("QueryTab — execution", () => {
 
     useSafeModeStore.setState({ mode: "warn" });
     const tab = makeQueryTab({ sql: "SELECT 1; DROP TABLE nope" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -520,7 +524,7 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updatedTab = state.tabs.find((t) => t.id === "query-1");
       if (updatedTab && updatedTab.type === "query") {
         expect(updatedTab.queryState.status).toBe("completed");
@@ -538,14 +542,14 @@ describe("QueryTab — execution", () => {
 
   it("uglifies SQL on uglify-sql event when tab is active", () => {
     const tab = makeQueryTab({ sql: "SELECT  id\n  FROM  users" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     act(() => {
       window.dispatchEvent(new CustomEvent("uglify-sql"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("SELECT id FROM users");
@@ -554,14 +558,14 @@ describe("QueryTab — execution", () => {
 
   it("ignores uglify-sql event when tab is not active", () => {
     const tab = makeQueryTab({ sql: "SELECT  id\n  FROM  users" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "other-tab" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "other-tab"));
     render(<QueryTab tab={tab} />);
 
     act(() => {
       window.dispatchEvent(new CustomEvent("uglify-sql"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("SELECT  id\n  FROM  users");
@@ -570,14 +574,14 @@ describe("QueryTab — execution", () => {
 
   it("ignores uglify-sql event when SQL is empty", () => {
     const tab = makeQueryTab({ sql: "   " });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     act(() => {
       window.dispatchEvent(new CustomEvent("uglify-sql"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updatedTab = state.tabs.find((t) => t.id === "query-1");
     if (updatedTab && updatedTab.type === "query") {
       expect(updatedTab.sql).toBe("   ");

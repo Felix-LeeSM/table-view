@@ -15,8 +15,9 @@
 // `useQueryExecution` 직접 mount (renderHook) 가 가능한지는 다른 dry-run.test.ts
 // 의 패턴 (full QueryTab mount 회피) 을 따른다.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import { useQueryExecution } from "./useQueryExecution";
@@ -65,7 +66,7 @@ function makeDmlResult(rowsAffected: number): QueryResult {
 
 function seedTab(sql: string) {
   const tab = makeQueryTab({ sql });
-  useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+  useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
   useConnectionStore.setState({
     connections: [makeConn({ id: "conn1", environment: "development" })],
   });
@@ -79,7 +80,7 @@ describe("useQueryExecution — Sprint 254 dry-run WARN escalation", () => {
     cancelQueryMock.mockReset();
     findDocumentsMock.mockReset();
     aggregateDocumentsMock.mockReset();
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "warn" });
   });

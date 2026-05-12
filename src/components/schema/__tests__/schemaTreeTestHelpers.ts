@@ -8,7 +8,7 @@
 import { vi } from "vitest";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -52,6 +52,15 @@ export function resetStores() {
     loadFunctions: mockLoadFunctions,
     prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
-  useTabStore.setState({ tabs: [], activeTabId: null });
-  useConnectionStore.setState({ connections: [] });
+  useWorkspaceStore.setState({ workspaces: {} });
+  // ADR 0027 — workspace key resolves via `(focusedConnId, activeDb)`.
+  // SchemaTree tests render with `connectionId="conn1"` and expect tabs
+  // to land in the default test slot; seeding the connection status
+  // keeps that mapping deterministic. Mirrors the seed pattern from
+  // `workspaceStoreTestHelpers.seedConnection()`.
+  useConnectionStore.setState({
+    connections: [],
+    focusedConnId: "conn1",
+    activeStatuses: { conn1: { type: "connected", activeDb: "db1" } },
+  });
 }

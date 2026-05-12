@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getTestWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import SchemaTree from "./SchemaTree";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore, type TableTab } from "@stores/tabStore";
+import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 
 // ---------------------------------------------------------------------------
 // Sprint 136 — Preview / persist click semantics for the relational tree.
@@ -53,16 +54,17 @@ function resetStores() {
     loadFunctions: mockLoadFunctions,
     prefetchSchemaColumns: mockPrefetchSchemaColumns,
   });
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
+  useWorkspaceStore.setState({ workspaces: {} });
+  // ADR 0027 — workspace key resolves via `(focusedConnId, activeDb)`.
+  useConnectionStore.setState({
+    connections: [],
+    focusedConnId: "conn1",
+    activeStatuses: { conn1: { type: "connected", activeDb: "db1" } },
   });
-  useConnectionStore.setState({ connections: [] });
 }
 
 function getTableTab(): TableTab {
-  const tab = useTabStore.getState().tabs[0]!;
+  const tab = getTestWorkspace().tabs[0]!;
   if (tab.type !== "table") throw new Error("Expected TableTab");
   return tab;
 }
@@ -94,7 +96,7 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
       fireEvent.click(screen.getByLabelText("users table"));
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().isPreview).toBe(true);
     expect(getTableTab().table).toBe("users");
   });
@@ -113,7 +115,7 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
       fireEvent.click(screen.getByLabelText("orders table"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     expect(getTableTab().table).toBe("orders");
     expect(getTableTab().isPreview).toBe(true);
@@ -130,7 +132,7 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
       fireEvent.doubleClick(screen.getByLabelText("users table"));
     });
 
-    expect(useTabStore.getState().tabs).toHaveLength(1);
+    expect(getTestWorkspace().tabs).toHaveLength(1);
     expect(getTableTab().isPreview).toBe(false);
     expect(getTableTab().table).toBe("users");
 
@@ -139,7 +141,7 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("orders table"));
     });
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(2);
     const tab0 = state.tabs[0]!;
     const tab1 = state.tabs[1]!;
@@ -161,13 +163,13 @@ describe("SchemaTree — Sprint 136 preview / persist click semantics", () => {
     await act(async () => {
       fireEvent.click(screen.getByLabelText("users table"));
     });
-    const previewId = useTabStore.getState().tabs[0]!.id;
+    const previewId = getTestWorkspace().tabs[0]!.id;
 
     await act(async () => {
       fireEvent.click(screen.getByLabelText("users table"));
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     expect(state.tabs).toHaveLength(1);
     // Same tab — no replacement.
     expect(state.tabs[0]!.id).toBe(previewId);

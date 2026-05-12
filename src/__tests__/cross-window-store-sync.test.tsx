@@ -38,6 +38,10 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 
 // ---------------------------------------------------------------------------
 // Shared in-process event bus mock for `@tauri-apps/api/event`.
@@ -115,7 +119,7 @@ vi.mock("@lib/window-label", () => ({
 
 // Import AFTER all mocks are registered.
 import { emit } from "@tauri-apps/api/event";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useFavoritesStore } from "@stores/favoritesStore";
@@ -139,12 +143,7 @@ function simulateRemoteEmit(
 }
 
 function resetTabStore(): void {
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
-    dirtyTabIds: new Set<string>(),
-  });
+  useWorkspaceStore.setState({ workspaces: {} });
 }
 
 function resetMruStore(): void {
@@ -182,30 +181,37 @@ describe("cross-window store sync (Sprint 153)", () => {
   // -------------------------------------------------------------------------
 
   describe("tabStore (workspace-only)", () => {
-    it("AC-153-01a: workspace mutation of `tabs` emits on `tab-sync`", async () => {
-      // The default mock has `getCurrentWindowLabel() === "workspace"`, so the
-      // bridge attached at module load. A workspace-side state write must
-      // produce an emit on the dedicated channel.
+    // ADR 0027 (Sprint 262) — the cross-window bridge moved off the flat
+    // `tab-sync` channel onto the per-workspace `workspace-sync` channel.
+    // The wire payload now carries `{ workspaces }` (a 2-level map keyed
+    // by `(connId, db)`) instead of the flat `{ tabs, activeTabId }`.
+    // Workspace-local fields (`closedTabHistory`, `dirtyTabIds`,
+    // `sidebar`) live INSIDE each per-(connId, db) slot and divergence
+    // there is acceptable — the same window-local exclusion intent as
+    // the legacy bridge.
+    it("AC-153-01a: workspace mutation of `workspaces` emits on `workspace-sync`", async () => {
       mockedEmit.mockClear();
-      useTabStore.setState({
-        tabs: [
-          {
-            type: "table",
-            id: "tab-A",
-            title: "users",
-            connectionId: "c1",
-            closable: true,
-            schema: "public",
-            table: "users",
-            subView: "records",
-          },
-        ],
-        activeTabId: "tab-A",
-      });
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-A",
+              title: "users",
+              connectionId: "c1",
+              closable: true,
+              schema: "public",
+              table: "users",
+              subView: "records",
+            },
+          ],
+          "tab-A",
+        ),
+      );
       await Promise.resolve();
 
       const syncCall = mockedEmit.mock.calls.find(
-        (call) => call[0] === "tab-sync",
+        (call) => call[0] === "workspace-sync",
       );
       expect(syncCall).toBeDefined();
       const payload = syncCall![1] as {
@@ -213,109 +219,114 @@ describe("cross-window store sync (Sprint 153)", () => {
         state: Record<string, unknown>;
       };
       expect(payload.origin).toBe("workspace");
-      expect(payload.state).toHaveProperty("tabs");
-      expect(payload.state).toHaveProperty("activeTabId");
+      expect(payload.state).toHaveProperty("workspaces");
     });
 
     it("AC-153-01b: a remote workspace emit applies to the local workspace store", async () => {
-      // Two workspace stores in the same process simulate the cross-window
-      // contract — origin "workspace-2" so the local "workspace" guard does
-      // not drop the payload.
-      simulateRemoteEmit("tab-sync", "workspace-2", {
-        tabs: [
-          {
-            type: "table",
-            id: "tab-remote",
-            title: "remote",
-            connectionId: "c2",
-            closable: true,
-            schema: "public",
-            table: "remote",
-            subView: "records",
+      simulateRemoteEmit("workspace-sync", "workspace-2", {
+        workspaces: {
+          c2: {
+            db1: {
+              tabs: [
+                {
+                  type: "table",
+                  id: "tab-remote",
+                  title: "remote",
+                  connectionId: "c2",
+                  closable: true,
+                  schema: "public",
+                  table: "remote",
+                  subView: "records",
+                },
+              ],
+              activeTabId: "tab-remote",
+              closedTabHistory: [],
+              dirtyTabIds: [],
+              sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+            },
           },
-        ],
-        activeTabId: "tab-remote",
+        },
       });
       await Promise.resolve();
 
-      const state = useTabStore.getState();
+      const state = getTestWorkspace("c2", "db1");
       expect(state.tabs).toHaveLength(1);
       expect(state.tabs[0]!.id).toBe("tab-remote");
       expect(state.activeTabId).toBe("tab-remote");
     });
 
-    it("AC-153-06 (tabStore): allowlist excludes window-local fields", async () => {
+    it("AC-153-06 (tabStore): wire payload carries only the `workspaces` field", async () => {
       mockedEmit.mockClear();
-      // Mutate dirtyTabIds + closedTabHistory + tabs in the same write so the
-      // bridge's diff sees a change but the wire payload should only contain
-      // `tabs` / `activeTabId`.
-      useTabStore.setState({
-        tabs: [
-          {
-            type: "table",
-            id: "tab-C",
-            title: "c",
-            connectionId: "c1",
-            closable: true,
-            schema: "public",
-            table: "c",
-            subView: "records",
-          },
-        ],
-        activeTabId: "tab-C",
-        dirtyTabIds: new Set<string>(["tab-C"]),
-        closedTabHistory: [],
-      });
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-C",
+              title: "c",
+              connectionId: "c1",
+              closable: true,
+              schema: "public",
+              table: "c",
+              subView: "records",
+            },
+          ],
+          "tab-C",
+          "conn1",
+          "db1",
+          { dirtyTabIds: ["tab-C"], closedTabHistory: [] },
+        ),
+      );
       await Promise.resolve();
 
       const syncCall = mockedEmit.mock.calls.find(
-        (call) => call[0] === "tab-sync",
+        (call) => call[0] === "workspace-sync",
       );
       expect(syncCall).toBeDefined();
       const payload = syncCall![1] as {
         origin: string;
         state: Record<string, unknown>;
       };
-      // `dirtyTabIds` is a Set instance and must not survive `JSON.stringify`,
-      // so we explicitly forbid it in the wire payload. `closedTabHistory` is
-      // window-local (reopen-last-closed must not surface another window's
-      // closed tabs).
-      expect(payload.state).not.toHaveProperty("dirtyTabIds");
-      expect(payload.state).not.toHaveProperty("closedTabHistory");
-      expect(Object.keys(payload.state).sort()).toEqual([
-        "activeTabId",
-        "tabs",
-      ]);
+      // Per ADR 0027 the wire payload is `{ workspaces }`; per-slot
+      // window-local fields (`dirtyTabIds`, `closedTabHistory`, sidebar)
+      // still travel inside the slot — divergence on those is by design.
+      expect(Object.keys(payload.state).sort()).toEqual(["workspaces"]);
     });
 
-    it("AC-153-07 (tabStore): malformed `tab-sync` payload does not throw or pollute state", async () => {
-      useTabStore.setState({
-        tabs: [
-          {
-            type: "table",
-            id: "tab-keep",
-            title: "users",
-            connectionId: "c1",
-            closable: true,
-            schema: "public",
-            table: "users",
-            subView: "records",
-          },
-        ],
-        activeTabId: "tab-keep",
-      });
+    it("AC-153-07 (tabStore): malformed `workspace-sync` payload does not throw or pollute state", async () => {
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-keep",
+              title: "users",
+              connectionId: "c1",
+              closable: true,
+              schema: "public",
+              table: "users",
+              subView: "records",
+            },
+          ],
+          "tab-keep",
+        ),
+      );
 
       expect(() => {
-        busEmit("tab-sync", null);
-        busEmit("tab-sync", "not-an-object");
-        busEmit("tab-sync", { origin: "workspace-2" });
-        busEmit("tab-sync", { origin: "workspace-2", state: "string" });
-        busEmit("tab-sync", { origin: "workspace-2", state: null });
-        busEmit("tab-sync", { origin: "workspace-2", state: { unknown: 1 } });
+        busEmit("workspace-sync", null);
+        busEmit("workspace-sync", "not-an-object");
+        busEmit("workspace-sync", { origin: "workspace-2" });
+        busEmit("workspace-sync", { origin: "workspace-2", state: "string" });
+        busEmit("workspace-sync", { origin: "workspace-2", state: null });
+        busEmit("workspace-sync", {
+          origin: "workspace-2",
+          state: { unknown: 1 },
+        });
       }).not.toThrow();
       await Promise.resolve();
 
-      const state = useTabStore.getState();
+      // seedWorkspace auto-derives connId from `firstTab.connectionId` ("c1").
+      const state = getTestWorkspace("c1", "db1");
       expect(state.tabs).toHaveLength(1);
       expect(state.tabs[0]!.id).toBe("tab-keep");
       expect(state.activeTabId).toBe("tab-keep");
@@ -347,15 +358,10 @@ describe("cross-window store sync (Sprint 153)", () => {
         moveConnectionToGroup: vi.fn(() => Promise.resolve()),
       }));
 
-      const { useTabStore: launcherTabStore } =
-        await import("@stores/tabStore");
+      const { useWorkspaceStore: launcherWorkspaceStore } =
+        await import("@stores/workspaceStore");
       // Reset the freshly-imported store to a known clean baseline.
-      launcherTabStore.setState({
-        tabs: [],
-        activeTabId: null,
-        closedTabHistory: [],
-        dirtyTabIds: new Set<string>(),
-      });
+      launcherWorkspaceStore.setState({ workspaces: {} });
       await Promise.resolve();
       await Promise.resolve();
 
@@ -379,8 +385,14 @@ describe("cross-window store sync (Sprint 153)", () => {
       await Promise.resolve();
 
       // Launcher's tabs MUST stay empty.
-      expect(launcherTabStore.getState().tabs).toHaveLength(0);
-      expect(launcherTabStore.getState().activeTabId).toBeNull();
+      expect(
+        launcherWorkspaceStore.getState().workspaces["conn1"]?.["db1"]?.tabs ??
+          [],
+      ).toHaveLength(0);
+      expect(
+        launcherWorkspaceStore.getState().workspaces["conn1"]?.["db1"]
+          ?.activeTabId ?? null,
+      ).toBeNull();
 
       vi.doUnmock("@lib/window-label");
       vi.doUnmock("@tauri-apps/api/event");
@@ -574,21 +586,23 @@ describe("cross-window store sync (Sprint 153)", () => {
       // in a regressed bridge (a tab mutation is the closest neighbour
       // since `tabStore` is workspace-scoped). The point is to give the
       // bus traffic so the assertion below is a real filter, not vacuous.
-      useTabStore.setState({
-        tabs: [
-          {
-            type: "table",
-            id: "tab-driver",
-            title: "drv",
-            connectionId: "c1",
-            closable: true,
-            schema: "public",
-            table: "drv",
-            subView: "records",
-          },
-        ],
-        activeTabId: "tab-driver",
-      });
+      useWorkspaceStore.setState(
+        seedWorkspace(
+          [
+            {
+              type: "table",
+              id: "tab-driver",
+              title: "drv",
+              connectionId: "c1",
+              closable: true,
+              schema: "public",
+              table: "drv",
+              subView: "records",
+            },
+          ],
+          "tab-driver",
+        ),
+      );
       await Promise.resolve();
 
       const sentChannels = mockedEmit.mock.calls.map((call) => call[0]);

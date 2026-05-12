@@ -9,9 +9,16 @@
 // localStorage + safe-mode reset). Cases are byte-equivalent to the
 // originals — no behaviour change.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import QueryTab from "./QueryTab";
-import { useTabStore, type QueryTab as QueryTabType } from "@stores/tabStore";
+import {
+  useWorkspaceStore,
+  type QueryTab as QueryTabType,
+} from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useSafeModeStore, SAFE_MODE_STORAGE_KEY } from "@stores/safeModeStore";
@@ -152,7 +159,7 @@ describe("QueryTab — document", () => {
   it("rdb paradigm routes handleExecute through executeQuery (regression)", async () => {
     mockExecuteQuery.mockResolvedValueOnce(MOCK_RESULT);
     const tab = makeQueryTab();
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -167,7 +174,7 @@ describe("QueryTab — document", () => {
   it("document+find calls findDocuments with the parsed filter", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     const tab = makeDocTab({ sql: '{"active":true}' });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -185,7 +192,7 @@ describe("QueryTab — document", () => {
     );
 
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updated = state.tabs.find((t) => t.id === "query-1");
       if (updated && updated.type === "query") {
         expect(updated.queryState.status).toBe("completed");
@@ -198,7 +205,7 @@ describe("QueryTab — document", () => {
     const tab = makeDocTab({
       sql: '{"filter":{"active":true},"sort":{"name":1},"limit":10}',
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -219,7 +226,7 @@ describe("QueryTab — document", () => {
       queryMode: "aggregate",
       sql: '[{"$match":{"active":true}},{"$limit":10}]',
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -239,7 +246,7 @@ describe("QueryTab — document", () => {
 
   it("surfaces an Invalid JSON error when the body can't be parsed", async () => {
     const tab = makeDocTab({ sql: "{not valid}" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -254,7 +261,8 @@ describe("QueryTab — document", () => {
     // "Invalid JSON" prefix) covers the AC-08 contract without requiring
     // the mocked QueryResultGrid to observe prop changes.
     await waitFor(() => {
-      const state = useTabStore.getState();
+      // ADR 0027 — doc tab lives in workspace (conn-mongo, table_view_test).
+      const state = getTestWorkspace("conn-mongo", "table_view_test");
       const updated = state.tabs.find((t) => t.id === "query-1");
       expect(updated?.type).toBe("query");
       if (updated?.type === "query") {
@@ -268,7 +276,7 @@ describe("QueryTab — document", () => {
 
   it("rejects a find body that is not a JSON object", async () => {
     const tab = makeDocTab({ sql: "[1,2,3]" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -277,7 +285,7 @@ describe("QueryTab — document", () => {
 
     expect(mockFindDocuments).not.toHaveBeenCalled();
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updated = state.tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query" && updated.queryState.status === "error") {
         expect(updated.queryState.error).toMatch(/Find body/);
@@ -290,7 +298,7 @@ describe("QueryTab — document", () => {
       queryMode: "aggregate",
       sql: '{"$match":{}}',
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -299,7 +307,7 @@ describe("QueryTab — document", () => {
 
     expect(mockAggregateDocuments).not.toHaveBeenCalled();
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updated = state.tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query" && updated.queryState.status === "error") {
         expect(updated.queryState.error).toMatch(/Pipeline/);
@@ -309,7 +317,7 @@ describe("QueryTab — document", () => {
 
   it("errors out when a document tab is missing database/collection context", async () => {
     const tab = makeDocTab({ database: undefined, collection: undefined });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -318,7 +326,7 @@ describe("QueryTab — document", () => {
 
     expect(mockFindDocuments).not.toHaveBeenCalled();
     await waitFor(() => {
-      const state = useTabStore.getState();
+      const state = getTestWorkspace();
       const updated = state.tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query" && updated.queryState.status === "error") {
         expect(updated.queryState.error).toMatch(/database and collection/);
@@ -333,7 +341,7 @@ describe("QueryTab — document", () => {
     expect(screen.queryByLabelText("Aggregate mode")).toBeNull();
 
     const docTab = makeDocTab({ id: "query-1" });
-    useTabStore.setState({ tabs: [docTab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
     rerender(<QueryTab tab={docTab} />);
     expect(screen.getByLabelText("Find mode")).toBeInTheDocument();
     expect(screen.getByLabelText("Aggregate mode")).toBeInTheDocument();
@@ -341,14 +349,14 @@ describe("QueryTab — document", () => {
 
   it("clicking the Aggregate toggle calls setQueryMode and flips tab state", async () => {
     const tab = makeDocTab({ queryMode: "find" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
       screen.getByLabelText("Aggregate mode").click();
     });
 
-    const state = useTabStore.getState();
+    const state = getTestWorkspace();
     const updated = state.tabs.find((t) => t.id === "query-1");
     if (updated?.type === "query") {
       expect(updated.queryMode).toBe("aggregate");
@@ -364,14 +372,14 @@ describe("QueryTab — document", () => {
   it("document tabs survive a successful run followed by a JSON error (idempotent)", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     const tab = makeDocTab({ sql: '{"active":true}' });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     const { rerender } = render(<QueryTab tab={tab} />);
 
     await act(async () => {
       screen.getByTestId("execute-btn").click();
     });
     await waitFor(() => {
-      const s = useTabStore.getState();
+      const s = getTestWorkspace();
       const updated = s.tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query") {
         expect(updated.queryState.status).toBe("completed");
@@ -381,7 +389,7 @@ describe("QueryTab — document", () => {
     // Flip the SQL to an invalid body and re-run; the error must replace the
     // previous success state so the user sees the new failure.
     const broken = makeDocTab({ sql: "{not json}" });
-    useTabStore.setState({ tabs: [broken], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([broken], "query-1"));
     rerender(<QueryTab tab={broken} />);
 
     await act(async () => {
@@ -389,7 +397,7 @@ describe("QueryTab — document", () => {
     });
 
     await waitFor(() => {
-      const s = useTabStore.getState();
+      const s = getTestWorkspace();
       const updated = s.tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query") {
         expect(updated.queryState.status).toBe("error");
@@ -423,7 +431,7 @@ describe("QueryTab — document", () => {
     });
 
     const tab = makeQueryTab({ sql: "\\c admin" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -475,7 +483,7 @@ describe("QueryTab — document", () => {
     });
 
     const tab = makeQueryTab({ sql: "\\c admin" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -521,7 +529,7 @@ describe("QueryTab — document", () => {
     });
 
     const tab = makeQueryTab({ sql: "SELECT 1" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -558,7 +566,7 @@ describe("QueryTab — document", () => {
     });
 
     const tab = makeQueryTab({ sql: "-- \\c admin\nSELECT 1" });
-    useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -620,7 +628,7 @@ describe("QueryTab — document", () => {
       database: "table_view_test",
       collection: "users",
     };
-    useTabStore.setState({ tabs: [docTab], activeTabId: "query-doc" });
+    useWorkspaceStore.setState(seedWorkspace([docTab], "query-doc"));
     render(<QueryTab tab={docTab} />);
 
     const executeBtn = screen.getByTestId("execute-btn");
@@ -676,7 +684,7 @@ describe("QueryTab — document", () => {
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "strict" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {
@@ -685,9 +693,7 @@ describe("QueryTab — document", () => {
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
       await screen.findByTestId("confirm-destructive-confirm");
-      const updated = useTabStore
-        .getState()
-        .tabs.find((t) => t.id === "query-1");
+      const updated = getTestWorkspace().tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query") {
         // Confirm flow keeps queryState idle until the user types and
         // confirms or cancels.
@@ -704,7 +710,7 @@ describe("QueryTab — document", () => {
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "warn" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {
@@ -734,7 +740,7 @@ describe("QueryTab — document", () => {
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "warn" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {
@@ -746,9 +752,7 @@ describe("QueryTab — document", () => {
       await user.click(screen.getByRole("button", { name: /Cancel/ }));
 
       expect(mockAggregateDocuments).not.toHaveBeenCalled();
-      const updated = useTabStore
-        .getState()
-        .tabs.find((t) => t.id === "query-1");
+      const updated = getTestWorkspace().tabs.find((t) => t.id === "query-1");
       if (updated?.type === "query") {
         // queryState started as "idle" (default for newly-mounted tabs);
         // cancel must not have transitioned it.
@@ -766,7 +770,7 @@ describe("QueryTab — document", () => {
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "off" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {
@@ -798,7 +802,7 @@ describe("QueryTab — document", () => {
       });
       useSafeModeStore.setState({ mode: "strict" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {
@@ -831,7 +835,7 @@ describe("QueryTab — document", () => {
       });
       useSafeModeStore.setState({ mode: "warn" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: PROD_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {
@@ -848,7 +852,7 @@ describe("QueryTab — document", () => {
       setupProductionMongo();
       useSafeModeStore.setState({ mode: "strict" });
       const tab = makeDocTab({ queryMode: "aggregate", sql: SAFE_PIPELINE });
-      useTabStore.setState({ tabs: [tab], activeTabId: "query-1" });
+      useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
       render(<QueryTab tab={tab} />);
 
       await act(async () => {

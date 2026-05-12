@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ChevronDown, Database, Loader2 } from "lucide-react";
-import { useActiveTab } from "@stores/tabStore";
+import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useDocumentStore } from "@stores/documentStore";

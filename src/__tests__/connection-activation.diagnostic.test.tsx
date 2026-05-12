@@ -25,10 +25,14 @@ import {
   afterEach,
   type Mock,
 } from "vitest";
+import {
+  seedWorkspace,
+  getTestWorkspace,
+} from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import HomePage from "@/pages/HomePage";
 import { useConnectionStore } from "@stores/connectionStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import type { ConnectionConfig } from "@/types/connection";
 
 // ── Mocks ──────────────────────────────────────────────────────────────────
@@ -148,12 +152,7 @@ function resetStores() {
     activeStatuses: {},
     focusedConnId: null,
   });
-  useTabStore.setState({
-    tabs: [],
-    activeTabId: null,
-    closedTabHistory: [],
-    dirtyTabIds: new Set<string>(),
-  });
+  useWorkspaceStore.setState({ workspaces: {} });
 }
 
 beforeEach(() => {
@@ -327,24 +326,27 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     });
 
     // Pre-seed tabs owned by c1.
-    useTabStore.setState({
-      tabs: [
-        {
-          id: "tab-a1",
-          title: "public.users",
-          connectionId: "c1",
-          type: "table",
-          closable: true,
-          schema: "public",
-          table: "users",
-          subView: "records",
-          isPreview: false,
-        },
-      ],
-      activeTabId: "tab-a1",
-      closedTabHistory: [],
-      dirtyTabIds: new Set<string>(),
-    });
+    useWorkspaceStore.setState(
+      seedWorkspace(
+        [
+          {
+            id: "tab-a1",
+            title: "public.users",
+            connectionId: "c1",
+            type: "table",
+            closable: true,
+            schema: "public",
+            table: "users",
+            subView: "records",
+            isPreview: false,
+          },
+        ],
+        "tab-a1",
+        "conn1",
+        "db1",
+        { closedTabHistory: [], dirtyTabIds: [] },
+      ),
+    );
 
     render(<HomePage />);
 
@@ -373,7 +375,7 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(hideWindowMock).toHaveBeenCalledWith("launcher");
 
     // A's stale tabs must be cleared — only c2 tabs (none yet) remain.
-    const tabState = useTabStore.getState();
+    const tabState = getTestWorkspace();
     const c1Tabs = tabState.tabs.filter((t) => t.connectionId === "c1");
     expect(c1Tabs).toHaveLength(0);
   });

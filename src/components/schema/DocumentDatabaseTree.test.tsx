@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { getAllTabsForConnection } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import {
   act,
   render,
@@ -11,7 +12,7 @@ import {
   useDocumentStore,
   __resetDocumentStoreForTests,
 } from "@stores/documentStore";
-import { useTabStore, type TableTab } from "@stores/tabStore";
+import { useWorkspaceStore, type TableTab } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 
 // Mock the tauri bridge so the store actions resolve against canned data
@@ -64,7 +65,7 @@ vi.mock("@lib/tauri", () => ({
 describe("DocumentDatabaseTree", () => {
   beforeEach(() => {
     __resetDocumentStoreForTests();
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     // Sprint 137 — reset the connection store so previous tests' active DB
     // selections cannot leak into the auto-load guard.
     useConnectionStore.setState({ activeStatuses: {}, connections: [] });
@@ -114,7 +115,7 @@ describe("DocumentDatabaseTree", () => {
 
     fireEvent.doubleClick(screen.getByLabelText("users collection"));
 
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getAllTabsForConnection("conn-mongo");
     expect(tabs).toHaveLength(1);
     const first = tabs[0]!;
     expect(first.type).toBe("table");
@@ -319,7 +320,7 @@ describe("DocumentDatabaseTree", () => {
 
     fireEvent.click(screen.getByLabelText("users collection"));
 
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getAllTabsForConnection("conn-mongo");
     expect(tabs).toHaveLength(1);
     const first = tabs[0]!;
     expect(first.type).toBe("table");
@@ -345,7 +346,7 @@ describe("DocumentDatabaseTree", () => {
 
     fireEvent.doubleClick(screen.getByLabelText("users collection"));
 
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getAllTabsForConnection("conn-mongo");
     expect(tabs).toHaveLength(1);
     const first = tabs[0]!;
     expect(first.type).toBe("table");
@@ -371,10 +372,10 @@ describe("DocumentDatabaseTree", () => {
     );
 
     fireEvent.click(screen.getByLabelText("users collection"));
-    const previewId = useTabStore.getState().tabs[0]!.id;
+    const previewId = getAllTabsForConnection("conn-mongo")[0]!.id;
     fireEvent.click(screen.getByLabelText("users collection"));
 
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getAllTabsForConnection("conn-mongo");
     expect(tabs).toHaveLength(1);
     expect(tabs[0]!.id).toBe(previewId);
     const first = tabs[0]!;
@@ -510,18 +511,20 @@ describe("DocumentDatabaseTree", () => {
   // instead of swapping) in the document paradigm context.
   // ─────────────────────────────────────────────────────────────────
 
-  // Reason: 다른 database의 collection 클릭 시 preview swap이 정상 동작하는지 진단.
-  //         addTab의 exact match는 (connectionId, table)만 비교하므로, 다른 DB의
-  //         같은 이름 collection은 exact match로 처리될 수 있음 (2026-04-28)
-  it("AC-156-doc-01: clicking collections in different databases swaps the preview slot", async () => {
-    // Override the database list mock to include dbX and dbY.
+  // ADR 0027 (Sprint 262) — per-database workspace partition. The
+  // pre-S262 behaviour for this AC was "preview swaps GLOBALLY across
+  // databases" because tabs lived in one flat list. Under per-(connId,
+  // db) workspaces each database keeps its own preview slot, so
+  // clicking collections in two distinct databases yields TWO preview
+  // tabs (one per workspace). This is the new contract; the legacy
+  // swap is no longer reachable.
+  it("AC-156-doc-01 (post-S262): clicking collections in different databases keeps a preview per-database", async () => {
     const tauriMock = await import("@lib/tauri");
     const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
     listDatabasesSpy.mockResolvedValueOnce([{ name: "dbX" }, { name: "dbY" }]);
 
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 
-    // Expand both databases.
     await waitFor(() =>
       expect(screen.getByLabelText("dbX database")).toBeInTheDocument(),
     );
@@ -538,25 +541,21 @@ describe("DocumentDatabaseTree", () => {
       ).toBeInTheDocument(),
     );
 
-    // Click collection in dbX.
     fireEvent.click(screen.getByLabelText("x_collection collection"));
-    const tabs = useTabStore.getState().tabs;
-    expect(tabs).toHaveLength(1);
-    const first = tabs[0]!;
-    if (first.type === "table") {
-      expect(first.isPreview).toBe(true);
-      expect(first.collection).toBe("x_collection");
-    }
-
-    // Click collection in dbY — must swap preview, not accumulate.
     fireEvent.click(screen.getByLabelText("y_collection collection"));
-    const tabs2 = useTabStore.getState().tabs;
-    expect(tabs2).toHaveLength(1);
-    const second = tabs2[0]!;
-    if (second.type === "table") {
-      expect(second.isPreview).toBe(true);
-      expect(second.collection).toBe("y_collection");
-    }
+
+    const tabs = getAllTabsForConnection("conn-mongo");
+    expect(tabs).toHaveLength(2);
+    const xTab = tabs.find(
+      (t): t is TableTab => t.type === "table" && t.database === "dbX",
+    );
+    const yTab = tabs.find(
+      (t): t is TableTab => t.type === "table" && t.database === "dbY",
+    );
+    expect(xTab?.isPreview).toBe(true);
+    expect(xTab?.collection).toBe("x_collection");
+    expect(yTab?.isPreview).toBe(true);
+    expect(yTab?.collection).toBe("y_collection");
   });
 
   // Reason: double-click promote 후 다른 collection 클릭 시 permanent + preview
@@ -584,7 +583,7 @@ describe("DocumentDatabaseTree", () => {
 
     // Double-click to promote.
     fireEvent.doubleClick(screen.getByLabelText("users collection"));
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getAllTabsForConnection("conn-mongo");
     expect(tabs).toHaveLength(1);
     const promoted = tabs[0]!;
     if (promoted.type === "table") {
@@ -604,7 +603,7 @@ describe("DocumentDatabaseTree", () => {
     );
     fireEvent.click(screen.getByLabelText("x_collection collection"));
 
-    const tabs2 = useTabStore.getState().tabs;
+    const tabs2 = getAllTabsForConnection("conn-mongo");
     expect(tabs2).toHaveLength(2);
     // Find the permanent and preview tabs.
     const permanent = tabs2.find(
@@ -644,7 +643,7 @@ describe("DocumentDatabaseTree", () => {
     // Click the same collection again — must not create a second tab.
     fireEvent.click(screen.getByLabelText("users collection"));
 
-    const tabs = useTabStore.getState().tabs;
+    const tabs = getAllTabsForConnection("conn-mongo");
     expect(tabs).toHaveLength(1);
     const tab = tabs[0]!;
     if (tab.type === "table") {
@@ -653,19 +652,20 @@ describe("DocumentDatabaseTree", () => {
     }
   });
 
-  // Reason: Phase 13 AC-13-06 — 같은 connection 내 다른 database의 collection 간
-  //         preview swap 검증. dbA.colA 클릭 → preview 생성, dbB.colB 클릭 →
-  //         preview swap (탭 개수 1 유지). AC-156-doc-01과 유사하지만 독립적인
-  //         mock 설정으로 Phase 13 수용 기준 충족을 명시적으로 보장 (2026-04-28)
-  it("AC-13-06: swaps preview when clicking collection from different database (same connection)", async () => {
+  // ADR 0027 (Sprint 262) — see AC-156-doc-01 comment above. Phase 13's
+  // AC-13-06 tested the same legacy "global preview swap" that no
+  // longer applies once tabs are partitioned by `(connId, db)`. The
+  // updated contract: each database keeps its own preview slot
+  // independently, and clicking collections in two databases yields
+  // one preview per database. Same coverage as AC-156-doc-01 above,
+  // retained here so the Phase 13 reference is preserved in tests.
+  it("AC-13-06 (post-S262): keeps a preview slot per-database (same connection)", async () => {
     const tauriMock = await import("@lib/tauri");
     const listDatabasesSpy = vi.mocked(tauriMock.listMongoDatabases);
-    // Use dbX and dbY — these are already handled by the default listMongoCollections mock.
     listDatabasesSpy.mockResolvedValueOnce([{ name: "dbX" }, { name: "dbY" }]);
 
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 
-    // Expand both databases to reveal their collections.
     await waitFor(() =>
       expect(screen.getByLabelText("dbX database")).toBeInTheDocument(),
     );
@@ -682,28 +682,20 @@ describe("DocumentDatabaseTree", () => {
       ).toBeInTheDocument(),
     );
 
-    // Click collection in dbX → preview tab created.
     fireEvent.click(screen.getByLabelText("x_collection collection"));
-    let tabs = useTabStore.getState().tabs;
-    expect(tabs).toHaveLength(1);
-    const first = tabs[0]!;
-    expect(first.type).toBe("table");
-    if (first.type === "table") {
-      expect(first.isPreview).toBe(true);
-      expect(first.collection).toBe("x_collection");
-      expect(first.database).toBe("dbX");
-    }
-
-    // Click collection in dbY → preview swapped (still 1 tab).
     fireEvent.click(screen.getByLabelText("y_collection collection"));
-    tabs = useTabStore.getState().tabs;
-    expect(tabs).toHaveLength(1);
-    const second = tabs[0]!;
-    expect(second.type).toBe("table");
-    if (second.type === "table") {
-      expect(second.isPreview).toBe(true);
-      expect(second.collection).toBe("y_collection");
-      expect(second.database).toBe("dbY");
-    }
+
+    const tabs = getAllTabsForConnection("conn-mongo");
+    expect(tabs).toHaveLength(2);
+    const xTab = tabs.find(
+      (t): t is TableTab => t.type === "table" && t.database === "dbX",
+    );
+    const yTab = tabs.find(
+      (t): t is TableTab => t.type === "table" && t.database === "dbY",
+    );
+    expect(xTab?.isPreview).toBe(true);
+    expect(xTab?.collection).toBe("x_collection");
+    expect(yTab?.isPreview).toBe(true);
+    expect(yTab?.collection).toBe("y_collection");
   });
 });

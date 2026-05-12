@@ -15,7 +15,7 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
-import type { QueryMode } from "@stores/tabStore";
+import type { QueryMode } from "@stores/workspaceStore";
 
 /**
  * MongoDB / document-paradigm query editor. Imports only MQL-aware

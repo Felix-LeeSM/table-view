@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import QuerySyntax from "./QuerySyntax";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useTabStore } from "@stores/tabStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 
 describe("QuerySyntax", () => {
   it("renders SQL tokens when paradigm is 'rdb'", () => {
@@ -62,12 +62,12 @@ describe("QuerySyntax", () => {
 
   it("does not mutate the queryHistoryStore or tabStore during render", () => {
     const historyBefore = useQueryHistoryStore.getState();
-    const tabBefore = useTabStore.getState();
-    render(<QuerySyntax sql={'{"$match":1}'} paradigm="document" />);
+    const tabBefore = useWorkspaceStore.getState();
+    render(<QuerySyntax sql={'{"$match":1 }'} paradigm="document" />);
     render(<QuerySyntax sql="SELECT 1" paradigm="rdb" />);
     render(<QuerySyntax sql="SELECT 1" paradigm={undefined} />);
     expect(useQueryHistoryStore.getState()).toBe(historyBefore);
-    expect(useTabStore.getState()).toBe(tabBefore);
+    expect(useWorkspaceStore.getState()).toBe(tabBefore);
   });
 
   it("renders invalid JSON document entries without throwing", () => {

@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { seedWorkspace } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent } from "@testing-library/react";
 import WorkspaceToolbar from "./WorkspaceToolbar";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
-  useTabStore,
-  __resetLastActiveTabsForTests,
+  useWorkspaceStore,
   type TableTab,
   type QueryTab,
-} from "@stores/tabStore";
+} from "@stores/workspaceStore";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 function makeConnection(
@@ -82,9 +82,8 @@ function setConnections(opts: {
 
 describe("WorkspaceToolbar", () => {
   beforeEach(() => {
-    useTabStore.setState({ tabs: [], activeTabId: null });
+    useWorkspaceStore.setState({ workspaces: {} });
     setConnections({});
-    __resetLastActiveTabsForTests();
   });
 
   it("renders the DB slot and the Disconnect button inside a labelled toolbar region", () => {
@@ -144,7 +143,7 @@ describe("WorkspaceToolbar", () => {
       schema: "analytics",
       table: "events",
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<WorkspaceToolbar />);
 
@@ -172,7 +171,7 @@ describe("WorkspaceToolbar", () => {
       database: "analytics",
       collection: "events",
     });
-    useTabStore.setState({ tabs: [tab], activeTabId: tab.id });
+    useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<WorkspaceToolbar />);
     // Sprint 128 — the document paradigm + connected status now activates

@@ -30,10 +30,11 @@ vi.mock("@stores/schemaStore", () => ({
     selector({ executeQuery: mockExecuteQuery }),
 }));
 
-vi.mock("@stores/tabStore", () => ({
-  useTabStore: (selector: (state: Record<string, unknown>) => unknown) =>
+vi.mock("@stores/workspaceStore", () => ({
+  useActiveTabId: () => "tab-1",
+  useCurrentWorkspaceKey: () => ({ connId: "conn1", db: "db1" }),
+  useWorkspaceStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      activeTabId: "tab-1",
       promoteTab: mockPromoteTab,
       setTabDirty: vi.fn(),
     }),
@@ -103,7 +104,7 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
       result.current.handleStartEdit(0, 1, "Alice");
     });
 
-    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+    expect(mockPromoteTab).toHaveBeenCalledWith("conn1", "db1", "tab-1");
     expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
@@ -119,7 +120,7 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
       result.current.handleStartEdit(0, 1, "Alice");
     });
 
-    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+    expect(mockPromoteTab).toHaveBeenCalledWith("conn1", "db1", "tab-1");
     expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
@@ -131,7 +132,7 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
       result.current.handleAddRow();
     });
 
-    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+    expect(mockPromoteTab).toHaveBeenCalledWith("conn1", "db1", "tab-1");
     expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
@@ -150,7 +151,7 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
       result.current.handleDeleteRow();
     });
 
-    expect(mockPromoteTab).toHaveBeenCalledWith("tab-1");
+    expect(mockPromoteTab).toHaveBeenCalledWith("conn1", "db1", "tab-1");
     expect(mockPromoteTab).toHaveBeenCalledTimes(1);
   });
 
@@ -184,7 +185,7 @@ describe("useDataGridEdit — preview tab promotion (Sprint 77)", () => {
     });
 
     expect(mockPromoteTab).toHaveBeenCalledTimes(2);
-    expect(mockPromoteTab).toHaveBeenNthCalledWith(1, "tab-1");
-    expect(mockPromoteTab).toHaveBeenNthCalledWith(2, "tab-1");
+    expect(mockPromoteTab).toHaveBeenNthCalledWith(1, "conn1", "db1", "tab-1");
+    expect(mockPromoteTab).toHaveBeenNthCalledWith(2, "conn1", "db1", "tab-1");
   });
 });
