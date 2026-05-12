@@ -685,4 +685,341 @@ describe("useSqlAutocomplete", () => {
     ];
     expect(node?.children).toEqual({});
   });
+
+  // ── Sprint 264 — cross-DB isolation audit ─────────────────────────────
+  // Sprint 263 분리 후 회귀 가드. 같은 connection 의 다른 DB 가 활성
+  // namespace 로 누설되지 않는지 6 corner case 로 잠근다.
+
+  // AC-264-01 #1 — 동일 table 이름이 두 DB 에서 서로 다른 컬럼을 가질
+  // 때, 활성 DB 의 컬럼만 surface.
+  it("isolates same-table-name across DBs — columns reflect active DB only (AC-264-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+          db2: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "name",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+          db2: {
+            public: {
+              users: [
+                {
+                  name: "id",
+                  data_type: "integer",
+                  nullable: false,
+                  default_value: null,
+                  is_primary_key: true,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+                {
+                  name: "email",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.users).toHaveProperty("id");
+    expect(ns.users).toHaveProperty("name");
+    expect(ns.users).not.toHaveProperty("email");
+  });
+
+  // AC-264-01 #2 — inactive DB 의 columnsCache 만 채워져 있는 (table 등록
+  // 없는) "ghost" 항목이 활성 namespace 로 새지 않는다.
+  it("inactive-DB columnsCache ghost entries don't surface for active DB (AC-264-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db2: {
+            public: {
+              ghost_table: [
+                {
+                  name: "secret",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty("users");
+    expect(ns).not.toHaveProperty("ghost_table");
+    expect(ns).not.toHaveProperty("public.ghost_table");
+  });
+
+  // AC-264-01 #3 — db 인자가 변경되면 useMemo 가 재빌드해 새 DB 의
+  // namespace 로 교체된다.
+  it("rerender with new db rebuilds the namespace (AC-264-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "alpha", schema: "public", row_count: null }],
+          },
+          db2: {
+            public: [{ name: "beta", schema: "public", row_count: null }],
+          },
+        },
+      },
+    });
+
+    const { result, rerender } = renderHook(
+      ({ db }) => useSqlAutocomplete("conn1", db),
+      { initialProps: { db: "db1" } },
+    );
+    expect(result.current).toHaveProperty("alpha");
+    expect(result.current).not.toHaveProperty("beta");
+
+    rerender({ db: "db2" });
+    expect(result.current).toHaveProperty("beta");
+    expect(result.current).not.toHaveProperty("alpha");
+  });
+
+  // AC-264-01 #4 — schema-qualified key (`public.users`) 도 활성 DB 의
+  // 컬럼만 따른다.
+  it("schema-qualified path isolates per active DB (AC-264-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+          db2: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "db1_only",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+          db2: {
+            public: {
+              users: [
+                {
+                  name: "db2_only",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns["public.users"]).toHaveProperty("db1_only");
+    expect(ns["public.users"]).not.toHaveProperty("db2_only");
+  });
+
+  // AC-264-01 #5 — PG dialect 의 fully-quoted key
+  // (`"public"."users"`) 도 활성 DB 의 컬럼만 노출한다.
+  it("fully-quoted PG key isolates per active DB (AC-264-01)", () => {
+    useSchemaStore.setState({
+      tables: {
+        conn1: {
+          db1: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+          db2: {
+            public: [{ name: "users", schema: "public", row_count: null }],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "db1_col",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+          db2: {
+            public: {
+              users: [
+                {
+                  name: "db2_col",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useSqlAutocomplete("conn1", "db1", {
+        dialect: PostgreSQL,
+        dbType: "postgresql",
+      }),
+    );
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).toHaveProperty('"public"."users"');
+    const node = (ns as Record<string, { children?: Record<string, unknown> }>)[
+      '"public"."users"'
+    ];
+    expect(node?.children).toHaveProperty("db1_col");
+    expect(node?.children).not.toHaveProperty("db2_col");
+  });
+
+  // AC-264-01 #6 — views axis 도 동일 격리.
+  it("views isolate same-name across DBs (AC-264-01)", () => {
+    useSchemaStore.setState({
+      views: {
+        conn1: {
+          db1: {
+            public: [
+              { name: "active_users", schema: "public", definition: "X1" },
+            ],
+          },
+          db2: {
+            public: [
+              { name: "active_users", schema: "public", definition: "X2" },
+            ],
+          },
+        },
+      },
+      tableColumnsCache: {
+        conn1: {
+          db1: {
+            public: {
+              active_users: [
+                {
+                  name: "v1_col",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+          db2: {
+            public: {
+              active_users: [
+                {
+                  name: "v2_col",
+                  data_type: "text",
+                  nullable: true,
+                  default_value: null,
+                  is_primary_key: false,
+                  is_foreign_key: false,
+                  fk_reference: null,
+                  comment: null,
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useSqlAutocomplete("conn1", "db1"));
+    const ns = result.current as Record<string, Record<string, unknown>>;
+    expect(ns.active_users).toHaveProperty("v1_col");
+    expect(ns.active_users).not.toHaveProperty("v2_col");
+  });
 });
