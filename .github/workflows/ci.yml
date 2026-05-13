@@ -159,13 +159,6 @@ jobs:
           MONGO_PORT: 27017
         run: cargo test --manifest-path src-tauri/Cargo.toml --test schema_integration --test query_integration --test mongo_integration --test fixture_loading
 
-  # ADR 0019 (2026-05-01) — E2E job removed from CI.
-  #
-  # Linux/xvfb/WebKitGTK/tauri-driver stack diverges from production
-  # (macOS WKWebView / Windows WebView2) and produced non-deterministic
-  # cold-boot timeouts despite Sprint 172~175 stabilization (shard split,
-  # GHA cache, mocha/helper timeout bumps, ARIA forensic dumps). E2E now
-  # runs host-native via lefthook `pre-push` → `scripts/e2e-host.sh`,
-  # gated by `.claude/hooks/pre-bash.sh` against `--no-verify` /
-  # `LEFTHOOK=0` bypasses. See `memory/decisions/0019-e2e-pre-push-not-ci/`
-  # and ADR 0015 (Superseded).
+  # Runtime E2E smoke lives in .github/workflows/e2e-smoke.yml as an
+  # informational check. This workflow remains the correctness gate:
+  # lint/test/build plus Rust unit and integration coverage.

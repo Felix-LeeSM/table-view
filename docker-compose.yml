@@ -3,24 +3,18 @@ services:
     image: postgres:16-alpine
     container_name: table_view_postgres
     environment:
-      # default `testuser`/`testpass` — 같은 한 쌍을 (1) CI workflow,
-      # (2) `src-tauri/tests/common/mod.rs` 통합 테스트, (3) e2e UI 폼
-      # (`e2e/_helpers.ts`), (4) `scripts/wait-for-test-db.sh`, (5) Mongo
-      # 서비스가 모두 사용한다. 이 default가 `postgres`로 drift 하면 e2e가
-      # `testuser`로 form 채우는 순간 인증 실패로 schema 트리가 안 뜨고
-      # spec 10/13개가 도미노로 무너진다 (2026-05-01 진단).
+      # default `testuser`/`testpass` — 같은 한 쌍을 CI workflow,
+      # `src-tauri/tests/common/mod.rs` 통합 테스트, smoke e2e UI 폼,
+      # `scripts/wait-for-test-db.sh`, Mongo 서비스가 모두 사용한다.
       POSTGRES_USER: ${PGUSER:-testuser}
       POSTGRES_PASSWORD: ${PGPASSWORD:-testpass}
       POSTGRES_DB: ${PGDATABASE:-table_view_test}
     # Host port binding — non-default by design (ADR 0019 follow-up,
     # 2026-05-01). Host devs frequently run another Postgres on :5432
     # (Postgres.app, brew, app project DBs) and the collision blocks the
-    # e2e gate every time. We bind the test container to **15432** by
+    # smoke runner every time. We bind the test container to **15432** by
     # default (`prod default + 10000`); override with `PGPORT=...` when a
-    # specific shard / parallel run needs a different port. The e2e
-    # service container still reaches postgres via the `postgres`
-    # hostname on the docker network at the internal :5432, so this
-    # binding only affects host-originated clients.
+    # specific shard / parallel run needs a different port.
     ports:
       - "${PGPORT:-15432}:5432"
     volumes:
@@ -47,7 +41,7 @@ services:
     # Host port binding — same `prod default + 10000` rule as postgres
     # (15432) and mongo (37017): bind to **13306** so a host mysqld on
     # :3306 (brew, docker desktop's bundled, app project DBs) doesn't
-    # clobber the e2e gate. Override with `MYSQL_PORT=...` for shards.
+    # clobber local test runs. Override with `MYSQL_PORT=...` for shards.
     ports:
       - "${MYSQL_PORT:-13306}:3306"
     volumes:
@@ -74,7 +68,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-testpass}
     # Host port binding — same `prod default + 10000` rule (ADR 0019
     # follow-up): bind to **37017** so a host mongod on :27017 doesn't
-    # clobber the e2e gate. Override with `MONGO_PORT=...` to pick a
+    # clobber the smoke runner. Override with `MONGO_PORT=...` to pick a
     # different port.
     ports:
       - "${MONGO_PORT:-37017}:27017"
@@ -86,54 +80,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
-
-  e2e:
-    build:
-      context: .
-      dockerfile: Dockerfile.e2e
-    # CI pre-builds this image with buildx + GHA cache and tags it as
-    # `table-view-e2e:local` (sprint-173) so `docker compose up` can reuse
-    # the cached layers instead of rebuilding from scratch on every shard.
-    # Local dev is unchanged: `docker compose --profile test up --build`
-    # will still build under this tag from Dockerfile.e2e above.
-    image: table-view-e2e:local
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-    working_dir: /app
-    # `tty: true` allocates a pseudo-TTY for stdout/stderr inside the
-    # container. Without it, Node.js (and pnpm) detect the docker-multiplexed
-    # stdout as a non-TTY pipe and switch to block-buffered output, which
-    # makes wdio's progress invisible until the run finishes — and on a hang,
-    # invisible forever. With a TTY, console.log flushes line-by-line and
-    # `docker compose up` can stream progress in real time.
-    tty: true
-    command: ["bash", "/app/e2e/run-e2e-docker.sh"]
-    environment:
-      PGHOST: postgres
-      PGPORT: 5432
-      PGUSER: ${PGUSER:-testuser}
-      PGPASSWORD: ${PGPASSWORD:-testpass}
-      PGDATABASE: ${PGDATABASE:-table_view_test}
-      E2E_MONGO_HOST: mongo
-      E2E_PG_HOST: postgres
-      MONGO_USER: ${MONGO_USER:-testuser}
-      MONGO_PASSWORD: ${MONGO_PASSWORD:-testpass}
-      # sprint-173 e2e sharding — when both are set the entrypoint
-      # selects the 1/Nth slice of spec files; unset → run full suite.
-      SHARD_INDEX: ${SHARD_INDEX:-}
-      SHARD_TOTAL: ${SHARD_TOTAL:-}
-    volumes:
-      - ./e2e/wdio-report:/app/e2e/wdio-report
-      # `./cargo-target` is a gitignored host directory — in CI it is
-      # populated/restored by actions/cache (sprint-173); locally it
-      # persists across `docker compose down` so subsequent runs reuse
-      # cargo's incremental cache instead of rebuilding from scratch.
-      - ./cargo-target:/app/src-tauri/target
-    profiles:
-      - test
 
 volumes:
   pgdata:

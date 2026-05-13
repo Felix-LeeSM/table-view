@@ -1,0 +1,119 @@
+name: E2E Smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  e2e-smoke:
+    name: Runtime Happy Path
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: table_view_test
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U testuser -d table_view_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        ports:
+          - 37017:27017
+        options: >-
+          --health-cmd "mongosh --quiet -u testuser -p testpass --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.91.0
+
+      - name: Cache Rust dependencies and build output
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-workspace-crates: false
+          shared-key: e2e-smoke-linux
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install tauri-driver
+        run: |
+          if ! command -v tauri-driver >/dev/null 2>&1; then
+            cargo install tauri-driver --locked
+          fi
+
+      - name: Run E2E smoke
+        env:
+          E2E_PG_HOST: localhost
+          E2E_PG_PORT: 15432
+          PGUSER: testuser
+          PGPASSWORD: testpass
+          PGDATABASE: table_view_test
+          E2E_MONGO_HOST: localhost
+          E2E_MONGO_PORT: 37017
+          MONGO_USER: testuser
+          MONGO_PASSWORD: testpass
+          E2E_MONGO_DB: table_view_test
+          E2E_MONGO_AUTH_DB: admin
+        run: bash scripts/e2e-smoke-ci.sh
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-smoke-artifacts
+          path: e2e/wdio-report/
+          if-no-files-found: ignore

@@ -1,0 +1,187 @@
+import { $, browser, expect } from "@wdio/globals";
+
+const WORKSPACE_TITLE = "Table View — Workspace";
+
+export type DbType = "postgresql" | "mongodb";
+
+export async function waitForLauncher() {
+  await switchToLauncherWindow();
+  const launcher = await $('[data-testid="launcher-page"]');
+  await launcher.waitForDisplayed({ timeout: 15000 });
+  const newConnection = await $('[aria-label="New Connection"]');
+  await newConnection.waitForDisplayed({ timeout: 15000 });
+}
+
+export async function switchToLauncherWindow(timeoutMs = 15000) {
+  const start = Date.now();
+  let lastError: unknown = null;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const handles = await browser.getWindowHandles();
+      for (const handle of handles) {
+        await browser.switchToWindow(handle);
+        const title = await browser.getTitle();
+        if (title === "Table View") return;
+      }
+    } catch (e) {
+      lastError = e;
+    }
+    await browser.pause(200);
+  }
+  throw new Error(
+    `launcher window did not appear within ${timeoutMs}ms: ${String(lastError ?? "")}`,
+  );
+}
+
+export async function switchToWorkspaceWindow(timeoutMs = 30000) {
+  const start = Date.now();
+  let lastError: unknown = null;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const handles = await browser.getWindowHandles();
+      for (const handle of handles) {
+        await browser.switchToWindow(handle);
+        const title = await browser.getTitle();
+        if (title === WORKSPACE_TITLE) return;
+      }
+    } catch (e) {
+      lastError = e;
+    }
+    await browser.pause(200);
+  }
+  throw new Error(
+    `workspace window did not appear within ${timeoutMs}ms: ${String(lastError ?? "")}`,
+  );
+}
+
+export async function openNewConnectionDialog() {
+  await waitForLauncher();
+  const newConnection = await $('[aria-label="New Connection"]');
+  await newConnection.click();
+  const dialog = await $('[role="dialog"]');
+  await dialog.waitForDisplayed({ timeout: 10000 });
+  return dialog;
+}
+
+export async function selectDatabaseType(dbType: DbType) {
+  const trigger = await $("#conn-db-type");
+  await trigger.waitForDisplayed({ timeout: 5000 });
+  const current = await trigger.getText();
+  const expected = dbType === "postgresql" ? "PostgreSQL" : "MongoDB";
+  if (current.includes(expected)) return;
+
+  await trigger.click();
+  const option = await $(`div[role="option"][data-value="${dbType}"]`);
+  await option.waitForDisplayed({ timeout: 5000 });
+  await option.click();
+}
+
+export async function createPostgresConnection(name = "E2E Postgres") {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("postgresql");
+
+  await setInput("#conn-name", name);
+  await setInput("#conn-host", process.env.E2E_PG_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_PG_PORT ?? process.env.PGPORT ?? "15432",
+  );
+  await setInput("#conn-user", process.env.PGUSER ?? "testuser");
+  await setInput("#conn-password", process.env.PGPASSWORD ?? "testpass");
+  await setInput("#conn-database", process.env.PGDATABASE ?? "table_view_test");
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+export async function createMongoConnection(name = "E2E MongoDB") {
+  const dialog = await openNewConnectionDialog();
+  await selectDatabaseType("mongodb");
+
+  await setInput("#conn-name", name);
+  await setInput("#conn-host", process.env.E2E_MONGO_HOST ?? "localhost");
+  await setInput(
+    "#conn-port",
+    process.env.E2E_MONGO_PORT ?? process.env.MONGO_PORT ?? "37017",
+  );
+  await setInput("#conn-user", process.env.MONGO_USER ?? "testuser");
+  await setInput("#conn-password", process.env.MONGO_PASSWORD ?? "testpass");
+  await setInput(
+    "#conn-database",
+    process.env.E2E_MONGO_DB ?? "table_view_test",
+  );
+  await setInput("#conn-auth-source", process.env.E2E_MONGO_AUTH_DB ?? "admin");
+
+  await saveConnectionDialog(dialog);
+  await expectConnectionVisible(name);
+}
+
+async function setInput(selector: string, value: string) {
+  const input = await $(selector);
+  await input.waitForDisplayed({ timeout: 5000 });
+  await input.clearValue();
+  await input.setValue(value);
+}
+
+async function saveConnectionDialog(dialog: WebdriverIO.Element) {
+  await (await $("button=Save")).click();
+  try {
+    await dialog.waitForDisplayed({ timeout: 10000, reverse: true });
+  } catch (e) {
+    const alert = await $('[role="alert"]');
+    if (await alert.isExisting()) {
+      throw new Error(`connection save failed: ${await alert.getText()}`);
+    }
+    throw e;
+  }
+}
+
+export async function expectConnectionVisible(name: string) {
+  const row = await $(`[aria-label^="${name}"]`);
+  await row.waitForDisplayed({ timeout: 10000 });
+  expect(await row.getAttribute("aria-label")).toContain(name);
+}
+
+export async function openConnection(name: string) {
+  await waitForLauncher();
+  const row = await $(`[aria-label^="${name}"]`);
+  await row.waitForDisplayed({ timeout: 10000 });
+  await row.scrollIntoView();
+  await browser.execute((el: HTMLElement) => {
+    el.dispatchEvent(
+      new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+    );
+  }, row);
+  await switchToWorkspaceWindow();
+  const back = await $('[aria-label="Back to connections"]');
+  await back.waitForDisplayed({ timeout: 30000 });
+}
+
+export async function openNewQueryTab() {
+  const newQuery = await $('[aria-label="New Query Tab"]');
+  await newQuery.waitForDisplayed({ timeout: 10000 });
+  await newQuery.click();
+  const editor = await $(".cm-editor");
+  await editor.waitForDisplayed({ timeout: 10000 });
+}
+
+export async function typeQuery(sql: string) {
+  const content = await $(".cm-content");
+  await content.waitForDisplayed({ timeout: 5000 });
+  await content.click();
+  await browser.keys(sql);
+}
+
+export async function runQuery() {
+  const run = await $('[aria-label="Run query"]');
+  await run.waitForDisplayed({ timeout: 5000 });
+  await run.click();
+}
+
+export async function expandIfCollapsed(selector: string, timeout = 10000) {
+  const node = await $(selector);
+  await node.waitForDisplayed({ timeout });
+  if ((await node.getAttribute("aria-expanded")) !== "true") {
+    await node.click();
+  }
+}

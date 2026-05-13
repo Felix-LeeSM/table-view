@@ -23,10 +23,10 @@ Phase 1–12 완료, Phase 13–27 진행 중. **TablePlus 패리티 7단계 (Ph
 - **DDL UI (Phase 24–27)** — CREATE TABLE / RENAME TABLE / DROP TABLE / ADD COLUMN / DROP COLUMN / CREATE INDEX / ADD CONSTRAINT (FK · CHECK · UNIQUE) + inline DDL preview
 - **SQL 에디터 (CodeMirror)** — 쿼리 실행, 동적 PG type list 자동완성, schema-qualified column autocomplete, syntax highlighting
 - **Quick Look 편집** — row 단일 행 상세 + 인라인 편집
-- **Query history** — source 필드 (raw / grid-edit / ddl-structure / mongo-*) 통합 audit
+- **Query history** — source 필드 (raw / grid-edit / ddl-structure / mongo-\*) 통합 audit
 - **비밀번호 로컬 암호화 저장** (AES-256-GCM)
 - **다크/라이트/시스템 테마** — cross-window 즉시 sync
-- **Docker 기반 통합 테스트 인프라** (PostgreSQL + MySQL)
+- **Docker 기반 통합 테스트 인프라** (PostgreSQL + MySQL) + Linux host E2E smoke
 
 아직 없는 범위:
 
@@ -160,30 +160,40 @@ pnpm test:docker
 PG_PORT=15432 pnpm test:docker
 ```
 
-### E2E 테스트 (host 전용, pre-push 게이트)
+### E2E smoke (Linux host, informational CI)
 
-WebdriverIO + tauri-driver로 네이티브 Tauri 창을 테스트합니다.
+WebdriverIO + tauri-driver로 실제 Tauri 창을 띄워 최소 runtime happy path만 검증합니다. 기존 full E2E suite와 Docker 안에서 앱까지 빌드하던 경로는 제거했고, smoke는 DBMS별 spec을 분리해서 실행합니다.
+
+현재 smoke 범위:
+
+- PostgreSQL: 연결 생성 → workspace 진입 → `users` 테이블 preview → `SELECT 1 AS test_column`
+- MongoDB: 연결 생성 → workspace 진입 → `table_view_test.smoke_users` collection preview
+
+CI에서는 [`.github/workflows/e2e-smoke.yml`](./.github/workflows/e2e-smoke.yml)이 GitHub Actions service container로 PostgreSQL/MongoDB를 띄우고, Linux host에서 Tauri debug binary + xvfb + tauri-driver를 실행합니다. 이 workflow는 `continue-on-error: true`인 informational check입니다. `tsc`, `lint`, `vitest`, `build`가 main correctness gate이고, E2E smoke는 실제 런타임 부팅과 DB 연결 happy path를 보는 보조 신호입니다.
+
+로컬 Linux 환경에서 동일한 경로를 실행하려면:
 
 ```bash
-pnpm test:e2e               # WebdriverIO (host docker daemon + psql 사전조건 필요)
+docker compose up -d postgres mongo
+E2E_PG_PORT=15432 E2E_MONGO_PORT=37017 bash scripts/e2e-smoke-ci.sh
 ```
 
-ADR 0019 (2026-05-01)에 따라 e2e는 **CI에서 제거되어 lefthook pre-push가 유일한 게이트**입니다. 현재 e2e suite는 vite v6 build OOM 회복 작업으로 `lefthook.yml`의 `5_e2e: skip: true` 상태이며, 복구 sprint 진행 중. 자세한 내용은 [`memory/lessons/`](./memory/lessons/) 참고.
+macOS/Windows에서는 tauri-driver 스택이 Linux WebKitGTK 기준이라 로컬 실행을 1차 지원하지 않습니다. 우선 Linux CI에서 informational smoke를 유지하고, 로컬에서는 필요할 때 Linux VM/컨테이너 runner에서 확인합니다.
 
-로컬 실행에는 추가 의존성이 필요합니다:
+주요 환경변수:
 
-```bash
-./scripts/setup-e2e.sh      # 안내 출력
-```
+- `TABLE_VIEW_TEST_DATA_DIR`: 테스트용 앱 데이터 디렉터리. spec별로 다른 하위 디렉터리를 써서 연결 fixture가 섞이지 않게 합니다.
+- `E2E_PG_HOST`, `E2E_PG_PORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`
+- `E2E_MONGO_HOST`, `E2E_MONGO_PORT`, `MONGO_USER`, `MONGO_PASSWORD`, `E2E_MONGO_DB`, `E2E_MONGO_AUTH_DB`
 
 ### 테스트 현황 (2026-05-07 기준)
 
-| 영역 | 도구 | 개수 | 비고 |
-|------|------|------|------|
-| Frontend | Vitest + RTL | ~2900 | 226 files |
-| Rust 단위 | cargo test --lib | ~410 | lib tests |
-| Rust 통합 | cargo test + Docker | ~27 | schema + query |
-| E2E | WebdriverIO + tauri-driver | — | host pre-push 게이트, 현재 skip 상태 |
+| 영역      | 도구                       | 개수    | 비고                        |
+| --------- | -------------------------- | ------- | --------------------------- |
+| Frontend  | Vitest + RTL               | ~2900   | 226 files                   |
+| Rust 단위 | cargo test --lib           | ~410    | lib tests                   |
+| Rust 통합 | cargo test + Docker        | ~27     | schema + query              |
+| E2E smoke | WebdriverIO + tauri-driver | 2 specs | Linux host informational CI |
 
 ## 저장과 보안
 

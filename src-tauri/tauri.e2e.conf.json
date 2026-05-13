@@ -1,5 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "pnpm build:e2e"
+  },
   "app": {
     "windows": [
       {

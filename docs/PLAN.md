@@ -206,7 +206,7 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 - **TDD strict**: 각 sprint 진입 시 `docs/sprints/sprint-N/tdd-evidence/red-state.log` 캡처 또는 commit 순서로 red→green TDD 흔적 보존.
 - **Skip-zero gate**: phase 종료 시 모든 touched 파일에서 `it.skip` / `this.skip()` / `it.todo` / `xit` / `describe.skip` 0건. 부득이 deferred 시 (a) RISK-NNN 또는 ADR 식별자 메모리 등록, (b) skip 직전 `[DEFERRED-<ID>]` 주석 + 동치 커버리지 경로 + 재진입 트리거 명시 — `memory/lessons/workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md` 참조.
 - **Verification 4-set**: 매 sprint 종료 직전 `pnpm vitest run`, `pnpm tsc --noEmit`, `pnpm lint`, 필요 시 `cargo build --manifest-path src-tauri/Cargo.toml` 모두 exit 0.
-- **E2E 정책**: Phase 13에서 Playwright + tauri-driver 기반 e2e suite 정착. CI에서 별도 job으로 운영 (vitest와 분리). 주요 시나리오는 phase-별 `E<phase>-NN` 형식으로 ID 부여, `e2e/` 디렉토리에 `<scenario>.spec.ts` 형식. Phase 13 closure 시 e2e 운영 결정 ADR 후보.
+- **E2E 정책**: Sprint 297부터 full-suite E2E와 pre-push gate를 제거하고, Linux host CI에서 WebdriverIO + tauri-driver 기반 `e2e/smoke/**`만 informational check로 운영. `tsc`/`lint`/`vitest`/`build`가 correctness gate이고, smoke는 실제 앱 부팅 + DBMS별 최소 happy path 회귀 신호로만 사용한다.
 - **ADR 동결**: trade-off 있는 결정은 작성 순간 본문 동결. 후속 결정은 새 ADR + supersede chain.
 
 ## 참고 자료

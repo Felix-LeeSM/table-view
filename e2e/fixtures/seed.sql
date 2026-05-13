@@ -1,12 +1,10 @@
--- sprint-169 / Sprint 3 — canonical E2E Postgres seed.
+-- sprint-297 — canonical E2E smoke Postgres seed.
 --
--- Single source of truth for the E2E suite's Postgres fixture data. Replaces
--- the duplicated heredoc in `e2e/run-e2e-docker.sh` and `.github/workflows/ci.yml`.
+-- Single source of truth for the smoke suite's Postgres fixture data.
 --
 -- Idempotency contract: re-running this file against an already-seeded
--- database MUST exit 0. The `psql -v ON_ERROR_STOP=1 -f` invocation in
--- `e2e/run-e2e-docker.sh` will fail the container otherwise, masking real
--- test failures behind seed errors.
+-- database MUST exit 0. `e2e/fixtures/seed-smoke.ts` retries startup but should
+-- not mask seed errors behind duplicate-key failures.
 --
 -- Strategy:
 --   * `CREATE TABLE IF NOT EXISTS ...` for schema.
