@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Database, MousePointerClick, Plug } from "lucide-react";
 import { Button } from "@components/ui/button";
+import { Skeleton } from "@components/ui/skeleton";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useActiveTab } from "@stores/workspaceStore";
 import { useConnectionLifecycle } from "@/hooks/useConnectionLifecycle";
@@ -41,11 +42,20 @@ export default function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
+  const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const { connect: connectToDatabase } = useConnectionLifecycle();
   const activeTab = useActiveTab();
   const activeTabConnId = activeTab?.connectionId ?? null;
 
   if (connections.length === 0) {
+    // Sprint 270 — pre-hydrate window: `loadConnections` hasn't resolved
+    // yet, so we don't know whether the user actually has zero connections
+    // or we just haven't fetched them. Show a skeleton instead of the
+    // "No connections yet" card to avoid the empty-card flash on cold
+    // boot. Once `hasLoadedOnce` flips, the existing empty card takes over.
+    if (!hasLoadedOnce) {
+      return <WorkspaceSidebarSkeleton />;
+    }
     return (
       <div
         className="flex flex-1 flex-col items-center justify-center px-4 py-8 text-center select-none"
@@ -137,6 +147,32 @@ export default function WorkspaceSidebar({
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {renderKind(pickSidebar(driving.paradigm), driving.id)}
+    </div>
+  );
+}
+
+/**
+ * Sprint 270 — first-paint skeleton for the sidebar. Renders four stacked
+ * `Skeleton` rows roughly the height of a connection-list row. `role="status"`
+ * + `aria-busy="true"` mirror the rest of the sidebar's empty / error cards
+ * so screen readers know the surface is loading rather than empty. The
+ * pre-hydrate window is usually < 200 ms, but on a cold-boot workspace
+ * remount or a slow IPC it gives the user visible activity instead of a
+ * blank column.
+ */
+function WorkspaceSidebarSkeleton(): ReactNode {
+  return (
+    <div
+      className="flex flex-1 flex-col gap-2 px-4 py-4"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading connections"
+      data-testid="workspace-sidebar-skeleton"
+    >
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-8 w-4/5" />
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-8 w-4/5" />
     </div>
   );
 }

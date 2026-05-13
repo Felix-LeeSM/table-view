@@ -62,6 +62,11 @@ function setupStore(opts: {
   active?: string[];
   errored?: Record<string, string>;
   connecting?: string[];
+  // Sprint 270 — defaults to `true`; legacy tests in this file all
+  // exercise post-hydrate branches (empty card, paradigm sidebars, active-
+  // tab priority). The pre-hydrate skeleton path is exercised by
+  // `firstPaintSkeleton.test.tsx`.
+  hasLoadedOnce?: boolean;
 }) {
   const conns = opts.connections ?? [];
   const active = new Set(opts.active ?? []);
@@ -82,6 +87,7 @@ function setupStore(opts: {
   useConnectionStore.setState({
     connections: conns,
     activeStatuses: statuses,
+    hasLoadedOnce: opts.hasLoadedOnce ?? true,
   });
 }
 
@@ -108,6 +114,57 @@ describe("WorkspaceSidebar", () => {
     render(<WorkspaceSidebar selectedId={null} />);
     expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
     expect(screen.queryByTestId("schema-tree")).toBeNull();
+  });
+
+  // ------------------------------------------------------------------
+  // Sprint 270 — first-paint skeleton (AC-270-01, AC-270-04)
+  // ------------------------------------------------------------------
+
+  // Sprint 270 (2026-05-13)
+  // AC-270-01 — pre-hydrate the sidebar must show the shimmer skeleton, not
+  // the "No connections yet" card. Otherwise on cold boot the user sees the
+  // empty card for ~1.4 s and panics that their connections were deleted.
+  it("AC-270-01 — renders the skeleton when connections is empty AND hasLoadedOnce is false", () => {
+    setupStore({ hasLoadedOnce: false });
+    render(<WorkspaceSidebar selectedId={null} />);
+
+    const skeleton = screen.getByTestId("workspace-sidebar-skeleton");
+    expect(skeleton).toBeInTheDocument();
+    expect(skeleton).toHaveAttribute("role", "status");
+    expect(skeleton).toHaveAttribute("aria-busy", "true");
+    // Four stacked rows per the spec's "Visual Direction".
+    const rows = skeleton.querySelectorAll(".animate-pulse");
+    expect(rows).toHaveLength(4);
+    // The post-hydrate empty card must NOT be in the DOM during the
+    // shimmer window — that's the visual flash this sprint is killing.
+    expect(screen.queryByText(/no connections yet/i)).toBeNull();
+  });
+
+  // Sprint 270 (2026-05-13)
+  // AC-270-04 — once hydration has completed, even with zero connections,
+  // the skeleton must NOT re-render. The user has been told "0 connections,
+  // add one" and the sidebar must stay on that surface.
+  it("AC-270-04 — renders the empty card (not skeleton) when hasLoadedOnce is true and connections is empty", () => {
+    setupStore({ hasLoadedOnce: true });
+    render(<WorkspaceSidebar selectedId={null} />);
+
+    expect(screen.queryByTestId("workspace-sidebar-skeleton")).toBeNull();
+    expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
+  });
+
+  // Sprint 270 (2026-05-13)
+  // AC-270-04 (remount) — flipping the flag to true and forcing a remount
+  // by unmount/render must not revert to the skeleton. Verifies the
+  // selector reads the live flag, not a captured-at-mount snapshot.
+  it("AC-270-04 — remount after hasLoadedOnce=true still renders the empty card", () => {
+    setupStore({ hasLoadedOnce: true });
+    const { unmount } = render(<WorkspaceSidebar selectedId={null} />);
+    expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
+    unmount();
+
+    render(<WorkspaceSidebar selectedId={null} />);
+    expect(screen.queryByTestId("workspace-sidebar-skeleton")).toBeNull();
+    expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
   });
 
   it("prompts to select a connection when selectedId is null and no active tab", () => {

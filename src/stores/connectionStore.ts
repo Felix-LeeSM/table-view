@@ -27,6 +27,15 @@ export interface ConnectionState {
    */
   focusedConnId: string | null;
   loading: boolean;
+  /**
+   * Sprint 270 — has `loadConnections` ever resolved (success OR error) in
+   * this window's lifetime. Distinct from `loading`: `loading` is "actively
+   * in flight", `hasLoadedOnce` is "ever finished". The skeleton at first
+   * paint is gated on this flag — once it flips, the skeleton swaps out
+   * and stays out for the rest of the session. Runtime-only: NOT persisted,
+   * NOT broadcast through the cross-window bridge (`SYNCED_KEYS`).
+   */
+  hasLoadedOnce: boolean;
   error: string | null;
 
   loadConnections: () => Promise<void>;
@@ -100,15 +109,20 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   activeStatuses: {},
   focusedConnId: null,
   loading: false,
+  hasLoadedOnce: false,
   error: null,
 
   loadConnections: async () => {
     set({ loading: true, error: null });
     try {
       const connections = await tauri.listConnections();
-      set({ connections, loading: false });
+      // Sprint 270 — flip in BOTH success and error branches so the
+      // skeleton swaps to the existing empty/error surface and never
+      // gets stuck shimmering. `hasLoadedOnce` is a session "ever
+      // finished" signal, NOT persisted, NOT in `SYNCED_KEYS`.
+      set({ connections, loading: false, hasLoadedOnce: true });
     } catch (e) {
-      set({ error: String(e), loading: false });
+      set({ error: String(e), loading: false, hasLoadedOnce: true });
     }
   },
 

@@ -18,6 +18,7 @@ import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
 import GlobalQueryLogPanel from "@components/query/GlobalQueryLogPanel";
 import { Button } from "@components/ui/button";
+import { Skeleton } from "@components/ui/skeleton";
 import { LogoWordmark } from "@components/shared/Logo";
 import { assertNever, type Paradigm } from "@/lib/paradigm";
 import WorkspaceToolbar from "@components/workspace/WorkspaceToolbar";
@@ -134,6 +135,30 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
   }
 }
 
+/**
+ * Sprint 270 — first-paint skeleton for the no-active-tab main area. Shape
+ * mirrors the `EmptyState` welcome card (logo block + two message lines +
+ * a CTA-sized button) so the post-hydrate swap doesn't reflow. `role="status"`
+ * + `aria-busy="true"` keeps screen-reader users informed that the surface
+ * is hydrating, not empty.
+ */
+function MainAreaSkeleton() {
+  return (
+    <div
+      className="flex flex-1 flex-col items-center justify-center gap-3 px-6"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading workspace"
+      data-testid="main-area-skeleton"
+    >
+      <Skeleton className="h-20 w-20" />
+      <Skeleton className="h-4 w-3/5" />
+      <Skeleton className="h-4 w-2/5" />
+      <Skeleton className="mt-1 h-8 w-32" />
+    </div>
+  );
+}
+
 function EmptyState() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
@@ -198,6 +223,10 @@ export default function MainArea() {
   const activeTabId = useActiveTabId();
   const workspaceKey = useCurrentWorkspaceKey();
   const setSubView = useWorkspaceStore((s) => s.setSubView);
+  // Sprint 270 — gates the no-active-tab fallback between skeleton (pre-
+  // hydrate) and `EmptyState` (post-hydrate). Once flipped to true the
+  // skeleton never re-renders for the remainder of the session.
+  const hasLoadedOnce = useConnectionStore((s) => s.hasLoadedOnce);
   const [showGlobalLog, setShowGlobalLog] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -240,8 +269,10 @@ export default function MainArea() {
           />
         ) : activeTab?.type === "query" ? (
           <QueryTab key={activeTab.id} tab={activeTab} />
-        ) : (
+        ) : hasLoadedOnce ? (
           <EmptyState />
+        ) : (
+          <MainAreaSkeleton />
         )}
       </div>
       <GlobalQueryLogPanel

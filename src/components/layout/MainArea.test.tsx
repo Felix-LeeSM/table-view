@@ -142,6 +142,11 @@ function makeConnection(id: string): ConnectionConfig {
 function setConnections(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
+  // Sprint 270 — defaults to `true` because every legacy test in this file
+  // asserts post-hydrate behaviour (EmptyState, DataGrid, sub-tab routing).
+  // The pre-hydrate skeleton path is exercised explicitly in
+  // `firstPaintSkeleton.test.tsx` with `hasLoadedOnce: false`.
+  hasLoadedOnce?: boolean;
 }) {
   const conns = opts.connections ?? [];
   const active = new Set(opts.active ?? []);
@@ -157,6 +162,7 @@ function setConnections(opts: {
   useConnectionStore.setState({
     connections: conns,
     activeStatuses: statuses,
+    hasLoadedOnce: opts.hasLoadedOnce ?? true,
   });
 }
 
@@ -180,6 +186,50 @@ describe("MainArea", () => {
     expect(
       screen.getByText("Select a connection from the sidebar to get started"),
     ).toBeInTheDocument();
+  });
+
+  // ------------------------------------------------------------------
+  // Sprint 270 — first-paint skeleton (AC-270-02, post-hydrate parity)
+  // ------------------------------------------------------------------
+
+  // Sprint 270 (2026-05-13)
+  // AC-270-02 — pre-hydrate the main area must show the welcome-shaped
+  // skeleton, not the `EmptyState`. Same rationale as sidebar: avoid the
+  // empty-state flash during the IPC round-trip.
+  it("AC-270-02 — renders MainAreaSkeleton when no active tab AND hasLoadedOnce is false", () => {
+    setConnections({ hasLoadedOnce: false });
+
+    render(<MainArea />);
+
+    const skeleton = screen.getByTestId("main-area-skeleton");
+    expect(skeleton).toBeInTheDocument();
+    expect(skeleton).toHaveAttribute("role", "status");
+    expect(skeleton).toHaveAttribute("aria-busy", "true");
+    // The post-hydrate logo wordmark + welcome copy must NOT be visible.
+    expect(screen.queryByAltText("Table View")).toBeNull();
+    expect(
+      screen.queryByText(
+        /select a connection from the sidebar to get started/i,
+      ),
+    ).toBeNull();
+  });
+
+  // Sprint 270 (2026-05-13)
+  // AC-270-04 (post-hydrate parity) — once hasLoadedOnce flips to true, the
+  // skeleton stays unmounted and the legacy `EmptyState` renders even on a
+  // remount (e.g. user navigates between layouts).
+  it("AC-270-04 — renders EmptyState (not skeleton) when no active tab AND hasLoadedOnce is true", () => {
+    setConnections({ hasLoadedOnce: true });
+
+    const { unmount } = render(<MainArea />);
+    expect(screen.queryByTestId("main-area-skeleton")).toBeNull();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
+    unmount();
+
+    // Remount with the same flag — skeleton must still not re-render.
+    render(<MainArea />);
+    expect(screen.queryByTestId("main-area-skeleton")).toBeNull();
+    expect(screen.getByAltText("Table View")).toBeInTheDocument();
   });
 
   it("shows logo wordmark in empty state", () => {

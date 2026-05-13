@@ -93,6 +93,7 @@ describe("connectionStore", () => {
       activeStatuses: {},
       focusedConnId: null,
       loading: false,
+      hasLoadedOnce: false,
       error: null,
     });
     vi.clearAllMocks();
@@ -802,6 +803,55 @@ describe("connectionStore", () => {
     it("does NOT include any sensitive or transient keys (loading/error)", () => {
       expect(SYNCED_KEYS).not.toContain("loading");
       expect(SYNCED_KEYS).not.toContain("error");
+    });
+
+    // Sprint 270 (2026-05-13)
+    // `hasLoadedOnce` is a window-local runtime flag (perceived-load gate),
+    // explicitly NOT broadcast. Pinning its absence here means a future
+    // contributor who adds another runtime-only key cannot silently slip it
+    // into the cross-window sync allowlist.
+    it("does NOT include hasLoadedOnce (window-local runtime flag)", () => {
+      expect(SYNCED_KEYS).not.toContain("hasLoadedOnce");
+    });
+  });
+
+  // -- Sprint 270 — hasLoadedOnce gates the first-paint skeleton --
+  //
+  // `loading` is "actively in flight"; `hasLoadedOnce` is "ever finished".
+  // The skeleton mounts when `connections.length === 0 && !hasLoadedOnce`
+  // and unmounts the moment the flag flips. The flag must flip in BOTH
+  // success and error branches of `loadConnections` so a rejection still
+  // swaps the skeleton out (to the error/empty card), not leaves it stuck.
+
+  describe("hasLoadedOnce flag (Sprint 270)", () => {
+    it("starts false on a fresh store", () => {
+      // Sprint 270 (2026-05-13) — initial-state guarantee for AC-270-01/02.
+      expect(useConnectionStore.getState().hasLoadedOnce).toBe(false);
+    });
+
+    it("flips to true after a successful loadConnections", async () => {
+      // Sprint 270 (2026-05-13) — success-branch flip (AC-270-03 swap-order
+      // backing): once load resolves, skeleton must be allowed to unmount.
+      expect(useConnectionStore.getState().hasLoadedOnce).toBe(false);
+      await useConnectionStore.getState().loadConnections();
+      expect(useConnectionStore.getState().hasLoadedOnce).toBe(true);
+    });
+
+    it("flips to true even when loadConnections rejects", async () => {
+      // Sprint 270 (2026-05-13) — error-branch flip. Without this the
+      // skeleton stays shimmering forever after a backend failure; the
+      // contract requires we surface the existing empty/error card instead.
+      const { listConnections } = await import("@lib/tauri");
+      (listConnections as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error("boom"),
+      );
+
+      await useConnectionStore.getState().loadConnections();
+
+      const state = useConnectionStore.getState();
+      expect(state.hasLoadedOnce).toBe(true);
+      expect(state.error).toContain("boom");
+      expect(state.loading).toBe(false);
     });
   });
 
