@@ -2,7 +2,7 @@
 
 잔여 위험 단일 추적 문서. 스프린트 handoff를 다시 읽지 않아도 됨.
 
-Last updated: 2026-05-07 (RISK-037 추가 — mongodb 3.6 → hickory-proto 0.25.2 CVE 2건 ignore)
+Last updated: 2026-05-13 (Sprint 250 — RISK-018 갱신: MySQL seed 인프라 추가, 어댑터 본체는 여전히 active)
 
 ## Summary
 
@@ -36,7 +36,7 @@ Last updated: 2026-05-07 (RISK-037 추가 — mongodb 3.6 → hickory-proto 0.25
 | RISK-015 | ConnectionConfigLike 타입 프로덕션과 중복                                               | active    | frontend/testing  | 8             | —                                                         |
 | RISK-016 | draggedConnectionId 모킹 간접성/취약성                                                 | active    | frontend/testing  | 9, 10         | —                                                         |
 | RISK-017 | skip 패턴 불일치 (query vs schema integration)                                          | active    | backend/testing   | 16            | —                                                         |
-| RISK-018 | MySQL 어댑터 미구현 (docker-compose에만 정의)                                          | active    | backend           | 16            | —                                                         |
+| RISK-018 | MySQL 어댑터 미구현 — Phase 17 (Sprint 251-256) 진입 전 Sprint 250이 seeding 인프라(docker-compose `mysql:8.0` + `e2e/fixtures/seed.mysql.sql` + `scripts/fixtures/mysql.ts` + `scripts/db/wait.sh` MySQL 분기 + `tests/common::mysql_test_config`) 추가. 어댑터 자체는 미구현 — Phase 17 closure 시 RISK resolved. | active    | backend           | 16            | Sprint 250 — seeding 인프라 추가; 어댑터 본체는 Sprint 253 |
 | RISK-019 | Schema integration 12개 테스트 CI에서 Docker DB 필요                                    | active    | ci                | 14–16         | CI passes with GitHub service containers; local-dev only  |
 | RISK-020 | E2E macOS 미지원 (tauri-driver WKWebView limitation)                                    | deferred  | ci                | 15            | —                                                         |
 | RISK-021 | CHECK constraint 표현식 raw SQL 전달 (DB 관리 도구이므로 의도적)                        | active    | backend           | 22            | By design — DB 관리 도구에서 raw SQL 의도적                |

@@ -49,8 +49,14 @@ wait_for_postgres() {
 wait_for_mysql() {
     local host="${MYSQL_HOST:-localhost}"
     local port="${MYSQL_TCP_PORT:-3306}"
+    local root_pw="${MYSQL_ROOT_PASSWORD:-testroot}"
     echo "  Checking MySQL at ${host}:${port} ..."
-    until docker exec table_view_test_mysql mysqladmin ping -h localhost --silent &>/dev/null; do
+    # Sprint 250 — switched container name from legacy `table_view_test_mysql`
+    # (docker-compose.test.yml, never existed) to canonical `table_view_mysql`
+    # (docker-compose.yml). Root credential needed for ping because testuser
+    # is scoped to the application DB.
+    until docker exec table_view_mysql \
+        mysqladmin ping -h localhost -u root -p"$root_pw" --silent &>/dev/null; do
         local now
         now=$(date +%s)
         if (( now - start_time >= TIMEOUT )); then
@@ -125,13 +131,13 @@ else
 fi
 
 # Wait for MySQL
-if docker ps --format '{{.Names}}' | grep -q '^table_view_test_mysql$'; then
+if docker ps --format '{{.Names}}' | grep -q '^table_view_mysql$'; then
     if ! wait_for_mysql; then
         overall_rc=1
     fi
     checked_count=$((checked_count + 1))
 else
-    echo "  SKIP: table_view_test_mysql container not running"
+    echo "  SKIP: table_view_mysql container not running"
 fi
 
 # Wait for MongoDB

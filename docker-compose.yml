@@ -32,6 +32,40 @@ services:
       retries: 10
       start_period: 5s
 
+  mysql:
+    # Sprint 250 — MySQL seed infrastructure for Phase 17 (Sprint 251-256
+    # MySQL adapter). Mirrors the postgres/mongo pattern: testuser/testpass
+    # credentials shared across CI workflow, src-tauri integration helpers,
+    # e2e form fixtures, scripts/db/wait.sh, and scripts/fixtures/mysql.ts.
+    image: mysql:8.0
+    container_name: table_view_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-testroot}
+      MYSQL_USER: ${MYSQL_USER:-testuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-testpass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-table_view_test}
+    # Host port binding — same `prod default + 10000` rule as postgres
+    # (15432) and mongo (37017): bind to **13306** so a host mysqld on
+    # :3306 (brew, docker desktop's bundled, app project DBs) doesn't
+    # clobber the e2e gate. Override with `MYSQL_PORT=...` for shards.
+    ports:
+      - "${MYSQL_PORT:-13306}:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      # `mysqladmin ping` needs root credentials inside the container.
+      # `$$` escapes the literal `$` so docker-compose doesn't try to
+      # variable-substitute MYSQL_ROOT_PASSWORD at compose-parse time.
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
   mongo:
     image: mongo:7
     container_name: table_view_mongo
@@ -104,3 +138,4 @@ services:
 volumes:
   pgdata:
   mongodata:
+  mysqldata:

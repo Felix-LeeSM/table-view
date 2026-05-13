@@ -52,6 +52,27 @@ struct MongoEndpoint {
     auth_source: Option<String>,
 }
 
+/// Sprint 250 — MySQL endpoint resolver for Phase 17 (Sprint 251-256).
+///
+/// Adapter still unimplemented today; this helper exists so the future
+/// `mysql_integration.rs` test binary can resolve a connection endpoint
+/// from env vars without re-deriving the docker-compose default port
+/// convention (`prod default 3306 + 10000 → 13306`).
+///
+/// Unlike `pg_endpoint` / `mongo_endpoint`, this resolver is env-var only —
+/// testcontainers-modules MySQL spawning will be wired in Sprint 253
+/// alongside the `MysqlAdapter` itself, so we avoid pulling the extra
+/// feature flag now and keep `cargo test` startup cost flat.
+#[derive(Clone, Debug)]
+#[allow(dead_code)]
+struct MysqlEndpoint {
+    host: String,
+    port: u16,
+    user: String,
+    password: String,
+    database: String,
+}
+
 /// 컨테이너 핸들을 process 종료까지 살려두기 위해 `Arc<...>` 로 보관.
 /// Drop 시 testcontainers 가 stop+rm 을 시도하지만 tokio runtime 종료
 /// 타이밍에 따라 leak 되는 경우가 있다 (sprint-258 측정 결과 매 run 마다
@@ -238,6 +259,72 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
         password: None,
         database: "table_view_test".to_string(),
         auth_source: None,
+    })
+}
+
+/// Sprint 250 — env-var-only MySQL endpoint helper. Returns `Some` iff
+/// either `MYSQL_HOST` is set (any deployment) or the docker-compose
+/// fixture container is the assumed target (default port 13306,
+/// `testuser`/`testpass`/`table_view_test`). Returns `None` when an
+/// adapter test wants explicit opt-out via `MYSQL_DISABLE=1`.
+///
+/// Sprint 253 will swap the body to lazy-spawn a testcontainers MySQL
+/// image (mirroring `pg_endpoint`); until then env-derived defaults are
+/// enough — Phase 17 integration tests will be authored against a
+/// docker-compose-provided container.
+#[allow(dead_code)]
+async fn mysql_endpoint() -> Option<MysqlEndpoint> {
+    if std::env::var("MYSQL_DISABLE")
+        .ok()
+        .filter(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .is_some()
+    {
+        return None;
+    }
+    Some(MysqlEndpoint {
+        host: std::env::var("MYSQL_HOST").unwrap_or_else(|_| "localhost".into()),
+        port: std::env::var("MYSQL_PORT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            // `MYSQL_TCP_PORT` is the mysql CLI's own env var; keep
+            // backwards-compat with `test_config(DatabaseType::Mysql)`
+            // which already consulted it.
+            .or_else(|| {
+                std::env::var("MYSQL_TCP_PORT")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+            })
+            .unwrap_or(13306),
+        user: std::env::var("MYSQL_USER").unwrap_or_else(|_| "testuser".into()),
+        password: std::env::var("MYSQL_PASSWORD")
+            .or_else(|_| std::env::var("MYSQL_PWD"))
+            .unwrap_or_else(|_| "testpass".into()),
+        database: std::env::var("MYSQL_DATABASE").unwrap_or_else(|_| "table_view_test".into()),
+    })
+}
+
+/// MySQL endpoint reflected into a `ConnectionConfig`. Phase 17 Sprint 253
+/// will call this from `mysql_integration.rs` once the adapter compiles.
+#[allow(dead_code)]
+pub async fn mysql_test_config() -> Option<ConnectionConfig> {
+    let endpoint = mysql_endpoint().await?;
+    Some(ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestMysql".to_string(),
+        db_type: DatabaseType::Mysql,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.database,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
     })
 }
 
