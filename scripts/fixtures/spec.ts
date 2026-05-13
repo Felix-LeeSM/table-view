@@ -102,13 +102,23 @@ const ConnectionSpec = z
 const ProfileSpecSchema = z
   .object({
     seed: z.number().int(),
-    database: z.object({ pg: z.string(), mongo: z.string() }),
+    database: z.object({
+      pg: z.string(),
+      mongo: z.string(),
+      // Sprint 281 — MySQL Slice A wire-up. profile yaml 에서 mysql
+      // database 명을 따로 지정할 수 있게 (PG 와 동일한 이름을 쓸지,
+      // `*_mysql` 처럼 분리할지는 profile 측 결정).
+      mysql: z.string().optional(),
+    }),
     locale_mix: z.record(z.string(), z.number().min(0).max(1)),
     rows: z.record(z.string(), z.number().int().nonnegative()),
     connections: z
       .object({
         pg: z.array(ConnectionSpec).optional(),
         mongo: z.array(ConnectionSpec).optional(),
+        // Sprint 281 — fixture 가 MySQL connection 도 storage 에 upsert
+        // 할 수 있게. yaml 미지정 시 buildConnections 는 mysql 항목 skip.
+        mysql: z.array(ConnectionSpec).optional(),
       })
       .optional(),
   })

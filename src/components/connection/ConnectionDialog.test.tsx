@@ -92,12 +92,12 @@ describe("ConnectionDialog", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Sprint 276 (2026-05-13) — connection 생성 시 dropdown 에는 supported
-  // 어댑터 (PG/Mongo) 만 노출되어야 한다. 백엔드 `make_adapter` 가
-  // Unsupported 를 반환하는 DBMS (MySQL/SQLite/Redis) 는 사용자가 새 connection
-  // 을 만들 때 선택할 수 없어야 함.
+  // Sprint 281 (2026-05-13) — connection 생성 시 dropdown 에는 supported
+  // 어댑터 (PG/MySQL/Mongo) 만 노출되어야 한다. Sprint 281 이전엔 MySQL 도
+  // hide 였으나 Phase 17 Slice A 합류로 노출. SQLite/Redis 는 여전히
+  // backend stub 이므로 숨김.
   // -----------------------------------------------------------------------
-  it("Sprint 276: DBMS dropdown exposes only supported adapters (PG + Mongo)", async () => {
+  it("Sprint 281: DBMS dropdown exposes supported adapters (PG + MySQL + Mongo)", async () => {
     const user = userEvent.setup();
     renderDialog();
     await user.click(screen.getByLabelText("Database Type"));
@@ -106,12 +106,10 @@ describe("ConnectionDialog", () => {
     expect(
       screen.getByRole("option", { name: "PostgreSQL" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "MySQL" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "MongoDB" })).toBeInTheDocument();
 
     // Unsupported — 안 보임.
-    expect(
-      screen.queryByRole("option", { name: "MySQL" }),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("option", { name: "SQLite" }),
     ).not.toBeInTheDocument();
@@ -394,16 +392,16 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Invalid URL");
   });
 
-  // Sprint 276 (2026-05-13) — URL parser 가 인식한 DBMS scheme 이지만 백엔드
-  // 어댑터가 아직 wire-up 되지 않은 경우 (MySQL/SQLite/Redis), Parse & Continue
+  // Sprint 281 (2026-05-13) — URL parser 가 인식한 DBMS scheme 이지만 백엔드
+  // 어댑터가 아직 wire-up 되지 않은 경우 (SQLite/Redis), Parse & Continue
   // 는 명시적 사용자 액션이므로 silent 가 아니라 거부 메시지를 노출한다 (form-
-  // mode paste 는 Sprint 276 의 silent 룰 적용).
+  // mode paste 는 Sprint 276 의 silent 룰 적용). MySQL 은 Sprint 281 합류로
+  // supported 가 됐으므로 본 거부 list 에서 제외.
   it.each([
-    ["mysql", "mysql://root:rpw@mysql.local:3306/store", "MySQL"],
     ["sqlite", "sqlite:/data/app.sqlite", "SQLite"],
     ["redis", "redis://u:p@redis.local:6379/0", "Redis"],
   ])(
-    "rejects unsupported %s URL with explanatory error (Sprint 276)",
+    "rejects unsupported %s URL with explanatory error (Sprint 281)",
     async (_scheme, url, label) => {
       renderDialog();
       await act(async () => {

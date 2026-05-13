@@ -467,17 +467,19 @@ describe("[AC-178-03] host:port blur split", () => {
 // ===========================================================================
 
 // ===========================================================================
-// Sprint 276 (2026-05-13) — unsupported DBMS scheme paste.
-// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS (MySQL/MariaDB/Redis/SQLite) URL 을
-// host 필드에 paste 하면 form 은 변경되지 않는다 (AC-178-04 의 silent 룰 적용:
-// best-effort 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의
-// Parse & Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
+// Sprint 281 (2026-05-13) — unsupported DBMS scheme paste.
+// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS (Redis/SQLite) URL 을 host 필드에
+// paste 하면 form 은 변경되지 않는다 (AC-178-04 의 silent 룰 적용: best-effort
+// 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의 Parse &
+// Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
+//
+// MySQL/MariaDB 는 Sprint 281 (Phase 17 Slice A) 합류로 supported 가 됐으므로
+// 본 silent-reject list 에서 제외 — paste 시 detected affordance 가 노출되고
+// form 이 자동 채워진다 (`parses mysql/mariadb URL` 그룹에서 별도 검증).
 // ===========================================================================
 
-describe("[Sprint 276] unsupported DBMS paste is silent (no form change)", () => {
+describe("[Sprint 281] unsupported DBMS paste is silent (no form change)", () => {
   const unsupportedPastes = [
-    { scheme: "mysql", url: "mysql://root:rpw@mysql.local:3306/store" },
-    { scheme: "mariadb", url: "mariadb://app:apw@maria.local:3307/inv" },
     { scheme: "redis", url: "redis://rediu:redip@redis.local:6379/0" },
     { scheme: "sqlite", url: "sqlite:/data/app.sqlite" },
   ];

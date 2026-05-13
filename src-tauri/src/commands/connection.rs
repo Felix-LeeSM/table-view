@@ -25,6 +25,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::db::mongodb::MongoAdapter;
+use crate::db::mysql::MysqlAdapter;
 use crate::db::postgres::PostgresAdapter;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
@@ -48,10 +49,14 @@ pub use session::get_session_id;
 /// Build an `ActiveAdapter` for the given database type.
 ///
 /// Sprint 65 adds MongoDB dispatch on top of Sprint 64's Postgres wiring.
-/// MySQL/SQLite still map to `AppError::Unsupported` pending Phase 9.
+/// Sprint 281 (Phase 17 Slice A) wires MySQL — RdbAdapter read path
+/// (namespaces / tables / columns) is live; DDL / queries / streaming
+/// surfaces still return `AppError::Unsupported` until Slice B~G land.
+/// SQLite remains unsupported.
 pub(crate) fn make_adapter(db_type: &DatabaseType) -> Result<ActiveAdapter, AppError> {
     match db_type {
         DatabaseType::Postgresql => Ok(ActiveAdapter::Rdb(Box::new(PostgresAdapter::new()))),
+        DatabaseType::Mysql => Ok(ActiveAdapter::Rdb(Box::new(MysqlAdapter::new()))),
         DatabaseType::Mongodb => Ok(ActiveAdapter::Document(Box::new(MongoAdapter::new()))),
         other => Err(AppError::Unsupported(format!(
             "Database type {:?} is not supported yet",
@@ -228,13 +233,15 @@ mod tests {
     }
 
     #[test]
-    fn test_make_adapter_mysql_returns_unsupported() {
-        match make_adapter(&DatabaseType::Mysql) {
-            Err(AppError::Unsupported(msg)) => {
-                assert!(msg.contains("Mysql"), "unexpected message: {msg}");
-            }
-            other => panic!("expected Unsupported, got: {:?}", other.is_ok()),
-        }
+    fn test_make_adapter_mysql_returns_rdb_variant() {
+        // Sprint 281 (Phase 17 Slice A) — MySQL 어댑터가 Rdb variant 로
+        // dispatch 되는지 회귀 가드. Slice A 이전엔 Unsupported 였음.
+        let adapter = make_adapter(&DatabaseType::Mysql).expect("mysql should succeed");
+        assert!(
+            matches!(adapter, ActiveAdapter::Rdb(_)),
+            "expected Rdb variant"
+        );
+        assert!(matches!(adapter.kind(), DatabaseType::Mysql));
     }
 
     #[test]

@@ -4,6 +4,9 @@ seed: 4242
 database:
   pg: table_view_development
   mongo: table_view_development
+  # Sprint 281 — MySQL Slice A. PG / Mongo 와 같은 이름을 의도적으로
+  # 사용 (시각적 일관성). MySQL 의 database = schema 라 별도 분리할 이유 없음.
+  mysql: table_view_development
 locale_mix:
   en: 0.70
   ko: 0.10
@@ -26,4 +29,11 @@ connections:
     - id: fixture-dev-mongo
       name: Dev (Mongo)
       color: "#16a34a"
+      environment: development
+  # Sprint 281 — MySQL Slice A. read path 만 동작 — query editor / DDL
+  # 은 Slice B~D 이전엔 Unsupported 메시지가 surface 된다.
+  mysql:
+    - id: fixture-dev-mysql
+      name: Dev (MySQL)
+      color: "#0891b2"
       environment: development

@@ -23,6 +23,7 @@ import { homedir, platform } from "node:os";
 import type { ProfileSpec, ResolvedSpec } from "./spec.js";
 import { pgEnvConn } from "./postgres.js";
 import { mongoEnvConn } from "./mongo.js";
+import { mysqlEnvConn } from "./mysql.js";
 
 const FIXTURE_GROUP_ID = "fixture-group";
 const FIXTURE_GROUP_NAME = "Fixtures";
@@ -213,6 +214,7 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
   const out: StoredConnection[] = [];
   const pg = pgEnvConn();
   const mongo = mongoEnvConn();
+  const mysql = mysqlEnvConn();
   const profile = spec.profileSpec as ProfileSpec;
 
   for (const c of profile.connections?.pg ?? []) {
@@ -252,6 +254,32 @@ function buildConnections(spec: ResolvedSpec, key: Buffer): StoredConnection[] {
       keep_alive_interval: null,
       environment: c.environment ?? null,
       auth_source: "admin",
+      replica_set: null,
+      tls_enabled: null,
+    });
+  }
+
+  // Sprint 281 — MySQL Slice A. profile yaml 이 `database.mysql` 미지정
+  // 시 PG database 명을 fallback (시각적 일관성 + 단순한 default).
+  // 실 사용자 connection 은 `pnpm db:seed mysql` 합류(Slice B+) 시 자동
+  // populated 된다. 현재는 빈 schema 의 connection 만 etablish.
+  const mysqlDb = profile.database.mysql ?? profile.database.pg;
+  for (const c of profile.connections?.mysql ?? []) {
+    out.push({
+      id: c.id,
+      name: c.name,
+      db_type: "mysql",
+      host: mysql.host,
+      port: mysql.port,
+      user: mysql.user,
+      password: encryptForStorage(mysql.password, key),
+      database: mysqlDb,
+      group_id: FIXTURE_GROUP_ID,
+      color: c.color ?? null,
+      connection_timeout: null,
+      keep_alive_interval: null,
+      environment: c.environment ?? null,
+      auth_source: null,
       replica_set: null,
       tls_enabled: null,
     });
