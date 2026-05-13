@@ -25,7 +25,7 @@
     "test:e2e:docker:rebuild": "docker compose --profile test up --build --attach e2e --abort-on-container-exit --exit-code-from e2e",
     "test:e2e:docker:down": "docker compose --profile test down -v",
     "tauri": "tauri",
-    "db:up": "docker compose up -d postgres mongo && ./scripts/db/wait.sh",
+    "db:up": "docker compose up -d postgres mongo mysql && ./scripts/db/wait.sh",
     "db:down": "docker compose down",
     "db:seed": "tsx scripts/fixtures/index.ts seed",
     "db:reset": "tsx scripts/fixtures/index.ts reset",

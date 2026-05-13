@@ -54,6 +54,21 @@ ignore = [
   # 시 즉시 해소.
   "RUSTSEC-2026-0118", # hickory-proto NSEC3 unbounded loop
   "RUSTSEC-2026-0119", # hickory-proto O(n²) name compression
+  # ── sqlx-mysql: rsa 0.9 timing sidechannel (Marvin Attack) ───────────
+  # 경로: sqlx-mysql 0.8.6 → rsa 0.9.10. MySQL 8.0+ default 인증 plugin
+  # (caching_sha2_password / sha256_password) 가 server public key 로
+  # 비밀번호 암호화 시 rsa crate 사용. upstream 의 constant-time RSA 구현
+  # 이 안정화될 때까지 patch 없음 (RustCrypto/RSA#626 추적 중).
+  # 실 영향: advisory 자체가 "local use on a non-compromised computer is
+  # fine" 명시 — Marvin Attack 은 attacker 가 victim 의 RSA 연산 timing
+  # 을 네트워크상에서 측정 가능한 시나리오 (예: TLS server) 가 전제.
+  # Table View 는 desktop app — 사용자가 자신의 MySQL server 에 직접 접속
+  # 하며, attacker 가 user 의 connection timing 을 측정할 채널이 없다.
+  # mysql_native_password (RSA 미사용) 로 인증 plugin 을 우회 가능하지만,
+  # 그건 사용자 environment 가 결정. RISKS.md 신규 항목 등록 (2026-05-13).
+  # sqlx 0.9+ 또는 rsa 0.10+ 채택 시 즉시 해소. Sprint 278 (sqlx mysql
+  # feature 활성화) 이후 본 advisory 가 surfacing 되어 추가.
+  "RUSTSEC-2023-0071",
 ]
 
 [licenses]

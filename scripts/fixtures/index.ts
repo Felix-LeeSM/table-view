@@ -185,6 +185,27 @@ function cmdConnections(action: string, profile: string): void {
     console.log(
       `db:connections clear — removed=${r.removed} fixture-* connection(s)`,
     );
+  } else if (action === "") {
+    // 인자 없이 호출 → 친절한 usage 안내 (2026-05-13 Sprint 280).
+    // pnpm 은 `--` 없이 인자를 못 넘기는 경우가 잦아 `pnpm db:connections`
+    // 만 친 사용자가 cryptic error 만 보던 회귀를 차단.
+    console.error(
+      [
+        "Usage:",
+        "  pnpm db:connections upsert <profile>",
+        "  pnpm db:connections clear",
+        "",
+        "Available profiles (fixtures/profiles/*.yaml):",
+        "  development  — 5K-20K rows, daily dev workflow",
+        "  e2e          — 200-1500 rows, e2e fixture (dormant)",
+        "",
+        "Examples:",
+        "  pnpm db:connections upsert development",
+        "  pnpm db:connections upsert e2e",
+        "  pnpm db:connections clear",
+      ].join("\n"),
+    );
+    process.exit(2);
   } else {
     throw new Error(
       `unknown connections action '${action}' (expected: upsert | clear)`,
