@@ -86,6 +86,7 @@ jobs:
         with:
           workspaces: src-tauri -> target
           cache-workspace-crates: false
+          cache-bin: false
           shared-key: e2e-smoke-linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
 

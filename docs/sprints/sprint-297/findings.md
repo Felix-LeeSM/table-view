@@ -14,7 +14,7 @@ No P1/P2 findings.
 | AC-04 storage isolation | PASS | `scripts/e2e-smoke-ci.sh` runs Postgres and Mongo specs with separate `TABLE_VIEW_TEST_DATA_DIR` subdirectories. |
 | AC-05 smoke-only WDIO config | PASS | `wdio.smoke.conf.ts` targets `./e2e/smoke/**/*.spec.ts`, checks for an existing debug binary in `onPrepare`, and starts `tauri-driver` separately. |
 | AC-06 informational CI workflow | PASS | `.github/workflows/e2e-smoke.yml` uses `push` + `workflow_dispatch`, `ubuntu-latest`, service containers, `continue-on-error: true`, and artifact upload. |
-| AC-07 cache policy | PASS | Workflow uses `actions/setup-node` pnpm cache keyed by `pnpm-lock.yaml`; no `node_modules` cache; Rust uses `Swatinem/rust-cache` with `cache-workspace-crates: false`, `shared-key: e2e-smoke-linux`, main-only save. |
+| AC-07 cache policy | PASS | Workflow uses `actions/setup-node` pnpm cache keyed by `pnpm-lock.yaml`; no `node_modules` cache; Rust uses `Swatinem/rust-cache` with `cache-workspace-crates: false`, `cache-bin: false`, `shared-key: e2e-smoke-linux`, main-only save. |
 | AC-08 docs | PASS | README, `.env.example`, and `docs/PLAN.md` describe smoke semantics, Linux host CI, macOS/Windows limitation, local command, env vars, and informational status. |
 | AC-09 no skipped pre-push E2E gate | PASS | Removed `lefthook.yml` skipped E2E block. |
 | AC-10 checks | PASS with runtime gap | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm exec tsc -b`, `pnpm build`, `pnpm test`, `bash -n scripts/e2e-smoke-ci.sh`, Prettier check all pass. Full Tauri E2E smoke not run locally because this host is macOS while the sprint target is Linux/xvfb/tauri-driver CI. |

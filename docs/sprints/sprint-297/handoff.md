@@ -25,7 +25,7 @@ runtime harness:
 | `e2e/fixtures/seed-smoke.ts` | Host-side Postgres + Mongo smoke fixture seeding with readiness retry. |
 | `e2e/fixtures/seed.sql` | Comment cleanup for smoke seed ownership. |
 | `scripts/e2e-smoke-ci.sh` | Linux host smoke runner: seed, build Tauri once, run each DBMS spec with isolated app data. |
-| `.github/workflows/e2e-smoke.yml` | Informational GitHub Actions workflow with Postgres/Mongo services and pnpm/Rust dependency cache. |
+| `.github/workflows/e2e-smoke.yml` | Informational GitHub Actions workflow with Postgres/Mongo services and pnpm/Rust dependency cache; cargo bin caching disabled. |
 | `.github/workflows/ci.yml` | Replaces stale “E2E removed” comment with pointer to informational smoke workflow. |
 | `src-tauri/tauri.e2e.conf.json` | Overrides E2E build to `pnpm build:e2e` and `../dist`. |
 | `docker-compose.yml` | Removes `e2e` service; keeps DB services. |
