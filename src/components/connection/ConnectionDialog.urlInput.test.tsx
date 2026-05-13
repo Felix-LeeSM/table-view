@@ -128,6 +128,11 @@ interface PasteCase {
   };
 }
 
+// Sprint 276 (2026-05-13) — paste detection은 *supported* DBMS 에 한해 form 을
+// 1-step 채운다. MySQL/MariaDB/Redis/SQLite scheme paste 는 이제 silent reject
+// (아래 [Sprint 276] unsupported DBMS paste 그룹에서 별도 검증). 해당 어댑터가
+// Phase 17 이후 합류하면 supported 리스트가 늘어나며 paste 케이스도 자연스럽게
+// 복원된다.
 const PASTE_CASES: PasteCase[] = [
   {
     scheme: "postgres",
@@ -154,30 +159,6 @@ const PASTE_CASES: PasteCase[] = [
     },
   },
   {
-    scheme: "mysql",
-    url: "mysql://root:rpw@mysql.local:3306/store",
-    expected: {
-      db_type: "mysql",
-      host: "mysql.local",
-      port: 3306,
-      user: "root",
-      database: "store",
-      password: "rpw",
-    },
-  },
-  {
-    scheme: "mariadb",
-    url: "mariadb://app:apw@maria.local:3307/inv",
-    expected: {
-      db_type: "mysql",
-      host: "maria.local",
-      port: 3307,
-      user: "app",
-      database: "inv",
-      password: "apw",
-    },
-  },
-  {
     scheme: "mongodb",
     url: "mongodb://mu:mp@mongo.local:27018/logs",
     expected: {
@@ -200,33 +181,6 @@ const PASTE_CASES: PasteCase[] = [
       user: "srvu",
       database: "mydb",
       password: "srvp",
-    },
-  },
-  {
-    scheme: "redis",
-    url: "redis://rediu:redip@redis.local:6379/0",
-    expected: {
-      db_type: "redis",
-      host: "redis.local",
-      port: 6379,
-      user: "rediu",
-      // redis URL with `/0` populates the DB-index input as "0".
-      database: "0",
-      password: "redip",
-    },
-  },
-  {
-    scheme: "sqlite",
-    url: "sqlite:/data/app.sqlite",
-    expected: {
-      // SQLite has no host/port/user/password — we assert the file path
-      // landed in `database` and the dbtype switched.
-      db_type: "sqlite",
-      host: "",
-      port: 0,
-      user: "",
-      database: "/data/app.sqlite",
-      password: "",
     },
   },
 ];
@@ -511,6 +465,51 @@ describe("[AC-178-03] host:port blur split", () => {
 // surfaces "Invalid URL"; the form-mode paste must stay silent so the
 // user's pasted text remains in the host field for them to fix.
 // ===========================================================================
+
+// ===========================================================================
+// Sprint 276 (2026-05-13) — unsupported DBMS scheme paste.
+// `SUPPORTED_DATABASE_TYPES` 에 없는 DBMS (MySQL/MariaDB/Redis/SQLite) URL 을
+// host 필드에 paste 하면 form 은 변경되지 않는다 (AC-178-04 의 silent 룰 적용:
+// best-effort 경로이므로 alert 없이 단순히 form 을 건드리지 않음). URL 모드의
+// Parse & Continue 는 명시적 사용자 액션이라 거부 메시지를 노출 — 별도 그룹.
+// ===========================================================================
+
+describe("[Sprint 276] unsupported DBMS paste is silent (no form change)", () => {
+  const unsupportedPastes = [
+    { scheme: "mysql", url: "mysql://root:rpw@mysql.local:3306/store" },
+    { scheme: "mariadb", url: "mariadb://app:apw@maria.local:3307/inv" },
+    { scheme: "redis", url: "redis://rediu:redip@redis.local:6379/0" },
+    { scheme: "sqlite", url: "sqlite:/data/app.sqlite" },
+  ];
+
+  for (const c of unsupportedPastes) {
+    it(`unsupported ${c.scheme} paste leaves form unchanged + no "detected" affordance`, async () => {
+      renderDialog();
+      const hostBefore = (screen.getByLabelText("Host") as HTMLInputElement)
+        .value;
+      const portBefore = (screen.getByLabelText("Port") as HTMLInputElement)
+        .value;
+      await act(async () => {
+        pasteIntoHost(c.url);
+      });
+      // db_type Select 는 여전히 PostgreSQL (기본). Host/Port 는 paste 의
+      // 기본 동작 영향만 받을 수 있어 affordance 부재로 reject 를 검증.
+      expect(
+        screen.queryByTestId("connection-url-detected"),
+      ).not.toBeInTheDocument();
+      // PG 폼은 그대로 mount (MySQL/Redis/SQLite 폼으로 전환되지 않음).
+      expect(screen.getByLabelText("Host")).toBeInTheDocument();
+      // Host/Port 입력은 우리 핸들러가 변경하지 않는다 (jsdom 의 paste
+      // 기본 동작이 input 에 텍스트를 자동 입력하지 않으므로 원래 값 유지).
+      expect((screen.getByLabelText("Host") as HTMLInputElement).value).toBe(
+        hostBefore,
+      );
+      expect((screen.getByLabelText("Port") as HTMLInputElement).value).toBe(
+        portBefore,
+      );
+    });
+  }
+});
 
 describe("[AC-178-04] malformed URL paste is silent", () => {
   const malformed = ["postgres://", "mysql://@", "mongodb://", "mariadb://"];

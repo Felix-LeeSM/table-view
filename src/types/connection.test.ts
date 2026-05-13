@@ -3,8 +3,11 @@ import {
   parseConnectionUrl,
   parseSqliteFilePath,
   createEmptyDraft,
+  isSupportedDatabaseType,
   DATABASE_DEFAULTS,
   DATABASE_DEFAULT_FIELDS,
+  DATABASE_TYPE_LABELS,
+  SUPPORTED_DATABASE_TYPES,
 } from "./connection";
 
 describe("parseConnectionUrl", () => {
@@ -259,6 +262,37 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     expect(DATABASE_DEFAULT_FIELDS.sqlite.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.mongodb.user).not.toBe("postgres");
     expect(DATABASE_DEFAULT_FIELDS.redis.user).not.toBe("postgres");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sprint 276 — Unsupported adapter hide. `SUPPORTED_DATABASE_TYPES` 가
+// connection 생성 UI 의 DBMS 노출 단일 source. 백엔드 `make_adapter` 가
+// 실제 어댑터를 반환하는 DBMS 만 포함되어야 한다 (PG/Mongo). Phase 17 합류
+// 시 mysql 이 supported 로 들어오면 이 회귀 가드들이 바로 알려준다.
+// Date 2026-05-13.
+// ---------------------------------------------------------------------------
+describe("SUPPORTED_DATABASE_TYPES (Sprint 276)", () => {
+  it("currently exposes only PG and Mongo (Phase 17 미합류)", () => {
+    expect([...SUPPORTED_DATABASE_TYPES]).toEqual(["postgresql", "mongodb"]);
+  });
+
+  it("isSupportedDatabaseType matches the SUPPORTED list", () => {
+    expect(isSupportedDatabaseType("postgresql")).toBe(true);
+    expect(isSupportedDatabaseType("mongodb")).toBe(true);
+    expect(isSupportedDatabaseType("mysql")).toBe(false);
+    expect(isSupportedDatabaseType("sqlite")).toBe(false);
+    expect(isSupportedDatabaseType("redis")).toBe(false);
+  });
+
+  it("DATABASE_TYPE_LABELS covers every DatabaseType variant", () => {
+    // 모든 variant 에 라벨이 있어야 한다 — unsupported 어댑터의 거부
+    // 메시지에서도 사용되므로.
+    expect(DATABASE_TYPE_LABELS.postgresql).toBe("PostgreSQL");
+    expect(DATABASE_TYPE_LABELS.mysql).toBe("MySQL");
+    expect(DATABASE_TYPE_LABELS.sqlite).toBe("SQLite");
+    expect(DATABASE_TYPE_LABELS.mongodb).toBe("MongoDB");
+    expect(DATABASE_TYPE_LABELS.redis).toBe("Redis");
   });
 });
 

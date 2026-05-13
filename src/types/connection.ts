@@ -6,6 +6,34 @@ export type DatabaseType =
   | "redis";
 
 /**
+ * Sprint 276 — 사용자에게 노출되는 어댑터의 단일 source of truth.
+ * 백엔드 `make_adapter` 가 실제 어댑터를 반환하는 DatabaseType 만 포함한다
+ * (Phase 17 이후 MySQL 추가 예정). 새 어댑터를 wire-up 하면 여기에 추가만
+ * 하면 ConnectionDialog Select / URL parse / paste detect 가 동시에 풀린다.
+ *
+ * 미포함 어댑터 (MySQL/SQLite/Redis) 는 connection 생성 dialog 의 Select
+ * option 에 노출되지 않고, URL paste / Parse & Continue 로 들어와도 거부된다.
+ */
+export const SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = [
+  "postgresql",
+  "mongodb",
+];
+
+export function isSupportedDatabaseType(t: DatabaseType): boolean {
+  return SUPPORTED_DATABASE_TYPES.includes(t);
+}
+
+/** UI 라벨. SUPPORTED 와 별개로 모든 variant 에 대해 정의 — URL parser 가
+ * 인식한 unsupported scheme 의 거부 메시지에서도 사용한다. */
+export const DATABASE_TYPE_LABELS: Record<DatabaseType, string> = {
+  postgresql: "PostgreSQL",
+  mysql: "MySQL",
+  sqlite: "SQLite",
+  mongodb: "MongoDB",
+  redis: "Redis",
+};
+
+/**
  * Broad paradigm classification mirrored from the backend. Each
  * `DatabaseType` maps to exactly one paradigm so the UI can branch on
  * paradigm (e.g. mongo → document tree) without re-inspecting the raw

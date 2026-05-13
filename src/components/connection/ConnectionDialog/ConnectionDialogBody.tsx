@@ -1,5 +1,11 @@
 import type { ConnectionDraft, DatabaseType } from "@/types/connection";
-import { ENVIRONMENT_META, ENVIRONMENT_OPTIONS } from "@/types/connection";
+import {
+  DATABASE_TYPE_LABELS,
+  ENVIRONMENT_META,
+  ENVIRONMENT_OPTIONS,
+  SUPPORTED_DATABASE_TYPES,
+  isSupportedDatabaseType,
+} from "@/types/connection";
 import { Button } from "@components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
@@ -238,11 +244,21 @@ export default function ConnectionDialogBody({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                <SelectItem value="mysql">MySQL</SelectItem>
-                <SelectItem value="sqlite">SQLite</SelectItem>
-                <SelectItem value="mongodb">MongoDB</SelectItem>
-                <SelectItem value="redis">Redis</SelectItem>
+                {/* Sprint 276 — 새 connection 생성 시엔 백엔드 어댑터가
+                    wire-up 된 DBMS (PG/Mongo) 만 노출. 편집 모드에서 기존
+                    connection 의 db_type 이 unsupported 라면 그 항목도
+                    예외적으로 추가해 Select 가 빈값으로 보이지 않게 한다
+                    (db_type 변경 자체는 의도된 흐름이 아니므로 그대로 둠). */}
+                {SUPPORTED_DATABASE_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {DATABASE_TYPE_LABELS[t]}
+                  </SelectItem>
+                ))}
+                {isEditing && !isSupportedDatabaseType(form.db_type) && (
+                  <SelectItem value={form.db_type}>
+                    {DATABASE_TYPE_LABELS[form.db_type]}
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
