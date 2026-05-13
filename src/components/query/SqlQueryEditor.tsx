@@ -22,6 +22,7 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
 import { aliasColumnCompletionSource } from "@lib/sql/aliasColumnCompletion";
+import { cteColumnCompletionSource } from "@lib/sql/cteColumnCompletion";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 
 /**
@@ -84,6 +85,15 @@ const buildSqlLang = (
   // 탐색해 anywhere-scan 으로 보강한다.
   dialect.language.data.of({
     autocomplete: aliasColumnCompletionSource(() => ns),
+  }),
+  // Sprint 295 (2026-05-14) — CTE / derived subquery virtual table. paren-
+  // depth-aware mini-parser 가 `WITH <name> AS (<inner-select>)` 와 `FROM
+  // (<inner-select>) [AS] <alias>` 의 projection list 를 추출해 가상
+  // 컬럼을 alias prefix 후보로 emit. base table 의 실제 컬럼은 위 alias
+  // source 가 담당하므로 가상 alias 와 base alias 가 같은 popup 에서
+  // 충돌 없이 dedup 된다.
+  dialect.language.data.of({
+    autocomplete: cteColumnCompletionSource(() => ns),
   }),
 ];
 
