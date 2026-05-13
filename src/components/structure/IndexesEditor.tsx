@@ -24,6 +24,18 @@ import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import OrderedColumnPicker from "@components/schema/CreateTableDialog/OrderedColumnPicker";
+import {
+  StructureShell,
+  StructureActionBar,
+  StructureTable,
+  StructureEmpty,
+  STRUCTURE_THEAD,
+  STRUCTURE_TH,
+  STRUCTURE_TH_ACTIONS,
+  STRUCTURE_TR,
+  STRUCTURE_TD,
+  STRUCTURE_TD_ACTIONS,
+} from "./shared/structureUI";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -341,105 +353,84 @@ export default function IndexesEditor({
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Action bar */}
-      <div className="flex items-center justify-end border-b border-border bg-secondary px-2 py-1">
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={handleOpenCreateIndex}
-          aria-label="Create index"
-        >
-          <Plus />
-          Create Index
-        </Button>
-      </div>
+    <StructureShell>
+      <StructureActionBar
+        count={`${indexes.length} ${indexes.length === 1 ? "index" : "indexes"}`}
+        actions={
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={handleOpenCreateIndex}
+            aria-label="Create index"
+          >
+            <Plus />
+            Index
+          </Button>
+        }
+      />
 
-      {/* Index table */}
       {indexes.length > 0 && (
-        <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-secondary">
-              <tr>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Name
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Columns
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Type
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Properties
-                </th>
-                <th className="w-20 border-b border-border px-1 py-1.5 text-center text-xs font-medium text-secondary-foreground">
-                  Actions
-                </th>
+        <StructureTable>
+          <thead className={STRUCTURE_THEAD}>
+            <tr>
+              <th className={STRUCTURE_TH}>Name</th>
+              <th className={STRUCTURE_TH}>Columns</th>
+              <th className={STRUCTURE_TH}>Type</th>
+              <th className={STRUCTURE_TH}>Properties</th>
+              <th className={STRUCTURE_TH_ACTIONS}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {indexes.map((idx) => (
+              <tr key={idx.name} className={STRUCTURE_TR}>
+                <td className={STRUCTURE_TD}>{idx.name}</td>
+                <td className={`${STRUCTURE_TD} text-secondary-foreground`}>
+                  {idx.columns.join(", ")}
+                </td>
+                <td className={`${STRUCTURE_TD} text-muted-foreground`}>
+                  {idx.index_type}
+                </td>
+                <td className={STRUCTURE_TD}>
+                  <div className="flex items-center gap-2">
+                    {idx.is_primary && (
+                      <span className="flex items-center gap-0.5 text-warning">
+                        <Key size={10} aria-hidden="true" /> PK
+                      </span>
+                    )}
+                    {idx.is_unique && !idx.is_primary && (
+                      <span className="flex items-center gap-0.5 text-primary">
+                        <Shield size={10} /> UNIQUE
+                      </span>
+                    )}
+                    {!idx.is_primary && !idx.is_unique && (
+                      <span className="text-muted-foreground">{"\u2014"}</span>
+                    )}
+                  </div>
+                </td>
+                <td className={STRUCTURE_TD_ACTIONS}>
+                  <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!idx.is_primary && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        className="hover:text-destructive"
+                        onClick={() => handleDropIndex(idx.name)}
+                        aria-label={`Delete index ${idx.name}`}
+                        title="Delete"
+                      >
+                        <Trash2 />
+                      </Button>
+                    )}
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {indexes.map((idx) => (
-                <tr
-                  key={idx.name}
-                  className="group border-b border-border hover:bg-muted"
-                >
-                  <td className="border-r border-border px-3 py-1 text-xs text-foreground">
-                    {idx.name}
-                  </td>
-                  <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
-                    {idx.columns.join(", ")}
-                  </td>
-                  <td className="border-r border-border px-3 py-1 text-xs text-muted-foreground">
-                    {idx.index_type}
-                  </td>
-                  <td className="border-r border-border px-3 py-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      {idx.is_primary && (
-                        <span className="flex items-center gap-0.5 text-warning">
-                          <Key size={10} aria-hidden="true" /> PK
-                        </span>
-                      )}
-                      {idx.is_unique && !idx.is_primary && (
-                        <span className="flex items-center gap-0.5 text-primary">
-                          <Shield size={10} /> UNIQUE
-                        </span>
-                      )}
-                      {!idx.is_primary && !idx.is_unique && (
-                        <span className="text-muted-foreground">
-                          {"\u2014"}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="w-20 border-l border-border px-1 py-1 text-center">
-                    <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {!idx.is_primary && (
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          className="hover:text-destructive"
-                          onClick={() => handleDropIndex(idx.name)}
-                          aria-label={`Delete index ${idx.name}`}
-                          title="Delete"
-                        >
-                          <Trash2 />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </StructureTable>
       )}
 
-      {/* Empty state */}
       {indexes.length === 0 && (
-        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-          No indexes found
-        </div>
+        <StructureEmpty>No indexes found</StructureEmpty>
       )}
 
       {/* SQL Preview Modal */}
@@ -483,6 +474,6 @@ export default function IndexesEditor({
           onCancel={ddl.cancelDangerous}
         />
       )}
-    </div>
+    </StructureShell>
   );
 }

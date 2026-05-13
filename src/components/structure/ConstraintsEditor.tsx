@@ -27,6 +27,18 @@ import { useDdlPreviewExecution } from "./useDdlPreviewExecution";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSchemaStore } from "@stores/schemaStore";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
+import {
+  StructureShell,
+  StructureActionBar,
+  StructureTable,
+  StructureEmpty,
+  STRUCTURE_THEAD,
+  STRUCTURE_TH,
+  STRUCTURE_TH_ACTIONS,
+  STRUCTURE_TR,
+  STRUCTURE_TD,
+  STRUCTURE_TD_ACTIONS,
+} from "./shared/structureUI";
 
 // ---------------------------------------------------------------------------
 // Constraint type
@@ -446,89 +458,70 @@ export default function ConstraintsEditor({
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Action bar */}
-      <div className="flex items-center justify-end border-b border-border bg-secondary px-2 py-1">
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={handleOpenAddConstraint}
-          aria-label="Add constraint"
-        >
-          <Plus />
-          Add Constraint
-        </Button>
-      </div>
+    <StructureShell>
+      <StructureActionBar
+        count={`${constraints.length} ${constraints.length === 1 ? "constraint" : "constraints"}`}
+        actions={
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={handleOpenAddConstraint}
+            aria-label="Add constraint"
+          >
+            <Plus />
+            Constraint
+          </Button>
+        }
+      />
 
-      {/* Constraint table */}
       {constraints.length > 0 && (
-        <div className="flex-1 overflow-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-secondary">
-              <tr>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Name
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Type
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Columns
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Reference
-                </th>
-                <th className="w-20 border-b border-border px-1 py-1.5 text-center text-xs font-medium text-secondary-foreground">
-                  Actions
-                </th>
+        <StructureTable>
+          <thead className={STRUCTURE_THEAD}>
+            <tr>
+              <th className={STRUCTURE_TH}>Name</th>
+              <th className={STRUCTURE_TH}>Type</th>
+              <th className={STRUCTURE_TH}>Columns</th>
+              <th className={STRUCTURE_TH}>Reference</th>
+              <th className={STRUCTURE_TH_ACTIONS}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {constraints.map((c) => (
+              <tr key={c.name} className={STRUCTURE_TR}>
+                <td className={STRUCTURE_TD}>{c.name}</td>
+                <td className={`${STRUCTURE_TD} text-secondary-foreground`}>
+                  {c.constraint_type}
+                </td>
+                <td className={`${STRUCTURE_TD} text-secondary-foreground`}>
+                  {c.columns.join(", ")}
+                </td>
+                <td className={`${STRUCTURE_TD} text-primary`}>
+                  {c.reference_table
+                    ? `${c.reference_table}(${(c.reference_columns ?? []).join(", ")})`
+                    : "\u2014"}
+                </td>
+                <td className={STRUCTURE_TD_ACTIONS}>
+                  <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="hover:text-destructive"
+                      onClick={() => handleDropConstraint(c.name)}
+                      aria-label={`Delete constraint ${c.name}`}
+                      title="Delete"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {constraints.map((c) => (
-                <tr
-                  key={c.name}
-                  className="group border-b border-border hover:bg-muted"
-                >
-                  <td className="border-r border-border px-3 py-1 text-xs text-foreground">
-                    {c.name}
-                  </td>
-                  <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
-                    {c.constraint_type}
-                  </td>
-                  <td className="border-r border-border px-3 py-1 text-xs text-secondary-foreground">
-                    {c.columns.join(", ")}
-                  </td>
-                  <td className="border-r border-border px-3 py-1 text-xs text-primary">
-                    {c.reference_table
-                      ? `${c.reference_table}(${(c.reference_columns ?? []).join(", ")})`
-                      : "\u2014"}
-                  </td>
-                  <td className="w-20 border-l border-border px-1 py-1 text-center">
-                    <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="hover:text-destructive"
-                        onClick={() => handleDropConstraint(c.name)}
-                        aria-label={`Delete constraint ${c.name}`}
-                        title="Delete"
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </StructureTable>
       )}
 
-      {/* Empty state */}
       {constraints.length === 0 && (
-        <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-          No constraints found
-        </div>
+        <StructureEmpty>No constraints found</StructureEmpty>
       )}
 
       {/* SQL Preview Modal */}
@@ -572,6 +565,6 @@ export default function ConstraintsEditor({
           onCancel={ddl.cancelDangerous}
         />
       )}
-    </div>
+    </StructureShell>
   );
 }

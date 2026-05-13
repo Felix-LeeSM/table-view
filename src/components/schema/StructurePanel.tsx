@@ -12,6 +12,11 @@ import { getParadigmVocabulary } from "@/lib/strings/paradigm-vocabulary";
 import ColumnsEditor from "@components/structure/ColumnsEditor";
 import IndexesEditor from "@components/structure/IndexesEditor";
 import ConstraintsEditor from "@components/structure/ConstraintsEditor";
+import {
+  StructureShell,
+  StructureActionBar,
+  StructureEmpty,
+} from "@components/structure/shared/structureUI";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { cancelQuery } from "@lib/tauri";
@@ -391,30 +396,23 @@ interface TriggersListProps {
  */
 function TriggersList({ triggers, onCreate, onDrop }: TriggersListProps) {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span
-          className="text-2xs uppercase tracking-wider text-muted-foreground"
-          aria-label="Trigger count"
-        >
-          {triggers.length === 0
-            ? "0 triggers"
-            : `${triggers.length} trigger${triggers.length === 1 ? "" : "s"}`}
-        </span>
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={onCreate}
-          aria-label="Create trigger"
-        >
-          <Plus className="size-3" />
-          Create Trigger
-        </Button>
-      </div>
+    <StructureShell>
+      <StructureActionBar
+        count={`${triggers.length} ${triggers.length === 1 ? "trigger" : "triggers"}`}
+        actions={
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={onCreate}
+            aria-label="Create trigger"
+          >
+            <Plus />
+            Trigger
+          </Button>
+        }
+      />
       {triggers.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center p-6 text-sm italic text-muted-foreground">
-          No triggers
-        </div>
+        <StructureEmpty>No triggers</StructureEmpty>
       ) : (
         <div className="flex-1 overflow-auto p-3">
           <ul className="flex flex-col gap-3">
@@ -469,6 +467,6 @@ function TriggersList({ triggers, onCreate, onDrop }: TriggersListProps) {
           </ul>
         </div>
       )}
-    </div>
+    </StructureShell>
   );
 }

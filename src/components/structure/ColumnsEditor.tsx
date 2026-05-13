@@ -11,6 +11,18 @@ import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import AddColumnDialog from "@components/schema/AddColumnDialog";
 import DropColumnDialog from "@components/schema/DropColumnDialog";
+import {
+  StructureShell,
+  StructureActionBar,
+  StructureTable,
+  StructureEmpty,
+  STRUCTURE_THEAD,
+  STRUCTURE_TH,
+  STRUCTURE_TH_ACTIONS,
+  STRUCTURE_TR,
+  STRUCTURE_TD,
+  STRUCTURE_TD_ACTIONS,
+} from "./shared/structureUI";
 
 // Sprint 237 — debounce window for the SET-NOT-NULL conflict probe. The
 // user toggles the checkbox; we wait 500 ms with no further change
@@ -194,28 +206,27 @@ function EditableColumnRow({
   };
 
   return (
-    <tr
-      className="group border-b border-border hover:bg-muted"
-      onKeyDown={handleKeyDown}
-    >
-      <td className="flex items-center gap-1.5 border-r border-border px-3 py-1 text-xs">
-        {col.is_primary_key && (
-          <span title="Primary Key">
-            <Key
-              size={12}
-              className="shrink-0 text-warning"
-              aria-label="Primary Key"
-            />
-          </span>
-        )}
-        {col.is_foreign_key && (
-          <span title="Foreign Key">
-            <Link2 size={12} className="shrink-0 text-primary" />
-          </span>
-        )}
-        <span className="text-foreground">{col.name}</span>
+    <tr className={STRUCTURE_TR} onKeyDown={handleKeyDown}>
+      <td className={STRUCTURE_TD}>
+        <div className="flex items-center gap-1.5">
+          {col.is_primary_key && (
+            <span title="Primary Key">
+              <Key
+                size={12}
+                className="shrink-0 text-warning"
+                aria-label="Primary Key"
+              />
+            </span>
+          )}
+          {col.is_foreign_key && (
+            <span title="Foreign Key">
+              <Link2 size={12} className="shrink-0 text-primary" />
+            </span>
+          )}
+          <span className="text-foreground">{col.name}</span>
+        </div>
       </td>
-      <td className="border-r border-border px-3 py-1 text-xs">
+      <td className={STRUCTURE_TD}>
         {isEditing ? (
           <div className="flex flex-col gap-1">
             <input
@@ -243,7 +254,7 @@ function EditableColumnRow({
           <span className="text-secondary-foreground">{col.data_type}</span>
         )}
       </td>
-      <td className="border-r border-border px-3 py-1 text-xs">
+      <td className={STRUCTURE_TD}>
         {isEditing ? (
           <div className="flex flex-col gap-1">
             <input
@@ -273,7 +284,7 @@ function EditableColumnRow({
           <span className="font-medium text-foreground">NO</span>
         )}
       </td>
-      <td className="max-w-50 truncate border-r border-border px-3 py-1 text-xs">
+      <td className={`${STRUCTURE_TD} max-w-50 truncate`}>
         {isEditing ? (
           <input
             className={inputClass}
@@ -289,7 +300,7 @@ function EditableColumnRow({
         )}
       </td>
       <td
-        className="max-w-50 truncate border-r border-border px-3 py-1 text-xs font-mono text-foreground"
+        className={`${STRUCTURE_TD} max-w-50 truncate font-mono`}
         title={(col.check_clauses ?? []).join("\n")}
       >
         {(() => {
@@ -303,13 +314,15 @@ function EditableColumnRow({
           return clauses.map((c) => c.replace(/^CHECK\s*/, "")).join("; ");
         })()}
       </td>
-      <td className="max-w-50 truncate border-r border-border px-3 py-1 text-xs text-primary">
+      <td className={`${STRUCTURE_TD} max-w-50 truncate text-primary`}>
         {col.fk_reference ?? "\u2014"}
       </td>
-      <td className="max-w-50 truncate px-3 py-1 text-xs text-muted-foreground">
+      <td
+        className={`${STRUCTURE_TD} max-w-50 truncate text-muted-foreground !border-r-0`}
+      >
         {col.comment ?? "\u2014"}
       </td>
-      <td className="w-20 border-l border-border px-1 py-1 text-center">
+      <td className={STRUCTURE_TD_ACTIONS}>
         <div className="flex items-center justify-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {isEditing ? (
             <>
@@ -542,98 +555,80 @@ export default function ColumnsEditor({
   // We use the columns prop change to detect reset needs internally.
   // The parent controls reset by changing connectionId/table/schema key.
 
-  return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Action bar */}
-      <div className="flex items-center justify-end border-b border-border bg-secondary px-2 py-1">
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={handleAddColumn}
-          aria-label={ariaAddUnit}
-        >
-          <Plus />
-          {vocab.addUnit}
-        </Button>
-        {pendingCount > 0 && (
-          <Button
-            size="xs"
-            onClick={handleReviewSql}
-            aria-label={`Review SQL (${pendingCount})`}
-          >
-            <Eye />
-            Review SQL ({pendingCount})
-          </Button>
-        )}
-      </div>
+  const visibleColumns = columns.filter((col) => !droppedColumns.has(col.name));
 
-      {/* Table */}
+  return (
+    <StructureShell>
+      <StructureActionBar
+        count={`${visibleColumns.length} ${vocab.units.toLowerCase()}`}
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleAddColumn}
+              aria-label={ariaAddUnit}
+            >
+              <Plus />
+              {vocab.addUnit}
+            </Button>
+            {pendingCount > 0 && (
+              <Button
+                size="xs"
+                onClick={handleReviewSql}
+                aria-label={`Review SQL (${pendingCount})`}
+              >
+                <Eye />
+                Review SQL ({pendingCount})
+              </Button>
+            )}
+          </>
+        }
+      />
+
       {columns.length > 0 && (
-        <div className="flex-1 overflow-auto">
-          <table className="w-full table-fixed border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-secondary">
-              <tr>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Name
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Type
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Nullable
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Default
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Check
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Ref
-                </th>
-                <th className="border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground">
-                  Comment
-                </th>
-                <th className="w-20 border-b border-border px-1 py-1.5 text-center text-xs font-medium text-secondary-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {columns
-                .filter((col) => !droppedColumns.has(col.name))
-                .map((col) => (
-                  <EditableColumnRow
-                    key={col.name}
-                    col={col}
-                    isEditing={editingColumn === col.name}
-                    onStartEdit={() => setEditingColumn(col.name)}
-                    onCancelEdit={() => setEditingColumn(null)}
-                    onSaveEdit={(change) => handleSaveEdit(col.name, change)}
-                    onDelete={() => handleDeleteColumn(col.name)}
-                    connectionId={connectionId}
-                    database={database}
-                    schema={schema}
-                    tableName={table}
-                  />
-                ))}
-              {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row
-                  rendering removed; `+ Column` toolbar now opens
-                  `AddColumnDialog`. The inline-batched MODIFY path
-                  stays \u2014 it goes through `pendingChanges` /
-                  `alter_table` (Sprint 237 polish target). */}
-            </tbody>
-          </table>
-        </div>
+        <StructureTable fixed>
+          <thead className={STRUCTURE_THEAD}>
+            <tr>
+              <th className={STRUCTURE_TH}>Name</th>
+              <th className={STRUCTURE_TH}>Type</th>
+              <th className={STRUCTURE_TH}>Nullable</th>
+              <th className={STRUCTURE_TH}>Default</th>
+              <th className={STRUCTURE_TH}>Check</th>
+              <th className={STRUCTURE_TH}>Ref</th>
+              <th className={STRUCTURE_TH}>Comment</th>
+              <th className={STRUCTURE_TH_ACTIONS}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleColumns.map((col) => (
+              <EditableColumnRow
+                key={col.name}
+                col={col}
+                isEditing={editingColumn === col.name}
+                onStartEdit={() => setEditingColumn(col.name)}
+                onCancelEdit={() => setEditingColumn(null)}
+                onSaveEdit={(change) => handleSaveEdit(col.name, change)}
+                onDelete={() => handleDeleteColumn(col.name)}
+                connectionId={connectionId}
+                database={database}
+                schema={schema}
+                tableName={table}
+              />
+            ))}
+            {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row
+                rendering removed; `+ Column` toolbar now opens
+                `AddColumnDialog`. The inline-batched MODIFY path
+                stays \u2014 it goes through `pendingChanges` /
+                `alter_table` (Sprint 237 polish target). */}
+          </tbody>
+        </StructureTable>
       )}
 
-      {/* Empty state */}
       {columns.length === 0 &&
         pendingChanges.length === 0 &&
         newColumnDrafts.length === 0 && (
-          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            {vocab.emptyUnits}
-          </div>
+          <StructureEmpty>{vocab.emptyUnits}</StructureEmpty>
         )}
 
       {/* SQL Preview Modal */}
@@ -695,6 +690,6 @@ export default function ColumnsEditor({
           onColumnDropped={onRefresh}
         />
       )}
-    </div>
+    </StructureShell>
   );
 }
