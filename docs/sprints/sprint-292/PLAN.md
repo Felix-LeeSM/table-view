@@ -1,112 +1,126 @@
-# Sprint 292 — Syntax highlighting + lint 고도화
+# Sprint 292 — Syntax Highlight 강화 + 자동완성 Level-1
 
 ## 배경
 
-현재 QueryEditor / MongoQueryEditor 는 CodeMirror 6 의 기본 `lang-sql` + `lang-json`
-토큰화에만 의존. 사용자가 잘못된 쿼리를 실행하기 직전에 **에디터 안에서**
-경고를 받지 못한다.
+QueryEditor / MongoQueryEditor 의 토큰화는 이미 dialect-aware 인프라가 깔려
+있음 (`databaseTypeToSqlDialect`, `lang-sql` PostgreSQL/MySQL preset,
+`updateColumnCompletionSource`). 하지만 사용자 체감은 "기능이 약하다, DDL 도
+지원 안 한다" — 실제 원인은 두 가지로 분리:
 
-사용자 요구: `joereynolds/sql-lint`, `simonecorsi/mongodb-query-validator`
-류의 라이브러리를 참고해 syntax highlighting 을 고도화.
+1. **highlight 색 풀이 약함**: CodeMirror 의 `defaultHighlightStyle` 은
+   keyword / type / string / function / number 를 거의 같은 모노톤으로 렌더 →
+   `CREATE TABLE users (id BIGSERIAL PRIMARY KEY)` 같은 DDL 도 색 차이로
+   보이지 않아 "highlight 없음" 으로 인식됨.
+2. **Mongo property vs BSON operator 가 같은 색**: lang-json 은 property
+   key 를 일반 string 으로만 처리. `$eq` / `$gt` 같은 operator 가 키워드로
+   부각되지 않음.
+
+자동완성도 사용자 요구: UPDATE / JOIN / subquery / CTE 에서 Tab 키로 잘
+풀려야 함. 외부 IDE (DataGrip / TablePlus) 수준. 이 sprint 는 그 중 가장
+보편적인 Level-1 (기본 SELECT/UPDATE/INSERT/WHERE/ON 위치의 column 자동
+완성 완성도 검증) 까지 다룸.
 
 ## 분석
 
-### CodeMirror 6 lint 인프라
+### Slice 1 — 커스텀 HighlightStyle (SQL + Mongo 공유)
 
-`@codemirror/lint` 패키지가 표준. Diagnostic 객체 (range, severity,
-message) 를 반환하는 `linter()` extension 을 등록하면 gutter marker +
-hover popup + Cmd+Shift+M ("show all problems") 가 자동으로 동작.
+`@codemirror/language` 의 `HighlightStyle.define([{ tag, class | color }])`
+로 tag 별 색을 강제. `@lezer/highlight` 의 `tags` 를 import 해서 다음 tag
+에 우리 design-token 기반 색을 매핑:
 
-이미 두 에디터가 CodeMirror 6 위에 있어 라이브러리 갈아엎을 필요 없음.
+- `tags.keyword` → `--primary` 계열 (예: SELECT, CREATE, JOIN, WHERE).
+- `tags.typeName` → 청록 (예: BIGSERIAL, JSONB, VARCHAR, LONGTEXT).
+- `tags.string` → 주황 (single/double quoted literal).
+- `tags.number` → 호박 (정수/실수 리터럴).
+- `tags.function(tags.variableName)` → 핑크 (sum / count / json_build_object).
+- `tags.comment` → muted-foreground.
+- `tags.operator` → 보라 (=, <, >, AND, OR, NOT, IN).
+- `tags.bracket` → 기본 foreground.
+- `tags.propertyName` → foreground + bold (JSON property key).
 
-### sql-lint (Joe Reynolds)
+SqlQueryEditor / MongoQueryEditor 둘 다 같은 `viewTableHighlightStyle` 을
+mount → 일관된 시각 톤.
 
-- Node CLI. dialect 별 rule (MySQL / PG / Sqlite).
-- 핵심 rule:
-  - `missing-where` — UPDATE/DELETE without WHERE
-  - `mysql-invalid-create-option` — MySQL dialect mismatch
-  - `unknown-table` / `unknown-column` — schema 가 있을 때만 가능
-  - `syntax-error` — 파싱 실패 위치 마킹
-- 의존성: `sqlite3`, `mysql2`, `node-postgres`. CLI 라 그대로는 부적합 —
-  핵심 rule 만 dialect-aware 한 정규식 + AST-light 파서로 인라인 포팅.
+### Slice 2 — Mongo BSON operator overlay
 
-### mongodb-query-validator (Simone Corsi)
+`@codemirror/lang-json` 위에 stream-language overlay 또는 view plugin 으로
+BSON operator (`$` 로 시작하는 property key) 를 `tags.keyword` 토큰으로
+재분류. 화이트리스트 셋:
 
-- npm 패키지. `validate(query)` → `{ valid, errors }`.
-- JSON5/JSON 입력을 받아 Mongo 표현식 ($eq, $gt, $in, $regex 등)
-  validation.
-- 의존성 가벼움 (ajv-like). MongoQueryEditor 에 직접 의존 추가 가능.
+```
+$eq, $ne, $gt, $gte, $lt, $lte, $in, $nin, $and, $or, $not, $nor,
+$exists, $type, $expr, $regex, $options, $size, $all, $elemMatch,
+$set, $unset, $inc, $push, $pull, $addToSet, $pop, $rename,
+$match, $project, $group, $sort, $limit, $skip, $lookup, $unwind,
+$count, $facet, $sum, $avg, $min, $max, $first, $last
+```
+
+옵션 1: ViewPlugin + Decoration (정규식 기반, 가장 가볍다).
+옵션 2: stream parser overlay (StreamLanguage.define + tokenize).
+
+**권장: 옵션 1**. Decoration 한 줄 정규식이면 끝, lang-json 의 AST 손대지
+않음.
+
+### Slice 3 — 자동완성 Level-1 검증 + 보강
+
+현재 인프라:
+
+- `useSqlAutocomplete` → `SQLNamespace` (테이블/컬럼/함수/키워드 후보).
+- `lang-sql({ dialect, schema })` → 기본 `schemaCompletionSource` (FROM
+  뒤 테이블 + table.column 인식, FROM alias 도 단일 테이블 범위에서 됨).
+- `updateColumnCompletionSource` → `UPDATE users SET <cursor>` /
+  `INSERT INTO users (<cursor>)` 보강.
+
+검증:
+
+1. `SELECT * FROM users WHERE <cursor>` → users 컬럼이 나오는지.
+2. `SELECT u.<cursor> FROM users u` → alias 인식.
+3. `SELECT * FROM users WHERE id IN (<cursor>` → 컬럼 후보.
+4. `DELETE FROM users WHERE <cursor>`.
+5. `INSERT INTO users (id, <cursor>)`.
+6. Tab 키로 후보 accept.
+
+빠진 케이스 발견 시 `updateColumnCompletionSource` 패턴으로 dialect data
+extension 추가.
+
+회귀 가드: 새 단위 테스트 — fixture schema + 위 6 시나리오 에서 `completion
+sources` 호출 결과 후보에 기대 column 이 포함되는지.
 
 ## 슬라이스 분할
 
-### Slice A — CodeMirror @codemirror/lint 인프라 마운트
-
-목표: 두 에디터에 빈 linter 등록. gutter / hover 동작 확인.
-
-- `pnpm add @codemirror/lint`
-- `QueryEditor.tsx`, `MongoQueryEditor.tsx` 에 `linter()` extension 추가.
-- 회귀 가드: 에디터 렌더링 / 키 입력 / 자동완성 회귀 없음.
-
-### Slice B — SQL dialect-aware lint rules (PG / MySQL)
-
-목표: 의존성 없이 핵심 rule 인라인 구현.
-
-- `src/lib/sql/lint/sqlLinter.ts` — `(sql, dialect) => Diagnostic[]`.
-- 규칙 1차:
-  1. `missing-where` — UPDATE/DELETE WHERE 누락 (raw SQL 분석).
-  2. `semicolon-after-block` — `BEGIN…END;` 안 / 밖 구분.
-  3. `dialect-mismatch` — PG 에 MySQL 키워드 (`AUTO_INCREMENT`, backtick
-     identifier), MySQL 에 PG 키워드 (`SERIAL`, `RETURNING`) 검출.
-  4. `dangerous-drop` — `DROP TABLE`/`DROP DATABASE` 경고 (severity warning).
-- 회귀 가드: rule 별 unit test (true positive / false positive).
-
-### Slice C — Mongo expression validator
-
-목표: `mongodb-query-validator` 통합 또는 핵심 rule 포팅.
-
-- 옵션 1: `pnpm add mongodb-query-validator` — 외부 의존 추가, 빠른 진입.
-- 옵션 2: 핵심 operator 화이트리스트 + JSON5 parse error → Diagnostic 인라인.
-- 권장: 옵션 2 — 의존성 minimal 유지 + dialect knob 자유로움.
-- 회귀 가드: `$eq` / `$in` 유효, `$bogus` 무효, JSON parse 위치 보고.
-
-### Slice D — Highlighting 강화 (dialect-aware keyword)
-
-목표: CodeMirror SQL highlight 가 모든 dialect 키워드를 한 set 으로 처리
-하던 것을 PG / MySQL 별 keyword set 으로 분리.
-
-- `lang-sql` 의 `PostgreSQL`, `MySQL` dialect preset 활용 +
-  `keywords:` extra entry 로 우리 환경의 합성 키워드 (예: PG 의 `\c`)
-  추가.
-- 회귀 가드: 토큰 클래스 단위 snapshot (`tokenAt(pos).type`).
+| Slice | 작업 | 회귀 가드 |
+|-------|------|---------|
+| 1 | `viewTableHighlightStyle` 생성 + 두 에디터 wire | 토큰 클래스 별 색 snapshot (test util) |
+| 2 | Mongo `$operator` Decoration overlay | `MongoQueryEditor` 토큰 단위 테스트 |
+| 3 | 자동완성 6 시나리오 검증 + 빠진 곳 보강 | 시나리오별 completion 후보 단위 테스트 |
 
 ## 의존성 / 호환성
 
-- `@codemirror/lint` 만 신규 dep. 번들 영향 < 8 KB gzip.
-- 인라인 SQL linter 는 무의존 → 번들 영향 0.
+- 신규 npm dep 없음 (`@codemirror/language` / `@codemirror/view` 이미 있음).
+- `@lezer/highlight` 도 `@codemirror/language` transitive — 직접 import 가능.
 
 ## 위험
 
-1. **False positive** — UPDATE 안의 부속 SELECT 가 WHERE 가 있다고 본체에
-   WHERE 가 없는 걸 못 잡는 경우. AST-light 파서 (재귀 없는 statement
-   splitter) 로 1차 statement boundary 만 검출.
-2. **성능** — 대형 쿼리 (10k 라인) 에서 lint debounce 필요. CodeMirror
-   `linter()` 가 자체 debounce 함 (기본 750ms).
-3. **사용자 혼란** — DROP TABLE 경고가 정상 DDL 워크플로를 방해. severity
-   warning + 토글 가능한 setting (장기).
+1. **defaultHighlightStyle 제거 시 fallback** — `syntaxHighlighting(default…
+   , { fallback: true })` 는 tag 미정의 시 작동. 우리 style 을 primary 로
+   두고 fallback 으로 default 를 함께 등록.
+2. **다크/라이트 모드** — design-token (CSS variable) 기반 색만 사용 →
+   테마 자동 추종.
+3. **JSON 일반 string 이 BSON operator overlay 에 잡힘** — 정규식을
+   `"\$\w+"` (property key 위치) 로 한정 + property key syntax-node 위치
+   검사로 false positive 방지.
 
 ## 일정
 
-- Slice A: 1 단계 — 인프라.
-- Slice B: 4 rule. rule 당 ~20 min.
-- Slice C: validator.
-- Slice D: keyword set 보강 (시간 남으면).
+- Slice 1: ~30 min. tag 매핑 + viewer wire.
+- Slice 2: ~20 min. Decoration overlay + 토큰 테스트.
+- Slice 3: ~40 min. 6 시나리오 단위 테스트 + 빠진 곳 보강.
 
-## 미해결 결정
+## 후속 sprint (별도)
 
-1. **외부 의존 vs 인라인 포팅** — `mongodb-query-validator` 의존 추가 여부.
-   현재 권장: 인라인 (slice C 옵션 2).
-2. **DDL 경고를 default ON / OFF** — TablePlus 는 toast 로 한 번 확인.
-   사용자 의견 필요.
-3. **MySQL dialect lint 에 keyword AUTO_INCREMENT, ENGINE= 등을 어디까지
-   허용** — PG 모드에서만 경고? 또는 어떤 dialect 라도 spec 키워드 외
-   사용은 경고? 기본 안: 활성 connection 의 dialect 와 mismatch 시 경고.
+- **Sprint 294 — 자동완성 Level-2 (alias-aware JOIN)**: `FROM users u JOIN
+  orders o ON o.<cursor>` 에서 `o.` 가 orders 컬럼으로 풀리도록. lang-sql
+  의 alias 추론 한계 (다중 join) 검증 후 자체 보강.
+- **Sprint 295 — 자동완성 Level-3 (CTE / derived subquery)**: `WITH t AS
+  (SELECT ...) SELECT t.<cursor>` 에서 t.column 추론. mini-parser 필요할
+  가능성.
