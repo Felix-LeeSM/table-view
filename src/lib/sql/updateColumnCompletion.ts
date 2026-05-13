@@ -6,7 +6,8 @@ import type {
 import type { SQLNamespace } from "@codemirror/lang-sql";
 
 /**
- * Auxiliary completion source for `UPDATE` / `INSERT INTO` statements.
+ * Auxiliary completion source for `UPDATE` / `INSERT INTO` / `DELETE FROM`
+ * statements.
  *
  * `@codemirror/lang-sql`'s built-in `schemaCompletionSource` resolves the
  * target table for column suggestions only after the parser has seen the
@@ -14,6 +15,11 @@ import type { SQLNamespace } from "@codemirror/lang-sql";
  * means `UPDATE users SET <cursor>` and `INSERT INTO users (<cursor>)`
  * never see column candidates — a regression the user reported on
  * 2026-05-11.
+ *
+ * Sprint 292 (2026-05-14) — `DELETE FROM users WHERE <cursor>` 도 같은
+ * 한계. built-in 이 DELETE 컨텍스트의 target table 을 alias 맵에 등록하지
+ * 않아 WHERE 절 컬럼이 노출되지 않는다. 이 source 가 DELETE 도 처리하도록
+ * 확장.
  *
  * This source augments the default by walking the syntax tree to the
  * enclosing Statement, identifying the verb (`update` or `insert`), and
@@ -83,26 +89,48 @@ export function updateColumnCompletionSource(
       if (!stmt || stmt.name !== "Statement") return null;
     }
 
-    // First child should be a Keyword — must be UPDATE or INSERT.
+    // First child should be a Keyword — must be UPDATE, INSERT, DELETE, or
+    // SELECT. SELECT is handled via a separate FROM-locating helper because
+    // the target identifier is not the syntactic neighbour of the verb.
     let scan = stmt.firstChild;
     while (scan && scan.name === "LineComment") scan = scan.nextSibling;
     if (!scan || scan.name !== "Keyword") return null;
     const firstKw = state.doc.sliceString(scan.from, scan.to).toLowerCase();
-    if (firstKw !== "update" && firstKw !== "insert") return null;
+    if (
+      firstKw !== "update" &&
+      firstKw !== "insert" &&
+      firstKw !== "delete" &&
+      firstKw !== "select"
+    ) {
+      return null;
+    }
 
-    // For INSERT, advance past the optional INTO keyword.
-    let sawInto = false;
-    if (firstKw === "insert") {
+    // For SELECT, scan forward to the FROM keyword (lang-sql does not
+    // auto-register the FROM table as an alias when the source is invoked
+    // out of band, so we resolve the single-table FROM ourselves; multi-
+    // table JOIN alias resolution is sprint-294 territory).
+    if (firstKw === "select") {
+      scan = scan.nextSibling;
+      while (scan) {
+        if (scan.name === "Keyword") {
+          const kw = state.doc.sliceString(scan.from, scan.to).toLowerCase();
+          if (kw === "from") {
+            scan = scan.nextSibling;
+            break;
+          }
+        }
+        scan = scan.nextSibling;
+      }
+      if (!scan) return null;
+    } else if (firstKw === "insert" || firstKw === "delete") {
+      // For INSERT / DELETE, advance past the obligatory INTO / FROM keyword.
+      const expected = firstKw === "insert" ? "into" : "from";
       scan = scan.nextSibling;
       while (scan && scan.name === "LineComment") scan = scan.nextSibling;
-      if (scan && scan.name === "Keyword") {
-        const kw = state.doc.sliceString(scan.from, scan.to).toLowerCase();
-        if (kw === "into") {
-          sawInto = true;
-          scan = scan.nextSibling;
-        }
-      }
-      if (!sawInto) return null;
+      if (!scan || scan.name !== "Keyword") return null;
+      const kw = state.doc.sliceString(scan.from, scan.to).toLowerCase();
+      if (kw !== expected) return null;
+      scan = scan.nextSibling;
     } else {
       scan = scan.nextSibling;
     }

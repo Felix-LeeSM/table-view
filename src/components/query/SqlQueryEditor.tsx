@@ -21,6 +21,7 @@ import {
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
+import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 
 /**
  * RDB / SQL-paradigm query editor. Imports only SQL-aware extensions —
@@ -128,6 +129,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
           langCompartment.current.of(
             buildSqlLang(dialectRef.current, schemaNamespaceRef.current),
           ),
+          syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
           keymap.of([

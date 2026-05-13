@@ -16,6 +16,7 @@ import {
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import type { QueryMode } from "@stores/workspaceStore";
+import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 
 /**
  * MongoDB / document-paradigm query editor. Imports only MQL-aware
@@ -101,6 +102,7 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
           indentOnInput(),
           bracketMatching(),
           langCompartment.current.of(buildJsonLang(mongoExtensionsRef.current)),
+          syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           autocompletion(),
           keymap.of([
@@ -158,6 +160,10 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
             ".cm-matchingBracket": {
               backgroundColor: "var(--primary)",
               opacity: "0.3",
+            },
+            ".cm-mql-operator": {
+              color: "var(--tv-syntax-keyword)",
+              fontWeight: "600",
             },
           }),
         ],
