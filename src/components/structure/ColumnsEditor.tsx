@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Key, Link2, Plus, Pencil, Trash2, X, Check, Eye } from "lucide-react";
 import type { ColumnInfo, ColumnChange } from "@/types/schema";
 import type { Paradigm } from "@/types/connection";
@@ -11,6 +11,12 @@ import { useConnectionStore } from "@stores/connectionStore";
 import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDialog";
 import AddColumnDialog from "@components/schema/AddColumnDialog";
 import DropColumnDialog from "@components/schema/DropColumnDialog";
+
+// Sprint 237 — debounce window for the SET-NOT-NULL conflict probe. The
+// user toggles the checkbox; we wait 500 ms with no further change
+// before issuing `count_null_rows` to avoid hammering the backend
+// while the user is still deciding.
+const NULL_PROBE_DEBOUNCE_MS = 500;
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -44,6 +50,17 @@ interface EditableColumnRowProps {
   onCancelEdit: () => void;
   onSaveEdit: (change: ColumnChange) => void;
   onDelete: () => void;
+  /**
+   * Sprint 237 — context forwarded to the SET-NOT-NULL conflict probe.
+   * The MODIFY editor calls `tauri.countNullRows` 500 ms after the user
+   * toggles a nullable column to NOT NULL; the response drives the
+   * inline warning text. Optional only because the inline-batched
+   * MODIFY surface is the sole caller today.
+   */
+  connectionId?: string;
+  database?: string;
+  schema?: string;
+  tableName?: string;
 }
 
 function EditableColumnRow({
@@ -53,16 +70,97 @@ function EditableColumnRow({
   onCancelEdit,
   onSaveEdit,
   onDelete,
+  connectionId,
+  database,
+  schema,
+  tableName,
 }: EditableColumnRowProps) {
   const [dataType, setDataType] = useState(col.data_type);
   const [nullable, setNullable] = useState(col.nullable);
   const [defaultValue, setDefaultValue] = useState(col.default_value ?? "");
+  // Sprint 237 — free-text USING cast expression. Rendered only when the
+  // user has chosen a NEW data type (i.e. `dataType !== col.data_type`).
+  // Cleared when the user reverts to the original type so a stale value
+  // doesn't leak into the eventual `alterTable` payload.
+  const [usingExpression, setUsingExpression] = useState("");
+  // Sprint 237 — pre-execution NULL-rows warning. `null` = no probe has
+  // resolved yet (or the toggle is in its default position). `0` is a
+  // valid resolution and renders no warning. `>0` renders the inline
+  // copy.
+  const [nullRowCount, setNullRowCount] = useState<number | null>(null);
+
+  const hasDataTypeChange = dataType !== col.data_type;
+  // Sprint 237 — SET-NOT-NULL is only meaningful when the column is
+  // currently nullable; we never probe DROP-NOT-NULL or no-change.
+  const willSetNotNull = col.nullable && !nullable;
+
+  // Sprint 237 — when the user clears the new data type, the USING
+  // input is hidden; drop any pending value so a re-toggle of the type
+  // doesn't repopulate stale text.
+  useEffect(() => {
+    if (!hasDataTypeChange && usingExpression.length > 0) {
+      setUsingExpression("");
+    }
+  }, [hasDataTypeChange, usingExpression.length]);
+
+  // Sprint 237 — debounced `count_null_rows` probe. Fires only when the
+  // user toggles SET NOT NULL on a column that is currently nullable.
+  // Re-runs on every state flip; the timer is cleared on unmount /
+  // re-toggle so an in-flight debounce is cancelled. Probe errors are
+  // swallowed (best-effort advisory — never blocks preview / commit).
+  useEffect(() => {
+    if (!isEditing) {
+      setNullRowCount(null);
+      return;
+    }
+    if (!willSetNotNull) {
+      // Toggle off / DROP-NOT-NULL path → clear any prior warning.
+      setNullRowCount(null);
+      return;
+    }
+    if (!connectionId || !schema || !tableName) {
+      // No coordinates forwarded → skip the probe. Mirrors the legacy
+      // call site shape; the modal-add / drop paths don't need it.
+      return;
+    }
+    // Sprint 237 Attempt 2 — stale-warning hygiene. When a dep (e.g.
+    // `col.name`, `database`, `tableName`) changes while `willSetNotNull`
+    // stays true, the previously-resolved `nullRowCount` would keep
+    // rendering until the next 500 ms debounce resolves. Clear it now so
+    // the warning vanishes immediately and reappears only when the
+    // fresh probe lands.
+    setNullRowCount(null);
+    let cancelled = false;
+    const handle = window.setTimeout(() => {
+      tauri
+        .countNullRows(connectionId, schema, tableName, col.name, database)
+        .then((count) => {
+          if (!cancelled) setNullRowCount(count);
+        })
+        .catch(() => {
+          // Probe is advisory; PG surfaces the real error on commit if the
+          // user proceeds. Silent swallow is intentional — see Sprint 237
+          // contract § Design Bar / Quality Bar.
+        });
+    }, NULL_PROBE_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [
+    isEditing,
+    willSetNotNull,
+    connectionId,
+    schema,
+    tableName,
+    col.name,
+    database,
+  ]);
 
   const inputClass =
     "w-full bg-transparent px-2 py-0.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary";
 
   const handleSave = () => {
-    const hasDataTypeChange = dataType !== col.data_type;
     const hasNullableChange = nullable !== col.nullable;
     const hasDefaultChange =
       (defaultValue || null) !== (col.default_value ?? null);
@@ -72,12 +170,21 @@ function EditableColumnRow({
       return;
     }
 
+    // Sprint 237 — only emit `using_expression` when a non-empty value is
+    // present alongside a type change. Empty / whitespace-only inputs
+    // pass through as `null` so the backend keeps emitting the pre-
+    // Sprint-237 `ALTER COLUMN "x" TYPE <t>` byte-for-byte.
+    const trimmedUsing = usingExpression.trim();
+    const usingPayload: string | null =
+      hasDataTypeChange && trimmedUsing.length > 0 ? trimmedUsing : null;
+
     onSaveEdit({
       type: "modify",
       name: col.name,
       new_data_type: hasDataTypeChange ? dataType : null,
       new_nullable: hasNullableChange ? nullable : null,
       new_default_value: hasDefaultChange ? defaultValue || null : null,
+      using_expression: usingPayload,
     });
   };
 
@@ -110,25 +217,56 @@ function EditableColumnRow({
       </td>
       <td className="border-r border-border px-3 py-1 text-xs">
         {isEditing ? (
-          <input
-            className={inputClass}
-            value={dataType}
-            onChange={(e) => setDataType(e.target.value)}
-            aria-label={`Data type for ${col.name}`}
-          />
+          <div className="flex flex-col gap-1">
+            <input
+              className={inputClass}
+              value={dataType}
+              onChange={(e) => setDataType(e.target.value)}
+              aria-label={`Data type for ${col.name}`}
+            />
+            {/* Sprint 237 — USING cast expression. Conditionally
+                rendered ONLY when the user has chosen a new type so
+                pre-Sprint-237 type-only flow stays diff=0. Free-text
+                input; PG surfaces its parse error if invalid. */}
+            {hasDataTypeChange && (
+              <input
+                className={inputClass}
+                value={usingExpression}
+                onChange={(e) => setUsingExpression(e.target.value)}
+                aria-label={`USING expression for ${col.name}`}
+                placeholder="e.g. col::int"
+                title="Used when changing column type if PostgreSQL can't cast implicitly"
+              />
+            )}
+          </div>
         ) : (
           <span className="text-secondary-foreground">{col.data_type}</span>
         )}
       </td>
       <td className="border-r border-border px-3 py-1 text-xs">
         {isEditing ? (
-          <input
-            type="checkbox"
-            checked={nullable}
-            onChange={(e) => setNullable(e.target.checked)}
-            aria-label={`Nullable for ${col.name}`}
-            className="rounded border-border"
-          />
+          <div className="flex flex-col gap-1">
+            <input
+              type="checkbox"
+              checked={nullable}
+              onChange={(e) => setNullable(e.target.checked)}
+              aria-label={`Nullable for ${col.name}`}
+              className="rounded border-border"
+            />
+            {/* Sprint 237 — pre-execution conflict warning. Renders
+                only when the user is flipping nullable→NOT NULL AND
+                the debounced probe returned a non-zero count. Purely
+                advisory — preview / commit are not blocked. */}
+            {willSetNotNull && nullRowCount !== null && nullRowCount > 0 && (
+              <span
+                role="alert"
+                className="text-xs text-warning"
+                aria-label={`Null rows warning for ${col.name}`}
+              >
+                {nullRowCount} rows have NULL — adding NOT NULL will fail
+              </span>
+            )}
+          </div>
         ) : nullable ? (
           <span className="text-muted-foreground">YES</span>
         ) : (
@@ -473,6 +611,10 @@ export default function ColumnsEditor({
                     onCancelEdit={() => setEditingColumn(null)}
                     onSaveEdit={(change) => handleSaveEdit(col.name, change)}
                     onDelete={() => handleDeleteColumn(col.name)}
+                    connectionId={connectionId}
+                    database={database}
+                    schema={schema}
+                    tableName={table}
                   />
                 ))}
               {/* Sprint 236 \u2014 inline `NewColumnRow` + pending-add row

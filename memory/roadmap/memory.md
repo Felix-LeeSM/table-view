@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 type: memory
-updated: 2026-05-01
+updated: 2026-05-13
 ---
 
 # 로드맵
@@ -20,6 +20,14 @@ updated: 2026-05-01
 - **Phase 5–11** 부분 진행 (Phase 5 Extended Features, Phase 6 MongoDB)
 - **Phase 12 완료 (2026-04-27, Sprint 150–155)** — launcher/workspace
   split, ADR 0012, RISK-025 resolved.
+- **Phase 21–27 (TablePlus 패리티 7단계) 종료 (2026-05-13, Sprint 237
+  closure)** — Sprint 226 CREATE TABLE → Sprint 237 Column MODIFY USING
+  + NULL-rows 사전 표시까지 7단계 모두 마감. TablePlus
+  `working-with-table/{table,column,row,constraint,index,trigger}` 6
+  surface 의 동등 워크플로우 도달. 회고:
+  [`memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`](../lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md).
+- **Phase 17–20 재개 평가 트리거 발동 (2026-05-13)** — Phase 27 종료
+  exit criterion 에 따라 신규 DBMS 추가 비용/가치 재산정 시점.
 
 ## 작업 순서 (Impact 큰 순) — Phase 21–27
 
@@ -28,10 +36,10 @@ updated: 2026-05-01
 | 1 | [Phase 21](../../docs/phases/phase-21.md) CSV/SQL/JSON Export | 181 | 단판승, 의존 0 |
 | 2 | [Phase 22](../../docs/phases/phase-22.md) Row 인라인 + Preview/Commit/Discard 게이트 | 182–184 | **#3~#7 공통 인프라** |
 | 3 | [Phase 23](../../docs/phases/phase-23.md) Safe Mode | **종료 (185–188)** | production 가드 + Mongo aggregate 가드 + `useSafeModeGate` |
-| 4 | [Phase 24](../../docs/phases/phase-24.md) Index Write UI | 미정 | DDL 패턴 첫 검증 |
-| 5 | [Phase 25](../../docs/phases/phase-25.md) Constraint Write UI | 미정 | 동일 패턴 확장 |
-| 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | 미정 | Function 옵션 |
-| 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | 미정 | 패리티 마일스톤 |
+| 4 | [Phase 24](../../docs/phases/phase-24.md) Index Write UI | **종료 (226–229)** | CREATE/Drop INDEX + create_table_plan |
+| 5 | [Phase 25](../../docs/phases/phase-25.md) Constraint Write UI | **종료 (229–230)** | PK/FK/UNIQUE/CHECK + ON DELETE/UPDATE whitelist |
+| 6 | [Phase 26](../../docs/phases/phase-26.md) Trigger 관리 | **종료 (272–275)** | list/create/drop trigger + WHEN/EXECUTE FUNCTION |
+| 7 | [Phase 27](../../docs/phases/phase-27.md) Table/Column DDL UI | **종료 (226–237, 2026-05-13)** | **패리티 마일스톤 달성** — Sprint 237 closure 가 USING + NULL-rows 사전 표시까지 마무리 |
 
 ## Sprint 189–198 sequencing (refactoring + feature 인터리브, 종료 2026-05-02)
 

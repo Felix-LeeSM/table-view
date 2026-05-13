@@ -119,6 +119,13 @@ pub(crate) struct StubRdbAdapter {
     /// panic-closure pattern uses `Some(Box::new(|_| panic!(...)))` to
     /// assert the trait body is never reached when DbMismatch fires.
     pub drop_trigger_fn: Option<FnOne<DropTriggerRequest, SchemaChangeResult>>,
+    /// Sprint 237 — override for `count_null_rows(namespace, table,
+    /// column)`. `None` falls back to a sentinel `Ok(0)` so wiring tests
+    /// that do not care about the probe still type-check. The mismatch
+    /// panic-closure pattern uses `Some(Box::new(|_,_,_| panic!(...)))`
+    /// to assert the trait body is not reached when DbMismatch fires.
+    pub count_null_rows_fn:
+        Option<Box<dyn Fn(&str, &str, &str) -> Result<i64, AppError> + Send + Sync>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -162,6 +169,7 @@ impl Default for StubRdbAdapter {
             drop_constraint_fn: None,
             create_trigger_fn: None,
             drop_trigger_fn: None,
+            count_null_rows_fn: None,
         }
     }
 }
@@ -538,6 +546,24 @@ impl RdbAdapter for StubRdbAdapter {
     }
     fn switch_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         let r = self.switch_database_fn.as_ref().map_or(Ok(()), |f| f(name));
+        Box::pin(async move { r })
+    }
+
+    /// Sprint 237 — `count_null_rows(namespace, table, column)`. `None`
+    /// closure falls back to `Ok(0)` (the natural "no NULL rows" default
+    /// for wiring tests). Override slot uses
+    /// `Some(Box::new(|_,_,_| panic!(...)))` for the mismatch
+    /// panic-closure assertion.
+    fn count_null_rows<'a>(
+        &'a self,
+        ns: &'a str,
+        table: &'a str,
+        column: &'a str,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        let r = self
+            .count_null_rows_fn
+            .as_ref()
+            .map_or(Ok(0), |f| f(ns, table, column));
         Box::pin(async move { r })
     }
 }

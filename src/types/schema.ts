@@ -133,6 +133,15 @@ export type ColumnChange =
       new_data_type: string | null;
       new_nullable: boolean | null;
       new_default_value: string | null;
+      /**
+       * Sprint 237 — optional USING cast expression for
+       * `ALTER COLUMN … TYPE … USING …`. Only emitted when both
+       * `new_data_type` and `using_expression` are non-null. Free-text
+       * passthrough; the backend serdes this with `#[serde(default)]`
+       * so payloads from pre-Sprint-237 callers (omitting the field)
+       * deserialize to `None` and the emitted SQL is byte-equivalent.
+       */
+      using_expression?: string | null;
     }
   | {
       type: "drop";

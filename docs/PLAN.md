@@ -196,7 +196,7 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 | 24 | Index Write UI | 계획 | [phase-24.md](phases/phase-24.md) |
 | 25 | Constraint Write UI | 계획 | [phase-25.md](phases/phase-25.md) |
 | 26 | Trigger 관리 | 계획 | [phase-26.md](phases/phase-26.md) |
-| 27 | Table / Column DDL UI | 진행 중 (Sprint 226 ✓ — CREATE TABLE) | [phase-27.md](phases/phase-27.md) |
+| 27 | Table / Column DDL UI | 종료 (Sprint 237 closure, 2026-05-13) | [phase-27.md](phases/phase-27.md) |
 
 > Phase 9–11은 본 phase 분할 이전의 임시 스케치(`phase-9.md` 등). Phase 17–20이 phase-9의 RDBMS 확장 계획을 승계해 분할 — 2026-05-01 결정으로 패리티 달성 시까지 보류. Phase 21–27 이 그 자리를 차지하고, 본 7단계 종료 시점에 Phase 17–20 재개를 재평가.
 

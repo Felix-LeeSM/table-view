@@ -9,10 +9,11 @@ use tauri::State;
 use tracing::{info, warn};
 
 use crate::commands::connection::AppState;
+use crate::db::postgres::validate_identifier;
 use crate::error::AppError;
 use crate::models::{FilterCondition, QueryResult, TableData};
 
-use super::{not_connected, register_cancel_token, release_cancel_token};
+use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
 /// Validate query execution inputs.
 ///
@@ -469,6 +470,75 @@ async fn query_table_data_inner(
     release_cancel_token(state, &cancel_handle).await;
 
     result
+}
+
+async fn count_null_rows_inner(
+    state: &AppState,
+    connection_id: &str,
+    schema: &str,
+    table: &str,
+    column: &str,
+    expected_database: Option<&str>,
+) -> Result<i64, AppError> {
+    // Sprint 237 — identifier validation runs *before* connection lookup
+    // so a bogus schema / table / column short-circuits without taking
+    // the `active_connections` lock. Mirrors the
+    // `validate_query_inputs` placement on `execute_query_inner` (line
+    // 57). The validator is the same `[a-zA-Z_][a-zA-Z0-9_]*` +
+    // NAMEDATALEN-63 helper used by every DDL emitter
+    // (`db/postgres/mutations.rs::validate_identifier`).
+    validate_identifier(schema, "Schema name")?;
+    validate_identifier(table, "Table name")?;
+    validate_identifier(column, "Column name")?;
+
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let adapter = active.as_rdb()?;
+    // Sprint 271c — opt-in DbMismatch guard. Shared
+    // `ensure_expected_db` helper (12 schema + 11 DDL siblings already
+    // use it). `None` is byte-equivalent — no `current_database()`
+    // probe.
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.count_null_rows(schema, table, column).await
+}
+
+/// Sprint 237 — count rows where the named column is `NULL`. The
+/// `ColumnsEditor` MODIFY editor debounces a call to this command 500 ms
+/// after the user toggles SET NOT NULL on a column that is currently
+/// nullable. A non-zero result surfaces an inline warning ("`N` rows
+/// have NULL — adding NOT NULL will fail"); zero rows or a probe error
+/// is silently ignored — the warning is advisory and never blocks
+/// preview / commit.
+///
+/// Identifiers go through the shared `validate_identifier` helper
+/// (NAMEDATALEN-63 + `[a-zA-Z_][a-zA-Z0-9_]*`). The expression cannot
+/// use parameter binding — PG only binds values, not identifiers — so
+/// the validator + ANSI-quoting (`quote_identifier`) is the SQL-
+/// injection floor.
+///
+/// Sprint 271c — `expected_database` opt-in DbMismatch guard runs under
+/// the same `active_connections.lock()` acquisition that dispatches the
+/// trait method.
+#[tauri::command]
+pub async fn count_null_rows(
+    state: State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    table: String,
+    column: String,
+    expected_database: Option<String>,
+) -> Result<i64, AppError> {
+    count_null_rows_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        &table,
+        &column,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1257,6 +1327,93 @@ mod tests {
         match cancel_query_inner(&state, "q-1").await {
             Err(AppError::NotFound(_)) => (),
             other => panic!("두번째 호출은 NotFound 여야 함: {:?}", other),
+        }
+    }
+
+    // ── Sprint 237 — count_null_rows dispatch + identifier guard ─────────
+    //
+    // 작성 이유 (2026-05-13): ColumnsEditor 가 SET NOT NULL 토글 시 호출하는
+    // 새 Tauri command 의 contract 를 고정한다. 5 cases:
+    //   (1..3) identifier validation (schema / table / column 각각 invalid →
+    //          Validation, 연결 lookup 도 안 감).
+    //   (4)    happy-path interpolation — sql 문자열에 "schema"."table"
+    //          WHERE "column" IS NULL 가 들어가는지 stub override 로 단언.
+    //   (5)    Sprint 271c mismatch panic-closure — adapter 가 dbA 인데
+    //          caller 가 dbB 를 요청하면 trait 의 count_null_rows 가
+    //          panic 으로 surface 되지 않고 (= 호출 안 됨) DbMismatch 가
+    //          return 되어야.
+
+    #[tokio::test]
+    async fn count_null_rows_rejects_invalid_schema_identifier() {
+        let state = AppState::new();
+        match count_null_rows_inner(&state, "absent", "bad schema!", "users", "email", None).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Schema name"), "label 누락: {msg}");
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn count_null_rows_rejects_invalid_table_identifier() {
+        // table 에 `;` 가 섞이면 identifier rule (alnum+underscore) 위반.
+        let state = AppState::new();
+        match count_null_rows_inner(&state, "absent", "public", "users; DROP", "email", None).await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Table name"), "label 누락: {msg}");
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn count_null_rows_rejects_invalid_column_identifier() {
+        // 컬럼명에 `"` (quote) — 식별자에 허용되지 않는 문자 → Validation.
+        let state = AppState::new();
+        match count_null_rows_inner(&state, "absent", "public", "users", "em\"ail", None).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Column name"), "label 누락: {msg}");
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn count_null_rows_happy_path_dispatches_with_args_propagated() {
+        // adapter trait 에 (ns, table, column) 가 그대로 전달되는지 검증.
+        // count 값 자체는 stub 이 결정 — 7 을 반환하면 그대로 i64 surface.
+        let mut s = StubRdbAdapter::default();
+        s.count_null_rows_fn = Some(Box::new(|ns: &str, tbl: &str, col: &str| {
+            assert_eq!(ns, "public");
+            assert_eq!(tbl, "users");
+            assert_eq!(col, "email");
+            Ok(7)
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let count = count_null_rows_inner(&state, "c", "public", "users", "email", None)
+            .await
+            .unwrap();
+        assert_eq!(count, 7);
+    }
+
+    #[tokio::test]
+    async fn count_null_rows_expected_db_mismatch_returns_dbmismatch_without_dispatch() {
+        // Sprint 271c — caller passes dbB while adapter is at dbA. The
+        // trait `count_null_rows` MUST NOT be invoked; stub panics if
+        // it is.
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s.count_null_rows_fn = Some(Box::new(|_, _, _| {
+            panic!("count_null_rows must not run on db mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match count_null_rows_inner(&state, "c", "public", "users", "email", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
         }
     }
 }

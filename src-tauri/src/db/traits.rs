@@ -343,6 +343,35 @@ pub trait RdbAdapter: DbAdapter {
         req: &'a DropConstraintRequest,
     ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>>;
 
+    /// Sprint 237 — count rows where `column` is `NULL` on
+    /// `"<namespace>"."<table>"`. Used by `ColumnsEditor` MODIFY editor
+    /// to surface a pre-execution warning when the user toggles a
+    /// nullable column to NOT NULL: a non-zero count predicts the
+    /// commit will fail at the database. The probe is advisory — the
+    /// preview / commit path is NOT blocked.
+    ///
+    /// Identifiers are caller-validated (`validate_identifier` reused
+    /// from the DDL family). The PG override interpolates the validated
+    /// identifiers verbatim with `quote_identifier` (ANSI quotes); no
+    /// parameter binding because PG does not bind identifiers.
+    ///
+    /// Default impl returns `AppError::Unsupported` so MySQL / SQLite
+    /// continue to compile until their dialect implementation lands.
+    /// Non-RDB adapters reach this only via `as_rdb()?`, which already
+    /// fails with `Unsupported(relational)` for the Document paradigm.
+    fn count_null_rows<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _column: &'a str,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support NULL row counting".into(),
+            ))
+        })
+    }
+
     /// Sprint 180 (AC-180-04): cancel-token cooperation as above.
     fn get_table_indexes<'a>(
         &'a self,

@@ -1,7 +1,7 @@
 ---
 title: Lessons 인덱스
 type: index
-updated: 2026-05-10
+updated: 2026-05-13
 ---
 
 # Lessons 인덱스
@@ -50,6 +50,10 @@ updated: 2026-05-10
 - [2026-04-27 · 피드백은 스펙 합의 → TDD 순서로 처리한다](workflow/2026-04-27-feedback-spec-first-tdd/memory.md)
 - [2026-04-27 · Phase 종료 시 skip된 테스트는 0건 / 메모리 등록 / skip 메시지 컨텍스트 셋 중 하나여야 한다](workflow/2026-04-27-phase-end-skip-accountability-gate/memory.md)
 - [2026-05-06 · architectural shift (Rust=server) 의 vitest mockability 트레이드오프 — 검증 surface 비교를 sprint planning 의 invariant 섹션에 명시](workflow/2026-05-06-architectural-shift-vitest-mockability-tradeoff/memory.md)
+
+## parity-milestone — phase 종료 회고 (one-off; Phase 27 closure 전용)
+
+- [2026-05-13 · TablePlus 패리티 7단계 (Phase 21–27) 종료 회고 — Sprint 226→237 cycle 의 결정 / 패턴 / 닫힌 surface / 미달 항목](parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md)
 
 ## 형식
 

@@ -105,6 +105,15 @@ pub enum ColumnChange {
         new_data_type: Option<String>,
         new_nullable: Option<bool>,
         new_default_value: Option<String>,
+        /// Sprint 237 — optional USING cast expression for
+        /// `ALTER COLUMN … TYPE … USING …`. Only emitted when both
+        /// `new_data_type` and `using_expression` are `Some(...)`. Free-
+        /// text passthrough (PG surfaces parse errors verbatim).
+        /// `#[serde(default)]` keeps pre-Sprint-237 callers byte-equivalent
+        /// — payloads that omit the field deserialize to `None` and the
+        /// emitted SQL is unchanged.
+        #[serde(default)]
+        using_expression: Option<String>,
     },
     Drop {
         name: String,
@@ -849,6 +858,7 @@ mod tests {
             new_data_type: Some("bigint".to_string()),
             new_nullable: Some(true),
             new_default_value: Some("0".to_string()),
+            using_expression: None,
         };
         let json = serde_json::to_string(&change).unwrap();
         let deserialized: ColumnChange = serde_json::from_str(&json).unwrap();
@@ -858,11 +868,63 @@ mod tests {
                 new_data_type,
                 new_nullable,
                 new_default_value,
+                using_expression,
             } => {
                 assert_eq!(name, "age");
                 assert_eq!(new_data_type, Some("bigint".to_string()));
                 assert_eq!(new_nullable, Some(true));
                 assert_eq!(new_default_value, Some("0".to_string()));
+                assert_eq!(using_expression, None);
+            }
+            _ => panic!("Expected ColumnChange::Modify"),
+        }
+    }
+
+    /// Sprint 237 — round-trip with `using_expression = Some(...)` to
+    /// pin the new field through serde, plus a back-compat probe where
+    /// the JSON payload omits `using_expression` entirely → deserialises
+    /// to `None` via `#[serde(default)]` (pre-Sprint-237 caller
+    /// byte-equivalence invariant).
+    #[test]
+    fn column_change_modify_using_expression_serde_roundtrip() {
+        let change = ColumnChange::Modify {
+            name: "age".to_string(),
+            new_data_type: Some("int".to_string()),
+            new_nullable: None,
+            new_default_value: None,
+            using_expression: Some("age::int".to_string()),
+        };
+        let json = serde_json::to_string(&change).unwrap();
+        assert!(
+            json.contains("\"using_expression\":\"age::int\""),
+            "expected using_expression in wire form, got: {json}"
+        );
+        let deserialized: ColumnChange = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            ColumnChange::Modify {
+                using_expression, ..
+            } => {
+                assert_eq!(using_expression, Some("age::int".to_string()));
+            }
+            _ => panic!("Expected ColumnChange::Modify"),
+        }
+
+        // Back-compat — payload that omits `using_expression` (pre-
+        // Sprint-237 caller) deserialises to `None` via
+        // `#[serde(default)]`.
+        let legacy = r#"{
+            "type":"modify",
+            "name":"age",
+            "new_data_type":"bigint",
+            "new_nullable":null,
+            "new_default_value":null
+        }"#;
+        let parsed: ColumnChange = serde_json::from_str(legacy).unwrap();
+        match parsed {
+            ColumnChange::Modify {
+                using_expression, ..
+            } => {
+                assert!(using_expression.is_none());
             }
             _ => panic!("Expected ColumnChange::Modify"),
         }

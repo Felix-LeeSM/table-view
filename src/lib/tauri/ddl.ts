@@ -247,3 +247,37 @@ export async function dropTrigger(
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("drop_trigger", { request });
 }
+
+/**
+ * Sprint 237 — count rows where `<column>` is `NULL` on
+ * `"<schema>"."<table>"`. Backs the pre-execution warning that the
+ * MODIFY editor surfaces when the user toggles a nullable column to
+ * NOT NULL — a non-zero result means the eventual `ALTER COLUMN …
+ * SET NOT NULL` will fail at the database. The probe is advisory
+ * (never blocks preview / commit).
+ *
+ * Backend validates `schema` / `table` / `column` identifiers via the
+ * shared `validate_identifier` helper (NAMEDATALEN-63 +
+ * `[a-zA-Z_][a-zA-Z0-9_]*`) and runs the SQL through the active PG
+ * pool. Non-PG RDB adapters surface `AppError::Unsupported` via the
+ * trait default — the frontend swallows probe errors silently so this
+ * is invisible to the user.
+ *
+ * Sprint 271c — optional `expectedDatabase` opt-in DbMismatch guard.
+ * Omitting the parameter is byte-equivalent to no probe.
+ */
+export async function countNullRows(
+  connectionId: string,
+  schema: string,
+  table: string,
+  column: string,
+  expectedDatabase?: string,
+): Promise<number> {
+  return invoke<number>("count_null_rows", {
+    connectionId,
+    schema,
+    table,
+    column,
+    expectedDatabase,
+  });
+}

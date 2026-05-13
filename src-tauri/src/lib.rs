@@ -145,6 +145,7 @@ pub fn run() {
         commands::rdb::schema::get_table_columns,
         commands::rdb::schema::list_schema_columns,
         commands::rdb::query::query_table_data,
+        commands::rdb::query::count_null_rows,
         commands::rdb::schema::get_table_indexes,
         commands::rdb::schema::get_table_constraints,
         commands::rdb::ddl::drop_table,

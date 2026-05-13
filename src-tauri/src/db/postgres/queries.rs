@@ -17,7 +17,7 @@ use crate::models::{
     ColumnInfo, FilterCondition, FilterOperator, QueryColumn, QueryResult, QueryType, TableData,
 };
 
-use super::mutations::qualified_table;
+use super::mutations::{qualified_table, quote_identifier, validate_identifier};
 use super::PostgresAdapter;
 
 /// Sprint 232 — build a deterministic fallback `ORDER BY` clause from
@@ -874,6 +874,40 @@ impl PostgresAdapter {
             .await
             .map_err(|e| AppError::Database(format!("COMMIT failed: {e}")))?;
         Ok(total)
+    }
+
+    /// Sprint 237 — count rows where `column` is `NULL` on
+    /// `"<schema>"."<table>"`. Backs the `count_null_rows` Tauri command
+    /// used by `ColumnsEditor` to surface a pre-execution warning before
+    /// the user toggles SET NOT NULL on a nullable column. Identifiers
+    /// flow through `validate_identifier` to defang SQL injection, then
+    /// are ANSI-quoted (PG does not bind identifiers; parameter
+    /// placeholders only work for values). The SQL string shape is
+    /// `SELECT COUNT(*) FROM "<schema>"."<table>" WHERE "<column>" IS
+    /// NULL` — pinned by the unit tests in `commands/rdb/query.rs`.
+    pub async fn count_null_rows(
+        &self,
+        schema: &str,
+        table: &str,
+        column: &str,
+    ) -> Result<i64, AppError> {
+        validate_identifier(schema, "Schema name")?;
+        validate_identifier(table, "Table name")?;
+        validate_identifier(column, "Column name")?;
+
+        let qualified = qualified_table(schema, table);
+        let quoted_column = quote_identifier(column);
+        let sql = format!(
+            "SELECT COUNT(*) FROM {} WHERE {} IS NULL",
+            qualified, quoted_column
+        );
+
+        let pool = self.active_pool().await?;
+        let (count,): (i64,) = sqlx::query_as(&sql)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        Ok(count)
     }
 }
 

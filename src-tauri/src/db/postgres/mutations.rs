@@ -30,7 +30,13 @@ const PG_IDENTIFIER_MAX_BYTES: usize = 63;
 ///
 /// Embedded NULL bytes (`\0`), embedded `"`, and embedded whitespace are
 /// implicitly rejected by the alphanumeric-or-underscore body rule.
-fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
+///
+/// Sprint 237 — visibility hoisted to `pub(crate)` so the
+/// `count_null_rows` command (which builds raw `SELECT COUNT(*) … WHERE
+/// "<col>" IS NULL` SQL with interpolated identifiers) can reuse the
+/// same validator as the rest of the DDL family. The body and rules are
+/// unchanged.
+pub(crate) fn validate_identifier(name: &str, label: &str) -> Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(AppError::Validation(format!("{} must not be empty", label)));
@@ -795,7 +801,24 @@ impl PostgresAdapter {
         for change in &req.changes {
             match change {
                 ColumnChange::Add { name, .. } => validate_identifier(name, "Column name")?,
-                ColumnChange::Modify { name, .. } => validate_identifier(name, "Column name")?,
+                ColumnChange::Modify {
+                    name,
+                    new_data_type,
+                    using_expression,
+                    ..
+                } => {
+                    validate_identifier(name, "Column name")?;
+                    // Sprint 237 — defensive: USING without a type change
+                    // is semantically meaningless (PG ties `USING <expr>`
+                    // to the TYPE clause). Reject up front so the user
+                    // sees a deterministic message instead of silently
+                    // dropping the expression.
+                    if new_data_type.is_none() && using_expression.is_some() {
+                        return Err(AppError::Validation(
+                            "USING expression requires a new data type".into(),
+                        ));
+                    }
+                }
                 ColumnChange::Drop { name } => validate_identifier(name, "Column name")?,
             }
         }
@@ -826,10 +849,22 @@ impl PostgresAdapter {
                     new_data_type,
                     new_nullable,
                     new_default_value,
+                    using_expression,
                 } => {
                     let quoted_name = quote_identifier(name);
                     if let Some(dt) = new_data_type {
-                        parts.push(format!("ALTER COLUMN {} TYPE {}", quoted_name, dt));
+                        // Sprint 237 — append USING <expr> to the TYPE
+                        // clause when the caller supplied an explicit
+                        // cast expression. `using_expression = None`
+                        // emits the pre-Sprint-237 SQL byte-for-byte
+                        // (regression guard test pins this).
+                        match using_expression {
+                            Some(expr) => parts.push(format!(
+                                "ALTER COLUMN {} TYPE {} USING {}",
+                                quoted_name, dt, expr
+                            )),
+                            None => parts.push(format!("ALTER COLUMN {} TYPE {}", quoted_name, dt)),
+                        }
                     }
                     if let Some(nullable) = new_nullable {
                         if *nullable {
@@ -2007,6 +2042,7 @@ mod tests {
                 new_data_type: Some("bigint".to_string()),
                 new_nullable: Some(false),
                 new_default_value: Some("0".to_string()),
+                using_expression: None,
             }],
             preview_only: true,
             expected_database: None,
@@ -2150,6 +2186,127 @@ mod tests {
         let result = adapter.alter_table(&req).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Not connected"));
+    }
+
+    // ── Sprint 237 — USING cast expression fixtures ──────────────────
+    //
+    // 작성 이유 (2026-05-13): Phase 27 closure 의 `ALTER COLUMN … TYPE …
+    // USING …` SQL 갈래를 emitter level 에서 고정한다. 3 fixture:
+    //   (1) type-only Modify, `using_expression = None` → pre-Sprint-237
+    //       byte-equivalent (regression guard).
+    //   (2) type + USING → `ALTER COLUMN "col" TYPE int USING col::int`.
+    //   (3) composite (type + USING + nullable + default) → comma-joined
+    //       parts, USING only on TYPE clause; nullability / default parts
+    //       unchanged (invariant: `alter_table` stays one SQL stmt).
+    // 별도 케이스 1 건: `using_expression` 만 있고 `new_data_type` 가 없는
+    // 잘못된 입력은 Validation 으로 reject (defensive — Generator 결정).
+
+    #[tokio::test]
+    async fn alter_table_preview_modify_type_only_without_using_is_byte_equivalent() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "age".to_string(),
+                new_data_type: Some("bigint".to_string()),
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: None,
+            }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let result = adapter.alter_table(&req).await.unwrap();
+        // pre-Sprint-237 byte-equivalent: no `USING` clause appended.
+        assert_eq!(
+            result.sql,
+            "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"age\" TYPE bigint"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_preview_modify_type_with_using_emits_using_clause() {
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "col".to_string(),
+                new_data_type: Some("int".to_string()),
+                new_nullable: None,
+                new_default_value: None,
+                using_expression: Some("col::int".to_string()),
+            }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let result = adapter.alter_table(&req).await.unwrap();
+        assert_eq!(
+            result.sql,
+            "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"col\" TYPE int USING col::int"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_preview_modify_composite_using_only_on_type_clause() {
+        // 복합: type + USING + nullable + default 가 모두 함께 와도
+        // USING 은 TYPE 절에만 attach. nullability / default 는 별도
+        // 콤마 part 로 byte-equivalent 하게 emit.
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "score".to_string(),
+                new_data_type: Some("numeric(10,2)".to_string()),
+                new_nullable: Some(false),
+                new_default_value: Some("0.0".to_string()),
+                using_expression: Some("score::numeric(10,2)".to_string()),
+            }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let result = adapter.alter_table(&req).await.unwrap();
+        assert_eq!(
+            result.sql,
+            "ALTER TABLE \"public\".\"users\" ALTER COLUMN \"score\" TYPE numeric(10,2) USING score::numeric(10,2), ALTER COLUMN \"score\" SET NOT NULL, ALTER COLUMN \"score\" SET DEFAULT 0.0"
+        );
+    }
+
+    #[tokio::test]
+    async fn alter_table_using_without_type_change_is_rejected() {
+        // `using_expression` 만 있고 `new_data_type` 가 None 이면
+        // emit 단계에서 정적으로 reject (defensive validation; PG 의
+        // USING 절은 TYPE 절에만 의미를 갖는다).
+        let adapter = PostgresAdapter::new();
+        let req = AlterTableRequest {
+            connection_id: "conn1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            changes: vec![ColumnChange::Modify {
+                name: "col".to_string(),
+                new_data_type: None,
+                new_nullable: Some(true),
+                new_default_value: None,
+                using_expression: Some("col::int".to_string()),
+            }],
+            preview_only: true,
+            expected_database: None,
+        };
+        let result = adapter.alter_table(&req).await;
+        match result {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("USING expression requires a new data type"),
+                    "Expected USING-without-type rejection message, got: {msg}"
+                );
+            }
+            other => panic!("Expected Validation error, got: {:?}", other),
+        }
     }
 
     // ── create_index tests ────────────────────────────────────────────

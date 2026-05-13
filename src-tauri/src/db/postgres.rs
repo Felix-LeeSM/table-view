@@ -41,6 +41,13 @@ mod queries;
 mod schema;
 
 pub use connection::PostgresAdapter;
+// Sprint 237 — `validate_identifier` is the shared SQL-identifier guard
+// (NAMEDATALEN-63 byte limit + `[a-zA-Z_][a-zA-Z0-9_]*`). The
+// `count_null_rows` Tauri command in `commands/rdb/query.rs` reuses
+// the same body to defang injection on its raw-SQL interpolation path.
+// Hoisting the re-export here keeps `mutations` itself private while
+// letting cross-module callers share one validator.
+pub(crate) use mutations::validate_identifier;
 
 use std::future::Future;
 use std::pin::Pin;
@@ -342,6 +349,19 @@ impl RdbAdapter for PostgresAdapter {
             self.stream_table_rows(namespace, table, batch_size, column_names, sender, cancel)
                 .await
         })
+    }
+
+    /// Sprint 237 — delegate to the inherent `count_null_rows` so the
+    /// command handler can dispatch through the trait. Identifiers are
+    /// validated inside the inherent method; the trait surface stays
+    /// dialect-agnostic.
+    fn count_null_rows<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        column: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<i64, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.count_null_rows(namespace, table, column).await })
     }
 
     fn list_views<'a>(
