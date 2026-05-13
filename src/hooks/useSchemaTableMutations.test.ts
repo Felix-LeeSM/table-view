@@ -149,7 +149,9 @@ describe("useSchemaTableMutations", () => {
     });
 
     expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
-    expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public");
+    // Sprint 271a (2026-05-13) — `database` forwarded as expectedDatabase
+    // so a swapped pool fails closed before populating wrong-db cache.
+    expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public", "db1");
     expect(getTables("conn1", "db1", "public")).toHaveLength(1);
     expect(getTables("conn1", "db1", "public")[0]!.name).toBe("orders");
   });
@@ -212,7 +214,8 @@ describe("useSchemaTableMutations", () => {
       "public",
       "people",
     );
-    expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public");
+    // Sprint 271a (2026-05-13) — `database` forwarded as expectedDatabase.
+    expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public", "db1");
     expect(getTables("conn1", "db1", "public")[0]!.name).toBe("people");
   });
 

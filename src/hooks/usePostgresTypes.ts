@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import * as tauri from "@lib/tauri";
 import { POSTGRES_COMMON_TYPES } from "@/lib/sql/postgresTypes";
+import { resolveActiveDb } from "@stores/workspaceStore";
 import type { PostgresTypeInfo } from "@/types/schema";
 
 /**
@@ -195,7 +196,10 @@ function fetchTypes(connectionId: string): Promise<void> {
 
   const promise = (async () => {
     try {
-      const live = await tauri.listPostgresTypes(connectionId);
+      // Sprint 271a — forward (connId, db) so a swapped backend pool rejects
+      // with DbMismatch instead of returning a stale db's type list.
+      const expectedDb = resolveActiveDb(connectionId) || undefined;
+      const live = await tauri.listPostgresTypes(connectionId, expectedDb);
       entry.raw = live;
       entry.types = mergeTypes(live);
       entry.typesByName = mergeTypesByName(live);

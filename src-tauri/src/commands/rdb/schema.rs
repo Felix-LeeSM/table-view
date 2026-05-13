@@ -8,6 +8,15 @@
 //! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into `_inner(&AppState)`
 //! so unit tests can drive them without a `tauri::State` mock. Public
 //! `#[tauri::command]` wrappers delegate via `state.inner()`.
+//!
+//! Sprint 271a (2026-05-13) — each handler gains an opt-in
+//! `expected_database: Option<String>` last-positional parameter. When the
+//! caller passes `Some(expected)`, the probe samples
+//! `adapter.current_database().await?.unwrap_or_default()` *inside* the same
+//! `active_connections.lock()` acquisition that wraps the dispatch, and
+//! returns `AppError::DbMismatch` BEFORE invoking the trait method. The
+//! `None` path is byte-equivalent to pre-Sprint-271. Mirrors the Sprint 266
+//! reference probe at `src-tauri/src/commands/rdb/query.rs:83–92`.
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
@@ -15,15 +24,40 @@ use crate::models::{ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, Tabl
 
 use super::{not_connected, register_cancel_token, release_cancel_token};
 
+/// Sprint 271a — shared mismatch probe. Caller must hold the
+/// `active_connections` lock already (so the sample and the eventual trait
+/// invocation see the same backend pool). Returns `Ok(())` when the guard
+/// is satisfied (or opted out via `None`), otherwise
+/// `AppError::DbMismatch { expected, actual }` — same shape as Sprint 266
+/// `execute_query_inner`.
+async fn ensure_expected_db(
+    adapter: &dyn crate::db::RdbAdapter,
+    expected_database: Option<&str>,
+) -> Result<(), AppError> {
+    if let Some(expected) = expected_database {
+        let actual = adapter.current_database().await?.unwrap_or_default();
+        if actual != expected {
+            return Err(AppError::DbMismatch {
+                expected: expected.to_string(),
+                actual,
+            });
+        }
+    }
+    Ok(())
+}
+
 async fn list_schemas_inner(
     state: &AppState,
     connection_id: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<SchemaInfo>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    let namespaces = active.as_rdb()?.list_namespaces().await?;
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    let namespaces = adapter.list_namespaces().await?;
     // NamespaceInfo and SchemaInfo share the same `{ name }` wire shape, so
     // mapping here preserves the payload exactly.
     Ok(namespaces
@@ -36,20 +70,25 @@ async fn list_schemas_inner(
 pub async fn list_schemas(
     state: tauri::State<'_, AppState>,
     connection_id: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<SchemaInfo>, AppError> {
-    list_schemas_inner(state.inner(), &connection_id).await
+    list_schemas_inner(state.inner(), &connection_id, expected_database.as_deref()).await
 }
 
 async fn list_tables_inner(
     state: &AppState,
     connection_id: &str,
     schema: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<TableInfo>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.list_tables(schema).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.list_tables(schema).await
 }
 
 #[tauri::command]
@@ -57,8 +96,16 @@ pub async fn list_tables(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     schema: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<TableInfo>, AppError> {
-    list_tables_inner(state.inner(), &connection_id, &schema).await
+    list_tables_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn get_table_columns_inner(
@@ -67,6 +114,7 @@ async fn get_table_columns_inner(
     table: &str,
     schema: &str,
     query_id: Option<&str>,
+    expected_database: Option<&str>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
 
@@ -75,10 +123,15 @@ async fn get_table_columns_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
-            .get_columns(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
-            .await
+        let adapter = active.as_rdb()?;
+        match ensure_expected_db(adapter, expected_database).await {
+            Ok(()) => {
+                adapter
+                    .get_columns(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
+                    .await
+            }
+            Err(e) => Err(e),
+        }
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -94,6 +147,8 @@ pub async fn get_table_columns(
     // Sprint 180 (AC-180-04): optional cancel-token id. Frontend can
     // pass a unique id and call `cancel_query(query_id)` to abort.
     query_id: Option<String>,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
     get_table_columns_inner(
         state.inner(),
@@ -101,6 +156,7 @@ pub async fn get_table_columns(
         &table,
         &schema,
         query_id.as_deref(),
+        expected_database.as_deref(),
     )
     .await
 }
@@ -109,12 +165,15 @@ async fn list_schema_columns_inner(
     state: &AppState,
     connection_id: &str,
     schema: &str,
+    expected_database: Option<&str>,
 ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.list_schema_columns(schema).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.list_schema_columns(schema).await
 }
 
 #[tauri::command]
@@ -122,8 +181,16 @@ pub async fn list_schema_columns(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     schema: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<std::collections::HashMap<String, Vec<ColumnInfo>>, AppError> {
-    list_schema_columns_inner(state.inner(), &connection_id, &schema).await
+    list_schema_columns_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn get_table_indexes_inner(
@@ -132,6 +199,7 @@ async fn get_table_indexes_inner(
     table: &str,
     schema: &str,
     query_id: Option<&str>,
+    expected_database: Option<&str>,
 ) -> Result<Vec<crate::models::IndexInfo>, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
 
@@ -140,10 +208,15 @@ async fn get_table_indexes_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
-            .get_table_indexes(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
-            .await
+        let adapter = active.as_rdb()?;
+        match ensure_expected_db(adapter, expected_database).await {
+            Ok(()) => {
+                adapter
+                    .get_table_indexes(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
+                    .await
+            }
+            Err(e) => Err(e),
+        }
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -158,6 +231,8 @@ pub async fn get_table_indexes(
     schema: String,
     // Sprint 180 (AC-180-04): optional cancel-token id (see get_table_columns).
     query_id: Option<String>,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<crate::models::IndexInfo>, AppError> {
     get_table_indexes_inner(
         state.inner(),
@@ -165,6 +240,7 @@ pub async fn get_table_indexes(
         &table,
         &schema,
         query_id.as_deref(),
+        expected_database.as_deref(),
     )
     .await
 }
@@ -175,6 +251,7 @@ async fn get_table_constraints_inner(
     table: &str,
     schema: &str,
     query_id: Option<&str>,
+    expected_database: Option<&str>,
 ) -> Result<Vec<crate::models::ConstraintInfo>, AppError> {
     let cancel_handle = register_cancel_token(state, query_id).await;
 
@@ -183,10 +260,19 @@ async fn get_table_constraints_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
-            .get_table_constraints(schema, table, cancel_handle.as_ref().map(|(_, tok)| tok))
-            .await
+        let adapter = active.as_rdb()?;
+        match ensure_expected_db(adapter, expected_database).await {
+            Ok(()) => {
+                adapter
+                    .get_table_constraints(
+                        schema,
+                        table,
+                        cancel_handle.as_ref().map(|(_, tok)| tok),
+                    )
+                    .await
+            }
+            Err(e) => Err(e),
+        }
     };
 
     release_cancel_token(state, &cancel_handle).await;
@@ -201,6 +287,8 @@ pub async fn get_table_constraints(
     schema: String,
     // Sprint 180 (AC-180-04): optional cancel-token id (see get_table_columns).
     query_id: Option<String>,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<crate::models::ConstraintInfo>, AppError> {
     get_table_constraints_inner(
         state.inner(),
@@ -208,6 +296,7 @@ pub async fn get_table_constraints(
         &table,
         &schema,
         query_id.as_deref(),
+        expected_database.as_deref(),
     )
     .await
 }
@@ -216,12 +305,15 @@ async fn list_views_inner(
     state: &AppState,
     connection_id: &str,
     schema: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<ViewInfo>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.list_views(schema).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.list_views(schema).await
 }
 
 #[tauri::command]
@@ -229,20 +321,31 @@ pub async fn list_views(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     schema: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<ViewInfo>, AppError> {
-    list_views_inner(state.inner(), &connection_id, &schema).await
+    list_views_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn list_functions_inner(
     state: &AppState,
     connection_id: &str,
     schema: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<FunctionInfo>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.list_functions(schema).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.list_functions(schema).await
 }
 
 #[tauri::command]
@@ -250,8 +353,16 @@ pub async fn list_functions(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     schema: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<FunctionInfo>, AppError> {
-    list_functions_inner(state.inner(), &connection_id, &schema).await
+    list_functions_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn get_view_definition_inner(
@@ -259,15 +370,15 @@ async fn get_view_definition_inner(
     connection_id: &str,
     schema: &str,
     view_name: &str,
+    expected_database: Option<&str>,
 ) -> Result<String, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_rdb()?
-        .get_view_definition(schema, view_name)
-        .await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.get_view_definition(schema, view_name).await
 }
 
 #[tauri::command]
@@ -276,8 +387,17 @@ pub async fn get_view_definition(
     connection_id: String,
     schema: String,
     view_name: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<String, AppError> {
-    get_view_definition_inner(state.inner(), &connection_id, &schema, &view_name).await
+    get_view_definition_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        &view_name,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn get_view_columns_inner(
@@ -285,12 +405,15 @@ async fn get_view_columns_inner(
     connection_id: &str,
     schema: &str,
     view_name: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.get_view_columns(schema, view_name).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.get_view_columns(schema, view_name).await
 }
 
 #[tauri::command]
@@ -299,8 +422,17 @@ pub async fn get_view_columns(
     connection_id: String,
     schema: String,
     view_name: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<ColumnInfo>, AppError> {
-    get_view_columns_inner(state.inner(), &connection_id, &schema, &view_name).await
+    get_view_columns_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        &view_name,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn get_function_source_inner(
@@ -308,15 +440,15 @@ async fn get_function_source_inner(
     connection_id: &str,
     schema: &str,
     function_name: &str,
+    expected_database: Option<&str>,
 ) -> Result<String, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active
-        .as_rdb()?
-        .get_function_source(schema, function_name)
-        .await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.get_function_source(schema, function_name).await
 }
 
 #[tauri::command]
@@ -325,19 +457,31 @@ pub async fn get_function_source(
     connection_id: String,
     schema: String,
     function_name: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<String, AppError> {
-    get_function_source_inner(state.inner(), &connection_id, &schema, &function_name).await
+    get_function_source_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        &function_name,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn list_postgres_types_inner(
     state: &AppState,
     connection_id: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<PostgresTypeInfo>, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
-    active.as_rdb()?.list_types().await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.list_types().await
 }
 
 /// Sprint 230 — list every Postgres-style data type visible to the
@@ -349,12 +493,16 @@ async fn list_postgres_types_inner(
 /// (Mongo) and non-PG RDB adapters (MySQL/SQLite/Oracle, Phase 17+)
 /// fail cleanly via `as_rdb()?` + the trait's default
 /// `Unsupported` impl.
+///
+/// Sprint 271a — opt-in db-mismatch guard via `expected_database`.
 #[tauri::command]
 pub async fn list_postgres_types(
     state: tauri::State<'_, AppState>,
     connection_id: String,
+    // Sprint 271a — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
 ) -> Result<Vec<PostgresTypeInfo>, AppError> {
-    list_postgres_types_inner(state.inner(), &connection_id).await
+    list_postgres_types_inner(state.inner(), &connection_id, expected_database.as_deref()).await
 }
 
 #[cfg(test)]
@@ -387,7 +535,7 @@ mod tests {
     #[tokio::test]
     async fn list_schemas_unknown_connection_returns_notfound() {
         let state = AppState::new();
-        match list_schemas_inner(&state, "absent").await {
+        match list_schemas_inner(&state, "absent", None).await {
             Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
             other => panic!("Expected NotFound, got: {:?}", other),
         }
@@ -396,7 +544,7 @@ mod tests {
     #[tokio::test]
     async fn list_schemas_document_paradigm_returns_unsupported_relational() {
         let state = state_with("doc-1", document_default()).await;
-        match list_schemas_inner(&state, "doc-1").await {
+        match list_schemas_inner(&state, "doc-1", None).await {
             Err(AppError::Unsupported(msg)) => {
                 assert!(msg.contains("relational"), "kw 'relational' 누락: {msg}")
             }
@@ -416,7 +564,7 @@ mod tests {
             ])
         }));
         let state = state_with("rdb-1", ActiveAdapter::Rdb(Box::new(s))).await;
-        let result = list_schemas_inner(&state, "rdb-1").await.unwrap();
+        let result = list_schemas_inner(&state, "rdb-1", None).await.unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].name, "public");
         assert_eq!(result[1].name, "app");
@@ -429,7 +577,7 @@ mod tests {
         let cloned = clone_app_error(&err);
         s.list_namespaces_fn = Some(Box::new(move || Err(clone_app_error(&cloned))));
         let state = state_with("rdb-1", ActiveAdapter::Rdb(Box::new(s))).await;
-        match list_schemas_inner(&state, "rdb-1").await {
+        match list_schemas_inner(&state, "rdb-1", None).await {
             Err(AppError::Database(msg)) => {
                 assert_eq!(msg, "permission denied for catalog")
             }
@@ -440,7 +588,7 @@ mod tests {
     #[tokio::test]
     async fn list_schemas_rdb_ok_empty_list_propagates_as_empty() {
         let state = state_with("rdb-1", rdb_default()).await;
-        let result = list_schemas_inner(&state, "rdb-1").await.unwrap();
+        let result = list_schemas_inner(&state, "rdb-1", None).await.unwrap();
         assert!(result.is_empty());
     }
 
@@ -450,7 +598,7 @@ mod tests {
     async fn list_tables_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            list_tables_inner(&state, "absent", "public").await,
+            list_tables_inner(&state, "absent", "public", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -458,7 +606,7 @@ mod tests {
     async fn get_table_columns_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            get_table_columns_inner(&state, "absent", "users", "public", None).await,
+            get_table_columns_inner(&state, "absent", "users", "public", None, None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -466,7 +614,7 @@ mod tests {
     async fn list_schema_columns_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            list_schema_columns_inner(&state, "absent", "public").await,
+            list_schema_columns_inner(&state, "absent", "public", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -474,7 +622,7 @@ mod tests {
     async fn get_table_indexes_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            get_table_indexes_inner(&state, "absent", "users", "public", None).await,
+            get_table_indexes_inner(&state, "absent", "users", "public", None, None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -482,7 +630,7 @@ mod tests {
     async fn get_table_constraints_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            get_table_constraints_inner(&state, "absent", "users", "public", None).await,
+            get_table_constraints_inner(&state, "absent", "users", "public", None, None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -490,7 +638,7 @@ mod tests {
     async fn list_views_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            list_views_inner(&state, "absent", "public").await,
+            list_views_inner(&state, "absent", "public", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -498,7 +646,7 @@ mod tests {
     async fn list_functions_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            list_functions_inner(&state, "absent", "public").await,
+            list_functions_inner(&state, "absent", "public", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -506,7 +654,7 @@ mod tests {
     async fn get_view_definition_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            get_view_definition_inner(&state, "absent", "public", "v").await,
+            get_view_definition_inner(&state, "absent", "public", "v", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -514,7 +662,7 @@ mod tests {
     async fn get_view_columns_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            get_view_columns_inner(&state, "absent", "public", "v").await,
+            get_view_columns_inner(&state, "absent", "public", "v", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -522,7 +670,7 @@ mod tests {
     async fn get_function_source_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            get_function_source_inner(&state, "absent", "public", "f").await,
+            get_function_source_inner(&state, "absent", "public", "f", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -530,7 +678,7 @@ mod tests {
     async fn list_postgres_types_unknown_connection_returns_notfound() {
         let state = AppState::new();
         assert!(matches!(
-            list_postgres_types_inner(&state, "absent").await,
+            list_postgres_types_inner(&state, "absent", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -541,7 +689,7 @@ mod tests {
     async fn list_tables_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            list_tables_inner(&state, "doc", "public").await,
+            list_tables_inner(&state, "doc", "public", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -549,7 +697,7 @@ mod tests {
     async fn get_table_columns_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            get_table_columns_inner(&state, "doc", "users", "public", None).await,
+            get_table_columns_inner(&state, "doc", "users", "public", None, None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -557,7 +705,7 @@ mod tests {
     async fn list_schema_columns_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            list_schema_columns_inner(&state, "doc", "public").await,
+            list_schema_columns_inner(&state, "doc", "public", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -565,7 +713,7 @@ mod tests {
     async fn get_table_indexes_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            get_table_indexes_inner(&state, "doc", "users", "public", None).await,
+            get_table_indexes_inner(&state, "doc", "users", "public", None, None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -573,7 +721,7 @@ mod tests {
     async fn get_table_constraints_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            get_table_constraints_inner(&state, "doc", "users", "public", None).await,
+            get_table_constraints_inner(&state, "doc", "users", "public", None, None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -581,7 +729,7 @@ mod tests {
     async fn list_views_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            list_views_inner(&state, "doc", "public").await,
+            list_views_inner(&state, "doc", "public", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -589,7 +737,7 @@ mod tests {
     async fn list_functions_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            list_functions_inner(&state, "doc", "public").await,
+            list_functions_inner(&state, "doc", "public", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -597,7 +745,7 @@ mod tests {
     async fn get_view_definition_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            get_view_definition_inner(&state, "doc", "public", "v").await,
+            get_view_definition_inner(&state, "doc", "public", "v", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -605,7 +753,7 @@ mod tests {
     async fn get_view_columns_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            get_view_columns_inner(&state, "doc", "public", "v").await,
+            get_view_columns_inner(&state, "doc", "public", "v", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -613,7 +761,7 @@ mod tests {
     async fn get_function_source_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            get_function_source_inner(&state, "doc", "public", "f").await,
+            get_function_source_inner(&state, "doc", "public", "f", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -621,7 +769,7 @@ mod tests {
     async fn list_postgres_types_document_paradigm_returns_unsupported() {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
-            list_postgres_types_inner(&state, "doc").await,
+            list_postgres_types_inner(&state, "doc", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -644,7 +792,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = list_tables_inner(&state, "c", "ns_x").await.unwrap();
+        let r = list_tables_inner(&state, "c", "ns_x", None).await.unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].name, "listed-from-ns_x");
         assert_eq!(r[0].schema, "ns_x");
@@ -668,7 +816,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = get_table_columns_inner(&state, "c", "users", "ns_x", None)
+        let r = get_table_columns_inner(&state, "c", "users", "ns_x", None, None)
             .await
             .unwrap();
         assert_eq!(r.len(), 1);
@@ -684,7 +832,7 @@ mod tests {
             Ok(m)
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = list_schema_columns_inner(&state, "c", "ns_y")
+        let r = list_schema_columns_inner(&state, "c", "ns_y", None)
             .await
             .unwrap();
         assert!(r.contains_key("from-ns_y"));
@@ -703,7 +851,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = get_table_indexes_inner(&state, "c", "tbl_b", "ns_a", None)
+        let r = get_table_indexes_inner(&state, "c", "tbl_b", "ns_a", None, None)
             .await
             .unwrap();
         assert_eq!(r[0].name, "idx@ns_a.tbl_b");
@@ -722,7 +870,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = get_table_constraints_inner(&state, "c", "t", "ns", None)
+        let r = get_table_constraints_inner(&state, "c", "t", "ns", None, None)
             .await
             .unwrap();
         assert_eq!(r[0].name, "c@ns.t");
@@ -739,7 +887,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = list_views_inner(&state, "c", "ns_v").await.unwrap();
+        let r = list_views_inner(&state, "c", "ns_v", None).await.unwrap();
         assert_eq!(r[0].name, "v@ns_v");
     }
 
@@ -758,7 +906,9 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = list_functions_inner(&state, "c", "ns_f").await.unwrap();
+        let r = list_functions_inner(&state, "c", "ns_f", None)
+            .await
+            .unwrap();
         assert_eq!(r[0].name, "f@ns_f");
     }
 
@@ -769,7 +919,7 @@ mod tests {
             Ok(format!("CREATE VIEW {ns}.{view} AS SELECT 1"))
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = get_view_definition_inner(&state, "c", "ns_q", "vw_z")
+        let r = get_view_definition_inner(&state, "c", "ns_q", "vw_z", None)
             .await
             .unwrap();
         assert_eq!(r, "CREATE VIEW ns_q.vw_z AS SELECT 1");
@@ -793,7 +943,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = get_view_columns_inner(&state, "c", "ns", "vw")
+        let r = get_view_columns_inner(&state, "c", "ns", "vw", None)
             .await
             .unwrap();
         assert_eq!(r[0].name, "vc@ns.vw");
@@ -806,7 +956,7 @@ mod tests {
             Ok(format!("CREATE FUNCTION {ns}.{func}() …"))
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = get_function_source_inner(&state, "c", "ns_g", "fn_h")
+        let r = get_function_source_inner(&state, "c", "ns_g", "fn_h", None)
             .await
             .unwrap();
         assert_eq!(r, "CREATE FUNCTION ns_g.fn_h() …");
@@ -823,7 +973,7 @@ mod tests {
             }])
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
-        let r = list_postgres_types_inner(&state, "c").await.unwrap();
+        let r = list_postgres_types_inner(&state, "c", None).await.unwrap();
         assert_eq!(r[0].name, "uuid");
     }
 
@@ -837,7 +987,7 @@ mod tests {
     #[tokio::test]
     async fn get_table_columns_inner_round_trip_releases_token() {
         let state = state_with("c", rdb_default()).await;
-        let _ = get_table_columns_inner(&state, "c", "t", "s", Some("qid-1")).await;
+        let _ = get_table_columns_inner(&state, "c", "t", "s", Some("qid-1"), None).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("qid-1"), "release 누락");
     }
@@ -845,7 +995,7 @@ mod tests {
     #[tokio::test]
     async fn get_table_indexes_inner_round_trip_releases_token() {
         let state = state_with("c", rdb_default()).await;
-        let _ = get_table_indexes_inner(&state, "c", "t", "s", Some("qid-2")).await;
+        let _ = get_table_indexes_inner(&state, "c", "t", "s", Some("qid-2"), None).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("qid-2"));
     }
@@ -853,8 +1003,243 @@ mod tests {
     #[tokio::test]
     async fn get_table_constraints_inner_round_trip_releases_token() {
         let state = state_with("c", rdb_default()).await;
-        let _ = get_table_constraints_inner(&state, "c", "t", "s", Some("qid-3")).await;
+        let _ = get_table_constraints_inner(&state, "c", "t", "s", Some("qid-3"), None).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("qid-3"));
+    }
+
+    // ── Sprint 271a — expected_database guard (2026-05-13) ───────────────
+    //
+    // 작성 이유: 12 schema introspection commands 각각의 mismatch 가드
+    // verbatim assertion. Sprint 266 reference (query.rs:83–92) 와 byte
+    // equivalent — current_database probe 가 trait 호출 *전에* 일어나야
+    // 하고, mismatch 시 underlying trait method (list_namespaces, list_tables
+    // 등) 가 호출되지 않아야 함. underlying trait closure 가 panic 하도록
+    // 두어 만약 가드가 새면 테스트가 fail panic 으로 즉시 surfaces.
+
+    fn mismatched_adapter() -> StubRdbAdapter {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s
+    }
+
+    #[tokio::test]
+    async fn list_schemas_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_namespaces_fn = Some(Box::new(|| {
+            panic!("list_namespaces must not be invoked on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_schemas_inner(&state, "c", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_tables_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_tables_fn = Some(Box::new(|_| panic!("list_tables must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_tables_inner(&state, "c", "public", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_table_columns_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.get_columns_fn = Some(Box::new(|_, _| {
+            panic!("get_columns must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_table_columns_inner(&state, "c", "t", "s", None, Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_table_columns_mismatch_releases_cancel_token() {
+        // probe 가 trait 호출 *전에* short-circuit 해도 register 된 token 은
+        // release 되어야 retry 가 깨끗하게 가능 (Sprint 266 mismatch + cancel
+        // 의 mirror).
+        let mut s = mismatched_adapter();
+        s.get_columns_fn = Some(Box::new(|_, _| panic!("must not run")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let _ =
+            get_table_columns_inner(&state, "c", "t", "s", Some("qid-mismatch"), Some("dbB")).await;
+        let tokens = state.query_tokens.lock().await;
+        assert!(!tokens.contains_key("qid-mismatch"));
+    }
+
+    #[tokio::test]
+    async fn list_schema_columns_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_schema_columns_fn = Some(Box::new(|_| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_schema_columns_inner(&state, "c", "public", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_table_indexes_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.get_table_indexes_fn = Some(Box::new(|_, _| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_table_indexes_inner(&state, "c", "t", "s", None, Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_table_constraints_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.get_table_constraints_fn = Some(Box::new(|_, _| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_table_constraints_inner(&state, "c", "t", "s", None, Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_views_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_views_fn = Some(Box::new(|_| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_views_inner(&state, "c", "public", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_functions_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_functions_fn = Some(Box::new(|_| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_functions_inner(&state, "c", "public", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_view_definition_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.get_view_definition_fn = Some(Box::new(|_, _| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_view_definition_inner(&state, "c", "public", "v", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_view_columns_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.get_view_columns_fn = Some(Box::new(|_, _| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_view_columns_inner(&state, "c", "public", "v", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_function_source_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.get_function_source_fn = Some(Box::new(|_, _| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_function_source_inner(&state, "c", "public", "f", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_postgres_types_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_adapter();
+        s.list_types_fn = Some(Box::new(|| panic!("must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_postgres_types_inner(&state, "c", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    // ── Sprint 271a — match path + None fast-path witness ────────────────
+    //
+    // 작성 이유 (2026-05-13): mismatch path 만 단언하면 happy/None paths 의
+    // byte-equivalence 가 의심 잔여. 1 happy (Some + match → trait 호출) +
+    // 1 none-fast-path (None → current_database probe 도 안 함) 를 witness
+    // 로 추가.
+
+    #[tokio::test]
+    async fn list_schemas_expected_db_match_executes_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s.list_namespaces_fn = Some(Box::new(|| {
+            Ok(vec![NamespaceInfo {
+                name: "public".into(),
+            }])
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = list_schemas_inner(&state, "c", Some("dbA")).await.unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].name, "public");
+    }
+
+    #[tokio::test]
+    async fn list_schemas_expected_db_none_skips_current_database_probe() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| {
+            panic!("current_database must not be probed when expected_database is None")
+        }));
+        s.list_namespaces_fn = Some(Box::new(|| Ok(vec![])));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = list_schemas_inner(&state, "c", None).await.unwrap();
+        assert!(r.is_empty());
     }
 }

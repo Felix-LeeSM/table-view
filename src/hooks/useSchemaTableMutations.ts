@@ -57,7 +57,9 @@ export function useSchemaTableMutations(): {
     ): Promise<void> => {
       await storeDrop(connectionId, database, table, schema);
       try {
-        const tables = await tauri.listTables(connectionId, schema);
+        // Sprint 271a — forward `database` as `expectedDatabase` so a swapped
+        // backend pool fails closed before populating a wrong-db cache.
+        const tables = await tauri.listTables(connectionId, schema, database);
         useSchemaStore.setState((state) => ({
           tables: setNested3(
             state.tables,
@@ -98,7 +100,9 @@ export function useSchemaTableMutations(): {
     ): Promise<void> => {
       await storeRename(connectionId, database, table, schema, newName);
       try {
-        const tables = await tauri.listTables(connectionId, schema);
+        // Sprint 271a — forward `database` as `expectedDatabase` so a swapped
+        // backend pool fails closed before populating a wrong-db cache.
+        const tables = await tauri.listTables(connectionId, schema, database);
         useSchemaStore.setState((state) => ({
           tables: setNested3(
             state.tables,

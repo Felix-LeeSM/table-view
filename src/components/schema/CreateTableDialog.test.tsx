@@ -2504,7 +2504,10 @@ describe("Sprint 230 — CreateTableDialog wires dynamic PG type list", () => {
     renderDialog();
 
     await waitFor(() => expect(mockListPostgresTypes).toHaveBeenCalledTimes(1));
-    expect(mockListPostgresTypes).toHaveBeenCalledWith("conn-1");
+    // Sprint 271a — wrapper now takes optional expectedDatabase as 2nd arg.
+    // setProdConnection seeds connections[0].database = "app" → resolveActiveDb
+    // falls back to the persisted database when no activeStatuses entry exists.
+    expect(mockListPostgresTypes).toHaveBeenCalledWith("conn-1", "app");
   });
 
   it("dialog merges live types into the column-type combobox suggestions (AC-230-08)", async () => {

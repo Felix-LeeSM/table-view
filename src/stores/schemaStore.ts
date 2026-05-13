@@ -12,6 +12,8 @@ import type {
 } from "@/types/schema";
 import type { QueryResult } from "@/types/query";
 import * as tauri from "@lib/tauri";
+import { parseDbMismatch } from "@lib/api/dbMismatch";
+import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 
 /**
  * Sprint 263 (ADR 0027 extension) — schemaStore 의 캐시 차원을
@@ -32,6 +34,11 @@ import * as tauri from "@lib/tauri";
  * active DB 를 사용하며, 프론트엔드는 fetch 시점의 activeDb 를 캐시 키로
  * 잠는다. activeDb 와 backend pool 의 동기성은 DbSwitcher 의
  * `await switchActiveDb()` → `setActiveDb()` 순서가 보장.
+ *
+ * Sprint 271a (2026-05-13) — 모든 read-only 호출이 backend 가드에 의해
+ * AppError::DbMismatch 로 short-circuit 될 수 있도록 캐시 키로 잠근
+ * `db` 를 `expectedDatabase` 로 forwarding. mismatch 가 surface 되면
+ * 백그라운드 introspection 이므로 silent sync (no toast) 로 처리.
  */
 
 type ByDb<V> = Record<string, V>;
@@ -239,6 +246,23 @@ function deleteConnDbSchema<V>(
   };
 }
 
+/**
+ * Sprint 271a — schemaStore introspection paths are background / silent.
+ * When the backend rejects with `AppError::DbMismatch` (Sprint 266 guard),
+ * the helper fires verify + setActiveDb so the next dispatch uses the
+ * correct expectedDatabase. The original rejection is then rethrown so the
+ * caller's loading/error state book-keeping stays consistent with
+ * pre-Sprint-271 behaviour — NO toast (contract §Out-of-Scope: "silent
+ * introspection (schemaStore prefetch, autocomplete refresh) uses
+ * syncMismatchedActiveDb sync-only, no toast").
+ */
+function handleDbMismatch(connId: string, err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  if (parseDbMismatch(message)) {
+    void syncMismatchedActiveDb(connId);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -255,12 +279,13 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   loadSchemas: async (connId, db) => {
     set({ loading: true, error: null });
     try {
-      const schemas = await tauri.listSchemas(connId);
+      const schemas = await tauri.listSchemas(connId, db);
       set((state) => ({
         schemas: setConnDb(state.schemas, connId, db, schemas),
         loading: false,
       }));
     } catch (e) {
+      handleDbMismatch(connId, e);
       set({ error: String(e), loading: false });
     }
   },
@@ -268,30 +293,32 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   loadTables: async (connId, db, schema) => {
     set({ loading: true, error: null });
     try {
-      const tables = await tauri.listTables(connId, schema);
+      const tables = await tauri.listTables(connId, schema, db);
       set((state) => ({
         tables: setConnDbSchema(state.tables, connId, db, schema, tables),
         loading: false,
       }));
     } catch (e) {
+      handleDbMismatch(connId, e);
       set({ error: String(e), loading: false });
     }
   },
 
   loadViews: async (connId, db, schema) => {
     try {
-      const views = await tauri.listViews(connId, schema);
+      const views = await tauri.listViews(connId, schema, db);
       set((state) => ({
         views: setConnDbSchema(state.views, connId, db, schema, views),
       }));
     } catch (e) {
+      handleDbMismatch(connId, e);
       set({ error: String(e) });
     }
   },
 
   loadFunctions: async (connId, db, schema) => {
     try {
-      const functions = await tauri.listFunctions(connId, schema);
+      const functions = await tauri.listFunctions(connId, schema, db);
       set((state) => ({
         functions: setConnDbSchema(
           state.functions,
@@ -302,43 +329,68 @@ export const useSchemaStore = create<SchemaState>((set) => ({
         ),
       }));
     } catch (e) {
+      handleDbMismatch(connId, e);
       set({ error: String(e) });
     }
   },
 
   getTableColumns: async (connId, db, table, schema) => {
-    const columns = await tauri.getTableColumns(connId, table, schema);
-    set((state) => ({
-      tableColumnsCache: setConnDbSchemaTable(
-        state.tableColumnsCache,
-        connId,
-        db,
-        schema,
-        table,
-        columns,
-      ),
-    }));
-    return columns;
+    try {
+      const columns = await tauri.getTableColumns(connId, table, schema, db);
+      set((state) => ({
+        tableColumnsCache: setConnDbSchemaTable(
+          state.tableColumnsCache,
+          connId,
+          db,
+          schema,
+          table,
+          columns,
+        ),
+      }));
+      return columns;
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
   },
 
-  // Sprint 263 — frontend cache key takes `(connId, db, schema, table)`,
-  // but the backend tauri command stays connection-scoped (active pool
-  // already binds a db). `db` is therefore accepted but discarded at the
-  // tauri seam.
-  getTableIndexes: async (connId, _db, table, schema) => {
-    return tauri.getTableIndexes(connId, table, schema);
+  // Sprint 263 — frontend cache key takes `(connId, db, schema, table)`.
+  // Sprint 271a — forwards `db` as `expectedDatabase` so the backend guard
+  // rejects a swapped pool BEFORE the trait dispatches.
+  getTableIndexes: async (connId, db, table, schema) => {
+    try {
+      return await tauri.getTableIndexes(connId, table, schema, db);
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
   },
 
-  getTableConstraints: async (connId, _db, table, schema) => {
-    return tauri.getTableConstraints(connId, table, schema);
+  getTableConstraints: async (connId, db, table, schema) => {
+    try {
+      return await tauri.getTableConstraints(connId, table, schema, db);
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
   },
 
-  getViewColumns: async (connId, _db, schema, viewName) => {
-    return tauri.getViewColumns(connId, schema, viewName);
+  getViewColumns: async (connId, db, schema, viewName) => {
+    try {
+      return await tauri.getViewColumns(connId, schema, viewName, db);
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
   },
 
-  getViewDefinition: async (connId, _db, schema, viewName) => {
-    return tauri.getViewDefinition(connId, schema, viewName);
+  getViewDefinition: async (connId, db, schema, viewName) => {
+    try {
+      return await tauri.getViewDefinition(connId, schema, viewName, db);
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
   },
 
   queryTableData: async (
@@ -352,6 +404,9 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     filters,
     rawWhere,
   ) => {
+    // Sprint 271b owns expectedDatabase forwarding for queryTableData (the
+    // user-initiated DataGrid path needs the Retry toast). 271a stays
+    // byte-equivalent for this method.
     return tauri.queryTableData(
       connId,
       table,
@@ -418,7 +473,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
 
   prefetchSchemaColumns: async (connId, db, schema) => {
     try {
-      const result = await tauri.listSchemaColumns(connId, schema);
+      const result = await tauri.listSchemaColumns(connId, schema, db);
       const tableEntries = Object.entries(result);
       if (tableEntries.length === 0) return;
       set((state) => {
@@ -435,8 +490,11 @@ export const useSchemaStore = create<SchemaState>((set) => ({
         }
         return { tableColumnsCache: next };
       });
-    } catch {
-      // best-effort prefetch — silently ignore failures.
+    } catch (e) {
+      // best-effort prefetch — silently ignore failures. Sprint 271a — still
+      // surface a DbMismatch via the sync helper so the next dispatch uses
+      // the corrected activeDb. No toast (background path).
+      handleDbMismatch(connId, e);
     }
   },
 }));

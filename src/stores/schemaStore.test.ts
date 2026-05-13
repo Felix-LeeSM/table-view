@@ -215,7 +215,13 @@ describe("schemaStore", () => {
       .getState()
       .getTableColumns("conn1", "db1", "users", "public");
 
-    expect(getTableColumns).toHaveBeenCalledWith("conn1", "users", "public");
+    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    expect(getTableColumns).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "db1",
+    );
     expect(columns).toHaveLength(1);
     expect(columns[0]!.name).toBe("id");
     expect(columns[0]!.is_primary_key).toBe(true);
@@ -276,7 +282,13 @@ describe("schemaStore", () => {
       .getState()
       .getTableIndexes("conn1", "db1", "users", "public");
 
-    expect(getTableIndexes).toHaveBeenCalledWith("conn1", "users", "public");
+    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
+    expect(getTableIndexes).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "db1",
+    );
     expect(indexes).toHaveLength(1);
     expect(indexes[0]!.name).toBe("users_pkey");
     expect(indexes[0]!.is_primary).toBe(true);
@@ -288,10 +300,12 @@ describe("schemaStore", () => {
       .getState()
       .getTableConstraints("conn1", "db1", "users", "public");
 
+    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
     expect(getTableConstraints).toHaveBeenCalledWith(
       "conn1",
       "users",
       "public",
+      "db1",
     );
     expect(constraints).toHaveLength(1);
     expect(constraints[0]!.constraint_type).toBe("PRIMARY KEY");
@@ -634,10 +648,12 @@ describe("schemaStore", () => {
       .getState()
       .getViewColumns("conn1", "db1", "public", "active_users");
 
+    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
     expect(getViewColumns).toHaveBeenCalledWith(
       "conn1",
       "public",
       "active_users",
+      "db1",
     );
     expect(columns).toHaveLength(2);
     expect(columns[0]!.name).toBe("id");
@@ -651,10 +667,12 @@ describe("schemaStore", () => {
       .getState()
       .getViewDefinition("conn1", "db1", "public", "active_users");
 
+    // Sprint 271a — forwards `db` as expectedDatabase (4th positional).
     expect(getViewDefinition).toHaveBeenCalledWith(
       "conn1",
       "public",
       "active_users",
+      "db1",
     );
     expect(sql).toContain("SELECT id, name FROM users");
   });

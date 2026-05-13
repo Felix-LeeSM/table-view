@@ -76,7 +76,9 @@ describe("usePostgresTypes (Sprint 230)", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockListPostgresTypes).toHaveBeenCalledTimes(1);
-    expect(mockListPostgresTypes).toHaveBeenCalledWith("conn-1");
+    // Sprint 271a — wrapper now takes optional expectedDatabase as 2nd arg.
+    // No connectionStore status seeded → resolveActiveDb returns "" → undefined forwarded.
+    expect(mockListPostgresTypes).toHaveBeenCalledWith("conn-1", undefined);
     // Merged list contains the canonical entries first, then the
     // non-duplicate live extras at the end.
     expect(
