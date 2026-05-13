@@ -11,6 +11,7 @@ import type { ConnectionConfig } from "@/types/connection";
 
 const mockMruState = {
   recentConnections: [] as Array<{ connectionId: string; lastUsed: number }>,
+  removeRecentConnection: vi.fn() as (id: string) => void,
 };
 
 const mockConnState = {
@@ -234,5 +235,75 @@ describe("RecentConnections", () => {
     mockConnState.connections = [makeConnection({ id: "c1" })];
 
     expect(() => render(<RecentConnections />)).not.toThrow();
+  });
+
+  // 작성 이유 (2026-05-13, Sprint 290): 사용자가 recent 항목을 개별 삭제할
+  // 수 있어야 한다는 요청. mruStore 의 removeRecentConnection 액션을 호출
+  // 하는 X 버튼이 실제로 wire 되어 있는지 회귀 가드.
+  describe("Sprint 290 — remove + collapse", () => {
+    beforeEach(() => {
+      window.localStorage.removeItem("table-view-recent-collapsed");
+    });
+
+    it("각 항목의 X 버튼 클릭 시 removeRecentConnection 호출", () => {
+      const remove = vi.fn();
+      mockMruState.removeRecentConnection = remove;
+      mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
+      mockConnState.connections = [makeConnection({ id: "c1", name: "X DB" })];
+
+      render(<RecentConnections />);
+      const btn = screen.getByRole("button", {
+        name: /Remove X DB from recent connections/,
+      });
+      fireEvent.click(btn);
+      expect(remove).toHaveBeenCalledWith("c1");
+    });
+
+    it("X 버튼 클릭은 항목의 onActivate (double-click) 을 트리거하지 않는다", () => {
+      const onActivate = vi.fn();
+      mockMruState.removeRecentConnection = vi.fn();
+      mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
+      mockConnState.connections = [makeConnection({ id: "c1", name: "Z DB" })];
+
+      render(<RecentConnections onActivate={onActivate} />);
+      const btn = screen.getByRole("button", {
+        name: /Remove Z DB from recent connections/,
+      });
+      fireEvent.click(btn);
+      expect(onActivate).not.toHaveBeenCalled();
+    });
+
+    it("collapse 토글 시 list 가 숨겨지고 aria-expanded 가 false 가 된다", () => {
+      mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
+      mockConnState.connections = [makeConnection({ id: "c1" })];
+
+      render(<RecentConnections />);
+      const toggle = screen.getByRole("button", { name: /Recent/ });
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      act(() => {
+        fireEvent.click(toggle);
+      });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByRole("list")).toBeNull();
+    });
+
+    it("collapse 상태는 localStorage 에 영속된다", () => {
+      mockMruState.recentConnections = [{ connectionId: "c1", lastUsed: now }];
+      mockConnState.connections = [makeConnection({ id: "c1" })];
+
+      const { unmount } = render(<RecentConnections />);
+      act(() => {
+        fireEvent.click(screen.getByRole("button", { name: /Recent/ }));
+      });
+      expect(window.localStorage.getItem("table-view-recent-collapsed")).toBe(
+        "1",
+      );
+      unmount();
+      render(<RecentConnections />);
+      expect(screen.getByRole("button", { name: /Recent/ })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+    });
   });
 });

@@ -81,6 +81,13 @@ interface MruState {
   recentConnections: MruEntry[]; // ordered list, most recent first
 
   markConnectionUsed: (id: string) => void;
+  /**
+   * Sprint 290 — remove a single entry from the Recent rail. Persists the
+   * shortened list synchronously. `lastUsedConnectionId` is recomputed
+   * from the new head so a future Sprint that resurrects this derived
+   * pointer stays consistent.
+   */
+  removeRecentConnection: (id: string) => void;
   loadPersistedMru: () => void;
 }
 
@@ -114,6 +121,20 @@ export const useMruStore = create<MruState>((set) => ({
       return {
         recentConnections: updated,
         lastUsedConnectionId: id, // backward compat
+      };
+    });
+  },
+
+  removeRecentConnection: (id) => {
+    set((state) => {
+      const updated = state.recentConnections.filter(
+        (e) => e.connectionId !== id,
+      );
+      if (updated.length === state.recentConnections.length) return state;
+      persistMruList(updated);
+      return {
+        recentConnections: updated,
+        lastUsedConnectionId: updated[0]?.connectionId ?? null,
       };
     });
   },

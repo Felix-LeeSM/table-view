@@ -196,4 +196,52 @@ describe("MRU list (Sprint 166)", () => {
     expect(recentConnections[0]!.lastUsed).toBeGreaterThan(0);
     expect(lastUsedConnectionId).toBe("legacy-conn-id");
   });
+
+  // 작성 이유 (2026-05-13, Sprint 290): 사용자 요구 — recent 항목을 개별
+  // 삭제할 수 있어야 함. mruStore.removeRecentConnection 액션을 추가했고,
+  // 본 회귀 가드는 (a) 정상 제거 + 영속 (b) 미존재 id 무변경 (c)
+  // lastUsedConnectionId 재계산 (d) 빈 리스트 → null 을 단언한다.
+  describe("removeRecentConnection (Sprint 290)", () => {
+    it("기존 항목을 제거하고 localStorage 에 반영한다", () => {
+      const store = useMruStore.getState();
+      store.markConnectionUsed("c1");
+      store.markConnectionUsed("c2");
+      useMruStore.getState().removeRecentConnection("c1");
+
+      const { recentConnections } = useMruStore.getState();
+      expect(recentConnections.map((e) => e.connectionId)).toEqual(["c2"]);
+      const persisted = JSON.parse(
+        window.localStorage.getItem(STORAGE_KEY) ?? "[]",
+      );
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0].connectionId).toBe("c2");
+    });
+
+    it("미존재 id 호출은 state 를 변경하지 않는다", () => {
+      const store = useMruStore.getState();
+      store.markConnectionUsed("c1");
+      const before = useMruStore.getState().recentConnections;
+      useMruStore.getState().removeRecentConnection("nope");
+      const after = useMruStore.getState().recentConnections;
+      expect(after).toBe(before);
+    });
+
+    it("head 항목 제거 시 lastUsedConnectionId 가 새 head 로 재계산된다", () => {
+      const store = useMruStore.getState();
+      store.markConnectionUsed("c1");
+      store.markConnectionUsed("c2");
+      useMruStore.getState().removeRecentConnection("c2");
+
+      expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
+    });
+
+    it("모든 항목 제거 시 lastUsedConnectionId 는 null", () => {
+      const store = useMruStore.getState();
+      store.markConnectionUsed("c1");
+      useMruStore.getState().removeRecentConnection("c1");
+
+      expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
+      expect(useMruStore.getState().recentConnections).toHaveLength(0);
+    });
+  });
 });
