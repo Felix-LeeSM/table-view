@@ -206,13 +206,26 @@ describe("App global shortcuts", () => {
 
   // ── Sprint 33: Extended Keyboard Shortcuts ──
 
-  it("Cmd+N dispatches new-connection event", () => {
+  // 작성 이유 (2026-05-13, Sprint 291): 사용자 요구 — workspace 윈도우의
+  // Cmd+N 은 connection-create dialog 대신 raw query tab 을 연다. 기존
+  // 테스트가 검증하던 "new-connection" DOM 이벤트는 더 이상 발생하지 않고,
+  // 대신 활성 connection 의 워크스페이스에 query tab 이 추가되어야 한다.
+  it("Sprint 291 — Cmd+N 은 활성 connection 에 raw query tab 을 추가한다", () => {
+    const tab = makeTableTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], "tab-1"));
     const handler = vi.fn();
     window.addEventListener("new-connection", handler);
     render(<App />);
 
     fireShortcut("n");
-    expect(handler).toHaveBeenCalled();
+
+    // 종전과 달리 new-connection 이벤트는 발생하지 않음.
+    expect(handler).not.toHaveBeenCalled();
+    // 활성 connection 의 workspace tabs 가 1 → 2 로 늘어남.
+    const tabsAfter = getTestWorkspace().tabs;
+    expect(tabsAfter.length).toBeGreaterThan(1);
+    const newTab = tabsAfter[tabsAfter.length - 1];
+    expect(newTab?.type).toBe("query");
 
     window.removeEventListener("new-connection", handler);
   });
@@ -703,7 +716,7 @@ describe("App global shortcuts", () => {
     { label: "Cmd+I (format SQL)", key: "i", focusPolicy: "skip-in-editable" },
     // Cmd+N / S / P — editable 안에서는 흘려보냄.
     {
-      label: "Cmd+N (new connection)",
+      label: "Cmd+N (new query tab)",
       key: "n",
       focusPolicy: "skip-in-editable",
     },

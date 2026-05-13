@@ -227,7 +227,12 @@ describe("Sidebar (schemas-only)", () => {
   });
 
   describe("Misc", () => {
-    it("new-connection event opens the ConnectionDialog", () => {
+    // 작성 이유 (2026-05-13, Sprint 291): workspace 윈도우에서 Cmd+N 의
+    // 의미가 "새 연결" 에서 "새 쿼리 탭" 으로 바뀌면서 Sidebar 의
+    // `new-connection` listener + 임베디드 ConnectionDialog mount 가
+    // 제거되었다. 본 회귀 가드는 (a) 이벤트가 와도 dialog 가 mount
+    // 되지 않고 (b) 컴포넌트 자체는 정상 렌더링됨을 단언한다.
+    it("Sprint 291 — new-connection 이벤트는 더 이상 dialog 를 열지 않는다", () => {
       render(<Sidebar />);
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
 
@@ -235,15 +240,6 @@ describe("Sidebar (schemas-only)", () => {
         window.dispatchEvent(new Event("new-connection"));
       });
 
-      expect(screen.getByTestId("connection-dialog")).toBeInTheDocument();
-    });
-
-    it("removes the new-connection listener on unmount", () => {
-      const { unmount } = render(<Sidebar />);
-      unmount();
-      act(() => {
-        window.dispatchEvent(new Event("new-connection"));
-      });
       expect(screen.queryByTestId("connection-dialog")).toBeNull();
     });
 

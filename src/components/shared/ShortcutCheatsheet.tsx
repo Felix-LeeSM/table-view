@@ -73,7 +73,7 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
   {
     label: "Misc",
     items: [
-      { label: "New connection", keys: ["Cmd+N"] },
+      { label: "New query tab", keys: ["Cmd+N", "Cmd+T"] },
       { label: "Show this cheatsheet", keys: ["?", "Cmd+/"] },
     ],
   },

@@ -128,7 +128,10 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [activeTabId, tabs]);
 
-  // Cmd+N / Ctrl+N — new connection
+  // Sprint 291 — workspace 윈도우에서의 Cmd+N 은 connection-create dialog 가
+  // 아니라 raw query tab 을 연다 (Cmd+T 와 동일 동작). 사용자 요청: workspace
+  // 안에서 새 연결 만들기는 launcher 윈도우 (macOS 메뉴 / 별도 진입점) 의
+  // 책무이고, workspace 의 Cmd+N 은 "쿼리 새로 작성" 시그널이라는 멘탈 모델.
   // Cmd+S / Ctrl+S — commit changes
   // Cmd+P / Ctrl+P — quick open
   useEffect(() => {
@@ -137,9 +140,24 @@ export default function App() {
 
       const key = e.key;
 
+      // Cmd+N is special — dispatch addQueryTab directly (no DOM event hop).
+      if (key === "n") {
+        if (isEditableTarget(e.target)) return;
+        e.preventDefault();
+        const activeTab = activeTabId
+          ? tabs.find((t) => t.id === activeTabId)
+          : null;
+        const connectionId = activeTab?.connectionId ?? "";
+        if (connectionId) {
+          const db = resolveActiveDb(connectionId);
+          addQueryTab(connectionId, db);
+          markConnectionUsed(connectionId);
+        }
+        return;
+      }
+
       let eventName: string | null = null;
-      if (key === "n") eventName = "new-connection";
-      else if (key === "s") eventName = "commit-changes";
+      if (key === "s") eventName = "commit-changes";
       else if (key === "p") eventName = "quick-open";
 
       if (!eventName) return;
@@ -152,7 +170,7 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [activeTabId, tabs, addQueryTab, markConnectionUsed]);
 
   // Cmd+1..9 / Ctrl+1..9 — switch to the N-th workspace tab (1-indexed).
   // Top-row digits only; `Numpad1`.. are intentionally NOT matched.

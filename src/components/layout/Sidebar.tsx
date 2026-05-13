@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import {
@@ -17,7 +17,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@components/ui/popover";
-import ConnectionDialog from "@components/connection/ConnectionDialog";
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
 import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
@@ -43,15 +42,14 @@ function readWidth(): number {
 
 /**
  * Workspace Sidebar — schema/work surface column shown on `WorkspacePage`.
- * Connection management lives on the dedicated `HomePage`.
+ * Connection management lives on the dedicated `HomePage` / launcher window.
  *
- * The `connection-added` window event still flips focus to the newly-saved
- * connection so a user who creates a new connection while inside the
- * workspace (via Cmd+N) sees that connection's schema tree on the next
- * Open.
+ * Sprint 291 — workspace 윈도우의 Cmd+N 은 raw query tab 을 여는 것으로
+ * 의미가 바뀌어 본 컴포넌트의 `new-connection` listener + 임베디드
+ * `ConnectionDialog` mount 는 제거되었다. 새 연결을 만들고 싶은 사용자는
+ * launcher 윈도우 (Cmd+, 또는 dock 아이콘 reopen) 에서 진행한다.
  */
 export default function Sidebar() {
-  const [showNewDialog, setShowNewDialog] = useState(false);
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
@@ -122,15 +120,9 @@ export default function Sidebar() {
   const ThemeIcon =
     themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
 
-  // Listen for Cmd+N keyboard shortcut dispatched from App
-  useEffect(() => {
-    const handler = () => setShowNewDialog(true);
-    window.addEventListener("new-connection", handler);
-    return () => window.removeEventListener("new-connection", handler);
-  }, []);
-
-  // New-connection creation happens on HomePage; the `connections` effect
-  // above heals focus when the new connection lands in the store.
+  // New-connection creation happens on the launcher window (HomePage);
+  // the `connections` effect above heals focus when the new connection
+  // lands in the store.
 
   const selectedConnected =
     !!focusedConnId && activeStatuses[focusedConnId]?.type === "connected";
@@ -225,10 +217,6 @@ export default function Sidebar() {
           onMouseDown={handleResizeMouseDown}
         />
       </div>
-
-      {showNewDialog && (
-        <ConnectionDialog onClose={() => setShowNewDialog(false)} />
-      )}
     </>
   );
 }
