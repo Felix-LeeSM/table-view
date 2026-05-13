@@ -15,7 +15,6 @@ import {
   X,
   Search,
   RefreshCw,
-  Zap,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -59,53 +58,6 @@ export interface SchemaTreeRowsContext {
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
   handleCreateTable: (schemaName: string) => void;
-  /**
-   * Sprint 273 — open the `CreateTriggerDialog` modal pre-populated with
-   * the parent table identity. Wired to the Table row's "Create
-   * Trigger…" context-menu entry AND the `+` affordance on the per-table
-   * Triggers group header.
-   */
-  handleCreateTrigger: (tableName: string, schemaName: string) => void;
-  /**
-   * Sprint 274 — open the `DropTriggerDialog` modal pre-populated with
-   * the `(schema, table, triggerName)` triple. Wired to the per-trigger
-   * child row's "Drop…" context-menu entry.
-   */
-  handleDropTrigger: (
-    triggerName: string,
-    tableName: string,
-    schemaName: string,
-  ) => void;
-  /**
-   * Sprint 272 — open the read-only Triggers sub-tab of `StructurePanel`
-   * for the given table. Wired to the Table row's "View Triggers"
-   * context-menu entry. Reuses `handleOpenStructure` semantics (opens a
-   * Structure tab); the StructurePanel itself routes to the Triggers
-   * sub-tab via the `initialSubTab` prop.
-   */
-  handleViewTableTriggers: (tableName: string, schemaName: string) => void;
-  /**
-   * Sprint 272 — toggle the Triggers child group expansion under a
-   * Table row. On expand, dispatches the lazy `getTableTriggers` IPC
-   * once and caches the result on the store.
-   */
-  toggleTriggerGroup: (schemaName: string, tableName: string) => void;
-  /**
-   * Sprint 272 — retry affordance for the italic "Failed to load
-   * triggers" placeholder row. Clears the recorded error + re-dispatches.
-   */
-  retryLoadTriggers: (schemaName: string, tableName: string) => void;
-  /**
-   * Sprint 272 — open the StructurePanel Triggers sub-tab for the
-   * trigger's parent table. The trigger name is currently informational
-   * (StructurePanel renders all triggers for the table); Sprint 273/274
-   * will refine this with a scroll-to-trigger affordance.
-   */
-  handleViewTriggerSource: (
-    triggerName: string,
-    tableName: string,
-    schemaName: string,
-  ) => void;
 }
 
 export function renderSchemaRow(
@@ -387,28 +339,11 @@ export function renderItemRow(
             >
               <Table2 size={14} /> Data
             </ContextMenuItem>
-            {/* Sprint 272 — Trigger affordances on the Table row. View
-                Triggers is enabled (opens Structure → Triggers sub-tab).
-                Sprint 273 — Create Trigger is wired to the new
-                CreateTriggerDialog. Sprint 274 — the per-table-row
-                "Drop Trigger…" placeholder is removed: Drop targets a
-                specific trigger and is exposed only on the per-trigger
-                child row context menu (a bulk per-table drop is
-                out-of-scope per master spec § 7). */}
-            <ContextMenuItem
-              onClick={() =>
-                ctx.handleViewTableTriggers(item.name, row.schemaName)
-              }
-              aria-label={`View triggers for ${item.name}`}
-            >
-              <Zap size={14} /> View Triggers
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => ctx.handleCreateTrigger(item.name, row.schemaName)}
-              aria-label={`Create trigger on ${item.name}`}
-            >
-              <Plus size={14} /> Create Trigger…
-            </ContextMenuItem>
+            {/* Sprint 275 — trigger entries removed from the Table row
+                context menu. Trigger CRUD now lives entirely on the
+                StructurePanel Triggers tab (consolidated single entry
+                point). Column/Index/Constraint surfaces don't carry
+                table-row shortcuts either, so this restores consistency. */}
             <ContextMenuItem
               onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
             >
@@ -448,219 +383,6 @@ export function renderItemRow(
   );
 }
 
-/**
- * Sprint 272 — Triggers child group header row. Renders directly under
- * each Table row at indent `pl-14` (one level deeper than the table row
- * at `pl-10`). Toggles its expansion via `ctx.toggleTriggerGroup`. The
- * count badge appears once the cache has resolved
- * (`triggerCount != null`); before that the row is just "Triggers".
- */
-export function renderTriggerGroupRow(
-  row: Extract<VisibleRow, { kind: "trigger-group" }>,
-  ctx: SchemaTreeRowsContext,
-) {
-  return (
-    <div
-      className={cn(
-        "flex w-full items-center hover:bg-muted",
-        row.isSelected && "bg-muted",
-      )}
-    >
-      <button
-        type="button"
-        className={cn(
-          "flex flex-1 cursor-pointer items-center gap-1.5 py-0.5 pr-1 pl-14 text-2xs font-medium",
-          row.isSelected ? "text-foreground" : "text-secondary-foreground",
-        )}
-        aria-expanded={row.isExpanded}
-        aria-label={`Triggers for ${row.tableName} in ${row.schemaName}`}
-        onClick={() => ctx.toggleTriggerGroup(row.schemaName, row.tableName)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            ctx.toggleTriggerGroup(row.schemaName, row.tableName);
-          }
-        }}
-      >
-        {row.isExpanded ? (
-          <ChevronDown size={11} className="shrink-0" />
-        ) : (
-          <ChevronRight size={11} className="shrink-0" />
-        )}
-        <Zap size={11} className="shrink-0 text-muted-foreground" />
-        <span>Triggers</span>
-        {row.isLoading && (
-          <Loader2 size={10} className="ml-1 shrink-0 animate-spin" />
-        )}
-      </button>
-      <div className="ml-auto flex shrink-0 items-center gap-1 pr-2">
-        {row.triggerCount != null && row.triggerCount > 0 && (
-          <span
-            className="text-3xs text-muted-foreground"
-            data-testid={`trigger-count-${row.schemaName}-${row.tableName}`}
-          >
-            {row.triggerCount}
-          </span>
-        )}
-        {/* Sprint 273 — Plus affordance on the Triggers group header.
-            Mirrors the "+" pattern used by other category headers
-            (e.g. Tables group → Create Table). Opens the
-            CreateTriggerDialog pre-populated with this row's parent
-            table identity. */}
-        <button
-          type="button"
-          className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
-          aria-label={`Create trigger on ${row.tableName}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            ctx.handleCreateTrigger(row.tableName, row.schemaName);
-          }}
-          title="Create Trigger"
-        >
-          <Plus size={11} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Sprint 272 — italic "Loading triggers…" placeholder. */
-export function renderTriggerLoadingRow(
-  row: Extract<VisibleRow, { kind: "trigger-loading" }>,
-) {
-  return (
-    <div
-      className="pl-[4.5rem] pr-3 py-0.5 text-2xs italic text-muted-foreground"
-      aria-label={`Loading triggers for ${row.tableName}`}
-    >
-      Loading triggers…
-    </div>
-  );
-}
-
-/** Sprint 272 — italic "No triggers" placeholder (fetched + empty). */
-export function renderTriggerEmptyRow(
-  row: Extract<VisibleRow, { kind: "trigger-empty" }>,
-) {
-  return (
-    <div
-      className="pl-[4.5rem] pr-3 py-0.5 text-2xs italic text-muted-foreground"
-      aria-label={`No triggers for ${row.tableName}`}
-    >
-      No triggers
-    </div>
-  );
-}
-
-/** Sprint 272 — italic red "Failed to load triggers" + Retry button. */
-export function renderTriggerErrorRow(
-  row: Extract<VisibleRow, { kind: "trigger-error" }>,
-  ctx: SchemaTreeRowsContext,
-) {
-  return (
-    <div className="flex items-center gap-1 pl-[4.5rem] pr-3 py-0.5 text-2xs italic text-destructive">
-      <span
-        title={row.message}
-        aria-label={`Failed to load triggers for ${row.tableName}`}
-      >
-        Failed to load triggers
-      </span>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => ctx.retryLoadTriggers(row.schemaName, row.tableName)}
-        aria-label={`Retry loading triggers for ${row.tableName}`}
-        title="Retry"
-      >
-        <RefreshCw size={10} />
-      </Button>
-    </div>
-  );
-}
-
-/**
- * Sprint 272 — individual trigger row. Right-click exposes the
- * per-trigger context menu: "View Source" (enabled, opens Triggers
- * sub-tab), "Create Trigger…" (Sprint 273 — opens CreateTriggerDialog),
- * "Drop Trigger…" (Sprint 274 — opens DropTriggerDialog with the trigger
- * name pre-filled for typing-confirm).
- */
-export function renderTriggerItemRow(
-  row: Extract<VisibleRow, { kind: "trigger-item" }>,
-  ctx: SchemaTreeRowsContext,
-) {
-  const trig = row.trigger;
-  return (
-    <ContextMenu key={row.key}>
-      <ContextMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex w-full cursor-pointer items-center gap-1.5 py-0.5 pl-[4.5rem] pr-3 hover:bg-muted",
-            row.isSelected
-              ? "bg-primary/10 text-primary font-semibold"
-              : "text-foreground",
-          )}
-          aria-label={`Trigger ${trig.name} on ${row.tableName}`}
-          onClick={() =>
-            ctx.handleViewTriggerSource(
-              trig.name,
-              row.tableName,
-              row.schemaName,
-            )
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              ctx.handleViewTriggerSource(
-                trig.name,
-                row.tableName,
-                row.schemaName,
-              );
-            }
-          }}
-        >
-          <Zap size={11} className="shrink-0 text-muted-foreground" />
-          <span className="truncate text-2xs">{trig.name}</span>
-          {trig.timing && (
-            <span className="ml-auto truncate text-3xs text-muted-foreground">
-              {trig.timing}
-            </span>
-          )}
-        </button>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem
-          onClick={() =>
-            ctx.handleViewTriggerSource(
-              trig.name,
-              row.tableName,
-              row.schemaName,
-            )
-          }
-          aria-label={`View source for trigger ${trig.name}`}
-        >
-          <Code2 size={14} /> View Source
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={() => ctx.handleCreateTrigger(row.tableName, row.schemaName)}
-          aria-label={`Create trigger on ${row.tableName}`}
-        >
-          <Plus size={14} /> Create Trigger…
-        </ContextMenuItem>
-        <ContextMenuItem
-          danger
-          onClick={() =>
-            ctx.handleDropTrigger(trig.name, row.tableName, row.schemaName)
-          }
-          aria-label={`Drop trigger ${trig.name}`}
-        >
-          <Trash2 size={14} /> Drop Trigger…
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
-
 /** Dispatcher used by virtualized branch — flat-list `VisibleRow` → JSX. */
 export function renderVisibleRow(
   row: VisibleRow,
@@ -685,15 +407,5 @@ export function renderVisibleRow(
       return renderEmptyRow(row);
     case "item":
       return renderItemRow(row, ctx);
-    case "trigger-group":
-      return renderTriggerGroupRow(row, ctx);
-    case "trigger-loading":
-      return renderTriggerLoadingRow(row);
-    case "trigger-empty":
-      return renderTriggerEmptyRow(row);
-    case "trigger-error":
-      return renderTriggerErrorRow(row, ctx);
-    case "trigger-item":
-      return renderTriggerItemRow(row, ctx);
   }
 }

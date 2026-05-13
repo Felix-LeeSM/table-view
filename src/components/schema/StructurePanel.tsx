@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { useSchemaStore } from "@stores/schemaStore";
 import type {
   ColumnInfo,
@@ -15,6 +16,9 @@ import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { cancelQuery } from "@lib/tauri";
 import { Tabs, TabsList, TabsTrigger } from "@components/ui/tabs";
+import { Button } from "@components/ui/button";
+import CreateTriggerDialog from "./CreateTriggerDialog";
+import DropTriggerDialog from "./DropTriggerDialog";
 
 interface StructurePanelProps {
   connectionId: string;
@@ -29,15 +33,18 @@ interface StructurePanelProps {
   paradigm?: Paradigm;
   /**
    * Sprint 272 — initial sub-tab to render on mount. `undefined` falls
-   * back to "columns" (pre-Sprint-272 default). The Sidebar "View
-   * Triggers" right-click affordance threads `"triggers"` here.
+   * back to "columns" (pre-Sprint-272 default). Sprint 275 — the
+   * Sidebar "View Triggers" entry was retired (sidebar trigger surface
+   * removed); the prop remains so future external entry points can
+   * deep-link to the Triggers sub-tab.
    */
   initialSubTab?: SubTab;
 }
 
 // Sprint 272 — `SubTab` enum extended with `"triggers"`. Existing
-// `"columns" | "indexes" | "constraints"` consumers are byte-equivalent;
-// the new value is opt-in via the right-click "View Triggers" path.
+// `"columns" | "indexes" | "constraints"` consumers are byte-equivalent.
+// Sprint 275 — `"triggers"` is now the single entry point for trigger
+// CRUD (sidebar Triggers child group retired).
 type SubTab = "columns" | "indexes" | "constraints" | "triggers";
 
 export default function StructurePanel({
@@ -68,10 +75,23 @@ export default function StructurePanel({
   // pattern as Columns / Indexes / Constraints to prevent a misleading
   // "No triggers" flash before the first fetch settles.
   const [hasFetchedTriggers, setHasFetchedTriggers] = useState(false);
+  // Sprint 275 — trigger CRUD now lives entirely on this surface (the
+  // SchemaTree sidebar Triggers child group was retired). Local dialog
+  // slots: `createTriggerDialog` opens the +Create Trigger modal,
+  // `dropTriggerDialog` opens the per-trigger trash modal. Both `null`
+  // when closed. The success path closes the slot AND calls
+  // `refreshTableTriggers` to invalidate the schemaStore cache so the
+  // list refreshes without a tree-wide reload.
+  const [createTriggerDialog, setCreateTriggerDialog] =
+    useState<boolean>(false);
+  const [dropTriggerDialog, setDropTriggerDialog] = useState<{
+    triggerName: string;
+  } | null>(null);
   const getTableColumns = useSchemaStore((s) => s.getTableColumns);
   const getTableIndexes = useSchemaStore((s) => s.getTableIndexes);
   const getTableConstraints = useSchemaStore((s) => s.getTableConstraints);
   const getTableTriggers = useSchemaStore((s) => s.getTableTriggers);
+  const refreshTableTriggers = useSchemaStore((s) => s.refreshTableTriggers);
   // fetchId guards against stale resolves overwriting state after a
   // Cancel-then-retry. The in-flight `query_id` is plumbed through the
   // Tauri command so the Cancel button can drive `cancel_query`.
@@ -289,85 +309,166 @@ export default function StructurePanel({
           />
         )}
 
-      {/* Sprint 272 — read-only Triggers viewer. CREATE / DROP land in
-          Sprint 273 / 274; this surface only displays existing triggers
-          + their `pg_get_triggerdef` source. `hasFetchedTriggers` gate
-          prevents an "No triggers" flash on first paint. */}
+      {/* Sprint 272 — Triggers viewer. Sprint 275 — full CRUD now lives
+          on this surface (sidebar Triggers child group retired): the
+          `+ Create Trigger` button opens `CreateTriggerDialog`; each
+          trigger row carries a per-row trash icon that opens
+          `DropTriggerDialog`. The `hasFetchedTriggers` gate prevents an
+          "No triggers" flash on first paint. */}
       {!loading &&
         !error &&
         activeSubTab === "triggers" &&
-        hasFetchedTriggers && <TriggersList triggers={triggers} />}
+        hasFetchedTriggers && (
+          <TriggersList
+            triggers={triggers}
+            onCreate={() => setCreateTriggerDialog(true)}
+            onDrop={(triggerName) => setDropTriggerDialog({ triggerName })}
+          />
+        )}
+
+      {/* Sprint 275 — CreateTriggerDialog mount. Moved here from
+          SchemaTree (Sprint 273) so the trigger CRUD surface is
+          consolidated. `onRefresh` invalidates the schemaStore cache for
+          `(connId, db, schema, table)` so the new trigger appears in
+          the list without a sidebar/tree reload. */}
+      {createTriggerDialog && (
+        <CreateTriggerDialog
+          connectionId={connectionId}
+          database={database}
+          schemaName={schema}
+          tableName={table}
+          open
+          onClose={() => setCreateTriggerDialog(false)}
+          onRefresh={async () => {
+            await refreshTableTriggers(connectionId, database, table, schema);
+            // Pull fresh list into local state so the row count + cards
+            // update immediately; the cache invalidate above ensures the
+            // re-render is consistent with the store.
+            await fetchData();
+          }}
+        />
+      )}
+
+      {/* Sprint 275 — DropTriggerDialog mount. Same wiring as Create;
+          carries the per-row trigger name into the typing-confirm
+          input. */}
+      {dropTriggerDialog && (
+        <DropTriggerDialog
+          connectionId={connectionId}
+          database={database}
+          schemaName={schema}
+          tableName={table}
+          triggerName={dropTriggerDialog.triggerName}
+          open
+          onClose={() => setDropTriggerDialog(null)}
+          onRefresh={async () => {
+            await refreshTableTriggers(connectionId, database, table, schema);
+            await fetchData();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 interface TriggersListProps {
   triggers: TriggerInfo[];
+  onCreate: () => void;
+  onDrop: (triggerName: string) => void;
 }
 
 /**
- * Sprint 272 — read-only viewer for the Triggers sub-tab. Renders one
- * card per trigger with structured metadata (timing / events / orientation
- * / function reference / WHEN clause) followed by the canonical
- * `pg_get_triggerdef` source in a monospace `<pre>` block. Empty state is
- * an italic placeholder (matches the `No constraints` / `No indexes`
- * pattern used by sibling editors).
- *
- * CREATE / DROP affordances are out of scope for Sprint 272 (see master
- * spec § 7 — they land in Sprint 273 / 274). The "Create Trigger…" /
- * "Drop Trigger…" buttons are intentionally absent from this surface;
- * the right-click Table context menu carries disabled placeholders.
+ * Sprint 272 — viewer for the Triggers sub-tab. Sprint 275 — now the
+ * single entry point for trigger CRUD (sidebar Triggers child group was
+ * retired). Surfaces:
+ *   - Header toolbar with `+ Create Trigger` button (opens
+ *     `CreateTriggerDialog` via `onCreate`).
+ *   - One card per trigger with structured metadata + the canonical
+ *     `pg_get_triggerdef` source in a monospace `<pre>` block. Per-row
+ *     trash icon opens `DropTriggerDialog` via `onDrop(triggerName)`.
+ *   - Empty state is an italic placeholder + Create button so the user
+ *     can author their first trigger without leaving this tab.
  */
-function TriggersList({ triggers }: TriggersListProps) {
-  if (triggers.length === 0) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-6 text-sm italic text-muted-foreground">
-        No triggers
-      </div>
-    );
-  }
-
+function TriggersList({ triggers, onCreate, onDrop }: TriggersListProps) {
   return (
-    <div className="flex-1 overflow-auto p-3">
-      <ul className="flex flex-col gap-3">
-        {triggers.map((t) => (
-          <li
-            key={`${t.schema}.${t.table}.${t.name}`}
-            className="rounded border border-border bg-card p-3"
-            aria-label={`Trigger ${t.name}`}
-          >
-            <header className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-mono text-sm font-semibold text-foreground">
-                {t.name}
-              </span>
-              <span className="text-2xs text-muted-foreground">
-                {t.timing} {t.events.join(" OR ")} · FOR EACH {t.orientation}
-              </span>
-            </header>
-            <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-2xs">
-              <dt className="text-muted-foreground">Function</dt>
-              <dd className="font-mono text-foreground">
-                {t.functionSchema}.{t.functionName}
-                {t.arguments ? `(${t.arguments})` : "()"}
-              </dd>
-              {t.whenExpression && (
-                <>
-                  <dt className="text-muted-foreground">When</dt>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <span
+          className="text-2xs uppercase tracking-wider text-muted-foreground"
+          aria-label="Trigger count"
+        >
+          {triggers.length === 0
+            ? "0 triggers"
+            : `${triggers.length} trigger${triggers.length === 1 ? "" : "s"}`}
+        </span>
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={onCreate}
+          aria-label="Create trigger"
+        >
+          <Plus className="size-3" />
+          Create Trigger
+        </Button>
+      </div>
+      {triggers.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center p-6 text-sm italic text-muted-foreground">
+          No triggers
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto p-3">
+          <ul className="flex flex-col gap-3">
+            {triggers.map((t) => (
+              <li
+                key={`${t.schema}.${t.table}.${t.name}`}
+                className="rounded border border-border bg-card p-3"
+                aria-label={`Trigger ${t.name}`}
+              >
+                <header className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="font-mono text-sm font-semibold text-foreground">
+                    {t.name}
+                  </span>
+                  <span className="text-2xs text-muted-foreground">
+                    {t.timing} {t.events.join(" OR ")} · FOR EACH{" "}
+                    {t.orientation}
+                  </span>
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    onClick={() => onDrop(t.name)}
+                    aria-label={`Drop trigger ${t.name}`}
+                    title={`Drop trigger ${t.name}`}
+                    className="ml-auto text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
+                </header>
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-2xs">
+                  <dt className="text-muted-foreground">Function</dt>
                   <dd className="font-mono text-foreground">
-                    {t.whenExpression}
+                    {t.functionSchema}.{t.functionName}
+                    {t.arguments ? `(${t.arguments})` : "()"}
                   </dd>
-                </>
-              )}
-            </dl>
-            <pre
-              data-testid={`trigger-source-${t.name}`}
-              className="mt-2 max-h-72 overflow-auto rounded bg-muted px-2 py-1.5 font-mono text-2xs text-foreground"
-            >
-              {t.definition}
-            </pre>
-          </li>
-        ))}
-      </ul>
+                  {t.whenExpression && (
+                    <>
+                      <dt className="text-muted-foreground">When</dt>
+                      <dd className="font-mono text-foreground">
+                        {t.whenExpression}
+                      </dd>
+                    </>
+                  )}
+                </dl>
+                <pre
+                  data-testid={`trigger-source-${t.name}`}
+                  className="mt-2 max-h-72 overflow-auto rounded bg-muted px-2 py-1.5 font-mono text-2xs text-foreground"
+                >
+                  {t.definition}
+                </pre>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

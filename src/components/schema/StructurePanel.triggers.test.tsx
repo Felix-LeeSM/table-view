@@ -12,10 +12,17 @@
 //     / orientation / function reference / WHEN clause).
 //   - Empty trigger list renders the italic "No triggers" placeholder.
 //
-// CREATE / DROP affordances are deliberately NOT exercised here — they
-// land in Sprint 273 / 274.
-import { describe, it, expect, beforeEach } from "vitest";
+// Sprint 275 (2026-05-13) — sidebar Triggers child group retired;
+// trigger CRUD now lives on this surface. New cases below assert:
+//   - `+ Create Trigger` button mounts the `CreateTriggerDialog`.
+//   - Per-trigger row carries a trash icon (aria-label "Drop trigger
+//     {name}") that mounts the `DropTriggerDialog`.
+//   - After Create / Drop, `refreshTableTriggers` is invoked so the
+//     schemaStore cache + the panel list both refresh.
+//   - Closing each dialog clears its local state slot.
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen, act, fireEvent } from "@testing-library/react";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
   MOCK_TRIGGERS,
   mockGetTableTriggers,
@@ -23,9 +30,21 @@ import {
   resetStructurePanelMocks,
 } from "./__tests__/structurePanelTestHelpers";
 
+// Sprint 275 — `refreshTableTriggers` is the store action invoked by
+// the StructurePanel CRUD post-commit `onRefresh` callbacks. Stubbed so
+// the tests can assert "the cache was invalidated".
+const mockRefreshTableTriggers = vi.fn().mockResolvedValue(MOCK_TRIGGERS);
+
 describe("StructurePanel Triggers tab (Sprint 272)", () => {
   beforeEach(() => {
     resetStructurePanelMocks();
+    // Sprint 275 — wire the refresh action onto the store mock so the
+    // post-commit `onRefresh` paths from Create/Drop can be observed.
+    mockRefreshTableTriggers.mockClear();
+    mockRefreshTableTriggers.mockResolvedValue(MOCK_TRIGGERS);
+    useSchemaStore.setState({
+      refreshTableTriggers: mockRefreshTableTriggers,
+    } as Partial<Parameters<typeof useSchemaStore.setState>[0]>);
   });
 
   it("exposes the Triggers tab after Constraints", async () => {
@@ -136,6 +155,122 @@ describe("StructurePanel Triggers tab (Sprint 272)", () => {
     });
     expect(
       await screen.findByTestId(`trigger-source-${MOCK_TRIGGERS[0]!.name}`),
+    ).toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------
+  // Sprint 275 (2026-05-13) — Trigger CRUD consolidated onto this tab.
+  // -------------------------------------------------------------------
+
+  it("exposes a +Create Trigger button on the Triggers toolbar with aria-label", async () => {
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    const createBtn = screen.getByRole("button", { name: "Create trigger" });
+    expect(createBtn).toBeInTheDocument();
+  });
+
+  it("clicking +Create Trigger mounts CreateTriggerDialog with the table/schema context", async () => {
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    // Dialog is not mounted before the click — the title is unique to it.
+    expect(
+      screen.queryByRole("heading", { name: "Create Trigger" }),
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create trigger" }));
+    });
+    // CreateTriggerDialog rendered with `schemaName.tableName` in the
+    // description — `public.users` per the fixture.
+    expect(
+      screen.getByRole("heading", { name: "Create Trigger" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("public.users")).toBeInTheDocument();
+  });
+
+  it("renders a per-trigger trash icon with aria-label 'Drop trigger {name}'", async () => {
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    const fixture = MOCK_TRIGGERS[0]!;
+    const dropBtn = screen.getByRole("button", {
+      name: `Drop trigger ${fixture.name}`,
+    });
+    expect(dropBtn).toBeInTheDocument();
+  });
+
+  it("clicking the trash icon mounts DropTriggerDialog with the trigger/schema/table props", async () => {
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    const fixture = MOCK_TRIGGERS[0]!;
+    expect(
+      screen.queryByRole("heading", { name: "Drop Trigger" }),
+    ).not.toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: `Drop trigger ${fixture.name}` }),
+      );
+    });
+    // DropTriggerDialog rendered with `{triggerName} on {schema}.{table}`.
+    expect(
+      screen.getByRole("heading", { name: "Drop Trigger" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`${fixture.name} on public.users`),
+    ).toBeInTheDocument();
+  });
+
+  it("closing the CreateTriggerDialog clears the slot state", async () => {
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Create trigger" }));
+    });
+    expect(
+      screen.getByRole("heading", { name: "Create Trigger" }),
+    ).toBeInTheDocument();
+    // Cancel button inside the dialog closes it.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Create Trigger" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closing the DropTriggerDialog clears the slot state", async () => {
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    const fixture = MOCK_TRIGGERS[0]!;
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: `Drop trigger ${fixture.name}` }),
+      );
+    });
+    expect(
+      screen.getByRole("heading", { name: "Drop Trigger" }),
+    ).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Drop Trigger" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("empty trigger list still surfaces the +Create Trigger button so the user can author their first trigger", async () => {
+    mockGetTableTriggers.mockResolvedValueOnce([]);
+    await act(async () => {
+      renderPanel({ initialSubTab: "triggers" });
+    });
+    expect(screen.getByText("No triggers")).toBeInTheDocument();
+    // Toolbar Create button must still be available in the empty state.
+    expect(
+      screen.getByRole("button", { name: "Create trigger" }),
     ).toBeInTheDocument();
   });
 });

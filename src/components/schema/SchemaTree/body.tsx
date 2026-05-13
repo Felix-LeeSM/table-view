@@ -1,15 +1,9 @@
 import type { VirtualItem, Virtualizer } from "@tanstack/react-virtual";
-import type {
-  TableInfo,
-  TriggerInfo,
-  ViewInfo,
-  FunctionInfo,
-} from "@/types/schema";
+import type { TableInfo, ViewInfo, FunctionInfo } from "@/types/schema";
 import type { RdbTreeShape } from "../treeShape";
 import {
   CATEGORIES,
   nodeIdToString,
-  triggerGroupKey,
   type Category,
   type CategoryKey,
   type VisibleRow,
@@ -20,11 +14,6 @@ import {
   renderItemRow,
   renderSchemaRow,
   renderSearchRow,
-  renderTriggerEmptyRow,
-  renderTriggerErrorRow,
-  renderTriggerGroupRow,
-  renderTriggerItemRow,
-  renderTriggerLoadingRow,
   renderVisibleRow,
   type SchemaTreeRowsContext,
 } from "./rows";
@@ -53,12 +42,6 @@ interface SchemaTreeBodyProps {
   shouldVirtualize: boolean;
   rowVirtualizer: Virtualizer<HTMLDivElement, Element>;
   ctx: SchemaTreeRowsContext;
-  // Sprint 272 — Triggers child group state. `triggersBySchemaTable`
-  // is the pre-sliced `(connId, db)` portion of `schemaStore.triggers`.
-  expandedTriggerGroups: Set<string>;
-  triggersBySchemaTable: Record<string, Record<string, TriggerInfo[]>>;
-  loadingTriggerGroups: ReadonlySet<string>;
-  triggerErrors: Record<string, string>;
 }
 
 export function SchemaTreeBody(props: SchemaTreeBodyProps) {
@@ -252,10 +235,6 @@ function CategoryCascade({
   activeTable,
   tableSearch,
   ctx,
-  expandedTriggerGroups,
-  triggersBySchemaTable,
-  loadingTriggerGroups,
-  triggerErrors,
 }: CategoryCascadeProps) {
   if (isLoadingTables && schemaTables.length === 0) {
     return (
@@ -285,10 +264,6 @@ function CategoryCascade({
           activeTable={activeTable}
           tableSearch={tableSearch}
           ctx={ctx}
-          expandedTriggerGroups={expandedTriggerGroups}
-          triggersBySchemaTable={triggersBySchemaTable}
-          loadingTriggerGroups={loadingTriggerGroups}
-          triggerErrors={triggerErrors}
         />
       ))}
     </div>
@@ -306,11 +281,6 @@ interface CategorySectionProps {
   activeTable: string | null;
   tableSearch: Record<string, string>;
   ctx: SchemaTreeRowsContext;
-  // Sprint 272 — Triggers child group state.
-  expandedTriggerGroups: Set<string>;
-  triggersBySchemaTable: Record<string, Record<string, TriggerInfo[]>>;
-  loadingTriggerGroups: ReadonlySet<string>;
-  triggerErrors: Record<string, string>;
 }
 
 function CategorySection({
@@ -324,10 +294,6 @@ function CategorySection({
   activeTable,
   tableSearch,
   ctx,
-  expandedTriggerGroups,
-  triggersBySchemaTable,
-  loadingTriggerGroups,
-  triggerErrors,
 }: CategorySectionProps) {
   const catExpanded = ctx.isCategoryExpanded(schemaName, cat.key);
   const categoryId = nodeIdToString({
@@ -400,26 +366,8 @@ function CategorySection({
                   itemKind,
                   { selectedNodeId, activeSchema, activeTable },
                 );
-                // Sprint 272 — emit the Triggers child group + its
-                // children directly under each Table row. Views /
-                // Functions are not table-scoped objects in PG so
-                // they don't carry trigger affordances.
                 return (
-                  <div key={itemRow.key}>
-                    {renderItemRow(itemRow, ctx)}
-                    {itemKind === "table" && (
-                      <TriggerGroupSubtree
-                        schemaName={schemaName}
-                        tableName={item.name}
-                        selectedNodeId={selectedNodeId}
-                        ctx={ctx}
-                        expandedTriggerGroups={expandedTriggerGroups}
-                        triggersBySchemaTable={triggersBySchemaTable}
-                        loadingTriggerGroups={loadingTriggerGroups}
-                        triggerErrors={triggerErrors}
-                      />
-                    )}
-                  </div>
+                  <div key={itemRow.key}>{renderItemRow(itemRow, ctx)}</div>
                 );
               })}
         </div>
@@ -513,148 +461,4 @@ function buildItemRow(
       selection.activeSchema === schemaName &&
       selection.activeTable === item.name,
   };
-}
-
-interface TriggerGroupSubtreeProps {
-  schemaName: string;
-  tableName: string;
-  selectedNodeId: string | null;
-  ctx: SchemaTreeRowsContext;
-  expandedTriggerGroups: Set<string>;
-  triggersBySchemaTable: Record<string, Record<string, TriggerInfo[]>>;
-  loadingTriggerGroups: ReadonlySet<string>;
-  triggerErrors: Record<string, string>;
-}
-
-/**
- * Sprint 272 — render the Triggers child group header + (when expanded)
- * its child placeholder / individual-trigger rows under a Table item
- * in the eager-nested branch. The virtualized branch uses the flat
- * `VisibleRow` dispatcher (`renderVisibleRow`); both paths share the
- * underlying leaf renderers in `rows.tsx`.
- */
-function TriggerGroupSubtree({
-  schemaName,
-  tableName,
-  selectedNodeId,
-  ctx,
-  expandedTriggerGroups,
-  triggersBySchemaTable,
-  loadingTriggerGroups,
-  triggerErrors,
-}: TriggerGroupSubtreeProps) {
-  const groupKey = triggerGroupKey(schemaName, tableName);
-  const groupNodeId = nodeIdToString({
-    type: "triggerGroup",
-    schema: schemaName,
-    table: tableName,
-  });
-  const isExpanded = expandedTriggerGroups.has(groupKey);
-  const isLoading = loadingTriggerGroups.has(groupKey);
-  const error = triggerErrors[groupKey] ?? null;
-  const triggersForTable =
-    triggersBySchemaTable[schemaName]?.[tableName] ?? null;
-  const triggerCount = triggersForTable?.length ?? null;
-
-  const header = renderTriggerGroupRow(
-    {
-      kind: "trigger-group",
-      key: `trigger-group:${schemaName}:${tableName}`,
-      schemaName,
-      tableName,
-      isExpanded,
-      isSelected: selectedNodeId === groupNodeId,
-      isLoading,
-      triggerCount,
-      error,
-    },
-    ctx,
-  );
-
-  if (!isExpanded) return <>{header}</>;
-
-  if (isLoading && !triggersForTable) {
-    return (
-      <>
-        {header}
-        {renderTriggerLoadingRow({
-          kind: "trigger-loading",
-          key: `trigger-loading:${schemaName}:${tableName}`,
-          schemaName,
-          tableName,
-        })}
-      </>
-    );
-  }
-
-  if (error) {
-    return (
-      <>
-        {header}
-        {renderTriggerErrorRow(
-          {
-            kind: "trigger-error",
-            key: `trigger-error:${schemaName}:${tableName}`,
-            schemaName,
-            tableName,
-            message: error,
-          },
-          ctx,
-        )}
-      </>
-    );
-  }
-
-  if (!triggersForTable) {
-    return (
-      <>
-        {header}
-        {renderTriggerLoadingRow({
-          kind: "trigger-loading",
-          key: `trigger-loading:${schemaName}:${tableName}`,
-          schemaName,
-          tableName,
-        })}
-      </>
-    );
-  }
-
-  if (triggersForTable.length === 0) {
-    return (
-      <>
-        {header}
-        {renderTriggerEmptyRow({
-          kind: "trigger-empty",
-          key: `trigger-empty:${schemaName}:${tableName}`,
-          schemaName,
-          tableName,
-        })}
-      </>
-    );
-  }
-
-  return (
-    <>
-      {header}
-      {triggersForTable.map((trig) => {
-        const trigNodeId = nodeIdToString({
-          type: "trigger",
-          schema: schemaName,
-          table: tableName,
-          triggerName: trig.name,
-        });
-        return renderTriggerItemRow(
-          {
-            kind: "trigger-item",
-            key: `trigger-item:${schemaName}:${tableName}:${trig.name}`,
-            schemaName,
-            tableName,
-            trigger: trig,
-            isSelected: selectedNodeId === trigNodeId,
-          },
-          ctx,
-        );
-      })}
-    </>
-  );
 }
