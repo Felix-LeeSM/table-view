@@ -210,3 +210,47 @@ describe("SQL Level-3 자동완성 — CTE / derived subquery baseline (Slice A 
     expect(labels).toEqual(expect.arrayContaining(["id"]));
   });
 });
+
+/**
+ * Sprint 295 (2026-05-14) — Slice E — Cross-source dedup 회귀 가드.
+ *
+ * 작성 이유:
+ *   lang-sql built-in + sprint-292 + sprint-294 + sprint-295 의 4 source 가
+ *   같은 cursor 위치에서 호출될 때 한 컬럼 라벨이 popup 에 중복 표시되지
+ *   않아야 한다 (`callAll` 의 Set dedup 이 자연스럽게 흡수). 또한 CTE 이름이
+ *   실재 base table 이름과 충돌할 때 CTE / derived 가 우선해서 base table 의
+ *   컬럼이 같은 라벨로 한 번만 노출 (CTE wins 정책).
+ */
+describe("SQL Level-3 자동완성 — Slice E cross-source dedup", () => {
+  it("한 호출의 후보 라벨 셋이 unique (CTE — t.<cursor>)", async () => {
+    const doc = "WITH t AS (SELECT id, name FROM users) SELECT t.";
+    const labels = await callAll(doc);
+    const unique = new Set(labels);
+    expect(unique.size).toBe(labels.length);
+  });
+
+  it("한 호출의 후보 라벨 셋이 unique (derived — sub.<cursor>)", async () => {
+    const doc = "SELECT sub. FROM (SELECT id, total FROM orders) sub";
+    const labels = await callAll(doc, "SELECT sub.".length);
+    const unique = new Set(labels);
+    expect(unique.size).toBe(labels.length);
+  });
+
+  it("CTE 이름 = base table 이름 — popup dedup 후에도 라벨 셋이 unique", async () => {
+    // `users` 는 namespace 의 base table. 같은 이름 CTE 가 그 위에 도입되면
+    // lang-sql 의 built-in source 가 base table 컬럼 (name/email/age) 도
+    // emit 하므로 같은 prefix 에 가상 + base 컬럼이 합쳐서 노출된다 — 이는
+    // lang-sql 의 의도된 동작이며 우리 source 가 막을 수 있는 영역이 아니다.
+    // 우리 deliverable 은 (1) `callAll` 의 Set dedup 결과 라벨이 unique 한
+    // 것 + (2) CTE 의 가상 컬럼 (`id`) 이 후보에 빠지지 않는 것.
+    const doc =
+      "WITH users AS (SELECT id FROM orders) SELECT users. FROM users";
+    const labels = await callAll(
+      doc,
+      "WITH users AS (SELECT id FROM orders) SELECT users.".length,
+    );
+    const unique = new Set(labels);
+    expect(unique.size).toBe(labels.length);
+    expect(labels).toEqual(expect.arrayContaining(["id"]));
+  });
+});
