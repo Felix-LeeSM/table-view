@@ -13,8 +13,8 @@
 //     key does NOT re-invoke the IPC.
 //   - Empty fetch result renders the italic "No triggers" placeholder.
 //   - Per-trigger row exposes its own context menu with "View Source"
-//     enabled + "Create Trigger…" + "Drop Trigger…" disabled
-//     placeholders (Sprint 273 / 274 affordances).
+//     enabled + "Create Trigger…" (Sprint 273 enabled) + "Drop Trigger…"
+//     (Sprint 274 enabled).
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 
@@ -168,10 +168,12 @@ describe("SchemaTree — Triggers child row (Sprint 272 attempt 2)", () => {
     ).toBeInTheDocument();
   });
 
-  it("per-trigger row exposes a context menu with View Source + Create enabled, Drop disabled", async () => {
+  it("per-trigger row exposes a context menu with View Source + Create + Drop all enabled", async () => {
     // Sprint 273 (2026-05-13) — Create Trigger… 메뉴 항목은 disabled
     // placeholder 에서 enabled 로 전환됐다 (CreateTriggerDialog 가
-    // 추가됨). Drop Trigger… 은 여전히 Sprint 274 placeholder.
+    // 추가됨). Sprint 274 (2026-05-13) — Drop Trigger… 도 동일한
+    // mechanical update — disabled placeholder → enabled (DropTriggerDialog
+    // 가 추가됨).
     seedSchemaWithTable();
 
     await act(async () => {
@@ -205,9 +207,12 @@ describe("SchemaTree — Triggers child row (Sprint 272 attempt 2)", () => {
     });
     expect(createItem).not.toHaveAttribute("data-disabled");
 
-    // Drop Trigger… disabled placeholder (Sprint 274).
-    const dropItem = screen.getByRole("menuitem", { name: /drop trigger/i });
-    expect(dropItem).toHaveAttribute("data-disabled");
+    // Sprint 274 — Drop Trigger… is now enabled (opens DropTriggerDialog
+    // pre-populated for the typing-confirm input).
+    const dropItem = screen.getByRole("menuitem", {
+      name: /drop trigger audit_users_insert/i,
+    });
+    expect(dropItem).not.toHaveAttribute("data-disabled");
 
     // The menu container is the radix portal; ensure all 3 menu items
     // live in the SAME menu (defensive — guards against accidentally

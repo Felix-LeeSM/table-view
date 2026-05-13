@@ -24,8 +24,8 @@ use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, CreateIndexRequest,
     CreateTablePlanRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
-    SchemaChangeResult,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, DropTriggerRequest,
+    RenameTableRequest, SchemaChangeResult,
 };
 
 use super::{ensure_expected_db, not_connected};
@@ -304,6 +304,34 @@ pub async fn create_trigger(
     create_trigger_inner(state.inner(), &request).await
 }
 
+async fn drop_trigger_inner(
+    state: &AppState,
+    request: &DropTriggerRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.drop_trigger(request).await
+}
+
+/// Sprint 274 — `DROP TRIGGER` handler. Mirrors `create_trigger` /
+/// `drop_table` body shape: lock connections, dispatch through
+/// `as_rdb()`, optional `ensure_expected_db` probe, delegate to the
+/// trait method. PG concrete impl validates identifiers, emits canonical
+/// SQL with optional CASCADE suffix, and (when `req.preview_only ==
+/// false`) wraps in `sqlx::Transaction::begin/commit`. Non-PG RDB
+/// adapters surface `Unsupported` via the trait default.
+#[tauri::command]
+pub async fn drop_trigger(
+    state: tauri::State<'_, AppState>,
+    request: DropTriggerRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    drop_trigger_inner(state.inner(), &request).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -467,6 +495,17 @@ mod tests {
             function_schema: "audit".into(),
             function_name: "log".into(),
             function_arguments: None,
+            preview_only: true,
+            expected_database: None,
+        }
+    }
+    fn drop_trigger_req(id: &str) -> DropTriggerRequest {
+        DropTriggerRequest {
+            connection_id: id.into(),
+            schema: "public".into(),
+            table: "users".into(),
+            trigger_name: "tg_audit".into(),
+            cascade: false,
             preview_only: true,
             expected_database: None,
         }
@@ -1106,6 +1145,61 @@ mod tests {
         let mut req = create_trigger_req("c");
         req.expected_database = Some("dbB".into());
         match create_trigger_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    // ── Sprint 274 — drop_trigger 4-step contract ───────────────────
+    //
+    // 작성 이유 (2026-05-13): trigger DROP 핸들러도 `_inner` 4-step
+    // contract (NotFound / Unsupported / trait wiring / DbMismatch) 를
+    // 보장한다. mismatch panic-closure 는 Sprint 271c 패턴 재사용 —
+    // current_database 가 `dbA` 인데 expected 가 `dbB` 면 trait 호출
+    // 전에 DbMismatch 가 surface 되고 stub closure 가 panic 하지 않아야
+    // 한다. 시그니처가 `create_trigger` 와 byte-equivalent 이므로 동일한
+    // 4 cases (wiring / NotFound / Unsupported / mismatch) 로 충분.
+
+    #[tokio::test]
+    async fn drop_trigger_routes_to_drop_trigger_trait_method() {
+        let state = state_with("c", rdb_default()).await;
+        let r = drop_trigger_inner(&state, &drop_trigger_req("c"))
+            .await
+            .unwrap();
+        assert_eq!(r.sql, "drop_trigger");
+    }
+
+    #[tokio::test]
+    async fn drop_trigger_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            drop_trigger_inner(&state, &drop_trigger_req("absent")).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn drop_trigger_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            drop_trigger_inner(&state, &drop_trigger_req("doc")).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn drop_trigger_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.drop_trigger_fn = Some(Box::new(|_| {
+            panic!("drop_trigger must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = drop_trigger_req("c");
+        req.expected_database = Some("dbB".into());
+        match drop_trigger_inner(&state, &req).await {
             Err(AppError::DbMismatch { expected, actual }) => {
                 assert_eq!(expected, "dbB");
                 assert_eq!(actual, "dbA");

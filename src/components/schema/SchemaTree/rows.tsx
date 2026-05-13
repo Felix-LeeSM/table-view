@@ -67,6 +67,16 @@ export interface SchemaTreeRowsContext {
    */
   handleCreateTrigger: (tableName: string, schemaName: string) => void;
   /**
+   * Sprint 274 — open the `DropTriggerDialog` modal pre-populated with
+   * the `(schema, table, triggerName)` triple. Wired to the per-trigger
+   * child row's "Drop…" context-menu entry.
+   */
+  handleDropTrigger: (
+    triggerName: string,
+    tableName: string,
+    schemaName: string,
+  ) => void;
+  /**
    * Sprint 272 — open the read-only Triggers sub-tab of `StructurePanel`
    * for the given table. Wired to the Table row's "View Triggers"
    * context-menu entry. Reuses `handleOpenStructure` semantics (opens a
@@ -380,8 +390,11 @@ export function renderItemRow(
             {/* Sprint 272 — Trigger affordances on the Table row. View
                 Triggers is enabled (opens Structure → Triggers sub-tab).
                 Sprint 273 — Create Trigger is wired to the new
-                CreateTriggerDialog. Drop is still a disabled placeholder
-                (Sprint 274). */}
+                CreateTriggerDialog. Sprint 274 — the per-table-row
+                "Drop Trigger…" placeholder is removed: Drop targets a
+                specific trigger and is exposed only on the per-trigger
+                child row context menu (a bulk per-table drop is
+                out-of-scope per master spec § 7). */}
             <ContextMenuItem
               onClick={() =>
                 ctx.handleViewTableTriggers(item.name, row.schemaName)
@@ -395,14 +408,6 @@ export function renderItemRow(
               aria-label={`Create trigger on ${item.name}`}
             >
               <Plus size={14} /> Create Trigger…
-            </ContextMenuItem>
-            <ContextMenuItem
-              danger
-              disabled
-              aria-label="Drop trigger"
-              title="Drop Trigger is coming soon"
-            >
-              <Trash2 size={14} /> Drop Trigger…
             </ContextMenuItem>
             <ContextMenuItem
               onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
@@ -576,8 +581,9 @@ export function renderTriggerErrorRow(
 /**
  * Sprint 272 — individual trigger row. Right-click exposes the
  * per-trigger context menu: "View Source" (enabled, opens Triggers
- * sub-tab), "Create Trigger…" (disabled placeholder for Sprint 273),
- * "Drop Trigger…" (disabled placeholder for Sprint 274).
+ * sub-tab), "Create Trigger…" (Sprint 273 — opens CreateTriggerDialog),
+ * "Drop Trigger…" (Sprint 274 — opens DropTriggerDialog with the trigger
+ * name pre-filled for typing-confirm).
  */
 export function renderTriggerItemRow(
   row: Extract<VisibleRow, { kind: "trigger-item" }>,
@@ -643,9 +649,10 @@ export function renderTriggerItemRow(
         </ContextMenuItem>
         <ContextMenuItem
           danger
-          disabled
-          aria-label="Drop trigger"
-          title="Drop Trigger is coming soon"
+          onClick={() =>
+            ctx.handleDropTrigger(trig.name, row.tableName, row.schemaName)
+          }
+          aria-label={`Drop trigger ${trig.name}`}
         >
           <Trash2 size={14} /> Drop Trigger…
         </ContextMenuItem>

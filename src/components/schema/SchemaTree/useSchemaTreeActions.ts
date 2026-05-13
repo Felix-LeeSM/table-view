@@ -88,6 +88,22 @@ export interface SchemaTreeActions {
   setCreateTriggerDialog: (
     state: { schemaName: string; tableName: string } | null,
   ) => void;
+  // Sprint 274 — drop-trigger modal state. Slot wrapper keys on the
+  // `(schema, table, triggerName)` triple so the dialog mounts with the
+  // right-clicked trigger pre-populated for the typing-confirm input.
+  // `null` = modal closed.
+  dropTriggerDialog: {
+    schemaName: string;
+    tableName: string;
+    triggerName: string;
+  } | null;
+  setDropTriggerDialog: (
+    state: {
+      schemaName: string;
+      tableName: string;
+      triggerName: string;
+    } | null,
+  ) => void;
 
   // Schema cache (loading / refresh)
   schemas: ReturnType<typeof useSchemaCache>["schemas"];
@@ -147,6 +163,17 @@ export interface SchemaTreeActions {
    * mounts the modal with the right parent table pre-populated.
    */
   handleCreateTrigger: (tableName: string, schemaName: string) => void;
+  /**
+   * Sprint 274 — opener for the DropTriggerDialog. Right-click "Drop…"
+   * on a per-trigger child row binds here. Stores the
+   * `(schema, table, triggerName)` triple so the slot wrapper mounts
+   * the modal pre-populated for the typing-confirm input.
+   */
+  handleDropTrigger: (
+    triggerName: string,
+    tableName: string,
+    schemaName: string,
+  ) => void;
   /**
    * Sprint 273 — re-fetch the triggers cached for `(connId, db, schema,
    * table)`. Called by the CreateTriggerDialog slot's `onRefresh`
@@ -305,6 +332,15 @@ export function useSchemaTreeActions({
   const [createTriggerDialog, setCreateTriggerDialog] = useState<{
     schemaName: string;
     tableName: string;
+  } | null>(null);
+  // Sprint 274 — DropTriggerDialog slot. Mounting is gated by the slot
+  // value (null vs `{ schemaName, tableName, triggerName }`); the
+  // modal's own commit-success path closes itself via
+  // `setDropTriggerDialog(null)`.
+  const [dropTriggerDialog, setDropTriggerDialog] = useState<{
+    schemaName: string;
+    tableName: string;
+    triggerName: string;
   } | null>(null);
 
   const handleExpandSchema = useCallback(
@@ -618,6 +654,17 @@ export function useSchemaTreeActions({
     [],
   );
 
+  // Sprint 274 — opener for DropTriggerDialog. Per-trigger child row
+  // right-click "Drop…" binds here. Threads through the
+  // `(schema, table, triggerName)` triple so the modal's typing-confirm
+  // input can validate against the exact trigger name.
+  const handleDropTrigger = useCallback(
+    (triggerName: string, tableName: string, schemaName: string) => {
+      setDropTriggerDialog({ schemaName, tableName, triggerName });
+    },
+    [],
+  );
+
   // Sprint 273 — bypass-cache refresh for the CreateTriggerDialog slot's
   // post-commit success path. Reads the workspaceKey at call time so the
   // refresh targets the workspace this hook is bound to, not whichever
@@ -698,6 +745,8 @@ export function useSchemaTreeActions({
     setCreateTableDialog,
     createTriggerDialog,
     setCreateTriggerDialog,
+    dropTriggerDialog,
+    setDropTriggerDialog,
 
     // Schema cache
     schemas,
@@ -729,6 +778,7 @@ export function useSchemaTreeActions({
     handleFunctionClick,
     handleCreateTable,
     handleCreateTrigger,
+    handleDropTrigger,
     refreshTableTriggersForSlot,
   };
 }

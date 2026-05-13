@@ -548,6 +548,37 @@ pub struct CreateTriggerRequest {
     pub expected_database: Option<String>,
 }
 
+/// Sprint 274 — request payload for `DROP TRIGGER`. PG emitter validates
+/// `trigger_name`, `schema`, and `table` via the shared
+/// `validate_identifier` helper, then builds
+/// `DROP TRIGGER "<name>" ON "<schema>"."<table>"` (+ trailing ` CASCADE`
+/// when `cascade == true`).
+///
+/// `cascade` is opt-in (default `false` → PG's implicit RESTRICT, byte-
+/// equivalent SQL emission omits the `RESTRICT` keyword; mirrors Sprint
+/// 235 `DropTableRequest` convention). `preview_only` toggles SQL
+/// emission vs. `sqlx::Transaction::begin/commit` execution.
+/// `expected_database` opt-in DbMismatch guard (Sprint 271c).
+///
+/// Wire shape: `#[serde(rename_all = "camelCase")]` so the TS mirror in
+/// `src/types/schema.ts` consumes payloads with `connectionId`,
+/// `triggerName`, `cascade`, `previewOnly`, `expectedDatabase`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DropTriggerRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub table: String,
+    pub trigger_name: String,
+    #[serde(default)]
+    pub cascade: bool,
+    #[serde(default)]
+    pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
+}
+
 /// Sprint 272 — single trigger entry returned by
 /// `list_triggers(connection_id, schema, table, expected_database?)`.
 ///
@@ -1433,6 +1464,58 @@ mod tests {
         assert!(parsed.expected_database.is_none());
         assert!(parsed.when_expression.is_none());
         assert!(parsed.function_arguments.is_none());
+    }
+
+    #[test]
+    fn drop_trigger_request_serde_roundtrip() {
+        // Sprint 274 — `DropTriggerRequest` round-trips with camelCase
+        // wire form (`connectionId`, `triggerName`, `cascade`,
+        // `previewOnly`, `expectedDatabase`). `cascade`, `preview_only`
+        // and `expected_database` default to `false` / `None` when
+        // omitted (`#[serde(default)]`).
+        let req = DropTriggerRequest {
+            connection_id: "conn-1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            trigger_name: "tg_audit".to_string(),
+            cascade: true,
+            preview_only: true,
+            expected_database: Some("appdb".to_string()),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(
+            json.contains("\"connectionId\":\"conn-1\""),
+            "expected camelCase connectionId, got: {json}"
+        );
+        assert!(
+            json.contains("\"triggerName\":\"tg_audit\""),
+            "expected camelCase triggerName, got: {json}"
+        );
+        assert!(json.contains("\"cascade\":true"));
+        assert!(json.contains("\"previewOnly\":true"));
+        assert!(json.contains("\"expectedDatabase\":\"appdb\""));
+        let deserialized: DropTriggerRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn-1");
+        assert_eq!(deserialized.schema, "public");
+        assert_eq!(deserialized.table, "users");
+        assert_eq!(deserialized.trigger_name, "tg_audit");
+        assert!(deserialized.cascade);
+        assert!(deserialized.preview_only);
+        assert_eq!(deserialized.expected_database, Some("appdb".to_string()));
+
+        // Back-compat — payload omitting `cascade`, `previewOnly`, and
+        // `expectedDatabase` deserialises to false / None (Sprint 274
+        // default-flag invariant).
+        let minimal = r#"{
+            "connectionId":"c",
+            "schema":"s",
+            "table":"t",
+            "triggerName":"tg"
+        }"#;
+        let parsed: DropTriggerRequest = serde_json::from_str(minimal).unwrap();
+        assert!(!parsed.cascade);
+        assert!(!parsed.preview_only);
+        assert!(parsed.expected_database.is_none());
     }
 
     #[test]

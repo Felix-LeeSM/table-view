@@ -11,8 +11,8 @@ pub use schema::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
     ConstraintDefinition, CreateIndexRequest, CreateTablePlanConstraint, CreateTablePlanIndex,
     CreateTablePlanRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
-    SchemaChangeResult,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, DropTriggerRequest,
+    RenameTableRequest, SchemaChangeResult,
 };
 pub use schema::{
     ColumnInfo, ConstraintInfo, FilterCondition, FilterOperator, FunctionInfo, IndexInfo,

@@ -161,8 +161,10 @@ export function analyzeStatement(sql: string): StatementAnalysis {
     return { kind: "update", severity: "warn", reasons: [] };
   }
 
-  if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW)\b/.test(upper)) {
-    const match = upper.match(/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW)\b/);
+  if (/^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER)\b/.test(upper)) {
+    const match = upper.match(
+      /^DROP\s+(TABLE|DATABASE|SCHEMA|INDEX|VIEW|TRIGGER)\b/,
+    );
     const reason = match ? `DROP ${match[1]}` : "DROP";
     return { kind: "ddl-drop", severity: "danger", reasons: [reason] };
   }

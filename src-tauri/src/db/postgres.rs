@@ -49,9 +49,9 @@ use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DatabaseType,
-    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
-    FunctionInfo, IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData,
-    TableInfo, TriggerInfo, ViewInfo,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+    DropTriggerRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -277,6 +277,16 @@ impl RdbAdapter for PostgresAdapter {
         // already takes `&CreateTriggerRequest` and branches on
         // `preview_only` for preview-vs-execute.
         Box::pin(async move { self.create_trigger(req).await })
+    }
+
+    fn drop_trigger<'a>(
+        &'a self,
+        req: &'a DropTriggerRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        // Sprint 274 — request-shaped delegate. Concrete inherent method
+        // already takes `&DropTriggerRequest` and branches on
+        // `preview_only` for preview-vs-execute.
+        Box::pin(async move { self.drop_trigger(req).await })
     }
 
     fn get_table_indexes<'a>(

@@ -11,6 +11,7 @@ import type {
   DropConstraintRequest,
   DropIndexRequest,
   DropTableRequest,
+  DropTriggerRequest,
   RenameTableRequest,
   SchemaChangeResult,
 } from "@/types/schema";
@@ -227,4 +228,22 @@ export async function createTrigger(
   request: CreateTriggerRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("create_trigger", { request });
+}
+
+/**
+ * Sprint 274 — `DROP TRIGGER` wrapper. The `DropTriggerDialog` calls
+ * this twice: first with `previewOnly: true` for the inline DDL preview
+ * pane, then with `previewOnly: false` for the commit. Backend
+ * validates `trigger_name` / `schema` / `table` identifiers, emits
+ * `DROP TRIGGER "name" ON "schema"."table"` (+ trailing ` CASCADE` when
+ * `cascade === true`), and (when `previewOnly === false`) wraps the
+ * statement in `sqlx::Transaction::begin/commit`. Non-PG RDB adapters
+ * surface `AppError::Unsupported`.
+ *
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
+export async function dropTrigger(
+  request: DropTriggerRequest,
+): Promise<SchemaChangeResult> {
+  return invoke<SchemaChangeResult>("drop_trigger", { request });
 }

@@ -31,6 +31,7 @@ import {
   CreateTableDialogSlot,
   CreateTriggerDialogSlot,
   DropTableDialogSlot,
+  DropTriggerDialogSlot,
   RenameTableDialogSlot,
 } from "./SchemaTree/dialogs";
 import { useSchemaTreeActions } from "./SchemaTree/useSchemaTreeActions";
@@ -201,6 +202,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleCreateTable: actions.handleCreateTable,
     // Sprint 273 — CreateTriggerDialog opener.
     handleCreateTrigger: actions.handleCreateTrigger,
+    // Sprint 274 — DropTriggerDialog opener.
+    handleDropTrigger: actions.handleDropTrigger,
     // Sprint 272 — Triggers child group handlers.
     toggleTriggerGroup: actions.toggleTriggerGroup,
     retryLoadTriggers: actions.retryLoadTriggers,
@@ -447,6 +450,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         database={db}
         createTriggerDialog={actions.createTriggerDialog}
         onClose={() => actions.setCreateTriggerDialog(null)}
+        onRefresh={actions.refreshTableTriggersForSlot}
+      />
+
+      <DropTriggerDialogSlot
+        connectionId={connectionId}
+        database={db}
+        dropTriggerDialog={actions.dropTriggerDialog}
+        onClose={() => actions.setDropTriggerDialog(null)}
         onRefresh={actions.refreshTableTriggersForSlot}
       />
     </div>

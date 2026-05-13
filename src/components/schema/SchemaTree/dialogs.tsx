@@ -4,6 +4,7 @@ import CreateTableDialog from "../CreateTableDialog";
 import RenameTableDialog from "../RenameTableDialog";
 import DropTableDialog from "../DropTableDialog";
 import CreateTriggerDialog from "../CreateTriggerDialog";
+import DropTriggerDialog from "../DropTriggerDialog";
 
 /**
  * Dialog mount slots for `SchemaTree`. Sprint 235 collapses the legacy
@@ -155,6 +156,53 @@ export function CreateTriggerDialogSlot({
         await onRefresh(
           createTriggerDialog.schemaName,
           createTriggerDialog.tableName,
+        );
+      }}
+    />
+  );
+}
+
+/**
+ * Sprint 274 — `DropTriggerDialog` mount slot. Mirrors
+ * `CreateTriggerDialogSlot` shape; carries the target trigger name
+ * (typing-confirm input target) in addition to the `(schema, table)`
+ * pair. `onRefresh` re-fetches the parent table's trigger list so the
+ * dropped trigger disappears from the Triggers child group after a
+ * successful commit.
+ */
+interface DropTriggerDialogSlotProps {
+  connectionId: string;
+  database: string;
+  dropTriggerDialog: {
+    schemaName: string;
+    tableName: string;
+    triggerName: string;
+  } | null;
+  onClose: () => void;
+  onRefresh: (schemaName: string, tableName: string) => Promise<void> | void;
+}
+
+export function DropTriggerDialogSlot({
+  connectionId,
+  database,
+  dropTriggerDialog,
+  onClose,
+  onRefresh,
+}: DropTriggerDialogSlotProps) {
+  if (!dropTriggerDialog) return null;
+  return (
+    <DropTriggerDialog
+      connectionId={connectionId}
+      database={database}
+      schemaName={dropTriggerDialog.schemaName}
+      tableName={dropTriggerDialog.tableName}
+      triggerName={dropTriggerDialog.triggerName}
+      open
+      onClose={onClose}
+      onRefresh={async () => {
+        await onRefresh(
+          dropTriggerDialog.schemaName,
+          dropTriggerDialog.tableName,
         );
       }}
     />

@@ -14,8 +14,9 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
     CreateTriggerRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
-    DropTableRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
-    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
+    DropTableRequest, DropTriggerRequest, FilterCondition, FunctionInfo, IndexInfo,
+    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
+    ViewInfo,
 };
 
 use super::types::{
@@ -458,6 +459,28 @@ pub trait RdbAdapter: DbAdapter {
         Box::pin(async {
             Err(AppError::Unsupported(
                 "This adapter does not support trigger creation".into(),
+            ))
+        })
+    }
+
+    /// Sprint 274 — `DROP TRIGGER` SQL emitter + execute.
+    ///
+    /// PG override validates identifiers and emits
+    /// `DROP TRIGGER "<name>" ON "<schema>"."<table>"` (+ trailing
+    /// ` CASCADE` when `req.cascade == true`); when
+    /// `req.preview_only == false`, wraps the statement in
+    /// `sqlx::Transaction::begin/commit`. Non-PG RDB adapters
+    /// (MySQL/SQLite) inherit the default `Unsupported` until
+    /// dialect-specific implementations land. Non-RDB adapters reach
+    /// this method only via `as_rdb()?` which already fails with
+    /// `Unsupported(relational)` for Document paradigm callers.
+    fn drop_trigger<'a>(
+        &'a self,
+        _req: &'a DropTriggerRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support trigger drop".into(),
             ))
         })
     }

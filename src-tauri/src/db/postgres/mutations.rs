@@ -12,8 +12,8 @@ use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
     CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
-    SchemaChangeResult,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, DropTriggerRequest,
+    RenameTableRequest, SchemaChangeResult,
 };
 
 use super::PostgresAdapter;
@@ -237,6 +237,45 @@ fn build_create_trigger_sql(req: &CreateTriggerRequest) -> Result<String, AppErr
         qualified_function,
         args_clause,
     );
+    Ok(sql)
+}
+
+/// Sprint 274 — `DROP TRIGGER` SQL emitter (pure helper, no pool access
+/// so it is unit-testable from `#[cfg(test)]` fixtures without a running
+/// PG).
+///
+/// Emission shape:
+///
+///   `DROP TRIGGER "<name>" ON "<schema>"."<table>"` (+ trailing
+///   ` CASCADE` when `req.cascade == true`).
+///
+/// Validation order (each returns `AppError::Validation` on failure):
+///   1. `trigger_name` passes `validate_identifier`.
+///   2. `schema` passes `validate_identifier`.
+///   3. `table` passes `validate_identifier`.
+///
+/// No `IF EXISTS` keyword — let PG surface its native `trigger "X" for
+/// relation "Y" does not exist` error verbatim (mirrors Sprint 235
+/// `drop_table` policy).
+fn build_drop_trigger_sql(req: &DropTriggerRequest) -> Result<String, AppError> {
+    validate_identifier(&req.trigger_name, "Trigger name")?;
+    validate_identifier(&req.schema, "Schema name")?;
+    validate_identifier(&req.table, "Table name")?;
+
+    let qualified_target = qualified_table(&req.schema, &req.table);
+    let sql = if req.cascade {
+        format!(
+            "DROP TRIGGER {} ON {} CASCADE",
+            quote_identifier(&req.trigger_name),
+            qualified_target,
+        )
+    } else {
+        format!(
+            "DROP TRIGGER {} ON {}",
+            quote_identifier(&req.trigger_name),
+            qualified_target,
+        )
+    };
     Ok(sql)
 }
 
@@ -1118,6 +1157,53 @@ impl PostgresAdapter {
         );
         Ok(SchemaChangeResult { sql })
     }
+
+    /// Sprint 274 — `DROP TRIGGER` SQL emitter + execute.
+    ///
+    /// Builds the canonical SQL via `build_drop_trigger_sql` (identifier
+    /// validation, CASCADE branch). `req.preview_only=true` returns the
+    /// built SQL without touching the database. `req.preview_only=false`
+    /// wraps the single statement in `sqlx::Transaction::begin/commit`
+    /// for parity with `drop_table` / `create_trigger` — a failure rolls
+    /// back rather than leaving a partial state.
+    ///
+    /// No pre-existence check — let PG surface its native `trigger "X"
+    /// for relation "Y" does not exist` error verbatim (mirrors Sprint
+    /// 235 `drop_table` pre-existence removal).
+    pub async fn drop_trigger(
+        &self,
+        req: &DropTriggerRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        let sql = build_drop_trigger_sql(req)?;
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let pool = self.active_pool().await?;
+
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            // Best-effort rollback — see `drop_table` for the rationale
+            // (the original DB error is the user-facing failure).
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!(
+            "Dropped trigger {} on {}.{}",
+            req.trigger_name, req.schema, req.table
+        );
+        Ok(SchemaChangeResult { sql })
+    }
 }
 
 #[cfg(test)]
@@ -1128,7 +1214,7 @@ mod tests {
         AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
         ConstraintDefinition, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest,
         DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
-        RenameTableRequest,
+        DropTriggerRequest, RenameTableRequest,
     };
 
     // ── drop_table / rename_table — Sprint 235 fixtures ──────────────
@@ -3743,5 +3829,140 @@ mod tests {
         assert!(err
             .to_string()
             .contains("INSTEAD OF triggers must declare exactly one event"));
+    }
+
+    // ── Sprint 274 — build_drop_trigger_sql fixtures ─────────────────
+    //
+    // 작성 이유 (2026-05-13): trigger DROP 의 SQL emission 을 cascade on/off
+    // 두 분기로 박제 + identifier validation 3 식별자 (trigger_name /
+    // schema / table) 의 거부 경로를 단언. `build_drop_trigger_sql` 은
+    // pool-free 순수 헬퍼이므로 fixture 만으로 검증 가능. preview vs.
+    // execute 분기는 `commands/rdb/ddl.rs` 의 wiring / mismatch 테스트가
+    // 담당.
+
+    fn drop_trigger_req(
+        trigger_name: &str,
+        schema: &str,
+        table: &str,
+        cascade: bool,
+    ) -> DropTriggerRequest {
+        DropTriggerRequest {
+            connection_id: "conn1".to_string(),
+            schema: schema.to_string(),
+            table: table.to_string(),
+            trigger_name: trigger_name.to_string(),
+            cascade,
+            preview_only: true,
+            expected_database: None,
+        }
+    }
+
+    #[test]
+    fn drop_trigger_no_cascade_byte_equivalent() {
+        // Master spec § AC-274-02 fixture — minimal happy path emits
+        // `DROP TRIGGER "name" ON "schema"."table"` with no trailing
+        // keyword. Quoting via `validate_identifier` + `quote_identifier`
+        // is byte-stable.
+        let req = drop_trigger_req("tg_audit", "public", "users", false);
+        let sql = build_drop_trigger_sql(&req).expect("emit OK");
+        assert_eq!(sql, r#"DROP TRIGGER "tg_audit" ON "public"."users""#);
+    }
+
+    #[test]
+    fn drop_trigger_cascade_byte_equivalent() {
+        // Master spec § AC-274-02 fixture — CASCADE branch appends a
+        // trailing ` CASCADE` keyword separated by a single space (the
+        // statement is otherwise byte-equivalent to the no-CASCADE
+        // form).
+        let req = drop_trigger_req("tg_audit", "public", "users", true);
+        let sql = build_drop_trigger_sql(&req).expect("emit OK");
+        assert_eq!(
+            sql,
+            r#"DROP TRIGGER "tg_audit" ON "public"."users" CASCADE"#
+        );
+    }
+
+    #[test]
+    fn drop_trigger_rejects_invalid_trigger_name() {
+        // Identifier validation rejects embedded double-quote characters
+        // (the helper whitelist allows only `[a-zA-Z_][a-zA-Z0-9_]*`).
+        // Without rejection, an embedded `"` could close the quoted
+        // identifier and inject syntax.
+        let req = drop_trigger_req("bad\"name", "public", "users", false);
+        let err = build_drop_trigger_sql(&req).unwrap_err();
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "Expected Validation error, got: {err:?}"
+        );
+        assert!(err.to_string().contains("Trigger name"));
+    }
+
+    #[test]
+    fn drop_trigger_rejects_invalid_schema() {
+        // Identifier validation rejects whitespace in schema names —
+        // `bad schema` fails the body-character whitelist.
+        let req = drop_trigger_req("tg_audit", "bad schema", "users", false);
+        let err = build_drop_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Schema name"));
+    }
+
+    #[test]
+    fn drop_trigger_rejects_invalid_table() {
+        // 65-byte table name exceeds NAMEDATALEN (63) and is rejected
+        // before SQL emission so PG never sees the over-length value.
+        let long_table = "t".repeat(65);
+        let req = drop_trigger_req("tg_audit", "public", &long_table, false);
+        let err = build_drop_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Table name"));
+        assert!(err.to_string().contains("63 bytes"));
+    }
+
+    #[test]
+    fn drop_trigger_rejects_empty_trigger_name() {
+        // Empty trigger_name surfaces "must not be empty" — Sprint 235
+        // identifier helper rule.
+        let req = drop_trigger_req("", "public", "users", false);
+        let err = build_drop_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Trigger name"));
+        assert!(err.to_string().contains("must not be empty"));
+    }
+
+    #[tokio::test]
+    async fn drop_trigger_without_connection_fails_non_preview() {
+        // Sprint 274 — execute branch (preview_only=false) requires a
+        // live pool; without one the call surfaces the connection
+        // sentinel before any DB work happens (mirrors Sprint 235
+        // `drop_table_without_connection_fails_non_preview`).
+        let adapter = PostgresAdapter::new();
+        let req = DropTriggerRequest {
+            connection_id: "conn1".into(),
+            schema: "public".into(),
+            table: "users".into(),
+            trigger_name: "tg_audit".into(),
+            cascade: false,
+            preview_only: false,
+            expected_database: None,
+        };
+        let result = adapter.drop_trigger(&req).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("Not connected"),
+            "Expected 'Not connected' error, got: {err_msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn drop_trigger_preview_only_does_not_execute() {
+        // preview_only=true returns the built SQL without touching the
+        // pool. Mirrors the Sprint 235 `drop_table_preview_only_does_not_execute`
+        // pattern — the adapter has no pool but preview still succeeds.
+        let adapter = PostgresAdapter::new();
+        let req = drop_trigger_req("tg_audit", "public", "users", false);
+        let result = adapter.drop_trigger(&req).await.expect("preview OK");
+        assert_eq!(result.sql, r#"DROP TRIGGER "tg_audit" ON "public"."users""#);
     }
 }

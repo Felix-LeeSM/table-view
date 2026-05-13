@@ -509,6 +509,30 @@ export interface CreateTriggerRequest {
 }
 
 /**
+ * Sprint 274 — `DROP TRIGGER` request. Mirrors the Rust
+ * `DropTriggerRequest` struct with `#[serde(rename_all = "camelCase")]`.
+ *
+ * `cascade` defaults to `false` (PG implicit RESTRICT; SQL omits the
+ * `RESTRICT` keyword for byte-equivalence with the implicit form,
+ * mirroring Sprint 235 `DropTableRequest` convention). When `true`, the
+ * emitted SQL appends a trailing ` CASCADE` keyword. `previewOnly`
+ * toggles between SQL emission and `sqlx::Transaction::begin/commit`
+ * execution.
+ */
+export interface DropTriggerRequest {
+  connectionId: string;
+  schema: string;
+  table: string;
+  triggerName: string;
+  cascade?: boolean;
+  previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
+}
+
+/**
  * Sprint 230 — single Postgres type entry returned by
  * `tauri.listPostgresTypes(connectionId)`. The wire shape matches the
  * Rust `PostgresTypeInfo` struct (snake_case `type_kind` mirrors serde
