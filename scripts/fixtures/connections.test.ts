@@ -56,15 +56,15 @@ function decrypt(b64: string, key: Buffer): string {
 }
 
 describe("connections — storage envelope contract (Rust crypto::decrypt compat)", () => {
-  it("auto-creates the .key file (32-byte base64) when missing", () => {
-    upsertConnections(loadSpec("e2e"));
+  it("auto-creates the .key file (32-byte base64) when missing", async () => {
+    await upsertConnections(loadSpec("e2e"));
     const keyPath = resolve(tempDir, ".key");
     const key = Buffer.from(readFileSync(keyPath, "utf8").trim(), "base64");
     expect(key.length).toBe(32);
   });
 
-  it("emits passwords that round-trip through AES-256-GCM with the .key", () => {
-    upsertConnections(loadSpec("e2e"));
+  it("emits passwords that round-trip through AES-256-GCM with the .key", async () => {
+    await upsertConnections(loadSpec("e2e"));
     const key = Buffer.from(
       readFileSync(resolve(tempDir, ".key"), "utf8").trim(),
       "base64",
@@ -79,14 +79,14 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     }
   });
 
-  it("respects an existing .key (does not regenerate) so the app can already own one", () => {
+  it("respects an existing .key (does not regenerate) so the app can already own one", async () => {
     const fixedKey = nodeRandomBytes(32);
     writeFileSync(
       resolve(tempDir, ".key"),
       fixedKey.toString("base64"),
       "utf8",
     );
-    upsertConnections(loadSpec("e2e"));
+    await upsertConnections(loadSpec("e2e"));
     const onDisk = Buffer.from(
       readFileSync(resolve(tempDir, ".key"), "utf8").trim(),
       "base64",
@@ -94,9 +94,9 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(onDisk.equals(fixedKey)).toBe(true);
   });
 
-  it("upsert is idempotent — running twice yields no duplicate ids", () => {
-    upsertConnections(loadSpec("e2e"));
-    upsertConnections(loadSpec("e2e"));
+  it("upsert is idempotent — running twice yields no duplicate ids", async () => {
+    await upsertConnections(loadSpec("e2e"));
+    await upsertConnections(loadSpec("e2e"));
     const conns = JSON.parse(
       readFileSync(resolve(tempDir, "connections.json"), "utf8"),
     ) as { connections: { id: string }[] };
@@ -104,8 +104,8 @@ describe("connections — storage envelope contract (Rust crypto::decrypt compat
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("clear removes only fixture-* connections, leaving user entries intact", () => {
-    upsertConnections(loadSpec("e2e"));
+  it("clear removes only fixture-* connections, leaving user entries intact", async () => {
+    await upsertConnections(loadSpec("e2e"));
     // Inject a non-fixture entry the user might have added.
     const path = resolve(tempDir, "connections.json");
     const data = JSON.parse(readFileSync(path, "utf8")) as {

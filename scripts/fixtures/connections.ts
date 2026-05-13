@@ -23,7 +23,11 @@ import { homedir, platform } from "node:os";
 import type { ProfileSpec, ResolvedSpec } from "./spec.js";
 import { pgEnvConn } from "./postgres.js";
 import { mongoEnvConn } from "./mongo.js";
-import { mysqlEnvConn } from "./mysql.js";
+import {
+  ensureMysqlDatabaseAndGrant,
+  mysqlEnvConn,
+  mysqlRootEnvConn,
+} from "./mysql.js";
 
 const FIXTURE_GROUP_ID = "fixture-group";
 const FIXTURE_GROUP_NAME = "Fixtures";
@@ -158,10 +162,35 @@ function saveStorage(data: StorageData): void {
   }
 }
 
-export function upsertConnections(spec: ResolvedSpec): {
+export interface UpsertOptions {
+  /**
+   * Sprint 281 — when true, root-creds 로 fixture profile 의 mysql DB 를
+   * ensure 하고 testuser GRANT 를 부여한다. CLI (`pnpm db:connections
+   * upsert`) 는 항상 true 로 호출해 사용자 surface 의 1044 (Access denied)
+   * 를 차단. unit test 는 default `false` 로 docker mysql 미의존 환경에서도
+   * `upsertConnections` 의 storage 로직만 검증할 수 있게 한다.
+   */
+  ensureMysql?: boolean;
+}
+
+export async function upsertConnections(
+  spec: ResolvedSpec,
+  opts: UpsertOptions = {},
+): Promise<{
   added: number;
   updated: number;
-} {
+}> {
+  const profile = spec.profileSpec as ProfileSpec;
+  if (
+    opts.ensureMysql &&
+    profile.connections?.mysql &&
+    profile.connections.mysql.length > 0
+  ) {
+    const mysql = mysqlEnvConn();
+    const mysqlDb = profile.database.mysql ?? profile.database.pg;
+    await ensureMysqlDatabaseAndGrant(mysqlRootEnvConn(), mysqlDb, mysql.user);
+  }
+
   const data = loadStorage();
   let added = 0;
   let updated = 0;

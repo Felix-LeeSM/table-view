@@ -32,6 +32,22 @@ export function mysqlEnvConn(): MysqlConnection {
   };
 }
 
+/**
+ * Sprint 281 — fixture profile 의 mysql DB 를 ensure 하고 testuser GRANT
+ * 까지 부여하려면 root 권한 필요. docker-compose mysql 의 entrypoint 가
+ * `MYSQL_DATABASE` 한 개만 만들고 그 DB 에만 testuser GRANT 를 부여하므로,
+ * fixture 가 그 외 DB (table_view_development, table_view_e2e) 를 쓰려면
+ * root 로 별도 GRANT 가 필요하다.
+ */
+export function mysqlRootEnvConn(): MysqlConnection {
+  return {
+    host: process.env.MYSQL_HOST ?? "localhost",
+    port: Number(process.env.MYSQL_PORT ?? 13306),
+    user: "root",
+    password: process.env.MYSQL_ROOT_PASSWORD ?? "testroot",
+  };
+}
+
 async function withClient<T>(
   conn: MysqlConnection,
   database: string | null,
@@ -70,6 +86,33 @@ export async function ensureMysqlDatabase(
     await c.query(
       `CREATE DATABASE IF NOT EXISTS ${quoted} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
     );
+  });
+}
+
+/**
+ * Sprint 281 — fixture profile 이 명시한 mysql DB 를 root 권한으로 만들고
+ * testuser 에게 ALL PRIVILEGES 를 부여한다. docker-compose mysql 의
+ * entrypoint 는 `MYSQL_DATABASE` 한 개만 만들고 거기에만 testuser 권한
+ * 을 자동 부여 — 그 외 DB 는 connect 시 1044 (Access denied) 가 나므로
+ * `db:connections upsert <profile>` 가 사용자에게 working connection 을
+ * 제공하려면 이 단계가 필수.
+ *
+ * 식별자 escape: `username` 은 환경변수 입력이라 외부 사용자 제어 영역이
+ * 아니지만 single-quote 한 글자만 안전을 위해 double-escape.
+ */
+export async function ensureMysqlDatabaseAndGrant(
+  rootConn: MysqlConnection,
+  dbName: string,
+  username: string,
+): Promise<void> {
+  await withClient(rootConn, null, async (c) => {
+    const quotedDb = "`" + dbName.replace(/`/g, "``") + "`";
+    const quotedUser = "'" + username.replace(/'/g, "''") + "'";
+    await c.query(
+      `CREATE DATABASE IF NOT EXISTS ${quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    );
+    await c.query(`GRANT ALL PRIVILEGES ON ${quotedDb}.* TO ${quotedUser}@'%'`);
+    await c.query(`FLUSH PRIVILEGES`);
   });
 }
 

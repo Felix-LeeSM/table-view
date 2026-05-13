@@ -173,10 +173,13 @@ async function cmdReset(
   );
 }
 
-function cmdConnections(action: string, profile: string): void {
+async function cmdConnections(action: string, profile: string): Promise<void> {
   if (action === "upsert") {
     const spec = loadSpec(profile);
-    const r = upsertConnections(spec);
+    // Sprint 281 — CLI 는 항상 ensureMysql=true 로 호출. 사용자가 다음에
+    // mysql connection 을 클릭했을 때 1044 (Access denied) 를 만나지 않도록
+    // root 권한으로 GRANT 를 미리 부여한다.
+    const r = await upsertConnections(spec, { ensureMysql: true });
     console.log(
       `db:connections upsert ${profile} — added=${r.added}, updated=${r.updated}`,
     );
@@ -289,7 +292,7 @@ async function main(): Promise<void> {
       const profile = positional[1] ?? "";
       if (action === "upsert" && !profile)
         throw new Error(`'connections upsert' requires a profile name.`);
-      cmdConnections(action, profile);
+      await cmdConnections(action, profile);
       break;
     }
     case "generate": {
