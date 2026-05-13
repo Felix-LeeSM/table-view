@@ -395,7 +395,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
 
   queryTableData: async (
     connId,
-    _db,
+    db,
     table,
     schema,
     page,
@@ -404,9 +404,12 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     filters,
     rawWhere,
   ) => {
-    // Sprint 271b owns expectedDatabase forwarding for queryTableData (the
-    // user-initiated DataGrid path needs the Retry toast). 271a stays
-    // byte-equivalent for this method.
+    // Sprint 271b — forward `db` as `expectedDatabase` so the backend
+    // guard rejects a swapped pool BEFORE the SELECT runs. DataGrid is
+    // the only caller and routes mismatches through its own catch path
+    // (user-initiated Retry toast lives there); we deliberately do NOT
+    // call `handleDbMismatch` here so the rejection propagates to the
+    // caller unchanged.
     return tauri.queryTableData(
       connId,
       table,
@@ -416,6 +419,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       orderBy,
       filters,
       rawWhere,
+      db,
     );
   },
 

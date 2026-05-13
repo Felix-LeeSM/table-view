@@ -257,6 +257,7 @@ async fn execute_query_dry_run_inner(
     connection_id: &str,
     statements: &[String],
     query_id: &str,
+    expected_database: Option<&str>,
 ) -> Result<Vec<QueryResult>, AppError> {
     info!(
         connection_id = %connection_id,
@@ -289,8 +290,25 @@ async fn execute_query_dry_run_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
+        let adapter = active.as_rdb()?;
+        // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
+        // Sprint 266 reference at `execute_query_inner:83–92`: probe
+        // sampled inside the same `active_connections.lock()` acquisition,
+        // `unwrap_or_default()` coercion on `current_database`, mismatch
+        // returns `AppError::DbMismatch` BEFORE invoking the trait, and
+        // the cancel token is released first so a retry can re-register
+        // under the same query id.
+        if let Some(expected) = expected_database {
+            let actual = adapter.current_database().await?.unwrap_or_default();
+            if actual != expected {
+                release_cancel_token(state, &cancel_handle).await;
+                return Err(AppError::DbMismatch {
+                    expected: expected.to_string(),
+                    actual,
+                });
+            }
+        }
+        adapter
             .dry_run_sql_batch(statements, child_token.as_ref())
             .await
     };
@@ -327,14 +345,26 @@ async fn execute_query_dry_run_inner(
 /// surface `AppError::Unsupported` from the trait default; Mongo
 /// connections fail at the paradigm guard with `AppError::Unsupported`
 /// before the trait method is reached.
+///
+/// Sprint 271b — see `execute_query` doc on `expected_database`. Same
+/// opt-in semantics: `None` preserves the pre-271 fast-path, `Some`
+/// gates the dry-run dispatch on the adapter's active db.
 #[tauri::command]
 pub async fn execute_query_dry_run(
     state: State<'_, AppState>,
     connection_id: String,
     statements: Vec<String>,
     query_id: String,
+    expected_database: Option<String>,
 ) -> Result<Vec<QueryResult>, AppError> {
-    execute_query_dry_run_inner(state.inner(), &connection_id, &statements, &query_id).await
+    execute_query_dry_run_inner(
+        state.inner(),
+        &connection_id,
+        &statements,
+        &query_id,
+        expected_database.as_deref(),
+    )
+    .await
 }
 
 async fn cancel_query_inner(state: &AppState, query_id: &str) -> Result<String, AppError> {
@@ -389,6 +419,7 @@ async fn query_table_data_inner(
     filters: Option<&[FilterCondition]>,
     raw_where: Option<&str>,
     query_id: Option<&str>,
+    expected_database: Option<&str>,
 ) -> Result<TableData, AppError> {
     // Hoist token registration outside the active_connections lock so
     // `cancel_query` can flip the flag without contention. Shared helper
@@ -400,8 +431,25 @@ async fn query_table_data_inner(
         let active = connections
             .get(connection_id)
             .ok_or_else(|| not_connected(connection_id))?;
-        active
-            .as_rdb()?
+        let adapter = active.as_rdb()?;
+        // Sprint 271b — opt-in db-mismatch guard. Byte-equivalent to the
+        // Sprint 266 reference at `execute_query_inner:83–92`: probe runs
+        // inside the same `active_connections.lock()` acquisition,
+        // `unwrap_or_default()` coercion on `current_database`, mismatch
+        // returns `AppError::DbMismatch` BEFORE invoking the trait. The
+        // cancel token is released before the early-return so the retry
+        // path can re-register the same query id.
+        if let Some(expected) = expected_database {
+            let actual = adapter.current_database().await?.unwrap_or_default();
+            if actual != expected {
+                release_cancel_token(state, &cancel_handle).await;
+                return Err(AppError::DbMismatch {
+                    expected: expected.to_string(),
+                    actual,
+                });
+            }
+        }
+        adapter
             .query_table_data(
                 schema,
                 table,
@@ -442,6 +490,8 @@ pub async fn query_table_data(
     // (legacy callers, fast paths) the trait method is invoked with
     // `None` and behaves identically to pre-Sprint-180.
     query_id: Option<String>,
+    // Sprint 271b — opt-in db-mismatch guard. See `execute_query` doc.
+    expected_database: Option<String>,
 ) -> Result<TableData, AppError> {
     query_table_data_inner(
         state.inner(),
@@ -454,6 +504,7 @@ pub async fn query_table_data(
         filters.as_deref(),
         raw_where.as_deref(),
         query_id.as_deref(),
+        expected_database.as_deref(),
     )
     .await
 }
@@ -853,7 +904,7 @@ mod tests {
         // 안 가고 Validation 으로 short-circuit.
         let state = AppState::new();
         let stmts = vec!["SELECT 1".to_string()];
-        match execute_query_dry_run_inner(&state, "  ", &stmts, "qd").await {
+        match execute_query_dry_run_inner(&state, "  ", &stmts, "qd", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Connection ID cannot be empty"))
             }
@@ -866,7 +917,7 @@ mod tests {
         // [AC-247-B2] — empty Vec 이면 Validation. PG inherent 의 empty
         // short-circuit (Ok(vec![])) 보다 outer guard 가 먼저.
         let state = AppState::new();
-        match execute_query_dry_run_inner(&state, "c", &[], "qd").await {
+        match execute_query_dry_run_inner(&state, "c", &[], "qd", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Query batch cannot be empty"))
             }
@@ -880,7 +931,7 @@ mod tests {
         // 메시지에 위치 포함. execute_query_batch 와 동일 카피.
         let state = AppState::new();
         let stmts = vec!["a".into(), "".into(), "".into()];
-        match execute_query_dry_run_inner(&state, "c", &stmts, "qd").await {
+        match execute_query_dry_run_inner(&state, "c", &stmts, "qd", None).await {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Statement 2 of 3"), "위치 누락: {msg}")
             }
@@ -895,7 +946,7 @@ mod tests {
         let state = AppState::new();
         let stmts = vec!["SELECT 1".to_string()];
         assert!(matches!(
-            execute_query_dry_run_inner(&state, "absent", &stmts, "qd").await,
+            execute_query_dry_run_inner(&state, "absent", &stmts, "qd", None).await,
             Err(AppError::NotFound(_))
         ));
     }
@@ -907,7 +958,7 @@ mod tests {
         let state = state_with("doc", document_default()).await;
         let stmts = vec!["SELECT 1".to_string()];
         assert!(matches!(
-            execute_query_dry_run_inner(&state, "doc", &stmts, "qd").await,
+            execute_query_dry_run_inner(&state, "doc", &stmts, "qd", None).await,
             Err(AppError::Unsupported(_))
         ));
     }
@@ -931,12 +982,82 @@ mod tests {
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         let stmts = vec!["UPDATE t SET x = 1".into()];
-        let r = execute_query_dry_run_inner(&state, "c", &stmts, "qd")
+        let r = execute_query_dry_run_inner(&state, "c", &stmts, "qd", None)
             .await
             .unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].total_count, 3);
         assert_eq!(r[0].execution_time_ms, 7);
+    }
+
+    // ── Sprint 271b — execute_query_dry_run mismatch guard ───────────────
+    //
+    // 작성 이유 (2026-05-13): dry-run path 가 Sprint 266 의 expected_database
+    // 가드 패턴을 byte-equivalent 하게 받았는지 검증. stateful USE 가
+    // production 에서 흔치 않더라도 SqlPreviewDialog 의 destructive preview
+    // 가 잘못된 db 에서 실행되면 user 가 "준비된 dry-run 결과" 로 잘못
+    // 안심하고 commit 할 위험이 큼.
+
+    #[tokio::test]
+    async fn execute_query_dry_run_mismatch_returns_dbmismatch_without_dispatching() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        // dry_run_sql_batch 가 호출되면 guard 가 새는 것 — 의도된 sentinel.
+        s.dry_run_sql_batch_fn = Some(Box::new(|_| {
+            panic!("dry_run_sql_batch must not run on db mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["DELETE FROM t WHERE id = 1".to_string()];
+        match execute_query_dry_run_inner(&state, "c", &stmts, "qd", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn execute_query_dry_run_mismatch_releases_cancel_token() {
+        // mismatch 가 early-return 해도 register 된 token 은 release 되어야
+        // 다음 시도가 깨끗하게 가능 (AC-180-05 retry contract). 같은 query_id
+        // 로 두번째 등록을 시도하면 Some 으로 잡혀야 한다.
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["SELECT 1".to_string()];
+        let _ = execute_query_dry_run_inner(&state, "c", &stmts, "qd-mismatch", Some("dbB")).await;
+        let tokens = state.query_tokens.lock().await;
+        assert!(
+            !tokens.contains_key("qd-mismatch"),
+            "cancel token must be released on mismatch (got tokens: {:?})",
+            tokens.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_query_dry_run_match_dispatches_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s.dry_run_sql_batch_fn = Some(Box::new(|stmts: &[String]| {
+            Ok(stmts
+                .iter()
+                .map(|_| RdbQueryResult {
+                    columns: Vec::new(),
+                    rows: Vec::new(),
+                    total_count: 0,
+                    execution_time_ms: 0,
+                    query_type: QueryType::Dml { rows_affected: 0 },
+                })
+                .collect())
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let stmts = vec!["DELETE FROM t WHERE id = 1".to_string()];
+        assert!(
+            execute_query_dry_run_inner(&state, "c", &stmts, "qd", Some("dbA"))
+                .await
+                .is_ok()
+        );
     }
 
     // ── query_table_data — dispatch contract ─────────────────────────────
@@ -946,7 +1067,7 @@ mod tests {
         let state = AppState::new();
         assert!(matches!(
             query_table_data_inner(
-                &state, "absent", "users", "public", None, None, None, None, None, None
+                &state, "absent", "users", "public", None, None, None, None, None, None, None
             )
             .await,
             Err(AppError::NotFound(_))
@@ -958,7 +1079,7 @@ mod tests {
         let state = state_with("doc", document_default()).await;
         assert!(matches!(
             query_table_data_inner(
-                &state, "doc", "users", "public", None, None, None, None, None, None
+                &state, "doc", "users", "public", None, None, None, None, None, None, None
             )
             .await,
             Err(AppError::Unsupported(_))
@@ -980,12 +1101,114 @@ mod tests {
         }));
         let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
         let r = query_table_data_inner(
-            &state, "c", "tbl_w", "ns_q", None, None, None, None, None, None,
+            &state, "c", "tbl_w", "ns_q", None, None, None, None, None, None, None,
         )
         .await
         .unwrap();
         assert_eq!(r.executed_query, "SELECT FROM ns_q.tbl_w");
         assert_eq!(r.total_count, 7);
+    }
+
+    // ── Sprint 271b — query_table_data mismatch guard ────────────────────
+    //
+    // 작성 이유 (2026-05-13): DataGrid user-initiated row-fetch 가 잘못된
+    // db 에서 실행되면 사용자가 본 그리드와 실제 DB 가 어긋남. backend
+    // 가드가 `query_table_data` 의 trait dispatch 이전에 mismatch 를 catch
+    // 하고 cancel token 까지 깨끗이 release 함을 검증.
+
+    #[tokio::test]
+    async fn query_table_data_mismatch_returns_dbmismatch_without_dispatching() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        // query_table_data 가 호출되면 guard 가 새는 것 — 의도된 sentinel.
+        s.query_table_data_fn = Some(Box::new(|_ns: &str, _tbl: &str| {
+            panic!("query_table_data must not run on db mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match query_table_data_inner(
+            &state,
+            "c",
+            "users",
+            "public",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("dbB"),
+        )
+        .await
+        {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn query_table_data_mismatch_releases_cancel_token() {
+        // cancel-token registration 이 query_table_data_inner 에 있어 release
+        // ordering 검증이 본 sprint 의 핵심. mismatch 가 early-return 해도
+        // query_tokens 에서 빠져 retry 가능.
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let _ = query_table_data_inner(
+            &state,
+            "c",
+            "users",
+            "public",
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("qtd-mismatch"),
+            Some("dbB"),
+        )
+        .await;
+        let tokens = state.query_tokens.lock().await;
+        assert!(
+            !tokens.contains_key("qtd-mismatch"),
+            "cancel token must be released on mismatch (got tokens: {:?})",
+            tokens.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[tokio::test]
+    async fn query_table_data_match_dispatches_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s.query_table_data_fn = Some(Box::new(|ns: &str, tbl: &str| {
+            Ok(TableData {
+                columns: Vec::new(),
+                rows: Vec::new(),
+                total_count: 0,
+                page: 1,
+                page_size: 100,
+                executed_query: format!("SELECT FROM {ns}.{tbl}"),
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = query_table_data_inner(
+            &state,
+            "c",
+            "users",
+            "public",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("dbA"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.executed_query, "SELECT FROM public.users");
     }
 
     // ── cancel_query — dispatch contract + token registry side effect ────

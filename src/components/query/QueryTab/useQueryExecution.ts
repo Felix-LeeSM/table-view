@@ -984,10 +984,15 @@ export function useQueryExecution({
     const queryId = `dry:${tab.id}-${Date.now()}`;
     updateQueryState(tab.id, { status: "running", queryId });
     try {
+      // Sprint 271b — forward the resolved workspace db as the
+      // `expectedDatabase` guard. The dry-run preview MUST run on the
+      // same db the eventual commit will hit; the backend rejects a
+      // swapped pool before the preview rolls back against the wrong db.
       const results = await executeQueryDryRun(
         tab.connectionId,
         statements,
         queryId,
+        workspaceDb ?? undefined,
       );
       // Backend always returns one QueryResult per statement, in input
       // order. Single-statement → no statements breakdown; multi → adapt
@@ -1016,15 +1021,32 @@ export function useQueryExecution({
       const lastResult = results[results.length - 1]!;
       completeQueryDryRun(tab.id, queryId, lastResult, statementResults);
     } catch (err) {
-      failQuery(
-        tab.id,
-        queryId,
-        err instanceof Error ? err.message : String(err),
-      );
+      const message = err instanceof Error ? err.message : String(err);
+      failQuery(tab.id, queryId, message);
+      // Sprint 271b — when the backend rejects with DbMismatch, sync the
+      // frontend stores so the next click dispatches against the correct
+      // db. Dry-run is user-initiated (toolbar button / Cmd+Shift+Enter)
+      // so we surface the Sprint 269 Retry toast just like
+      // `runRdbSingleNow`. Background introspection paths stay silent.
+      if (parseDbMismatch(message)) {
+        const capturedConnectionId = tab.connectionId;
+        void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
+          toast.warning(
+            `Active DB synced to '${actual}'. Re-run the dry-run if needed.`,
+          );
+        });
+      }
     }
     // Excluding store actions from deps is deliberate — see hook header.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab.id, tab.sql, tab.queryState.status, tab.connectionId, tab.paradigm]);
+  }, [
+    tab.id,
+    tab.sql,
+    tab.queryState.status,
+    tab.connectionId,
+    tab.paradigm,
+    workspaceDb,
+  ]);
 
   return {
     handleExecute,

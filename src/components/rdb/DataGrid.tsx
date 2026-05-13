@@ -8,6 +8,9 @@ import {
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
 import { cancelQuery } from "@lib/tauri";
+import { parseDbMismatch } from "@lib/api/dbMismatch";
+import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
+import { toast } from "@lib/toast";
 import FilterBar from "@components/rdb/FilterBar";
 import {
   Dialog,
@@ -233,6 +236,20 @@ export default function DataGrid({
     } catch (e) {
       if (fetchId === fetchIdRef.current) {
         setError(String(e));
+      }
+      // Sprint 271b — when the Sprint 266 backend guard rejects the
+      // fetch with DbMismatch, sync the frontend stores so the next
+      // attempt dispatches against the correct db. DataGrid is the
+      // canonical user-initiated row-fetch surface (open table from
+      // sidebar / refresh-data event), so we route the mismatch through
+      // the Sprint 269 Retry toast like `useQueryExecution` does.
+      const message = e instanceof Error ? e.message : String(e);
+      if (parseDbMismatch(message)) {
+        void syncMismatchedActiveDb(connectionId, (actual) => {
+          toast.warning(
+            `Active DB synced to '${actual}'. Re-open the table to refresh.`,
+          );
+        });
       }
     }
     if (fetchId === fetchIdRef.current) {

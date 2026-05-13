@@ -4,6 +4,14 @@ import type { FilterCondition, TableData } from "@/types/schema";
 
 import { wrapNumericCells } from "./numericWrap";
 
+// Sprint 271b — `expectedDatabase` is an opt-in db-mismatch guard. When
+// provided the backend verifies the adapter's active db matches before
+// dispatch; mismatch surfaces as `AppError::DbMismatch` (rendered as
+// `"Database mismatch: expected 'X', backend pool has 'Y'"`). DataGrid
+// row-fetches forward the workspace `(connId, db)` so a swapped pool
+// can no longer paint stale rows from the wrong database between user
+// click and dispatch. Omitting the argument preserves the pre-271
+// fast-path.
 export async function queryTableData(
   connectionId: string,
   table: string,
@@ -13,6 +21,7 @@ export async function queryTableData(
   orderBy?: string,
   filters?: FilterCondition[],
   rawWhere?: string,
+  expectedDatabase?: string,
 ): Promise<TableData> {
   const result = await invoke<TableData>("query_table_data", {
     connectionId,
@@ -23,6 +32,7 @@ export async function queryTableData(
     orderBy: orderBy ?? null,
     filters: filters ?? null,
     rawWhere: rawWhere ?? null,
+    expectedDatabase: expectedDatabase ?? null,
   });
   return wrapNumericCells(result);
 }
@@ -83,15 +93,24 @@ export async function executeQueryBatch(
 // today) reject with `Unsupported`; Mongo connections never reach this
 // wrapper because the hook routes paradigm="document" to a disclaimer
 // state without invoking IPC.
+//
+// Sprint 271b — `expectedDatabase` is the same opt-in mismatch guard as
+// `executeQuery` / `executeQueryBatch`. The dry-run preview MUST run
+// against the same db the eventual commit will hit; threading the
+// workspace `(connId, db)` lets the backend reject a swapped pool
+// before the preview rolls back against the wrong database. Omitting
+// it preserves the pre-271 fast-path.
 export async function executeQueryDryRun(
   connectionId: string,
   statements: string[],
   queryId: string,
+  expectedDatabase?: string,
 ): Promise<QueryResult[]> {
   const results = await invoke<QueryResult[]>("execute_query_dry_run", {
     connectionId,
     statements,
     queryId,
+    expectedDatabase: expectedDatabase ?? null,
   });
   return results.map(wrapNumericCells);
 }

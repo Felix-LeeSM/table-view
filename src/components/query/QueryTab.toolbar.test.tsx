@@ -258,10 +258,15 @@ describe("QueryTab — toolbar", () => {
     });
 
     expect(mockExecuteQueryDryRun).toHaveBeenCalledTimes(1);
+    // Sprint 271b — workspaceDb is now forwarded as the 4th positional
+    // `expectedDatabase`. `seedWorkspace` aligns the connection store
+    // with the seeded tab; without an explicit `database` the default
+    // workspace db is `DEFAULT_TEST_DB === "db1"`.
     expect(mockExecuteQueryDryRun).toHaveBeenCalledWith(
       "conn1",
       ["DELETE FROM users WHERE id = 1"],
       expect.stringMatching(/^dry:/),
+      "db1",
     );
     // Real-execute path NEVER fires for dry-run clicks.
     expect(mockExecuteQuery).not.toHaveBeenCalled();

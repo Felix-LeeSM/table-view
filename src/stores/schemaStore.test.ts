@@ -262,6 +262,7 @@ describe("schemaStore", () => {
       .getState()
       .queryTableData("conn1", "db1", "users", "public", 1, 50, "id");
 
+    // Sprint 271b — forwards `db` as the new last-positional expectedDatabase.
     expect(queryTableData).toHaveBeenCalledWith(
       "conn1",
       "users",
@@ -271,6 +272,7 @@ describe("schemaStore", () => {
       "id",
       undefined,
       undefined,
+      "db1",
     );
     expect(data.total_count).toBe(1);
     expect(data.rows).toHaveLength(1);
@@ -335,6 +337,7 @@ describe("schemaStore", () => {
         filters,
       );
 
+    // Sprint 271b — forwards `db` as expectedDatabase (last positional).
     expect(queryTableData).toHaveBeenCalledWith(
       "conn1",
       "users",
@@ -344,6 +347,7 @@ describe("schemaStore", () => {
       undefined,
       filters,
       undefined,
+      "db1",
     );
   });
 
@@ -364,6 +368,7 @@ describe("schemaStore", () => {
         "id = 13",
       );
 
+    // Sprint 271b — forwards `db` as expectedDatabase (last positional).
     expect(queryTableData).toHaveBeenCalledWith(
       "conn1",
       "users",
@@ -373,6 +378,7 @@ describe("schemaStore", () => {
       undefined,
       undefined,
       "id = 13",
+      "db1",
     );
   });
 

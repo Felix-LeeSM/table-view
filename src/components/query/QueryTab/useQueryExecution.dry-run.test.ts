@@ -48,8 +48,13 @@ vi.mock("@lib/tauri", () => ({
 
 // `dispatchDbMutationHint` calls verifyActiveDb fire-and-forget. Stub
 // so the dry-run tests don't accidentally trigger the real IPC.
+//
+// Sprint 271b — the dry-run mismatch case below relies on the same
+// `verifyActiveDb` mock to drive `syncMismatchedActiveDb`. We expose a
+// hoisted vi.fn so individual tests can change its resolved value.
+const verifyActiveDbMock = vi.hoisted(() => vi.fn().mockResolvedValue(""));
 vi.mock("@lib/api/verifyActiveDb", () => ({
-  verifyActiveDb: vi.fn().mockResolvedValue(""),
+  verifyActiveDb: verifyActiveDbMock,
 }));
 
 // Sprint 248 — `splitSqlStatements` keeps semicolon-separated parts so
@@ -170,10 +175,15 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     });
 
     expect(executeQueryDryRunMock).toHaveBeenCalledTimes(1);
+    // Sprint 271b — workspaceDb is forwarded as the 4th positional
+    // `expectedDatabase`. `seedWorkspace` aligns the connection store
+    // with the seeded tab; without an explicit `database` the default
+    // workspace db is `DEFAULT_TEST_DB === "db1"`.
     expect(executeQueryDryRunMock).toHaveBeenCalledWith(
       "conn1",
       ["DELETE FROM users WHERE id = 1"],
       expect.stringMatching(/^dry:/),
+      "db1",
     );
 
     await waitFor(() => {
@@ -239,10 +249,13 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     });
 
     expect(executeQueryDryRunMock).toHaveBeenCalledTimes(1);
+    // Sprint 271b — workspaceDb is forwarded as the 4th positional
+    // `expectedDatabase`. `seedWorkspace` defaults to `DEFAULT_TEST_DB`.
     expect(executeQueryDryRunMock).toHaveBeenCalledWith(
       "conn1",
       ["SELECT * FROM users", "DELETE FROM users WHERE id = 1"],
       expect.stringMatching(/^dry:/),
+      "db1",
     );
 
     await waitFor(() => {
@@ -280,5 +293,76 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
 
     const call = executeQueryDryRunMock.mock.calls[0]!;
     expect(call[2]).toEqual(expect.stringMatching(/^dry:/));
+  });
+
+  // Sprint 271b (2026-05-13) — workspaceDb forwarding.
+  //
+  // 작성 이유: dry-run preview MUST run on the same db the eventual
+  // commit will hit. The contract pins useQueryExecution's dry-run path
+  // to thread the workspace `(connId, db)` like it already does for the
+  // executeQuery / executeQueryBatch paths. Without this guard a
+  // swapped pool could roll back against a different db than the user
+  // intended to preview.
+  it("forwards tab.database as expectedDatabase (4th positional)", async () => {
+    executeQueryDryRunMock.mockResolvedValueOnce([DML_RESULT]);
+    const tab = seedTab({
+      sql: "UPDATE t SET x = 1",
+      database: "myDb",
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleDryRun();
+    });
+
+    expect(executeQueryDryRunMock).toHaveBeenCalledTimes(1);
+    expect(executeQueryDryRunMock).toHaveBeenCalledWith(
+      "conn1",
+      ["UPDATE t SET x = 1"],
+      expect.stringMatching(/^dry:/),
+      "myDb",
+    );
+  });
+
+  // Sprint 271b (2026-05-13) — DbMismatch end-to-end.
+  //
+  // 작성 이유: mocked IPC throws Sprint 266 wire format → useQueryExecution
+  // 의 catch 가 parseDbMismatch 로 감지 → syncMismatchedActiveDb 가
+  // verifyActiveDb 의 새 db 를 받아 toast.warning 발사 (user-initiated
+  // dry-run 은 Sprint 269 Retry toast 재사용; background introspection 만
+  // silent).
+  it("routes DbMismatch through syncMismatchedActiveDb + Retry toast", async () => {
+    executeQueryDryRunMock.mockRejectedValueOnce(
+      new Error(
+        "Database mismatch: expected 'db1', backend pool has 'otherDb'",
+      ),
+    );
+    verifyActiveDbMock.mockResolvedValueOnce("otherDb");
+    // Omit `database` so the tab lives in the default workspace slot
+    // (`conn1` / `db1`) — `getTestWorkspace()` reads that slot.
+    const tab = seedTab({ sql: "UPDATE t SET x = 1" });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleDryRun();
+    });
+
+    // failQuery surfaces the mismatch as an error.
+    await waitFor(() => {
+      const updated = getTestWorkspace().tabs.find((t) => t.id === tab.id);
+      if (!updated || updated.type !== "query") throw new Error("missing");
+      expect(updated.queryState.status).toBe("error");
+    });
+
+    // sync helper fired against the workspace conn id.
+    await waitFor(() => {
+      expect(verifyActiveDbMock).toHaveBeenCalledWith("conn1");
+    });
+
+    // user-initiated → Retry toast surfaces.
+    await waitFor(() => {
+      const toasts = useToastStore.getState().toasts;
+      expect(toasts.some((t) => t.variant === "warning")).toBe(true);
+    });
   });
 });
