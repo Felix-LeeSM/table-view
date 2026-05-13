@@ -240,3 +240,36 @@ describe("aliasColumnCompletionSource — Sprint 294 Slice D edge cases", () => 
     );
   });
 });
+
+/**
+ * Sprint 294 (2026-05-14) — Slice E — dedup 회귀 가드.
+ *
+ * 작성 이유:
+ *   aliasColumnCompletionSource 가 emit 하는 컬럼 후보 label 들이 한 호출
+ *   안에서 중복이 없어야 한다. lang-sql 의 built-in alias source 와 합쳐졌을
+ *   때도 CodeMirror autocompletion 의 dedup 에 추가 부담을 주지 않도록.
+ */
+describe("aliasColumnCompletionSource — Sprint 294 Slice E dedup", () => {
+  it("한 호출의 후보 label 셋이 unique", () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc = "SELECT u. FROM users u";
+    const ctx = makeContext(doc, "SELECT u.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    const unique = new Set(labels);
+    expect(unique.size).toBe(labels.length);
+  });
+
+  it("multi-join 의 후보 label 셋도 unique (target alias 한 개)", () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc =
+      "SELECT oi. FROM users u JOIN orders o JOIN order_items oi ON oi.id = o.id";
+    const ctx = makeContext(doc, "SELECT oi.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    const unique = new Set(labels);
+    expect(unique.size).toBe(labels.length);
+  });
+});
