@@ -12,6 +12,7 @@ import {
 } from "@codemirror/lang-sql";
 import { updateColumnCompletionSource } from "./updateColumnCompletion";
 import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
+import { cteColumnCompletionSource } from "./cteColumnCompletion";
 
 /**
  * Sprint 295 (2026-05-14) — Slice A — Level-3 baseline (CTE / derived
@@ -70,6 +71,7 @@ const TEST_SCHEMA: SQLNamespace = {
 
 const updateSource = updateColumnCompletionSource(() => TEST_SCHEMA);
 const aliasSource = aliasColumnCompletionSource(() => TEST_SCHEMA);
+const cteSource = cteColumnCompletionSource(() => TEST_SCHEMA);
 
 function makeContext(doc: string, cursor?: number, explicit = true) {
   const pos = cursor ?? doc.length;
@@ -95,7 +97,7 @@ async function callAll(doc: string, cursor?: number): Promise<string[]> {
     ctx.pos,
   );
   const labels = new Set<string>();
-  for (const source of [...fromLang, updateSource, aliasSource]) {
+  for (const source of [...fromLang, updateSource, aliasSource, cteSource]) {
     if (typeof source !== "function") continue;
     const raw = source(ctx);
     const result = (await Promise.resolve(raw)) as CompletionResult | null;
@@ -118,57 +120,45 @@ describe("SQL Level-3 자동완성 — CTE / derived subquery baseline (Slice A 
   // 인식하지 못해 후보 0 개. sprint-294 의 alias source 도 `t` 의 source
   // table 을 찾지 못함 (CTE 정의는 `parseFromContext` 의 `FROM <table>
   // <alias>` 패턴에 매칭되지 않음). → RED.
-  it.fails(
-    "(a) WITH t AS (SELECT id, name FROM users) SELECT t.<cursor> → [id, name]",
-    async () => {
-      const doc = "WITH t AS (SELECT id, name FROM users) SELECT t.";
-      const labels = await callAll(doc);
-      expect(labels).toEqual(expect.arrayContaining(["id", "name"]));
-    },
-  );
+  it("(a) WITH t AS (SELECT id, name FROM users) SELECT t.<cursor> → [id, name]", async () => {
+    const doc = "WITH t AS (SELECT id, name FROM users) SELECT t.";
+    const labels = await callAll(doc);
+    expect(labels).toEqual(expect.arrayContaining(["id", "name"]));
+  });
 
   // (b) `WITH t AS (SELECT id, name FROM users) SELECT * FROM t WHERE t.<cursor>`
   //
   // CTE 의 가상 테이블을 FROM 절에서 참조한 뒤 WHERE 절에서 alias prefix.
   // sprint-294 의 alias source 가 `FROM t` 를 보고 `t` 를 base table 로
   // 시도하지만 schema 에 `t` 가 없으므로 후보 0 개. → RED.
-  it.fails(
-    "(b) WITH t AS (...) SELECT * FROM t WHERE t.<cursor> → [id, name]",
-    async () => {
-      const doc =
-        "WITH t AS (SELECT id, name FROM users) SELECT * FROM t WHERE t.";
-      const labels = await callAll(doc);
-      expect(labels).toEqual(expect.arrayContaining(["id", "name"]));
-    },
-  );
+  it("(b) WITH t AS (...) SELECT * FROM t WHERE t.<cursor> → [id, name]", async () => {
+    const doc =
+      "WITH t AS (SELECT id, name FROM users) SELECT * FROM t WHERE t.";
+    const labels = await callAll(doc);
+    expect(labels).toEqual(expect.arrayContaining(["id", "name"]));
+  });
 
   // (c) 다중 CTE — `a` 와 `b` 각각 다른 base table 로부터 추출.
   //
   // `WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT a.<cursor>`
   // 측정 결과: 두 CTE 정의 모두 alias source 에 잡히지 않음. → RED.
-  it.fails(
-    "(c) WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT a.<cursor> → [id]",
-    async () => {
-      const doc =
-        "WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT a.";
-      const labels = await callAll(doc);
-      expect(labels).toEqual(expect.arrayContaining(["id"]));
-    },
-  );
+  it("(c) WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT a.<cursor> → [id]", async () => {
+    const doc =
+      "WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT a.";
+    const labels = await callAll(doc);
+    expect(labels).toEqual(expect.arrayContaining(["id"]));
+  });
 
   // (d) 같은 doc, 다른 cursor — `SELECT b.<cursor>` → orders 의 total.
   //
   // 다중 CTE 정의 안에서 두 번째 CTE 의 가상 컬럼 emit 검증.
   // 측정 결과: 동일 사유로 → RED.
-  it.fails(
-    "(d) WITH a AS (...), b AS (SELECT total FROM orders) SELECT b.<cursor> → [total]",
-    async () => {
-      const doc =
-        "WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT b.";
-      const labels = await callAll(doc);
-      expect(labels).toEqual(expect.arrayContaining(["total"]));
-    },
-  );
+  it("(d) WITH a AS (...), b AS (SELECT total FROM orders) SELECT b.<cursor> → [total]", async () => {
+    const doc =
+      "WITH a AS (SELECT id FROM users), b AS (SELECT total FROM orders) SELECT b.";
+    const labels = await callAll(doc);
+    expect(labels).toEqual(expect.arrayContaining(["total"]));
+  });
 
   // (e) `SELECT sub.<cursor> FROM (SELECT id, total FROM orders) sub`
   //
@@ -177,44 +167,35 @@ describe("SQL Level-3 자동완성 — CTE / derived subquery baseline (Slice A 
   // table 이 unknown (subquery) 이라 컬럼 후보 없음. sprint-294 의 alias
   // source 도 `parseFromContext` 가 paren 으로 시작하는 토큰을 base table 로
   // 인식하지 않음. → RED.
-  it.fails(
-    "(e) SELECT sub.<cursor> FROM (SELECT id, total FROM orders) sub → [id, total]",
-    async () => {
-      const doc = "SELECT sub. FROM (SELECT id, total FROM orders) sub";
-      const labels = await callAll(doc, "SELECT sub.".length);
-      expect(labels).toEqual(expect.arrayContaining(["id", "total"]));
-    },
-  );
+  it("(e) SELECT sub.<cursor> FROM (SELECT id, total FROM orders) sub → [id, total]", async () => {
+    const doc = "SELECT sub. FROM (SELECT id, total FROM orders) sub";
+    const labels = await callAll(doc, "SELECT sub.".length);
+    expect(labels).toEqual(expect.arrayContaining(["id", "total"]));
+  });
 
   // (f) `SELECT s.<cursor> FROM (SELECT id FROM users) AS s`
   //
   // Derived subquery + 명시적 `AS` keyword. (e) 와 동일 사유로 → RED.
-  it.fails(
-    "(f) SELECT s.<cursor> FROM (SELECT id FROM users) AS s → [id]",
-    async () => {
-      const doc = "SELECT s. FROM (SELECT id FROM users) AS s";
-      const labels = await callAll(doc, "SELECT s.".length);
-      expect(labels).toEqual(expect.arrayContaining(["id"]));
-    },
-  );
+  it("(f) SELECT s.<cursor> FROM (SELECT id FROM users) AS s → [id]", async () => {
+    const doc = "SELECT s. FROM (SELECT id FROM users) AS s";
+    const labels = await callAll(doc, "SELECT s.".length);
+    expect(labels).toEqual(expect.arrayContaining(["id"]));
+  });
 
   // (g) CTE + derived 혼합.
   //
   // `WITH t AS (SELECT id FROM users) SELECT t.<cursor> FROM t JOIN (SELECT total FROM orders) sub`
   // cursor 위치는 `SELECT t.` — CTE `t` 의 가상 컬럼 `id` 가 와야 한다.
   // 측정 결과: CTE 가 인식 안 됨 → RED.
-  it.fails(
-    "(g) CTE + derived mix — WITH t AS (...) SELECT t.<cursor> FROM t JOIN (SELECT total FROM orders) sub → [id]",
-    async () => {
-      const doc =
-        "WITH t AS (SELECT id FROM users) SELECT t. FROM t JOIN (SELECT total FROM orders) sub";
-      const labels = await callAll(
-        doc,
-        "WITH t AS (SELECT id FROM users) SELECT t.".length,
-      );
-      expect(labels).toEqual(expect.arrayContaining(["id"]));
-    },
-  );
+  it("(g) CTE + derived mix — WITH t AS (...) SELECT t.<cursor> FROM t JOIN (SELECT total FROM orders) sub → [id]", async () => {
+    const doc =
+      "WITH t AS (SELECT id FROM users) SELECT t. FROM t JOIN (SELECT total FROM orders) sub";
+    const labels = await callAll(
+      doc,
+      "WITH t AS (SELECT id FROM users) SELECT t.".length,
+    );
+    expect(labels).toEqual(expect.arrayContaining(["id"]));
+  });
 
   // (h) Derived nested.
   //
@@ -222,13 +203,10 @@ describe("SQL Level-3 자동완성 — CTE / derived subquery baseline (Slice A 
   // 가장 바깥 derived subquery 의 projection 은 `id` 한 컬럼. nested 의 가장
   // 안쪽 source 가 users 라는 사실은 paren-depth 추적이 필요.
   // 측정 결과: 가장 바깥 alias `outer` 도 base table 매칭 실패 → RED.
-  it.fails(
-    "(h) Derived nested — SELECT outer.<cursor> FROM (SELECT id FROM (SELECT id FROM users) inner) outer → [id]",
-    async () => {
-      const doc =
-        "SELECT outer. FROM (SELECT id FROM (SELECT id FROM users) inner) outer";
-      const labels = await callAll(doc, "SELECT outer.".length);
-      expect(labels).toEqual(expect.arrayContaining(["id"]));
-    },
-  );
+  it("(h) Derived nested — SELECT outer.<cursor> FROM (SELECT id FROM (SELECT id FROM users) inner) outer → [id]", async () => {
+    const doc =
+      "SELECT outer. FROM (SELECT id FROM (SELECT id FROM users) inner) outer";
+    const labels = await callAll(doc, "SELECT outer.".length);
+    expect(labels).toEqual(expect.arrayContaining(["id"]));
+  });
 });
