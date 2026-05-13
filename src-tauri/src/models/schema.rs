@@ -162,6 +162,12 @@ pub struct DropIndexRequest {
     pub connection_id: String,
     pub schema: String,
     pub index_name: String,
+    /// Sprint 285 (Phase 17 MySQL Slice E) — MySQL 의 `DROP INDEX` 는
+    /// `ON <table>` 절을 강제한다 (PG 는 schema + index_name 만으로 충분).
+    /// PG 호출자는 `#[serde(default)]` 덕에 필드를 생략 가능하며 emitter
+    /// 가 무시한다. MySQL 어댑터는 빈 문자열 시 `AppError::Validation`.
+    #[serde(default)]
+    pub table: String,
     #[serde(default)]
     pub if_exists: bool,
     #[serde(default)]
@@ -998,6 +1004,7 @@ mod tests {
             connection_id: "conn1".to_string(),
             schema: "public".to_string(),
             index_name: "idx_users_email".to_string(),
+            table: String::new(),
             if_exists: true,
             preview_only: false,
             expected_database: None,

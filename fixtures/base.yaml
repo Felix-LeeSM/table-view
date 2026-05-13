@@ -4,23 +4,29 @@
 # Profiles override `seed`, `locale_mix`, and per-entity row counts.
 # Defaults: nullable=false, unique=false, primary=false. PK auto-implies
 # nullable=false + unique=true and is never edge-injected.
+#
+# Sprint 288 — MySQL target placement. MySQL 은 database = schema 라
+# `pg.schema` 의 분기 개념이 없어 `mysql.table` 만 명시. PG 와 동일 row
+# data 를 dialect-correct DDL 로 적재한다.
 
 entities:
   customers:
-    targets: [pg, mongo]
+    targets: [pg, mongo, mysql]
     pg: { schema: core, table: customers }
     mongo: { collection: core_customers }
+    mysql: { table: customers }
     columns:
       id:         { type: uuid, primary: true }
       email:      { type: email, unique: true }
       full_name:  { type: full_name, locale_aware: true, max_length: 200 }
-      phone:      { type: phone, nullable: true }
+      phone:      { type: phone, nullable: true, max_length: 64 }
       created_at: { type: timestamp, range: [-365d, 0d] }
 
   products:
-    targets: [pg, mongo]
+    targets: [pg, mongo, mysql]
     pg: { schema: catalog, table: products }
     mongo: { collection: catalog_products }
+    mysql: { table: products }
     columns:
       id:        { type: uuid, primary: true }
       sku:       { type: sku, unique: true }
@@ -29,12 +35,13 @@ entities:
       tags:      { type: array_of, item: string, count: [0, 4] }
 
   orders:
-    targets: [pg, mongo]
+    targets: [pg, mongo, mysql]
     pg: { schema: sales, table: orders }
     mongo:
       collection: sales_orders
       embed:
         items:    { from: order_items, kind: many }
+    mysql: { table: orders }
     columns:
       id:          { type: uuid, primary: true }
       customer_id: { type: ref, to: customers.id }
@@ -43,8 +50,9 @@ entities:
       total:       { type: decimal, range: [0.99, 9999.99] }
 
   order_items:
-    targets: [pg]   # mongo: embedded inside orders.items
+    targets: [pg, mysql]   # mongo: embedded inside orders.items
     pg: { schema: sales, table: order_items }
+    mysql: { table: order_items }
     columns:
       id:         { type: uuid, primary: true }
       order_id:   { type: ref, to: orders.id }
@@ -53,9 +61,10 @@ entities:
       unit_price: { type: decimal, range: [0.99, 999.99] }
 
   support_tickets:
-    targets: [pg, mongo]
+    targets: [pg, mongo, mysql]
     pg: { schema: support, table: tickets }
     mongo: { collection: support_tickets }
+    mysql: { table: tickets }
     columns:
       id:          { type: uuid, primary: true }
       customer_id: { type: ref, to: customers.id, nullable: true }

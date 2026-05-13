@@ -454,6 +454,7 @@ mod tests {
             connection_id: id.into(),
             schema: "public".into(),
             index_name: "idx_x".into(),
+            table: String::new(),
             if_exists: false,
             preview_only: true,
             expected_database: None,

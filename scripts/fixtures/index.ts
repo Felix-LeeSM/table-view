@@ -16,6 +16,14 @@ import {
   mongoEnvConn,
   mongoIsPopulated,
 } from "./mongo.js";
+import {
+  applyMysql,
+  dropMysqlDatabase,
+  ensureMysqlDatabaseAndGrant,
+  mysqlEnvConn,
+  mysqlIsPopulated,
+  mysqlRootEnvConn,
+} from "./mysql.js";
 import { clearConnections, upsertConnections } from "./connections.js";
 
 interface ParsedArgs {
@@ -48,10 +56,11 @@ function parse(argv: string[]): ParsedArgs {
 
 function targetMode(
   options: Record<string, string | boolean>,
-): "all" | "pg" | "mongo" {
+): "all" | "pg" | "mongo" | "mysql" {
   const t = options.target;
   if (t === "pg" || t === "postgres" || t === "postgresql") return "pg";
   if (t === "mongo" || t === "mongodb") return "mongo";
+  if (t === "mysql" || t === "mariadb") return "mysql";
   return "all";
 }
 
@@ -61,7 +70,7 @@ function quiet(options: Record<string, string | boolean>): boolean {
 
 async function cmdSeed(
   profile: string,
-  target: "all" | "pg" | "mongo",
+  target: "all" | "pg" | "mongo" | "mysql",
   isQuiet: boolean,
 ): Promise<void> {
   const spec = loadSpec(profile);
@@ -69,9 +78,11 @@ async function cmdSeed(
 
   let pgRows = 0;
   let mongoDocs = 0;
+  let mysqlRows = 0;
   const t0 = Date.now();
   const wantPg = target === "all" || target === "pg";
   const wantMongo = target === "all" || target === "mongo";
+  const wantMysql = target === "all" || target === "mysql";
 
   if (wantPg) {
     const conn = pgEnvConn();
@@ -117,14 +128,34 @@ async function cmdSeed(
       );
     }
   }
+
+  if (wantMysql) {
+    const conn = mysqlEnvConn();
+    const mysqlDb =
+      spec.profileSpec.database.mysql ?? spec.profileSpec.database.pg;
+    // root 권한으로 DB ensure + testuser GRANT (1044 Access denied 방지).
+    await ensureMysqlDatabaseAndGrant(mysqlRootEnvConn(), mysqlDb, conn.user);
+    if (await mysqlIsPopulated(conn, mysqlDb, spec)) {
+      console.log(
+        `  mysql → ${mysqlDb}: already seeded — use 'db:reset' to refill`,
+      );
+    } else {
+      const rows = generateAll(spec);
+      console.log(`  mysql → ${mysqlDb}`);
+      await applyMysql(conn, mysqlDb, spec, rows, (e, n, ms) => {
+        if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+        mysqlRows += n;
+      });
+    }
+  }
   console.log(
-    `done — ${pgRows.toLocaleString()} rows + ${mongoDocs.toLocaleString()} docs in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+    `done — ${pgRows.toLocaleString()} pg + ${mongoDocs.toLocaleString()} mongo + ${mysqlRows.toLocaleString()} mysql in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
   );
 }
 
 async function cmdReset(
   profile: string,
-  target: "all" | "pg" | "mongo",
+  target: "all" | "pg" | "mongo" | "mysql",
   isQuiet: boolean,
 ): Promise<void> {
   const spec = loadSpec(profile);
@@ -132,6 +163,7 @@ async function cmdReset(
 
   let pgRows = 0;
   let mongoDocs = 0;
+  let mysqlRows = 0;
   const t0 = Date.now();
 
   if (target === "all" || target === "pg") {
@@ -168,8 +200,23 @@ async function cmdReset(
       },
     );
   }
+
+  if (target === "all" || target === "mysql") {
+    const conn = mysqlEnvConn();
+    const mysqlDb =
+      spec.profileSpec.database.mysql ?? spec.profileSpec.database.pg;
+    // drop 은 root 권한으로 (testuser 가 DROP DATABASE 권한 없을 수 있음).
+    await dropMysqlDatabase(mysqlRootEnvConn(), mysqlDb);
+    await ensureMysqlDatabaseAndGrant(mysqlRootEnvConn(), mysqlDb, conn.user);
+    const rows = generateAll(spec);
+    console.log(`  mysql → ${mysqlDb}`);
+    await applyMysql(conn, mysqlDb, spec, rows, (e, n, ms) => {
+      if (!isQuiet) console.log(`    ${formatEntity(e, n, ms, "rows")}`);
+      mysqlRows += n;
+    });
+  }
   console.log(
-    `done — ${pgRows.toLocaleString()} rows + ${mongoDocs.toLocaleString()} docs in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+    `done — ${pgRows.toLocaleString()} pg + ${mongoDocs.toLocaleString()} mongo + ${mysqlRows.toLocaleString()} mysql in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
   );
 }
 

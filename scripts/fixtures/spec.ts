@@ -70,7 +70,7 @@ const EmbedSchema = z.object({
 
 const EntitySchema = z
   .object({
-    targets: z.array(z.enum(["pg", "mongo"])).nonempty(),
+    targets: z.array(z.enum(["pg", "mongo", "mysql"])).nonempty(),
     pg: z.object({ schema: z.string(), table: z.string() }).optional(),
     mongo: z
       .object({
@@ -78,6 +78,9 @@ const EntitySchema = z
         embed: z.record(z.string(), EmbedSchema).optional(),
       })
       .optional(),
+    // Sprint 288 — MySQL entity placement. database = schema 라 schema 필드
+    // 없이 table 만. yaml 에선 `mysql: { table: customers }` 처럼 사용.
+    mysql: z.object({ table: z.string() }).optional(),
     columns: z.record(z.string(), ColumnSchema),
   })
   .strict();
