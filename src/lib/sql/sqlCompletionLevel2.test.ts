@@ -11,6 +11,7 @@ import {
   type SQLNamespace,
 } from "@codemirror/lang-sql";
 import { updateColumnCompletionSource } from "./updateColumnCompletion";
+import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
 
 /**
  * Sprint 294 (2026-05-14) — Level-2 alias-aware JOIN baseline.
@@ -43,12 +44,18 @@ import { updateColumnCompletionSource } from "./updateColumnCompletion";
  *     없이도 alias 추적이 가능해야 외부 IDE 수준).
  *
  * 따라서 6 spec 시나리오는 통과 it 으로, 그 위에 mid-typing RED 1 건을
- * `it.fails(...)` 로 추가해 Slice B 의 표적을 코드로 명시한다.
+ * `it.fails(...)` 로 추가해 Slice B 의 표적을 코드로 명시했다.
  *
  * `callAll` 헬퍼는 sprint-292 의 `sqlCompletionLevel1.test.ts` 패턴을
  * **그대로 복제** — `languageDataAt<CompletionSource>("autocomplete")` 로
  * lang-sql built-in source 를 수집하고 `updateColumnCompletionSource` 를
- * 합산. Slice A 단계에서는 추가 source 호출 없음.
+ * 합산.
+ *
+ * Sprint 294 Slice B (2026-05-14) 업데이트: `aliasColumnCompletionSource`
+ * 가 추가됨에 따라 mid-typing 시나리오가 GREEN 으로 전이. `callAll` 에
+ * `aliasSource` 합산을 추가하고, 마지막 it.fails 는 GREEN 회귀 가드 it 으로
+ * 전이. Slice C 가 wire 한 뒤에는 본 source 가 dialect data 로 자동 호출
+ * 되지만, 여기서는 단위 테스트 격리를 위해 명시 호출.
  */
 
 const TEST_SCHEMA: SQLNamespace = {
@@ -57,6 +64,7 @@ const TEST_SCHEMA: SQLNamespace = {
 };
 
 const updateSource = updateColumnCompletionSource(() => TEST_SCHEMA);
+const aliasSource = aliasColumnCompletionSource(() => TEST_SCHEMA);
 
 function makeContext(doc: string, cursor?: number, explicit = true) {
   const pos = cursor ?? doc.length;
@@ -79,7 +87,7 @@ async function callAll(doc: string, cursor?: number): Promise<string[]> {
     ctx.pos,
   );
   const labels = new Set<string>();
-  for (const source of [...fromLang, updateSource]) {
+  for (const source of [...fromLang, updateSource, aliasSource]) {
     if (typeof source !== "function") continue;
     const raw = source(ctx);
     const result = (await Promise.resolve(raw)) as CompletionResult | null;
@@ -170,7 +178,7 @@ describe("SQL Level-2 자동완성 — alias-aware JOIN baseline (Slice A 측정
   });
 
   // ────────────────────────────────────────────────────────────────────────
-  // Slice B 표적 — RED 시나리오 (mid-typing flow).
+  // Slice B 표적 — mid-typing flow (Sprint 294 Slice B 보강으로 GREEN 전이).
   //
   // 위 6 baseline 은 doc 가 FROM 절을 이미 포함해야 lang-sql 의 alias 맵이
   // 완성되는 한계를 보여준다. 실제 사용자 흐름은:
@@ -181,21 +189,17 @@ describe("SQL Level-2 자동완성 — alias-aware JOIN baseline (Slice A 측정
   //
   // Slice B 의 `aliasColumnCompletionSource` 는 doc 안 어디든 (위 또는 아래)
   // `FROM users u` 가 있으면 alias 맵을 구성해 mid-typing 흐름에서도 후보를
-  // 돌려줘야 한다 — 외부 IDE (DataGrip / TablePlus) 수준.
+  // 돌려준다. 이 it 은 (a) Slice A 시점의 RED 표적을 (b) Slice B 가 정확히
+  // GREEN 으로 전이시켰는지 검증하는 회귀 가드.
   //
-  // 이 시나리오는 spec 의 6 baseline 이 아니라 Slice B 의 표적을 코드로
-  // 못박기 위한 보조 it. contract Done Criteria #4 의 "실패 케이스 1+ 개"
-  // 요건도 충족.
-  //
-  // expected: RED — Slice B 의 보강 후 GREEN 전이.
-  it.fails(
-    "[Slice B 표적] SELECT u.<cursor> (FROM 아직 미입력) → users 컬럼 노출 — 현재 RED",
-    async () => {
-      const doc = "SELECT u.";
-      const labels = await callAll(doc, doc.length);
-      expect(labels).toEqual(
-        expect.arrayContaining(["id", "name", "email", "age"]),
-      );
-    },
-  );
+  // Slice B 의 contract Done Criteria #2: `it.fails` → `it` 전이.
+  it("[Slice B GREEN] SELECT u.<cursor> (FROM 미입력 mid-typing) → users 컬럼 노출", async () => {
+    // 두 statement: 첫 번째는 mid-typing, 두 번째에 alias 선언이 있음.
+    // anywhere-scan 으로 alias map 을 구성해야 후보가 풀린다.
+    const doc = "SELECT u.\n;\nSELECT * FROM users u";
+    const labels = await callAll(doc, "SELECT u.".length);
+    expect(labels).toEqual(
+      expect.arrayContaining(["id", "name", "email", "age"]),
+    );
+  });
 });
