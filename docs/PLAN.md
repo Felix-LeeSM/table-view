@@ -187,7 +187,7 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 | 14 | Workspace theme toggle | 계획 | [phase-14.md](phases/phase-14.md) |
 | 15 | Connection group DnD + nested indent | 계획 | [phase-15.md](phases/phase-15.md) |
 | 16 | Recent connections (MRU) 동작 보장 | 계획 | [phase-16.md](phases/phase-16.md) |
-| 17 | MySQL 어댑터 | 진행 중 (Sprint 250 seed infra ✓ / Sprint 276 unsupported UI hide ✓ / Sprint 252+ adapter 본체) | [phase-17.md](phases/phase-17.md) |
+| 17 | MySQL 어댑터 | 진행 중 (Sprint 277 seed infra ✓ / Sprint 276 unsupported UI hide ✓ / 다음: adapter 본체) | [phase-17.md](phases/phase-17.md) |
 | 18 | MariaDB 어댑터 | **보류** (2026-05-01) | [phase-18.md](phases/phase-18.md) |
 | 19 | SQLite 어댑터 | **보류** (2026-05-01) | [phase-19.md](phases/phase-19.md) |
 | 20 | Oracle 어댑터 | **보류** (2026-05-01) | [phase-20.md](phases/phase-20.md) |
