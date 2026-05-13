@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useConnectionStore } from "@stores/connectionStore";
@@ -36,19 +36,28 @@ import {
  * stores so the user's next click dispatches against the correct
  * expectedDatabase. Fire-and-forget — verify failures stay invisible so
  * the query result panel survives a network blip.
+ *
+ * Sprint 269 — the passive `toast.warning(...)` previously surfaced here
+ * is REPLACED by a Retry-bearing toast pushed from the catch site (so the
+ * Retry closure has lexical access to `stmt` / `statements` / `joinedSql`).
+ * `onSynced` is invoked only when verify resolved with a non-empty actual
+ * db — preserves the Sprint 267 "verify-failed = silent" invariant.
  */
-async function syncMismatchedActiveDb(connectionId: string): Promise<void> {
+async function syncMismatchedActiveDb(
+  connectionId: string,
+  onSynced: (actual: string) => void,
+): Promise<void> {
   try {
     const actual = await verifyActiveDb(connectionId);
     if (!actual) return;
     useConnectionStore.getState().setActiveDb(connectionId, actual);
     useSchemaStore.getState().clearForConnection(connectionId);
-    toast.warning(
-      `Active DB synced to '${actual}'. Re-run the query if needed.`,
-    );
+    onSynced(actual);
   } catch {
     // Best-effort — verify failure must not turn into a second user-facing
-    // failure on top of the original DbMismatch.
+    // failure on top of the original DbMismatch. The Retry toast is NOT
+    // surfaced when verify rejects: a Retry whose first action would race
+    // an unsynced backend would just re-trigger the same DbMismatch.
   }
 }
 import { logger } from "@lib/logger";
@@ -354,6 +363,41 @@ export function useQueryExecution({
     setPendingMongoConfirm(null);
   }, []);
 
+  // Sprint 269 — refs the Retry closure dereferences when invoked. The
+  // closure captured at catch time would otherwise hold a stale function
+  // identity (each `useCallback` re-creates `runRdbSingleNow` /
+  // `runRdbBatchNow` on tab-mutation re-render), so the user clicking
+  // Retry after a re-render would dispatch through the *previous* render's
+  // function. Refs decouple closure identity from `useCallback` deps.
+  const runRdbSingleRef = useRef<((stmt: string) => Promise<void>) | null>(
+    null,
+  );
+  const runRdbBatchRef = useRef<
+    ((statements: string[], joinedSql: string) => Promise<void>) | null
+  >(null);
+
+  // Sprint 269 — Retry closure helper. Looks up the live tab via
+  // `useWorkspaceStore.getState()` (tabs live nested at
+  // `workspaces[connId][db].tabs`) and returns it only when (a) it still
+  // exists and (b) is NOT currently `running`. `null` ⇒ Retry no-ops.
+  // Walks every (connId, db) slot for the connection because the tab may
+  // have moved if the active db flipped mid-flight.
+  const findLiveIdleTab = useCallback(
+    (tabId: string, connectionId: string): QueryTab | null => {
+      const conns = useWorkspaceStore.getState().workspaces[connectionId];
+      if (!conns) return null;
+      for (const ws of Object.values(conns)) {
+        const found = ws?.tabs.find((t) => t.id === tabId);
+        if (!found) continue;
+        if (found.type !== "query") return null;
+        if (found.queryState.status === "running") return null;
+        return found;
+      }
+      return null;
+    },
+    [],
+  );
+
   // Sprint 231 — single-statement RDB dispatch + book-keeping. Mirrors
   // `runMongoAggregateNow`: extracted so the warn-tier confirm path can
   // re-enter the same try/catch + recordHistory + DB-mutation hint flow
@@ -393,8 +437,36 @@ export function useQueryExecution({
         // Sprint 267 — Sprint 266 의 가드가 backend 의 active db 변동을
         // 알려준 것. 즉시 verify + sync 하여 다음 user click 이 올바른
         // expectedDatabase 로 dispatch 되도록.
+        //
+        // Sprint 269 — push the Retry-bearing toast from the catch site
+        // (rather than from inside `syncMismatchedActiveDb`) so the closure
+        // captures `stmt` lexically. The Retry closure re-invokes the live
+        // `runRdbSingleNow` via `runRdbSingleRef.current` only when the tab
+        // still exists and is NOT currently running.
         if (parseDbMismatch(message)) {
-          void syncMismatchedActiveDb(tab.connectionId);
+          const capturedTabId = tab.id;
+          const capturedConnectionId = tab.connectionId;
+          const capturedStmt = stmt;
+          void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
+            toast.warning(
+              `Active DB synced to '${actual}'. Re-run the query if needed.`,
+              {
+                action: {
+                  label: "Retry",
+                  onClick: () => {
+                    const live = findLiveIdleTab(
+                      capturedTabId,
+                      capturedConnectionId,
+                    );
+                    if (!live) return;
+                    const fn = runRdbSingleRef.current;
+                    if (!fn) return;
+                    void fn(capturedStmt);
+                  },
+                },
+              },
+            );
+          });
         }
       }
       // Run DB-change detection regardless of query success — `\c x` can
@@ -411,8 +483,12 @@ export function useQueryExecution({
       completeQuery,
       failQuery,
       recordHistory,
+      findLiveIdleTab,
     ],
   );
+  // Keep the ref in sync with the latest function identity so the Retry
+  // closure (captured at catch time) routes to the current render's helper.
+  runRdbSingleRef.current = runRdbSingleNow;
 
   // Sprint 231 — multi-statement RDB dispatch + per-statement breakdown.
   // Mirrors the original inline loop in `handleExecute` but takes the
@@ -427,6 +503,12 @@ export function useQueryExecution({
       let lastResult: import("@/types/query").QueryResult | null = null;
       const statementResults: import("@/types/query").QueryStatementResult[] =
         [];
+      // Sprint 269 — only push ONE Retry toast per batch even if multiple
+      // statements trip the mismatch guard. The first observed mismatch
+      // fires the verify + sync; subsequent statement-level mismatches
+      // skip the toast push (sync is idempotent so the store update is
+      // still safe to repeat, but a second toast would clutter the queue).
+      let mismatchToastPushed = false;
 
       for (let i = 0; i < statements.length; i++) {
         const stmt = statements[i]!;
@@ -457,8 +539,43 @@ export function useQueryExecution({
           // Sprint 267 — mismatch sync (per statement-level catch).
           // 같은 mismatch 가 batch 안에서 반복되어도 setActiveDb 는 동일
           // 결과 idempotent — overhead 만 약간 더 큰 round-trip 수준.
-          if (parseDbMismatch(message)) {
-            void syncMismatchedActiveDb(tab.connectionId);
+          //
+          // Sprint 269 — push the Retry-bearing toast (once per batch) from
+          // the catch site so the closure captures `(statements, joinedSql)`
+          // lexically. Retry re-invokes the live `runRdbBatchNow` via the
+          // ref iff the tab still exists and is NOT currently running.
+          if (parseDbMismatch(message) && !mismatchToastPushed) {
+            mismatchToastPushed = true;
+            const capturedTabId = tab.id;
+            const capturedConnectionId = tab.connectionId;
+            const capturedStatements = statements;
+            const capturedJoinedSql = joinedSql;
+            void syncMismatchedActiveDb(capturedConnectionId, (actual) => {
+              toast.warning(
+                `Active DB synced to '${actual}'. Re-run the query if needed.`,
+                {
+                  action: {
+                    label: "Retry",
+                    onClick: () => {
+                      const live = findLiveIdleTab(
+                        capturedTabId,
+                        capturedConnectionId,
+                      );
+                      if (!live) return;
+                      const fn = runRdbBatchRef.current;
+                      if (!fn) return;
+                      void fn(capturedStatements, capturedJoinedSql);
+                    },
+                  },
+                },
+              );
+            });
+          } else if (parseDbMismatch(message)) {
+            // Subsequent statements hitting the same mismatch: still run
+            // verify+sync (idempotent) but suppress an extra toast.
+            void syncMismatchedActiveDb(tab.connectionId, () => {
+              /* no toast on repeat — keep queue uncluttered */
+            });
           }
         }
       }
@@ -498,8 +615,11 @@ export function useQueryExecution({
       updateQueryState,
       completeMultiStatementQuery,
       recordHistory,
+      findLiveIdleTab,
     ],
   );
+  // Sprint 269 — see `runRdbSingleRef` rationale above. Mirror for batch.
+  runRdbBatchRef.current = runRdbBatchNow;
 
   // Sprint 231 — warn-tier confirm callback. Re-enters the same single /
   // multi helper without the gate, so the user's input is dispatched

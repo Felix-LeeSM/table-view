@@ -203,4 +203,69 @@ describe("Toaster", () => {
     // ancestor scroll/transform.
     expect(container.className).toContain("fixed");
   });
+
+  // --- Sprint 269 (2026-05-13): action button rendering --------------------
+  // The DbMismatch toast carries a Retry action; the toast row must render a
+  // button whose accessible name equals `action.label`, click must fire the
+  // callback exactly once and dismiss the toast in the same gesture.
+
+  it("Sprint 269: toast with action renders a button with accessible name = action.label", () => {
+    render(<Toaster />);
+
+    act(() => {
+      toast.warning("Active DB synced", {
+        action: { label: "Retry", onClick: vi.fn() },
+      });
+    });
+
+    const retryBtn = screen.getByRole("button", { name: "Retry" });
+    expect(retryBtn).toBeInTheDocument();
+    // Pin `type="button"` so a toast accidentally surfaced inside a <form>
+    // does not submit the form.
+    expect(retryBtn.getAttribute("type")).toBe("button");
+  });
+
+  it("Sprint 269: clicking the action button fires onClick exactly once", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<Toaster />);
+
+    act(() => {
+      toast.warning("Active DB synced", {
+        action: { label: "Retry", onClick },
+      });
+    });
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("Sprint 269: clicking the action button dismisses the toast", async () => {
+    const user = userEvent.setup();
+    render(<Toaster />);
+
+    act(() => {
+      toast.warning("Active DB synced", {
+        action: { label: "Retry", onClick: vi.fn() },
+      });
+    });
+    expect(screen.getByText("Active DB synced")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(screen.queryByText("Active DB synced")).not.toBeInTheDocument();
+  });
+
+  it("Sprint 269: toast without action renders only the dismiss button (1 button, not 2)", () => {
+    render(<Toaster />);
+
+    act(() => {
+      toast.warning("plain warning");
+    });
+
+    const row = screen.getByRole("alert");
+    const buttons = within(row).getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.getAttribute("aria-label")).toBe("Dismiss notification");
+  });
 });

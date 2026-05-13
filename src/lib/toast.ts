@@ -11,6 +11,18 @@ import { create } from "zustand";
 
 export type ToastVariant = "success" | "error" | "info" | "warning";
 
+/**
+ * Sprint 269 — optional action button payload. Surfaced as an in-toast
+ * button (rendered immediately before the dismiss `X`); clicking invokes
+ * `onClick` synchronously then dismisses the toast. The field is omitted
+ * (not `null`) on toasts that have no action so existing serialization +
+ * the Sprint 94 `Toast` shape stay byte-equivalent.
+ */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface Toast {
   /** Stable id used for `toast.dismiss(id)`. Unique per active toast. */
   id: string;
@@ -22,6 +34,11 @@ export interface Toast {
    * `DEFAULT_DURATIONS`.
    */
   durationMs: number | null;
+  /**
+   * Sprint 269 — optional Retry-style action. Present only when the caller
+   * passed `options.action` to `toast.<variant>(...)`.
+   */
+  action?: ToastAction;
 }
 
 export interface ToastOptions {
@@ -37,6 +54,13 @@ export interface ToastOptions {
    * a fresh id is generated.
    */
   id?: string;
+  /**
+   * Sprint 269 — optional action button. When supplied, the toaster renders
+   * a button labelled `action.label` immediately before the dismiss `X`;
+   * clicking it invokes `action.onClick()` and dismisses the toast. Omitted
+   * by default so existing Sprint 94 call sites behave unchanged.
+   */
+  action?: ToastAction;
 }
 
 interface ToastStoreState {
@@ -90,7 +114,13 @@ export const useToastStore = create<ToastStoreState>((set) => ({
       options?.durationMs === undefined
         ? DEFAULT_DURATIONS[variant]
         : options.durationMs;
-    const toast: Toast = { id, variant, message, durationMs };
+    // Build the persisted Toast. Omit `action` entirely when the caller did
+    // not supply one — Sprint 94 callers (success/info/error/warning without
+    // options.action) get a Toast whose shape is unchanged from before.
+    const toast: Toast =
+      options?.action === undefined
+        ? { id, variant, message, durationMs }
+        : { id, variant, message, durationMs, action: options.action };
     set((state) => {
       // If a caller-supplied id collides with an existing toast, replace in
       // place so the call has "update" semantics (e.g. flipping a pending

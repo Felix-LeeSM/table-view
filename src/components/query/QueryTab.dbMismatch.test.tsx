@@ -13,9 +13,12 @@ import {
   getTestWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import QueryTab from "./QueryTab";
+import { Toaster } from "@/components/ui/toaster";
 import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
+import { useToastStore } from "@lib/toast";
 import {
   mockExecuteQuery,
   mockCancelQuery,
@@ -221,5 +224,292 @@ describe("QueryTab — DbMismatch auto-sync (Sprint 267)", () => {
       }
     });
     expect(mockVerifyActiveDb).not.toHaveBeenCalled();
+    // Sprint 269 (2026-05-13) — AC-269-04 specificity gate. Non-mismatch
+    // errors must NOT push an action-bearing toast. Positive assertion that
+    // no toast in the queue carries an `action` field — preserves the
+    // Sprint 267 specificity invariant in the post-Retry world.
+    const queueAfter = useToastStore.getState().toasts;
+    expect(queueAfter.every((t) => t.action === undefined)).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Sprint 269 (2026-05-13) — DbMismatch toast Retry button.
+  // Reason: the passive `toast.warning(...)` Sprint 267 surfaced left the user
+  // with no affordance to re-run the same query against the now-synced active
+  // db. These cases pin the Retry action shape + re-dispatch semantics +
+  // closure guards.
+  // ---------------------------------------------------------------------------
+
+  it("AC-269-01: mismatch error surfaces a toast with an accessible Retry button", async () => {
+    seedConn1WithActiveDb("db1");
+    mockExecuteQuery.mockRejectedValueOnce(
+      new Error(
+        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+      ),
+    );
+    mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
+
+    const tab = makeQueryTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(
+      <>
+        <QueryTab tab={tab} />
+        <Toaster />
+      </>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    expect(retry.getAttribute("type")).toBe("button");
+  });
+
+  it("AC-269-02 single: clicking Retry re-dispatches the same statement", async () => {
+    const user = userEvent.setup();
+    seedConn1WithActiveDb("db1");
+    // First call: mismatch. Second call (after Retry): success.
+    mockExecuteQuery
+      .mockRejectedValueOnce(
+        new Error(
+          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+        ),
+      )
+      .mockResolvedValueOnce({
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 1,
+        query_type: "select",
+      });
+    mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
+
+    const tab = makeQueryTab({ sql: "SELECT 1" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(
+      <>
+        <QueryTab tab={tab} />
+        <Toaster />
+      </>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    await act(async () => {
+      await user.click(retry);
+    });
+
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(2);
+    });
+    // Same `stmt` re-dispatched on Retry.
+    expect(mockExecuteQuery.mock.calls[1]?.[0]).toBe("conn1");
+    expect(mockExecuteQuery.mock.calls[1]?.[1]).toBe("SELECT 1");
+  });
+
+  it("AC-269-02 batch: clicking Retry re-runs the same multi-statement batch", async () => {
+    const user = userEvent.setup();
+    seedConn1WithActiveDb("db1");
+    // First two calls (initial batch): both reject with mismatch.
+    // Retry batch: both succeed.
+    mockExecuteQuery
+      .mockRejectedValueOnce(
+        new Error(
+          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+        ),
+      )
+      .mockRejectedValueOnce(
+        new Error(
+          "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+        ),
+      )
+      .mockResolvedValueOnce({
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 1,
+        query_type: "select",
+      })
+      .mockResolvedValueOnce({
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 1,
+        query_type: "select",
+      });
+    mockVerifyActiveDb.mockResolvedValue("db_actual");
+
+    const tab = makeQueryTab({ sql: "SELECT 1; SELECT 2" });
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(
+      <>
+        <QueryTab tab={tab} />
+        <Toaster />
+      </>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    await act(async () => {
+      await user.click(retry);
+    });
+
+    // Initial batch (2 statements) + retry batch (2 statements) = 4 calls.
+    await waitFor(() => {
+      expect(mockExecuteQuery).toHaveBeenCalledTimes(4);
+    });
+    expect(mockExecuteQuery.mock.calls[2]?.[1]).toBe("SELECT 1");
+    expect(mockExecuteQuery.mock.calls[3]?.[1]).toBe("SELECT 2");
+  });
+
+  it("AC-269-03 closed-tab: Retry no-ops when the tab no longer exists", async () => {
+    const user = userEvent.setup();
+    seedConn1WithActiveDb("db1");
+    mockExecuteQuery.mockRejectedValueOnce(
+      new Error(
+        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+      ),
+    );
+    mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
+
+    const tab = makeQueryTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(
+      <>
+        <QueryTab tab={tab} />
+        <Toaster />
+      </>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+
+    // Remove the tab from the workspace before clicking Retry. The retry
+    // closure must observe the missing tab via
+    // `useWorkspaceStore.getState()` and bail out.
+    act(() => {
+      useWorkspaceStore.setState({ workspaces: {} });
+    });
+
+    await act(async () => {
+      await user.click(retry);
+    });
+
+    // Initial call only; the closed-tab guard suppressed the re-dispatch.
+    expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("AC-269-03 already-running: Retry no-ops when the tab is already running", async () => {
+    const user = userEvent.setup();
+    seedConn1WithActiveDb("db1");
+    mockExecuteQuery.mockRejectedValueOnce(
+      new Error(
+        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+      ),
+    );
+    mockVerifyActiveDb.mockResolvedValueOnce("db_actual");
+
+    const tab = makeQueryTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(
+      <>
+        <QueryTab tab={tab} />
+        <Toaster />
+      </>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    const retry = await screen.findByRole("button", { name: "Retry" });
+
+    // Force the tab back to `running` so the closure's
+    // `queryState.status !== "running"` guard fires.
+    act(() => {
+      useWorkspaceStore.setState((state) => {
+        const conn = state.workspaces["conn1"];
+        if (!conn) return state;
+        const ws = conn["db1"];
+        if (!ws) return state;
+        return {
+          workspaces: {
+            ...state.workspaces,
+            conn1: {
+              ...conn,
+              db1: {
+                ...ws,
+                tabs: ws.tabs.map((t) =>
+                  t.id === "query-1" && t.type === "query"
+                    ? {
+                        ...t,
+                        queryState: {
+                          status: "running" as const,
+                          queryId: "manual-running",
+                        },
+                      }
+                    : t,
+                ),
+              },
+            },
+          },
+        };
+      });
+    });
+
+    await act(async () => {
+      await user.click(retry);
+    });
+
+    expect(mockExecuteQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("Sprint 269: verifyActiveDb rejection keeps the catch silent — no Retry toast surfaces", async () => {
+    seedConn1WithActiveDb("db1");
+    mockExecuteQuery.mockRejectedValueOnce(
+      new Error(
+        "Database mismatch: expected 'db1', backend pool has 'db_actual'",
+      ),
+    );
+    // Sprint 267 best-effort invariant: verify rejection ⇒ silent path.
+    mockVerifyActiveDb.mockRejectedValueOnce(new Error("verify failed"));
+
+    const tab = makeQueryTab();
+    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
+    render(
+      <>
+        <QueryTab tab={tab} />
+        <Toaster />
+      </>,
+    );
+
+    await act(async () => {
+      screen.getByTestId("execute-btn").click();
+    });
+
+    await waitFor(() => {
+      expect(mockVerifyActiveDb).toHaveBeenCalledWith("conn1");
+    });
+    // The query failed; the tab transitioned to error. No Retry button
+    // surfaced because verifyActiveDb rejected.
+    await waitFor(() => {
+      const t = getTestWorkspace().tabs.find((x) => x.id === "query-1");
+      if (t && t.type === "query") {
+        expect(t.queryState.status).toBe("error");
+      }
+    });
+    expect(
+      screen.queryByRole("button", { name: "Retry" }),
+    ).not.toBeInTheDocument();
   });
 });

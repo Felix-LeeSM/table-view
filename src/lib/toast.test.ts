@@ -108,4 +108,31 @@ describe("toast (lib)", () => {
     toast.clear();
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
+
+  // Sprint 269 (2026-05-13) — pin that `options.action` is persisted onto the
+  // resulting `Toast`. The DbMismatch Retry button rides on this field; without
+  // copying it through `push`, the toaster has nothing to render.
+  it("toast.warning with options.action persists the action on the resulting Toast", () => {
+    const onClick = (): void => {};
+    const id = toast.warning("mismatch", {
+      action: { label: "Retry", onClick },
+    });
+
+    const stored = useToastStore.getState().toasts.find((t) => t.id === id);
+    expect(stored).toBeDefined();
+    expect(stored?.action?.label).toBe("Retry");
+    expect(stored?.action?.onClick).toBe(onClick);
+  });
+
+  // Sprint 269 (2026-05-13) — backward-compat: omitting `action` leaves the
+  // field `undefined` on the persisted `Toast` so Sprint 94 call sites and
+  // serialization shape stay byte-equivalent.
+  it("existing call sites (no action) result in a Toast whose action is undefined", () => {
+    const id = toast.success("ok");
+    const stored = useToastStore.getState().toasts.find((t) => t.id === id);
+    expect(stored).toBeDefined();
+    expect(stored?.action).toBeUndefined();
+    // The field is omitted entirely (not `null`), preserving JSON shape.
+    expect(stored && "action" in stored).toBe(false);
+  });
 });
