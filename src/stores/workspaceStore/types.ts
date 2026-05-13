@@ -17,6 +17,18 @@ import type { FilterCondition, SortInfo } from "@/types/schema";
 export type TabSubView = "records" | "structure";
 
 /**
+ * Sprint 272 — sub-tab of the Structure pane. Extends the
+ * `StructurePanel` `SubTab` enum verbatim. `undefined` keeps the default
+ * "columns" route so existing tabs / persisted payloads are
+ * byte-equivalent. Only consumed when `subView === "structure"`.
+ */
+export type StructureSubTab =
+  | "columns"
+  | "indexes"
+  | "constraints"
+  | "triggers";
+
+/**
  * Distinguishes between a base table and a view. Both share the tab
  * shape, but the Structure sub-view renders differently (read-only
  * columns + definition SQL for views vs. editable columns + indexes +
@@ -39,6 +51,14 @@ export interface TableTab {
   /** MongoDB collection name (document paradigm only). */
   collection?: string;
   subView: TabSubView;
+  /**
+   * Sprint 272 — initial Structure sub-tab when `subView === "structure"`.
+   * The "View Triggers" right-click affordance threads `"triggers"` here
+   * so `StructurePanel` mounts on the Triggers sub-tab. `undefined`
+   * preserves the default "columns" route (existing call sites byte-
+   * equivalent).
+   */
+  initialStructureSubTab?: StructureSubTab;
   /** Whether this tab points at a base table or a view. */
   objectKind?: TabObjectKind;
   /** When true, clicking another table in the same connection replaces this tab. */

@@ -11,7 +11,7 @@ use sqlx::PgPool;
 use crate::error::AppError;
 use crate::models::{
     ColumnInfo, ConstraintInfo, FunctionInfo, IndexInfo, PostgresTypeInfo, SchemaInfo, TableInfo,
-    ViewInfo,
+    TriggerInfo, ViewInfo,
 };
 
 use super::category::{map_pg_data_type, normalize_pg_type, restore_serial};
@@ -80,6 +80,111 @@ pub(crate) const LIST_TYPES_SQL: &str = "SELECT n.nspname AS schema, t.typname A
 /// sprint-89's scope.
 pub(crate) fn format_fk_reference(schema: &str, table: &str, column: &str) -> String {
     format!("{schema}.{table}({column})")
+}
+
+// ── Sprint 272 — `pg_trigger.tgtype` bitmask decoder ───────────────────────
+
+/// Sprint 272 — bit constants for `pg_trigger.tgtype`. Sourced from the
+/// PostgreSQL source tree (`src/include/catalog/pg_trigger.h`); reproduced
+/// here so the unit tests assert against an explicit byte-vs-meaning map.
+pub(crate) const TRIGGER_TYPE_ROW: i16 = 0x01;
+pub(crate) const TRIGGER_TYPE_BEFORE: i16 = 0x02;
+pub(crate) const TRIGGER_TYPE_INSERT: i16 = 0x04;
+pub(crate) const TRIGGER_TYPE_DELETE: i16 = 0x08;
+pub(crate) const TRIGGER_TYPE_UPDATE: i16 = 0x10;
+pub(crate) const TRIGGER_TYPE_TRUNCATE: i16 = 0x20;
+pub(crate) const TRIGGER_TYPE_INSTEAD: i16 = 0x40;
+
+/// Decoded view of one `pg_trigger.tgtype` int2 bitmask. `timing` and
+/// `orientation` are static keywords; `events` carries the user-facing
+/// subset of `["INSERT", "UPDATE", "DELETE"]` (TRUNCATE intentionally
+/// stripped — see `PostgresAdapter::list_triggers` doc).
+pub(crate) struct DecodedTgtype {
+    pub timing: &'static str,
+    pub orientation: &'static str,
+    pub events: Vec<&'static str>,
+}
+
+/// Decode `pg_trigger.tgtype` into explicit timing / events / orientation
+/// fields. INSTEAD OF takes precedence over BEFORE/AFTER (PG semantics:
+/// `INSTEAD` triggers can only exist on views and are mutually exclusive
+/// with timing flags, but defensively we check `INSTEAD` first regardless
+/// of whether `BEFORE` is also set).
+///
+/// Event ordering is fixed (INSERT, UPDATE, DELETE) so the rendered SQL
+/// preview is deterministic regardless of the bitmask's natural order.
+pub(crate) fn decode_tgtype(tgtype: i16) -> DecodedTgtype {
+    let timing = if (tgtype & TRIGGER_TYPE_INSTEAD) != 0 {
+        "INSTEAD OF"
+    } else if (tgtype & TRIGGER_TYPE_BEFORE) != 0 {
+        "BEFORE"
+    } else {
+        "AFTER"
+    };
+
+    let orientation = if (tgtype & TRIGGER_TYPE_ROW) != 0 {
+        "ROW"
+    } else {
+        "STATEMENT"
+    };
+
+    // Sprint 272 — TRUNCATE is dropped from the event list. The list is
+    // built in fixed `INSERT, UPDATE, DELETE` order to keep the rendered
+    // summary deterministic; the user-visible label `"BEFORE INSERT OR
+    // UPDATE"` never depends on which bit happened to be set in PG's
+    // internal order.
+    let mut events: Vec<&'static str> = Vec::new();
+    if (tgtype & TRIGGER_TYPE_INSERT) != 0 {
+        events.push("INSERT");
+    }
+    if (tgtype & TRIGGER_TYPE_UPDATE) != 0 {
+        events.push("UPDATE");
+    }
+    if (tgtype & TRIGGER_TYPE_DELETE) != 0 {
+        events.push("DELETE");
+    }
+    // TRIGGER_TYPE_TRUNCATE (0x20) is intentionally NOT pushed — see
+    // `PostgresAdapter::list_triggers` doc. Asserting the bit name here
+    // keeps the constant referenced (otherwise dead_code) and documents
+    // the deliberate omission.
+    let _ = TRIGGER_TYPE_TRUNCATE;
+
+    DecodedTgtype {
+        timing,
+        orientation,
+        events,
+    }
+}
+
+/// Sprint 272 — render `pg_trigger.tgargs` (PG stores it as a `bytea` of
+/// null-delimited C strings, terminated by an empty string) into the
+/// display form `'arg1', 'arg2'`. Returns `None` when the trigger function
+/// takes no arguments (empty `tgargs` blob).
+///
+/// PG escapes embedded single quotes in `tgargs` as `''`; this helper
+/// surfaces the raw decoded string verbatim so the rendered SQL matches
+/// what `pg_get_triggerdef` would emit.
+pub(crate) fn decode_tgargs(tgargs: &[u8]) -> Option<String> {
+    if tgargs.is_empty() {
+        return None;
+    }
+    // Split on null bytes, drop the trailing empty terminator if present.
+    let parts: Vec<&[u8]> = tgargs.split(|b| *b == 0).collect();
+    let mut rendered: Vec<String> = Vec::new();
+    for part in parts {
+        if part.is_empty() {
+            continue;
+        }
+        // Lossy UTF-8: trigger arguments are user text and may carry
+        // non-ASCII; lossy decode keeps the helper infallible.
+        let s = String::from_utf8_lossy(part);
+        rendered.push(format!("'{}'", s));
+    }
+    if rendered.is_empty() {
+        None
+    } else {
+        Some(rendered.join(", "))
+    }
 }
 
 impl PostgresAdapter {
@@ -822,6 +927,129 @@ impl PostgresAdapter {
         }
     }
 
+    /// Sprint 272 — list triggers attached to `(schema, table)`.
+    ///
+    /// Filters `tgisinternal = true` (PG-managed FK / RI / replication
+    /// triggers) so only user-defined triggers surface. `tgtype` is the
+    /// int2 bitmask decoded by [`decode_tgtype`] into the explicit
+    /// timing / events / orientation fields on `TriggerInfo`.
+    ///
+    /// TRUNCATE event handling (master spec § 6, Generator's pick):
+    /// - The decoder strips TRUNCATE from the `events` list so the UI
+    ///   never offers an "edit a TRUNCATE trigger" affordance.
+    /// - If TRUNCATE is the ONLY event (`events.is_empty()` after the
+    ///   filter) the entire trigger row is dropped — surfacing a trigger
+    ///   with no events would be a lie. Triggers that fire on
+    ///   `INSERT OR TRUNCATE` keep the INSERT row and drop the TRUNCATE
+    ///   event; the rendered SQL definition still carries the full
+    ///   `pg_get_triggerdef` so the user can see the truth in source.
+    ///
+    /// SQL identifiers are bound as `$1` / `$2` — no string interpolation
+    /// of user-supplied schema / table names.
+    pub async fn list_triggers(
+        &self,
+        schema: &str,
+        table: &str,
+    ) -> Result<Vec<TriggerInfo>, AppError> {
+        // Row tuple shape returned by the pg_trigger query: (tgname,
+        // tgtype, function_schema, function_name, tgargs, when_expression,
+        // definition). Aliased to satisfy clippy::type_complexity.
+        type TriggerRow = (String, i16, String, String, Vec<u8>, Option<String>, String);
+
+        let pool = self.active_pool().await?;
+
+        // `tgargs` is bytea (PG stores it null-delimited); cast to text
+        // via `convert_from(..., 'UTF8')` preserves the bytes. The
+        // application-layer decoder splits on `\0` and re-renders as
+        // `'a', 'b'` for display.
+        let rows: Vec<TriggerRow> = sqlx::query_as(
+            "SELECT t.tgname, \
+                    t.tgtype, \
+                    fn.nspname AS function_schema, \
+                    p.proname AS function_name, \
+                    t.tgargs, \
+                    pg_catalog.pg_get_expr(t.tgqual, t.tgrelid) AS when_expression, \
+                    pg_catalog.pg_get_triggerdef(t.oid, true) AS definition \
+             FROM pg_catalog.pg_trigger t \
+             JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+             JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid \
+             JOIN pg_catalog.pg_namespace fn ON fn.oid = p.pronamespace \
+             WHERE n.nspname = $1 \
+               AND c.relname = $2 \
+               AND NOT t.tgisinternal \
+             ORDER BY t.tgname",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        let mut out = Vec::with_capacity(rows.len());
+        for (name, tgtype, function_schema, function_name, tgargs, when_expression, definition) in
+            rows
+        {
+            let decoded = decode_tgtype(tgtype);
+            // TRUNCATE-only filter — see method doc.
+            if decoded.events.is_empty() {
+                continue;
+            }
+            out.push(TriggerInfo {
+                name,
+                schema: schema.to_string(),
+                table: table.to_string(),
+                timing: decoded.timing.to_string(),
+                events: decoded.events.into_iter().map(|s| s.to_string()).collect(),
+                orientation: decoded.orientation.to_string(),
+                function_schema,
+                function_name,
+                arguments: decode_tgargs(&tgargs),
+                when_expression,
+                definition,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Sprint 272 — `pg_get_triggerdef(t.oid)` for a single trigger.
+    ///
+    /// Identifiers bound parametrically. `relkind IN ('r', 'p', 'v', 'm')`
+    /// is implicit via the join on the named (schema, table) — `pg_trigger`
+    /// only references relations.
+    pub async fn get_trigger_source(
+        &self,
+        schema: &str,
+        table: &str,
+        trigger_name: &str,
+    ) -> Result<String, AppError> {
+        let pool = self.active_pool().await?;
+
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT pg_catalog.pg_get_triggerdef(t.oid, true) \
+             FROM pg_catalog.pg_trigger t \
+             JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid \
+             JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
+             WHERE n.nspname = $1 \
+               AND c.relname = $2 \
+               AND t.tgname = $3 \
+               AND NOT t.tgisinternal",
+        )
+        .bind(schema)
+        .bind(table)
+        .bind(trigger_name)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| AppError::Connection(e.to_string()))?;
+
+        match row {
+            Some((source,)) => Ok(source),
+            None => Err(AppError::NotFound(format!(
+                "Trigger {schema}.{table}.{trigger_name} not found"
+            ))),
+        }
+    }
+
     /// List every non-template database visible to the connected role.
     ///
     /// Sprint 128 — counterpart to `DocumentAdapter::list_databases`. The
@@ -1036,6 +1264,124 @@ mod tests {
             err_msg.contains("Not connected"),
             "Expected 'Not connected' error, got: {err_msg}"
         );
+    }
+
+    // ── Sprint 272 — `pg_trigger.tgtype` bitmask decoder unit tests ────
+    //
+    // 작성 이유 (2026-05-13): decode_tgtype 가 PG 의 int2 bitmask 를
+    // 정확히 timing / orientation / events 로 풀어내야 SchemaTree /
+    // StructurePanel 양쪽이 거짓말 없이 사용자에게 표시. 4 representative
+    // bitmask 값으로 INSTEAD-OF/BEFORE/AFTER × ROW/STATEMENT × INSERT/
+    // UPDATE/DELETE/TRUNCATE 조합을 cover. 추가로 TRUNCATE-only/multi-
+    // event 경계 케이스 둘과 tgargs 디코더의 happy + empty 케이스.
+
+    #[test]
+    fn decode_tgtype_row_before_insert() {
+        // 0x07 = ROW (0x01) | BEFORE (0x02) | INSERT (0x04)
+        let d = decode_tgtype(0x07);
+        assert_eq!(d.timing, "BEFORE");
+        assert_eq!(d.orientation, "ROW");
+        assert_eq!(d.events, vec!["INSERT"]);
+    }
+
+    #[test]
+    fn decode_tgtype_statement_after_delete() {
+        // 0x08 = DELETE (0x08); no BEFORE → AFTER; no ROW → STATEMENT
+        let d = decode_tgtype(0x08);
+        assert_eq!(d.timing, "AFTER");
+        assert_eq!(d.orientation, "STATEMENT");
+        assert_eq!(d.events, vec!["DELETE"]);
+    }
+
+    #[test]
+    fn decode_tgtype_row_instead_of_insert_on_view() {
+        // 0x45 = ROW (0x01) | INSERT (0x04) | INSTEAD (0x40); INSTEAD
+        // takes precedence over BEFORE/AFTER. (INSTEAD OF triggers must
+        // be ROW per PG, so the orientation bit is set as well.)
+        let d = decode_tgtype(0x45);
+        assert_eq!(d.timing, "INSTEAD OF");
+        assert_eq!(d.orientation, "ROW");
+        assert_eq!(d.events, vec!["INSERT"]);
+    }
+
+    #[test]
+    fn decode_tgtype_row_after_insert_or_update() {
+        // 0x15 = ROW (0x01) | INSERT (0x04) | UPDATE (0x10); no BEFORE
+        // → AFTER. Multi-event renders as fixed ["INSERT", "UPDATE"]
+        // order regardless of bit order in the mask.
+        let d = decode_tgtype(0x15);
+        assert_eq!(d.timing, "AFTER");
+        assert_eq!(d.orientation, "ROW");
+        assert_eq!(d.events, vec!["INSERT", "UPDATE"]);
+    }
+
+    #[test]
+    fn decode_tgtype_truncate_only_yields_empty_events() {
+        // 0x21 = ROW (0x01) | TRUNCATE (0x20); the decoder filters
+        // TRUNCATE out → empty events list. The caller
+        // (`list_triggers`) then drops the trigger entirely.
+        let d = decode_tgtype(0x21);
+        assert!(
+            d.events.is_empty(),
+            "TRUNCATE-only mask must produce no events, got: {:?}",
+            d.events
+        );
+        // timing / orientation are still decoded so the caller's
+        // diagnostic message can stay accurate if it ever wants to
+        // surface a "TRUNCATE-only trigger skipped" log.
+        assert_eq!(d.timing, "AFTER");
+        assert_eq!(d.orientation, "ROW");
+    }
+
+    #[test]
+    fn decode_tgtype_insert_or_truncate_drops_truncate_keeps_insert() {
+        // 0x25 = ROW (0x01) | INSERT (0x04) | TRUNCATE (0x20); decoder
+        // keeps INSERT and silently drops TRUNCATE. The trigger row
+        // survives because at least one user-visible event remains.
+        let d = decode_tgtype(0x25);
+        assert_eq!(d.timing, "AFTER");
+        assert_eq!(d.orientation, "ROW");
+        assert_eq!(d.events, vec!["INSERT"]);
+    }
+
+    #[test]
+    fn decode_tgargs_empty_blob_returns_none() {
+        assert_eq!(decode_tgargs(&[]), None);
+    }
+
+    #[test]
+    fn decode_tgargs_single_argument_rendered_quoted() {
+        // PG stores `tgargs` as null-delimited C strings ending in an
+        // empty terminator. `\0users\0` is the canonical single-arg form.
+        let blob = b"users\0";
+        assert_eq!(decode_tgargs(blob), Some("'users'".to_string()));
+    }
+
+    #[test]
+    fn decode_tgargs_multiple_arguments_rendered_comma_separated() {
+        let blob = b"users\0DELETE\0";
+        assert_eq!(decode_tgargs(blob), Some("'users', 'DELETE'".to_string()));
+    }
+
+    // 작성 이유 (2026-05-13, Sprint 272 attempt 2): Evaluator P2a —
+    // `decode_tgargs` already documents "PG escapes embedded single
+    // quotes in `tgargs` as `''`" but had no test pinning that we
+    // surface the raw decoded bytes verbatim (no extra escaping). PG
+    // doesn't actually double-encode tgargs (the doubling lives in
+    // `pg_get_triggerdef` SQL rendering, not the wire bytes), so the
+    // decoded form here is the raw apostrophe — our renderer wraps the
+    // whole arg in `'…'` quotes and would emit an invalid SQL literal
+    // if surfaced to user-facing DDL. Sprint 273's CREATE TRIGGER
+    // emitter is the one that needs to re-escape; this helper's job is
+    // only the byte-faithful display form that mirrors `pg_get_triggerdef`'s
+    // already-rendered output. Pinning the embedded-quote case keeps
+    // future helpers from accidentally double-escaping on read.
+    #[test]
+    fn decode_tgargs_embedded_single_quote_passes_through_verbatim() {
+        // C-string with an embedded `'` (PG stores tgargs as null-
+        // delimited raw bytes, no SQL-level escaping at this layer).
+        let blob: &[u8] = b"O'Brien\0";
+        assert_eq!(decode_tgargs(blob), Some("'O'Brien'".to_string()));
     }
 
     #[test]

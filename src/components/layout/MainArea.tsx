@@ -126,6 +126,7 @@ function TableTabView({ tab, onSubViewChange }: TableTabProps) {
               database={tab.database ?? ""}
               table={tab.table!}
               schema={tab.schema!}
+              initialSubTab={tab.initialStructureSubTab}
             />
           )}
         </div>

@@ -8,6 +8,7 @@ import type {
   SchemaInfo,
   TableData,
   TableInfo,
+  TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
 import type { QueryResult } from "@/types/query";
@@ -52,6 +53,13 @@ interface SchemaState {
   views: ByConn<BySchema<ViewInfo[]>>;
   functions: ByConn<BySchema<FunctionInfo[]>>;
   tableColumnsCache: ByConn<BySchema<ByTable<ColumnInfo[]>>>;
+  /**
+   * Sprint 272 — per-`(connId, db, schema, table)` trigger cache.
+   * Populated lazily by `getTableTriggers`. Mirrors the
+   * `tableColumnsCache` shape so the same eviction helpers
+   * (`deleteConn` / `deleteConnDb` / `deleteConnDbSchema`) apply.
+   */
+  triggers: ByConn<BySchema<ByTable<TriggerInfo[]>>>;
   loading: boolean;
   error: string | null;
 
@@ -77,6 +85,20 @@ interface SchemaState {
     table: string,
     schema: string,
   ) => Promise<ConstraintInfo[]>;
+  /**
+   * Sprint 272 — list triggers for `(connId, db, schema, table)`.
+   * Cache-first: second call with identical key returns the cached
+   * array without invoking the `listTriggers` IPC. On `DbMismatch` the
+   * helper threads through `syncMismatchedActiveDb` silently (passive
+   * prefetch — no toast; matches Sprint 271a `getTableIndexes`
+   * behaviour).
+   */
+  getTableTriggers: (
+    connId: string,
+    db: string,
+    table: string,
+    schema: string,
+  ) => Promise<TriggerInfo[]>;
   getViewColumns: (
     connId: string,
     db: string,
@@ -267,12 +289,13 @@ function handleDbMismatch(connId: string, err: unknown): void {
 // Store
 // ---------------------------------------------------------------------------
 
-export const useSchemaStore = create<SchemaState>((set) => ({
+export const useSchemaStore = create<SchemaState>((set, get) => ({
   schemas: {},
   tables: {},
   views: {},
   functions: {},
   tableColumnsCache: {},
+  triggers: {},
   loading: false,
   error: null,
 
@@ -375,6 +398,32 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     }
   },
 
+  // Sprint 272 — cache-first triggers fetcher. Mirrors `tableColumnsCache`
+  // shape (`(connId, db, schema, table)` → `TriggerInfo[]`). Second call
+  // with identical key short-circuits to the cached array without hitting
+  // IPC. Mismatch path is silent (passive prefetch — no toast).
+  getTableTriggers: async (connId, db, table, schema) => {
+    const cached = get().triggers[connId]?.[db]?.[schema]?.[table];
+    if (cached) return cached;
+    try {
+      const triggers = await tauri.listTriggers(connId, schema, table, db);
+      set((state) => ({
+        triggers: setConnDbSchemaTable(
+          state.triggers,
+          connId,
+          db,
+          schema,
+          table,
+          triggers,
+        ),
+      }));
+      return triggers;
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
+  },
+
   getViewColumns: async (connId, db, schema, viewName) => {
     try {
       return await tauri.getViewColumns(connId, schema, viewName, db);
@@ -449,6 +498,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       views: deleteConn(state.views, connId),
       functions: deleteConn(state.functions, connId),
       tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
+      triggers: deleteConn(state.triggers, connId),
     }));
   },
 
@@ -459,6 +509,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       views: deleteConn(state.views, connId),
       functions: deleteConn(state.functions, connId),
       tableColumnsCache: deleteConn(state.tableColumnsCache, connId),
+      triggers: deleteConn(state.triggers, connId),
     }));
   },
 
@@ -469,6 +520,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       views: deleteConnDb(state.views, connId, db),
       functions: deleteConnDb(state.functions, connId, db),
       tableColumnsCache: deleteConnDb(state.tableColumnsCache, connId, db),
+      triggers: deleteConnDb(state.triggers, connId, db),
     }));
   },
 
@@ -477,6 +529,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       tables: deleteConnDbSchema(state.tables, connId, db, schemaName),
       views: deleteConnDbSchema(state.views, connId, db, schemaName),
       functions: deleteConnDbSchema(state.functions, connId, db, schemaName),
+      triggers: deleteConnDbSchema(state.triggers, connId, db, schemaName),
     }));
   },
 

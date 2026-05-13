@@ -437,6 +437,39 @@ export interface FunctionInfo {
 }
 
 /**
+ * Sprint 272 — single trigger entry returned by `tauri.listTriggers`.
+ *
+ * Mirrors the Rust `TriggerInfo` struct with `#[serde(rename_all =
+ * "camelCase")]`. PG-only this phase (non-PG RDB adapters return an
+ * empty array). Read-only structural metadata + the full
+ * `pg_get_triggerdef` source so the read-only viewer can render
+ * canonical SQL without a second IPC round-trip.
+ *
+ * Whitelists are intentionally `string` (not literal unions) so future
+ * dialect extensions don't force a TS recompile cascade. The
+ * `decode_tgtype` Rust bitmask decoder is the single source of truth for
+ * the allowed values:
+ *   - `timing`: `"BEFORE" | "AFTER" | "INSTEAD OF"`
+ *   - `events`: subset of `["INSERT", "UPDATE", "DELETE"]`. TRUNCATE
+ *     event triggers are filtered out by the decoder so the events list
+ *     is never empty for surfaced triggers.
+ *   - `orientation`: `"ROW" | "STATEMENT"`
+ */
+export interface TriggerInfo {
+  name: string;
+  schema: string;
+  table: string;
+  timing: string;
+  events: string[];
+  orientation: string;
+  functionSchema: string;
+  functionName: string;
+  arguments: string | null;
+  whenExpression: string | null;
+  definition: string;
+}
+
+/**
  * Sprint 230 — single Postgres type entry returned by
  * `tauri.listPostgresTypes(connectionId)`. The wire shape matches the
  * Rust `PostgresTypeInfo` struct (snake_case `type_kind` mirrors serde

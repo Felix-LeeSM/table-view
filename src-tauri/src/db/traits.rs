@@ -15,7 +15,7 @@ use crate::models::{
     ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest, DatabaseType,
     DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
     FunctionInfo, IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData,
-    TableInfo, ViewInfo,
+    TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -426,6 +426,41 @@ pub trait RdbAdapter: DbAdapter {
         namespace: &'a str,
         function: &'a str,
     ) -> BoxFuture<'a, Result<String, AppError>>;
+
+    /// Sprint 272 — list triggers attached to `(namespace, table)`.
+    ///
+    /// PG override queries `pg_catalog.pg_trigger` + decodes `tgtype`.
+    /// Non-PG RDB adapters fall back to the default `Ok(Vec::new())` —
+    /// MySQL/SQLite trigger introspection is deferred. Non-RDB adapters
+    /// reach this method only via `as_rdb()?` which already fails with
+    /// `Unsupported(relational)` for Document paradigm callers.
+    fn list_triggers<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger.
+    ///
+    /// Unlike `list_triggers`, there is no sane "empty" default for a
+    /// single-trigger query — non-PG adapters must surface
+    /// `AppError::Unsupported` so the frontend can render a clear copy
+    /// rather than a misleading empty string. PG overrides this in
+    /// `db/postgres/schema.rs`.
+    fn get_trigger_source<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+        _trigger_name: &'a str,
+    ) -> BoxFuture<'a, Result<String, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support trigger source introspection".into(),
+            ))
+        })
+    }
 
     /// Sprint 230 — list every Postgres-style data type visible to the
     /// active connection. PG overrides to query

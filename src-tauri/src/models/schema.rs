@@ -484,6 +484,52 @@ pub struct FunctionInfo {
     pub kind: String, // "function", "procedure", "aggregate", "window"
 }
 
+/// Sprint 272 — single trigger entry returned by
+/// `list_triggers(connection_id, schema, table, expected_database?)`.
+///
+/// Sourced from `pg_catalog.pg_trigger ⨝ pg_proc ⨝ pg_namespace ⨝ pg_class`
+/// with `NOT t.tgisinternal`. The `tgtype` int2 bitmask is decoded into the
+/// explicit fields below by [`crate::db::postgres::schema::decode_tgtype`]:
+///   - `0x40` → `INSTEAD OF` (else `0x02` → BEFORE, otherwise AFTER)
+///   - events from `0x04` (INSERT) / `0x08` (DELETE) / `0x10` (UPDATE);
+///     `0x20` TRUNCATE is dropped from the event list (Sprint 272 hides
+///     TRUNCATE from the user-visible trigger UI per master spec § 6).
+///   - `0x01` → ROW (else STATEMENT).
+///
+/// `arguments` carries the raw `tgargs` blob decoded as PG's `\0`-delimited
+/// list rendered as `'arg1', 'arg2'`. `when_expression` carries the
+/// `pg_get_expr(tgqual, tgrelid)` result for the WHEN clause (`None` when
+/// `tgqual` is null). `definition` is the full `pg_get_triggerdef(t.oid)`
+/// string so the read-only Structure tab can render canonical SQL.
+///
+/// Wire shape: `#[serde(rename_all = "camelCase")]` so the TS mirror in
+/// `src/types/schema.ts` (Sprint 272) consumes payloads with
+/// `name`, `schema`, `table`, `timing`, `events`, `orientation`,
+/// `functionSchema`, `functionName`, `arguments`, `whenExpression`,
+/// `definition`. Older callers that omit `arguments` / `whenExpression`
+/// deserialize cleanly via `Option<String>`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TriggerInfo {
+    pub name: String,
+    pub schema: String,
+    pub table: String,
+    /// Whitelist: `"BEFORE" | "AFTER" | "INSTEAD OF"`.
+    pub timing: String,
+    /// Whitelisted subset of `["INSERT", "UPDATE", "DELETE"]`. TRUNCATE
+    /// event triggers (`0x20`) are dropped from this list by the decoder;
+    /// if a trigger fires ONLY on TRUNCATE the entire row is filtered out
+    /// upstream so this vector is never empty for surfaced triggers.
+    pub events: Vec<String>,
+    /// Whitelist: `"ROW" | "STATEMENT"`.
+    pub orientation: String,
+    pub function_schema: String,
+    pub function_name: String,
+    pub arguments: Option<String>,
+    pub when_expression: Option<String>,
+    pub definition: String,
+}
+
 /// Sprint 230 — single Postgres type entry returned by
 /// `list_postgres_types(connection_id)`. Sourced from
 /// `pg_catalog.pg_type` joined with `pg_catalog.pg_namespace`.
@@ -1181,6 +1227,61 @@ mod tests {
         let parsed: DropColumnRequest = serde_json::from_str(minimal).unwrap();
         assert!(!parsed.cascade);
         assert!(!parsed.preview_only);
+    }
+
+    #[test]
+    fn trigger_info_serde_roundtrip() {
+        // Sprint 272 — TriggerInfo round-trips with camelCase wire form
+        // (`functionSchema`, `functionName`, `whenExpression`). Older
+        // payloads that omit `arguments` / `whenExpression` deserialize to
+        // `None` via `Option<String>`.
+        let info = TriggerInfo {
+            name: "audit_users_insert".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            timing: "BEFORE".to_string(),
+            events: vec!["INSERT".to_string(), "UPDATE".to_string()],
+            orientation: "ROW".to_string(),
+            function_schema: "audit".to_string(),
+            function_name: "log_change".to_string(),
+            arguments: Some("'users'".to_string()),
+            when_expression: Some("(NEW.email IS NOT NULL)".to_string()),
+            definition: "CREATE TRIGGER audit_users_insert …".to_string(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        // camelCase wire form check.
+        assert!(
+            json.contains("\"functionSchema\":\"audit\""),
+            "expected camelCase functionSchema, got: {json}"
+        );
+        assert!(
+            json.contains("\"functionName\":\"log_change\""),
+            "expected camelCase functionName, got: {json}"
+        );
+        assert!(
+            json.contains("\"whenExpression\":\"(NEW.email IS NOT NULL)\""),
+            "expected camelCase whenExpression, got: {json}"
+        );
+        let deserialized: TriggerInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, info);
+
+        // Minimal payload (no arguments / no whenExpression) round-trips.
+        let minimal = TriggerInfo {
+            name: "t1".to_string(),
+            schema: "public".to_string(),
+            table: "orders".to_string(),
+            timing: "AFTER".to_string(),
+            events: vec!["DELETE".to_string()],
+            orientation: "STATEMENT".to_string(),
+            function_schema: "public".to_string(),
+            function_name: "cleanup".to_string(),
+            arguments: None,
+            when_expression: None,
+            definition: "CREATE TRIGGER t1 …".to_string(),
+        };
+        let json_min = serde_json::to_string(&minimal).unwrap();
+        let de_min: TriggerInfo = serde_json::from_str(&json_min).unwrap();
+        assert_eq!(de_min, minimal);
     }
 
     #[test]

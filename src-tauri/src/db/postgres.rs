@@ -51,7 +51,7 @@ use crate::models::{
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
     IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
-    ViewInfo,
+    TriggerInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -374,6 +374,31 @@ impl RdbAdapter for PostgresAdapter {
         function: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
         Box::pin(async move { self.get_function_source(namespace, function).await })
+    }
+
+    /// Sprint 272 — delegate to the inherent `list_triggers` so the
+    /// trait dispatcher can drive the new `list_triggers` Tauri command
+    /// without the command site having to downcast to `PostgresAdapter`.
+    fn list_triggers<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<TriggerInfo>, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.list_triggers(namespace, table).await })
+    }
+
+    /// Sprint 272 — delegate to the inherent `get_trigger_source` so the
+    /// `get_trigger_source` Tauri command can dispatch through the trait.
+    fn get_trigger_source<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+        trigger_name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<String, AppError>> + Send + 'a>> {
+        Box::pin(async move {
+            self.get_trigger_source(namespace, table, trigger_name)
+                .await
+        })
     }
 
     /// Sprint 230 — delegate to the inherent `list_types` so the trait

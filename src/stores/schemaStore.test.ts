@@ -152,6 +152,31 @@ vi.mock("@lib/tauri", () => ({
   getViewDefinition: vi.fn(() =>
     Promise.resolve("SELECT id, name FROM users WHERE active = true"),
   ),
+  // Sprint 272 — trigger IPC mock. Default resolves with a single
+  // canonical fixture; individual tests override per-call as needed.
+  listTriggers: vi.fn(() =>
+    Promise.resolve([
+      {
+        name: "audit_users_insert",
+        schema: "public",
+        table: "users",
+        timing: "BEFORE",
+        events: ["INSERT"],
+        orientation: "ROW",
+        functionSchema: "audit",
+        functionName: "log_insert",
+        arguments: null,
+        whenExpression: null,
+        definition:
+          "CREATE TRIGGER audit_users_insert BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION audit.log_insert()",
+      },
+    ]),
+  ),
+  getTriggerSource: vi.fn(() =>
+    Promise.resolve(
+      "CREATE TRIGGER audit_users_insert BEFORE INSERT ON public.users FOR EACH ROW EXECUTE FUNCTION audit.log_insert()",
+    ),
+  ),
 }));
 
 describe("schemaStore", () => {
@@ -162,6 +187,10 @@ describe("schemaStore", () => {
       views: {},
       functions: {},
       tableColumnsCache: {},
+      // Sprint 272 — reset the triggers slice between tests so cache
+      // residue from a prior `getTableTriggers` doesn't leak into the
+      // next test's "first call should hit IPC" expectation.
+      triggers: {},
       loading: false,
       error: null,
     });
@@ -254,6 +283,55 @@ describe("schemaStore", () => {
     expect(state.tableColumnsCache.conn1?.db1?.public?.orders).toBeUndefined();
     // Other connection preserved
     expect(state.tableColumnsCache.conn2?.db1?.public?.items).toBeDefined();
+  });
+
+  // 작성 이유 (2026-05-13, Sprint 272 attempt 2): Evaluator P2b —
+  // `clearSchema` is the connection-scope eviction (the same operation
+  // that runs when a connection disconnects). Until Sprint 272 added the
+  // `triggers` slice, this test was implicit; pin it now so a future
+  // refactor that forgets to update the `clearSchema` spread can't leak
+  // stale triggers across connection rebinds.
+  it("clearSchema removes triggers for the connection and preserves siblings", async () => {
+    useSchemaStore.setState({
+      triggers: {
+        conn1: {
+          db1: {
+            public: {
+              users: [
+                {
+                  name: "audit_users_insert",
+                  schema: "public",
+                  table: "users",
+                  timing: "BEFORE",
+                  events: ["INSERT"],
+                  orientation: "ROW",
+                  functionSchema: "audit",
+                  functionName: "log_insert",
+                  arguments: null,
+                  whenExpression: null,
+                  definition: "CREATE TRIGGER ...",
+                },
+              ],
+            },
+          },
+        },
+        conn2: {
+          db1: {
+            public: {
+              items: [],
+            },
+          },
+        },
+      },
+    });
+
+    useSchemaStore.getState().clearSchema("conn1");
+
+    const state = useSchemaStore.getState();
+    // Targeted connection: triggers slice cleared.
+    expect(state.triggers.conn1).toBeUndefined();
+    // Sibling connection: untouched.
+    expect(state.triggers.conn2?.db1?.public?.items).toEqual([]);
   });
 
   it("delegates queryTableData", async () => {
@@ -837,5 +915,118 @@ describe("schemaStore", () => {
     useSchemaStore.getState().clearForConnection("conn1");
     const state = useSchemaStore.getState();
     expect(state.schemas.conn2?.db1).toHaveLength(1);
+  });
+
+  // ── Sprint 272 — getTableTriggers cache + eviction ─────────────────────
+  //
+  // 작성 이유 (2026-05-13, Sprint 272): contract AC-272-05 + AC-272-08
+  // — 두 번째 호출이 IPC mock 을 재호출하지 않고 캐시 hit 으로 풀려야
+  // 함. eviction 3 사이트 (clearForConnection / clearForWorkspace /
+  // evictSchemaForName) 가 triggers 슬라이스를 비우면서 인접 캐시
+  // (tables / tableColumnsCache) 는 건드리지 않는 것까지 검증.
+
+  it("getTableTriggers calls the IPC on first miss and caches the result", async () => {
+    const { listTriggers } = await import("@lib/tauri");
+    const first = await useSchemaStore
+      .getState()
+      .getTableTriggers("conn1", "db1", "users", "public");
+    expect(first).toHaveLength(1);
+    expect(first[0]!.name).toBe("audit_users_insert");
+    // Sprint 271a — `db` is forwarded as `expectedDatabase` (the 4th
+    // positional argument to the tauri wrapper).
+    expect(listTriggers).toHaveBeenCalledWith(
+      "conn1",
+      "public",
+      "users",
+      "db1",
+    );
+    expect(listTriggers).toHaveBeenCalledTimes(1);
+
+    // Cache hit — second call with identical key MUST NOT re-invoke IPC.
+    const second = await useSchemaStore
+      .getState()
+      .getTableTriggers("conn1", "db1", "users", "public");
+    expect(second).toEqual(first);
+    expect(listTriggers).toHaveBeenCalledTimes(1);
+
+    const state = useSchemaStore.getState();
+    expect(state.triggers.conn1?.db1?.public?.users).toEqual(first);
+  });
+
+  it("getTableTriggers re-invokes IPC for a different (db, schema, table) key", async () => {
+    const { listTriggers } = await import("@lib/tauri");
+    await useSchemaStore
+      .getState()
+      .getTableTriggers("conn1", "db1", "users", "public");
+    await useSchemaStore
+      .getState()
+      .getTableTriggers("conn1", "db1", "orders", "public");
+    expect(listTriggers).toHaveBeenCalledTimes(2);
+  });
+
+  it("clearForWorkspace evicts only the triggers slice for that (connId, db)", async () => {
+    // Seed two workspaces with cached triggers + a sibling tables cache.
+    useSchemaStore.setState({
+      tables: { conn1: { db1: { public: [] }, db2: { public: [] } } },
+      triggers: {
+        conn1: {
+          db1: { public: { users: [] } },
+          db2: { public: { users: [] } },
+        },
+      },
+    });
+    useSchemaStore.getState().clearForWorkspace("conn1", "db1");
+    const state = useSchemaStore.getState();
+    // Targeted workspace: cleared.
+    expect(state.triggers.conn1?.db1).toBeUndefined();
+    // Sibling workspace: untouched.
+    expect(state.triggers.conn1?.db2?.public?.users).toEqual([]);
+    // Sibling cache shapes (tables) on the same workspace are still
+    // cleared by clearForWorkspace as before — assert byte-equivalence.
+    expect(state.tables.conn1?.db1).toBeUndefined();
+    expect(state.tables.conn1?.db2?.public).toEqual([]);
+  });
+
+  it("evictSchemaForName drops triggers for one (connId, db, schema) without disturbing other caches", () => {
+    useSchemaStore.setState({
+      tableColumnsCache: {
+        conn1: { db1: { public: { users: [] } } },
+      },
+      triggers: {
+        conn1: {
+          db1: {
+            public: { users: [] },
+            audit: { events: [] },
+          },
+        },
+      },
+    });
+    useSchemaStore.getState().evictSchemaForName("conn1", "db1", "public");
+    const state = useSchemaStore.getState();
+    expect(state.triggers.conn1?.db1?.public).toBeUndefined();
+    expect(state.triggers.conn1?.db1?.audit?.events).toEqual([]);
+    // evictSchemaForName intentionally leaves tableColumnsCache alone
+    // (pre-Sprint-272 invariant — see store source for rationale).
+    expect(state.tableColumnsCache.conn1?.db1?.public?.users).toEqual([]);
+  });
+
+  it("getTableTriggers triggers silent syncMismatchedActiveDb on DbMismatch (no toast)", async () => {
+    const { listTriggers } = await import("@lib/tauri");
+    (listTriggers as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error(
+        "Database mismatch: expected 'db1', backend pool has 'other_db'",
+      ),
+    );
+    await expect(
+      useSchemaStore
+        .getState()
+        .getTableTriggers("conn1", "db1", "users", "public"),
+    ).rejects.toThrow(/Database mismatch/);
+    // The store's mismatch handler is silent for background paths — we
+    // assert by the absence of a re-thrown error other than the
+    // original. The verifyActiveDb / setActiveDb side-effects are tested
+    // upstream in `syncMismatchedActiveDb.test`.
+    const state = useSchemaStore.getState();
+    expect(state.triggers.conn1?.db1?.public?.users).toBeUndefined();
   });
 });

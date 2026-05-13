@@ -8,7 +8,12 @@ import {
 } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
-import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
+import {
+  DEFAULT_EXPANDED,
+  nodeIdToString,
+  triggerGroupKey,
+  type CategoryKey,
+} from "./treeRows";
 
 const EMPTY_EXPANDED: readonly string[] = Object.freeze([]);
 
@@ -84,6 +89,15 @@ export interface SchemaTreeActions {
   refreshConnection: () => void;
   refreshSchema: (schemaName: string) => void;
 
+  // Sprint 272 — per-Table Triggers child group state. `key` is
+  // `triggerGroupKey(schema, table)`. Expansion is OPT-IN (collapsed by
+  // default) so the lazy IPC doesn't fire on every Table expansion.
+  expandedTriggerGroups: Set<string>;
+  loadingTriggerGroups: ReadonlySet<string>;
+  triggerErrors: Record<string, string>;
+  toggleTriggerGroup: (schemaName: string, tableName: string) => void;
+  retryLoadTriggers: (schemaName: string, tableName: string) => void;
+
   // Action handlers
   handleExpandSchema: (schemaName: string) => Promise<void>;
   handleRefresh: () => void;
@@ -91,6 +105,24 @@ export interface SchemaTreeActions {
   handleTableClick: (tableName: string, schemaName: string) => void;
   handleTableDoubleClick: (tableName: string, schemaName: string) => void;
   handleOpenStructure: (tableName: string, schemaName: string) => void;
+  /**
+   * Sprint 272 — open the StructurePanel for a Table positioned on the
+   * Triggers sub-tab AND scrolled / highlighted to the given trigger
+   * name. Wired to per-trigger-row right-click "View Source".
+   */
+  handleViewTriggerSource: (
+    triggerName: string,
+    tableName: string,
+    schemaName: string,
+  ) => void;
+  /**
+   * Sprint 272 — open the Structure tab for the given table on the
+   * Triggers sub-tab. Right-click Table → "View Triggers" entry binds
+   * here. Mirrors `handleOpenStructure` but threads
+   * `initialSubView: "triggers"` into the workspace tab so
+   * `StructurePanel` mounts on the new Triggers sub-tab.
+   */
+  handleViewTableTriggers: (tableName: string, schemaName: string) => void;
   // Sprint 235 — both handlers are simple openers. Behavioural diff
   // from the pre-Sprint 235 versions: the inline rename validation,
   // tauri call, history record, and toast paths now run inside the
@@ -211,6 +243,22 @@ export function useSchemaTreeActions({
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, Set<CategoryKey>>
   >({});
+
+  // Sprint 272 — per-`(schema, table)` Triggers child group state.
+  // `expandedTriggerGroups` is OPT-IN; the lazy IPC fires only when the
+  // user explicitly expands the group (mount cost zero on every Table
+  // expansion). `loadingTriggerGroups` + `triggerErrors` drive the
+  // child placeholder rows (Loading / Failed) emitted by `treeRows`.
+  const [expandedTriggerGroups, setExpandedTriggerGroups] = useState<
+    Set<string>
+  >(() => new Set());
+  const [loadingTriggerGroups, setLoadingTriggerGroups] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [triggerErrors, setTriggerErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const getTableTriggers = useSchemaStore((s) => s.getTableTriggers);
   // Sprint 235 — collapsed dialog state. Each modal owns its own form
   // state internally; this hook only tracks "which row was right-
   // clicked" so the slot wrappers can mount the right modal.
@@ -303,6 +351,138 @@ export function useSchemaTreeActions({
       markConnectionUsed(connectionId);
     },
     [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
+  );
+
+  // Sprint 272 — opener for the Triggers sub-tab. Same tab shape as
+  // `handleOpenStructure` (table-type tab on the Structure sub-view);
+  // the `initialSubView: "triggers"` field tells `StructurePanel` to
+  // mount its Triggers sub-tab on first paint.
+  const handleViewTableTriggers = useCallback(
+    (tableName: string, schemaName: string) => {
+      setSelectedNodeId(null);
+      addTab(connectionId, {
+        title: `${schemaName}.${tableName}`,
+        connectionId,
+        type: "table",
+        closable: true,
+        schema: schemaName,
+        table: tableName,
+        subView: "structure",
+        initialStructureSubTab: "triggers",
+      });
+      markConnectionUsed(connectionId);
+    },
+    [addTab, markConnectionUsed, connectionId, setSelectedNodeId],
+  );
+
+  // Sprint 272 — open the StructurePanel for the given trigger's parent
+  // table on the Triggers sub-tab. Per-trigger "scroll-to-trigger"
+  // affordance ships in Sprint 273 / 274 alongside the create/drop
+  // flows; for the read-only 272 surface we land on the Triggers tab
+  // and rely on its `<pre>` block to show all the trigger definitions
+  // for the table. `triggerName` is currently unused on the consumer
+  // side (StructurePanel) but threaded here so 273/274 don't need a
+  // signature churn.
+  const handleViewTriggerSource = useCallback(
+    (_triggerName: string, tableName: string, schemaName: string) => {
+      handleViewTableTriggers(tableName, schemaName);
+    },
+    [handleViewTableTriggers],
+  );
+
+  // Sprint 272 — lazy load triggers for a `(schema, table)` group.
+  // Reads the workspaceKey at call time so the workspace mismatch
+  // between `useSchemaTreeActions` mount and click is captured
+  // correctly. Records errors in `triggerErrors` so the row's
+  // "Failed to load triggers" placeholder can surface them; the
+  // store-level `handleDbMismatch` runs first and is silent
+  // (passive prefetch).
+  const loadTriggersForGroup = useCallback(
+    async (schemaName: string, tableName: string) => {
+      const key = workspaceKeyRef.current;
+      if (!key) return;
+      const groupKey = triggerGroupKey(schemaName, tableName);
+      // Bail out if already loading or cached.
+      const cached =
+        useSchemaStore.getState().triggers[key.connId]?.[key.db]?.[
+          schemaName
+        ]?.[tableName];
+      if (cached) return;
+      setLoadingTriggerGroups((prev) => {
+        if (prev.has(groupKey)) return prev;
+        const next = new Set(prev);
+        next.add(groupKey);
+        return next;
+      });
+      setTriggerErrors((prev) => {
+        if (!(groupKey in prev)) return prev;
+        const next = { ...prev };
+        delete next[groupKey];
+        return next;
+      });
+      try {
+        await getTableTriggers(key.connId, key.db, tableName, schemaName);
+      } catch (e) {
+        setTriggerErrors((prev) => ({
+          ...prev,
+          [groupKey]: e instanceof Error ? e.message : String(e),
+        }));
+      } finally {
+        setLoadingTriggerGroups((prev) => {
+          if (!prev.has(groupKey)) return prev;
+          const next = new Set(prev);
+          next.delete(groupKey);
+          return next;
+        });
+      }
+    },
+    [getTableTriggers],
+  );
+
+  // Sprint 272 — toggle Triggers child group expansion. On expand,
+  // dispatches the lazy fetch ONCE (cached on subsequent expands). On
+  // collapse, leaves the cache intact (so re-expand is instant).
+  const toggleTriggerGroup = useCallback(
+    (schemaName: string, tableName: string) => {
+      const groupKey = triggerGroupKey(schemaName, tableName);
+      setExpandedTriggerGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(groupKey)) {
+          next.delete(groupKey);
+        } else {
+          next.add(groupKey);
+          // Fire the lazy fetch (no-op on cache hit; the store's
+          // `getTableTriggers` short-circuits on cached `(connId, db,
+          // schema, table)` keys).
+          void loadTriggersForGroup(schemaName, tableName);
+        }
+        return next;
+      });
+      setSelectedNodeId(
+        nodeIdToString({
+          type: "triggerGroup",
+          schema: schemaName,
+          table: tableName,
+        }),
+      );
+    },
+    [loadTriggersForGroup, setSelectedNodeId],
+  );
+
+  // Sprint 272 — retry affordance on the "Failed to load triggers"
+  // placeholder row. Clears the recorded error and re-dispatches.
+  const retryLoadTriggers = useCallback(
+    (schemaName: string, tableName: string) => {
+      const groupKey = triggerGroupKey(schemaName, tableName);
+      setTriggerErrors((prev) => {
+        if (!(groupKey in prev)) return prev;
+        const next = { ...prev };
+        delete next[groupKey];
+        return next;
+      });
+      void loadTriggersForGroup(schemaName, tableName);
+    },
+    [loadTriggersForGroup],
   );
 
   // Sprint 235 — opener for the new DropTableDialog. The legacy version
@@ -461,6 +641,13 @@ export function useSchemaTreeActions({
     refreshConnection,
     refreshSchema,
 
+    // Sprint 272 — Triggers child group state + handlers.
+    expandedTriggerGroups,
+    loadingTriggerGroups,
+    triggerErrors,
+    toggleTriggerGroup,
+    retryLoadTriggers,
+
     // Handlers
     handleExpandSchema,
     handleRefresh,
@@ -468,6 +655,8 @@ export function useSchemaTreeActions({
     handleTableClick,
     handleTableDoubleClick,
     handleOpenStructure,
+    handleViewTableTriggers,
+    handleViewTriggerSource,
     handleDropTable,
     handleStartRename,
     handleViewClick,

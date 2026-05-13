@@ -33,7 +33,7 @@ use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
     ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
     DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
-    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
+    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
 };
 
 /// Closure type alias — `Send + Sync` so the trait `BoxFuture` constraint
@@ -73,6 +73,16 @@ pub(crate) struct StubRdbAdapter {
     pub get_view_columns_fn: Option<FnTwo<str, str, Vec<ColumnInfo>>>,
     pub get_function_source_fn: Option<FnTwo<str, str, String>>,
     pub list_types_fn: Option<FnZero<Vec<PostgresTypeInfo>>>,
+    /// Sprint 272 — override for `list_triggers(namespace, table)`. `None`
+    /// falls back to the trait default (`Ok(Vec::new())`) so wiring tests
+    /// that don't care about triggers still type-check.
+    pub list_triggers_fn: Option<FnTwo<str, str, Vec<TriggerInfo>>>,
+    /// Sprint 272 — override for `get_trigger_source(namespace, table,
+    /// trigger_name)`. `None` falls back to a sentinel `Ok("")` (the trait
+    /// default `Unsupported` would force every dispatch test to set the
+    /// override). The mismatch panic-closure pattern uses this slot.
+    pub get_trigger_source_fn:
+        Option<Box<dyn Fn(&str, &str, &str) -> Result<String, AppError> + Send + Sync>>,
 
     pub current_database_fn: Option<FnZero<Option<String>>>,
     pub switch_database_fn: Option<FnOne<str, ()>>,
@@ -119,6 +129,8 @@ impl Default for StubRdbAdapter {
             get_view_columns_fn: None,
             get_function_source_fn: None,
             list_types_fn: None,
+            list_triggers_fn: None,
+            get_trigger_source_fn: None,
             current_database_fn: None,
             switch_database_fn: None,
             execute_sql_fn: None,
@@ -452,6 +464,29 @@ impl RdbAdapter for StubRdbAdapter {
     }
     fn list_types<'a>(&'a self) -> BoxFuture<'a, Result<Vec<PostgresTypeInfo>, AppError>> {
         let r = self.list_types_fn.as_ref().map_or(Ok(Vec::new()), |f| f());
+        Box::pin(async move { r })
+    }
+    fn list_triggers<'a>(
+        &'a self,
+        ns: &'a str,
+        table: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
+        let r = self
+            .list_triggers_fn
+            .as_ref()
+            .map_or(Ok(Vec::new()), |f| f(ns, table));
+        Box::pin(async move { r })
+    }
+    fn get_trigger_source<'a>(
+        &'a self,
+        ns: &'a str,
+        table: &'a str,
+        trigger_name: &'a str,
+    ) -> BoxFuture<'a, Result<String, AppError>> {
+        let r = self
+            .get_trigger_source_fn
+            .as_ref()
+            .map_or(Ok(String::new()), |f| f(ns, table, trigger_name));
         Box::pin(async move { r })
     }
     fn current_database<'a>(&'a self) -> BoxFuture<'a, Result<Option<String>, AppError>> {

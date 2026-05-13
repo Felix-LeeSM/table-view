@@ -7,6 +7,7 @@ import type {
   PostgresTypeInfo,
   SchemaInfo,
   TableInfo,
+  TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
 
@@ -160,6 +161,46 @@ export async function getFunctionSource(
     connectionId,
     schema,
     functionName,
+    expectedDatabase: expectedDatabase ?? null,
+  });
+}
+
+/**
+ * Sprint 272 — list triggers attached to `(schema, table)`. PG-only;
+ * non-PG RDB adapters return an empty array. Pass `expectedDatabase` to
+ * opt into the Sprint 271c DbMismatch guard.
+ */
+export async function listTriggers(
+  connectionId: string,
+  schema: string,
+  table: string,
+  expectedDatabase?: string,
+): Promise<TriggerInfo[]> {
+  return invoke<TriggerInfo[]>("list_triggers", {
+    connectionId,
+    schema,
+    table,
+    expectedDatabase: expectedDatabase ?? null,
+  });
+}
+
+/**
+ * Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger. Returns the
+ * canonical CREATE TRIGGER source. Non-PG RDB adapters reject with
+ * `AppError::Unsupported` — there is no sane empty-string default.
+ */
+export async function getTriggerSource(
+  connectionId: string,
+  schema: string,
+  table: string,
+  triggerName: string,
+  expectedDatabase?: string,
+): Promise<string> {
+  return invoke<string>("get_trigger_source", {
+    connectionId,
+    schema,
+    table,
+    triggerName,
     expectedDatabase: expectedDatabase ?? null,
   });
 }

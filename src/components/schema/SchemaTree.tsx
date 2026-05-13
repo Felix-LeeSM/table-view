@@ -71,6 +71,12 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
   const functions = useSchemaStore(
     (s) => s.functions[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
   );
+  // Sprint 272 — pre-slice the per-`(connId, db)` portion of the
+  // triggers cache. The eager + virtualized branches both index by
+  // bare `[schema][table]` keys.
+  const triggersBySchemaTable = useSchemaStore(
+    (s) => s.triggers[connectionId]?.[db] ?? EMPTY_BY_SCHEMA,
+  );
 
   const connectionName = useConnectionStore(
     (s) => s.connections.find((c) => c.id === connectionId)?.name,
@@ -141,6 +147,13 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     activeSchema: activeSchema ?? null,
     activeTable: activeTable ?? null,
     tableSearch: actions.tableSearch,
+    // Sprint 272 — trigger child group state. Empty defaults are
+    // fine: an empty `expandedTriggerGroups` set means every group is
+    // collapsed (the row still renders, no children).
+    expandedTriggerGroups: actions.expandedTriggerGroups,
+    triggersBySchemaTable,
+    loadingTriggerGroups: actions.loadingTriggerGroups,
+    triggerErrors: actions.triggerErrors,
   });
 
   // Only `with-schema` fans out far enough to need virtualization
@@ -178,12 +191,17 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleTableClick: actions.handleTableClick,
     handleTableDoubleClick: actions.handleTableDoubleClick,
     handleOpenStructure: actions.handleOpenStructure,
+    handleViewTableTriggers: actions.handleViewTableTriggers,
     handleDropTable: actions.handleDropTable,
     handleStartRename: actions.handleStartRename,
     handleViewClick: actions.handleViewClick,
     handleOpenViewStructure: actions.handleOpenViewStructure,
     handleFunctionClick: actions.handleFunctionClick,
     handleCreateTable: actions.handleCreateTable,
+    // Sprint 272 — Triggers child group handlers.
+    toggleTriggerGroup: actions.toggleTriggerGroup,
+    retryLoadTriggers: actions.retryLoadTriggers,
+    handleViewTriggerSource: actions.handleViewTriggerSource,
   };
 
   return (
@@ -387,6 +405,10 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         shouldVirtualize={shouldVirtualize}
         rowVirtualizer={rowVirtualizer}
         ctx={ctx}
+        expandedTriggerGroups={actions.expandedTriggerGroups}
+        triggersBySchemaTable={triggersBySchemaTable}
+        loadingTriggerGroups={actions.loadingTriggerGroups}
+        triggerErrors={actions.triggerErrors}
       />
 
       {/* Sprint 235 — Phase 27 Rename / Drop modal slots replacing the

@@ -25,7 +25,9 @@
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
-use crate::models::{ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, TableInfo, ViewInfo};
+use crate::models::{
+    ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, TableInfo, TriggerInfo, ViewInfo,
+};
 
 use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
@@ -448,6 +450,91 @@ pub async fn get_function_source(
         &connection_id,
         &schema,
         &function_name,
+        expected_database.as_deref(),
+    )
+    .await
+}
+
+async fn list_triggers_inner(
+    state: &AppState,
+    connection_id: &str,
+    schema: &str,
+    table: &str,
+    expected_database: Option<&str>,
+) -> Result<Vec<TriggerInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter.list_triggers(schema, table).await
+}
+
+/// Sprint 272 — list triggers attached to `(schema, table)`. PG impl
+/// queries `pg_catalog.pg_trigger ⨝ pg_proc ⨝ pg_namespace ⨝ pg_class`
+/// with `NOT t.tgisinternal`. Non-PG RDB adapters fall back to the trait
+/// default `Ok(Vec::new())`; non-RDB connections fail via `as_rdb()?`
+/// with `Unsupported(relational)` before the trait dispatches.
+///
+/// Sprint 271c — opt-in `expected_database` mismatch guard.
+#[tauri::command]
+pub async fn list_triggers(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    table: String,
+    // Sprint 271c — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
+) -> Result<Vec<TriggerInfo>, AppError> {
+    list_triggers_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        &table,
+        expected_database.as_deref(),
+    )
+    .await
+}
+
+async fn get_trigger_source_inner(
+    state: &AppState,
+    connection_id: &str,
+    schema: &str,
+    table: &str,
+    trigger_name: &str,
+    expected_database: Option<&str>,
+) -> Result<String, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, expected_database).await?;
+    adapter
+        .get_trigger_source(schema, table, trigger_name)
+        .await
+}
+
+/// Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger. Non-PG
+/// adapters surface `AppError::Unsupported` (the trait default) — there
+/// is no sane empty-string default for a single-trigger query.
+#[tauri::command]
+pub async fn get_trigger_source(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    table: String,
+    trigger_name: String,
+    // Sprint 271c — opt-in db-mismatch guard. See module doc.
+    expected_database: Option<String>,
+) -> Result<String, AppError> {
+    get_trigger_source_inner(
+        state.inner(),
+        &connection_id,
+        &schema,
+        &table,
+        &trigger_name,
         expected_database.as_deref(),
     )
     .await
@@ -1198,6 +1285,136 @@ mod tests {
     // byte-equivalence 가 의심 잔여. 1 happy (Some + match → trait 호출) +
     // 1 none-fast-path (None → current_database probe 도 안 함) 를 witness
     // 로 추가.
+
+    // ── Sprint 272 — list_triggers / get_trigger_source ──────────────────
+    //
+    // 작성 이유 (2026-05-13): 두 새 _inner 핸들러가 (a) NotFound /
+    // Unsupported / happy / err 의 4 routing 케이스, (b) 271c 의 mismatch
+    // panic-closure 패턴(adapter 메서드 호출 *전에* probe 가 차단), (c)
+    // schema / table / trigger_name 인자가 trait 까지 그대로 전달되는지를
+    // cover. 같은 패턴이 기존 list_functions_* / get_function_source_*
+    // 테스트와 byte-equivalent 라 회귀 가드로 작동.
+
+    #[tokio::test]
+    async fn list_triggers_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            list_triggers_inner(&state, "absent", "public", "users", None).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_triggers_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            list_triggers_inner(&state, "doc", "public", "users", None).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_triggers_inner_returns_pg_triggers() {
+        // Happy path — stub adapter returns a fixture trigger; the
+        // dispatcher passes (schema, table) through unchanged.
+        use crate::models::TriggerInfo;
+        let mut s = StubRdbAdapter::default();
+        s.list_triggers_fn = Some(Box::new(|ns: &str, tbl: &str| {
+            Ok(vec![TriggerInfo {
+                name: "audit_users".to_string(),
+                schema: ns.to_string(),
+                table: tbl.to_string(),
+                timing: "BEFORE".to_string(),
+                events: vec!["INSERT".to_string()],
+                orientation: "ROW".to_string(),
+                function_schema: "audit".to_string(),
+                function_name: "log_insert".to_string(),
+                arguments: None,
+                when_expression: None,
+                definition: format!("CREATE TRIGGER audit_users ON {ns}.{tbl}"),
+            }])
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = list_triggers_inner(&state, "c", "public", "users", None)
+            .await
+            .unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].name, "audit_users");
+        assert_eq!(r[0].schema, "public");
+        assert_eq!(r[0].table, "users");
+        assert_eq!(
+            r[0].definition,
+            "CREATE TRIGGER audit_users ON public.users"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_triggers_inner_db_mismatch() {
+        // 271c panic-closure pattern: probe rejects BEFORE the trait
+        // method is invoked. The closure panics if reached so any
+        // probe-bypass regression surfaces as a test panic.
+        let mut s = mismatched_adapter();
+        s.list_triggers_fn = Some(Box::new(|_, _| {
+            panic!("list_triggers must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match list_triggers_inner(&state, "c", "public", "users", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_trigger_source_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            get_trigger_source_inner(&state, "absent", "public", "users", "t", None).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn get_trigger_source_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            get_trigger_source_inner(&state, "doc", "public", "users", "t", None).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn get_trigger_source_inner_returns_pg_get_triggerdef() {
+        // Happy path — stub adapter echoes the (schema, table, name)
+        // arguments back so the dispatcher's arg-propagation is asserted.
+        let mut s = StubRdbAdapter::default();
+        s.get_trigger_source_fn = Some(Box::new(|ns: &str, tbl: &str, name: &str| {
+            Ok(format!("CREATE TRIGGER {name} ON {ns}.{tbl}"))
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = get_trigger_source_inner(&state, "c", "public", "users", "t1", None)
+            .await
+            .unwrap();
+        assert_eq!(r, "CREATE TRIGGER t1 ON public.users");
+    }
+
+    #[tokio::test]
+    async fn get_trigger_source_inner_db_mismatch() {
+        let mut s = mismatched_adapter();
+        s.get_trigger_source_fn = Some(Box::new(|_, _, _| {
+            panic!("get_trigger_source must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        match get_trigger_source_inner(&state, "c", "public", "users", "t1", Some("dbB")).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
 
     #[tokio::test]
     async fn list_schemas_expected_db_match_executes_normally() {
