@@ -115,7 +115,11 @@ export function cteColumnCompletionSource(
     const { aliasName, partialFrom } = aliasMatch;
 
     // ── build the virtual table map over the whole buffer ──────────────
-    const virtualTables = extractVirtualTables(state.doc.toString());
+    // Pass the namespace through so the mini-parser can resolve
+    // `SELECT *` projections to the inner FROM's base table columns
+    // (Slice D — D1 SELECT * fallback, D4 schema-qualified inner table,
+    // D7 CTE chaining single-level).
+    const virtualTables = extractVirtualTables(state.doc.toString(), schema);
     const columns = lookupVirtualColumns(virtualTables, aliasName);
     if (!columns || columns.length === 0) return null;
 
@@ -190,8 +194,20 @@ function lookupVirtualColumns(
  * Walk the buffer's tokens with a single paren-depth counter and emit a
  * map of `alias → projection column names` covering both CTE and derived
  * subquery patterns. See the module header for the full algorithm.
+ *
+ * Slice D (sprint-295, 2026-05-14) — the optional `schema` parameter is
+ * the namespace passed by the completion source. It is consulted when
+ * the inner SELECT projects `*` (SELECT * fallback → inner FROM's base
+ * table columns), and the dotted-identifier coalescing reused from
+ * sprint-294 makes schema-qualified inner tables (`public.users`)
+ * resolve correctly. CTE chaining (single level: `b AS (SELECT * FROM
+ * a)` inherits a's columns) is handled by consulting the partially-built
+ * `out` map for already-registered CTE aliases.
  */
-export function extractVirtualTables(sql: string): Map<string, string[]> {
+export function extractVirtualTables(
+  sql: string,
+  schema?: SQLNamespace,
+): Map<string, string[]> {
   const out = new Map<string, string[]>();
   if (!sql) return out;
   const all = tokenizeSql(sql);
@@ -222,7 +238,7 @@ export function extractVirtualTables(sql: string): Map<string, string[]> {
 
     // ── CTE extraction: top-level `WITH` keyword ─────────────────────
     if (depthBefore[i] === 0 && tok.kind === "keyword" && upper === "WITH") {
-      i = extractCtes(tokens, i + 1, depthBefore, out);
+      i = extractCtes(tokens, i + 1, depthBefore, out, schema);
       continue;
     }
 
@@ -242,6 +258,8 @@ export function extractVirtualTables(sql: string): Map<string, string[]> {
           tokens,
           openIdx + 1,
           closeIdx - 1,
+          schema,
+          out,
         );
         // After the `)` look for `[AS] <alias>`.
         let k = closeIdx + 1;
@@ -281,12 +299,19 @@ export function extractVirtualTables(sql: string): Map<string, string[]> {
  * Consumes: `[RECURSIVE] <name> [(col, ...)] AS ( ... )  [, <name2> ...]*`.
  * Returns the index of the last consumed token (so the caller's loop
  * resumes from `i + 1`).
+ *
+ * Slice D (sprint-295) — `schema` is threaded through so each CTE's
+ * inner SELECT can resolve `*` to base-table columns. The partially
+ * built `out` map is also passed so a later CTE that does
+ * `SELECT * FROM <earlier-cte>` inherits its columns (single-level
+ * chaining).
  */
 function extractCtes(
   tokens: SqlToken[],
   start: number,
   depthBefore: number[],
   out: Map<string, string[]>,
+  schema?: SQLNamespace,
 ): number {
   let i = start;
   // Optional `RECURSIVE` keyword.
@@ -358,6 +383,10 @@ function extractCtes(
     }
 
     // Resolve columns: explicit > inner projection.
+    // Slice D (sprint-295) — when the inner projection is `SELECT *`,
+    // the projection extractor consults the namespace + earlier CTEs
+    // (via the partially-built `out` map) to fall back to the inner
+    // FROM's base-table columns or inherit from an earlier CTE.
     let cols: string[];
     if (explicitCols && explicitCols.length > 0) {
       cols = explicitCols;
@@ -366,6 +395,8 @@ function extractCtes(
         tokens,
         bodyOpenIdx + 1,
         bodyCloseIdx - 1,
+        schema,
+        out,
       );
     }
     if (cteName && cols.length > 0) {
@@ -433,11 +464,22 @@ function findMatchingParen(tokens: SqlToken[], openIdx: number): number {
  *   4. Split the projection by commas at depth 0.
  *   5. For each item: extract the column name (alias if `AS` present,
  *      else last identifier).
+ *
+ * Slice D (sprint-295, 2026-05-14) — when the projection is the single
+ * `*` token (SELECT *), look at the inner FROM clause's base table and
+ * return that table's columns from the namespace. Schema-qualified
+ * inner tables (`public.users`) are coalesced into a dotted name and
+ * the **last** segment (rightmost) is used for namespace lookup, which
+ * matches sprint-294's dotted-identifier coalescing pattern. If the
+ * inner FROM names an already-registered CTE alias, inherit that
+ * alias's columns (CTE chaining, single level).
  */
 function extractProjectionColumns(
   tokens: SqlToken[],
   rangeStart: number,
   rangeEnd: number,
+  schema?: SQLNamespace,
+  knownVirtual?: Map<string, string[]>,
 ): string[] {
   // rangeEnd is inclusive.
   if (rangeStart > rangeEnd) return [];
@@ -476,6 +518,7 @@ function extractProjectionColumns(
   }
 
   let projEnd = -1;
+  let fromIdx = -1;
   depth = 0;
   for (let j = projStart; j <= rangeEnd; j++) {
     const t = tokens[j]!;
@@ -487,12 +530,38 @@ function extractProjectionColumns(
       t.text.toUpperCase() === "FROM"
     ) {
       projEnd = j - 1;
+      fromIdx = j;
       break;
     }
   }
   // No FROM (e.g. `SELECT 1`) — treat the whole tail as projection.
   if (projEnd === -1) projEnd = rangeEnd;
   if (projStart > projEnd) return [];
+
+  // ── Slice D D1: SELECT * fallback ─────────────────────────────────
+  // If the projection is exactly the single `*` token, look up the
+  // inner FROM's base table in the namespace (or in the known-virtual
+  // map for single-step CTE chaining).
+  if (
+    projStart === projEnd &&
+    tokens[projStart]!.kind === "punct" &&
+    tokens[projStart]!.text === "*"
+  ) {
+    if (fromIdx === -1) return [];
+    const baseName = readBaseTableAfterFrom(tokens, fromIdx + 1, rangeEnd);
+    if (!baseName) return [];
+    // CTE chaining (Slice D D7) — earlier CTE wins over namespace
+    // lookup so `b AS (SELECT * FROM a)` inherits a's projection
+    // even if a's name shadows a real base table (Slice D D6).
+    if (knownVirtual) {
+      const inherited = lookupVirtualColumns(knownVirtual, baseName);
+      if (inherited && inherited.length > 0) return inherited;
+    }
+    if (schema) {
+      return resolveBaseTableColumns(schema, baseName);
+    }
+    return [];
+  }
 
   // Split projection by commas at depth 0.
   const items: Array<{ from: number; to: number }> = [];
@@ -517,6 +586,104 @@ function extractProjectionColumns(
     if (name) columns.push(name);
   }
   return columns;
+}
+
+/**
+ * Slice D (sprint-295, 2026-05-14) — read the base table name after a
+ * `FROM` keyword inside an inner SELECT. Handles schema-qualified names
+ * like `public.users` (returns the last segment so namespace lookup hits
+ * the table key) and quoted identifiers. Returns `null` if no
+ * identifier follows (e.g. `FROM (subquery)` — that case is handled by
+ * the outer scanner registering the subquery alias separately).
+ */
+function readBaseTableAfterFrom(
+  tokens: SqlToken[],
+  start: number,
+  rangeEnd: number,
+): string | null {
+  if (start > rangeEnd) return null;
+  const first = tokens[start];
+  if (!first || first.kind !== "identifier") return null;
+  // Sprint 294's dotted-identifier coalescing — `tenant.schema.tbl`.
+  let last = start;
+  while (
+    last + 2 <= rangeEnd &&
+    tokens[last + 1]?.kind === "punct" &&
+    tokens[last + 1]?.text === "." &&
+    tokens[last + 2]?.kind === "identifier"
+  ) {
+    last += 2;
+  }
+  // Take the rightmost segment for lookup (sprint-294 pattern — the
+  // namespace key is the bare table name; the schema/db segments are
+  // discarded for lookup purposes).
+  return stripIdentifierQuotes(tokens[last]!.text);
+}
+
+/**
+ * Slice D (sprint-295, 2026-05-14) — given a `SQLNamespace` and a base
+ * table name, return that table's column names. The namespace shape is
+ * recursive (`Record<string, SQLNamespace | …>`); the convention used
+ * elsewhere in this codebase is `{ tableName: { col1: {}, col2: {} } }`.
+ * We do a case-insensitive lookup matching the rest of the source's
+ * behaviour (`lookupVirtualColumns`).
+ */
+function resolveBaseTableColumns(
+  schema: SQLNamespace,
+  tableName: string,
+): string[] {
+  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
+    return [];
+  }
+  const entries = Object.entries(schema as Record<string, unknown>);
+  const lower = tableName.toLowerCase();
+  let match: unknown = undefined;
+  for (const [key, value] of entries) {
+    if (key === tableName || key.toLowerCase() === lower) {
+      match = value;
+      break;
+    }
+  }
+  if (!match) return [];
+  // The matched value may be a `{ self, children }` shape (lang-sql's
+  // verbose form) or a plain record (`{ col: {} }`). For our usage the
+  // plain record is the dominant shape — sprint-292/294 tests and
+  // production wire-up both use it.
+  if (typeof match === "object" && match !== null && !Array.isArray(match)) {
+    // Lang-sql verbose form: `{ self: { label, type }, children: [...] }`.
+    const verbose = match as { self?: unknown; children?: unknown };
+    if (Array.isArray(verbose.children)) {
+      const cols: string[] = [];
+      for (const child of verbose.children) {
+        if (
+          typeof child === "object" &&
+          child !== null &&
+          "label" in child &&
+          typeof (child as { label: unknown }).label === "string"
+        ) {
+          cols.push((child as { label: string }).label);
+        }
+      }
+      if (cols.length > 0) return cols;
+    }
+    return Object.keys(match as Record<string, unknown>);
+  }
+  if (Array.isArray(match)) {
+    // Flat-list form: `[{ label, type }, ...]`.
+    const cols: string[] = [];
+    for (const entry of match) {
+      if (
+        typeof entry === "object" &&
+        entry !== null &&
+        "label" in entry &&
+        typeof (entry as { label: unknown }).label === "string"
+      ) {
+        cols.push((entry as { label: string }).label);
+      }
+    }
+    return cols;
+  }
+  return [];
 }
 
 /**
