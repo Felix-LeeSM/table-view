@@ -40,6 +40,10 @@ import { aliasColumnCompletionSource } from "./aliasColumnCompletion";
 const TEST_SCHEMA: SQLNamespace = {
   users: { id: {}, name: {}, email: {}, age: {} },
   orders: { id: {}, user_id: {}, total: {}, created_at: {} },
+  order_items: { id: {}, order_id: {}, product_id: {}, qty: {} },
+  // schema-qualified — sprint-268 의 Policy A (bare + qualified 둘 다 키)
+  // 를 흉내. lookup 시 `public.users` / `users` 둘 다 시도해야 함.
+  "public.users": { id: {}, name: {}, email: {}, age: {} },
 };
 
 function makeContext(doc: string, cursor?: number, explicit = true) {
@@ -140,6 +144,94 @@ describe("aliasColumnCompletionSource (Sprint 294 Slice B)", () => {
     // cursor 가 첫 statement 안인데도 anywhere-scan 으로 alias 가 풀려야.
     const doc = "SELECT u.\n;\nSELECT * FROM users u";
     const ctx = makeContext(doc, "SELECT u.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["id", "name", "email", "age"]),
+    );
+  });
+});
+
+/**
+ * Sprint 294 (2026-05-14) — Slice D — edge case 단언.
+ *
+ * 작성 이유:
+ *   사용자가 실제로 작성하는 SQL 은 단일 JOIN 단순 패턴을 넘어선다 — 3 개
+ *   이상 JOIN, schema-qualified target (`public.users u`), 명시적 `AS`,
+ *   같은 alias 가 중복 등장, quoted reserved-word alias. 각 케이스가 Slice B
+ *   의 source 에서 어떻게 동작하는지 명시적으로 단언해서 회귀를 차단.
+ */
+describe("aliasColumnCompletionSource — Sprint 294 Slice D edge cases", () => {
+  // ── (D1) 3 개 이상 JOIN ──────────────────────────────────────────────
+  it("multi-join 3+: FROM users u JOIN orders o JOIN order_items oi ON oi.<cursor> → order_items 컬럼", () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc =
+      "SELECT oi. FROM users u JOIN orders o JOIN order_items oi ON oi.id = o.id";
+    const ctx = makeContext(doc, "SELECT oi.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["id", "order_id", "product_id", "qty"]),
+    );
+  });
+
+  // ── (D2) schema-qualified target ─────────────────────────────────────
+  // `FROM public.users u` 에서 alias `u` → `users` 또는 `public.users`
+  // namespace 키로 lookup. bare + qualified 둘 다 시도하는 sprint-268
+  // Policy A 호환.
+  it("schema-qualified: FROM public.users u WHERE u.<cursor> → users 컬럼", () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc = "SELECT u. FROM public.users u";
+    const ctx = makeContext(doc, "SELECT u.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["id", "name", "email", "age"]),
+    );
+  });
+
+  // ── (D3) 명시적 AS ────────────────────────────────────────────────────
+  it("명시적 AS: FROM users AS u JOIN orders AS o ON o.<cursor> → orders 컬럼", () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc =
+      "SELECT o. FROM users AS u JOIN orders AS o ON o.user_id = u.id";
+    const ctx = makeContext(doc, "SELECT o.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    expect(labels).toEqual(
+      expect.arrayContaining(["id", "user_id", "total", "created_at"]),
+    );
+  });
+
+  // ── (D4) 동일 alias 중복 ──────────────────────────────────────────────
+  // `FROM users u, orders u` — 같은 alias `u` 가 두 테이블에 바인딩.
+  // crash 없이 어느 한쪽 컬럼은 노출. 정책은 parseFromContext 의 last-wins
+  // (line 128 `aliases[aliasName] = tableName`) — 코드 코멘트로 명시.
+  it("동일 alias 중복: FROM users u, orders u — crash 없이 어느 한쪽 컬럼 노출", () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc = "SELECT u. FROM users u, orders u";
+    const ctx = makeContext(doc, "SELECT u.".length);
+    const result = source(ctx);
+    expect(result).not.toBeNull();
+    const labels = result!.options.map((o) => o.label);
+    // last-wins (parseFromContext 정책) — orders 컬럼이 노출.
+    expect(labels).toEqual(
+      expect.arrayContaining(["id", "user_id", "total", "created_at"]),
+    );
+  });
+
+  // ── (D5) quoted reserved-word alias ──────────────────────────────────
+  // `FROM users "from"` — alias 가 quoted reserved word. parseFromContext
+  // 의 stripIdentifierQuotes 가 `"from"` 을 `from` 으로 unwrap → alias
+  // map 에 등록. cursor 의 alias 인식도 quoted/unquoted 둘 다 시도.
+  it('quoted alias: FROM users "from" — "from".<cursor> → users 컬럼', () => {
+    const source = aliasColumnCompletionSource(() => TEST_SCHEMA);
+    const doc = 'SELECT "from". FROM users "from"';
+    const ctx = makeContext(doc, 'SELECT "from".'.length);
     const result = source(ctx);
     expect(result).not.toBeNull();
     const labels = result!.options.map((o) => o.label);

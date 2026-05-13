@@ -104,11 +104,28 @@ export function parseFromContext(sql: string): FromContext {
       if (!tableTok) break;
       if (tableTok.kind !== "identifier") break;
 
-      const tableName = stripIdentifierQuotes(tableTok.text);
+      // Sprint 294 (2026-05-14) — schema-qualified targets (`public.users`,
+      // `tenant.schema.tbl`) come through tokenize as `[identifier, '.',
+      // identifier, ...]`. Coalesce into a single dotted tableName so the
+      // following alias slot is read correctly.
+      let lastTableIdx = j;
+      while (
+        lastTableIdx + 2 < tokens.length &&
+        tokens[lastTableIdx + 1]?.kind === "punct" &&
+        tokens[lastTableIdx + 1]?.text === "." &&
+        tokens[lastTableIdx + 2]?.kind === "identifier"
+      ) {
+        lastTableIdx += 2;
+      }
+      const tableTextParts: string[] = [];
+      for (let p = j; p <= lastTableIdx; p += 2) {
+        tableTextParts.push(stripIdentifierQuotes(tokens[p]!.text));
+      }
+      const tableName = tableTextParts.join(".");
       tables.push(tableName);
 
       // Look ahead for an alias: `users AS u` or `users u`.
-      let k = j + 1;
+      let k = lastTableIdx + 1;
       let aliasTok = tokens[k];
 
       if (
