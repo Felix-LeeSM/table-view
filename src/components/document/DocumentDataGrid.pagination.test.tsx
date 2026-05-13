@@ -99,12 +99,12 @@ describe("DocumentDataGrid — pagination parity (sprint 117)", () => {
     expect(screen.getByLabelText("Page size")).toBeInTheDocument();
   });
 
-  // AC-02: 유효한 Jump 입력 → 새 page fetch (skip = (page-1) * pageSize).
-  // controlled `<input type="number" value={page}>` 는 userEvent.type 의
-  // 키 단위 input 이 controlled value 와 충돌 (clear → "" 가 다시 page 로
-  // 즉시 복원). sprint 112 의 Radix Select 클릭 path 는 user.click 으로
-  // 단언하지만, 본 native input 의 가드 검증은 직접 value 주입이 결정적.
-  it("Jump input dispatches a fetch with the correct skip when value is in range", async () => {
+  // AC-02 (Sprint 289 rewrite): 유효한 Jump 입력 → Enter / blur commit
+  // 시점에 page fetch (skip = (page-1) * pageSize). 종전 (sprint 117)
+  // 까지는 onChange 가 매 키 입력마다 fetch 했지만 Sprint 289 부터는
+  // draft state + Enter/blur commit. fireEvent.change 만으론 fetch 가
+  // 일어나지 않아야 하고, Enter 키 입력 시점에 발화한다.
+  it("Jump input dispatches a fetch with the correct skip on Enter commit", async () => {
     renderGrid();
 
     await waitFor(() => expect(screen.getByText("User 0")).toBeInTheDocument());
@@ -112,6 +112,11 @@ describe("DocumentDataGrid — pagination parity (sprint 117)", () => {
 
     const jump = screen.getByLabelText("Jump to page") as HTMLInputElement;
     fireEvent.change(jump, { target: { value: "2" } });
+
+    // 타이핑만으로는 fetch 가 발생하지 않아야 한다.
+    expect(findMock.mock.calls.length).toBe(initialCalls);
+
+    fireEvent.keyDown(jump, { key: "Enter" });
 
     await waitFor(() => {
       expect(findMock.mock.calls.length).toBeGreaterThan(initialCalls);
@@ -122,28 +127,23 @@ describe("DocumentDataGrid — pagination parity (sprint 117)", () => {
     expect(body.limit).toBe(300);
   });
 
-  // AC-02 (negative): out-of-range Jump (빈 문자열 / 음수 / 0 / totalPages
-  // 초과) → fetch 미발화. DataGridToolbar 의 onChange 가드 (`val >= 1 &&
-  // val <= totalPages`) 가 책임지는 invariant. fireEvent.change 로 직접
-  // value 를 주입하는 이유: number input 은 브라우저가 일부 문자(-, 빈
-  // 문자열) 입력을 막아 userEvent.type 으로 재현이 어려움 — 가드 자체의
-  // 견고성을 단언하려면 직접 값 주입이 결정적이다.
-  it("Jump input ignores out-of-range and empty values (no extra fetch)", async () => {
+  // AC-02 negative (Sprint 289 rewrite): out-of-range Jump (빈 문자열 /
+  // 음수 / 0 / totalPages 초과) 를 입력하고 Enter / blur 로 commit 해도
+  // PageJumpInput 의 가드 (`val >= 1 && val <= totalPages`) 가 막아
+  // fetch 가 발화되지 않아야 한다. 잘못된 값은 외부 page 로 revert.
+  it("Jump input ignores out-of-range and empty values on commit", async () => {
     renderGrid();
 
     await waitFor(() => expect(screen.getByText("User 0")).toBeInTheDocument());
     const baselineCalls = findMock.mock.calls.length;
 
     const jump = screen.getByLabelText("Jump to page") as HTMLInputElement;
-    // totalPages = 3. "" / 4 / 0 / -1 모두 가드에 막혀야 함.
-    fireEvent.change(jump, { target: { value: "" } });
-    fireEvent.change(jump, { target: { value: "4" } });
-    fireEvent.change(jump, { target: { value: "0" } });
-    fireEvent.change(jump, { target: { value: "-1" } });
+    // totalPages = 3. "" / 4 / 0 / -1 모두 commit 시 가드에 막혀야 함.
+    for (const bad of ["", "4", "0", "-1"]) {
+      fireEvent.change(jump, { target: { value: bad } });
+      fireEvent.keyDown(jump, { key: "Enter" });
+    }
 
-    // 결정적 대기: 가드 통과가 일어났다면 setPage → useEffect → findMock
-    // 호출이 React 의 다음 microtask 에서 발화. waitFor 가 retry 하므로
-    // 호출 횟수가 baseline 을 유지하는지 확실하게 단언 가능.
     await waitFor(() => expect(findMock.mock.calls.length).toBe(baselineCalls));
   });
 

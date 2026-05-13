@@ -265,6 +265,68 @@ describe("DataGridToolbar — Sprint 179 paradigm-aware labels (AC-179-03)", () 
     });
   });
 
+  // 작성 이유 (2026-05-13, Sprint 289): 종전 page input 의 onChange 핸들러가
+  // 매 키스트로크마다 `onSetPage` 를 호출 → 매번 fetch 가 폭발. 사용자가
+  // "더 나은 인터페이스" 를 요구해 draft state + Enter/blur commit 으로 분리.
+  // 본 회귀 가드는 (a) 타이핑 중 onSetPage 안 부름 (b) Enter 시 commit
+  // (c) Escape 시 revert (d) blur 시 commit (e) invalid 입력 reset.
+  describe("PageJumpInput (Sprint 289)", () => {
+    it("타이핑만으로는 onSetPage 를 호출하지 않는다 (draft only)", () => {
+      const onSetPage = vi.fn();
+      renderToolbar({ page: 1, totalPages: 10, onSetPage });
+      const input = screen.getByLabelText("Jump to page");
+      fireEvent.change(input, { target: { value: "5" } });
+      expect(onSetPage).not.toHaveBeenCalled();
+    });
+
+    it("Enter 키 입력 시 commit", () => {
+      const onSetPage = vi.fn();
+      renderToolbar({ page: 1, totalPages: 10, onSetPage });
+      const input = screen.getByLabelText("Jump to page");
+      fireEvent.change(input, { target: { value: "7" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onSetPage).toHaveBeenCalledWith(7);
+    });
+
+    it("blur 시 commit", () => {
+      const onSetPage = vi.fn();
+      renderToolbar({ page: 1, totalPages: 10, onSetPage });
+      const input = screen.getByLabelText("Jump to page");
+      fireEvent.change(input, { target: { value: "3" } });
+      fireEvent.blur(input);
+      expect(onSetPage).toHaveBeenCalledWith(3);
+    });
+
+    it("Escape 키 입력 시 draft 를 외부 page 로 revert (commit 없음)", () => {
+      const onSetPage = vi.fn();
+      renderToolbar({ page: 2, totalPages: 10, onSetPage });
+      const input = screen.getByLabelText("Jump to page") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "9" } });
+      fireEvent.keyDown(input, { key: "Escape" });
+      expect(onSetPage).not.toHaveBeenCalled();
+      expect(input.value).toBe("2");
+    });
+
+    it("범위 밖 입력 (0, total+1, NaN) 은 commit 없이 revert", () => {
+      const onSetPage = vi.fn();
+      renderToolbar({ page: 4, totalPages: 10, onSetPage });
+      const input = screen.getByLabelText("Jump to page") as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "99" } });
+      fireEvent.blur(input);
+      expect(onSetPage).not.toHaveBeenCalled();
+      expect(input.value).toBe("4");
+    });
+
+    it("동일한 page commit 은 onSetPage 를 호출하지 않는다 (idempotent)", () => {
+      const onSetPage = vi.fn();
+      renderToolbar({ page: 3, totalPages: 10, onSetPage });
+      const input = screen.getByLabelText("Jump to page");
+      fireEvent.change(input, { target: { value: "3" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onSetPage).not.toHaveBeenCalled();
+    });
+  });
+
   it("[AC-179-03b] DOCUMENT_LABELS literal output is unchanged byte-for-byte", () => {
     // Anchors the derived constant's literal strings so DocumentDataGrid
     // (the existing consumer at DocumentDataGrid.tsx:273-276) sees no

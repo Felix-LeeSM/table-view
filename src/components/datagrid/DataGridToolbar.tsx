@@ -14,6 +14,7 @@ import {
   Eye,
   Undo2,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { SortInfo, TableData } from "@/types/schema";
 import { PARADIGM_VOCABULARY } from "@/lib/strings/paradigm-vocabulary";
 import { Button } from "@components/ui/button";
@@ -326,30 +327,10 @@ export default function DataGridToolbar({
             >
               <ChevronLeft />
             </Button>
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={page}
-              className="w-10 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              aria-label="Jump to page"
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                if (val >= 1 && val <= totalPages) {
-                  onSetPage(val);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const val = parseInt(
-                    (e.target as HTMLInputElement).value,
-                    10,
-                  );
-                  if (val >= 1 && val <= totalPages) {
-                    onSetPage(val);
-                  }
-                }
-              }}
+            <PageJumpInput
+              page={page}
+              totalPages={totalPages}
+              onCommit={onSetPage}
             />
             <span className="text-xs text-muted-foreground">
               / {totalPages}
@@ -403,5 +384,62 @@ export default function DataGridToolbar({
         )}
       </div>
     </div>
+  );
+}
+
+interface PageJumpInputProps {
+  page: number;
+  totalPages: number;
+  onCommit: (page: number) => void;
+}
+
+/**
+ * Sprint 289 — page input draft. 매 키스트로크마다 fetch 가 발생하던 종전
+ * onChange 결합 (`<input onChange={... onSetPage(val) ...}>`) 을 분리: 사용자
+ * 가 자유롭게 숫자를 타이핑하는 동안은 local draft 만 변하고, commit 은
+ * Enter / blur 두 시점에서만. invalid 입력은 외부 page 로 reset (revert).
+ *
+ * 외부 page 가 다른 경로 (Prev/Next/Filter reset) 로 바뀌면 draft 도 동기화 —
+ * 사용자가 input 에 focus 중이라도 stale 한 숫자가 남지 않도록.
+ */
+function PageJumpInput({ page, totalPages, onCommit }: PageJumpInputProps) {
+  const [draft, setDraft] = useState<string>(String(page));
+
+  useEffect(() => {
+    setDraft(String(page));
+  }, [page]);
+
+  const commit = () => {
+    const val = parseInt(draft, 10);
+    if (Number.isFinite(val) && val >= 1 && val <= totalPages) {
+      if (val !== page) onCommit(val);
+      setDraft(String(val));
+    } else {
+      setDraft(String(page));
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={totalPages}
+      value={draft}
+      className="w-10 rounded border border-border bg-background px-1 py-0.5 text-xs text-foreground text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      aria-label="Jump to page"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+          (e.currentTarget as HTMLInputElement).blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setDraft(String(page));
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
   );
 }
