@@ -21,6 +21,7 @@ import {
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
+import { aliasColumnCompletionSource } from "@lib/sql/aliasColumnCompletion";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 
 /**
@@ -75,6 +76,14 @@ const buildSqlLang = (
   // language so it stays dormant outside SQL contexts.
   dialect.language.data.of({
     autocomplete: updateColumnCompletionSource(() => ns),
+  }),
+  // Sprint 294 (2026-05-14) — alias-aware mid-typing flow. lang-sql 의 alias
+  // map 은 cursor 의 Statement 안에 FROM 절이 이미 있을 때만 작동 → 사용자
+  // 가 SELECT projection 을 먼저 입력하는 일반 패턴 (`SELECT u.` + 후행
+  // FROM) 에서 후보 0. 이 source 는 buffer 전체에서 FROM/JOIN alias 패턴을
+  // 탐색해 anywhere-scan 으로 보강한다.
+  dialect.language.data.of({
+    autocomplete: aliasColumnCompletionSource(() => ns),
   }),
 ];
 
