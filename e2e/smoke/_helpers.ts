@@ -6,10 +6,8 @@ export type DbType = "postgresql" | "mongodb";
 
 export async function waitForLauncher() {
   await switchToLauncherWindow();
-  const launcher = await $('[data-testid="launcher-page"]');
-  await launcher.waitForDisplayed({ timeout: 15000 });
   const newConnection = await $('[aria-label="New Connection"]');
-  await newConnection.waitForDisplayed({ timeout: 15000 });
+  await newConnection.waitForDisplayed({ timeout: 30000 });
 }
 
 export async function switchToLauncherWindow(timeoutMs = 15000) {

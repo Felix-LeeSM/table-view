@@ -33,9 +33,9 @@ run_wdio() {
   local spec="$2"
 
   if command -v xvfb-run >/dev/null 2>&1; then
-    TABLE_VIEW_TEST_DATA_DIR="$data_dir" xvfb-run -a pnpm test:e2e:smoke -- --spec "$spec"
+    TABLE_VIEW_TEST_DATA_DIR="$data_dir" xvfb-run -a pnpm exec wdio run wdio.smoke.conf.ts --spec "$spec"
   else
-    TABLE_VIEW_TEST_DATA_DIR="$data_dir" pnpm test:e2e:smoke -- --spec "$spec"
+    TABLE_VIEW_TEST_DATA_DIR="$data_dir" pnpm exec wdio run wdio.smoke.conf.ts --spec "$spec"
   fi
 }
 
