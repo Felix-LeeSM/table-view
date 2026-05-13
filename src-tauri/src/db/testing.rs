@@ -31,9 +31,10 @@ use super::types::{
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, IndexInfo,
-    PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DatabaseType,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
+    IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
+    TriggerInfo,
 };
 
 /// Closure type alias — `Send + Sync` so the trait `BoxFuture` constraint
@@ -106,6 +107,12 @@ pub(crate) struct StubRdbAdapter {
     pub drop_index_fn: Option<FnOne<DropIndexRequest, SchemaChangeResult>>,
     pub add_constraint_fn: Option<FnOne<AddConstraintRequest, SchemaChangeResult>>,
     pub drop_constraint_fn: Option<FnOne<DropConstraintRequest, SchemaChangeResult>>,
+    /// Sprint 273 — override for `create_trigger(req)`. `None` falls back
+    /// to the DDL default `Ok(SchemaChangeResult { sql: "create_trigger" })`
+    /// so wiring tests can assert on the sentinel SQL; the mismatch
+    /// panic-closure pattern uses `Some(Box::new(|_| panic!(...)))` to
+    /// assert the trait body is never reached when DbMismatch fires.
+    pub create_trigger_fn: Option<FnOne<CreateTriggerRequest, SchemaChangeResult>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -147,6 +154,7 @@ impl Default for StubRdbAdapter {
             drop_index_fn: None,
             add_constraint_fn: None,
             drop_constraint_fn: None,
+            create_trigger_fn: None,
         }
     }
 }
@@ -373,6 +381,20 @@ impl RdbAdapter for StubRdbAdapter {
             .drop_constraint_fn
             .as_ref()
             .map_or_else(|| ddl_default_sql("drop_constraint"), |f| f(req));
+        Box::pin(async move { r })
+    }
+    fn create_trigger<'a>(
+        &'a self,
+        req: &'a CreateTriggerRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        // Sprint 273 — DDL default sentinel `Ok(... sql: "create_trigger")`
+        // so wiring tests can assert that the handler reached the trait
+        // body without configuring a closure. Override slot accepts the
+        // mismatch panic-closure pattern used in `ddl.rs`.
+        let r = self
+            .create_trigger_fn
+            .as_ref()
+            .map_or_else(|| ddl_default_sql("create_trigger"), |f| f(req));
         Box::pin(async move { r })
     }
     fn get_table_indexes<'a>(

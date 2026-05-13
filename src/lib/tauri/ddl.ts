@@ -6,6 +6,7 @@ import type {
   CreateIndexRequest,
   CreateTablePlanRequest,
   CreateTableRequest,
+  CreateTriggerRequest,
   DropColumnRequest,
   DropConstraintRequest,
   DropIndexRequest,
@@ -209,4 +210,21 @@ export async function dropConstraint(
   request: DropConstraintRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("drop_constraint", { request });
+}
+
+/**
+ * Sprint 273 — `CREATE TRIGGER` wrapper. The `CreateTriggerDialog`
+ * calls this twice: first with `previewOnly: true` for the inline DDL
+ * preview pane, then with `previewOnly: false` for the commit. Backend
+ * validates identifiers / whitelists, rejects `INSTEAD OF + STATEMENT`
+ * and `INSTEAD OF + multi-event`, doubles `'` in `functionArguments`,
+ * and (when `previewOnly === false`) wraps the statement in
+ * `BEGIN/COMMIT`. Non-PG RDB adapters surface `AppError::Unsupported`.
+ *
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
+export async function createTrigger(
+  request: CreateTriggerRequest,
+): Promise<SchemaChangeResult> {
+  return invoke<SchemaChangeResult>("create_trigger", { request });
 }

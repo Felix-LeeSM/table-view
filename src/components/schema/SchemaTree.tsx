@@ -29,6 +29,7 @@ import { SchemaTreeBody } from "./SchemaTree/body";
 import type { SchemaTreeRowsContext } from "./SchemaTree/rows";
 import {
   CreateTableDialogSlot,
+  CreateTriggerDialogSlot,
   DropTableDialogSlot,
   RenameTableDialogSlot,
 } from "./SchemaTree/dialogs";
@@ -198,6 +199,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleOpenViewStructure: actions.handleOpenViewStructure,
     handleFunctionClick: actions.handleFunctionClick,
     handleCreateTable: actions.handleCreateTable,
+    // Sprint 273 — CreateTriggerDialog opener.
+    handleCreateTrigger: actions.handleCreateTrigger,
     // Sprint 272 — Triggers child group handlers.
     toggleTriggerGroup: actions.toggleTriggerGroup,
     retryLoadTriggers: actions.retryLoadTriggers,
@@ -437,6 +440,14 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
         onRefresh={async (schemaName) => {
           actions.refreshSchema(schemaName);
         }}
+      />
+
+      <CreateTriggerDialogSlot
+        connectionId={connectionId}
+        database={db}
+        createTriggerDialog={actions.createTriggerDialog}
+        onClose={() => actions.setCreateTriggerDialog(null)}
+        onRefresh={actions.refreshTableTriggersForSlot}
       />
     </div>
   );

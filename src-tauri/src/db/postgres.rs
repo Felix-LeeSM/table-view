@@ -48,10 +48,10 @@ use std::pin::Pin;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FunctionInfo,
-    IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData, TableInfo,
-    TriggerInfo, ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DatabaseType,
+    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
+    FunctionInfo, IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData,
+    TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::{DbAdapter, NamespaceInfo, NamespaceLabel, RdbAdapter, RdbQueryResult};
@@ -267,6 +267,16 @@ impl RdbAdapter for PostgresAdapter {
         req: &'a DropConstraintRequest,
     ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
         Box::pin(async move { self.drop_constraint(req).await })
+    }
+
+    fn create_trigger<'a>(
+        &'a self,
+        req: &'a CreateTriggerRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<SchemaChangeResult, AppError>> + Send + 'a>> {
+        // Sprint 273 — request-shaped delegate. Concrete inherent method
+        // already takes `&CreateTriggerRequest` and branches on
+        // `preview_only` for preview-vs-execute.
+        Box::pin(async move { self.create_trigger(req).await })
     }
 
     fn get_table_indexes<'a>(

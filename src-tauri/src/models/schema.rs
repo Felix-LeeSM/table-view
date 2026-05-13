@@ -484,6 +484,70 @@ pub struct FunctionInfo {
     pub kind: String, // "function", "procedure", "aggregate", "window"
 }
 
+/// Sprint 273 — request payload for `tauri.create_trigger`.
+///
+/// Carries the canonical trigger fields required by PG `CREATE TRIGGER`:
+///   - `trigger_name`, `schema`, `table`, `function_schema`, `function_name`
+///     — all validated by the shared `validate_identifier` helper
+///     (NAMEDATALEN-63 byte limit + `[a-zA-Z_][a-zA-Z0-9_]*` body).
+///   - `timing`, `orientation`, `events` — whitelisted (PG canonical
+///     uppercase) by the SQL emitter. Caller MUST send canonical
+///     uppercase; mismatches are rejected via `AppError::Validation`.
+///   - `events` is required to be a non-empty subset of
+///     `["INSERT", "UPDATE", "DELETE"]`. TRUNCATE is hidden from the
+///     CREATE dialog per master spec § 7 and not whitelisted here.
+///   - `when_expression: Option<String>` — verbatim PG expression that
+///     the emitter wraps in `WHEN (...)`. Free-text passthrough
+///     (no escaping, PG surfaces parse errors verbatim).
+///   - `function_arguments: Option<String>` — verbatim argument list
+///     for the `EXECUTE FUNCTION "schema"."name"(args)` clause. The
+///     emitter doubles single quotes (`'` → `''`) before embedding so
+///     SQL injection through unbalanced quotes is impossible
+///     (closes Sprint 272 findings § P3).
+///
+/// `preview_only: bool` toggles SQL emission vs. `BEGIN/COMMIT`
+/// execution. `expected_database: Option<String>` opt-in DbMismatch
+/// guard mirroring the rest of the Phase 24-26 DDL family.
+///
+/// Wire shape: `#[serde(rename_all = "camelCase")]` so the TS mirror in
+/// `src/types/schema.ts` consumes payloads with `connectionId`,
+/// `triggerName`, `whenExpression`, `functionSchema`, `functionName`,
+/// `functionArguments`, `previewOnly`, `expectedDatabase`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTriggerRequest {
+    pub connection_id: String,
+    pub schema: String,
+    pub table: String,
+    pub trigger_name: String,
+    /// Whitelist: `"BEFORE" | "AFTER" | "INSTEAD OF"`.
+    pub timing: String,
+    /// Non-empty subset of `["INSERT", "UPDATE", "DELETE"]`. Canonical
+    /// uppercase. Emitter sorts to canonical order
+    /// (INSERT, UPDATE, DELETE) before joining with ` OR ` so the SQL
+    /// string is deterministic regardless of payload order.
+    pub events: Vec<String>,
+    /// Whitelist: `"ROW" | "STATEMENT"`. `INSTEAD OF` requires `"ROW"`.
+    pub orientation: String,
+    /// Optional `WHEN (<expr>)` clause. Free-text passthrough; emitter
+    /// wraps in parentheses verbatim.
+    #[serde(default)]
+    pub when_expression: Option<String>,
+    pub function_schema: String,
+    pub function_name: String,
+    /// Optional comma-separated argument list for the
+    /// `EXECUTE FUNCTION "schema"."name"(args)` clause. The emitter
+    /// doubles single quotes inside this string before embedding
+    /// (Sprint 272 findings § P3 fix).
+    #[serde(default)]
+    pub function_arguments: Option<String>,
+    #[serde(default)]
+    pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
+}
+
 /// Sprint 272 — single trigger entry returned by
 /// `list_triggers(connection_id, schema, table, expected_database?)`.
 ///
@@ -1282,6 +1346,93 @@ mod tests {
         let json_min = serde_json::to_string(&minimal).unwrap();
         let de_min: TriggerInfo = serde_json::from_str(&json_min).unwrap();
         assert_eq!(de_min, minimal);
+    }
+
+    #[test]
+    fn create_trigger_request_serde_roundtrip() {
+        // Sprint 273 — `CreateTriggerRequest` round-trips with camelCase
+        // wire form (`connectionId`, `triggerName`, `whenExpression`,
+        // `functionSchema`, `functionName`, `functionArguments`,
+        // `previewOnly`, `expectedDatabase`). `preview_only` and
+        // `expected_database` default to `false` / `None` when omitted
+        // (`#[serde(default)]`).
+        let req = CreateTriggerRequest {
+            connection_id: "conn-1".to_string(),
+            schema: "public".to_string(),
+            table: "users".to_string(),
+            trigger_name: "audit_users_insert".to_string(),
+            timing: "BEFORE".to_string(),
+            events: vec!["INSERT".to_string()],
+            orientation: "ROW".to_string(),
+            when_expression: Some("(NEW.email IS NOT NULL)".to_string()),
+            function_schema: "audit".to_string(),
+            function_name: "log_insert".to_string(),
+            function_arguments: Some("'users'".to_string()),
+            preview_only: true,
+            expected_database: Some("appdb".to_string()),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(
+            json.contains("\"connectionId\":\"conn-1\""),
+            "expected camelCase connectionId, got: {json}"
+        );
+        assert!(
+            json.contains("\"triggerName\":\"audit_users_insert\""),
+            "expected camelCase triggerName, got: {json}"
+        );
+        assert!(
+            json.contains("\"whenExpression\":\"(NEW.email IS NOT NULL)\""),
+            "expected camelCase whenExpression, got: {json}"
+        );
+        assert!(
+            json.contains("\"functionSchema\":\"audit\""),
+            "expected camelCase functionSchema, got: {json}"
+        );
+        assert!(
+            json.contains("\"functionName\":\"log_insert\""),
+            "expected camelCase functionName, got: {json}"
+        );
+        assert!(
+            json.contains("\"functionArguments\":\"'users'\""),
+            "expected camelCase functionArguments, got: {json}"
+        );
+        assert!(json.contains("\"previewOnly\":true"));
+        assert!(json.contains("\"expectedDatabase\":\"appdb\""));
+        let deserialized: CreateTriggerRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.connection_id, "conn-1");
+        assert_eq!(deserialized.trigger_name, "audit_users_insert");
+        assert_eq!(deserialized.timing, "BEFORE");
+        assert_eq!(deserialized.events, vec!["INSERT".to_string()]);
+        assert_eq!(deserialized.orientation, "ROW");
+        assert_eq!(
+            deserialized.when_expression,
+            Some("(NEW.email IS NOT NULL)".to_string())
+        );
+        assert_eq!(deserialized.function_schema, "audit");
+        assert_eq!(deserialized.function_name, "log_insert");
+        assert_eq!(deserialized.function_arguments, Some("'users'".to_string()));
+        assert!(deserialized.preview_only);
+        assert_eq!(deserialized.expected_database, Some("appdb".to_string()));
+
+        // Back-compat — payload omitting `previewOnly`, `expectedDatabase`,
+        // `whenExpression`, `functionArguments` deserialises to false /
+        // None (Sprint 273 default-flag invariant).
+        let minimal = r#"{
+            "connectionId":"c",
+            "schema":"s",
+            "table":"t",
+            "triggerName":"tg",
+            "timing":"AFTER",
+            "events":["UPDATE"],
+            "orientation":"STATEMENT",
+            "functionSchema":"public",
+            "functionName":"fn"
+        }"#;
+        let parsed: CreateTriggerRequest = serde_json::from_str(minimal).unwrap();
+        assert!(!parsed.preview_only);
+        assert!(parsed.expected_database.is_none());
+        assert!(parsed.when_expression.is_none());
+        assert!(parsed.function_arguments.is_none());
     }
 
     #[test]

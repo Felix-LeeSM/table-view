@@ -12,10 +12,10 @@ use tokio_util::sync::CancellationToken;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnInfo, ConnectionConfig,
-    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest, DatabaseType,
-    DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition,
-    FunctionInfo, IndexInfo, PostgresTypeInfo, RenameTableRequest, SchemaChangeResult, TableData,
-    TableInfo, TriggerInfo, ViewInfo,
+    ConstraintInfo, CreateIndexRequest, CreateTablePlanRequest, CreateTableRequest,
+    CreateTriggerRequest, DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest,
+    DropTableRequest, FilterCondition, FunctionInfo, IndexInfo, PostgresTypeInfo,
+    RenameTableRequest, SchemaChangeResult, TableData, TableInfo, TriggerInfo, ViewInfo,
 };
 
 use super::types::{
@@ -440,6 +440,26 @@ pub trait RdbAdapter: DbAdapter {
         _table: &'a str,
     ) -> BoxFuture<'a, Result<Vec<TriggerInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+
+    /// Sprint 273 — `CREATE TRIGGER` SQL emitter + execute.
+    ///
+    /// PG override validates identifiers, whitelists timing / orientation
+    /// / events, emits canonical SQL, and (when `req.preview_only ==
+    /// false`) wraps the statement in `BEGIN/COMMIT`. Non-PG RDB
+    /// adapters (MySQL/SQLite) inherit the default `Unsupported` until
+    /// dialect-specific implementations land. Non-RDB adapters reach
+    /// this method only via `as_rdb()?` which already fails with
+    /// `Unsupported(relational)` for Document paradigm callers.
+    fn create_trigger<'a>(
+        &'a self,
+        _req: &'a CreateTriggerRequest,
+    ) -> BoxFuture<'a, Result<SchemaChangeResult, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support trigger creation".into(),
+            ))
+        })
     }
 
     /// Sprint 272 — `pg_get_triggerdef(t.oid)` for one trigger.

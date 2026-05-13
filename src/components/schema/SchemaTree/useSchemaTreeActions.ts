@@ -81,6 +81,13 @@ export interface SchemaTreeActions {
   // Sprint 226 — create-table modal state (unchanged).
   createTableDialog: { schemaName: string } | null;
   setCreateTableDialog: (state: { schemaName: string } | null) => void;
+  // Sprint 273 — create-trigger modal state. Slot wrapper keys on the
+  // `(schema, table)` pair so the dialog mounts pre-populated for the
+  // right-clicked Triggers group / table. `null` = modal closed.
+  createTriggerDialog: { schemaName: string; tableName: string } | null;
+  setCreateTriggerDialog: (
+    state: { schemaName: string; tableName: string } | null,
+  ) => void;
 
   // Schema cache (loading / refresh)
   schemas: ReturnType<typeof useSchemaCache>["schemas"];
@@ -133,6 +140,24 @@ export interface SchemaTreeActions {
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
   handleCreateTable: (schemaName: string) => void;
+  /**
+   * Sprint 273 — opener for the CreateTriggerDialog. Right-click "Create
+   * Trigger…" on a Table row OR the per-table Triggers group header
+   * binds here. Stores the `(schema, table)` pair so the slot wrapper
+   * mounts the modal with the right parent table pre-populated.
+   */
+  handleCreateTrigger: (tableName: string, schemaName: string) => void;
+  /**
+   * Sprint 273 — re-fetch the triggers cached for `(connId, db, schema,
+   * table)`. Called by the CreateTriggerDialog slot's `onRefresh`
+   * callback after a successful commit so the new trigger appears under
+   * the Triggers child group without a tree-wide reload. Stable
+   * callback (binds the active workspaceKey via ref).
+   */
+  refreshTableTriggersForSlot: (
+    schemaName: string,
+    tableName: string,
+  ) => Promise<void>;
 }
 
 export function useSchemaTreeActions({
@@ -273,6 +298,13 @@ export function useSchemaTreeActions({
   const [tableSearch, setTableSearch] = useState<Record<string, string>>({});
   const [createTableDialog, setCreateTableDialog] = useState<{
     schemaName: string;
+  } | null>(null);
+  // Sprint 273 — CreateTriggerDialog slot. Mounting is gated by the slot
+  // value (null vs `{ schemaName, tableName }`); the modal's own
+  // commit-success path closes itself via `setCreateTriggerDialog(null)`.
+  const [createTriggerDialog, setCreateTriggerDialog] = useState<{
+    schemaName: string;
+    tableName: string;
   } | null>(null);
 
   const handleExpandSchema = useCallback(
@@ -576,6 +608,37 @@ export function useSchemaTreeActions({
     setCreateTableDialog({ schemaName });
   }, []);
 
+  // Sprint 273 — opener for CreateTriggerDialog. Same shape as
+  // `handleCreateTable` but threads through the parent table identity
+  // (triggers are always table-scoped in PG).
+  const handleCreateTrigger = useCallback(
+    (tableName: string, schemaName: string) => {
+      setCreateTriggerDialog({ schemaName, tableName });
+    },
+    [],
+  );
+
+  // Sprint 273 — bypass-cache refresh for the CreateTriggerDialog slot's
+  // post-commit success path. Reads the workspaceKey at call time so the
+  // refresh targets the workspace this hook is bound to, not whichever
+  // happens to be focused.
+  const refreshTableTriggersAction = useSchemaStore(
+    (s) => s.refreshTableTriggers,
+  );
+  const refreshTableTriggersForSlot = useCallback(
+    async (schemaName: string, tableName: string) => {
+      const key = workspaceKeyRef.current;
+      if (!key) return;
+      await refreshTableTriggersAction(
+        key.connId,
+        key.db,
+        tableName,
+        schemaName,
+      );
+    },
+    [refreshTableTriggersAction],
+  );
+
   const toggleCategory = useCallback(
     (schemaName: string, categoryKey: CategoryKey) => {
       setExpandedCategories((prev) => {
@@ -633,6 +696,8 @@ export function useSchemaTreeActions({
     setDropTableDialog,
     createTableDialog,
     setCreateTableDialog,
+    createTriggerDialog,
+    setCreateTriggerDialog,
 
     // Schema cache
     schemas,
@@ -663,5 +728,7 @@ export function useSchemaTreeActions({
     handleOpenViewStructure,
     handleFunctionClick,
     handleCreateTable,
+    handleCreateTrigger,
+    refreshTableTriggersForSlot,
   };
 }

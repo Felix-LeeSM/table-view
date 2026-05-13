@@ -23,8 +23,9 @@ use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, CreateIndexRequest,
-    CreateTablePlanRequest, CreateTableRequest, DropColumnRequest, DropConstraintRequest,
-    DropIndexRequest, DropTableRequest, RenameTableRequest, SchemaChangeResult,
+    CreateTablePlanRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
+    SchemaChangeResult,
 };
 
 use super::{ensure_expected_db, not_connected};
@@ -275,6 +276,34 @@ pub async fn drop_constraint(
     drop_constraint_inner(state.inner(), &request).await
 }
 
+async fn create_trigger_inner(
+    state: &AppState,
+    request: &CreateTriggerRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(&request.connection_id)
+        .ok_or_else(|| not_connected(&request.connection_id))?;
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.create_trigger(request).await
+}
+
+/// Sprint 273 — `CREATE TRIGGER` handler. Mirrors `create_table` /
+/// `drop_table` body shape: lock connections, dispatch through
+/// `as_rdb()`, optional `ensure_expected_db` probe, delegate to the
+/// trait method. PG concrete impl validates identifiers / whitelists,
+/// emits canonical SQL, and (when `req.preview_only == false`) wraps in
+/// `BEGIN/COMMIT`. Non-PG RDB adapters surface `Unsupported` via the
+/// trait default.
+#[tauri::command]
+pub async fn create_trigger(
+    state: tauri::State<'_, AppState>,
+    request: CreateTriggerRequest,
+) -> Result<SchemaChangeResult, AppError> {
+    create_trigger_inner(state.inner(), &request).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -421,6 +450,23 @@ mod tests {
             schema: "public".into(),
             table: "users".into(),
             constraint_name: "uq_x".into(),
+            preview_only: true,
+            expected_database: None,
+        }
+    }
+    fn create_trigger_req(id: &str) -> CreateTriggerRequest {
+        CreateTriggerRequest {
+            connection_id: id.into(),
+            schema: "public".into(),
+            table: "users".into(),
+            trigger_name: "tg_audit".into(),
+            timing: "BEFORE".into(),
+            events: vec!["INSERT".into()],
+            orientation: "ROW".into(),
+            when_expression: None,
+            function_schema: "audit".into(),
+            function_name: "log".into(),
+            function_arguments: None,
             preview_only: true,
             expected_database: None,
         }
@@ -1012,5 +1058,59 @@ mod tests {
         );
         let result = drop_table_inner(&state, &req).await.unwrap();
         assert_eq!(result.sql, "DROP TABLE x");
+    }
+
+    // ── Sprint 273 — create_trigger 4-step contract ─────────────────
+    //
+    // 작성 이유 (2026-05-13): trigger CREATE 핸들러도 `_inner` 4-step
+    // contract (NotFound / Unsupported / trait wiring / DbMismatch) 를
+    // 보장한다. mismatch panic-closure 는 Sprint 271c 패턴 재사용 —
+    // current_database 가 `dbA` 인데 expected 가 `dbB` 면 trait 호출
+    // 전에 DbMismatch 가 surface 되고 stub closure 가 panic 하지 않아야
+    // 한다.
+
+    #[tokio::test]
+    async fn create_trigger_routes_to_create_trigger_trait_method() {
+        let state = state_with("c", rdb_default()).await;
+        let r = create_trigger_inner(&state, &create_trigger_req("c"))
+            .await
+            .unwrap();
+        assert_eq!(r.sql, "create_trigger");
+    }
+
+    #[tokio::test]
+    async fn create_trigger_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            create_trigger_inner(&state, &create_trigger_req("absent")).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn create_trigger_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            create_trigger_inner(&state, &create_trigger_req("doc")).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn create_trigger_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.create_trigger_fn = Some(Box::new(|_| {
+            panic!("create_trigger must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = create_trigger_req("c");
+        req.expected_database = Some("dbB".into());
+        match create_trigger_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
     }
 }

@@ -60,6 +60,13 @@ export interface SchemaTreeRowsContext {
   handleFunctionClick: (funcName: string, schemaName: string) => void;
   handleCreateTable: (schemaName: string) => void;
   /**
+   * Sprint 273 — open the `CreateTriggerDialog` modal pre-populated with
+   * the parent table identity. Wired to the Table row's "Create
+   * Trigger…" context-menu entry AND the `+` affordance on the per-table
+   * Triggers group header.
+   */
+  handleCreateTrigger: (tableName: string, schemaName: string) => void;
+  /**
    * Sprint 272 — open the read-only Triggers sub-tab of `StructurePanel`
    * for the given table. Wired to the Table row's "View Triggers"
    * context-menu entry. Reuses `handleOpenStructure` semantics (opens a
@@ -372,10 +379,9 @@ export function renderItemRow(
             </ContextMenuItem>
             {/* Sprint 272 — Trigger affordances on the Table row. View
                 Triggers is enabled (opens Structure → Triggers sub-tab).
-                Create / Drop are disabled placeholders wired in Sprint
-                273 / 274; rendering them disabled (rather than hidden)
-                signals to TablePlus refugees that the surface is
-                landing in subsequent sprints. */}
+                Sprint 273 — Create Trigger is wired to the new
+                CreateTriggerDialog. Drop is still a disabled placeholder
+                (Sprint 274). */}
             <ContextMenuItem
               onClick={() =>
                 ctx.handleViewTableTriggers(item.name, row.schemaName)
@@ -385,9 +391,8 @@ export function renderItemRow(
               <Zap size={14} /> View Triggers
             </ContextMenuItem>
             <ContextMenuItem
-              disabled
-              aria-label="Create trigger"
-              title="Create Trigger is coming soon"
+              onClick={() => ctx.handleCreateTrigger(item.name, row.schemaName)}
+              aria-label={`Create trigger on ${item.name}`}
             >
               <Plus size={14} /> Create Trigger…
             </ContextMenuItem>
@@ -492,6 +497,23 @@ export function renderTriggerGroupRow(
             {row.triggerCount}
           </span>
         )}
+        {/* Sprint 273 — Plus affordance on the Triggers group header.
+            Mirrors the "+" pattern used by other category headers
+            (e.g. Tables group → Create Table). Opens the
+            CreateTriggerDialog pre-populated with this row's parent
+            table identity. */}
+        <button
+          type="button"
+          className="flex shrink-0 items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+          aria-label={`Create trigger on ${row.tableName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            ctx.handleCreateTrigger(row.tableName, row.schemaName);
+          }}
+          title="Create Trigger"
+        >
+          <Plus size={11} />
+        </button>
       </div>
     </div>
   );
@@ -614,9 +636,8 @@ export function renderTriggerItemRow(
           <Code2 size={14} /> View Source
         </ContextMenuItem>
         <ContextMenuItem
-          disabled
-          aria-label="Create trigger"
-          title="Create Trigger is coming soon"
+          onClick={() => ctx.handleCreateTrigger(row.tableName, row.schemaName)}
+          aria-label={`Create trigger on ${row.tableName}`}
         >
           <Plus size={14} /> Create Trigger…
         </ContextMenuItem>

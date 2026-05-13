@@ -158,6 +158,7 @@ pub fn run() {
         commands::rdb::ddl::drop_index,
         commands::rdb::ddl::add_constraint,
         commands::rdb::ddl::drop_constraint,
+        commands::rdb::ddl::create_trigger,
         commands::rdb::schema::list_views,
         commands::rdb::schema::list_functions,
         commands::rdb::schema::get_view_definition,

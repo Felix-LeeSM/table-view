@@ -11,8 +11,9 @@ use tracing::info;
 use crate::error::AppError;
 use crate::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ConstraintDefinition,
-    CreateIndexRequest, CreateTableRequest, DropColumnRequest, DropConstraintRequest,
-    DropIndexRequest, DropTableRequest, RenameTableRequest, SchemaChangeResult,
+    CreateIndexRequest, CreateTableRequest, CreateTriggerRequest, DropColumnRequest,
+    DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
+    SchemaChangeResult,
 };
 
 use super::PostgresAdapter;
@@ -71,6 +72,172 @@ pub(super) fn quote_identifier(name: &str) -> String {
 /// Build a qualified table reference: `"schema"."table"`.
 pub(super) fn qualified_table(schema: &str, table: &str) -> String {
     format!("{}.{}", quote_identifier(schema), quote_identifier(table))
+}
+
+/// Sprint 273 — PG canonical timing whitelist for `CREATE TRIGGER`.
+/// Case-sensitive uppercase; caller (frontend dialog) sends canonical
+/// strings — mismatches are rejected via `AppError::Validation`.
+const TRIGGER_TIMINGS: &[&str] = &["BEFORE", "AFTER", "INSTEAD OF"];
+
+/// Sprint 273 — PG canonical orientation whitelist.
+const TRIGGER_ORIENTATIONS: &[&str] = &["ROW", "STATEMENT"];
+
+/// Sprint 273 — canonical event order. The SQL emitter sorts the
+/// caller's `events` input against this order before joining with ` OR `
+/// so the emitted SQL is deterministic regardless of payload order.
+/// TRUNCATE is intentionally absent — master spec § 7 hides TRUNCATE
+/// from the CREATE dialog and rejects it as an invalid event here.
+const TRIGGER_EVENT_CANONICAL_ORDER: &[&str] = &["INSERT", "UPDATE", "DELETE"];
+
+/// Sprint 273 — `CREATE TRIGGER` SQL emitter (pure helper, no pool
+/// access so it is unit-testable from `#[cfg(test)]` fixtures without a
+/// running PG).
+///
+/// Emission shape:
+///
+///   `CREATE TRIGGER "<name>" {BEFORE|AFTER|INSTEAD OF} <events> ON
+///    "<schema>"."<table>" FOR EACH {ROW|STATEMENT} [WHEN (<expr>)]
+///    EXECUTE FUNCTION "<fn_schema>"."<fn_name>"(<args>)`
+///
+/// Validation order (each returns `AppError::Validation` on failure):
+///   1. `trigger_name`, `schema`, `table`, `function_schema`,
+///      `function_name` pass `validate_identifier`.
+///   2. `timing` ∈ `TRIGGER_TIMINGS`.
+///   3. `orientation` ∈ `TRIGGER_ORIENTATIONS`.
+///   4. `events` non-empty and every element ∈
+///      `TRIGGER_EVENT_CANONICAL_ORDER`.
+///   5. `INSTEAD OF + STATEMENT` rejected.
+///   6. `INSTEAD OF + multi-event` rejected (PG itself does not accept
+///      `INSTEAD OF INSERT OR UPDATE`, but we surface the error
+///      pre-dispatch so the dialog can render it inline).
+///
+/// `function_arguments`: every `'` in the free-text input is doubled
+/// (`'` → `''`) before being interpolated into `(args)`. Closes Sprint
+/// 272 findings § P3 — without this, an argument literal `O'Brien`
+/// would unbalance the quoting and either fail PG parse or, in the
+/// worst case, allow injection through trailing fragments. Identifier
+/// validation rejects embedded `"` / NUL / whitespace upstream, so
+/// `function_arguments` is the only free-text input we have to
+/// re-escape.
+///
+/// `when_expression`: parenthesised verbatim (`WHEN (<expr>)`); empty /
+/// whitespace-only string is treated as "no clause" and omitted. PG
+/// surfaces any verbatim parse error.
+fn build_create_trigger_sql(req: &CreateTriggerRequest) -> Result<String, AppError> {
+    validate_identifier(&req.trigger_name, "Trigger name")?;
+    validate_identifier(&req.schema, "Schema name")?;
+    validate_identifier(&req.table, "Table name")?;
+    validate_identifier(&req.function_schema, "Function schema")?;
+    validate_identifier(&req.function_name, "Function name")?;
+
+    if !TRIGGER_TIMINGS.contains(&req.timing.as_str()) {
+        return Err(AppError::Validation(format!(
+            "Invalid trigger timing: {} (expected one of BEFORE / AFTER / INSTEAD OF)",
+            req.timing
+        )));
+    }
+
+    if !TRIGGER_ORIENTATIONS.contains(&req.orientation.as_str()) {
+        return Err(AppError::Validation(format!(
+            "Invalid trigger orientation: {} (expected ROW or STATEMENT)",
+            req.orientation
+        )));
+    }
+
+    if req.events.is_empty() {
+        return Err(AppError::Validation(
+            "Trigger must declare at least one event (INSERT / UPDATE / DELETE)".into(),
+        ));
+    }
+
+    for event in &req.events {
+        if !TRIGGER_EVENT_CANONICAL_ORDER.contains(&event.as_str()) {
+            return Err(AppError::Validation(format!(
+                "Invalid trigger event: {} (expected INSERT / UPDATE / DELETE)",
+                event
+            )));
+        }
+    }
+
+    // INSTEAD OF cannot combine with STATEMENT — PG itself rejects
+    // `INSTEAD OF ... FOR EACH STATEMENT` because INSTEAD OF triggers
+    // fire per-row on a view. Reject pre-dispatch so the dialog can
+    // render the failure inline (the modal's STATEMENT radio is also
+    // disabled when timing == INSTEAD OF as a defense-in-depth UX
+    // hint).
+    if req.timing == "INSTEAD OF" && req.orientation == "STATEMENT" {
+        return Err(AppError::Validation(
+            "INSTEAD OF triggers must use FOR EACH ROW (PG does not accept STATEMENT here)".into(),
+        ));
+    }
+
+    // INSTEAD OF cannot combine with multi-event — PG rejects
+    // `INSTEAD OF INSERT OR UPDATE` because INSTEAD OF fires per-row
+    // against a specific operation. Reject pre-dispatch for the same
+    // dialog inline-feedback reason.
+    if req.timing == "INSTEAD OF" && req.events.len() > 1 {
+        return Err(AppError::Validation(
+            "INSTEAD OF triggers must declare exactly one event (not multi-event)".into(),
+        ));
+    }
+
+    // Canonical event order: walk the canonical list in order and
+    // append any event the caller declared. Set-style dedupe is implicit
+    // — duplicates in the input are emitted at most once. Output order
+    // is byte-stable regardless of payload order (fixture iv in the
+    // contract Test Requirements).
+    let mut ordered_events: Vec<&str> = Vec::with_capacity(req.events.len());
+    for canonical in TRIGGER_EVENT_CANONICAL_ORDER {
+        if req.events.iter().any(|e| e == canonical) {
+            ordered_events.push(canonical);
+        }
+    }
+    let events_clause = ordered_events.join(" OR ");
+
+    // Sprint 272 findings § P3 — single-quote re-escape on
+    // `function_arguments`. Identifier validation already rejected
+    // embedded `"` / NUL for the schema/name pair, so the only free-text
+    // tail that could unbalance the quoting is the argument list.
+    let args_clause = match req.function_arguments.as_deref() {
+        None => String::new(),
+        Some(s) => s.replace('\'', "''"),
+    };
+
+    let when_clause = match req.when_expression.as_deref() {
+        None => String::new(),
+        Some(expr) => {
+            let trimmed = expr.trim();
+            if trimmed.is_empty() {
+                String::new()
+            } else {
+                // Free-text passthrough — PG surfaces parse errors
+                // verbatim. Parenthesised so the WHEN clause is a
+                // well-formed boolean sub-expression regardless of the
+                // caller's wrapping.
+                format!(" WHEN ({})", trimmed)
+            }
+        }
+    };
+
+    let qualified_target = qualified_table(&req.schema, &req.table);
+    let qualified_function = format!(
+        "{}.{}",
+        quote_identifier(&req.function_schema),
+        quote_identifier(&req.function_name)
+    );
+
+    let sql = format!(
+        "CREATE TRIGGER {} {} {} ON {} FOR EACH {}{} EXECUTE FUNCTION {}({})",
+        quote_identifier(&req.trigger_name),
+        req.timing,
+        events_clause,
+        qualified_target,
+        req.orientation,
+        when_clause,
+        qualified_function,
+        args_clause,
+    );
+    Ok(sql)
 }
 
 /// Sprint 229 — closed whitelist of PG canonical referential actions
@@ -906,6 +1073,51 @@ impl PostgresAdapter {
         );
         Ok(SchemaChangeResult { sql })
     }
+
+    /// Sprint 273 — `CREATE TRIGGER` SQL emitter + execute.
+    ///
+    /// Builds the canonical SQL via `build_create_trigger_sql` (identifier
+    /// validation, whitelist, canonical event ordering, single-quote
+    /// re-escape on `function_arguments`, INSTEAD OF rejection paths).
+    /// `req.preview_only=true` returns the built SQL without touching the
+    /// database. `req.preview_only=false` wraps the single statement in
+    /// `BEGIN; <sql>; COMMIT;` for parity with the rest of the Phase 24-26
+    /// DDL family — a failure rolls back rather than leaving a half-created
+    /// trigger.
+    pub async fn create_trigger(
+        &self,
+        req: &CreateTriggerRequest,
+    ) -> Result<SchemaChangeResult, AppError> {
+        let sql = build_create_trigger_sql(req)?;
+
+        if req.preview_only {
+            return Ok(SchemaChangeResult { sql });
+        }
+
+        let pool = self.active_pool().await?;
+
+        let mut tx = pool
+            .begin()
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        if let Err(e) = sqlx::query(&sql).execute(&mut *tx).await {
+            // Best-effort rollback — see `drop_table` for the rationale
+            // (the original DB error is the user-facing failure).
+            let _ = tx.rollback().await;
+            return Err(AppError::Database(e.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| AppError::Database(format!("commit failed: {}", e)))?;
+
+        info!(
+            "Created trigger {} on {}.{}",
+            req.trigger_name, req.schema, req.table
+        );
+        Ok(SchemaChangeResult { sql })
+    }
 }
 
 #[cfg(test)]
@@ -914,8 +1126,9 @@ mod tests {
     use crate::db::postgres::PostgresAdapter;
     use crate::models::{
         AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-        ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DropColumnRequest,
-        DropConstraintRequest, DropIndexRequest, DropTableRequest, RenameTableRequest,
+        ConstraintDefinition, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest,
+        DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+        RenameTableRequest,
     };
 
     // ── drop_table / rename_table — Sprint 235 fixtures ──────────────
@@ -3110,5 +3323,425 @@ mod tests {
             result.sql,
             r#"ALTER TABLE "public"."events" ADD COLUMN "id" bigint GENERATED BY DEFAULT AS IDENTITY NOT NULL"#
         );
+    }
+
+    // ── create_trigger — Sprint 273 fixtures ─────────────────────────
+    //
+    // Locks `build_create_trigger_sql` emission shape against the master
+    // spec § 6 SQL form. Validation order (identifier → timing →
+    // orientation → events non-empty → events whitelist → INSTEAD OF
+    // exclusions) is exercised by the rejection group below; happy-path
+    // emission is exercised by the SQL-emission group. `preview_only` is
+    // implicitly true for every fixture because `build_create_trigger_sql`
+    // is the pure helper — the execute branch is covered by the
+    // `commands/rdb/ddl.rs` mismatch / wiring tests where the StubAdapter
+    // sees the request object.
+
+    // The trigger request carries 10 fields; the builder mirrors them
+    // 1:1 so the test fixtures stay readable.
+    #[allow(clippy::too_many_arguments)]
+    fn create_trigger_req(
+        trigger_name: &str,
+        schema: &str,
+        table: &str,
+        timing: &str,
+        events: Vec<&str>,
+        orientation: &str,
+        when_expression: Option<&str>,
+        function_schema: &str,
+        function_name: &str,
+        function_arguments: Option<&str>,
+    ) -> CreateTriggerRequest {
+        CreateTriggerRequest {
+            connection_id: "conn1".to_string(),
+            schema: schema.to_string(),
+            table: table.to_string(),
+            trigger_name: trigger_name.to_string(),
+            timing: timing.to_string(),
+            events: events.into_iter().map(str::to_string).collect(),
+            orientation: orientation.to_string(),
+            when_expression: when_expression.map(str::to_string),
+            function_schema: function_schema.to_string(),
+            function_name: function_name.to_string(),
+            function_arguments: function_arguments.map(str::to_string),
+            preview_only: true,
+            expected_database: None,
+        }
+    }
+
+    #[test]
+    fn create_trigger_before_insert_row_no_when_no_args() {
+        // Master spec § 6 fixture (i) — minimal happy path. No WHEN,
+        // empty arguments list, single event. Locks the canonical
+        // `EXECUTE FUNCTION "schema"."name"()` tail with empty parens.
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let sql = build_create_trigger_sql(&req).expect("emit OK");
+        assert_eq!(
+            sql,
+            r#"CREATE TRIGGER "tg_audit" BEFORE INSERT ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "audit"."log"()"#
+        );
+    }
+
+    #[test]
+    fn create_trigger_after_insert_update_delete_statement() {
+        // Master spec § 6 fixture (ii) — multi-event + STATEMENT
+        // orientation. Locks `INSERT OR UPDATE OR DELETE` join + `FOR
+        // EACH STATEMENT`.
+        let req = create_trigger_req(
+            "tg_changes",
+            "public",
+            "orders",
+            "AFTER",
+            vec!["INSERT", "UPDATE", "DELETE"],
+            "STATEMENT",
+            None,
+            "audit",
+            "log_changes",
+            None,
+        );
+        let sql = build_create_trigger_sql(&req).expect("emit OK");
+        assert_eq!(
+            sql,
+            r#"CREATE TRIGGER "tg_changes" AFTER INSERT OR UPDATE OR DELETE ON "public"."orders" FOR EACH STATEMENT EXECUTE FUNCTION "audit"."log_changes"()"#
+        );
+    }
+
+    #[test]
+    fn create_trigger_instead_of_insert_row_when_with_quoted_args() {
+        // Master spec § 6 fixture (iii) — INSTEAD OF + WHEN + arguments
+        // containing a single quote (`O'Brien`). The emitter must double
+        // every `'` in `function_arguments` per Sprint 272 findings § P3
+        // — without this the generated SQL would either be a PG parse
+        // error or, worse, allow trailing-quote injection through the
+        // argument list.
+        let req = create_trigger_req(
+            "tg_view_redirect",
+            "public",
+            "user_view",
+            "INSTEAD OF",
+            vec!["INSERT"],
+            "ROW",
+            Some("(NEW.x IS NOT NULL)"),
+            "audit",
+            "redirect",
+            Some("'O'Brien', audit_users"),
+        );
+        let sql = build_create_trigger_sql(&req).expect("emit OK");
+        // `'O'Brien'` → `''O''Brien''` after `'` → `''` doubling.
+        assert_eq!(
+            sql,
+            r#"CREATE TRIGGER "tg_view_redirect" INSTEAD OF INSERT ON "public"."user_view" FOR EACH ROW WHEN ((NEW.x IS NOT NULL)) EXECUTE FUNCTION "audit"."redirect"(''O''Brien'', audit_users)"#
+        );
+    }
+
+    #[test]
+    fn create_trigger_canonical_event_ordering_independent_of_input_order() {
+        // Master spec § 6 fixture (iv) — caller submits events in
+        // `[DELETE, UPDATE, INSERT]` order; emitted SQL must contain
+        // canonical `INSERT OR UPDATE OR DELETE`. Locks the
+        // canonical-walk approach in `build_create_trigger_sql` so the
+        // SQL is byte-stable across UI checkbox iteration order.
+        let req = create_trigger_req(
+            "tg_changes",
+            "public",
+            "orders",
+            "AFTER",
+            vec!["DELETE", "UPDATE", "INSERT"],
+            "STATEMENT",
+            None,
+            "audit",
+            "log_changes",
+            None,
+        );
+        let sql = build_create_trigger_sql(&req).expect("emit OK");
+        assert!(
+            sql.contains("AFTER INSERT OR UPDATE OR DELETE ON"),
+            "Expected canonical event order in SQL, got: {sql}"
+        );
+    }
+
+    #[test]
+    fn create_trigger_emits_when_clause_with_outer_parens() {
+        // Locks the `WHEN (<expr>)` wrapping — the emitter parenthesises
+        // the caller's verbatim expression. With caller input `NEW.x > 0`
+        // (no caller parens) we expect `WHEN (NEW.x > 0)`.
+        let req = create_trigger_req(
+            "tg_guard",
+            "public",
+            "events",
+            "BEFORE",
+            vec!["UPDATE"],
+            "ROW",
+            Some("NEW.x > 0"),
+            "public",
+            "noop",
+            None,
+        );
+        let sql = build_create_trigger_sql(&req).expect("emit OK");
+        assert_eq!(
+            sql,
+            r#"CREATE TRIGGER "tg_guard" BEFORE UPDATE ON "public"."events" FOR EACH ROW WHEN (NEW.x > 0) EXECUTE FUNCTION "public"."noop"()"#
+        );
+    }
+
+    #[test]
+    fn create_trigger_omits_when_clause_for_whitespace_expression() {
+        // `when_expression == Some("   ")` is treated as "no clause" —
+        // the dialog can submit the field unconditionally and the
+        // emitter still produces a well-formed statement.
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            Some("   "),
+            "audit",
+            "log",
+            None,
+        );
+        let sql = build_create_trigger_sql(&req).expect("emit OK");
+        assert_eq!(
+            sql,
+            r#"CREATE TRIGGER "tg_audit" BEFORE INSERT ON "public"."users" FOR EACH ROW EXECUTE FUNCTION "audit"."log"()"#
+        );
+    }
+
+    // ── Rejection paths — each returns `AppError::Validation` ────────
+
+    #[test]
+    fn create_trigger_rejects_empty_events() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec![],
+            "ROW",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(
+            matches!(err, AppError::Validation(_)),
+            "Expected Validation error, got: {err:?}"
+        );
+        assert!(err.to_string().contains("at least one event"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_timing() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "DURING",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Invalid trigger timing"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_orientation() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "BATCH",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Invalid trigger orientation"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_event() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["TRUNCATE"],
+            "STATEMENT",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Invalid trigger event"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_trigger_name() {
+        // Identifier validation rejects digit-start names.
+        let req = create_trigger_req(
+            "9bad",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Trigger name"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_schema() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "bad schema",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Schema name"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_table() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "user\"s",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "audit",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Table name"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_function_schema() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "bad schema",
+            "log",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Function schema"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_invalid_function_name() {
+        let req = create_trigger_req(
+            "tg_audit",
+            "public",
+            "users",
+            "BEFORE",
+            vec!["INSERT"],
+            "ROW",
+            None,
+            "audit",
+            "9bad",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err.to_string().contains("Function name"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_instead_of_with_statement_orientation() {
+        // INSTEAD OF triggers must use FOR EACH ROW — PG itself rejects
+        // INSTEAD OF + STATEMENT because INSTEAD OF fires per-row on a
+        // view. Pre-dispatch rejection lets the dialog surface the error
+        // inline.
+        let req = create_trigger_req(
+            "tg_view_redirect",
+            "public",
+            "user_view",
+            "INSTEAD OF",
+            vec!["INSERT"],
+            "STATEMENT",
+            None,
+            "audit",
+            "redirect",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err
+            .to_string()
+            .contains("INSTEAD OF triggers must use FOR EACH ROW"));
+    }
+
+    #[test]
+    fn create_trigger_rejects_instead_of_with_multi_event() {
+        // INSTEAD OF cannot combine with multi-event — PG rejects
+        // `INSTEAD OF INSERT OR UPDATE` because INSTEAD OF fires per-row
+        // against a specific operation.
+        let req = create_trigger_req(
+            "tg_view_redirect",
+            "public",
+            "user_view",
+            "INSTEAD OF",
+            vec!["INSERT", "UPDATE"],
+            "ROW",
+            None,
+            "audit",
+            "redirect",
+            None,
+        );
+        let err = build_create_trigger_sql(&req).unwrap_err();
+        assert!(matches!(err, AppError::Validation(_)));
+        assert!(err
+            .to_string()
+            .contains("INSTEAD OF triggers must declare exactly one event"));
     }
 }

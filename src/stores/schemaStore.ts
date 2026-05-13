@@ -99,6 +99,20 @@ interface SchemaState {
     table: string,
     schema: string,
   ) => Promise<TriggerInfo[]>;
+  /**
+   * Sprint 273 — invalidate the cached entry for `(connId, db, schema,
+   * table)` and re-fetch via `listTriggers`. Used by
+   * `CreateTriggerDialog` after a successful commit so the new trigger
+   * appears under the Triggers child group without a tree-wide reload.
+   * Throws on IPC error; the dialog's `useDdlPreviewExecution.runCommit`
+   * catch wraps it.
+   */
+  refreshTableTriggers: (
+    connId: string,
+    db: string,
+    table: string,
+    schema: string,
+  ) => Promise<TriggerInfo[]>;
   getViewColumns: (
     connId: string,
     db: string,
@@ -405,6 +419,30 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
   getTableTriggers: async (connId, db, table, schema) => {
     const cached = get().triggers[connId]?.[db]?.[schema]?.[table];
     if (cached) return cached;
+    try {
+      const triggers = await tauri.listTriggers(connId, schema, table, db);
+      set((state) => ({
+        triggers: setConnDbSchemaTable(
+          state.triggers,
+          connId,
+          db,
+          schema,
+          table,
+          triggers,
+        ),
+      }));
+      return triggers;
+    } catch (e) {
+      handleDbMismatch(connId, e);
+      throw e;
+    }
+  },
+
+  // Sprint 273 — bypass-cache refresh used post-CREATE TRIGGER. Same
+  // `setConnDbSchemaTable` write as `getTableTriggers` but skips the
+  // cache short-circuit so the dialog's commit-success path sees the
+  // new trigger. Throws on IPC error.
+  refreshTableTriggers: async (connId, db, table, schema) => {
     try {
       const triggers = await tauri.listTriggers(connId, schema, table, db);
       set((state) => ({

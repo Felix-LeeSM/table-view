@@ -168,7 +168,10 @@ describe("SchemaTree — Triggers child row (Sprint 272 attempt 2)", () => {
     ).toBeInTheDocument();
   });
 
-  it("per-trigger row exposes a context menu with View Source enabled + Create/Drop disabled", async () => {
+  it("per-trigger row exposes a context menu with View Source + Create enabled, Drop disabled", async () => {
+    // Sprint 273 (2026-05-13) — Create Trigger… 메뉴 항목은 disabled
+    // placeholder 에서 enabled 로 전환됐다 (CreateTriggerDialog 가
+    // 추가됨). Drop Trigger… 은 여전히 Sprint 274 placeholder.
     seedSchemaWithTable();
 
     await act(async () => {
@@ -196,11 +199,11 @@ describe("SchemaTree — Triggers child row (Sprint 272 attempt 2)", () => {
     expect(viewSource).toBeInTheDocument();
     expect(viewSource).not.toHaveAttribute("data-disabled", "true");
 
-    // Create Trigger… disabled placeholder (Sprint 273).
+    // Sprint 273 — Create Trigger… is now enabled (opens dialog).
     const createItem = screen.getByRole("menuitem", {
-      name: /create trigger/i,
+      name: /create trigger on users/i,
     });
-    expect(createItem).toHaveAttribute("data-disabled");
+    expect(createItem).not.toHaveAttribute("data-disabled");
 
     // Drop Trigger… disabled placeholder (Sprint 274).
     const dropItem = screen.getByRole("menuitem", { name: /drop trigger/i });

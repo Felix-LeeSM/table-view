@@ -470,6 +470,45 @@ export interface TriggerInfo {
 }
 
 /**
+ * Sprint 273 — `CREATE TRIGGER` request. Mirrors the Rust
+ * `CreateTriggerRequest` struct with `#[serde(rename_all = "camelCase")]`.
+ *
+ * Whitelists (server-side validation re-checks; UI restricts the
+ * inputs):
+ *   - `timing`: `"BEFORE" | "AFTER" | "INSTEAD OF"`. `INSTEAD OF`
+ *     requires `orientation === "ROW"` and `events.length === 1`.
+ *   - `events`: non-empty subset of `["INSERT", "UPDATE", "DELETE"]`.
+ *     Server emits in canonical order regardless of input order.
+ *   - `orientation`: `"ROW" | "STATEMENT"`.
+ *
+ * Free-text fields:
+ *   - `whenExpression`: optional. Wrapped in `WHEN (<expr>)` verbatim;
+ *     PG surfaces any parse error. Empty / whitespace-only string is
+ *     treated as "no clause".
+ *   - `functionArguments`: optional comma-separated argument list. The
+ *     server doubles every `'` (Sprint 272 findings § P3 fix) before
+ *     interpolating into the `(args)` clause.
+ */
+export interface CreateTriggerRequest {
+  connectionId: string;
+  schema: string;
+  table: string;
+  triggerName: string;
+  timing: string;
+  events: string[];
+  orientation: string;
+  whenExpression?: string;
+  functionSchema: string;
+  functionName: string;
+  functionArguments?: string;
+  previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
+}
+
+/**
  * Sprint 230 — single Postgres type entry returned by
  * `tauri.listPostgresTypes(connectionId)`. The wire shape matches the
  * Rust `PostgresTypeInfo` struct (snake_case `type_kind` mirrors serde
