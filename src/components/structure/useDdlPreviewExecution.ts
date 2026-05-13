@@ -2,6 +2,9 @@ import { useCallback, useRef, useState } from "react";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { parseDbMismatch } from "@lib/api/dbMismatch";
+import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
+import { toast } from "@lib/toast";
 
 /**
  * Shared DDL preview/execute lifecycle for the Structure-surface editors
@@ -113,6 +116,28 @@ export function useDdlPreviewExecution({
   const safeModeGate = useSafeModeGate(connectionId);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
 
+  // Sprint 271c (2026-05-13) — DbMismatch recovery. DDL dispatches are
+  // user-initiated (dialog Apply / editor Execute), so on a mismatch the
+  // backend's Sprint 266 wire format reaches this catch path. Route
+  // through Sprint 267's `syncMismatchedActiveDb` to align the
+  // frontend's `activeDb` with the backend pool, and raise the Sprint
+  // 269 passive Retry toast so the user re-issues the action against
+  // the synced db (DDL Apply has no auto-retry — re-clicking the dialog
+  // button is the natural retry surface).
+  const surfaceDbMismatchIfMatched = useCallback(
+    (message: string): boolean => {
+      const info = parseDbMismatch(message);
+      if (!info) return false;
+      void syncMismatchedActiveDb(connectionId, (actual) => {
+        toast.warning(
+          `Active database synced to '${actual}'. Re-apply if needed.`,
+        );
+      });
+      return true;
+    },
+    [connectionId],
+  );
+
   const runCommit = useCallback(async () => {
     const commit = pendingExecuteRef.current;
     if (!commit) return;
@@ -138,7 +163,12 @@ export function useDdlPreviewExecution({
         source: "ddl-structure",
       });
     } catch (e) {
-      setPreviewError(String(e));
+      // Use `err.message` (not `String(e)`) so the Sprint 266 wire
+      // format ("Database mismatch: …") sits at column 0 of the
+      // matched string — `parseDbMismatch` anchors with `^…$`.
+      const message = e instanceof Error ? e.message : String(e);
+      setPreviewError(message);
+      surfaceDbMismatchIfMatched(message);
       addHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
@@ -151,7 +181,13 @@ export function useDdlPreviewExecution({
       });
     }
     setPreviewLoading(false);
-  }, [addHistoryEntry, connectionId, onRefresh, previewSql]);
+  }, [
+    addHistoryEntry,
+    connectionId,
+    onRefresh,
+    previewSql,
+    surfaceDbMismatchIfMatched,
+  ]);
 
   const loadPreview = useCallback(
     async (
@@ -166,13 +202,16 @@ export function useDdlPreviewExecution({
         setPreviewSql(result.sql);
         pendingExecuteRef.current = prepareCommit();
       } catch (e) {
-        setPreviewError(String(e));
+        // Use `err.message` (not `String(e)`) — see `runCommit` catch.
+        const message = e instanceof Error ? e.message : String(e);
+        setPreviewError(message);
         setPreviewSql("");
         pendingExecuteRef.current = null;
+        surfaceDbMismatchIfMatched(message);
       }
       setPreviewLoading(false);
     },
-    [],
+    [surfaceDbMismatchIfMatched],
   );
 
   const attemptExecute = useCallback(async () => {

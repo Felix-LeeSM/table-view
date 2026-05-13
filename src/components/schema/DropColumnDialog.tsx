@@ -47,6 +47,12 @@ import { useConnectionStore } from "@stores/connectionStore";
 export interface DropColumnDialogProps {
   /** Connection id used by the Safe Mode gate + history record. */
   connectionId: string;
+  /**
+   * Sprint 271c — workspace active database. Forwarded as
+   * `expectedDatabase` on the DROP COLUMN request. Optional for
+   * back-compat; new callers pass the workspace db.
+   */
+  database?: string;
   /** Schema name (display + payload). */
   schemaName: string;
   /** Target table name (display + payload). */
@@ -67,6 +73,7 @@ export interface DropColumnDialogProps {
 
 export default function DropColumnDialog({
   connectionId,
+  database,
   schemaName,
   tableName,
   columnName,
@@ -128,6 +135,8 @@ export default function DropColumnDialog({
             columnName,
             cascade,
             previewOnly: true,
+            // Sprint 271c — opt-in DbMismatch guard.
+            expectedDatabase: database,
           });
           return { sql: result.sql };
         },
@@ -139,6 +148,8 @@ export default function DropColumnDialog({
             columnName,
             cascade,
             previewOnly: false,
+            // Sprint 271c — opt-in DbMismatch guard.
+            expectedDatabase: database,
           });
         },
       );

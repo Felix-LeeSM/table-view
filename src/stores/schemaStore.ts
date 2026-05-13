@@ -424,7 +424,11 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   },
 
   // Sprint 223 — reload+fallback moved to `useSchemaTableMutations`.
-  dropTable: (cid, _db, table, schema) => tauri.dropTable(cid, table, schema),
+  // Sprint 271c — forward `db` as `expectedDatabase` so the backend
+  // rejects with `AppError::DbMismatch` if the connection pool's active
+  // db has diverged from the workspace.
+  dropTable: (cid, db, table, schema) =>
+    tauri.dropTable(cid, table, schema, db),
 
   executeQuery: async (connId, sql, queryId) => {
     return tauri.executeQuery(connId, sql, queryId);
@@ -435,7 +439,8 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   },
 
   // Sprint 223 — see `dropTable` comment.
-  renameTable: (cid, _db, t, s, n) => tauri.renameTable(cid, t, s, n),
+  // Sprint 271c — forward `db` as `expectedDatabase`.
+  renameTable: (cid, db, t, s, n) => tauri.renameTable(cid, t, s, n, db),
 
   clearSchema: (connId) => {
     set((state) => ({

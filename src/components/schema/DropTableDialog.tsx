@@ -123,6 +123,11 @@ export default function DropTableDialog({
             table: tableName,
             cascade,
             previewOnly: true,
+            // Sprint 271c — opt-in DbMismatch guard. Forward the
+            // workspace `(connId, db)` coordinate so a swapped pool
+            // rejects with `AppError::DbMismatch` before the table is
+            // dropped against the wrong database.
+            expectedDatabase: database,
           });
           return { sql: result.sql };
         },

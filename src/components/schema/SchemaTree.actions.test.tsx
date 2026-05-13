@@ -383,7 +383,13 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
     await waitFor(() => {
-      expect(mockDropTable).toHaveBeenCalledWith("conn1", "users", "public");
+      // Sprint 271c — `expectedDatabase` last-positional propagated.
+      expect(mockDropTable).toHaveBeenCalledWith(
+        "conn1",
+        "users",
+        "public",
+        "db1",
+      );
     });
     await waitFor(() => {
       expect(screen.queryByText("Drop Table")).not.toBeInTheDocument();
@@ -477,11 +483,13 @@ describe("SchemaTree — actions", () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     });
     await waitFor(() => {
+      // Sprint 271c — `expectedDatabase` last-positional propagated.
       expect(mockRenameTable).toHaveBeenCalledWith(
         "conn1",
         "users",
         "public",
         "people",
+        "db1",
       );
     });
     await waitFor(() => {

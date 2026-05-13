@@ -237,6 +237,15 @@ function EditableColumnRow({
 
 interface ColumnsEditorProps {
   connectionId: string;
+  /**
+   * Sprint 271c — active database (workspace `(connId, db)` coordinate).
+   * Forwarded to `tauri.alterTable` / `addColumnRequest` /
+   * `dropColumnRequest` as `expectedDatabase` so a swapped backend pool
+   * rejects with `AppError::DbMismatch` before any column mutation
+   * lands. Optional only so legacy callers compile unchanged; new
+   * callers should pass the workspace db.
+   */
+  database?: string;
   table: string;
   schema: string;
   columns: ColumnInfo[];
@@ -253,6 +262,7 @@ interface ColumnsEditorProps {
 
 export default function ColumnsEditor({
   connectionId,
+  database,
   table,
   schema,
   columns,
@@ -349,6 +359,9 @@ export default function ColumnsEditor({
     table,
     changes: pendingChanges.map((p) => p.change),
     preview_only: previewOnly,
+    // Sprint 271c — opt-in DbMismatch guard. Wire format is snake_case
+    // (matches Rust struct field name).
+    expected_database: database,
   });
 
   const handleReviewSql = async () => {
@@ -518,6 +531,7 @@ export default function ColumnsEditor({
       {/* Sprint 236 — AddColumnDialog (replaces inline NewColumnDraft). */}
       <AddColumnDialog
         connectionId={connectionId}
+        database={database}
         schemaName={schema}
         tableName={table}
         columns={columns}
@@ -530,6 +544,7 @@ export default function ColumnsEditor({
       {dropColumnTarget !== null && (
         <DropColumnDialog
           connectionId={connectionId}
+          database={database}
           schemaName={schema}
           tableName={table}
           columnName={dropColumnTarget}

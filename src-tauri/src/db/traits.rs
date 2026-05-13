@@ -264,6 +264,10 @@ pub trait RdbAdapter: DbAdapter {
                 primary_key: req.primary_key.clone(),
                 preview_only: req.preview_only,
                 table_comment: req.table_comment.clone(),
+                // Sprint 271c — parent handler already probed `expected_database`
+                // under the `active_connections` lock; child trait calls run
+                // inside the same dispatch and do not re-probe.
+                expected_database: None,
             };
             let parent_result = self.create_table(&parent_req).await?;
             let mut sql_parts: Vec<String> = vec![parent_result.sql];
@@ -278,6 +282,8 @@ pub trait RdbAdapter: DbAdapter {
                     index_type: idx.index_type.clone(),
                     is_unique: idx.is_unique,
                     preview_only: req.preview_only,
+                    // Sprint 271c — see parent_req comment.
+                    expected_database: None,
                 };
                 // Sprint 240 — surface the failing index name so the
                 // dialog's preview pane shows which row blocked the
@@ -297,6 +303,8 @@ pub trait RdbAdapter: DbAdapter {
                     constraint_name: c.constraint_name.clone(),
                     definition: c.definition.clone(),
                     preview_only: req.preview_only,
+                    // Sprint 271c — see parent_req comment.
+                    expected_database: None,
                 };
                 // Sprint 240 — same per-row name surface as indexes.
                 let r = self.add_constraint(&creq).await.map_err(|e| {

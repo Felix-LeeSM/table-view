@@ -17,34 +17,17 @@
 //! returns `AppError::DbMismatch` BEFORE invoking the trait method. The
 //! `None` path is byte-equivalent to pre-Sprint-271. Mirrors the Sprint 266
 //! reference probe at `src-tauri/src/commands/rdb/query.rs:83–92`.
+//!
+//! Sprint 271c (2026-05-13) — `ensure_expected_db` helper hoisted to
+//! `super` (`commands/rdb/mod.rs`) so DDL handlers can share the same
+//! probe body. The 12 schema introspection call sites stay byte-
+//! equivalent in behaviour; only the import path changed.
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, FunctionInfo, PostgresTypeInfo, SchemaInfo, TableInfo, ViewInfo};
 
-use super::{not_connected, register_cancel_token, release_cancel_token};
-
-/// Sprint 271a — shared mismatch probe. Caller must hold the
-/// `active_connections` lock already (so the sample and the eventual trait
-/// invocation see the same backend pool). Returns `Ok(())` when the guard
-/// is satisfied (or opted out via `None`), otherwise
-/// `AppError::DbMismatch { expected, actual }` — same shape as Sprint 266
-/// `execute_query_inner`.
-async fn ensure_expected_db(
-    adapter: &dyn crate::db::RdbAdapter,
-    expected_database: Option<&str>,
-) -> Result<(), AppError> {
-    if let Some(expected) = expected_database {
-        let actual = adapter.current_database().await?.unwrap_or_default();
-        if actual != expected {
-            return Err(AppError::DbMismatch {
-                expected: expected.to_string(),
-                actual,
-            });
-        }
-    }
-    Ok(())
-}
+use super::{ensure_expected_db, not_connected, register_cancel_token, release_cancel_token};
 
 async fn list_schemas_inner(
     state: &AppState,

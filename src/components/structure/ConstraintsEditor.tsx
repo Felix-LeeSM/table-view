@@ -373,6 +373,8 @@ export default function ConstraintsEditor({
           constraint_name: params.constraintName,
           definition: params.definition,
           preview_only: true,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         }),
       () => async () => {
         await tauri.addConstraint({
@@ -382,6 +384,8 @@ export default function ConstraintsEditor({
           constraint_name: params.constraintName,
           definition: params.definition,
           preview_only: false,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         });
         setShowPreviewModal(false);
       },
@@ -402,6 +406,8 @@ export default function ConstraintsEditor({
           table,
           constraint_name: constraintName,
           preview_only: true,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         }),
       () => async () => {
         await tauri.dropConstraint({
@@ -410,6 +416,8 @@ export default function ConstraintsEditor({
           table,
           constraint_name: constraintName,
           preview_only: false,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         });
         setShowPreviewModal(false);
       },

@@ -120,6 +120,13 @@ pub struct AlterTableRequest {
     pub changes: Vec<ColumnChange>,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c (2026-05-13) — opt-in DbMismatch guard. When set, the
+    /// DDL handler probes `adapter.current_database()` under the
+    /// `active_connections` lock and rejects with `AppError::DbMismatch`
+    /// before invoking the trait method. Omitting the field
+    /// (`#[serde(default)]` → `None`) is byte-equivalent to pre-Sprint-271.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for creating an index.
@@ -135,6 +142,9 @@ pub struct CreateIndexRequest {
     pub is_unique: bool,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for dropping an index.
@@ -147,6 +157,9 @@ pub struct DropIndexRequest {
     pub if_exists: bool,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Types of constraints supported by ADD CONSTRAINT.
@@ -192,6 +205,9 @@ pub struct AddConstraintRequest {
     pub definition: ConstraintDefinition,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for dropping a constraint.
@@ -203,6 +219,9 @@ pub struct DropConstraintRequest {
     pub constraint_name: String,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Single column definition for `CREATE TABLE` (Sprint 226).
@@ -264,6 +283,9 @@ pub struct RenameTableRequest {
     pub new_name: String,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for `DROP TABLE` (Sprint 235).
@@ -282,6 +304,9 @@ pub struct DropTableRequest {
     pub cascade: bool,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for `ADD COLUMN` (Sprint 236).
@@ -314,6 +339,9 @@ pub struct AddColumnRequest {
     pub check_expression: Option<String>,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for `DROP COLUMN` (Sprint 236).
@@ -333,6 +361,9 @@ pub struct DropColumnRequest {
     pub cascade: bool,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Request payload for `CREATE TABLE` (Sprint 226).
@@ -353,6 +384,9 @@ pub struct CreateTableRequest {
     /// 226-233 callers stay byte-equivalent).
     #[serde(default)]
     pub table_comment: Option<String>,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 /// Result returned by schema change operations.
@@ -427,6 +461,9 @@ pub struct CreateTablePlanRequest {
     pub constraints: Vec<CreateTablePlanConstraint>,
     #[serde(default)]
     pub preview_only: bool,
+    /// Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+    #[serde(default)]
+    pub expected_database: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -723,6 +760,7 @@ mod tests {
                 },
             ],
             preview_only: true,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: AlterTableRequest = serde_json::from_str(&json).unwrap();
@@ -742,6 +780,7 @@ mod tests {
             index_type: "btree".to_string(),
             is_unique: true,
             preview_only: false,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: CreateIndexRequest = serde_json::from_str(&json).unwrap();
@@ -758,6 +797,7 @@ mod tests {
             index_name: "idx_users_email".to_string(),
             if_exists: true,
             preview_only: false,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: DropIndexRequest = serde_json::from_str(&json).unwrap();
@@ -858,6 +898,7 @@ mod tests {
                 on_update: None,
             },
             preview_only: true,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: AddConstraintRequest = serde_json::from_str(&json).unwrap();
@@ -873,6 +914,7 @@ mod tests {
             table: "orders".to_string(),
             constraint_name: "fk_user".to_string(),
             preview_only: false,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: DropConstraintRequest = serde_json::from_str(&json).unwrap();
@@ -941,6 +983,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: Some("user accounts".to_string()),
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         let deserialized: CreateTableRequest = serde_json::from_str(&json).unwrap();
@@ -976,6 +1019,7 @@ mod tests {
             table: "users".to_string(),
             new_name: "people".to_string(),
             preview_only: true,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         // camelCase wire form check.
@@ -1012,6 +1056,7 @@ mod tests {
             table: "users".to_string(),
             cascade: true,
             preview_only: false,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"connectionId\":\"conn1\""));
@@ -1056,6 +1101,7 @@ mod tests {
             },
             check_expression: Some("email LIKE '%@%'".to_string()),
             preview_only: true,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(
@@ -1111,6 +1157,7 @@ mod tests {
             column_name: "email".to_string(),
             cascade: true,
             preview_only: false,
+            expected_database: None,
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"connectionId\":\"conn1\""));

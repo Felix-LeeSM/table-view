@@ -424,8 +424,10 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Review SQL (1)" }));
     });
 
-    // Error should appear — String(new Error(...)) includes "Error: "
-    expect(screen.getByText("Error: Preview failed")).toBeInTheDocument();
+    // Error should appear — Sprint 271c switched useDdlPreviewExecution to
+    // surface `err.message` (so parseDbMismatch's `^Database mismatch:` anchor
+    // can match), dropping the legacy `"Error: "` prefix from `String(e)`.
+    expect(screen.getByText("Preview failed")).toBeInTheDocument();
   });
 
   it("shows error in modal when execute fails and keeps modal open", async () => {
@@ -452,9 +454,9 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    // Modal should still be open with error
+    // Modal should still be open with error (Sprint 271c: bare err.message).
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Error: Execute failed")).toBeInTheDocument();
+    expect(screen.getByText("Execute failed")).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------

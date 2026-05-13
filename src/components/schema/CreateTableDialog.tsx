@@ -701,6 +701,10 @@ export default function CreateTableDialog({
       indexes: planIndexes,
       constraints: planConstraints,
       previewOnly,
+      // Sprint 271c — opt-in DbMismatch guard. Forward workspace db so
+      // CREATE TABLE rejects with `AppError::DbMismatch` if the
+      // connection pool's active db has diverged.
+      expectedDatabase: database,
     };
   };
 

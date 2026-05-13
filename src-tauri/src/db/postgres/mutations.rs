@@ -934,6 +934,7 @@ mod tests {
             table: table.to_string(),
             cascade,
             preview_only,
+            expected_database: None,
         }
     }
 
@@ -949,6 +950,7 @@ mod tests {
             table: table.to_string(),
             new_name: new_name.to_string(),
             preview_only,
+            expected_database: None,
         }
     }
 
@@ -1211,6 +1213,7 @@ mod tests {
             column: col,
             check_expression: check_expression.map(|s| s.to_string()),
             preview_only,
+            expected_database: None,
         }
     }
 
@@ -1228,6 +1231,7 @@ mod tests {
             column_name: column_name.to_string(),
             cascade,
             preview_only,
+            expected_database: None,
         }
     }
 
@@ -1656,6 +1660,7 @@ mod tests {
                 default_value: None,
             }],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_ok());
@@ -1680,6 +1685,7 @@ mod tests {
                 default_value: Some("now()".to_string()),
             }],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_ok());
@@ -1704,6 +1710,7 @@ mod tests {
                 new_default_value: Some("0".to_string()),
             }],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_ok());
@@ -1725,6 +1732,7 @@ mod tests {
                 name: "legacy".to_string(),
             }],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_ok());
@@ -1754,6 +1762,7 @@ mod tests {
                 },
             ],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_ok());
@@ -1773,6 +1782,7 @@ mod tests {
             table: "users".to_string(),
             changes: vec![],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_err());
@@ -1796,6 +1806,7 @@ mod tests {
                 default_value: None,
             }],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_err());
@@ -1815,6 +1826,7 @@ mod tests {
                 default_value: None,
             }],
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_err());
@@ -1834,6 +1846,7 @@ mod tests {
                 default_value: None,
             }],
             preview_only: false,
+            expected_database: None,
         };
         let result = adapter.alter_table(&req).await;
         assert!(result.is_err());
@@ -1854,6 +1867,7 @@ mod tests {
             index_type: "btree".to_string(),
             is_unique: true,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_ok());
@@ -1875,6 +1889,7 @@ mod tests {
             index_type: "hash".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_ok());
@@ -1896,6 +1911,7 @@ mod tests {
             index_type: "btree".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_ok());
@@ -1923,6 +1939,7 @@ mod tests {
             index_type: "gin".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_ok());
@@ -1948,6 +1965,7 @@ mod tests {
             index_type: "gist".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_ok());
@@ -1970,6 +1988,7 @@ mod tests {
                 index_type: itype.to_string(),
                 is_unique: false,
                 preview_only: true,
+                expected_database: None,
             };
             assert!(
                 adapter.create_index(&req).await.is_ok(),
@@ -1991,6 +2010,7 @@ mod tests {
             index_type: "invalid_type".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_err());
@@ -2012,6 +2032,7 @@ mod tests {
             index_type: "btree".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_err());
@@ -2033,6 +2054,7 @@ mod tests {
             index_type: "btree".to_string(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_err());
@@ -2050,6 +2072,7 @@ mod tests {
             index_type: "btree".to_string(),
             is_unique: false,
             preview_only: false,
+            expected_database: None,
         };
         let result = adapter.create_index(&req).await;
         assert!(result.is_err());
@@ -2067,6 +2090,7 @@ mod tests {
             index_name: "idx_users_email".to_string(),
             if_exists: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.drop_index(&req).await;
         assert!(result.is_ok());
@@ -2085,6 +2109,7 @@ mod tests {
             index_name: "idx_users_email".to_string(),
             if_exists: true,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.drop_index(&req).await;
         assert!(result.is_ok());
@@ -2103,6 +2128,7 @@ mod tests {
             index_name: "bad;name".to_string(),
             if_exists: false,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.drop_index(&req).await;
         assert!(result.is_err());
@@ -2117,6 +2143,7 @@ mod tests {
             index_name: "idx_test".to_string(),
             if_exists: false,
             preview_only: false,
+            expected_database: None,
         };
         let result = adapter.drop_index(&req).await;
         assert!(result.is_err());
@@ -2137,6 +2164,7 @@ mod tests {
                 columns: vec!["id".to_string()],
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_ok());
@@ -2166,6 +2194,7 @@ mod tests {
                 on_update: None,
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_ok());
@@ -2193,6 +2222,7 @@ mod tests {
                 on_update: None,
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_ok());
@@ -2218,6 +2248,7 @@ mod tests {
                 on_update: Some("SET NULL".to_string()),
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_ok());
@@ -2246,6 +2277,7 @@ mod tests {
                 on_update: None,
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_err());
@@ -2267,6 +2299,7 @@ mod tests {
                 columns: vec!["email".to_string()],
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_ok());
@@ -2288,6 +2321,7 @@ mod tests {
                 expression: "age >= 0".to_string(),
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_ok());
@@ -2307,6 +2341,7 @@ mod tests {
             constraint_name: "pk_test".to_string(),
             definition: ConstraintDefinition::PrimaryKey { columns: vec![] },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_err());
@@ -2328,6 +2363,7 @@ mod tests {
                 expression: "  ".to_string(),
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_err());
@@ -2349,6 +2385,7 @@ mod tests {
                 columns: vec!["email".to_string()],
             },
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_err());
@@ -2366,6 +2403,7 @@ mod tests {
                 columns: vec!["email".to_string()],
             },
             preview_only: false,
+            expected_database: None,
         };
         let result = adapter.add_constraint(&req).await;
         assert!(result.is_err());
@@ -2383,6 +2421,7 @@ mod tests {
             table: "users".to_string(),
             constraint_name: "uq_users_email".to_string(),
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.drop_constraint(&req).await;
         assert!(result.is_ok());
@@ -2401,6 +2440,7 @@ mod tests {
             table: "users".to_string(),
             constraint_name: "bad;name".to_string(),
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.drop_constraint(&req).await;
         assert!(result.is_err());
@@ -2415,6 +2455,7 @@ mod tests {
             table: "users".to_string(),
             constraint_name: "uq_test".to_string(),
             preview_only: false,
+            expected_database: None,
         };
         let result = adapter.drop_constraint(&req).await;
         assert!(result.is_err());
@@ -2465,6 +2506,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2489,6 +2531,7 @@ mod tests {
             primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2515,6 +2558,7 @@ mod tests {
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2535,6 +2579,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2556,6 +2601,7 @@ mod tests {
             primary_key: Some(vec!["nonexistent".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2577,6 +2623,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2600,6 +2647,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2616,6 +2664,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2637,6 +2686,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2658,6 +2708,7 @@ mod tests {
             primary_key: Some(vec!["id".to_string()]),
             preview_only: false,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_err());
@@ -2677,6 +2728,7 @@ mod tests {
             primary_key: Some(vec![]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
@@ -2711,6 +2763,7 @@ mod tests {
             primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2738,6 +2791,7 @@ mod tests {
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2768,6 +2822,7 @@ mod tests {
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2791,6 +2846,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
@@ -2820,6 +2876,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
@@ -2847,6 +2904,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: Some("user accounts".to_string()),
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2873,6 +2931,7 @@ mod tests {
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
             table_comment: Some("event log".to_string()),
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2896,6 +2955,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: Some("O'Brien's table".to_string()),
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2925,6 +2985,7 @@ mod tests {
             primary_key: Some(vec!["user_id".to_string(), "group_id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok(), "Expected Ok, got {:?}", result);
@@ -2948,6 +3009,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: Some("   ".to_string()),
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await;
         assert!(result.is_ok());
@@ -2987,6 +3049,7 @@ mod tests {
             primary_key: Some(vec!["id".to_string()]),
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await.expect("emit OK");
         assert_eq!(
@@ -3012,6 +3075,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         };
         let result = adapter.create_table(&req).await.expect("emit OK");
         assert_eq!(
@@ -3039,6 +3103,7 @@ mod tests {
             },
             check_expression: None,
             preview_only: true,
+            expected_database: None,
         };
         let result = adapter.add_column(&req).await.expect("emit OK");
         assert_eq!(

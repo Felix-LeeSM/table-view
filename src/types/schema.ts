@@ -145,6 +145,13 @@ export interface AlterTableRequest {
   table: string;
   changes: ColumnChange[];
   preview_only?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. When set, the backend probes
+   * the adapter's `current_database()` under the `active_connections`
+   * lock and rejects with `AppError::DbMismatch` before invoking the
+   * trait method. Omitting the field is byte-equivalent to pre-Sprint-271.
+   */
+  expected_database?: string;
 }
 
 /**
@@ -159,6 +166,10 @@ export interface RenameTableRequest {
   table: string;
   newName: string;
   previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
 }
 
 /**
@@ -173,6 +184,10 @@ export interface DropTableRequest {
   table: string;
   cascade?: boolean;
   previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
 }
 
 /**
@@ -194,6 +209,10 @@ export interface AddColumnRequest {
   column: ColumnDefinition;
   checkExpression?: string | null;
   previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
 }
 
 /**
@@ -211,6 +230,10 @@ export interface DropColumnRequest {
   columnName: string;
   cascade?: boolean;
   previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
 }
 
 export interface CreateIndexRequest {
@@ -222,6 +245,10 @@ export interface CreateIndexRequest {
   index_type: string;
   is_unique?: boolean;
   preview_only?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expected_database?: string;
 }
 
 export interface DropIndexRequest {
@@ -230,6 +257,10 @@ export interface DropIndexRequest {
   index_name: string;
   if_exists?: boolean;
   preview_only?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expected_database?: string;
 }
 
 export type ConstraintDefinition =
@@ -274,6 +305,10 @@ export interface AddConstraintRequest {
   constraint_name: string;
   definition: ConstraintDefinition;
   preview_only?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expected_database?: string;
 }
 
 export interface DropConstraintRequest {
@@ -282,6 +317,10 @@ export interface DropConstraintRequest {
   table: string;
   constraint_name: string;
   preview_only?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expected_database?: string;
 }
 
 export interface SchemaChangeResult {
@@ -323,6 +362,10 @@ export interface CreateTableRequest {
   columns: ColumnDefinition[];
   primary_key?: string[] | null;
   preview_only?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expected_database?: string;
 }
 
 /**
@@ -371,6 +414,10 @@ export interface CreateTablePlanRequest {
   indexes?: CreateTablePlanIndex[];
   constraints?: CreateTablePlanConstraint[];
   previewOnly?: boolean;
+  /**
+   * Sprint 271c — opt-in DbMismatch guard. See `AlterTableRequest`.
+   */
+  expectedDatabase?: string;
 }
 
 export interface ViewInfo {

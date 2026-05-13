@@ -209,6 +209,7 @@ export default function StructurePanel({
           <ColumnsEditor
             key={`${connectionId}-${table}-${schema}`}
             connectionId={connectionId}
+            database={database}
             table={table}
             schema={schema}
             columns={columns}

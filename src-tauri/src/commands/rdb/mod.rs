@@ -19,9 +19,46 @@
 //! copy with `commands/document/mod.rs` collapsed). 본 모듈은 sub-files
 //! 가 `use super::{register_cancel_token, release_cancel_token}` 패턴을
 //! 그대로 유지하도록 re-export 만 둔다.
+//!
+//! Sprint 271c (2026-05-13) — `ensure_expected_db` hoisted from
+//! `schema.rs` to this module so the 11 DDL handlers can share the same
+//! mismatch-probe helper as the 12 schema introspection handlers (23
+//! call sites total). `query.rs` keeps the probe inline because its
+//! `cancel_handle` release ordering differs (271b decision).
 
 pub mod ddl;
 pub mod query;
 pub mod schema;
 
 pub(super) use crate::commands::{not_connected, register_cancel_token, release_cancel_token};
+
+use crate::error::AppError;
+
+/// Sprint 271 — shared mismatch probe. Caller must hold the
+/// `active_connections` lock already (so the sample and the eventual
+/// trait invocation see the same backend pool). Returns `Ok(())` when
+/// the guard is satisfied (or opted out via `None`), otherwise
+/// `AppError::DbMismatch { expected, actual }` — byte-equivalent to the
+/// Sprint 266 reference probe at
+/// `src-tauri/src/commands/rdb/query.rs:83–92`.
+///
+/// Sprint 271c (2026-05-13) hoisted this helper from `schema.rs` to
+/// `mod.rs` so DDL handlers share the same body. `query.rs` still
+/// inlines the probe because it must call `release_cancel_token` on the
+/// mismatch early-return path before dropping the lock guard — a leaky
+/// signature to add here for two call sites.
+pub(super) async fn ensure_expected_db(
+    adapter: &dyn crate::db::RdbAdapter,
+    expected_database: Option<&str>,
+) -> Result<(), AppError> {
+    if let Some(expected) = expected_database {
+        let actual = adapter.current_database().await?.unwrap_or_default();
+        if actual != expected {
+            return Err(AppError::DbMismatch {
+                expected: expected.to_string(),
+                actual,
+            });
+        }
+    }
+    Ok(())
+}

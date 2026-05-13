@@ -370,9 +370,9 @@ describe("StructurePanel", () => {
     });
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(
-      screen.getByText("Error: Drop constraint failed"),
-    ).toBeInTheDocument();
+    // Sprint 271c: useDdlPreviewExecution surfaces bare `err.message` so the
+    // parseDbMismatch anchor matches; the legacy `"Error: "` prefix is gone.
+    expect(screen.getByText("Drop constraint failed")).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------

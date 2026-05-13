@@ -142,6 +142,8 @@ export default function RenameTableDialog({
             table: tableName,
             newName: trimmed,
             previewOnly: true,
+            // Sprint 271c — forward workspace db as the DbMismatch guard.
+            expectedDatabase: database,
           });
           return { sql: result.sql };
         },

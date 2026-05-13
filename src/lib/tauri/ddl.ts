@@ -27,10 +27,21 @@ import type {
 // holds. These wrappers build the request object internally with
 // `previewOnly: false` and discard the returned `sql` (only the new
 // modals need it).
+//
+// Sprint 271c (2026-05-13) — every wrapper threads the Request object's
+// `expectedDatabase?: string` field straight to the backend (Tauri's
+// camelCase↔snake_case auto-conversion handles the rename to
+// `expected_database`). Existing call sites that omit the field stay
+// byte-equivalent; new call sites populate it from the workspace
+// `(connId, db)` coordinate. Mismatch surfaces as
+// `AppError::DbMismatch` (Sprint 266 wire format).
 
 /**
  * Sprint 235 — request-shaped DROP TABLE wrapper. Returns the SQL the
  * backend ran (or, when `previewOnly: true`, the SQL it WOULD run).
+ *
+ * Sprint 271c — `request.expectedDatabase` triggers the backend
+ * DbMismatch guard.
  */
 export async function dropTableRequest(
   request: DropTableRequest,
@@ -41,6 +52,8 @@ export async function dropTableRequest(
 /**
  * Sprint 235 — request-shaped RENAME TABLE wrapper. Same semantics as
  * `dropTableRequest`.
+ *
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function renameTableRequest(
   request: RenameTableRequest,
@@ -52,11 +65,16 @@ export async function renameTableRequest(
  * Compat wrapper — `schemaStore.dropTable` action body remains byte-
  * equivalent (Sprint 235 invariant on `src/stores/schemaStore.ts`).
  * Builds the request object internally + discards the SQL string.
+ *
+ * Sprint 271c — optional `expectedDatabase` last-positional propagates
+ * to the underlying request struct so a swapped backend pool rejects
+ * with `AppError::DbMismatch` before the table is dropped.
  */
 export async function dropTable(
   connectionId: string,
   table: string,
   schema: string,
+  expectedDatabase?: string,
 ): Promise<void> {
   await dropTableRequest({
     connectionId,
@@ -64,17 +82,21 @@ export async function dropTable(
     table,
     cascade: false,
     previewOnly: false,
+    expectedDatabase,
   });
 }
 
 /**
  * Compat wrapper — same shape as `dropTable`.
+ *
+ * Sprint 271c — see `dropTable`.
  */
 export async function renameTable(
   connectionId: string,
   table: string,
   schema: string,
   newName: string,
+  expectedDatabase?: string,
 ): Promise<void> {
   await renameTableRequest({
     connectionId,
@@ -82,10 +104,13 @@ export async function renameTable(
     table,
     newName,
     previewOnly: false,
+    expectedDatabase,
   });
 }
 
-// Schema change operations
+/**
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
 export async function alterTable(
   request: AlterTableRequest,
 ): Promise<SchemaChangeResult> {
@@ -104,6 +129,8 @@ export async function alterTable(
  * `addColumn` compat wrapper is exported — `grep -rn 'tauri\.addColumn\b'
  * src/` returns 0 hits in production code, so the request-shaped
  * function is the sole public API surface.
+ *
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function addColumnRequest(
   request: AddColumnRequest,
@@ -115,6 +142,8 @@ export async function addColumnRequest(
  * Sprint 236 — request-shaped DROP COLUMN wrapper. Same shape as
  * `addColumnRequest`. No positional compat wrapper (see Sprint 236
  * Open Question §1).
+ *
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function dropColumnRequest(
   request: DropColumnRequest,
@@ -122,6 +151,9 @@ export async function dropColumnRequest(
   return invoke<SchemaChangeResult>("drop_column", { request });
 }
 
+/**
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
 export async function createTable(
   request: CreateTableRequest,
 ): Promise<SchemaChangeResult> {
@@ -134,6 +166,8 @@ export async function createTable(
  * `CreateTableDialog`. Returns the joined SQL plan as a single string
  * (statements separated by `;\n`); the dialog renders it verbatim in
  * the preview pane.
+ *
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
  */
 export async function createTablePlan(
   request: CreateTablePlanRequest,
@@ -141,24 +175,36 @@ export async function createTablePlan(
   return invoke<SchemaChangeResult>("create_table_plan", { request });
 }
 
+/**
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
 export async function createIndex(
   request: CreateIndexRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("create_index", { request });
 }
 
+/**
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
 export async function dropIndex(
   request: DropIndexRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("drop_index", { request });
 }
 
+/**
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
 export async function addConstraint(
   request: AddConstraintRequest,
 ): Promise<SchemaChangeResult> {
   return invoke<SchemaChangeResult>("add_constraint", { request });
 }
 
+/**
+ * Sprint 271c — `request.expectedDatabase` opt-in DbMismatch guard.
+ */
 export async function dropConstraint(
   request: DropConstraintRequest,
 ): Promise<SchemaChangeResult> {

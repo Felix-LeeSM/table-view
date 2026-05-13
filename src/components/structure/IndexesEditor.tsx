@@ -272,6 +272,8 @@ export default function IndexesEditor({
           index_type: params.indexType,
           is_unique: params.isUnique,
           preview_only: true,
+          // Sprint 271c — opt-in DbMismatch guard. snake_case wire form.
+          expected_database: database,
         }),
       () => async () => {
         await tauri.createIndex({
@@ -283,6 +285,8 @@ export default function IndexesEditor({
           index_type: params.indexType,
           is_unique: params.isUnique,
           preview_only: false,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         });
         setShowPreviewModal(false);
       },
@@ -307,6 +311,8 @@ export default function IndexesEditor({
           schema,
           index_name: indexName,
           preview_only: true,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         }),
       () => async () => {
         await tauri.dropIndex({
@@ -314,6 +320,8 @@ export default function IndexesEditor({
           schema,
           index_name: indexName,
           preview_only: false,
+          // Sprint 271c — opt-in DbMismatch guard.
+          expected_database: database,
         });
         setShowPreviewModal(false);
       },

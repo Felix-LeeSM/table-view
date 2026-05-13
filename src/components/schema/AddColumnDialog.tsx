@@ -57,6 +57,13 @@ const IDENTIFIER_MAX_BYTES = 63;
 export interface AddColumnDialogProps {
   /** Connection id used by Safe Mode + `usePostgresTypes`. */
   connectionId: string;
+  /**
+   * Sprint 271c — workspace active database. Forwarded as
+   * `expectedDatabase` on the ADD COLUMN request so a swapped pool
+   * rejects with `AppError::DbMismatch` before mutation. Optional only
+   * for back-compat; new callers pass the workspace db.
+   */
+  database?: string;
   /** Schema name (display + payload). */
   schemaName: string;
   /** Target table name (display + payload). */
@@ -91,6 +98,7 @@ function validateIdentifier(value: string): string | null {
 
 export default function AddColumnDialog({
   connectionId,
+  database,
   schemaName,
   tableName,
   columns,
@@ -188,6 +196,8 @@ export default function AddColumnDialog({
         },
         checkExpression: trimmedCheck.length > 0 ? checkExpr : null,
         previewOnly,
+        // Sprint 271c — opt-in DbMismatch guard. Forward workspace db.
+        expectedDatabase: database,
       });
       void ddl.loadPreview(
         async () => {

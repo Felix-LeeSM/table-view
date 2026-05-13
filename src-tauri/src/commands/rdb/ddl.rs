@@ -8,6 +8,16 @@
 //! Sprint 237 P5 (2026-05-08) — handler bodies hoisted into
 //! `_inner(&AppState, &Request)` shape so unit tests can drive prod code
 //! directly without a `tauri::State` mock.
+//!
+//! Sprint 271c (2026-05-13) — every `*Request` struct gains an opt-in
+//! `expected_database: Option<String>` field (`#[serde(default)]`). When
+//! the caller passes `Some(expected)`, each `_inner` probes
+//! `adapter.current_database()` under the same `active_connections.lock()`
+//! acquisition that wraps the dispatch (via shared `ensure_expected_db`
+//! helper hoisted from `schema.rs` to `super`) and returns
+//! `AppError::DbMismatch` BEFORE invoking the trait method. The `None`
+//! path is byte-equivalent to pre-Sprint-271 (no probe overhead). Mirrors
+//! the Sprint 266 reference probe at `commands/rdb/query.rs:83–92`.
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
@@ -17,7 +27,7 @@ use crate::models::{
     DropIndexRequest, DropTableRequest, RenameTableRequest, SchemaChangeResult,
 };
 
-use super::not_connected;
+use super::{ensure_expected_db, not_connected};
 
 async fn drop_table_inner(
     state: &AppState,
@@ -27,7 +37,9 @@ async fn drop_table_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.drop_table(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.drop_table(request).await
 }
 
 /// Sprint 235 — request-shaped DROP TABLE handler. Mirrors `create_table`
@@ -51,7 +63,9 @@ async fn rename_table_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.rename_table(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.rename_table(request).await
 }
 
 /// Sprint 235 — request-shaped RENAME TABLE handler. Same shape as
@@ -72,7 +86,9 @@ async fn alter_table_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.alter_table(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.alter_table(request).await
 }
 
 #[tauri::command]
@@ -91,7 +107,9 @@ async fn add_column_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.add_column(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.add_column(request).await
 }
 
 /// Sprint 236 — request-shaped ADD COLUMN handler. Mirrors
@@ -113,7 +131,9 @@ async fn drop_column_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.drop_column(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.drop_column(request).await
 }
 
 /// Sprint 236 — request-shaped DROP COLUMN handler. Same shape as
@@ -134,7 +154,9 @@ async fn create_table_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.create_table(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.create_table(request).await
 }
 
 #[tauri::command]
@@ -153,7 +175,9 @@ async fn create_table_plan_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.create_table_plan(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.create_table_plan(request).await
 }
 
 /// Sprint 240 — unified `CREATE TABLE + indexes + constraints` handler.
@@ -175,7 +199,9 @@ async fn create_index_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.create_index(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.create_index(request).await
 }
 
 #[tauri::command]
@@ -194,7 +220,9 @@ async fn drop_index_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.drop_index(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.drop_index(request).await
 }
 
 #[tauri::command]
@@ -213,7 +241,9 @@ async fn add_constraint_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.add_constraint(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.add_constraint(request).await
 }
 
 #[tauri::command]
@@ -232,7 +262,9 @@ async fn drop_constraint_inner(
     let active = connections
         .get(&request.connection_id)
         .ok_or_else(|| not_connected(&request.connection_id))?;
-    active.as_rdb()?.drop_constraint(request).await
+    let adapter = active.as_rdb()?;
+    ensure_expected_db(adapter, request.expected_database.as_deref()).await?;
+    adapter.drop_constraint(request).await
 }
 
 #[tauri::command]
@@ -283,6 +315,7 @@ mod tests {
             table: "users".into(),
             cascade: false,
             preview_only: true,
+            expected_database: None,
         }
     }
     fn rename_table_req(id: &str) -> RenameTableRequest {
@@ -292,6 +325,7 @@ mod tests {
             table: "users".into(),
             new_name: "users_archived".into(),
             preview_only: true,
+            expected_database: None,
         }
     }
     fn alter_table_req(id: &str) -> AlterTableRequest {
@@ -301,6 +335,7 @@ mod tests {
             table: "users".into(),
             changes: Vec::<ColumnChange>::new(),
             preview_only: true,
+            expected_database: None,
         }
     }
     fn add_column_req(id: &str) -> AddColumnRequest {
@@ -318,6 +353,7 @@ mod tests {
             },
             check_expression: None,
             preview_only: true,
+            expected_database: None,
         }
     }
     fn drop_column_req(id: &str) -> DropColumnRequest {
@@ -328,6 +364,7 @@ mod tests {
             column_name: "x".into(),
             cascade: false,
             preview_only: true,
+            expected_database: None,
         }
     }
     fn create_table_req(id: &str) -> CreateTableRequest {
@@ -339,6 +376,7 @@ mod tests {
             primary_key: None,
             preview_only: true,
             table_comment: None,
+            expected_database: None,
         }
     }
     fn create_index_req(id: &str) -> CreateIndexRequest {
@@ -351,6 +389,7 @@ mod tests {
             index_type: "btree".into(),
             is_unique: false,
             preview_only: true,
+            expected_database: None,
         }
     }
     fn drop_index_req(id: &str) -> DropIndexRequest {
@@ -360,6 +399,7 @@ mod tests {
             index_name: "idx_x".into(),
             if_exists: false,
             preview_only: true,
+            expected_database: None,
         }
     }
     fn add_constraint_req(id: &str) -> AddConstraintRequest {
@@ -372,6 +412,7 @@ mod tests {
                 columns: vec!["x".into()],
             },
             preview_only: true,
+            expected_database: None,
         }
     }
     fn drop_constraint_req(id: &str) -> DropConstraintRequest {
@@ -381,6 +422,7 @@ mod tests {
             table: "users".into(),
             constraint_name: "uq_x".into(),
             preview_only: true,
+            expected_database: None,
         }
     }
 
@@ -699,5 +741,276 @@ mod tests {
             drop_constraint_inner(&state, &drop_constraint_req("doc")).await,
             Err(AppError::Unsupported(_))
         ));
+    }
+
+    // ── Sprint 271c — expected_database guard (2026-05-13) ────────────────
+    //
+    // 작성 이유: 11 DDL commands 각각의 mismatch 가드 verbatim assertion.
+    // Sprint 266 reference (`query.rs:83–92`) 와 byte-equivalent — probe 가
+    // trait 호출 *전에* 일어나고 mismatch 시 underlying trait method
+    // (drop_table_sql 등) 가 호출되지 않아야 함. trait closure 가 panic
+    // 하도록 두어 가드가 새면 fail-loud. 슬라이스 271a 의 schema 측
+    // mismatched_adapter / panic-closure 패턴 재사용.
+
+    fn mismatched_rdb() -> StubRdbAdapter {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s
+    }
+
+    fn with_expected(mut req: AlterTableRequest, db: &str) -> AlterTableRequest {
+        req.expected_database = Some(db.into());
+        req
+    }
+
+    #[tokio::test]
+    async fn drop_table_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.drop_table_fn = Some(Box::new(|_| panic!("drop_table must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = drop_table_req("c");
+        req.expected_database = Some("dbB".into());
+        match drop_table_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn rename_table_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.rename_table_fn = Some(Box::new(|_| {
+            panic!("rename_table must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = rename_table_req("c");
+        req.expected_database = Some("dbB".into());
+        match rename_table_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn alter_table_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.alter_table_fn = Some(Box::new(|_| panic!("alter_table must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let req = with_expected(alter_table_req("c"), "dbB");
+        match alter_table_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn add_column_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.add_column_fn = Some(Box::new(|_| panic!("add_column must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = add_column_req("c");
+        req.expected_database = Some("dbB".into());
+        match add_column_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_column_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.drop_column_fn = Some(Box::new(|_| panic!("drop_column must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = drop_column_req("c");
+        req.expected_database = Some("dbB".into());
+        match drop_column_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_table_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.create_table_fn = Some(Box::new(|_| {
+            panic!("create_table must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = create_table_req("c");
+        req.expected_database = Some("dbB".into());
+        match create_table_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_table_plan_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        // `create_table_plan` 의 trait 디폴트 구현은 `create_table` 등을 chain
+        // 호출하므로 mismatch 시 어떤 child 도 트리거되면 panic 으로 surface.
+        let mut s = mismatched_rdb();
+        s.create_table_fn = Some(Box::new(|_| {
+            panic!("create_table must not run on mismatch (chained from plan)")
+        }));
+        s.create_index_fn = Some(Box::new(|_| {
+            panic!("create_index must not run on mismatch")
+        }));
+        s.add_constraint_fn = Some(Box::new(|_| {
+            panic!("add_constraint must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let req = CreateTablePlanRequest {
+            connection_id: "c".into(),
+            schema: "public".into(),
+            name: "new_table".into(),
+            columns: Vec::new(),
+            primary_key: None,
+            table_comment: None,
+            indexes: Vec::new(),
+            constraints: Vec::new(),
+            preview_only: true,
+            expected_database: Some("dbB".into()),
+        };
+        match create_table_plan_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_index_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.create_index_fn = Some(Box::new(|_| {
+            panic!("create_index must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = create_index_req("c");
+        req.expected_database = Some("dbB".into());
+        match create_index_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_index_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.drop_index_fn = Some(Box::new(|_| panic!("drop_index must not run on mismatch")));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = drop_index_req("c");
+        req.expected_database = Some("dbB".into());
+        match drop_index_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn add_constraint_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.add_constraint_fn = Some(Box::new(|_| {
+            panic!("add_constraint must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = add_constraint_req("c");
+        req.expected_database = Some("dbB".into());
+        match add_constraint_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_constraint_expected_db_mismatch_returns_dbmismatch_and_skips_trait() {
+        let mut s = mismatched_rdb();
+        s.drop_constraint_fn = Some(Box::new(|_| {
+            panic!("drop_constraint must not run on mismatch")
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = drop_constraint_req("c");
+        req.expected_database = Some("dbB".into());
+        match drop_constraint_inner(&state, &req).await {
+            Err(AppError::DbMismatch { expected, actual }) => {
+                assert_eq!(expected, "dbB");
+                assert_eq!(actual, "dbA");
+            }
+            other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    // ── Sprint 271c — match + None fast-path witness (2026-05-13) ─────────
+    //
+    // 작성 이유: mismatch 만 단언하면 happy / None paths 의 byte-equivalence
+    // 가 의심 잔여. 1 happy (Some + match → trait 호출 정상) + 1 none-fast-
+    // path (None → current_database probe 도 skip) 를 witness 로 추가.
+    // drop_table 을 sample 로 채택 — request-shape 의 다른 DDL 와 probe 코드
+    // 가 완전 동일하므로 sample 1 개로 invariant 보존 충분.
+
+    #[tokio::test]
+    async fn drop_table_expected_db_match_executes_normally() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| Ok(Some("dbA".into()))));
+        s.drop_table_fn = Some(Box::new(|_| {
+            Ok(SchemaChangeResult {
+                sql: "DROP TABLE x".into(),
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let mut req = drop_table_req("c");
+        req.expected_database = Some("dbA".into());
+        let result = drop_table_inner(&state, &req).await.unwrap();
+        assert_eq!(result.sql, "DROP TABLE x");
+    }
+
+    #[tokio::test]
+    async fn drop_table_expected_db_none_skips_current_database_probe() {
+        let mut s = StubRdbAdapter::default();
+        s.current_database_fn = Some(Box::new(|| {
+            panic!("current_database must not be probed when expected_database is None")
+        }));
+        s.drop_table_fn = Some(Box::new(|_| {
+            Ok(SchemaChangeResult {
+                sql: "DROP TABLE x".into(),
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        // drop_table_req sets expected_database=None by default builder construction.
+        let req = drop_table_req("c");
+        assert!(
+            req.expected_database.is_none(),
+            "builder default must be None"
+        );
+        let result = drop_table_inner(&state, &req).await.unwrap();
+        assert_eq!(result.sql, "DROP TABLE x");
     }
 }

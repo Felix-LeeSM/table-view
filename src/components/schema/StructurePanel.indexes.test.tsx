@@ -385,10 +385,10 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Preview SQL" }));
     });
 
-    // Error should appear in the create index modal
-    expect(
-      screen.getByText("Error: Index creation failed"),
-    ).toBeInTheDocument();
+    // Error should appear in the create index modal (Sprint 271c: bare
+    // `err.message` — `useDdlPreviewExecution` surfaces the message verbatim
+    // so `parseDbMismatch` can match its `^Database mismatch:` anchor).
+    expect(screen.getByText("Index creation failed")).toBeInTheDocument();
   });
 
   it("shows error in modal when dropIndex preview fails", async () => {
@@ -408,9 +408,9 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByLabelText("Delete index users_name_idx"));
     });
 
-    // Error should appear in the preview modal
+    // Error should appear in the preview modal (Sprint 271c: bare message).
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Error: Drop index failed")).toBeInTheDocument();
+    expect(screen.getByText("Drop index failed")).toBeInTheDocument();
   });
 
   it("shows error in modal when execute drop index fails", async () => {
@@ -440,9 +440,9 @@ describe("StructurePanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Execute" }));
     });
 
-    // Modal should still be open with error
+    // Modal should still be open with error (Sprint 271c: bare message).
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Error: Execute failed")).toBeInTheDocument();
+    expect(screen.getByText("Execute failed")).toBeInTheDocument();
   });
 
   // -----------------------------------------------------------------------

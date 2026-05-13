@@ -217,7 +217,13 @@ describe("DropTableDialog (Sprint 235)", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
     // Sprint 223 useSchemaTableMutations chained the compat wrapper.
-    expect(mockDropTable).toHaveBeenCalledWith("conn-1", "users", "public");
+    // Sprint 271c — `expectedDatabase` last-positional propagated.
+    expect(mockDropTable).toHaveBeenCalledWith(
+      "conn-1",
+      "users",
+      "public",
+      "db-1",
+    );
   });
 
   // AC-235-02 / AC-235-03 — IPC payload shape (camelCase) +
@@ -238,6 +244,8 @@ describe("DropTableDialog (Sprint 235)", () => {
       table: "users",
       cascade: false,
       previewOnly: true,
+      // Sprint 271c — opt-in DbMismatch guard forwards workspace db.
+      expectedDatabase: "db-1",
     });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -248,7 +256,13 @@ describe("DropTableDialog (Sprint 235)", () => {
     // Compat wrapper bridges to the request call. Each commit call goes
     // through `tauri.dropTable` positional → `dropTableRequest` with
     // previewOnly:false.
-    expect(mockDropTable).toHaveBeenCalledWith("conn-1", "users", "public");
+    // Sprint 271c — `expectedDatabase` last-positional propagated.
+    expect(mockDropTable).toHaveBeenCalledWith(
+      "conn-1",
+      "users",
+      "public",
+      "db-1",
+    );
   });
 
   // AC-235-06 — Safe Mode confirm dialog on production×strict (was
