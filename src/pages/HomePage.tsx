@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowDownUp,
+  ChevronDown,
+  ChevronRight,
   Clock,
   FolderPlus,
   Monitor,
@@ -50,6 +52,30 @@ import ThemePicker from "@components/theme/ThemePicker";
  * `[+ Connection]` / `[+ Group]` / `[Import / Export]` buttons live in the
  * top header strip alongside the brand wordmark.
  */
+// Sprint 296 — theme picker 를 제외한 footer (현재는 Recent 묶음) 가 한
+// 단위로 접힌다. localStorage 키는 Sprint 290 에서 정해진 이름을 유지해
+// 기존 사용자 환경의 collapse 선호가 그대로 살아남도록 한다. footer 에
+// 추가 섹션이 더 생기면 이 collapse 단위가 그 섹션도 함께 흡수해야 한다.
+const RECENT_COLLAPSE_KEY = "table-view-recent-collapsed";
+
+function loadRecentCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(RECENT_COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistRecentCollapsed(v: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RECENT_COLLAPSE_KEY, v ? "1" : "0");
+  } catch {
+    // localStorage unavailable — collapse stays session-local.
+  }
+}
+
 export default function HomePage() {
   // Re-hydrate from session storage on mount and window focus so the
   // launcher picks up disconnects/state changes made in the workspace.
@@ -58,6 +84,19 @@ export default function HomePage() {
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showImportExport, setShowImportExport] = useState(false);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
+  const [recentCollapsed, setRecentCollapsed] = useState<boolean>(false);
+
+  useEffect(() => {
+    setRecentCollapsed(loadRecentCollapsed());
+  }, []);
+
+  const toggleRecentCollapsed = useCallback(() => {
+    setRecentCollapsed((prev) => {
+      const next = !prev;
+      persistRecentCollapsed(next);
+      return next;
+    });
+  }, []);
 
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
@@ -222,16 +261,34 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Recent — MRU connection list. */}
+      {/* Recent — MRU connection list. Sprint 296: 라벨 헤더가 토글
+          버튼 역할을 한다. theme picker 는 별도 footer 영역에 머무르며
+          이 collapse 의 영향을 받지 않는다. */}
       <div
         className="border-t border-border px-3 py-2"
         data-testid="home-recent"
       >
-        <div className="mb-1 flex items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground">
+        <button
+          type="button"
+          onClick={toggleRecentCollapsed}
+          aria-expanded={!recentCollapsed}
+          aria-controls="home-recent-body"
+          aria-label="Toggle Recent"
+          className="mb-1 flex w-full items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
+        >
+          {recentCollapsed ? (
+            <ChevronRight size={10} />
+          ) : (
+            <ChevronDown size={10} />
+          )}
           <Clock size={10} />
           <span>Recent</span>
-        </div>
-        <RecentConnections onActivate={handleActivate} />
+        </button>
+        {!recentCollapsed && (
+          <div id="home-recent-body">
+            <RecentConnections onActivate={handleActivate} />
+          </div>
+        )}
       </div>
 
       {/* Theme picker footer — same control as the legacy Sidebar so the
