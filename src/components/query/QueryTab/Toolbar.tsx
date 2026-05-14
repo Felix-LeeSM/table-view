@@ -9,7 +9,9 @@ import {
   X,
   FlaskConical,
 } from "lucide-react";
+import type { EditorView } from "@codemirror/view";
 import FavoritesPanel from "../FavoritesPanel";
+import InsertSnippetMenu from "./InsertSnippetMenu";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 
@@ -49,6 +51,15 @@ export interface QueryTabToolbarProps {
   onDryRun: () => void;
   onFormat: () => void;
   favorites: QueryFavoritesState;
+  /**
+   * Sprint 310 (Phase 28 Slice A4) — CodeMirror EditorView ref drilled
+   * from `useQueryEvents` so the `+ Insert ▾` popover can dispatch
+   * snippet insertion against the live editor. Decision D-09: prop
+   * drilling is preferred over context / store because the ref already
+   * lives in `useQueryEvents` and ergonomics + minimum diff favour a
+   * single explicit prop on the toolbar interface.
+   */
+  editorRef: React.RefObject<EditorView | null>;
 }
 
 export default function QueryTabToolbar({
@@ -58,6 +69,7 @@ export default function QueryTabToolbar({
   onDryRun,
   onFormat,
   favorites,
+  editorRef,
 }: QueryTabToolbarProps) {
   const {
     showSaveForm,
@@ -135,6 +147,13 @@ export default function QueryTabToolbar({
           itself doesn't already express. A5 (sprint-311) replaces the
           legacy aggregate-flag dispatch branch with parser-driven
           routing. */}
+      {/* Sprint 310 (Phase 28 Slice A4) — `+ Insert ▾` snippet menu.
+          Document-paradigm only (the popover surfaces the 13 mongosh
+          methods + filter operators + aggregate stages; RDB has its own
+          SQL formatter path and intentionally does NOT mount this
+          button). The snippet engine drives CodeMirror's native
+          Tab/Shift+Tab/Esc placeholder navigation. */}
+      {isDocument && <InsertSnippetMenu editorRef={editorRef} />}
       <div className="ml-auto flex items-center gap-1 relative">
         <Button
           variant="ghost"

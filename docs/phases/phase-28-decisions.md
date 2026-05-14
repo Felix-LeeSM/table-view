@@ -212,4 +212,158 @@ migration backfill 은 손대지 않음 — 기존 persisted 페이로드가
   queryMode 누락 시 `"find"` 로 backfill) — spec 의 "load throw 없음"
   invariant 와 align.
 
-## (다음 sprint 진행하면서 이어붙임)
+## Phase 28 Slice A4 (Sprint 310 — 2026-05-14)
+
+### D-06: snippet 의 user-visible placeholder 문법으로 `<name>` 채택, CodeMirror native `${…}` 는 engine 내부 변환
+
+**문제**: snippet 템플릿의 placeholder 문법을 어떻게 표기하는가. (1) `<name>`
+(spec/contract 의 표기), (2) `$name`, (3) CodeMirror native `${name}` /
+`${1:name}` 의 세 후보.
+
+**결정**: snippet 데이터 모듈 (`mongoshSnippets.ts`) 이 노출하는 템플릿은
+`<placeholder>` 문법을 그대로 사용한다 (예: `db.<collection>.find(<filter>)`).
+engine 모듈 (`snippetEngine.ts`) 이 삽입 직전에 `<name>` → `${name}` 으로
+변환해 CodeMirror 의 `snippet()` 에 넘긴다. 변환 함수는 export 해서 unit
+test 로 lock.
+
+**근거**:
+1. **Spec 정합**: sprint-310 contract AC-04 / sprint-307 spec UI States 가
+   모두 `<placeholder>` 표기를 사용자에게 보여주는 것으로 명시. 데이터
+   모듈이 그대로 그 표기를 들고 있으면 spec ↔ source 매핑이 1:1.
+2. **CodeMirror native syntax 는 backslash escaping 의 비용** 을 가짐 —
+   사용자 / 후속 sprint 가 템플릿을 추가할 때 `{` `}` 를 literal 로
+   넣으려면 escape 필요. `<…>` 는 JS string 안에서 escape 가 필요 없는
+   문자.
+3. **Round-trip 가능성**: snippet template 자체를 dialog / settings 에
+   사용자가 보거나 편집할 가능성 (후속 sprint) 을 대비. `<filter>` 가
+   `${1:filter}` 보다 훨씬 자연어에 가까움.
+
+**대안**:
+- `${name}` raw — 거부. (1) spec 표기와 mismatch, (2) `{` literal 의 escape
+  비용, (3) source 의 가독성 떨어짐.
+- `$name` — 거부. mongosh 연산자 (`$gt`, `$match`) 와 시각적으로 충돌.
+  사용자가 placeholder 와 mongo operator 를 구분 어려움.
+
+**영향**: `snippetEngine.ts` 가 `convertPlaceholders(template: string)` 변환
+함수 + `insertMongoshSnippet(view, template)` 두 surface 를 노출. 변환
+유닛 테스트가 모든 sprint 310 snippet 의 conversion 정합을 lock.
+
+---
+
+### D-07: snippet 삽입 + Tab/Shift+Tab/Esc placeholder 네비를 `@codemirror/autocomplete` 의 `snippet()` API 로 위임
+
+**문제**: snippet 삽입 후 placeholder 사이를 Tab/Shift+Tab/Esc 으로 이동
+하는 동작을 (1) `@codemirror/autocomplete` 의 `snippet()` + `snippetKeymap`
+빌트인을 쓸지 / (2) custom 구현 (StateField + cursor selection + key
+binding) 을 쓸지.
+
+**결정**: 빌트인 `snippet()` 사용. `MongoQueryEditor` 가 이미
+`autocompletion()` extension 을 마운트하고 있으므로 `snippetKeymap`
+(Tab/Shift+Tab/Esc 의 default binding) 도 자동으로 활성. snippet wrapper
+는 `convertPlaceholders` 후 `snippet(template)(view, null, from, to)` 를
+호출하기만 하면 된다.
+
+**근거**:
+1. **Zero dependency cost**: `@codemirror/autocomplete` 가 이미 deps —
+   추가 패키지 없음. ADR 0029 가 mongosh 파서 strategy 로 CodeMirror
+   생태계 의존을 lock.
+2. **Tab/Shift+Tab/Esc 의 well-tested 동작**: CodeMirror 가 placeholder
+   문서 순서 cycling + 동일 이름 multi-placeholder 의 독립 편집 + Esc
+   시 마지막 placeholder 뒤 cursor 위치 등을 모두 covered. AC-04 / AC-05
+   가 요구하는 모든 동작이 빌트인.
+3. **future-proof**: 다른 paradigm (RDB SQL snippet) 이 추후 같은 engine
+   을 재사용 가능. custom 구현이면 매번 dialect 별 키 바인딩 / state
+   추적 코드를 새로 작성해야 함.
+4. **Test surface**: CodeMirror snippet API 는 EditorView 가 있으면
+   바로 호출 가능 — `EditorState.create` + `new EditorView` 패턴이
+   기존 `autocompleteTheme.test.ts` 와 동일. JSDOM 으로 충분.
+
+**대안**:
+- Custom StateField + KeyBinding 구현 — 거부. (1) Tab cycling /
+  Shift+Tab back / Esc clear / 동일 이름 multi-placeholder 처리 모두
+  re-implement. (2) CodeMirror 의 snippetKeymap 과 우선순위 충돌 위험
+  (default Tab → acceptCompletion 이 이미 우리 코드에 있음, 거기에
+  추가 layer 가 끼어들면 race).
+
+**영향**: `snippetEngine.ts` 의 표면이 매우 작아짐 — 변환 1 + 호출 1.
+test 가 EditorView 인스턴스 위에서 직접 동작을 검증.
+
+---
+
+### D-08: operator snippet 은 wrapped fragment (`{ $gt: <value> }`) — operator + value 의 완성 fragment 를 삽입
+
+**문제**: Operators 섹션의 `$gt` 같은 항목을 클릭했을 때 (1) operator
+이름만 (`$gt:`) / (2) operator + placeholder pair (`$gt: <value>`) /
+(3) wrapped object fragment (`{ $gt: <value> }`) 중 무엇을 삽입하는가.
+
+**결정**: wrapped fragment — `{ $gt: <value> }`. 삽입 후 첫 placeholder
+(`<value>`) 가 자동 선택.
+
+**근거**:
+1. **사용자 mental model**: mongosh 의 query filter 는
+   `{ field: { $gt: 30 } }` 패턴. 사용자가 operator menu 를 클릭하는
+   시점은 보통 field 의 value position 에 있음 — `{ $gt: <value> }` 가
+   곧장 paste-and-go 가능한 fragment.
+2. **A4 의 scope 와 align**: A4 는 "boilerplate 를 줄인다" 가 목표.
+   `$gt:` 만 주면 사용자가 `{ }` 와 `value` 를 직접 채워야 함 — boilerplate
+   reduction 절반밖에 못함.
+3. **Operator/Stage 의 균형**: Stages 섹션은 이미 `{ $match: <expr> }`
+   pattern 으로 wrapped fragment. Operators 도 동일 패턴을 따르면 두
+   섹션 사이의 일관성 + 사용자 학습 곡선 ↓.
+4. **AC-04 의 first placeholder selection** 이 wrapped fragment 에서
+   자연스럽게 동작: `<value>` 가 첫 placeholder 라서 클릭 즉시 입력
+   focus.
+
+**대안**:
+- operator name only (`$gt:`) — 거부. 사용자가 fragment 를 완성하려면
+  추가 키 입력 필요. menu 의 가치 ↓.
+- key+value pair (`$gt: <value>`) — 거부. 외부 `{ }` 가 없어서 multi-line
+  filter 안에서 사용 시 syntax 불일치. wrapped fragment 가 일관성 ↑.
+
+**영향**: `mongoshSnippets.ts` 의 Operators / Stages 두 섹션 모두
+wrapped fragment 표기. snippet 테스트가 wrapped 형식을 lock.
+
+---
+
+### D-09: editor view ref 는 `useQueryEvents` 에서 이미 만들어진 `editorRef` 를 prop drilling 으로 toolbar 에 전달
+
+**문제**: `InsertSnippetMenu` 가 snippet 삽입 시 EditorView 가 필요.
+이를 toolbar 가 어떻게 획득하는가. 후보: (1) `useQueryEvents` 의 기존
+`editorRef` 를 toolbar prop 으로 추가, (2) React context (`EditorViewContext`)
+신설, (3) Zustand store 에 editor view ref 저장, (4) `MongoQueryEditor`
+의 `onEditorViewReady` callback 신설.
+
+**결정**: (1) — `editorRef: RefObject<EditorView | null>` 를
+`QueryTabToolbarProps` 에 추가. `QueryTab.tsx` 가 이미 `useQueryEvents`
+에서 받은 `editorRef` 를 `MongoQueryEditor` / `SqlQueryEditor` 의 `ref`
+로 넘기고 있으므로, 같은 ref 를 toolbar prop 으로도 그대로 넘긴다.
+
+**근거**:
+1. **Single source of truth**: editor view 의 ref 는 이미 한 곳
+   (`useQueryEvents`) 에서 관리. context / store 를 신설하면 동일 정보가
+   두 곳에 존재 → drift 위험.
+2. **Minimum diff**: QueryTab.tsx 가 prop 1 개 추가만 하면 됨. context
+   신설은 wrapper 컴포넌트 + Provider 추가 + 모든 consumer 변경. 같은
+   효과를 prop 1 line 으로 달성.
+3. **Test 용이성**: RTL 에서 toolbar 만 단독 mount 시 mock ref 를
+   props 로 주입하기 쉬움. context 라면 Provider wrap 필요.
+4. **타입 명확성**: prop type `RefObject<EditorView | null>` 가
+   toolbar 가 editor 와 결합되어 있다는 사실을 type 으로 표현. context
+   는 implicit dependency.
+
+**대안**:
+- React context — 거부. wrapper / Provider 의 비용이 추가 prop 1 개의
+  비용보다 크다.
+- Zustand store — 거부. DOM ref 를 store 에 넣으면 serialization /
+  rehydration 시 dangling. ref 의 mutability 가 store 의 immutability
+  계약을 깸.
+- `onEditorViewReady` callback — 거부. `useQueryEvents` 가 이미 ref 를
+  보유하므로 callback 은 중복.
+
+**영향**: `QueryTabToolbarProps` 에 `editorRef` prop 추가.
+`InsertSnippetMenu` 는 prop 으로 `editorRef.current` 를 받음. RDB
+paradigm 에서는 prop 이 전달되지만 `+ Insert ▾` 자체가
+`isDocument` gate 안에 있으므로 사용되지 않음.
+
+---
+
