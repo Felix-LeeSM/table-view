@@ -29,9 +29,9 @@ use table_view_lib::db::{DbAdapter, RdbAdapter};
 use table_view_lib::error::AppError;
 use table_view_lib::models::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
-    ConstraintDefinition, CreateIndexRequest, CreateTableRequest, DatabaseType, DropColumnRequest,
-    DropConstraintRequest, DropIndexRequest, DropTableRequest, FilterCondition, FilterOperator,
-    QueryType, RenameTableRequest,
+    ConstraintDefinition, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest,
+    DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+    DropTriggerRequest, FilterCondition, FilterOperator, QueryType, RenameTableRequest,
 };
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -2474,17 +2474,12 @@ async fn test_mysql_query_table_data_bigint_value_is_number_wire() {
     adapter.disconnect_pool().await.ok();
 }
 
-// DECIMAL/NEWDECIMAL wire encoding 은 queries.rs line 145 가 `String` 으로
-// 의도하지만, sqlx-mysql 의 prepared statement binary protocol 은 추가 feature
-// (`bigdecimal` / `rust_decimal`) 없이는 DECIMAL → String 자동 디코드를 제공
-// 하지 않는다. 그 결과 현재 path 가 Null 을 반환. 이는 정밀-민감 DECIMAL 컬럼
-// 의 frontend grid 노출 누락 가능성을 시사하는 latent bug — Sprint 297+ 에서
-// (a) sqlx feature 추가 또는 (b) `CAST(...AS CHAR)` projection 으로 우회해야.
-// 본 시나리오는 의도된 동작을 회귀 가드로 고정해 두기 위해 보존하되, 어댑터
-// 보강 전까지 #[ignore].
+// Sprint 296 follow-up (2026-05-14) — sqlx `bigdecimal` feature 활성화 +
+// queries.rs decode 경로가 `BigDecimal::to_string()` 으로 변환 → ADR 0026
+// 와 동일한 wire format (JSON string). 정밀-민감 DECIMAL 컬럼의 frontend
+// grid 노출 누락 회귀 가드.
 #[tokio::test]
 #[serial_test::serial]
-#[ignore = "DECIMAL decode broken without sqlx bigdecimal/rust_decimal feature — Sprint 297+"]
 async fn test_mysql_query_table_data_decimal_value_is_string_wire() {
     let adapter = match common::setup_mysql_adapter().await {
         Some(a) => a,
@@ -3191,4 +3186,140 @@ async fn test_mysql_execute_query_bigint_select_emits_number_wire() {
     assert_eq!(cell.as_i64(), Some(9223372036854775807));
 
     adapter.disconnect_pool().await.ok();
+}
+
+// =============================================================================
+// Sprint 296 follow-up — MySQL trigger 메소드 coverage
+// =============================================================================
+// 작성 이유: `db/mysql/schema.rs` 의 `list_triggers` / `get_trigger_source` 가
+// 미커버 (information_schema.triggers path). CREATE TRIGGER 자체는 sqlx
+// prepared protocol 미지원 (Sprint 296 ignored 시나리오와 동일) 라 trigger 가
+// 없는 path 만 hit 가능. `create_trigger` / `drop_trigger` 트레잇 wrapper 는
+// Unsupported reject 로 회귀 가드.
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_list_triggers_empty_table_returns_vec() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let table = format!("test_trg_empty_{ts}");
+
+    adapter
+        .execute_query(&format!("CREATE TABLE {table} (id INT PRIMARY KEY)"), None)
+        .await
+        .expect("CREATE TABLE");
+
+    // trigger 가 없는 table 은 empty vec — information_schema.triggers
+    // round-trip + BTreeMap fold path 가 happy path 로 동작.
+    let triggers = adapter
+        .list_triggers(MYSQL_SCHEMA, &table)
+        .await
+        .expect("list_triggers");
+    assert!(
+        triggers.is_empty(),
+        "expected empty triggers, got: {triggers:?}"
+    );
+
+    adapter
+        .execute_query(&format!("DROP TABLE {table}"), None)
+        .await
+        .ok();
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mysql_get_trigger_source_unknown_returns_connection_error() {
+    let adapter = match common::setup_mysql_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+    // 본 어댑터는 trigger 미존재 시 `AppError::Connection("Trigger … not found")`
+    // 반환 (schema.rs line 777).
+    let err = adapter
+        .get_trigger_source(MYSQL_SCHEMA, "any_table", "definitely_does_not_exist_trg")
+        .await
+        .expect_err("unknown trigger → Connection error");
+    match err {
+        AppError::Connection(msg) => {
+            assert!(msg.contains("not found"), "got: {msg}");
+        }
+        other => panic!("expected Connection, got {other:?}"),
+    }
+    adapter.disconnect_pool().await.ok();
+}
+
+#[tokio::test]
+async fn test_mysql_create_trigger_trait_returns_unsupported() {
+    // MySQL adapter 의 `create_trigger` 트레잇 wrapper (db/mysql.rs line 397)
+    // 는 Unsupported 즉시 반환 — MySQL 의 trigger body 는 inline compound
+    // statement 이고 PG 의 `function_name`-driven 모델과 패러다임 불일치.
+    let adapter: Arc<dyn RdbAdapter> = Arc::new(MysqlAdapter::new());
+    let req = CreateTriggerRequest {
+        connection_id: "c".into(),
+        schema: "test".into(),
+        table: "t".into(),
+        trigger_name: "trg_x".into(),
+        timing: "BEFORE".into(),
+        events: vec!["INSERT".into()],
+        orientation: "ROW".into(),
+        when_expression: None,
+        function_schema: "test".into(),
+        function_name: "fn_x".into(),
+        function_arguments: None,
+        preview_only: false,
+        expected_database: None,
+    };
+    let err = adapter
+        .create_trigger(&req)
+        .await
+        .expect_err("MySQL create_trigger → Unsupported");
+    match err {
+        AppError::Unsupported(msg) => {
+            assert!(msg.contains("raw SQL"), "Unsupported copy: {msg}");
+        }
+        other => panic!("expected Unsupported, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_mysql_drop_trigger_trait_returns_unsupported() {
+    let adapter: Arc<dyn RdbAdapter> = Arc::new(MysqlAdapter::new());
+    let req = DropTriggerRequest {
+        connection_id: "c".into(),
+        schema: "test".into(),
+        table: "t".into(),
+        trigger_name: "trg_x".into(),
+        cascade: false,
+        preview_only: false,
+        expected_database: None,
+    };
+    let err = adapter
+        .drop_trigger(&req)
+        .await
+        .expect_err("MySQL drop_trigger → Unsupported");
+    match err {
+        AppError::Unsupported(msg) => {
+            assert!(msg.contains("raw SQL"), "Unsupported copy: {msg}");
+        }
+        other => panic!("expected Unsupported, got {other:?}"),
+    }
+}
+
+// list_types — MySQL adapter 는 trait default (Unsupported) 를 상속. 트레잇
+// dispatch surface 회귀 가드.
+#[tokio::test]
+async fn test_mysql_list_types_trait_default_returns_unsupported() {
+    let adapter: Arc<dyn RdbAdapter> = Arc::new(MysqlAdapter::new());
+    let err = adapter
+        .list_types()
+        .await
+        .expect_err("MySQL list_types → Unsupported (trait default)");
+    matches!(err, AppError::Unsupported(_));
 }

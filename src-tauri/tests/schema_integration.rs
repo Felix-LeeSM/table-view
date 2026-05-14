@@ -1,6 +1,14 @@
 mod common;
 
-use table_view_lib::models::{DatabaseType, FilterCondition, FilterOperator};
+use std::sync::Arc;
+use table_view_lib::db::postgres::PostgresAdapter;
+use table_view_lib::db::{DbAdapter, RdbAdapter};
+use table_view_lib::models::{
+    AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,
+    ConstraintDefinition, CreateIndexRequest, CreateTableRequest, CreateTriggerRequest,
+    DatabaseType, DropColumnRequest, DropConstraintRequest, DropIndexRequest, DropTableRequest,
+    DropTriggerRequest, FilterCondition, FilterOperator, RenameTableRequest,
+};
 
 /// Helper: create a unique test table name to avoid collisions across tests.
 fn unique_table_name(prefix: &str) -> String {
@@ -1502,4 +1510,531 @@ async fn test_execute_query_bigint_select_emits_string_wire() {
     assert_eq!(cell.as_str(), Some("9223372036854775807"));
 
     adapter.disconnect_pool().await.unwrap();
+}
+
+// =============================================================================
+// Sprint 296 follow-up (2026-05-14) — PG RdbAdapter 트레잇 dispatch 통합
+// =============================================================================
+// 작성 이유: `db/postgres.rs` (390 line) 의 트레잇 dispatch wrapper 가
+// 4.62% 만 hit. inherent method 만 직접 호출하던 기존 시나리오는 트레잇 surface
+// 를 건너뛴다. Sprint 296 의 MySQL 측 (`db/mysql.rs`) 합류를 PG 로 mirror —
+// `Arc<dyn DbAdapter>` / `Arc<dyn RdbAdapter>` 로 호출해 wrapper 본체를 hit.
+// PG-only `create_trigger` / `drop_trigger` / `list_types` 도 같은 path 로.
+
+// Trait dispatch test — 단일 통합 시나리오로 38개 wrapper 메소드를 한 번씩 hit.
+// 시나리오 분할 비용보다 한 commit 안에서 surface 전체 회귀 가드 가치가 큼.
+#[tokio::test]
+async fn test_pg_trait_dispatch_covers_rdb_adapter_surface() {
+    let adapter = match common::setup_adapter(DatabaseType::Postgresql).await {
+        Some(a) => a,
+        None => return,
+    };
+    let raw = Arc::new(adapter);
+
+    // (1) DbAdapter — kind / ping. connect/disconnect 은 setup_adapter 이미 호출.
+    let db: Arc<dyn DbAdapter> = raw.clone();
+    assert!(
+        matches!(db.kind(), DatabaseType::Postgresql),
+        "trait kind() must report Postgresql"
+    );
+    db.ping().await.expect("trait ping");
+
+    // (2) RdbAdapter — read paths.
+    let rdb: Arc<dyn RdbAdapter> = raw.clone();
+
+    let namespaces = rdb.list_namespaces().await.expect("trait list_namespaces");
+    assert!(!namespaces.is_empty());
+
+    let dbs = rdb.list_databases().await.expect("trait list_databases");
+    assert!(!dbs.is_empty());
+
+    // PG `current_database` 는 trait default — execute_sql 경로로 SELECT
+    // current_database(). 명시적으로 호출해 default 분기 hit.
+    let cur = rdb
+        .current_database()
+        .await
+        .expect("trait current_database");
+    assert!(cur.is_some());
+
+    // (3) DDL / schema introspection — fresh table 으로 모든 path.
+    let table_name = unique_table_name("trait_disp");
+    let view_name = format!("{table_name}_v");
+    let parent_name = unique_table_name("trait_parent");
+    let child_name = unique_table_name("trait_child");
+    let fn_name = format!("fn_{}", unique_table_name("trait_fn"));
+    let trigger_name = format!("trg_{}", unique_table_name("trait_trg"));
+    let idx_name = format!("{table_name}_idx");
+
+    // create_table via trait.
+    let create_req = CreateTableRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: table_name.clone(),
+        columns: vec![
+            ColumnDefinition {
+                name: "id".into(),
+                data_type: "integer".into(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+                is_identity: true,
+            },
+            ColumnDefinition {
+                name: "label".into(),
+                data_type: "text".into(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            },
+        ],
+        primary_key: Some(vec!["id".into()]),
+        preview_only: false,
+        table_comment: Some("trait dispatch fixture".into()),
+        expected_database: None,
+    };
+    rdb.create_table(&create_req)
+        .await
+        .expect("trait create_table");
+
+    // execute_sql / execute_sql_batch / dry_run_sql_batch.
+    let _ = rdb
+        .execute_sql(
+            &format!("INSERT INTO \"{table_name}\" (label) VALUES ('a')"),
+            None,
+        )
+        .await
+        .expect("trait execute_sql INSERT");
+
+    let _ = rdb
+        .execute_sql_batch(
+            &[
+                format!("INSERT INTO \"{table_name}\" (label) VALUES ('b')"),
+                format!("INSERT INTO \"{table_name}\" (label) VALUES ('c')"),
+            ],
+            None,
+        )
+        .await
+        .expect("trait execute_sql_batch");
+
+    let dry = rdb
+        .dry_run_sql_batch(&[format!("SELECT COUNT(*) FROM \"{table_name}\"")], None)
+        .await
+        .expect("trait dry_run_sql_batch");
+    assert_eq!(dry.len(), 1);
+
+    // Introspection — list_tables / get_columns / query_table_data / count_null_rows.
+    let tables = rdb.list_tables("public").await.expect("trait list_tables");
+    assert!(tables.iter().any(|t| t.name == table_name));
+
+    let cols = rdb
+        .get_columns("public", &table_name, None)
+        .await
+        .expect("trait get_columns");
+    assert_eq!(cols.len(), 2);
+
+    let data = rdb
+        .query_table_data("public", &table_name, 1, 50, None, None, None, None)
+        .await
+        .expect("trait query_table_data");
+    assert_eq!(data.rows.len(), 3);
+
+    let null_count = rdb
+        .count_null_rows("public", &table_name, "label")
+        .await
+        .expect("trait count_null_rows");
+    assert_eq!(null_count, 0);
+
+    // stream_table_rows.
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<Vec<serde_json::Value>>>(4);
+    let streamed = rdb
+        .stream_table_rows(
+            "public",
+            &table_name,
+            10,
+            &["id".to_string(), "label".to_string()],
+            tx,
+            None,
+        )
+        .await
+        .expect("trait stream_table_rows");
+    assert_eq!(streamed, 3);
+    let mut total = 0usize;
+    while let Some(batch) = rx.recv().await {
+        total += batch.len();
+    }
+    assert_eq!(total, 3);
+
+    // create_index / get_table_indexes.
+    let idx_req = CreateIndexRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        index_name: idx_name.clone(),
+        columns: vec!["label".into()],
+        index_type: "btree".into(),
+        is_unique: false,
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.create_index(&idx_req)
+        .await
+        .expect("trait create_index");
+
+    let indexes = rdb
+        .get_table_indexes("public", &table_name, None)
+        .await
+        .expect("trait get_table_indexes");
+    assert!(indexes.iter().any(|i| i.name == idx_name));
+
+    // drop_index. NOTE: PG drop_index 에 `IF EXISTS` 위치 버그 (issue 별도) —
+    // `DROP INDEX "public".IF EXISTS "name"` 으로 emit 되어 syntax error. 본
+    // 시나리오는 `if_exists: false` 로 우회.
+    let drop_idx_req = DropIndexRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        index_name: idx_name.clone(),
+        table: String::new(),
+        if_exists: false,
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.drop_index(&drop_idx_req)
+        .await
+        .expect("trait drop_index");
+
+    // add_constraint + get_table_constraints + drop_constraint.
+    let uq_name = format!("{table_name}_uq_label");
+    let add_cons_req = AddConstraintRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        constraint_name: uq_name.clone(),
+        definition: ConstraintDefinition::Unique {
+            columns: vec!["label".into()],
+        },
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.add_constraint(&add_cons_req)
+        .await
+        .expect("trait add_constraint");
+    let constraints = rdb
+        .get_table_constraints("public", &table_name, None)
+        .await
+        .expect("trait get_table_constraints");
+    assert!(constraints.iter().any(|c| c.name == uq_name));
+
+    let drop_cons_req = DropConstraintRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        constraint_name: uq_name,
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.drop_constraint(&drop_cons_req)
+        .await
+        .expect("trait drop_constraint");
+
+    // alter_table / add_column / drop_column.
+    let add_col_req = AddColumnRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        column: ColumnDefinition {
+            name: "extra".into(),
+            data_type: "text".into(),
+            nullable: true,
+            default_value: None,
+            comment: None,
+            is_identity: false,
+        },
+        check_expression: None,
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.add_column(&add_col_req)
+        .await
+        .expect("trait add_column");
+
+    let alter_req = AlterTableRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        changes: vec![ColumnChange::Modify {
+            name: "extra".into(),
+            new_data_type: Some("varchar(100)".into()),
+            new_nullable: Some(true),
+            new_default_value: None,
+            using_expression: None,
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+    rdb.alter_table(&alter_req)
+        .await
+        .expect("trait alter_table preview");
+
+    let drop_col_req = DropColumnRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        column_name: "extra".into(),
+        cascade: false,
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.drop_column(&drop_col_req)
+        .await
+        .expect("trait drop_column");
+
+    // View introspection — create view, list/get/get_columns.
+    let _ = rdb
+        .execute_sql(
+            &format!("CREATE VIEW \"{view_name}\" AS SELECT id, label FROM \"{table_name}\""),
+            None,
+        )
+        .await
+        .expect("CREATE VIEW");
+    let views = rdb.list_views("public").await.expect("trait list_views");
+    assert!(views.iter().any(|v| v.name == view_name));
+    let view_def = rdb
+        .get_view_definition("public", &view_name)
+        .await
+        .expect("trait get_view_definition");
+    assert!(view_def.to_lowercase().contains("select"));
+    let view_cols = rdb
+        .get_view_columns("public", &view_name)
+        .await
+        .expect("trait get_view_columns");
+    assert_eq!(view_cols.len(), 2);
+    let _ = rdb
+        .execute_sql(&format!("DROP VIEW \"{view_name}\""), None)
+        .await
+        .ok();
+
+    // list_schema_columns.
+    let schema_map = rdb
+        .list_schema_columns("public")
+        .await
+        .expect("trait list_schema_columns");
+    assert!(schema_map.contains_key(&table_name));
+
+    // Functions — create + list + get_function_source.
+    let _ = rdb
+        .execute_sql(
+            &format!(
+                "CREATE FUNCTION \"{fn_name}\"(x INT) RETURNS INT \
+                 LANGUAGE SQL AS $$ SELECT x + 1 $$"
+            ),
+            None,
+        )
+        .await
+        .expect("CREATE FUNCTION");
+    let funcs = rdb
+        .list_functions("public")
+        .await
+        .expect("trait list_functions");
+    assert!(funcs.iter().any(|f| f.name == fn_name));
+    let fn_src = rdb
+        .get_function_source("public", &fn_name)
+        .await
+        .expect("trait get_function_source");
+    assert!(fn_src.contains("x + 1") || fn_src.contains("x+1"));
+
+    // Triggers — create_trigger / list_triggers / get_trigger_source / drop_trigger.
+    let create_trg_req = CreateTriggerRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        trigger_name: trigger_name.clone(),
+        timing: "BEFORE".into(),
+        events: vec!["INSERT".into()],
+        orientation: "ROW".into(),
+        when_expression: None,
+        function_schema: "public".into(),
+        function_name: fn_name.clone(),
+        function_arguments: Some("NEW.id".into()),
+        preview_only: true,
+        expected_database: None,
+    };
+    let trg_preview = rdb
+        .create_trigger(&create_trg_req)
+        .await
+        .expect("trait create_trigger preview");
+    assert!(trg_preview.sql.contains("CREATE TRIGGER"));
+
+    // Real trigger 는 BEFORE INSERT trigger function 이 reuse 가능한 형태로 작성
+    // 돼야 함. 본 시나리오의 fn 은 SQL function 으로 trigger function 자격이
+    // 없으므로 preview_only 로 dispatcher 만 hit. 실제 execute 는 sprint 별
+    // PG trigger 시나리오에서 cover.
+
+    let triggers = rdb
+        .list_triggers("public", &table_name)
+        .await
+        .expect("trait list_triggers");
+    // 본 fixture 는 trigger 를 실제로 만들지 않아 빈 vec — 동작 path 자체만 pin.
+    let _ = triggers;
+
+    let drop_trg_req = DropTriggerRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: table_name.clone(),
+        trigger_name: trigger_name.clone(),
+        cascade: false,
+        preview_only: true,
+        expected_database: None,
+    };
+    let drop_trg_preview = rdb
+        .drop_trigger(&drop_trg_req)
+        .await
+        .expect("trait drop_trigger preview");
+    assert!(drop_trg_preview.sql.contains("DROP TRIGGER"));
+
+    // get_trigger_source — unknown trigger 도 path 만 hit. PG 는 not-found 시
+    // Err(Connection) 을 반환할 수 있어 .ok() 로 두고 err 도 허용.
+    let _ = rdb
+        .get_trigger_source("public", &table_name, &trigger_name)
+        .await
+        .ok();
+
+    // list_types (PG-only override — MySQL 은 default Unsupported).
+    let types = rdb.list_types().await.expect("trait list_types");
+    assert!(types.iter().any(|t| t.name == "int4"));
+
+    // FK chain — parent/child + rename + drop.
+    let create_parent = CreateTableRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: parent_name.clone(),
+        columns: vec![ColumnDefinition {
+            name: "id".into(),
+            data_type: "integer".into(),
+            nullable: false,
+            default_value: None,
+            comment: None,
+            is_identity: false,
+        }],
+        primary_key: Some(vec!["id".into()]),
+        preview_only: false,
+        table_comment: None,
+        expected_database: None,
+    };
+    rdb.create_table(&create_parent)
+        .await
+        .expect("trait create_table parent");
+
+    let create_child = CreateTableRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: child_name.clone(),
+        columns: vec![
+            ColumnDefinition {
+                name: "id".into(),
+                data_type: "integer".into(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            },
+            ColumnDefinition {
+                name: "parent_id".into(),
+                data_type: "integer".into(),
+                nullable: false,
+                default_value: None,
+                comment: None,
+                is_identity: false,
+            },
+        ],
+        primary_key: Some(vec!["id".into()]),
+        preview_only: false,
+        table_comment: None,
+        expected_database: None,
+    };
+    rdb.create_table(&create_child)
+        .await
+        .expect("trait create_table child");
+
+    let fk_name = format!("{child_name}_fk_parent");
+    let add_fk_req = AddConstraintRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: child_name.clone(),
+        constraint_name: fk_name.clone(),
+        definition: ConstraintDefinition::ForeignKey {
+            columns: vec!["parent_id".into()],
+            reference_table: parent_name.clone(),
+            reference_columns: vec!["id".into()],
+            on_delete: Some("CASCADE".into()),
+            on_update: None,
+        },
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.add_constraint(&add_fk_req)
+        .await
+        .expect("trait add_constraint FK");
+
+    // rename_table.
+    let renamed = format!("{child_name}_renamed");
+    let rename_req = RenameTableRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: child_name.clone(),
+        new_name: renamed.clone(),
+        preview_only: false,
+        expected_database: None,
+    };
+    rdb.rename_table(&rename_req)
+        .await
+        .expect("trait rename_table");
+
+    // namespace_label / switch_database — both default to schema/Unsupported
+    // 가 아니라 PG impl 이 schema namespace + sub-pool switch 를 제공.
+    let label = raw.namespace_label();
+    assert!(matches!(label, table_view_lib::db::NamespaceLabel::Schema));
+
+    // switch_database — PG sub-pool 가 default DB ("postgres" / "table_view_test") 로
+    // 전환. 본 fixture 의 default DB 와 동일한 이름으로 호출해 dispatch wrapper hit.
+    if let Some(target_db) = cur.as_deref() {
+        rdb.switch_database(target_db).await.ok();
+    }
+
+    // Cleanup — drop_table via trait (parent/child/renamed/base).
+    for t in [renamed, parent_name, table_name] {
+        let drop_req = DropTableRequest {
+            connection_id: "c".into(),
+            schema: "public".into(),
+            table: t,
+            cascade: true,
+            preview_only: false,
+            expected_database: None,
+        };
+        rdb.drop_table(&drop_req).await.ok();
+    }
+    // Drop function (not via trait — no fn DDL in trait surface).
+    let _ = rdb
+        .execute_sql(&format!("DROP FUNCTION \"{fn_name}\"(INT)"), None)
+        .await
+        .ok();
+
+    // disconnect via DbAdapter trait.
+    db.disconnect().await.expect("trait disconnect");
+}
+
+// 별도 단위 — DbAdapter trait dispatch 의 connect path 회귀 가드. setup_adapter
+// 이 이미 connect 한 후 라 위 통합 시나리오는 connect 트레잇 wrapper 를 hit
+// 안 함. 본 시나리오는 raw adapter 로 시작해 trait connect 만 호출.
+#[tokio::test]
+async fn test_pg_trait_connect_dispatch_via_box_dyn_db_adapter() {
+    let config = match common::pg_test_config().await {
+        Some(c) => c,
+        None => return,
+    };
+    let raw = Arc::new(PostgresAdapter::new());
+    let db: Arc<dyn DbAdapter> = raw.clone();
+    db.connect(&config).await.expect("trait connect");
+    db.ping().await.expect("trait ping after connect");
+    db.disconnect().await.expect("trait disconnect");
 }

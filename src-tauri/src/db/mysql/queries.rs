@@ -138,10 +138,17 @@ fn cell_to_json(row: &sqlx::mysql::MySqlRow, idx: usize) -> serde_json::Value {
                 .unwrap_or(serde_json::Value::Null));
         }
         "DECIMAL" | "NEWDECIMAL" => {
-            // sqlx-mysql 의 decimal feature 비활성 상태에선 raw bytes 가
-            // ASCII decimal string 으로 들어오므로 String 으로 decode 후
-            // ADR 0026 patterm (numeric precision-sensitive) 따라 string
-            // 으로 유지.
+            // Sprint 296 follow-up — sqlx-mysql 의 prepared statement binary
+            // protocol 은 DECIMAL → String 자동 디코드를 제공하지 않는다 (이전
+            // 가정 오류 — Sprint 296 ignored test 가 노출). Cargo `bigdecimal`
+            // feature 를 enable 한 후 `BigDecimal::to_string()` 으로 정밀도-
+            // 손실 없는 base-10 string 으로 변환. ADR 0026 (PG) 와 동일한
+            // wire format (JSON string) 유지.
+            try_decode!(sqlx::types::BigDecimal, |v: sqlx::types::BigDecimal| {
+                serde_json::Value::String(v.to_string())
+            });
+            // 일부 driver path 가 ASCII string 으로 직접 노출하는 경우 (legacy
+            // text protocol) fallback.
             try_decode!(String, serde_json::Value::String);
         }
         "DATE" => {
