@@ -14,6 +14,7 @@ import { acceptCompletion } from "@codemirror/autocomplete";
 import FormDialog from "@components/ui/dialog/FormDialog";
 import { useMongoAutocomplete } from "@/hooks/useMongoAutocomplete";
 import { useDocumentStore } from "@stores/documentStore";
+import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
 /**
  * Lightweight JSON editor for inserting a single document. Parses on
@@ -187,6 +188,7 @@ export default function AddDocumentModal({
           ".cm-activeLine": { backgroundColor: "var(--muted)" },
           ".cm-cursor": { borderLeftColor: "var(--foreground)" },
         }),
+        autocompleteTooltipTheme,
       ],
     });
 

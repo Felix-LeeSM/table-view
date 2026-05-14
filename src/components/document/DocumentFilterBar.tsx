@@ -11,6 +11,7 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { acceptCompletion } from "@codemirror/autocomplete";
+import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
@@ -466,6 +467,7 @@ function RawMqlEditor({
           ".cm-activeLine": { backgroundColor: "var(--muted)" },
           ".cm-cursor": { borderLeftColor: "var(--foreground)" },
         }),
+        autocompleteTooltipTheme,
       ],
     });
 

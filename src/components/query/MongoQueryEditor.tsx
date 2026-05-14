@@ -17,6 +17,7 @@ import {
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import type { QueryMode } from "@stores/workspaceStore";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
+import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
 /**
  * MongoDB / document-paradigm query editor. Imports only MQL-aware
@@ -166,6 +167,7 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
               fontWeight: "600",
             },
           }),
+          autocompleteTooltipTheme,
         ],
       });
 

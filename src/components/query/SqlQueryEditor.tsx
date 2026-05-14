@@ -24,6 +24,7 @@ import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
 import { aliasColumnCompletionSource } from "@lib/sql/aliasColumnCompletion";
 import { cteColumnCompletionSource } from "@lib/sql/cteColumnCompletion";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
+import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
 /**
  * RDB / SQL-paradigm query editor. Imports only SQL-aware extensions —
@@ -222,6 +223,7 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
               opacity: "0.3",
             },
           }),
+          autocompleteTooltipTheme,
         ],
       });
 
