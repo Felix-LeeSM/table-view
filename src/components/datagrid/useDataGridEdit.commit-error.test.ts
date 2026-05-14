@@ -5,10 +5,11 @@ import type { TableData } from "@/types/schema";
 // `?raw` is a Vite-supported query suffix that imports a file's text as a
 // string. We use it for the static regression guard so the test verifies the
 // SQL branch catch block is not empty without depending on Node fs APIs
-// (the project tsconfig does not pull in `@types/node`). Sprint 193
-// (AC-193-03) extracted runRdbBatch into useDataGridPreviewCommit; the
-// guard now reads that hook's source instead of useDataGridEdit's.
-import useDataGridPreviewCommitSource from "@/hooks/useDataGridPreviewCommit.ts?raw";
+// (the project tsconfig does not pull in `@types/node`). The RDB executor
+// is now `executeRdbBatch` inside the paradigm adapter module — the guard
+// reads from there to keep the silent-swallow guard pinned to the actual
+// catch block.
+import paradigmEditAdapterSource from "@/lib/datagrid/paradigmEditAdapter.ts?raw";
 
 // Sprint 93 — handleExecuteCommit's SQL branch must surface commit failures
 // instead of swallowing them. Sprint 183 (date 2026-05-01) flipped the call
@@ -398,20 +399,23 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
 
   it("static regression guard: SQL branch catch block is non-empty", () => {
     // AC-05 / Sprint 183 — ensure no future change re-introduces the
-    // silent-swallow bug. Sprint 186 extracted the try/catch + cleanup
-    // into a `runRdbBatch` helper. Sprint 193 (AC-193-03) moved that
-    // helper into `useDataGridPreviewCommit`, so the slice now reads
-    // from the hook's source.
-    const source = useDataGridPreviewCommitSource;
+    // silent-swallow bug. The RDB executor (`executeRdbBatch`) now lives
+    // in the paradigm adapter module; the slice covers its function body
+    // up to the closing brace.
+    const source = paradigmEditAdapterSource;
 
-    const sqlBranchStart = source.indexOf("const runRdbBatch = useCallback(");
+    const sqlBranchStart = source.indexOf("async function executeRdbBatch(");
     expect(
       sqlBranchStart,
-      "runRdbBatch marker not found — useDataGridEdit refactor required",
+      "executeRdbBatch marker not found — paradigm adapter refactor required",
     ).toBeGreaterThan(-1);
     const sqlBranchSlice = source.slice(sqlBranchStart);
-    // First `}, [` after the slice closes the useCallback dependency array.
-    const sqlBranchEnd = sqlBranchSlice.indexOf("}, [");
+    // Find the matching closing brace of the top-level function. The next
+    // top-level `\nfunction` / `\nexport function` after the start closes it.
+    const nextTopLevelDeclRe =
+      /\n(?:export\s+)?(?:function|async\s+function)\b/;
+    const nextDecl = sqlBranchSlice.slice(1).search(nextTopLevelDeclRe);
+    const sqlBranchEnd = nextDecl === -1 ? sqlBranchSlice.length : nextDecl + 1;
     const sqlBranchSource = sqlBranchSlice.slice(0, sqlBranchEnd);
 
     // Empty-catch shape: `} catch (err?) { whitespace + // comments only }`.
@@ -424,13 +428,16 @@ describe("useDataGridEdit — Sprint 93 commit error surfacing", () => {
       "SQL branch catch must not be empty (sprint-93 regression guard)",
     ).toHaveLength(0);
 
-    // Positive assertion: the SQL branch wires the failure through
-    // commitError, calls executeQueryBatch (single transaction), and
-    // surfaces the standardised rolled-back wording. A future refactor
-    // that removes the surfacing path will trip this assertion.
-    expect(sqlBranchSource).toMatch(/setCommitError\(/);
+    // Positive assertion: the SQL branch surfaces the failure as a
+    // structured `BatchResult` ({ ok: false, failedIndex, failedKey,
+    // errorMessage }) that the hook above wires into commitError. The
+    // executor calls `executeQueryBatch` (single transaction) and emits
+    // the standardised rolled-back wording. A future refactor that
+    // removes the surfacing path will trip these assertions.
     expect(sqlBranchSource).toMatch(/executeQueryBatch\(/);
     expect(sqlBranchSource).toMatch(/all changes rolled back/);
+    expect(sqlBranchSource).toMatch(/ok:\s*false/);
+    expect(sqlBranchSource).toMatch(/errorMessage/);
     // Sprint 183 — old partial-failure tokens must NOT reappear.
     expect(sqlBranchSource).not.toMatch(/executed: \$\{/);
     expect(sqlBranchSource).not.toMatch(/failed at: \$\{/);
