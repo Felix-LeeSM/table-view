@@ -214,7 +214,8 @@ export default function FilterBar({
                 onValueChange={(v) => updateFilter(index, { column: v })}
               >
                 <SelectTrigger
-                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                  size="xs"
+                  className="rounded border border-border bg-background text-foreground"
                   aria-label="Filter column"
                 >
                   <SelectValue />
@@ -244,7 +245,8 @@ export default function FilterBar({
                 }}
               >
                 <SelectTrigger
-                  className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+                  size="xs"
+                  className="rounded border border-border bg-background text-foreground"
                   aria-label="Filter operator"
                 >
                   <SelectValue />

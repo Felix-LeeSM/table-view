@@ -508,7 +508,7 @@ export default function DocumentDataGrid({
                     )
                   }
                   className={cn(
-                    "cursor-pointer border-b border-border hover:bg-muted",
+                    "min-h-8 cursor-pointer border-b border-border hover:bg-muted",
                     selected && "bg-accent dark:bg-accent/60",
                     isDeleted &&
                       "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",

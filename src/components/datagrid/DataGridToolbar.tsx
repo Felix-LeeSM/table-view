@@ -361,7 +361,8 @@ export default function DataGridToolbar({
             onValueChange={(v) => onSetPageSize(Number(v))}
           >
             <SelectTrigger
-              className="!h-auto min-h-0 rounded border border-border bg-background px-1 py-1 text-xs text-foreground shadow-none"
+              size="xs"
+              className="rounded border border-border bg-background px-1 text-foreground shadow-none"
               aria-label="Page size"
             >
               <SelectValue />

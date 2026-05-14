@@ -11,11 +11,7 @@ import {
   deriveEditorSeed,
   getInputTypeForColumn,
 } from "../useDataGridEdit";
-import {
-  isBlobColumn,
-  parseFkReference,
-  ROW_HEIGHT_ESTIMATE,
-} from "./columnUtils";
+import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
 /**
@@ -148,15 +144,6 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
     // Sprint 261 — sum-of-cols > parent width 시 row 박스가 grid tracks 합만큼
     // 늘어나야 border-b / hover:bg-muted 가 끝까지 그려진다.
     minWidth: "max-content",
-    // 2026-05-11 — pin row height to the virtualizer estimate so the
-    // eager path (last page when totalBodyRowCount drops below
-    // VIRTUALIZE_THRESHOLD) doesn't render shorter than the virtualized
-    // path on prior pages. Pre-fix only the virtualized branch fed
-    // `height: virtualRow.size` through `rowStyle`; eager rows used the
-    // natural text-xs + py-1 height (~25px) and looked visibly cramped
-    // ("py가 사라지는 것 같음"). The virtualized override still wins
-    // because `rowStyle` is spread last.
-    minHeight: ROW_HEIGHT_ESTIMATE,
     ...rowStyle,
   };
 
@@ -164,7 +151,7 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
     <div
       role="row"
       aria-rowindex={rowIdx + 2}
-      className={`border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
+      className={`min-h-8 border-b border-border hover:bg-muted${isSelected ? " bg-accent/20" : ""}${isDeleted ? " line-through opacity-50" : ""}`}
       style={mergedStyle}
       onClick={(e) => onSelectRow(rowIdx, e.metaKey || e.ctrlKey, e.shiftKey)}
       onContextMenu={(e) => {
