@@ -367,3 +367,191 @@ paradigm 에서는 prop 이 전달되지만 `+ Insert ▾` 자체가
 
 ---
 
+
+### D-10: Dispatch logic stays inline in `useQueryExecution.ts`
+
+**문제**: Sprint 311 (Phase 28 Slice A5) 의 parser-driven Run dispatch
+를 어디에 놓을 것인가. 후보: (1) `useQueryExecution.ts` 내부 inline,
+(2) `queryHelpers.ts` 로 helper 추출, (3) 신규 `mongoDispatch.ts` 모듈.
+
+**결정**: (1) — inline 유지. `dispatchMongoshCall` + 6 method helper
+(`runDocumentFind` / `runDocumentFindOne` / `runDocumentCount` /
+`runDocumentEstimatedCount` / `runDocumentDistinct` / `runMongoAggregateNow`)
+는 모두 `useCallback` 으로 hook 내부에 정의. 각 helper 가 hook scope
+의 `tab.id`, `tab.connectionId`, store action (`completeQuery` /
+`failQuery` / `updateQueryState`), `recordHistory` 를 클로저로 쓰기에
+별도 모듈로 추출하면 6 개 추가 인자를 props 처럼 받아야 함 → 추출
+이득보다 인자 churn 비용이 크다.
+
+**근거**:
+1. **Hook scope dependency**: 각 method helper 는 store action 5 종 +
+   `recordHistory` + `tab.id` 를 사용. 추출 시 helper 가 hook 형태가
+   되어야 하며 그러면 사실상 hook decomposition 이 됨. A5 의 scope
+   를 넘는 refactor.
+2. **Test surface 안정**: `useQueryExecution.test.ts` 는 hook 1 개의
+   contract 를 testing. inline 유지 시 테스트 추가만으로 contract
+   확장 가능.
+3. **A6 (Sprint 312)** 에서 write-path dispatch 가 추가됨 — 그때 8
+   write method 가 합류하면 그 시점에 helper 추출 ROI 가 재평가됨.
+   지금 추출하면 A6 의 5 추가 helper 도 같은 module 로 묶거나
+   helper 들을 다시 정리해야 함.
+
+**대안**:
+- `queryHelpers.ts` 로 추출 — 거부. 현재 `queryHelpers.ts` 는 pure
+  유틸 (`readDocumentContext`, `isRecord`, `dispatchDbMutationHint`)
+  를 담고 있어 dispatch helper 의 store-action coupling 과 결이 다름.
+- 신규 `mongoDispatch.ts` — 거부. 위 1 의 인자 churn 비용 + A6 추가
+  시 재정리 필요.
+
+**영향**: `useQueryExecution.ts` 가 ~1500 라인. 충분히 큰 함수지만
+각 helper 가 자기 책임만 가지고 있어 가독성은 유지됨. A6 이후
+helper 가 12 개를 넘으면 그때 추출 그릴링.
+
+---
+
+### D-11: Cursor chain → FindBody mapping은 sort/limit/skip 만 (projection 제외)
+
+**문제**: A1 의 `ParsedMongoshCall.cursorChain` 은 `{ name, args }`
+step list. `FindBody` 는 `{ filter, sort, projection, skip, limit }`.
+projection 을 chain 으로 받을지 / 따로 받을지.
+
+**결정**: A5 는 `sort` / `limit` / `skip` 만 mapping. `projection`
+은 추후 A4 snippet 의 wrapped fragment 로 전달 (A6 이상에서 강화).
+`.toArray()` 는 parsed but ignored (default IPC 가 array 반환).
+
+**근거**:
+1. **A1 의 chain shape**: A1 의 `CURSOR_CHAIN_METHODS` 는 `sort` /
+   `limit` / `skip` / `toArray` 만 허용. projection 은 mongosh 에서
+   `.project({...})` 가 아닌 `find({}, projection)` 의 2nd arg 또는
+   `.projection({...})` 로 들어옴. A1 이 아직 후자를 캡처하지 않음.
+2. **`find(filter, options)` 의 2nd arg**: 추후 A6 / A1 확장에서
+   parsed.args[1] 로 capture 가능. A5 는 args[0] (filter) 만 사용.
+3. **사용자 routing**: projection 이 필요한 사용자는 A4 snippet
+   menu 의 "Projection Query" template (`db.<coll>.find(<filter>,
+   <projection>)`) 를 사용. A5 가 두 path 를 동시에 wire 하면
+   confusion.
+
+**대안**:
+- `.projection({...})` chain step 도 mapping — 거부. A1 의
+  `CURSOR_CHAIN_METHODS` 에 추가가 필요한데 그건 A1 동결 위반.
+- `find(filter, projection)` 의 2nd arg mapping — 거부. A1 의 parser
+  는 args 를 그대로 통과시키지만 A5 에서 mapping 추가 시 추가 test
+  + edge case (`null` projection, sparse object). A6 가 더 적합한
+  scope.
+
+**영향**: 사용자가 `db.users.find({}).projection({})` 를 쳐도 A5 는
+`invalid-cursor-chain` error 를 surface (A1 가 reject). A5 의 documented
+limitation 이며 A6 가 polish.
+
+---
+
+### D-12: `findOne(None)` 은 빈 grid 로 렌더링 (A6 가 "No match" 패널로 polish)
+
+**문제**: `findOne` 이 `null` (= 매치 없음) 반환 시 UI 가 어떻게 표현
+하는가. 후보: (a) 빈 grid (`columns: []`, `rows: []`), (b) sentinel
+row (`columns: [{name: "result"}], rows: [["(no match)"]]`).
+
+**결정**: (a) — 빈 grid. `find({})` 가 0 docs 반환과 동일한 shape.
+
+**근거**:
+1. **Consistency**: `find` 와 `findOne` 의 empty case 가 같은 shape →
+   grid 가 paradigm 별 분기 없이 동일 path.
+2. **A6 polish responsibility**: AC-311 의 scope 는 "wire shapes for
+   scalar/list; A6 will polish rendering". findOne empty 도 같은 카테고리.
+3. **Cell sentinel vs empty grid 의 ambiguity**: sentinel row 를
+   넣으면 사용자가 "1 row matched, value is the string '(no match)'"
+   로 오해할 가능성. 빈 grid 가 unambiguous.
+
+**대안**:
+- Sentinel row — 거부. 위 3 의 오해 risk + A6 의 "No match" 패널
+  scope 침해.
+
+**영향**: A5 의 findOne null case 는 grid 가 row 0 으로 렌더링. A6
+가 dedicated "No match" 패널 mount.
+
+---
+
+### D-13: History `queryMode` 는 parsed method 이름이 win (legacy persisted 무시)
+
+**문제**: persisted legacy tab 이 `queryMode: "aggregate"` 를 carry
+하지만 사용자가 editor 에 `db.coll.find(...)` 를 쳐 실행. history
+entry 의 `queryMode` 는 무엇이 들어가야 하는가.
+
+**결정**: parsed method 이름 (`"find"`) 가 win. 즉 history 가 실제
+실행된 method 를 reflect. 사용자 가 `queryMode === "aggregate"` 로
+filter 했을 때 보이는 entry 는 "실제로 aggregate 를 실행한 entry" 만.
+
+**근거**:
+1. **History 의 의미**: history 는 "내가 무엇을 실행했는가" 의 기록.
+   tab.queryMode 는 persisted UI state 이지 "이번 실행" 의 method 가
+   아님. 사용자 mental model 과 align.
+2. **Filter UI compat**: 기존 `queryMode === "aggregate"` filter 가
+   "내가 실행한 aggregate" 만 보여주는 게 더 정확.
+3. **Backward-compat**: 사용자가 legacy 의 `tab.queryMode: "aggregate"`
+   를 가진 tab 에서 `db.coll.find(...)` 를 실행해도 history 는
+   `"find"` 로 기록. 사용자가 새로 만든 tab 의 동작과 일관.
+
+**대안**:
+- `tab.queryMode` 우선 — 거부. 위 1 의 mental-model misalignment.
+- 둘 다 기록 (`queryMode`, `executedMethod`) — 거부. schema churn +
+  filter UI 변경 비용.
+
+**영향**: history 의 `queryMode` 는 6 read method (A5) + 7 write
+method (A6) 의 superset union 으로 widening. `QueryMode` type 도
+같이 widening (`src/stores/workspaceStore/types.ts`).
+
+---
+
+### D-14: collection-mismatch 에러 메시지는 contract 의 영어 wording 채택
+
+**문제**: tab.collection 이 set 이고 parsed.collection 과 다를 때
+surface 할 메시지. 후보: (a) 영어 (contract AC-02 verbatim),
+(b) Korean translation.
+
+**결정**: (a) — contract 의 영어 wording 그대로:
+`"Editor targets collection '<parsed>' but tab is bound to '<bound>'."`
+
+**근거**:
+1. **Contract 정합성**: AC-311-02 가 exact wording 을 명시. wording
+   변경은 contract 재협의가 필요.
+2. **Codebase 의 다른 에러 메시지**: 대부분 영어 (예: `"Document
+   query tabs require a target database and collection."`). 일관성.
+3. **i18n**: 추후 i18n 도입 시 일괄 변환 대상.
+
+**대안**:
+- Korean wording — 거부. 위 1/2.
+
+**영향**: `useQueryExecution.test.ts` 의 collection-mismatch 회귀가
+이 wording 으로 lock.
+
+---
+
+### D-15: Pending confirm payload 는 parsed pipeline 만 보유 (full `ParsedMongoshCall` 아님)
+
+**문제**: `pendingMongoConfirm` / `pendingMongoWarn` 의 payload 는
+무엇을 보유하는가. 후보: (a) `{ pipeline: Record<string, unknown>[] }`
+(현재 shape), (b) `{ parsed: ParsedMongoshCall }` (전체 보존).
+
+**결정**: (a) — pipeline 만. 기존 dialog consumer 호환성 100% 유지.
+
+**근거**:
+1. **Backward-compat**: `ConfirmDestructiveDialog` / `MqlPreviewModal`
+   이 이미 `pipeline: Record<string, unknown>[]` shape 을 consume.
+   shape 변경은 modal 의 prop type + JSX 변경을 동반.
+2. **Confirm-flow 의 isolation 보장**: 사용자가 editor 를 mutate 한
+   경우에도 confirm callback 이 parsed pipeline 으로 re-dispatch.
+   AC-311-09 의 stale-editor 격리 가드는 pipeline 만 보유해도 충족.
+3. **A6 가 method name 을 modal 에 노출하고 싶다면**: 그때 modal
+   prop 에 별도 `method?: MongoshMethod` 를 추가하면 됨. 지금은
+   needed 아님.
+
+**대안**:
+- 전체 `ParsedMongoshCall` 보존 — 거부. 위 1 의 호환성 비용.
+- pipeline + method tuple — 거부. 위 3 의 timing.
+
+**영향**: `useQueryExecution.ts` 의 `setPendingMongoConfirm({ pipeline,
+reason })` / `setPendingMongoWarn({ pipeline })` 시그니처 불변.
+`confirmMongoDangerous` → `runMongoAggregateNow(pipeline, collection)`
+재진입 path 도 동일.
+
+---

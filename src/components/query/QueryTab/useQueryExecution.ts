@@ -7,6 +7,10 @@ import {
   cancelQuery,
   findDocuments,
   aggregateDocuments,
+  findOneDocument,
+  countDocuments,
+  estimatedDocumentCount,
+  distinctDocuments,
 } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
@@ -16,13 +20,16 @@ import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
-import type { QueryTab } from "@stores/workspaceStore";
+import type { QueryTab, QueryMode } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
 import {
+  parseMongoshExpression,
+  type ParsedMongoshCall,
+} from "@lib/mongo/mongoshParser";
+import {
   readDocumentContext,
   isRecord,
-  isRecordArray,
   dispatchDbMutationHint,
 } from "./queryHelpers";
 
@@ -201,6 +208,16 @@ export function useQueryExecution({
   // History recording is the caller's responsibility (the tabStore no
   // longer reaches across stores). We rebuild the payload here so the
   // 8 call sites can pass only the variable fields below.
+  //
+  // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — `queryMode` now accepts
+  // an override so document-paradigm dispatch can record the **parsed
+  // method name** (`"find"` / `"aggregate"` / `"countDocuments"` / etc.)
+  // instead of the persisted `tab.queryMode`. RDB call sites continue
+  // to pass nothing and fall back to `tab.queryMode` (`"sql"`).
+  // Backwards-compat: any filter/search consumer that previously matched
+  // `queryMode === "aggregate"` keeps working unchanged because aggregate
+  // entries still carry `"aggregate"` — only the source of truth flipped
+  // from the toggle state to the parser output.
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const recordHistory = useCallback(
     (payload: {
@@ -208,6 +225,7 @@ export function useQueryExecution({
       executedAt: number;
       duration: number;
       status: QueryHistoryStatus;
+      queryMode?: QueryMode;
     }) => {
       addHistoryEntry({
         sql: payload.sql,
@@ -217,7 +235,7 @@ export function useQueryExecution({
         source: "raw",
         connectionId: tab.connectionId,
         paradigm: tab.paradigm,
-        queryMode: tab.queryMode,
+        queryMode: payload.queryMode ?? tab.queryMode,
         database: tab.database,
         collection: tab.collection,
       });
@@ -269,10 +287,23 @@ export function useQueryExecution({
   // dialog can re-enter the same path with the pending pipeline. Mirrors
   // the inline find branch (running-set → dispatch → adapt → complete →
   // history) but for `aggregateDocuments`.
+  //
+  // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — accepts an optional
+  // `collectionOverride` so free-form document tabs (without bound
+  // `tab.collection`) can re-enter the confirm flow with the
+  // parser-extracted collection name. History records the parsed method
+  // (`"aggregate"`) explicitly so backward-compat consumers keep seeing
+  // the same value the legacy `tab.queryMode === "aggregate"` branch
+  // emitted.
   const runMongoAggregateNow = useCallback(
-    async (pipeline: Record<string, unknown>[]) => {
-      const docCtx = readDocumentContext(tab);
-      if (!docCtx) {
+    async (
+      pipeline: Record<string, unknown>[],
+      collectionOverride?: string,
+    ) => {
+      const baseCtx = readDocumentContext(tab);
+      const resolvedDatabase = baseCtx?.database ?? tab.database;
+      const resolvedCollection = collectionOverride ?? baseCtx?.collection;
+      if (!resolvedDatabase || !resolvedCollection) {
         updateQueryState(tab.id, {
           status: "error",
           error:
@@ -286,8 +317,8 @@ export function useQueryExecution({
       try {
         const docResult = await aggregateDocuments(
           tab.connectionId,
-          docCtx.database,
-          docCtx.collection,
+          resolvedDatabase,
+          resolvedCollection,
           pipeline,
         );
         const queryResult: import("@/types/query").QueryResult = {
@@ -303,6 +334,7 @@ export function useQueryExecution({
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "success",
+          queryMode: "aggregate",
         });
       } catch (err) {
         failQuery(
@@ -315,6 +347,7 @@ export function useQueryExecution({
           executedAt: Date.now(),
           duration: Date.now() - startTime,
           status: "error",
+          queryMode: "aggregate",
         });
       }
     },
@@ -642,6 +675,483 @@ export function useQueryExecution({
     setPendingMongoWarn(null);
   }, []);
 
+  // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — parser-driven document
+  // dispatch. Routes a `ParsedMongoshCall` to one of the 6 read-path
+  // IPC wrappers (find / findOne / aggregate / countDocuments /
+  // estimatedDocumentCount / distinct), adapts the response into the
+  // shared `QueryResult` shape (with `resultKind` for scalar/list
+  // panels — A6 polishes the actual rendering), and records history
+  // with the parsed method name. Aggregate retains the Safe Mode gate
+  // path; STOP/WARN dialogs store the PARSED pipeline so the confirm
+  // flow is isolated from any editor mutation between prompt and click.
+  // Write methods land in A6 (Sprint 312) — A5 returns an explanatory
+  // error if the parser surfaces one.
+  const dispatchMongoshCall = useCallback(
+    async (
+      parsed: ParsedMongoshCall,
+      ctx: {
+        connectionId: string;
+        database: string;
+        collection: string;
+        rawSql: string;
+      },
+    ) => {
+      const { connectionId, database, collection, rawSql } = ctx;
+
+      // ── aggregate (Safe Mode gate retained) ───────────────────────────
+      if (parsed.method === "aggregate") {
+        const pipelineRaw = parsed.args[0];
+        if (!Array.isArray(pipelineRaw)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "Pipeline must be an array of stage objects.",
+          });
+          return;
+        }
+        const pipeline = pipelineRaw.filter(isRecord) as Record<
+          string,
+          unknown
+        >[];
+        if (pipeline.length !== pipelineRaw.length) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "Pipeline must be an array of stage objects.",
+          });
+          return;
+        }
+        const analysis = analyzeMongoPipeline(pipeline);
+        const decision = safeModeGate.decide(analysis);
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        // STOP tier — parsed pipeline stored verbatim. Confirm-flow
+        // re-enters with the captured value so editor mutation between
+        // prompt and click cannot smuggle a benign pipeline through the
+        // gate.
+        if (decision.action === "confirm") {
+          setPendingMongoConfirm({
+            pipeline,
+            reason: decision.reason,
+          });
+          return;
+        }
+        if (analysis.severity === "warn") {
+          setPendingMongoWarn({ pipeline });
+          return;
+        }
+        await runMongoAggregateNow(pipeline, collection);
+        return;
+      }
+
+      // ── find (FindBody from args + cursor chain) ──────────────────────
+      if (parsed.method === "find") {
+        const filterArg = parsed.args[0];
+        const body: FindBody = {};
+        if (isRecord(filterArg)) {
+          body.filter = filterArg;
+        } else if (filterArg !== undefined) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "find() filter must be an object.",
+          });
+          return;
+        }
+        // D-11 — cursor chain → FindBody fields. `projection` is not
+        // captured by A1's chain shape yet; users wanting projection
+        // pass it via the A4 snippet template. `.toArray()` is parsed
+        // but a no-op (default IPC behaviour returns an array).
+        for (const step of parsed.cursorChain) {
+          if (step.name === "sort") {
+            const arg = step.args[0];
+            if (isRecord(arg)) body.sort = arg;
+          } else if (step.name === "limit") {
+            const arg = step.args[0];
+            if (typeof arg === "number") body.limit = arg;
+          } else if (step.name === "skip") {
+            const arg = step.args[0];
+            if (typeof arg === "number") body.skip = arg;
+          }
+          // `toArray` — no-op.
+        }
+        await runDocumentFind(connectionId, database, collection, body, rawSql);
+        return;
+      }
+
+      // ── findOne ───────────────────────────────────────────────────────
+      if (parsed.method === "findOne") {
+        const filterArg = parsed.args[0];
+        if (filterArg !== undefined && !isRecord(filterArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "findOne() filter must be an object.",
+          });
+          return;
+        }
+        await runDocumentFindOne(
+          connectionId,
+          database,
+          collection,
+          filterArg as Record<string, unknown> | undefined,
+          rawSql,
+        );
+        return;
+      }
+
+      // ── countDocuments → scalar ───────────────────────────────────────
+      if (parsed.method === "countDocuments") {
+        const filterArg = parsed.args[0];
+        if (filterArg !== undefined && !isRecord(filterArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "countDocuments() filter must be an object.",
+          });
+          return;
+        }
+        await runDocumentCount(
+          connectionId,
+          database,
+          collection,
+          filterArg as Record<string, unknown> | undefined,
+          rawSql,
+        );
+        return;
+      }
+
+      // ── estimatedDocumentCount → scalar ───────────────────────────────
+      if (parsed.method === "estimatedDocumentCount") {
+        await runDocumentEstimatedCount(
+          connectionId,
+          database,
+          collection,
+          rawSql,
+        );
+        return;
+      }
+
+      // ── distinct → list ───────────────────────────────────────────────
+      if (parsed.method === "distinct") {
+        const fieldArg = parsed.args[0];
+        if (typeof fieldArg !== "string") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "distinct() requires a string field name as the first argument.",
+          });
+          return;
+        }
+        const filterArg = parsed.args[1];
+        if (filterArg !== undefined && !isRecord(filterArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "distinct() filter must be an object.",
+          });
+          return;
+        }
+        await runDocumentDistinct(
+          connectionId,
+          database,
+          collection,
+          fieldArg,
+          filterArg as Record<string, unknown> | undefined,
+          rawSql,
+        );
+        return;
+      }
+
+      // ── write methods (A6 / Sprint 312) ───────────────────────────────
+      updateQueryState(tab.id, {
+        status: "error",
+        error: `Method '${parsed.method}' is not yet wired (Phase 28 Slice A6 will add the write-path dispatch).`,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tab.id, safeModeGate, runMongoAggregateNow, updateQueryState],
+  );
+
+  // Sprint 311 — find dispatch helper. Mirrors the previous inline
+  // findDocuments block; kept inline-ish so the cursor-chain mapping
+  // above retains a single dispatch site per method.
+  const runDocumentFind = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      body: FindBody,
+      rawSql: string,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const docResult = await findDocuments(
+          connectionId,
+          database,
+          collection,
+          body,
+        );
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: docResult.columns,
+          rows: docResult.rows,
+          total_count: docResult.total_count,
+          execution_time_ms: docResult.execution_time_ms,
+          query_type: "select",
+        };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode: "find",
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode: "find",
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  // Sprint 311 — findOne dispatch. D-12: `null` (no match) renders as
+  // an empty grid (`columns: []`, `rows: []`) for now; A6 will swap in
+  // a dedicated "No match" panel.
+  const runDocumentFindOne = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      filter: Record<string, unknown> | undefined,
+      rawSql: string,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const docRow = await findOneDocument(
+          connectionId,
+          database,
+          collection,
+          filter,
+        );
+        const queryResult: import("@/types/query").QueryResult =
+          docRow === null
+            ? {
+                columns: [],
+                rows: [],
+                total_count: 0,
+                execution_time_ms: Date.now() - startTime,
+                query_type: "select",
+              }
+            : {
+                columns: docRow.columns,
+                rows: [docRow.row],
+                total_count: 1,
+                execution_time_ms: Date.now() - startTime,
+                query_type: "select",
+              };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode: "findOne",
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode: "findOne",
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  // Sprint 311 — count → scalar QueryResult (`resultKind: "scalar"`).
+  // A6 will render the dedicated ScalarPanel; A5 wires the shape only.
+  const runDocumentCount = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      filter: Record<string, unknown> | undefined,
+      rawSql: string,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const count = await countDocuments(
+          connectionId,
+          database,
+          collection,
+          filter,
+        );
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: [{ name: "count", data_type: "Int64", category: "int" }],
+          rows: [[count]],
+          total_count: 1,
+          execution_time_ms: Date.now() - startTime,
+          query_type: "select",
+          resultKind: "scalar",
+        };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode: "countDocuments",
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode: "countDocuments",
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  // Sprint 311 — estimatedDocumentCount → scalar QueryResult (same
+  // shape as `countDocuments`). Backed by the cheap metadata count IPC.
+  const runDocumentEstimatedCount = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      rawSql: string,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const count = await estimatedDocumentCount(
+          connectionId,
+          database,
+          collection,
+        );
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: [{ name: "count", data_type: "Int64", category: "int" }],
+          rows: [[count]],
+          total_count: 1,
+          execution_time_ms: Date.now() - startTime,
+          query_type: "select",
+          resultKind: "scalar",
+        };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode: "estimatedDocumentCount",
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode: "estimatedDocumentCount",
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  // Sprint 311 — distinct → list QueryResult (1col `value`, N rows).
+  // `resultKind: "list"` flags the response so A6 can swap the grid
+  // for a vertical list panel.
+  const runDocumentDistinct = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      field: string,
+      filter: Record<string, unknown> | undefined,
+      rawSql: string,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const values = await distinctDocuments(
+          connectionId,
+          database,
+          collection,
+          field,
+          filter,
+        );
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: [{ name: "value", data_type: "string", category: "text" }],
+          rows: values.map((v) => [v]),
+          total_count: values.length,
+          execution_time_ms: Date.now() - startTime,
+          query_type: "select",
+          resultKind: "list",
+        };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode: "distinct",
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode: "distinct",
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
   const handleExecute = useCallback(async () => {
     const sql = tab.sql.trim();
     if (!sql) return;
@@ -661,13 +1171,17 @@ export function useQueryExecution({
       return;
     }
 
-    // Document paradigm (find / aggregate). Parses the editor body as
-    // JSON, dispatches the matching Tauri command, and adapts
-    // DocumentQueryResult into the shared QueryResult shape so the grid
-    // doesn't fork by paradigm.
+    // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — document paradigm
+    // Run dispatch is now driven by `parseMongoshExpression`. The legacy
+    // `JSON.parse(sql)` + `tab.queryMode === "aggregate"` branch is
+    // gone; the parsed method discriminator picks the matching IPC
+    // wrapper. Free-form tabs (no `tab.collection` binding) inherit the
+    // collection from the parsed expression. STOP-tier aggregates still
+    // route through `pendingMongoConfirm` with the **parsed pipeline**
+    // stored verbatim — confirm-flow re-dispatch is isolated from any
+    // editor mutation that happens between prompt and confirm-click.
     if (tab.paradigm === "document") {
-      const docCtx = readDocumentContext(tab);
-      if (!docCtx) {
+      if (!tab.database) {
         updateQueryState(tab.id, {
           status: "error",
           error:
@@ -676,127 +1190,34 @@ export function useQueryExecution({
         return;
       }
 
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(sql);
-      } catch (err) {
+      const parsed = parseMongoshExpression(sql);
+      if (parsed.kind === "error") {
         updateQueryState(tab.id, {
           status: "error",
-          error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+          error: parsed.message,
         });
         return;
       }
 
-      // The aggregate gate runs before the running-state transition so
-      // `block`/`confirm` decisions cannot strand the tab in `running`.
-      if (tab.queryMode === "aggregate") {
-        if (!isRecordArray(parsed)) {
-          updateQueryState(tab.id, {
-            status: "error",
-            error: "Pipeline must be a JSON array of stage objects.",
-          });
-          return;
-        }
-        const analysis = analyzeMongoPipeline(parsed);
-        const decision = safeModeGate.decide(analysis);
-        if (decision.action === "block") {
-          updateQueryState(tab.id, {
-            status: "error",
-            error: decision.reason,
-          });
-          return;
-        }
-        // STOP tier — destructive aggregate ($out / $merge) always routes
-        // to the existing ConfirmDestructiveDialog (Sprint 231).
-        if (decision.action === "confirm") {
-          setPendingMongoConfirm({
-            pipeline: parsed,
-            reason: decision.reason,
-          });
-          return;
-        }
-        // Sprint 255 — gate said `allow`. Apply INFO heuristic: read-only
-        // pipeline → direct IPC; otherwise WARN dialog (MqlPreviewModal).
-        // Only severity:"warn" triggers WARN; severity:"danger" pipelines
-        // that the gate allowed (e.g. $out on dev + warn — env-gated
-        // unguarded under ADR 0022) bypass WARN entirely so the existing
-        // destructive-on-dev-warn unguarded behavior stays intact.
-        //
-        // Sprint 254 — Mongo `*-many` (non-empty filter) is now classified
-        // as severity:"warn" (was "safe"), so the WARN dialog finally
-        // covers Mongo bulk-write previews. INFO (`mongo-other`) skips
-        // dialog. Mongo paradigm has no dry-run IPC support so escalation
-        // is skipped (`escalateWarnIfLargeImpact` is rdb-only).
-        if (analysis.severity === "warn") {
-          setPendingMongoWarn({ pipeline: parsed });
-          return;
-        }
-        await runMongoAggregateNow(parsed);
-        return;
-      }
-
-      // Document find path — kept inline because the FindBody shaping is
-      // unique to this branch and adding a helper would not save a call site.
-      const queryId = `${tab.id}-${Date.now()}`;
-      const startTime = Date.now();
-      updateQueryState(tab.id, { status: "running", queryId });
-
-      try {
-        // Default find path. Accept either an object (treated as the
-        // filter) or the full FindBody shape if the user already wrapped
-        // it.
-        if (!isRecord(parsed)) {
-          throw new Error(
-            "Find body must be a JSON object (filter or FindBody).",
-          );
-        }
-        const candidate = parsed as Record<string, unknown>;
-        const looksLikeFindBody =
-          "filter" in candidate ||
-          "sort" in candidate ||
-          "projection" in candidate ||
-          "skip" in candidate ||
-          "limit" in candidate;
-        const body: FindBody = looksLikeFindBody
-          ? (candidate as FindBody)
-          : { filter: candidate };
-        const docResult = await findDocuments(
-          tab.connectionId,
-          docCtx.database,
-          docCtx.collection,
-          body,
-        );
-
-        // Adapt DocumentQueryResult → QueryResult so the existing grid
-        // can render the flattened rows without forking the result panel.
-        const queryResult: import("@/types/query").QueryResult = {
-          columns: docResult.columns,
-          rows: docResult.rows,
-          total_count: docResult.total_count,
-          execution_time_ms: docResult.execution_time_ms,
-          query_type: "select",
-        };
-
-        completeQuery(tab.id, queryId, queryResult);
-        recordHistory({
-          sql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
-          status: "success",
-        });
-      } catch (err) {
-        failQuery(
-          tab.id,
-          queryId,
-          err instanceof Error ? err.message : String(err),
-        );
-        recordHistory({
-          sql,
-          executedAt: Date.now(),
-          duration: Date.now() - startTime,
+      // AC-311-02 — `tab.collection` is the source of truth when set.
+      // Free-form tabs (no binding) fall through to the parsed value.
+      // Wording from contract AC-02 verbatim (D-14).
+      if (tab.collection && tab.collection !== parsed.collection) {
+        updateQueryState(tab.id, {
           status: "error",
+          error: `Editor targets collection '${parsed.collection}' but tab is bound to '${tab.collection}'.`,
         });
+        return;
       }
+      const targetCollection = tab.collection ?? parsed.collection;
+      const targetDatabase = tab.database;
+
+      await dispatchMongoshCall(parsed, {
+        connectionId: tab.connectionId,
+        database: targetDatabase,
+        collection: targetCollection,
+        rawSql: sql,
+      });
       return;
     }
 
@@ -930,6 +1351,12 @@ export function useQueryExecution({
     // 100 multi-statement history invariant).
     await runRdbBatchNow(statements, sql);
     // Excluding store actions from deps is deliberate — see hook header.
+    //
+    // Sprint 311 (Phase 28 Slice A5) — `tab.queryMode` is intentionally
+    // ABSENT from the deps. The document branch no longer reads it
+    // (parser decides dispatch); the RDB branch always treats the tab
+    // as `"sql"`. The field remains on the QueryTab type only for
+    // backward-compat with persisted legacy tabs + history filter UI.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tab.id,
@@ -937,11 +1364,9 @@ export function useQueryExecution({
     tab.queryState.status,
     tab.connectionId,
     tab.paradigm,
-    tab.queryMode,
     tab.database,
     tab.collection,
-    safeModeGate,
-    runMongoAggregateNow,
+    dispatchMongoshCall,
     runRdbSingleNow,
     runRdbBatchNow,
   ]);

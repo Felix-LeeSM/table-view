@@ -38,7 +38,22 @@ export interface QueryHistoryEntry {
   connectionId: string;
   /** Paradigm of the connection the query ran against. */
   paradigm: Paradigm;
-  /** Execution mode within the paradigm (SQL statement, Mongo find, or aggregate). */
+  /**
+   * Execution mode within the paradigm.
+   *
+   * - RDB: always `"sql"`.
+   * - Document (Sprint 311, Phase 28 Slice A5): the **parsed mongosh method
+   *   name** (`"find"`, `"findOne"`, `"aggregate"`, `"countDocuments"`,
+   *   `"estimatedDocumentCount"`, `"distinct"`, plus write methods landed in
+   *   A6). The legacy `"find" | "aggregate"` toggle was removed in Sprint
+   *   309; the field is now wholly driven by `parseMongoshExpression`.
+   *
+   * History filter / search UI keeps working because the values widen
+   * superset-style — any consumer that previously matched
+   * `queryMode === "aggregate"` continues to see the aggregate entries
+   * unchanged. Legacy persisted entries (pre-A5) still deserialise via the
+   * `normaliseEntry` defaulting to `"sql"`.
+   */
   queryMode: QueryMode;
   /** MongoDB database name when the entry originated from a document paradigm tab. */
   database?: string;

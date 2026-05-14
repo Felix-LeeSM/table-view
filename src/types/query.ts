@@ -28,6 +28,13 @@ export type QueryType = "select" | { dml: { rows_affected: number } } | "ddl";
 /**
  * Result of executing an arbitrary SQL query.
  * Matches the Rust `QueryResult` struct.
+ *
+ * Sprint 311 (Phase 28 Slice A5) — added `resultKind` to discriminate
+ * between the default grid render (`"grid"` / undefined), the scalar
+ * panel (`"scalar"` for `countDocuments` / `estimatedDocumentCount`),
+ * and the list panel (`"list"` for `distinct`). A6 will introduce
+ * `"writeSummary"` for mutation results. Optional so every existing
+ * RDB call site stays compatible without changes.
  */
 export interface QueryResult {
   columns: QueryColumn[];
@@ -35,6 +42,7 @@ export interface QueryResult {
   total_count: number;
   execution_time_ms: number;
   query_type: QueryType;
+  resultKind?: "grid" | "scalar" | "list";
 }
 
 /**

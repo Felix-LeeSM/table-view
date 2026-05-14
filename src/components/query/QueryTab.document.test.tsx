@@ -171,9 +171,18 @@ describe("QueryTab — document", () => {
     expect(mockAggregateDocuments).not.toHaveBeenCalled();
   });
 
-  it("document+find calls findDocuments with the parsed filter", async () => {
+  // Sprint 311 (Phase 28 Slice A5) — document Run dispatch is now driven
+  // by `parseMongoshExpression`, so the editor body is no longer a JSON
+  // literal. The cases below cover the parser-driven dispatch contract:
+  //   - find expression → findDocuments with cursor-chain → FindBody mapping
+  //   - aggregate expression → aggregateDocuments with parsed pipeline
+  //   - parser error → queryState.error (no IPC)
+  //   - missing context → queryState.error preserved
+  // (The legacy "Invalid JSON" / "Find body" / "Pipeline" error messages
+  // are gone because the parser surfaces a richer taxonomy upstream.)
+  it("document+find dispatches to findDocuments with parsed FindBody (Sprint 311)", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
-    const tab = makeDocTab({ sql: '{"active":true}' });
+    const tab = makeDocTab({ sql: "db.users.find({active:true})" });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
@@ -200,10 +209,10 @@ describe("QueryTab — document", () => {
     });
   });
 
-  it("document+find accepts a full FindBody shape when the user wraps filter themselves", async () => {
+  it("document+find maps cursor chain to FindBody sort/limit/skip (Sprint 311)", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     const tab = makeDocTab({
-      sql: '{"filter":{"active":true},"sort":{"name":1},"limit":10}',
+      sql: "db.users.find({active:true}).sort({name:1}).limit(10)",
     });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
@@ -220,11 +229,10 @@ describe("QueryTab — document", () => {
     );
   });
 
-  it("document+aggregate calls aggregateDocuments with the pipeline array", async () => {
+  it("document+aggregate dispatches to aggregateDocuments with parsed pipeline (Sprint 311)", async () => {
     mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     const tab = makeDocTab({
-      queryMode: "aggregate",
-      sql: '[{"$match":{"active":true}},{"$limit":10}]',
+      sql: "db.users.aggregate([{$match:{active:true}},{$limit:10}])",
     });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
@@ -244,8 +252,8 @@ describe("QueryTab — document", () => {
     );
   });
 
-  it("surfaces an Invalid JSON error when the body can't be parsed", async () => {
-    const tab = makeDocTab({ sql: "{not valid}" });
+  it("surfaces a parser error when the body can't be parsed (Sprint 311)", async () => {
+    const tab = makeDocTab({ sql: "{not valid mongosh}" });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
@@ -256,10 +264,6 @@ describe("QueryTab — document", () => {
     expect(mockFindDocuments).not.toHaveBeenCalled();
     expect(mockAggregateDocuments).not.toHaveBeenCalled();
 
-    // The store's queryState is what QueryResultGrid reads in production —
-    // validating that the error message lands there (with a recognisable
-    // "Invalid JSON" prefix) covers the AC-08 contract without requiring
-    // the mocked QueryResultGrid to observe prop changes.
     await waitFor(() => {
       // ADR 0027 — doc tab lives in workspace (conn-mongo, table_view_test).
       const state = getTestWorkspace("conn-mongo", "table_view_test");
@@ -267,50 +271,6 @@ describe("QueryTab — document", () => {
       expect(updated?.type).toBe("query");
       if (updated?.type === "query") {
         expect(updated.queryState.status).toBe("error");
-        if (updated.queryState.status === "error") {
-          expect(updated.queryState.error).toMatch(/Invalid JSON/);
-        }
-      }
-    });
-  });
-
-  it("rejects a find body that is not a JSON object", async () => {
-    const tab = makeDocTab({ sql: "[1,2,3]" });
-    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
-    render(<QueryTab tab={tab} />);
-
-    await act(async () => {
-      screen.getByTestId("execute-btn").click();
-    });
-
-    expect(mockFindDocuments).not.toHaveBeenCalled();
-    await waitFor(() => {
-      const state = getTestWorkspace();
-      const updated = state.tabs.find((t) => t.id === "query-1");
-      if (updated?.type === "query" && updated.queryState.status === "error") {
-        expect(updated.queryState.error).toMatch(/Find body/);
-      }
-    });
-  });
-
-  it("rejects an aggregate body that is not an array of stage objects", async () => {
-    const tab = makeDocTab({
-      queryMode: "aggregate",
-      sql: '{"$match":{}}',
-    });
-    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
-    render(<QueryTab tab={tab} />);
-
-    await act(async () => {
-      screen.getByTestId("execute-btn").click();
-    });
-
-    expect(mockAggregateDocuments).not.toHaveBeenCalled();
-    await waitFor(() => {
-      const state = getTestWorkspace();
-      const updated = state.tabs.find((t) => t.id === "query-1");
-      if (updated?.type === "query" && updated.queryState.status === "error") {
-        expect(updated.queryState.error).toMatch(/Pipeline/);
       }
     });
   });
@@ -618,7 +578,9 @@ describe("QueryTab — document", () => {
       title: "Mongo",
       connectionId: "conn1",
       closable: true,
-      sql: "{}",
+      // Sprint 311 — document Run is parser-driven; the editor must
+      // carry a mongosh expression, not a bare JSON literal.
+      sql: "db.users.find({})",
       queryState: { status: "idle" },
       paradigm: "document",
       queryMode: "find",
@@ -653,8 +615,12 @@ describe("QueryTab — document", () => {
   // internals — those have unit coverage in `useSafeModeGate.test.ts`.
   // date 2026-05-01.
   describe("Sprint 188 — Mongo aggregate safe-mode gate", () => {
-    const PROD_PIPELINE = '[{"$match":{}},{"$out":"snapshot"}]';
-    const SAFE_PIPELINE = '[{"$match":{"active":true}}]';
+    // Sprint 311 (Phase 28 Slice A5) — pipelines now arrive via the
+    // parser as `db.users.aggregate([...])` rather than bare JSON
+    // arrays. The dispatch is parser-driven; the gate still operates
+    // on the parsed pipeline so the Sprint 188 matrix is unchanged.
+    const PROD_PIPELINE = 'db.users.aggregate([{$match:{}},{$out:"snapshot"}])';
+    const SAFE_PIPELINE = "db.users.aggregate([{$match:{active:true}}])";
 
     function setupProductionMongo(): void {
       useConnectionStore.setState({

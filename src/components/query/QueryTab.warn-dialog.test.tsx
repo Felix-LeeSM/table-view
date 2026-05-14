@@ -411,11 +411,16 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
 
   // ── Mongo aggregate cases ──────────────────────────────────────────────
 
+  // Sprint 311 (Phase 28 Slice A5) — document Run is parser-driven, so
+  // the editor body carries a mongosh expression (`db.users.aggregate(...)`,
+  // `db.users.find(...)`) rather than a bare JSON array/object. The
+  // dialog mount behaviour is unchanged — gate analysis runs on the
+  // parsed pipeline.
   it("[AC-255-07a] Mongo aggregate read-only ($match) → dialog NOT mount (INFO skip), aggregateDocuments 1회 호출", async () => {
     mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     seedDocConnection("development");
     const tab = seedDocTab(
-      JSON.stringify([{ $match: { active: true } }]),
+      "db.users.aggregate([{$match:{active:true}}])",
       "aggregate",
     );
     render(<QueryTab tab={tab} />);
@@ -433,7 +438,7 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
   it("[AC-255-07b] Mongo find → dialog NOT mount (INFO 항상), findDocuments 1회 호출", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     seedDocConnection("development");
-    const tab = seedDocTab(JSON.stringify({ active: true }), "find");
+    const tab = seedDocTab("db.users.find({active:true})", "find");
     render(<QueryTab tab={tab} />);
 
     await act(async () => {
@@ -449,7 +454,10 @@ describe("QueryTab — Sprint 255 WARN dialog mount (raw SQL/MQL editor)", () =>
   it("[AC-255-07c] Mongo aggregate write ($out) under production+warn → STOP dialog (ConfirmDestructiveDialog), MQL Preview 미발동", async () => {
     seedDocConnection("production");
     useSafeModeStore.setState({ mode: "warn" });
-    const tab = seedDocTab(JSON.stringify([{ $out: "snapshot" }]), "aggregate");
+    const tab = seedDocTab(
+      'db.users.aggregate([{$out:"snapshot"}])',
+      "aggregate",
+    );
     render(<QueryTab tab={tab} />);
 
     await act(async () => {

@@ -73,10 +73,33 @@ export interface TableTab {
 
 /**
  * Execution mode for a query tab. SQL statements belong to `"sql"`;
- * document paradigms split into a MongoDB `find` body and an aggregation
- * `pipeline`. Routes the editor + execute path.
+ * document paradigms historically split into a MongoDB `find` body and
+ * an aggregation `pipeline`.
+ *
+ * Sprint 311 (Phase 28 Slice A5) — the parser-driven Run dispatch can
+ * now classify any of the 6 read-path mongosh methods (`find`,
+ * `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`,
+ * `distinct`) and writes them through the history `queryMode` field for
+ * filter/search backward-compat. Write-path methods (Sprint 312 / A6)
+ * extend the union further. The field itself is no longer used to
+ * route dispatch — the parser decides — but persisted legacy tabs may
+ * still carry `"find" | "aggregate"`.
  */
-export type QueryMode = "sql" | "find" | "aggregate";
+export type QueryMode =
+  | "sql"
+  | "find"
+  | "findOne"
+  | "aggregate"
+  | "countDocuments"
+  | "estimatedDocumentCount"
+  | "distinct"
+  | "insertOne"
+  | "insertMany"
+  | "updateOne"
+  | "updateMany"
+  | "deleteOne"
+  | "deleteMany"
+  | "bulkWrite";
 
 /** A tab that hosts the SQL / document query editor. */
 export interface QueryTab {

@@ -361,9 +361,11 @@ describe("QueryTab — history", () => {
   });
 
   // AC-02 — Document+find execution records document/find + db/coll.
+  // Sprint 311 — Run is parser-driven; the editor body is a mongosh
+  // expression. History `queryMode` records the parsed method name.
   it("records document/find metadata + database + collection on successful find", async () => {
     mockFindDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
-    const tab = makeDocTab({ sql: '{"active":true}' });
+    const tab = makeDocTab({ sql: "db.users.find({active:true})" });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
 
@@ -393,11 +395,13 @@ describe("QueryTab — history", () => {
   });
 
   // AC-03 — Document+aggregate execution records document/aggregate + db/coll.
+  // Sprint 311 — parser-driven Run. `queryMode` is the parsed method
+  // name (`"aggregate"`); persisted legacy field is no longer consulted.
   it("records document/aggregate metadata on successful aggregate", async () => {
     mockAggregateDocuments.mockResolvedValueOnce(MOCK_DOC_RESULT);
     const tab = makeDocTab({
       queryMode: "aggregate",
-      sql: '[{"$match":{"active":true}}]',
+      sql: "db.users.aggregate([{$match:{active:true}}])",
     });
     useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
     render(<QueryTab tab={tab} />);
