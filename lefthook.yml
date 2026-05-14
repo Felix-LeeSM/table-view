@@ -115,7 +115,7 @@ pre-push:
       # 사용되지 않는 cargo 의존성 검출. 가벼움 (~5s).
       tags: lint rust
       run: cd src-tauri && cargo machete
-    6_rust-coverage:
+    6_rust-test-and-coverage:
       # `cargo llvm-cov` 가 unit + 모든 통합 테스트를 한 번에 instrument.
       # Tier 2 (testcontainers 기반 PG/Mongo/MySQL 통합) 가 db/postgres/* /
       # db/mongodb/* / db/mysql/* 본체 라인을 hit 하므로 unit-only 대비 상승.
