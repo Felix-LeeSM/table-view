@@ -23,6 +23,7 @@ import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
 import { updateColumnCompletionSource } from "@lib/sql/updateColumnCompletion";
 import { aliasColumnCompletionSource } from "@lib/sql/aliasColumnCompletion";
 import { cteColumnCompletionSource } from "@lib/sql/cteColumnCompletion";
+import { wrappedSchemaCompletionSource } from "@lib/sql/schemaCompletionWrapper";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
@@ -66,10 +67,17 @@ const buildSqlLang = (
   dialect: SQLDialect,
   ns: SQLNamespace | undefined,
 ): Extension => [
+  // Sprint 304 (2026-05-14) — `schema` 인자 *제거*. lang-sql 의 자동
+  // schemaCompletionSource wire 는 ns top-level (table) 을 모든 컨텍스트
+  // 에서 emit 해 우리 column source 와 같은 라벨이 popup 에 두 번
+  // 노출됐다. wrappedSchemaCompletionSource 가 같은 lang-sql source 를
+  // 호출하지만 column-only 컨텍스트에서 table 후보를 제거한다.
   sqlLanguage({
     dialect,
-    schema: ns,
     upperCaseKeywords: true,
+  }),
+  dialect.language.data.of({
+    autocomplete: wrappedSchemaCompletionSource(() => ns, dialect),
   }),
   // 2026-05-11 — supplement lang-sql's built-in `schemaCompletionSource`,
   // which only resolves a target table behind `FROM`. Without this,
