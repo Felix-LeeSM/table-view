@@ -81,6 +81,16 @@ Sprint 198 종료로 sequencing 완료.
   [18](../../docs/phases/phase-18.md), [19](../../docs/phases/phase-19.md),
   [20](../../docs/phases/phase-20.md). Phase 27 종료 (2026-05-13) 로
   재개 평가 트리거 발동.
+- **Phase 28 (MongoDB Full Support) 계획 (2026-05-14)** — grill-me
+  세션으로 카테고리 20+ 결정 lock. 13 slice (A–M). 정의서
+  [`docs/phases/phase-28.md`](../../docs/phases/phase-28.md), 결정 dict
+  [phase-28-mongo-full-support](./phase-28-mongo-full-support/memory.md).
+- **Phase 29 후보 — RDB+Mongo Unified Followups** — U1 server activity
+  / U2 explain viewer / U3 stats 탭 / U4 server info / U5 slow query/
+  profiler. Phase 28 종료 후 진입.
+  [unified-followups](./unified-followups/memory.md).
+- **Phase 30 후보 — 보안 surface** — Q30 (user/role), Q31 (auth
+  mechanism) 은 threat-model 핸드오프 후 grill 재개.
 
 ## Active 작업
 
