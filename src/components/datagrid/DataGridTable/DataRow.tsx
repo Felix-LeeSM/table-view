@@ -39,8 +39,13 @@ function renderCell(cell: unknown): string {
 function renderCellTitle(cell: unknown): string {
   if (cell == null) return "NULL";
   if (cell instanceof Decimal) return cell.toString();
+  // Sprint 305 — nested BigInt 가 든 object (예: JSONB / Mongo Int64) 가
+  // tooltip 으로 흘러오면 raw `JSON.stringify` 가 throw → DataGrid mount
+  // 시점 freeze. `safeStringifyCell` 은 BigInt/Decimal replacer 가 있어
+  // 안전하고, pretty-print 도 같은 stringify 호출 안에서 처리한다.
   if (typeof cell === "object" && cell !== null)
-    return JSON.stringify(cell, null, 2);
+    return safeStringifyCell(cell, 2);
+  if (typeof cell === "bigint") return cell.toString();
   return String(cell);
 }
 

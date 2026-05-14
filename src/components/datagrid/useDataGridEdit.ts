@@ -16,6 +16,7 @@ import { useDataGridPreviewCommit } from "@/hooks/useDataGridPreviewCommit";
 import type { TableData } from "@/types/schema";
 import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
 import { toast } from "@/lib/toast";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 /**
  * Edit key helper: maps row/col indices to a unique string key.
@@ -171,7 +172,7 @@ export function cellToEditString(cell: unknown): string {
   // `JSON.stringify` and emit `{}`). `BigInt` is `typeof === "bigint"` and
   // already falls through to `String(cell)` correctly.
   if (cell instanceof Decimal) return cell.toString();
-  if (typeof cell === "object") return JSON.stringify(cell, null, 2);
+  if (typeof cell === "object") return safeStringifyCell(cell, 2);
   return String(cell);
 }
 
@@ -185,7 +186,7 @@ export function cellToEditValue(cell: unknown): string | null {
   // Sprint 261 (ADR 0026) — same Decimal-before-object ordering as
   // `cellToEditString`.
   if (cell instanceof Decimal) return cell.toString();
-  if (typeof cell === "object") return JSON.stringify(cell, null, 2);
+  if (typeof cell === "object") return safeStringifyCell(cell, 2);
   return String(cell);
 }
 

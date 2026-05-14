@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ChevronRight, ChevronDown, Copy } from "lucide-react";
 import { cn } from "@lib/utils";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 // ── BSON wrapper whitelist ──────────────────────────────────────────────
 
@@ -37,12 +38,9 @@ interface BsonBadge {
 }
 
 function canonicalStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    // Value has cycles — fall back to String() so the tree still renders.
-    return String(value);
-  }
+  // Sprint 305 — replacer 가 BigInt/Decimal 을 digit string 으로 emit.
+  // raw JSON.stringify 는 BigInt 만나면 throw.
+  return safeStringifyCell(value);
 }
 
 function truncate(text: string, max: number): string {
@@ -215,7 +213,7 @@ function TreeNode({
     // and a string as `"hello"`. Containers get pretty-printed JSON so the
     // clipboard output is usable as-is in an editor (contract AC-06).
     const serialised = hasChildren
-      ? JSON.stringify(value, null, 2)
+      ? safeStringifyCell(value, 2)
       : canonicalStringify(value);
     const ok = await copyToClipboard(serialised);
     if (ok) {

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import TabsDialog from "@components/ui/dialog/TabsDialog";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 export interface BlobViewerDialogProps {
   open: boolean;
@@ -20,9 +21,13 @@ function toBytes(data: unknown): Uint8Array {
     return new TextEncoder().encode(String(data));
   }
 
-  // Objects (including arrays) — JSON stringify then encode
+  // Objects (including arrays) — JSON stringify then encode. Sprint 305:
+  // BigInt-safe replacer so JSONB cell 안 큰 정수가 throw 시키지 않는다.
   if (typeof data === "object") {
-    return new TextEncoder().encode(JSON.stringify(data));
+    return new TextEncoder().encode(safeStringifyCell(data));
+  }
+  if (typeof data === "bigint") {
+    return new TextEncoder().encode(data.toString());
   }
 
   return new TextEncoder().encode(String(data));

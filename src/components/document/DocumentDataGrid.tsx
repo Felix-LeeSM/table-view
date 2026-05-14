@@ -245,7 +245,7 @@ export default function DocumentDataGrid({
       // Synthesise a user-readable MQL line for the history row,
       // matching the per-document format from `mqlGenerator`.
       const startedAt = Date.now();
-      const recordedSql = `db.${collection}.insertOne(${JSON.stringify(record)})`;
+      const recordedSql = `db.${collection}.insertOne(${safeStringifyCell(record)})`;
       try {
         await insertDocument(connectionId, database, collection, record);
         setAddModalOpen(false);
@@ -549,9 +549,11 @@ export default function DocumentDataGrid({
                             ? "null"
                             : cell instanceof Decimal
                               ? cell.toString()
-                              : typeof cell === "object"
-                                ? JSON.stringify(cell)
-                                : String(cell)
+                              : typeof cell === "bigint"
+                                ? cell.toString()
+                                : typeof cell === "object"
+                                  ? safeStringifyCell(cell)
+                                  : String(cell)
                         }
                         onDoubleClick={(e) => {
                           e.stopPropagation();

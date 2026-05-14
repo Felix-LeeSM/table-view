@@ -74,4 +74,14 @@ describe("safeStringifyCell", () => {
     // top-level Symbol → undefined; object 내 Symbol property → 무시.
     expect(safeStringifyCell({ a: 1, b: Symbol("x") })).toBe('{"a":1}');
   });
+
+  // Sprint 305 — indent 옵션. DataGrid tooltip / Cell detail dialog 가
+  // pretty-print 한 multi-line JSON 으로 렌더하므로 두 번째 인자가 native
+  // `JSON.stringify` 의 indent 의미를 그대로 가져야 한다 (BigInt/Decimal
+  // 셀이 들어와도 throw 없이).
+  it("honours the indent argument with BigInt-safe replacer", () => {
+    expect(safeStringifyCell({ id: BigInt("123"), name: "x" }, 2)).toBe(
+      ["{", '  "id": "123",', '  "name": "x"', "}"].join("\n"),
+    );
+  });
 });

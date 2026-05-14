@@ -3,7 +3,9 @@
 // the sibling `FieldRow.tsx`; both bodies (`RdbQuickLookBody`,
 // `DocumentQuickLookBody`) import the renderers from `./FieldRow`, and
 // `FieldRow` itself imports the helpers below.
+import Decimal from "decimal.js";
 import type { ColumnInfo } from "@/types/schema";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 // ── Resize constants ─────────────────────────────────────────────────
 
@@ -51,19 +53,17 @@ export function looksLikeJson(value: unknown): boolean {
 export function formatCellValue(value: unknown, col: ColumnInfo): string {
   if (value == null) return "NULL";
   if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      // Value has cycles — fall back to String().
-      return String(value);
-    }
-  }
+  // Sprint 305 — ADR 0026 precision-preserving cell type. Decimal 는
+  // `typeof === "object"` 라 generic branch 가 `{}` 로 emit, BigInt 는
+  // raw JSON.stringify 가 throw → QuickLook 마운트 시점 freeze.
+  if (value instanceof Decimal) return value.toString();
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "object") return safeStringifyCell(value, 2);
   // String values that look like JSON
   if (isJsonColumn(col.data_type) || looksLikeJson(value)) {
     try {
       const parsed = JSON.parse(value as string);
-      return JSON.stringify(parsed, null, 2);
+      return safeStringifyCell(parsed, 2);
     } catch {
       // String didn't parse as JSON — render verbatim.
       return String(value);

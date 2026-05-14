@@ -16,9 +16,9 @@ function bigIntDecimalReplacer(_key: string, value: unknown): unknown {
   return value;
 }
 
-export function safeStringifyCell(value: unknown): string {
+export function safeStringifyCell(value: unknown, indent?: number): string {
   try {
-    const result = JSON.stringify(value, bigIntDecimalReplacer);
+    const result = JSON.stringify(value, bigIntDecimalReplacer, indent);
     return result ?? UNSERIALIZABLE;
   } catch {
     return UNSERIALIZABLE;

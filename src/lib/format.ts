@@ -1,6 +1,20 @@
 // Sprint 238 — `CELL_DISPLAY_LIMIT` + `truncateCell` 폐기 (AC-238-05).
 // 가로 폭 통제는 `useColumnWidths` + CSS ellipsis 가 담당.
 
+import Decimal from "decimal.js";
+import { safeStringifyCell } from "@lib/jsonCell";
+
+// Sprint 305 — copy format 의 cell rendering 헬퍼. ADR 0026 의 BigInt /
+// Decimal cell 이 raw `JSON.stringify` 를 만나면 throw / `{}` 로 망가지므로
+// 명시 분기. tab/csv/sql 세 갈래가 동일 로직.
+function cellToFlatString(value: unknown): string {
+  if (value == null) return "";
+  if (value instanceof Decimal) return value.toString();
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "object") return safeStringifyCell(value);
+  return String(value);
+}
+
 // ── Copy format utilities ───────────────────────────────────────────────
 
 /** Data required by copy-format functions. */
@@ -19,17 +33,7 @@ export interface CopyRowData {
 export function rowsToPlainText(data: CopyRowData): string {
   const lines: string[] = [data.columns.join("\t")];
   for (const row of data.rows) {
-    lines.push(
-      row
-        .map((v) =>
-          v == null
-            ? ""
-            : typeof v === "object"
-              ? JSON.stringify(v)
-              : String(v),
-        )
-        .join("\t"),
-    );
+    lines.push(row.map((v) => cellToFlatString(v)).join("\t"));
   }
   return lines.join("\n");
 }
@@ -46,7 +50,8 @@ export function rowsToJson(data: CopyRowData): string {
     });
     return obj;
   });
-  return JSON.stringify(objects, null, 2);
+  // Sprint 305 — replacer 가 BigInt/Decimal 을 digit string 으로 emit.
+  return safeStringifyCell(objects, 2);
 }
 
 /**
@@ -69,19 +74,7 @@ function escapeCsvField(value: string): string {
 export function rowsToCsv(data: CopyRowData): string {
   const lines: string[] = [data.columns.map(escapeCsvField).join(",")];
   for (const row of data.rows) {
-    lines.push(
-      row
-        .map((v) => {
-          const str =
-            v == null
-              ? ""
-              : typeof v === "object"
-                ? JSON.stringify(v)
-                : String(v);
-          return escapeCsvField(str);
-        })
-        .join(","),
-    );
+    lines.push(row.map((v) => escapeCsvField(cellToFlatString(v))).join(","));
   }
   return lines.join("\n");
 }
@@ -94,7 +87,13 @@ function escapeSqlValue(value: unknown): string {
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
-  const str = typeof value === "object" ? JSON.stringify(value) : String(value);
+  // Sprint 305 — BigInt / Decimal 은 unquoted numeric literal 로 emit.
+  // INSERT 회수 시 numeric column 에 string literal 로 넣으면 PG cast 오류
+  // 발생 — 원본 디지트를 그대로 보존.
+  if (value instanceof Decimal) return value.toString();
+  if (typeof value === "bigint") return value.toString();
+  const str =
+    typeof value === "object" ? safeStringifyCell(value) : String(value);
   return `'${str.replace(/'/g, "''")}'`;
 }
 

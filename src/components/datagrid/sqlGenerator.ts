@@ -1,4 +1,5 @@
 import type { ColumnInfo, TableData } from "@/types/schema";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 /**
  * Data type family for SQL literal emission. Mirrors — but is distinct from —
@@ -222,21 +223,25 @@ function buildWhereClause(
   columns: ColumnInfo[],
   pkCols: ColumnInfo[],
 ): string {
+  // Sprint 305 — pk / 비-pk 값이 Decimal 인 경우 `String(decimal)` → `[object
+  // Object]` 가 되는 회귀 가드. BigInt 는 String() 으로 digit 보존되지만
+  // Decimal 은 명시 분기 필요.
+  const literal = (v: unknown): string => {
+    if (v == null) return "NULL";
+    if (typeof v === "string") return `'${v}'`;
+    if (typeof v === "object" && "toString" in (v as object))
+      return (v as { toString(): string }).toString();
+    return String(v);
+  };
   if (pkCols.length > 0) {
     return pkCols
       .map((pk) => {
         const pkIdx = columns.indexOf(pk);
-        const pkVal = row[pkIdx];
-        return `${pk.name} = ${pkVal == null ? "NULL" : typeof pkVal === "string" ? `'${pkVal}'` : String(pkVal)}`;
+        return `${pk.name} = ${literal(row[pkIdx])}`;
       })
       .join(" AND ");
   }
-  return columns
-    .map((c, i) => {
-      const val = row[i];
-      return `${c.name} = ${val == null ? "NULL" : typeof val === "string" ? `'${val}'` : String(val)}`;
-    })
-    .join(" AND ");
+  return columns.map((c, i) => `${c.name} = ${literal(row[i])}`).join(" AND ");
 }
 
 /**
@@ -278,7 +283,9 @@ function normalizeNewRowCell(value: unknown): string | null {
   // Primitives (number / boolean / bigint / symbol) stringify deterministically.
   // Objects are JSON-encoded so an array/object accidentally routed through a
   // new-row cell still lands in a recoverable shape rather than `[object …]`.
-  if (typeof value === "object") return JSON.stringify(value);
+  // Sprint 305 — safe stringify so nested BigInt / Decimal 든 object 도
+  // round-trip 가능 (raw JSON.stringify 가 BigInt 만나면 throw).
+  if (typeof value === "object") return safeStringifyCell(value);
   return String(value);
 }
 

@@ -56,6 +56,19 @@ describe("cellToEditValue — preserves null/empty-string distinction", () => {
       "9999999999999999.99999999",
     );
   });
+
+  // Sprint 305 (2026-05-14) — DataGrid mount-time freeze. cell 이 nested
+  // BigInt 가 든 object 일 때 raw `JSON.stringify` 가 throw 했다 (사용자
+  // 보고: "datagrid 를 연 상태에서 굳어버렸음"). `safeStringifyCell` 로
+  // wrap 했으므로 BigInt 가 nested 든 어디에 있든 stringify 가 성공해야.
+  it("[Sprint 305] does not throw on objects containing nested BigInt", () => {
+    expect(() =>
+      cellToEditValue({ id: 9223372036854775807n, name: "x" }),
+    ).not.toThrow();
+    expect(cellToEditValue({ id: 9223372036854775807n })).toBe(
+      ["{", '  "id": "9223372036854775807"', "}"].join("\n"),
+    );
+  });
 });
 
 describe("cellToEditString — legacy display helper (NULL → '')", () => {

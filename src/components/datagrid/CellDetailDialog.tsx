@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
+import Decimal from "decimal.js";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@components/ui/button";
 import PreviewDialog from "@components/ui/dialog/PreviewDialog";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 export interface CellDetailDialogProps {
   open: boolean;
@@ -19,14 +21,12 @@ export interface CellDetailDialogProps {
  */
 function renderCellText(data: unknown): string {
   if (data == null) return "NULL";
-  if (typeof data === "object") {
-    try {
-      return JSON.stringify(data, null, 2);
-    } catch {
-      // Object has cycles or non-serializable members — fall back to String().
-      return String(data);
-    }
-  }
+  // Sprint 305 — Decimal / BigInt 는 ADR 0026 의 precision-preserving cell
+  // type. Decimal 은 `typeof === "object"` 라 generic branch 가 `{}` 로
+  // emit, BigInt 는 raw JSON.stringify 가 throw → 둘 다 명시 처리.
+  if (data instanceof Decimal) return data.toString();
+  if (typeof data === "bigint") return data.toString();
+  if (typeof data === "object") return safeStringifyCell(data, 2);
   return String(data);
 }
 
