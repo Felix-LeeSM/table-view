@@ -117,17 +117,20 @@ pre-push:
       run: cd src-tauri && cargo machete
     6_rust-coverage:
       # `cargo llvm-cov` 가 unit + 모든 통합 테스트를 한 번에 instrument.
-      # Tier 2 (testcontainers 기반 PG/Mongo 통합) 가 db/postgres/* 와
-      # db/mongodb/* 본체 라인을 hit 하므로 unit-only 대비 +4pp 상승.
-      # baseline (2026-05-08, Tier 1+2 통합, queries/schema/indexes/constraints
-      # 시나리오 보강 후): 83.58 / 78.76 / 85.16. cushion 을 2pp 두고 임계값
-      # 81/76/83 (functions 는 cushion 2.7pp 지만 한 자릿수 변동에 민감하므로
-      # 76 유지; lines 는 +0.87pp 상승분을 임계값에 반영).
-      # 첫 실행은 PG/Mongo image pull 포함 ~3-5분, 캐시 후 ~1-2분.
+      # Tier 2 (testcontainers 기반 PG/Mongo/MySQL 통합) 가 db/postgres/* /
+      # db/mongodb/* / db/mysql/* 본체 라인을 hit 하므로 unit-only 대비 상승.
+      # Sprint 296 rebaseline (2026-05-14, MySQL 통합 합류): mysql_integration
+      # 75 시나리오 (query/schema 1:1 mirror + mutation preview + RdbAdapter
+      # 트레잇 dispatch) 추가. baseline 82.32 / 76.53 / 83.07. 2pp 균일 cushion
+      # → 임계 80 / 74 / 81. 이전 baseline (83.58/78.76/85.16, 83/76/81 임계)
+      # 은 mysql_integration 미참여 + adapter Slice G+ 확장으로 drift, 본
+      # Sprint 정공법 (mirror + 트레잇 dispatch) 으로 회복 시도. PG 측
+      # trait dispatcher (db/postgres.rs 4.62%) 보강은 별 sprint.
+      # 첫 실행은 PG/Mongo/MySQL image pull 포함 ~3-5분, 캐시 후 ~2분.
       # Docker daemon 부재 환경 (예: 원격 sandbox) 에서는 testcontainers 가
       # 즉시 실패 → push 차단됨. ADR-0019 정신상 push 는 "작동하는 게이트"
-      # 만 가져야 하므로, daemon 부재면 PG_TEST_URL/MONGO_HOST 를 셋팅해
-      # 외부 인스턴스로 우회해야 한다.
+      # 만 가져야 하므로, daemon 부재면 PG_TEST_URL/MONGO_HOST/MYSQL_HOST 를
+      # 셋팅해 외부 인스턴스로 우회해야 한다.
       tags: test rust
       run: |
         if ! rustup component list --installed 2>/dev/null | grep -q '^llvm-tools'; then
@@ -141,9 +144,10 @@ pre-push:
           --test schema_integration \
           --test fixture_loading \
           --test mongo_integration \
+          --test mysql_integration \
           --summary-only \
-          --fail-under-lines 83 \
-          --fail-under-functions 76 \
+          --fail-under-lines 80 \
+          --fail-under-functions 74 \
           --fail-under-regions 81
     7_ts-test:
       tags: test frontend

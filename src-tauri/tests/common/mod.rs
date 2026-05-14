@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use table_view_lib::db::mongodb::MongoAdapter;
+use table_view_lib::db::mysql::MysqlAdapter;
 use table_view_lib::db::postgres::PostgresAdapter;
 use table_view_lib::db::DbAdapter;
 use table_view_lib::models::{ConnectionConfig, DatabaseType};
@@ -25,6 +26,7 @@ use testcontainers::core::ImageExt;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers_modules::mongo::Mongo as MongoImage;
+use testcontainers_modules::mysql::Mysql as MysqlImage;
 use testcontainers_modules::postgres::Postgres as PostgresImage;
 use tokio::sync::OnceCell;
 
@@ -64,7 +66,6 @@ struct MongoEndpoint {
 /// alongside the `MysqlAdapter` itself, so we avoid pulling the extra
 /// feature flag now and keep `cargo test` startup cost flat.
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 struct MysqlEndpoint {
     host: String,
     port: u16,
@@ -80,6 +81,7 @@ struct MysqlEndpoint {
 /// 누적을 차단한다.
 static PG_CONTAINER: OnceCell<Option<Arc<ContainerAsync<PostgresImage>>>> = OnceCell::const_new();
 static MONGO_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MongoImage>>>> = OnceCell::const_new();
+static MYSQL_CONTAINER: OnceCell<Option<Arc<ContainerAsync<MysqlImage>>>> = OnceCell::const_new();
 static SWEEP_DONE: OnceCell<()> = OnceCell::const_new();
 
 /// owner PID 가 죽은 우리 컨테이너만 `docker rm -f` 로 정리.
@@ -262,16 +264,18 @@ async fn mongo_endpoint() -> Option<MongoEndpoint> {
     })
 }
 
-/// Sprint 250 — env-var-only MySQL endpoint helper. Returns `Some` iff
-/// either `MYSQL_HOST` is set (any deployment) or the docker-compose
-/// fixture container is the assumed target (default port 13306,
-/// `testuser`/`testpass`/`table_view_test`). Returns `None` when an
-/// adapter test wants explicit opt-out via `MYSQL_DISABLE=1`.
+/// Sprint 296 — testcontainers MySQL spawn helper. PG/Mongo 와 동일한
+/// 두 단계 패턴:
+///   1) `MYSQL_HOST` 가 있으면 외부 MySQL 재사용 — docker-compose 또는
+///      host-native (homebrew 등) 인스턴스. PORT/USER/PASSWORD/DATABASE 는
+///      override 가능, 기본은 sprint-250 docker-compose 컨벤션
+///      (port 13306, testuser/testpass/table_view_test).
+///   2) `MYSQL_DISABLE=1` 가 아니면 testcontainers 가 MySQL 8.x image 를
+///      lazy spawn. owner-pid 라벨 + dead-owner sweep 으로 PG/Mongo 와 같은
+///      좀비 청소 패턴 공유.
 ///
-/// Sprint 253 will swap the body to lazy-spawn a testcontainers MySQL
-/// image (mirroring `pg_endpoint`); until then env-derived defaults are
-/// enough — Phase 17 integration tests will be authored against a
-/// docker-compose-provided container.
+/// `MYSQL_DISABLE=1` escape hatch 는 sprint-250 정책 그대로 유지 — adapter
+/// 단위 테스트가 MySQL 게이트를 명시적으로 끌 때 사용.
 #[allow(dead_code)]
 async fn mysql_endpoint() -> Option<MysqlEndpoint> {
     if std::env::var("MYSQL_DISABLE")
@@ -281,9 +285,12 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
     {
         return None;
     }
-    Some(MysqlEndpoint {
-        host: std::env::var("MYSQL_HOST").unwrap_or_else(|_| "localhost".into()),
-        port: std::env::var("MYSQL_PORT")
+
+    // 1) 외부 MySQL 재사용 — `MYSQL_HOST` 가 있을 때만. PG 가 모든 env 를
+    //    요구하는 것과 달리, MySQL 은 host 만 있으면 PORT/USER/PASSWORD/
+    //    DATABASE 는 docker-compose 컨벤션 default 로 fill.
+    if let Ok(host) = std::env::var("MYSQL_HOST") {
+        let port = std::env::var("MYSQL_PORT")
             .ok()
             .and_then(|s| s.parse().ok())
             // `MYSQL_TCP_PORT` is the mysql CLI's own env var; keep
@@ -294,12 +301,76 @@ async fn mysql_endpoint() -> Option<MysqlEndpoint> {
                     .ok()
                     .and_then(|s| s.parse().ok())
             })
-            .unwrap_or(13306),
-        user: std::env::var("MYSQL_USER").unwrap_or_else(|_| "testuser".into()),
-        password: std::env::var("MYSQL_PASSWORD")
-            .or_else(|_| std::env::var("MYSQL_PWD"))
-            .unwrap_or_else(|_| "testpass".into()),
-        database: std::env::var("MYSQL_DATABASE").unwrap_or_else(|_| "table_view_test".into()),
+            .unwrap_or(13306);
+        return Some(MysqlEndpoint {
+            host,
+            port,
+            user: std::env::var("MYSQL_USER").unwrap_or_else(|_| "testuser".into()),
+            password: std::env::var("MYSQL_PASSWORD")
+                .or_else(|_| std::env::var("MYSQL_PWD"))
+                .unwrap_or_else(|_| "testpass".into()),
+            database: std::env::var("MYSQL_DATABASE").unwrap_or_else(|_| "table_view_test".into()),
+        });
+    }
+
+    // 2) testcontainers — lazy 시작. PG/Mongo 와 정확히 같은 owner-pid +
+    //    sweep 패턴.
+    //
+    // 환경변수 3 종:
+    // - `MYSQL_ROOT_HOST=%`     — testcontainers-modules MysqlImage 의 default
+    //   는 `'root'@'localhost'` 만 grant. macOS Docker Desktop 의 NAT 동작으로
+    //   client source IP 가 wireless / LAN interface 로 인식되는 경우 grant
+    //   table 매칭 실패. `%` 로 host 와일드카드 보장.
+    // - `MYSQL_ROOT_PASSWORD=testpass` — image default `MYSQL_ALLOW_EMPTY_PASSWORD=yes`
+    //   는 caching_sha2_password 의 empty-password handshake 가 macOS NAT
+    //   환경에서 `1045 Access denied (using password: YES)` 로 fail. password
+    //   를 명시하면 sqlx 의 caching_sha2 challenge-response 가 정상 동작.
+    //   `MYSQL_ROOT_PASSWORD` 가 set 되면 image entrypoint 가 ALLOW_EMPTY 를
+    //   자동 무시 (mutually exclusive).
+    ensure_sweep_once().await;
+    let pid = current_pid_label();
+    let cell = MYSQL_CONTAINER
+        .get_or_init(|| async {
+            match MysqlImage::default()
+                .with_env_var("MYSQL_ROOT_HOST", "%")
+                .with_env_var("MYSQL_ROOT_PASSWORD", "testpass")
+                .with_label(OWNED_LABEL, "1")
+                .with_label(OWNER_PID_LABEL, &pid)
+                .start()
+                .await
+            {
+                Ok(c) => Some(Arc::new(c)),
+                Err(e) => {
+                    println!(
+                        "SKIP: MySQL testcontainer 시작 실패 ({}). \
+                         Docker daemon 이 떠 있는지 확인하거나 \
+                         MYSQL_HOST/MYSQL_PORT/MYSQL_USER/MYSQL_PASSWORD \
+                         환경 변수로 외부 MySQL 을 지정하세요.",
+                        e
+                    );
+                    None
+                }
+            }
+        })
+        .await
+        .as_ref()?;
+
+    let port = match cell.get_host_port_ipv4(3306).await {
+        Ok(p) => p,
+        Err(e) => {
+            println!("SKIP: MySQL container 포트 매핑 실패 ({})", e);
+            return None;
+        }
+    };
+
+    // testcontainers-modules Mysql image 8.1 default — db `test`. user `root`.
+    // password 는 본 helper 가 MYSQL_ROOT_PASSWORD env 로 명시 set 한 값.
+    Some(MysqlEndpoint {
+        host: "127.0.0.1".to_string(),
+        port,
+        user: "root".to_string(),
+        password: "testpass".to_string(),
+        database: "test".to_string(),
     })
 }
 
@@ -503,6 +574,47 @@ pub async fn setup_adapter(db_type: DatabaseType) -> Option<PostgresAdapter> {
     None
 }
 
+/// Sprint 296 — MySQL 도 PG/Mongo 와 같은 lifecycle helper. testcontainers
+/// 가 spawn 또는 외부 인스턴스 reuse 후 `connect_pool` 5-retry. silent-skip
+/// 시맨틱 (`None`) 보존.
+#[allow(dead_code)]
+pub async fn setup_mysql_adapter() -> Option<MysqlAdapter> {
+    let endpoint = mysql_endpoint().await?;
+    let config = ConnectionConfig {
+        id: "test-conn".to_string(),
+        name: "TestMysql".to_string(),
+        db_type: DatabaseType::Mysql,
+        host: endpoint.host,
+        port: endpoint.port,
+        user: endpoint.user,
+        password: endpoint.password,
+        database: endpoint.database,
+        group_id: None,
+        color: None,
+        connection_timeout: Some(10),
+        keep_alive_interval: None,
+        environment: None,
+        auth_source: None,
+        replica_set: None,
+        tls_enabled: None,
+    };
+
+    let adapter = MysqlAdapter::new();
+    for attempt in 0..5 {
+        match adapter.connect_pool(&config).await {
+            Ok(()) => return Some(adapter),
+            Err(_) if attempt < 4 => {
+                tokio::time::sleep(Duration::from_millis(200 * (attempt + 1))).await;
+            }
+            Err(e) => {
+                println!("SKIP: MySQL connect_pool failed after retries ({})", e);
+                return None;
+            }
+        }
+    }
+    None
+}
+
 /// Mongo는 PostgresAdapter와 다른 concrete type이라 별도 helper.
 #[allow(dead_code)]
 pub async fn setup_mongo_adapter() -> Option<MongoAdapter> {
@@ -548,6 +660,9 @@ pub async fn available_dbms() -> Vec<DatabaseType> {
     let mut available = Vec::new();
     if setup_adapter(DatabaseType::Postgresql).await.is_some() {
         available.push(DatabaseType::Postgresql);
+    }
+    if setup_mysql_adapter().await.is_some() {
+        available.push(DatabaseType::Mysql);
     }
     if setup_mongo_adapter().await.is_some() {
         available.push(DatabaseType::Mongodb);
