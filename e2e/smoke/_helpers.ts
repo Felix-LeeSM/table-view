@@ -6,8 +6,7 @@ export type DbType = "postgresql" | "mongodb";
 
 export async function waitForLauncher() {
   await switchToLauncherWindow();
-  const newConnection = await $('[aria-label="New Connection"]');
-  await newConnection.waitForDisplayed({ timeout: 30000 });
+  await waitForDomSelector('[aria-label="New Connection"]', 30000);
 }
 
 export async function switchToLauncherWindow(timeoutMs = 15000) {
@@ -54,11 +53,33 @@ export async function switchToWorkspaceWindow(timeoutMs = 30000) {
 
 export async function openNewConnectionDialog() {
   await waitForLauncher();
-  const newConnection = await $('[aria-label="New Connection"]');
-  await newConnection.click();
+  await clickDomSelector('[aria-label="New Connection"]');
   const dialog = await $('[role="dialog"]');
   await dialog.waitForDisplayed({ timeout: 10000 });
   return dialog;
+}
+
+async function waitForDomSelector(selector: string, timeout = 10000) {
+  await browser.waitUntil(
+    async () =>
+      await browser.execute(
+        (sel) => Boolean(document.querySelector(sel)),
+        selector,
+      ),
+    {
+      timeout,
+      timeoutMsg: `${selector} did not appear in the DOM`,
+    },
+  );
+}
+
+async function clickDomSelector(selector: string) {
+  await waitForDomSelector(selector);
+  await browser.execute((sel) => {
+    const element = document.querySelector<HTMLElement>(sel);
+    if (!element) throw new Error(`${sel} did not appear in the DOM`);
+    element.click();
+  }, selector);
 }
 
 export async function selectDatabaseType(dbType: DbType) {
