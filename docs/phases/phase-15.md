@@ -1,6 +1,12 @@
 # Phase 15: Connection Group DnD + Nested Indent
 
-> **상태: 계획**
+> **상태: 종료 (Sprint 163–164, P2 후속 잔존).** 핵심 AC-15-01~04 PASS lock
+> — native HTML5 drag&drop API 로 구현 (spec 의 `@dnd-kit` 도입 결정은
+> 미적용, 의존성 0). AC-15-05 (drop indicator placeholder line) PARTIAL,
+> AC-15-06 (키보드 DnD) / AC-15-07 (다중 선택) / AC-15-08 (E2E) DEFERRED.
+> closure handoff:
+> [`docs/sprints/sprint-164/handoff.md`](../sprints/sprint-164/handoff.md)
+> (retrospective, 2026-05-14). 본문 동결.
 
 ## 배경
 

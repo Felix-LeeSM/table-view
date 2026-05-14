@@ -1,6 +1,9 @@
 # Phase 13: Connection 활성화 + Preview Tab Parity
 
-> **상태: 계획 (착수 전)** — Phase 12 직후 회귀 진단 sprint로 시작.
+> **상태: 종료 (Sprint 156–160).** Sprint 160 closure handoff 에서
+> AC-13-01~07 PASS lock. AC-13-08 (E2E 5 시나리오) 만 DEFERRED — tauri-
+> driver 미설치 시점 결정. Sprint 297 E2E smoke 재구축 후 보강 후보.
+> 본문 동결.
 
 ## 배경
 

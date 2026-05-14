@@ -1,8 +1,12 @@
 # Phase 17: MySQL 어댑터 지원
 
-> **상태: 보류 (2026-05-01 결정)** — TablePlus 패리티 우선 정책으로 Phase
-> 21–27 종료까지 보류. 이전 상태는 "계획" (phase-9 F-Refactor + MySQL 승계).
-> Phase 27 종료 시 재개 평가. 본 문서 본문은 동결, 재개 시 갱신.
+> **상태: 종료 (Sprint 278–287 Slice A–G + Sprint 296 coverage gate 합류,
+> retrospective 2026-05-14).** Phase 27 종료 (2026-05-13) 재개 트리거가
+> 도착하기 전에 이미 Sprint 276~296 sequence 로 작업이 진행돼 묻혀 있었다.
+> ADR 0028 (sqlx::mysql 채택) + 통합 coverage 84.23/79.74/85.66 (임계
+> 80/74/81 통과). closure handoff:
+> [`docs/sprints/sprint-296/handoff.md`](../sprints/sprint-296/handoff.md)
+> (retrospective, 2026-05-14). 본문 동결.
 
 ## 배경
 

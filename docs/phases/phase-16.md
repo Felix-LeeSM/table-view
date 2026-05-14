@@ -1,6 +1,9 @@
 # Phase 16: Recent Connections (MRU) 동작 보장
 
-> **상태: 계획**
+> **상태: 종료 (Sprint 166–168).** Sprint 168 closure handoff 에서
+> AC-16-01~07 PASS lock. AC-16-08 (E2E) DEFERRED. Sprint 290 (Recent
+> connections 삭제 + 접기) / Sprint 300 (X swap) 으로 후속 UX 보강.
+> 본문 동결.
 
 ## 배경
 

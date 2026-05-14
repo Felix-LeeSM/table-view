@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 type: memory
-updated: 2026-05-13
+updated: 2026-05-14
 ---
 
 # 로드맵
@@ -28,6 +28,10 @@ updated: 2026-05-13
   [`memory/lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md`](../lessons/parity-milestone/2026-05-13-tableplus-parity-phase-27-closure/memory.md).
 - **Phase 17–20 재개 평가 트리거 발동 (2026-05-13)** — Phase 27 종료
   exit criterion 에 따라 신규 DBMS 추가 비용/가치 재산정 시점.
+- **Phase 13–16 retroactive closure (2026-05-14)** — audit 결과 모두
+  코드 wired. 13/16 은 sprint-160/168 에서 closure 완료, 14/15 는
+  contract 만 디렉토리에 잔존해 묻혀 있던 phase 로 retroactive handoff
+  추가.
 
 ## 작업 순서 (Impact 큰 순) — Phase 21–27
 
@@ -58,11 +62,25 @@ Sprint 198 종료로 sequencing 완료.
 
 ## 진행 중 / 대기 / 보류
 
-- 진행/대기: [13](../../docs/phases/phase-13.md), [14](../../docs/phases/phase-14.md),
-  [15](../../docs/phases/phase-15.md), [16](../../docs/phases/phase-16.md).
-- 보류 (2026-05-01): [17](../../docs/phases/phase-17.md),
+- **Phase 13–17 종료 (2026-05-14 audit)** — 작업이 phase 미식별 sprint 들에
+  묻혀 진행됐다. closure 매핑:
+  - [Phase 13](../../docs/phases/phase-13.md) — Sprint 160 closure (2026-
+    04-28). Connection 활성화 회귀 + PG/Mongo preview-tab parity.
+  - [Phase 14](../../docs/phases/phase-14.md) — Sprint 162 closure
+    (retrospective 2026-05-14). Workspace ThemePicker + `Cmd+Shift+L`
+    단축키.
+  - [Phase 15](../../docs/phases/phase-15.md) — Sprint 164 closure
+    (retrospective 2026-05-14). Native HTML5 DnD 로 connection group
+    이동 + nested indent + collapse persist (`@dnd-kit` 미도입).
+  - [Phase 16](../../docs/phases/phase-16.md) — Sprint 168 closure
+    (2026-04-29). MRU 리스트 + RecentConnections + cross-window sync.
+  - [Phase 17](../../docs/phases/phase-17.md) — Sprint 296 closure
+    (retrospective 2026-05-14). MysqlAdapter Slice A–G + ADR 0028 +
+    testcontainers gate 합류 (coverage 84.23/79.74/85.66).
+- 보류 (2026-05-01, 재평가 대기):
   [18](../../docs/phases/phase-18.md), [19](../../docs/phases/phase-19.md),
-  [20](../../docs/phases/phase-20.md). Phase 27 종료 시 재개 평가.
+  [20](../../docs/phases/phase-20.md). Phase 27 종료 (2026-05-13) 로
+  재개 평가 트리거 발동.
 
 ## Active 작업
 
