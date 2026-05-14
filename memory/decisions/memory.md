@@ -35,6 +35,7 @@ updated: 2026-05-14
 | [0026](./0026-numeric-wire-string-type-aware-wrap/memory.md) | 수치 wire-format — string token + frontend type-aware wrap (BigInt / Decimal / Number) | Accepted | 2026-05-11 | — |
 | [0027](./0027-per-workspace-state-store/memory.md) | Per-workspace state — workspaceStore (tabStore 흡수) keyed by (connId, db) with explicit-API | Accepted | 2026-05-12 | — |
 | [0028](./0028-mysql-driver-sqlx/memory.md) | MySQL adapter 라이브러리 — sqlx::mysql (mysql_async 미채택) | Accepted | 2026-05-14 | — |
+| [0029](./0029-mongosh-parser-strategy/memory.md) | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택) | Accepted | 2026-05-14 | — |
 
 ## 역사 (Superseded / Deprecated)
 
