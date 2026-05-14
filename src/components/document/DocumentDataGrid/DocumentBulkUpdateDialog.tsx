@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@components/ui/dialog";
 import { cn } from "@lib/utils";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 /**
  * Presentational `Update matching documents` dialog. Stateless: the
@@ -56,7 +57,7 @@ export default function DocumentBulkUpdateDialog({
                 : `No filter is active. The patch will apply to EVERY document in "${database}.${collection}".`}
             </DialogDescription>
             <pre className="mb-2 max-h-24 overflow-auto rounded bg-muted p-2 text-xs text-foreground">
-              {JSON.stringify(activeFilter, null, 2)}
+              {safeStringifyCell(activeFilter, 2)}
             </pre>
           </DialogHeader>
           <label className="mb-2 block text-xs font-medium text-secondary-foreground">

@@ -80,6 +80,29 @@ describe("BlobViewerDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드.
+  it("[Sprint 306] BigInt 셀이 와도 throw 없이 렌더링", () => {
+    expect(() =>
+      render(
+        <BlobViewerDialog
+          {...defaultProps}
+          data={BigInt("9223372036854775807")}
+        />,
+      ),
+    ).not.toThrow();
+  });
+
+  it("[Sprint 306] nested BigInt object 도 throw 없이 텍스트 직렬화", () => {
+    expect(() =>
+      render(
+        <BlobViewerDialog
+          {...defaultProps}
+          data={{ big: BigInt("9223372036854775807") }}
+        />,
+      ),
+    ).not.toThrow();
+  });
+
   it("renders hex dump format correctly for binary-like data", () => {
     // String that has mixed printable and non-printable bytes
     render(<BlobViewerDialog {...defaultProps} data="Hello World" />);

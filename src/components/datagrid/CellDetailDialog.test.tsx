@@ -59,6 +59,25 @@ describe("CellDetailDialog", () => {
     ).toBeInTheDocument();
   });
 
+  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드. CellDetailDialog 는
+  // JSONB / numeric column 에서 nested BigInt 또는 top-level BigInt 를 받아
+  // 굳었던 sprint-305 hot-path.
+  it("[Sprint 306] renders top-level BigInt as digit string without throwing", () => {
+    expect(() =>
+      renderDialog(BigInt("9223372036854775807"), "id"),
+    ).not.toThrow();
+    expect(screen.getByText("9223372036854775807")).toBeInTheDocument();
+  });
+
+  it("[Sprint 306] renders nested BigInt inside object cell as JSON-safe", () => {
+    expect(() =>
+      renderDialog({ id: BigInt("9223372036854775807"), n: "x" }),
+    ).not.toThrow();
+    expect(
+      screen.getByText(/"id":\s*"9223372036854775807"/),
+    ).toBeInTheDocument();
+  });
+
   it("copies the value to the clipboard when Copy is clicked", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {

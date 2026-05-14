@@ -6,6 +6,7 @@ import {
   updateMany as invokeUpdateMany,
 } from "@lib/tauri";
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
+import { safeStringifyCell } from "@lib/jsonCell";
 import type { SafeModeGate } from "@hooks/useSafeModeGate";
 
 /**
@@ -85,7 +86,7 @@ export function useMongoBulkOps({
   const handleConfirmDeleteMany = useCallback(async () => {
     setDeleteManyLoading(true);
     const startedAt = Date.now();
-    const filterJson = JSON.stringify(activeFilter);
+    const filterJson = safeStringifyCell(activeFilter);
     const recordedSql = `db.${collection}.deleteMany(${filterJson})`;
     try {
       const deletedCount = await invokeDeleteMany(
@@ -180,8 +181,8 @@ export function useMongoBulkOps({
     }
     setUpdateManyLoading(true);
     const startedAt = Date.now();
-    const filterJson = JSON.stringify(activeFilter);
-    const patchJson = JSON.stringify(patch);
+    const filterJson = safeStringifyCell(activeFilter);
+    const patchJson = safeStringifyCell(patch);
     const recordedSql = `db.${collection}.updateMany(${filterJson}, { $set: ${patchJson} })`;
     try {
       const modifiedCount = await invokeUpdateMany(

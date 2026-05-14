@@ -29,6 +29,7 @@ import {
   type DocumentId,
 } from "@/types/documentMutate";
 import { isDocumentSentinel } from "@/types/document";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 /** Column shape the generator needs — structurally compatible with the
  *  `ColumnInfo` used by the RDB path, but intentionally narrower so callers
@@ -112,9 +113,10 @@ function formatMqlValue(value: unknown): string {
   if (typeof value === "bigint") {
     return value.toString();
   }
-  // Objects/arrays — JSON.stringify is good enough for a preview. The commit
-  // payload goes through Tauri's serde-json path, not this text.
-  return JSON.stringify(value);
+  // Objects/arrays — safeStringifyCell so nested BigInt (Mongo Int64 / NumberLong)
+  // 가 들어와도 preview 가 throw 하지 않는다 (Sprint 306). commit payload
+  // 는 별도 path 라 preview 텍스트의 BigInt-as-string 직렬화는 안전.
+  return safeStringifyCell(value);
 }
 
 /** Render a flat object as ` { key: <val>, … }` (unquoted keys) for the

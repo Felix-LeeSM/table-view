@@ -1,4 +1,5 @@
 import { Button } from "@components/ui/button";
+import { safeStringifyCell } from "@lib/jsonCell";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,7 @@ export default function DocumentBulkDeleteDialog({
                 : `No filter is active. This will delete EVERY document in "${database}.${collection}". This action cannot be undone.`}
             </DialogDescription>
             <pre className="mb-4 max-h-32 overflow-auto rounded bg-muted p-2 text-xs text-foreground">
-              {JSON.stringify(activeFilter, null, 2)}
+              {safeStringifyCell(activeFilter, 2)}
             </pre>
           </DialogHeader>
           <DialogFooter className="flex justify-end gap-2">

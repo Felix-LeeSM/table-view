@@ -284,6 +284,28 @@ describe("BsonTreeViewer", () => {
     ).toBeInTheDocument();
   });
 
+  // Sprint 306 (2026-05-14) — BigInt freeze 회귀 가드. canonicalStringify
+  // 가 raw JSON.stringify 였을 때 nested BigInt 입력에서 throw.
+  it("[Sprint 306] BigInt leaf 가 있어도 throw 없이 render", () => {
+    expect(() =>
+      render(
+        <BsonTreeViewer
+          value={{ id: BigInt("9223372036854775807"), name: "x" }}
+        />,
+      ),
+    ).not.toThrow();
+  });
+
+  it("[Sprint 306] BigInt array 도 throw 없이 render", () => {
+    expect(() =>
+      render(
+        <BsonTreeViewer
+          value={[BigInt(1), BigInt(2)] as unknown as unknown[]}
+        />,
+      ),
+    ).not.toThrow();
+  });
+
   it("renders a 6-deep nested structure without crashing", () => {
     const deep = { a: { b: { c: { d: { e: { f: "leaf" } } } } } };
     render(<BsonTreeViewer value={deep} />);

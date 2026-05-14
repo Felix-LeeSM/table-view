@@ -1,4 +1,5 @@
 import type { ColumnInfo } from "@/types/schema";
+import { safeStringifyCell } from "@lib/jsonCell";
 
 /**
  * Quote a SQL identifier with double quotes, escaping internal `"`.
@@ -26,7 +27,11 @@ function literal(value: unknown): string {
   if (value == null) return "NULL";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number") return String(value);
-  if (typeof value === "object") return quoteString(JSON.stringify(value));
+  // Sprint 306 — cell 값이 nested BigInt / Decimal 일 때 raw JSON.stringify
+  // 가 throw 했던 회귀. safeStringifyCell 은 BigInt/Decimal 을 string 으로
+  // emit 하므로 raw query edit literal 이 안전하게 round-trip.
+  if (typeof value === "object") return quoteString(safeStringifyCell(value));
+  if (typeof value === "bigint") return String(value);
   return quoteString(String(value));
 }
 
