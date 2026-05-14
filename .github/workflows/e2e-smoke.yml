@@ -11,6 +11,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TAURI_DRIVER_VERSION: "2.0.6"
 
 jobs:
   e2e-smoke:
@@ -91,11 +92,16 @@ jobs:
           shared-key: e2e-smoke-linux
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Cache tauri-driver binary
+        id: cache-tauri-driver
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/tauri-driver
+          key: tauri-driver-${{ runner.os }}-v${{ env.TAURI_DRIVER_VERSION }}
+
       - name: Install tauri-driver
-        run: |
-          if ! command -v tauri-driver >/dev/null 2>&1; then
-            cargo install tauri-driver --locked
-          fi
+        if: steps.cache-tauri-driver.outputs.cache-hit != 'true'
+        run: cargo install tauri-driver --version ${{ env.TAURI_DRIVER_VERSION }} --locked
 
       - name: Run E2E smoke
         env:
