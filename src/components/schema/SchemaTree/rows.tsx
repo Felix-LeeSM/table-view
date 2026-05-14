@@ -15,15 +15,23 @@ import {
   X,
   Search,
   RefreshCw,
+  Download,
+  FileText,
+  Rows3,
+  Database,
 } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubTrigger,
+  ContextMenuSubContent,
 } from "@components/ui/context-menu";
 import { Button } from "@components/ui/button";
 import type { TableInfo, FunctionInfo } from "@/types/schema";
+import type { ExportInclude } from "@/hooks/useMigrationExport";
 import { cn } from "@lib/utils";
 import {
   rowCountLabel,
@@ -31,6 +39,21 @@ import {
   type CategoryKey,
   type VisibleRow,
 } from "./treeRows";
+
+// Sprint 301 — schema / table 컨텍스트 메뉴의 Export sub-menu 가 사용하는
+// 세 가지 export include 모드. DDL / Data (DML) / Full (DDL + Data).
+// Data 와 Full 은 현재 PostgreSQL 만 실제로 동작 — MySQL / SQLite 는
+// stream_table_rows 가 Unsupported 라 useMigrationExport 가 toast 로
+// 사용자에게 알리며 종료. UI 는 모든 driver 에 동일하게 노출한다.
+const EXPORT_MODES: ReadonlyArray<{
+  include: ExportInclude;
+  label: string;
+  Icon: typeof FileText;
+}> = [
+  { include: "ddl", label: "DDL (CREATE only)", Icon: FileText },
+  { include: "dml", label: "Data (INSERT only)", Icon: Rows3 },
+  { include: "both", label: "Full dump (DDL + data)", Icon: Database },
+];
 
 /**
  * Leaf row renderers consumed by both `SchemaTreeBody` paths
@@ -58,6 +81,12 @@ export interface SchemaTreeRowsContext {
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
   handleCreateTable: (schemaName: string) => void;
+  handleExportSchema: (schemaName: string, include: ExportInclude) => void;
+  handleExportTable: (
+    tableName: string,
+    schemaName: string,
+    include: ExportInclude,
+  ) => void;
 }
 
 export function renderSchemaRow(
@@ -110,6 +139,22 @@ export function renderSchemaRow(
           <Plus size={14} />
           Create Table…
         </ContextMenuItem>
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <Download size={14} />
+            Export Schema…
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            {EXPORT_MODES.map(({ include, label, Icon }) => (
+              <ContextMenuItem
+                key={include}
+                onClick={() => ctx.handleExportSchema(row.schemaName, include)}
+              >
+                <Icon size={14} /> {label}
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuItem
           onClick={() => ctx.handleRefreshSchema(row.schemaName)}
         >
@@ -344,6 +389,23 @@ export function renderItemRow(
                 StructurePanel Triggers tab (consolidated single entry
                 point). Column/Index/Constraint surfaces don't carry
                 table-row shortcuts either, so this restores consistency. */}
+            <ContextMenuSub>
+              <ContextMenuSubTrigger>
+                <Download size={14} /> Export Table…
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent>
+                {EXPORT_MODES.map(({ include, label, Icon }) => (
+                  <ContextMenuItem
+                    key={include}
+                    onClick={() =>
+                      ctx.handleExportTable(item.name, row.schemaName, include)
+                    }
+                  >
+                    <Icon size={14} /> {label}
+                  </ContextMenuItem>
+                ))}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
             <ContextMenuItem
               onClick={() => ctx.handleStartRename(item.name, row.schemaName)}
             >

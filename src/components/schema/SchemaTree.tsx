@@ -184,6 +184,8 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
     handleOpenViewStructure: actions.handleOpenViewStructure,
     handleFunctionClick: actions.handleFunctionClick,
     handleCreateTable: actions.handleCreateTable,
+    handleExportSchema: actions.handleExportSchema,
+    handleExportTable: actions.handleExportTable,
   };
 
   return (

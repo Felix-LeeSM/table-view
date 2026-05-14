@@ -1122,4 +1122,83 @@ describe("SchemaTree — actions", () => {
     const plusButtons = screen.queryAllByLabelText(/^Create table in /);
     expect(plusButtons).toHaveLength(1);
   });
+
+  // =========================================================================
+  // Sprint 301 — schema/table 컨텍스트 메뉴 Export 진입점
+  // =========================================================================
+  //
+  // 작성 이유 (2026-05-13, Sprint 301): 헤더 Download Popover 만이 export
+  // 진입점이었는데, 사용자는 우클릭 흐름으로도 schema / table 단위 export
+  // 를 트리거할 수 있길 원함. 본 sprint 는 schema row 우클릭에 "Export…"
+  // sub-menu (Schema DDL / Data / Full), table row 우클릭에 "Export…"
+  // sub-menu (Table DDL / Data / Full) 를 wire 한다. sub-menu 내부 항목
+  // 클릭 트리거는 Radix Portal + jsdom 한계로 visual 영역에 가깝고, 본
+  // 가드는 sub-trigger 노출만 검증 — 회귀 시 menu 가 통째로 사라지면 잡힘.
+  //
+  // 비 PG (MySQL / SQLite) connection 에서도 sub-trigger 자체는 노출 (DDL
+  // 만 호출 가능). 의도된 disabled 상태 가드는 follow-up 으로 미룬다.
+  describe("Sprint 301 — context menu Export entry", () => {
+    beforeEach(() => {
+      useConnectionStore.setState({
+        connections: [
+          {
+            id: "conn1",
+            name: "PG",
+            db_type: "postgresql",
+            host: "localhost",
+            port: 5432,
+            user: "u",
+            database: "db",
+            group_id: null,
+            color: null,
+            environment: "local",
+            paradigm: "rdb",
+            has_password: false,
+          },
+        ],
+      });
+    });
+
+    it("[AC-301-01] schema row 우클릭 시 'Export…' sub-trigger 가 노출된다", async () => {
+      setSchemaStoreState({
+        schemas: { conn1: [{ name: "public" }] },
+        tables: { "conn1:public": [] },
+      });
+
+      await act(async () => {
+        render(<SchemaTree connectionId="conn1" />);
+      });
+
+      const schemaRow = screen.getByLabelText("public schema");
+      await act(async () => {
+        fireEvent.contextMenu(schemaRow, { clientX: 100, clientY: 200 });
+      });
+
+      // SubTrigger label 만 가드. sub-content 의 DDL/Data/Full 클릭 트리거
+      // 는 Radix Portal + jsdom 한계로 본 case 의 범위 밖.
+      expect(screen.getByText("Export Schema…")).toBeInTheDocument();
+    });
+
+    it("[AC-301-02] table row 우클릭 시 'Export…' sub-trigger 가 노출된다", async () => {
+      setSchemaStoreState({
+        schemas: { conn1: [{ name: "public" }] },
+        tables: {
+          "conn1:public": [
+            { name: "users", schema: "public", row_count: null },
+          ],
+        },
+      });
+
+      await act(async () => {
+        render(<SchemaTree connectionId="conn1" />);
+      });
+
+      const tableItem = screen.getByLabelText("users table");
+      await act(async () => {
+        fireEvent.contextMenu(tableItem, { clientX: 100, clientY: 200 });
+      });
+
+      expect(screen.getByText("Export Table…")).toBeInTheDocument();
+    });
+  });
 });

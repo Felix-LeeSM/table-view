@@ -8,6 +8,10 @@ import {
 } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useSchemaCache } from "@/hooks/useSchemaCache";
+import {
+  useMigrationExport,
+  type ExportInclude,
+} from "@/hooks/useMigrationExport";
 import { DEFAULT_EXPANDED, nodeIdToString, type CategoryKey } from "./treeRows";
 
 const EMPTY_EXPANDED: readonly string[] = Object.freeze([]);
@@ -101,6 +105,14 @@ export interface SchemaTreeActions {
   handleOpenViewStructure: (viewName: string, schemaName: string) => void;
   handleFunctionClick: (funcName: string, schemaName: string) => void;
   handleCreateTable: (schemaName: string) => void;
+  // Sprint 301 — schema / table 컨텍스트 메뉴 export 진입점. 헤더의
+  // Download Popover 와 동일한 useMigrationExport 경로를 재사용.
+  handleExportSchema: (schemaName: string, include: ExportInclude) => void;
+  handleExportTable: (
+    tableName: string,
+    schemaName: string,
+    include: ExportInclude,
+  ) => void;
 }
 
 export function useSchemaTreeActions({
@@ -399,6 +411,28 @@ export function useSchemaTreeActions({
     setCreateTableDialog({ schemaName });
   }, []);
 
+  // Sprint 301 — useMigrationExport 를 직접 import 해 schema / table
+  // 컨텍스트 메뉴 진입점을 wire. 헤더 Download Popover 가 사용하는
+  // hook 인스턴스와는 별개 — `isExporting` lock 도 분리되지만, 사용자
+  // 흐름상 두 진입점에서 동시 export 가 일어날 시나리오는 없다.
+  const { exportSchema, exportTable } = useMigrationExport();
+  const handleExportSchema = useCallback(
+    (schemaName: string, include: ExportInclude) => {
+      const key = workspaceKeyRef.current;
+      if (!key) return;
+      void exportSchema(key.connId, key.db, schemaName, include);
+    },
+    [exportSchema],
+  );
+  const handleExportTable = useCallback(
+    (tableName: string, schemaName: string, include: ExportInclude) => {
+      const key = workspaceKeyRef.current;
+      if (!key) return;
+      void exportTable(key.connId, key.db, schemaName, tableName, include);
+    },
+    [exportTable],
+  );
+
   const toggleCategory = useCallback(
     (schemaName: string, categoryKey: CategoryKey) => {
       setExpandedCategories((prev) => {
@@ -477,5 +511,7 @@ export function useSchemaTreeActions({
     handleOpenViewStructure,
     handleFunctionClick,
     handleCreateTable,
+    handleExportSchema,
+    handleExportTable,
   };
 }

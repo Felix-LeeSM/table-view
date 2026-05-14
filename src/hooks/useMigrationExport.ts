@@ -46,6 +46,16 @@ export interface UseMigrationExportReturn {
     schemas: string[],
     include: ExportInclude,
   ) => Promise<void>;
+  // Sprint 301 — 단일 table export. SchemaTree row 의 컨텍스트 메뉴
+  // 진입점에서 호출. include 시맨틱 / Unsupported driver 의 toast 정책은
+  // `exportSchema` 와 동일.
+  exportTable: (
+    connectionId: string,
+    database: string,
+    schema: string,
+    table: string,
+    include: ExportInclude,
+  ) => Promise<void>;
   isExporting: boolean;
 }
 
@@ -308,5 +318,86 @@ export function useMigrationExport(): UseMigrationExportReturn {
     [isExporting],
   );
 
-  return { exportSchema, exportDatabase, isExporting };
+  const exportTable = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      schema: string,
+      table: string,
+      include: ExportInclude,
+    ) => {
+      if (isExporting) return;
+      const resolved = resolveDialect(connectionId);
+      if (!resolved) return;
+
+      setIsExporting(true);
+      try {
+        const allTables = await loadSchemaMetadata(
+          connectionId,
+          database,
+          schema,
+        );
+        const target = allTables.find((t) => t.name === table);
+        if (!target) {
+          toast.error(
+            `Export: table "${schema}.${table}" 의 metadata 를 찾을 수 없음`,
+          );
+          return;
+        }
+
+        const ddlHeader =
+          include === "ddl" || include === "both"
+            ? generateMigrationDDL({
+                dialect: resolved.dialect,
+                schema,
+                tables: [target],
+              })
+            : "";
+
+        const suffix =
+          include === "ddl"
+            ? "schema.sql"
+            : include === "dml"
+              ? "data.sql"
+              : "dump.sql";
+        const savePath = await save({
+          defaultPath: `${schema}.${table}.${suffix}`,
+          filters: [{ name: "SQL", extensions: ["sql"] }],
+        });
+        if (savePath === null || savePath === undefined) return;
+
+        if (include === "ddl") {
+          const summary = await writeTextFileExport(savePath, ddlHeader);
+          toast.success(
+            `Exported ${INCLUDE_LABEL.ddl} (${schema}.${table}, ${formatKb(summary.bytes_written)} KB)`,
+          );
+          return;
+        }
+
+        const dumpTables = toDumpTables([{ schema, ddlTables: [target] }]);
+        const ddlFooter = buildSequenceResets(resolved.dialect, schema, [
+          target,
+        ]).join("\n");
+        const summary = await exportSchemaDump(
+          connectionId,
+          savePath,
+          ddlHeader,
+          ddlFooter,
+          dumpTables,
+          { include, batchSize: STREAM_BATCH_SIZE },
+        );
+        toast.success(
+          `Exported ${INCLUDE_LABEL[include]} (${schema}.${table}, ${formatRows(summary.rows_written)} row${summary.rows_written === 1 ? "" : "s"}, ${formatKb(summary.bytes_written)} KB)`,
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(`Export failed: ${message}`);
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [isExporting],
+  );
+
+  return { exportSchema, exportDatabase, exportTable, isExporting };
 }
