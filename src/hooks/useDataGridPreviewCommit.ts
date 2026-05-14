@@ -1,29 +1,25 @@
-// Sub-hook for the preview / commit / Safe Mode handoff. Owns paradigm
-// branching (RDB SQL preview ↔ Mongo MQL preview), the
-// executeQueryBatch / dispatchMqlCommand executors, the
-// `useSafeModeGate` consumer, and the warn-tier confirmDangerous /
-// cancelDangerous + commitError lifecycle.
-//
-// The hook consumes its zustand deps directly (schemaStore +
-// useSafeModeGate); the facade wires only cell editing / pending state
-// and the cleanup callback so deps aren't doubly-wired.
-import { useCallback, useState } from "react";
+// Sub-hook for the preview / commit / Safe Mode handoff. Paradigm
+// branching lives in `paradigmEditAdapter` (`lib/datagrid/`); this hook
+// drives the Safe Mode dialog state machine and the commitError /
+// pendingConfirm / commit-flash lifecycle. RDB and Document share the
+// same body now — adapter `kind` is only consulted at the return
+// boundary so the facade's legacy `sqlPreview` / `mqlPreview` fields
+// stay populated for downstream UI components.
+import { useCallback, useMemo, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
-import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import {
-  generateSqlWithKeys,
-  type CoerceError,
-  type GeneratedSqlStatement,
-} from "@/components/datagrid/sqlGenerator";
-import {
-  generateMqlPreview,
-  type MqlCommand,
-  type MqlPreview,
-} from "@/lib/mongo/mqlGenerator";
-import { insertDocument, updateDocument, deleteDocument } from "@/lib/tauri";
-import { toast } from "@/lib/toast";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { toast } from "@/lib/toast";
+import {
+  buildRdbSession,
+  documentEditAdapter,
+  rdbEditAdapter,
+  type Paradigm,
+  type PreviewSession,
+  type RdbAdapterDeps,
+  type DocumentAdapterDeps,
+} from "@/lib/datagrid/paradigmEditAdapter";
+import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
 import type { TableData } from "@/types/schema";
 import type { CommitError } from "@/components/datagrid/useDataGridEdit";
 
@@ -33,7 +29,7 @@ export interface UseDataGridPreviewCommitParams {
   table: string;
   connectionId: string;
   page: number;
-  paradigm: "rdb" | "document" | "search" | "kv";
+  paradigm: Paradigm;
   fetchData: () => void;
   /** 읽기 전용 pending state — preview 생성 시 입력. */
   pendingEdits: Map<string, string | null>;
@@ -46,9 +42,9 @@ export interface UseDataGridPreviewCommitParams {
    */
   clearAllPending: () => void;
   /**
-   * 커밋 시도 중 surface 한 cell-level coercion error map. hook 이
-   * commit 시 reset (RDB: nextErrors / MQL: empty) 하고, batch 실패 시
-   * 실패 statement 의 key 에 한 entry 추가.
+   * 커밋 시도 중 surface 한 cell-level coercion error map. preview 생성
+   * 시 reset (adapter 가 채운 `coerceErrors`), batch 실패 시 실패
+   * statement 의 key 에 한 entry 추가.
    */
   setPendingEditErrors: React.Dispatch<
     React.SetStateAction<Map<string, string>>
@@ -74,10 +70,10 @@ export interface HandleCommitOverrides {
 
 export interface HandleCommitResult {
   /**
-   * `true` when an SQL or MQL preview opened. Drives the facade's
-   * decision to dismiss the in-flight cell editor — when validation
-   * fails and the preview never opens, the editor must stay so the
-   * user can fix the value in place.
+   * `true` when a preview opened. Drives the facade's decision to
+   * dismiss the in-flight cell editor — when validation fails and
+   * the preview never opens, the editor must stay so the user can
+   * fix the value in place.
    */
   opened: boolean;
 }
@@ -99,8 +95,8 @@ export interface UseDataGridPreviewCommitReturn {
   confirmDangerous: () => Promise<void>;
   cancelDangerous: () => void;
   /**
-   * Called by the facade's discard path. Clears preview / statements /
-   * commitError / pendingConfirm in one shot, paradigm-agnostic.
+   * Called by the facade's discard path. Clears preview / commitError /
+   * pendingConfirm in one shot, paradigm-agnostic.
    */
   resetPreviewState: () => void;
 }
@@ -129,351 +125,276 @@ export function useDataGridPreviewCommit(
   // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);
 
-  const [sqlPreview, setSqlPreview] = useState<string[] | null>(null);
-  // Keyed statements (lockstep with `sqlPreview`). `handleExecuteCommit`
-  // maps a failing `statementIndex` back to the pending-edit cell key.
-  const [sqlPreviewStatements, setSqlPreviewStatements] = useState<
-    GeneratedSqlStatement[] | null
-  >(null);
+  // Paradigm-keyed adapter. Selection happens here exactly once per
+  // dep change — the hook body never branches on `paradigm` again.
+  const adapter = useMemo(() => {
+    if (paradigm === "document") {
+      const deps: DocumentAdapterDeps = {
+        connectionId,
+        history: {
+          recordSuccess: ({ sql, startedAt, duration }) =>
+            addHistoryEntry({
+              sql,
+              executedAt: startedAt,
+              duration,
+              status: "success",
+              connectionId,
+              paradigm: "document",
+              queryMode: "find",
+              database: schema,
+              collection: table,
+              source: "grid-edit",
+            }),
+          recordError: ({ sql, startedAt, duration }) =>
+            addHistoryEntry({
+              sql,
+              executedAt: startedAt,
+              duration,
+              status: "error",
+              connectionId,
+              paradigm: "document",
+              queryMode: "find",
+              database: schema,
+              collection: table,
+              source: "grid-edit",
+            }),
+        },
+      };
+      return documentEditAdapter(deps);
+    }
+    const deps: RdbAdapterDeps = {
+      connectionId,
+      safeModeGate,
+      executeQueryBatch,
+      history: {
+        recordSuccess: ({ sql, startedAt, duration }) =>
+          addHistoryEntry({
+            sql,
+            executedAt: startedAt,
+            duration,
+            status: "success",
+            connectionId,
+            paradigm: "rdb",
+            queryMode: "sql",
+            source: "grid-edit",
+          }),
+        recordError: ({ sql, startedAt, duration }) =>
+          addHistoryEntry({
+            sql,
+            executedAt: startedAt,
+            duration,
+            status: "error",
+            connectionId,
+            paradigm: "rdb",
+            queryMode: "sql",
+            source: "grid-edit",
+          }),
+      },
+    };
+    return rdbEditAdapter(deps);
+  }, [
+    paradigm,
+    connectionId,
+    schema,
+    table,
+    safeModeGate,
+    executeQueryBatch,
+    addHistoryEntry,
+  ]);
+
+  const [session, setSession] = useState<PreviewSession | null>(null);
   const [commitError, setCommitError] = useState<CommitError | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<{
     reason: string;
     sql: string;
     statementIndex: number;
   } | null>(null);
-  // Document-paradigm MQL preview. Always null on RDB grids; participates
-  // in the `hasPendingChanges` OR.
-  const [mqlPreview, setMqlPreview] = useState<MqlPreview | null>(null);
 
-  // Wrapped setter — clearing the preview also clears keyed statements
-  // and commitError so the next open starts fresh.
-  const setSqlPreviewExposed = useCallback((v: string[] | null) => {
-    setSqlPreview(v);
+  // Back-door for tests that seed `sqlPreview` with raw SQL strings
+  // (useDataGridEdit.safe-mode.test.ts etc.). Synthesizes an RDB session
+  // with the same Safe Mode risk-classification path that
+  // `rdbEditAdapter` uses, so `handleExecuteCommit` behaves identically
+  // whether the session came from `handleCommit` or this setter.
+  const setSqlPreviewExposed = useCallback(
+    (v: string[] | null) => {
+      if (v === null) {
+        setSession(null);
+        setCommitError(null);
+        return;
+      }
+      const deps: RdbAdapterDeps = {
+        connectionId,
+        safeModeGate,
+        executeQueryBatch,
+        history: {
+          recordSuccess: ({ sql, startedAt, duration }) =>
+            addHistoryEntry({
+              sql,
+              executedAt: startedAt,
+              duration,
+              status: "success",
+              connectionId,
+              paradigm: "rdb",
+              queryMode: "sql",
+              source: "grid-edit",
+            }),
+          recordError: ({ sql, startedAt, duration }) =>
+            addHistoryEntry({
+              sql,
+              executedAt: startedAt,
+              duration,
+              status: "error",
+              connectionId,
+              paradigm: "rdb",
+              queryMode: "sql",
+              source: "grid-edit",
+            }),
+        },
+      };
+      const synth = buildRdbSession(
+        v,
+        v.map(() => undefined),
+        deps,
+      );
+      setSession(synth);
+      setCommitError(null);
+    },
+    [connectionId, safeModeGate, executeQueryBatch, addHistoryEntry],
+  );
+
+  // `setMqlPreview(null)` dismisses the preview dialog. Non-null sets
+  // are not used by any caller (only tests do that for RDB via
+  // `setSqlPreview`), so the back-door is RDB-only.
+  const setMqlPreview = useCallback((v: MqlPreview | null) => {
     if (v === null) {
-      setSqlPreviewStatements(null);
+      setSession(null);
       setCommitError(null);
     }
+    // Non-null branch intentionally no-op — `handleCommit` is the only
+    // legitimate producer of a document session.
   }, []);
+
+  const runExecution = useCallback(
+    async (sess: PreviewSession) => {
+      const result = await sess.execute();
+      if (result.ok) {
+        setSession(null);
+        setCommitError(null);
+        clearAllPending();
+        fetchData();
+        return;
+      }
+      // Failure: keep the preview visible so the user can see what was
+      // attempted. RDB adapters surface `failedKey` + `failedIndex` from
+      // the backend's `"statement N of M failed"` error; Mongo leaves
+      // both undefined and the banner falls back to the first item.
+      const failedIndex = result.failedIndex ?? 0;
+      const failedItem = sess.items[failedIndex];
+      setCommitError({
+        statementIndex: failedIndex,
+        statementCount: sess.items.length,
+        sql: failedItem?.text ?? "",
+        message: result.errorMessage ?? "Commit failed.",
+        failedKey: result.failedKey,
+      });
+      if (result.failedKey) {
+        const key = result.failedKey;
+        setPendingEditErrors((prev) => {
+          const next = new Map(prev);
+          next.set(key, result.errorMessage ?? "Commit failed.");
+          return next;
+        });
+      }
+    },
+    [clearAllPending, fetchData, setPendingEditErrors],
+  );
 
   const handleCommit = useCallback(
     (overrides?: HandleCommitOverrides): HandleCommitResult => {
       if (!data) return { opened: false };
       // Always begin the flash; the 400ms safety guard caps it for the
-      // document early-return / no-op RDB branches that never resolve a
-      // commit.
+      // empty-preview / no-op branches that never resolve a commit.
       beginCommitFlash();
       const effectivePendingEdits =
         overrides?.pendingEditsOverride ?? pendingEdits;
-      if (paradigm === "document") {
-        const columns = data.columns.map((c) => ({
-          name: c.name,
-          data_type: c.data_type,
-          is_primary_key: c.is_primary_key,
-        }));
-        const insertRecords: Record<string, unknown>[] = pendingNewRows.map(
-          (row) => {
-            const record: Record<string, unknown> = {};
-            columns.forEach((col, idx) => {
-              const value = row[idx];
-              if (value !== null && value !== undefined) {
-                record[col.name] = value;
-              }
-            });
-            return record;
-          },
-        );
-        const preview = generateMqlPreview({
-          database: schema,
-          collection: table,
-          columns,
-          rows: data.rows,
-          page,
-          pendingEdits: effectivePendingEdits,
-          pendingDeletedRowKeys,
-          pendingNewRows: insertRecords,
-        });
-        // The MQL path records row-level errors on the preview itself;
-        // the RDB-only `pendingEditErrors` map must be reset here.
-        setPendingEditErrors(new Map());
-        if (preview.commands.length === 0) return { opened: false };
-        setMqlPreview(preview);
-        return { opened: true };
-      }
-      const nextErrors = new Map<string, string>();
-      const keyedStatements = generateSqlWithKeys(
+      const { session: newSession, coerceErrors } = adapter.preparePreview({
         data,
         schema,
         table,
-        effectivePendingEdits,
-        pendingDeletedRowKeys,
+        page,
+        pendingEdits: effectivePendingEdits,
         pendingNewRows,
-        {
-          onCoerceError: (err: CoerceError) => {
-            nextErrors.set(err.key, err.message);
-          },
-        },
-      );
-      setPendingEditErrors(nextErrors);
-      if (keyedStatements.length === 0) return { opened: false };
-      setSqlPreview(keyedStatements.map((s) => s.sql));
-      setSqlPreviewStatements(keyedStatements);
+        pendingDeletedRowKeys,
+      });
+      // Adapter always reports coerce errors regardless of whether the
+      // preview opens — pure-error edits surface inline next to the cell
+      // even when no statements are emitted.
+      setPendingEditErrors(coerceErrors);
+      if (newSession === null) return { opened: false };
+      setSession(newSession);
       setCommitError(null);
       return { opened: true };
     },
     [
       data,
+      adapter,
       pendingEdits,
       pendingDeletedRowKeys,
       pendingNewRows,
       schema,
       table,
-      paradigm,
       page,
       beginCommitFlash,
       setPendingEditErrors,
     ],
   );
 
-  const dispatchMqlCommand = useCallback(
-    async (cmd: MqlCommand): Promise<void> => {
-      switch (cmd.kind) {
-        case "insertOne":
-          await insertDocument(
-            connectionId,
-            cmd.database,
-            cmd.collection,
-            cmd.document,
-          );
-          return;
-        case "updateOne":
-          await updateDocument(
-            connectionId,
-            cmd.database,
-            cmd.collection,
-            cmd.documentId,
-            cmd.patch,
-          );
-          return;
-        case "deleteOne":
-          await deleteDocument(
-            connectionId,
-            cmd.database,
-            cmd.collection,
-            cmd.documentId,
-          );
-          return;
-        default: {
-          const never: never = cmd;
-          return never;
-        }
-      }
-    },
-    [connectionId],
-  );
-
-  // Shared by `handleExecuteCommit` and `confirmDangerous` so try/catch
-  // + cleanup live in one place.
-  const runRdbBatch = useCallback(
-    async (statements: GeneratedSqlStatement[], statementCount: number) => {
-      const startedAt = Date.now();
-      const joinedSql = statements.map((s) => s.sql).join(";\n");
-      try {
-        await executeQueryBatch(
-          connectionId,
-          statements.map((s) => s.sql),
-          `edit-${Date.now()}`,
-        );
-        setSqlPreview(null);
-        setSqlPreviewStatements(null);
-        setCommitError(null);
-        clearAllPending();
-        fetchData();
-        toast.success(
-          `${statementCount} ${statementCount === 1 ? "change" : "changes"} committed.`,
-        );
-        // RDB grid-commit history. Mongo commits record from the
-        // document branch in `handleExecuteCommit`.
-        addHistoryEntry({
-          sql: joinedSql,
-          executedAt: startedAt,
-          duration: Date.now() - startedAt,
-          status: "success",
-          connectionId,
-          paradigm: "rdb",
-          queryMode: "sql",
-          source: "grid-edit",
-        });
-      } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : typeof err === "string"
-              ? err
-              : "Failed to commit changes.";
-        const indexMatch = message.match(/statement (\d+) of \d+ failed/);
-        const failedIndex = indexMatch
-          ? Math.max(0, Number(indexMatch[1]) - 1)
-          : 0;
-        const failedStmt = statements[failedIndex] ?? statements[0];
-        setCommitError({
-          statementIndex: failedIndex,
-          statementCount,
-          sql: failedStmt?.sql ?? "",
-          message: `Commit failed — all changes rolled back: ${message}`,
-          failedKey: failedStmt?.key,
-        });
-        if (failedStmt?.key) {
-          setPendingEditErrors((prev) => {
-            const next = new Map(prev);
-            next.set(failedStmt.key!, message);
-            return next;
-          });
-        }
-        toast.error(`Commit failed — all changes rolled back: ${message}`);
-        addHistoryEntry({
-          sql: joinedSql,
-          executedAt: startedAt,
-          duration: Date.now() - startedAt,
-          status: "error",
-          connectionId,
-          paradigm: "rdb",
-          queryMode: "sql",
-          source: "grid-edit",
-        });
-      }
-    },
-    [
-      executeQueryBatch,
-      connectionId,
-      fetchData,
-      clearAllPending,
-      setPendingEditErrors,
-      addHistoryEntry,
-    ],
-  );
-
   const handleExecuteCommit = useCallback(async () => {
-    if (paradigm === "document") {
-      if (!mqlPreview || mqlPreview.commands.length === 0) return;
-      const docCount = mqlPreview.commands.length;
-      const startedAt = Date.now();
-      // History row needs a single string; collapse the human-readable
-      // per-command preview lines.
-      const joinedMql = mqlPreview.previewLines.join("\n");
-      try {
-        for (const cmd of mqlPreview.commands) {
-          await dispatchMqlCommand(cmd);
-        }
-        setMqlPreview(null);
-        clearAllPending();
-        fetchData();
-        toast.success(
-          `${docCount} document ${docCount === 1 ? "change" : "changes"} committed.`,
-        );
-        addHistoryEntry({
-          sql: joinedMql,
-          executedAt: startedAt,
-          duration: Date.now() - startedAt,
-          status: "success",
-          connectionId,
-          paradigm: "document",
-          queryMode: "find",
-          // `data?.` plumbing: schema / table prop on this hook is repurposed
-          // for Mongo as `database` / `collection`. The cell-edit hook contract
-          // already passes the Mongo db/collection through these slots.
-          database: schema,
-          collection: table,
-          source: "grid-edit",
-        });
-      } catch (err) {
-        // The MQL branch surfaces the failure via toast — `commitError`
-        // is RDB-only — so the user still sees what went wrong.
-        const message =
-          err instanceof Error
-            ? err.message
-            : typeof err === "string"
-              ? err
-              : "Failed to commit document changes.";
-        toast.error(`Commit failed: ${message}`);
-        addHistoryEntry({
-          sql: joinedMql,
-          executedAt: startedAt,
-          duration: Date.now() - startedAt,
-          status: "error",
-          connectionId,
-          paradigm: "document",
-          queryMode: "find",
-          database: schema,
-          collection: table,
-          source: "grid-edit",
-        });
-      }
-      return;
-    }
-    if (!sqlPreview) return;
-    const statements: GeneratedSqlStatement[] =
-      sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
-    const statementCount = statements.length;
-    // Per-statement Safe Mode gate: block → `commitError`,
-    // confirm → `pendingConfirm` (warn-tier dialog).
-    for (let i = 0; i < statements.length; i++) {
-      const stmt = statements[i];
-      if (!stmt) continue;
-      const analysis = analyzeStatement(stmt.sql);
-      const decision = safeModeGate.decide(analysis);
-      if (decision.action === "block") {
+    if (!session) return;
+    // Per-item Safe Mode gate: destructive → commitError + early return,
+    // warn → pendingConfirm + early return. Walk in order so the first
+    // failing item wins; subsequent items are not analysed until the
+    // user resolves the dialog.
+    for (let i = 0; i < session.items.length; i++) {
+      const item = session.items[i];
+      if (!item) continue;
+      if (item.risk === "destructive") {
+        const reason = item.reason ?? "Blocked by Safe Mode";
         setCommitError({
           statementIndex: i,
-          statementCount,
-          sql: stmt.sql,
-          message: decision.reason,
-          failedKey: stmt.key,
+          statementCount: session.items.length,
+          sql: item.text,
+          message: reason,
+          failedKey: item.key,
         });
-        toast.error(decision.reason);
         return;
       }
-      if (decision.action === "confirm") {
+      if (item.risk === "warn") {
         setPendingConfirm({
-          reason: decision.reason,
-          sql: stmt.sql,
+          reason: item.reason ?? "Confirmation required",
+          sql: item.text,
           statementIndex: i,
         });
         return;
       }
     }
-    await runRdbBatch(statements, statementCount);
-  }, [
-    sqlPreview,
-    sqlPreviewStatements,
-    mqlPreview,
-    paradigm,
-    dispatchMqlCommand,
-    fetchData,
-    safeModeGate,
-    runRdbBatch,
-    clearAllPending,
-    addHistoryEntry,
-    connectionId,
-    schema,
-    table,
-  ]);
+    await runExecution(session);
+  }, [session, runExecution]);
 
-  // Warn-tier handoff. `confirmDangerous` rebuilds the batch from the
-  // current preview and runs unconditionally; `cancelDangerous` sets a
-  // warn-tier `commitError` so the user knows why nothing happened.
+  // Warn-tier handoff. `confirmDangerous` runs the session unconditionally
+  // (re-uses the same closure built at preview time); `cancelDangerous`
+  // surfaces a warn-tier `commitError` so the user knows why nothing
+  // happened.
   const confirmDangerous = useCallback(async () => {
     if (!pendingConfirm) return;
     setPendingConfirm(null);
-    if (!sqlPreview) return;
-    const statements: GeneratedSqlStatement[] =
-      sqlPreviewStatements ?? sqlPreview.map((sql) => ({ sql }));
-    await runRdbBatch(statements, statements.length);
-  }, [pendingConfirm, sqlPreview, sqlPreviewStatements, runRdbBatch]);
+    if (!session) return;
+    await runExecution(session);
+  }, [pendingConfirm, session, runExecution]);
 
   const cancelDangerous = useCallback(() => {
     if (!pendingConfirm) return;
-    const statementCount =
-      sqlPreviewStatements?.length ?? sqlPreview?.length ?? 0;
+    const statementCount = session?.items.length ?? 0;
     const message =
       "Safe Mode (warn): confirmation cancelled — no changes committed";
     setCommitError({
@@ -485,14 +406,21 @@ export function useDataGridPreviewCommit(
     });
     setPendingConfirm(null);
     toast.info(message);
-  }, [pendingConfirm, sqlPreview, sqlPreviewStatements]);
+  }, [pendingConfirm, session]);
 
   const resetPreviewState = useCallback(() => {
-    setMqlPreview(null);
-    setSqlPreviewStatements(null);
+    setSession(null);
     setCommitError(null);
     setPendingConfirm(null);
   }, []);
+
+  // Legacy paradigm-specific surface, derived from the unified session.
+  // `DataGrid.tsx` (RDB) reads `sqlPreview`; `DocumentDataGrid.tsx` reads
+  // `mqlPreview.errors` / `.previewLines`. Both ignore the other paradigm
+  // so this discriminator is harmless.
+  const sqlPreview =
+    session?.kind === "rdb" ? session.items.map((i) => i.text) : null;
+  const mqlPreview = session?.kind === "document" ? session.mqlPreview : null;
 
   return {
     sqlPreview,
