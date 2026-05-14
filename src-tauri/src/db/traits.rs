@@ -20,8 +20,8 @@ use crate::models::{
 };
 
 use super::types::{
-    BoxFuture, DocumentId, DocumentQueryResult, FindBody, NamespaceInfo, NamespaceLabel,
-    RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentId, DocumentQueryResult, DocumentRow,
+    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
 
 // ── Lifecycle trait ───────────────────────────────────────────────────────
@@ -667,6 +667,88 @@ pub trait DocumentAdapter: DbAdapter {
         db: &'a str,
         collection: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 308 — single-document projection.
+    ///
+    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `db.coll.findOne(<filter>)`
+    /// 을 dispatch 할 때 호출. cancel-token cooperation 은 `find` 와 동일한
+    /// `tokio::select!` 패턴으로 따른다. 매칭이 없으면 `Ok(None)`, 매칭이
+    /// 있으면 `DocumentRow` (columns + row + raw) 를 반환.
+    fn find_one<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Option<DocumentRow>, AppError>>;
+
+    /// Sprint 308 — exact-count filter result.
+    ///
+    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.countDocuments(<filter>)`
+    /// 을 dispatch 할 때 호출. driver 의 `count_documents` 는 정확한 카운트
+    /// 를 위해 collection scan 을 수행 — `estimated_document_count` 의 O(1)
+    /// metadata 와 의도적으로 분리한다. cancel-token cooperation 동일.
+    fn count_documents<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>>;
+
+    /// Sprint 308 — O(1) metadata count.
+    ///
+    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.estimatedDocumentCount()`
+    /// 을 dispatch 할 때 호출. metadata 기반 estimate — 정확도 trade-off
+    /// 는 frontend `WriteSummaryPanel` 의 caveat 으로 노출. cancel-token
+    /// cooperation 동일.
+    fn estimated_document_count<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>>;
+
+    /// Sprint 308 — unique field values (post-filter).
+    ///
+    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.distinct(<field>, <filter>)`
+    /// 을 dispatch 할 때 호출. 결과는 BSON canonical-extjson 통과한
+    /// `Vec<serde_json::Value>` — Quick Look 의 tree viewer 와 grid 의
+    /// `ScalarOrListPanel` 이 동일 shape 으로 소비.
+    fn distinct<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        field: &'a str,
+        filter: bson::Document,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<serde_json::Value>, AppError>>;
+
+    /// Sprint 308 — multi-document insert.
+    ///
+    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.insertMany([...])` 을
+    /// dispatch 할 때 호출. **cancel 인자 없음** — mongo driver 가 in-flight
+    /// write 중단을 지원하지 않아 cooperative abort 의 의미가 없다. 빈 배열
+    /// 입력은 `Ok(vec![])` 반환 (driver 의 거부를 wrap 하지 않고 short-circuit).
+    fn insert_many<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        docs: Vec<bson::Document>,
+    ) -> BoxFuture<'a, Result<Vec<DocumentId>, AppError>>;
+
+    /// Sprint 308 — heterogeneous bulk-write.
+    ///
+    /// 작성 이유 (2026-05-14): A1 파서가 `db.coll.bulkWrite([...])` 을
+    /// dispatch 할 때 호출. **cancel 인자 없음** (mongo driver write 중단
+    /// 미지원). driver 의 `ordered: true` default 를 따라 첫 실패 시
+    /// short-circuit. 빈 배열 입력은 `Ok(BulkWriteResult::default())` 반환.
+    fn bulk_write<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        ops: Vec<BulkWriteOp>,
+    ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

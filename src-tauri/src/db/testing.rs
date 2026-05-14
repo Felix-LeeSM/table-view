@@ -25,8 +25,8 @@ use tokio_util::sync::CancellationToken;
 
 use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
 use super::types::{
-    BoxFuture, DocumentId, DocumentQueryResult, FindBody, NamespaceInfo, NamespaceLabel,
-    RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentId, DocumentQueryResult, DocumentRow,
+    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
 use crate::error::AppError;
 use crate::models::{
@@ -585,6 +585,20 @@ pub(crate) struct StubDocumentAdapter {
     pub infer_collection_fields_fn: Option<FnTwo<str, str, Vec<ColumnInfo>>>,
 
     pub drop_collection_fn: Option<FnTwo<str, str, ()>>,
+
+    // Sprint 308 (2026-05-14) — override slots for the six new methods.
+    // 작성 이유: command-level dispatch tests can swap in failure /
+    // happy-path closures without touching production code. Default
+    // closures return the natural "empty / zero / None" so wiring tests
+    // (NotFound / Unsupported route gating) compile with no override.
+    pub find_one_fn: Option<FnTwo<str, str, Option<DocumentRow>>>,
+    pub count_documents_fn: Option<FnTwo<str, str, i64>>,
+    pub estimated_document_count_fn: Option<FnTwo<str, str, i64>>,
+    pub distinct_fn: Option<
+        Box<dyn Fn(&str, &str, &str) -> Result<Vec<serde_json::Value>, AppError> + Send + Sync>,
+    >,
+    pub insert_many_fn: Option<FnTwo<str, str, Vec<DocumentId>>>,
+    pub bulk_write_fn: Option<FnTwo<str, str, BulkWriteResult>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -600,6 +614,12 @@ impl Default for StubDocumentAdapter {
             list_collections_fn: None,
             infer_collection_fields_fn: None,
             drop_collection_fn: None,
+            find_one_fn: None,
+            count_documents_fn: None,
+            estimated_document_count_fn: None,
+            distinct_fn: None,
+            insert_many_fn: None,
+            bulk_write_fn: None,
         }
     }
 }
@@ -747,6 +767,86 @@ impl DocumentAdapter for StubDocumentAdapter {
             .drop_collection_fn
             .as_ref()
             .map_or(Ok(()), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 308 (2026-05-14) — 6 새 trait method 의 stub impl.
+    fn find_one<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        _: bson::Document,
+        _: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Option<DocumentRow>, AppError>> {
+        let r = self.find_one_fn.as_ref().map_or(Ok(None), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    fn count_documents<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        _: bson::Document,
+        _: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        let r = self
+            .count_documents_fn
+            .as_ref()
+            .map_or(Ok(0), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    fn estimated_document_count<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        _: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        let r = self
+            .estimated_document_count_fn
+            .as_ref()
+            .map_or(Ok(0), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    fn distinct<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        field: &'a str,
+        _: bson::Document,
+        _: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<serde_json::Value>, AppError>> {
+        let r = self
+            .distinct_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f(db, coll, field));
+        Box::pin(async move { r })
+    }
+
+    fn insert_many<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        _: Vec<bson::Document>,
+    ) -> BoxFuture<'a, Result<Vec<DocumentId>, AppError>> {
+        let r = self
+            .insert_many_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    fn bulk_write<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        _: Vec<BulkWriteOp>,
+    ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
+        let r = self
+            .bulk_write_fn
+            .as_ref()
+            .map_or_else(|| Ok(BulkWriteResult::default()), |f| f(db, coll));
         Box::pin(async move { r })
     }
 }

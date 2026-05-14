@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  type BulkWriteOp,
+  type BulkWriteResult,
   type DocumentId,
   documentIdFromRow,
   formatDocumentIdForMql,
@@ -113,5 +115,103 @@ describe("wire-format roundtrip sanity", () => {
     expect(kindOfDocumentId(n)).toBe("Number");
     const raw = JSON.parse('{"Raw":{"$date":"2024-01-01"}}') as DocumentId;
     expect(kindOfDocumentId(raw)).toBe("Raw");
+  });
+});
+
+// ── Sprint 308 (2026-05-14) — BulkWriteOp / BulkWriteResult ────────────
+//
+// 작성 이유: Rust `enum BulkWriteOp` 는 serde `tag = "op", rename_all =
+// "camelCase"` 로 emit 한다 — wire shape 의 변경은 frontend dispatch 가
+// silently fall-through 하는 회귀를 일으키므로 6 variant + 결과 카운터
+// 의 round-trip 을 명시적으로 단언한다. fixture 는 Rust 측이 emit 할
+// JSON 을 그대로 적어 type-guard + JSON.parse 통과 여부를 확인.
+
+describe("BulkWriteOp wire shape (Sprint 308)", () => {
+  it("recognises insertOne variant", () => {
+    const wire = '{"op":"insertOne","document":{"name":"alice"}}';
+    const parsed = JSON.parse(wire) as BulkWriteOp;
+    expect(parsed.op).toBe("insertOne");
+    if (parsed.op === "insertOne") {
+      expect(parsed.document).toEqual({ name: "alice" });
+    }
+  });
+
+  it("recognises updateOne with optional upsert", () => {
+    const wire =
+      '{"op":"updateOne","filter":{"_id":1},"update":{"$set":{"x":2}},"upsert":true}';
+    const parsed = JSON.parse(wire) as BulkWriteOp;
+    expect(parsed.op).toBe("updateOne");
+    if (parsed.op === "updateOne") {
+      expect(parsed.filter).toEqual({ _id: 1 });
+      expect(parsed.update).toEqual({ $set: { x: 2 } });
+      expect(parsed.upsert).toBe(true);
+    }
+  });
+
+  it("recognises updateMany variant", () => {
+    const wire =
+      '{"op":"updateMany","filter":{"age":{"$lt":18}},"update":{"$set":{"minor":true}}}';
+    const parsed = JSON.parse(wire) as BulkWriteOp;
+    expect(parsed.op).toBe("updateMany");
+  });
+
+  it("recognises deleteOne variant", () => {
+    const wire = '{"op":"deleteOne","filter":{"_id":42}}';
+    const parsed = JSON.parse(wire) as BulkWriteOp;
+    expect(parsed.op).toBe("deleteOne");
+    if (parsed.op === "deleteOne") {
+      expect(parsed.filter).toEqual({ _id: 42 });
+    }
+  });
+
+  it("recognises deleteMany variant", () => {
+    const wire = '{"op":"deleteMany","filter":{"status":"archived"}}';
+    const parsed = JSON.parse(wire) as BulkWriteOp;
+    expect(parsed.op).toBe("deleteMany");
+  });
+
+  it("recognises replaceOne with replacement and upsert", () => {
+    const wire =
+      '{"op":"replaceOne","filter":{"_id":1},"replacement":{"name":"alice"},"upsert":false}';
+    const parsed = JSON.parse(wire) as BulkWriteOp;
+    expect(parsed.op).toBe("replaceOne");
+    if (parsed.op === "replaceOne") {
+      expect(parsed.replacement).toEqual({ name: "alice" });
+      expect(parsed.upsert).toBe(false);
+    }
+  });
+
+  it("round-trips through JSON.stringify without losing the discriminator", () => {
+    const op: BulkWriteOp = {
+      op: "updateOne",
+      filter: { _id: 1 },
+      update: { $set: { x: 2 } },
+    };
+    const roundtripped = JSON.parse(JSON.stringify(op)) as BulkWriteOp;
+    expect(roundtripped).toEqual(op);
+  });
+});
+
+describe("BulkWriteResult wire shape (Sprint 308)", () => {
+  it("matches the Rust snake_case wire output", () => {
+    // Rust struct default-derived (no `rename_all` attribute) — same
+    // convention as `DocumentQueryResult.total_count` / `raw_documents`.
+    const wire =
+      '{"inserted_count":3,"matched_count":2,"modified_count":1,"deleted_count":4,"upserted_ids":[{"Number":99}]}';
+    const parsed = JSON.parse(wire) as BulkWriteResult;
+    expect(parsed.inserted_count).toBe(3);
+    expect(parsed.matched_count).toBe(2);
+    expect(parsed.modified_count).toBe(1);
+    expect(parsed.deleted_count).toBe(4);
+    expect(parsed.upserted_ids).toHaveLength(1);
+    expect(parsed.upserted_ids[0]).toEqual({ Number: 99 });
+  });
+
+  it("handles the empty BulkWriteResult::default() shape", () => {
+    const wire =
+      '{"inserted_count":0,"matched_count":0,"modified_count":0,"deleted_count":0,"upserted_ids":[]}';
+    const parsed = JSON.parse(wire) as BulkWriteResult;
+    expect(parsed.inserted_count).toBe(0);
+    expect(parsed.upserted_ids).toEqual([]);
   });
 });

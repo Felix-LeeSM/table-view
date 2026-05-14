@@ -92,3 +92,73 @@ pub struct DocumentQueryResult {
     pub total_count: i64,
     pub execution_time_ms: u64,
 }
+
+/// Sprint 308 — single-document projection for `find_one`.
+///
+/// 작성 이유 (2026-05-14): A1 mongosh 파서가 `findOne(...)` 을 dispatch
+/// 했을 때 single row 를 grid 또는 scalar panel 로 렌더링할 수 있도록
+/// `DocumentQueryResult` 의 단일-문서 슬라이스 shape 을 그대로 매칭한다.
+/// `columns` 는 `flatten_cell` 의 BFS 순서를 따르고 (`_id` first), `row` 는
+/// `columns` 와 길이가 같다 (`raw` 는 원본 BSON 을 보존해 Quick Look 이
+/// 그대로 렌더링).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentRow {
+    pub columns: Vec<QueryColumn>,
+    pub row: Vec<serde_json::Value>,
+    pub raw: bson::Document,
+}
+
+/// Sprint 308 — `bulkWrite` sub-op wire shape.
+///
+/// 작성 이유 (2026-05-14): A1 파서가 `db.coll.bulkWrite([...])` 의 배열
+/// 항목을 각 variant 로 reify 하면, A5/A6 dispatch 가 그대로 IPC 페이로드로
+/// 전송한다. serde `tag = "op"` + `rename_all = "camelCase"` 라 wire JSON 은
+/// `{ "op": "updateOne", "filter": {...}, "update": {...} }` 형태.
+///
+/// `ordered: true` 는 Mongo driver default 라 본 enum 에 포함하지 않는다
+/// (contract: "Mongo driver 기본값(`true`)로 고정"). 첫 실패 시 short-circuit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum BulkWriteOp {
+    InsertOne {
+        document: bson::Document,
+    },
+    UpdateOne {
+        filter: bson::Document,
+        update: bson::Document,
+        #[serde(default)]
+        upsert: bool,
+    },
+    UpdateMany {
+        filter: bson::Document,
+        update: bson::Document,
+        #[serde(default)]
+        upsert: bool,
+    },
+    DeleteOne {
+        filter: bson::Document,
+    },
+    DeleteMany {
+        filter: bson::Document,
+    },
+    ReplaceOne {
+        filter: bson::Document,
+        replacement: bson::Document,
+        #[serde(default)]
+        upsert: bool,
+    },
+}
+
+/// Sprint 308 — aggregate counters returned by `bulkWrite`.
+///
+/// 작성 이유 (2026-05-14): A6 `WriteSummaryPanel` 의 per-op breakdown row
+/// 와 직접 mapping. `inserted_count` / `matched_count` / `modified_count` /
+/// `deleted_count` 4 카운터 + `upserted_ids` (서버가 upsert 한 신규 doc id).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BulkWriteResult {
+    pub inserted_count: i64,
+    pub matched_count: i64,
+    pub modified_count: i64,
+    pub deleted_count: i64,
+    pub upserted_ids: Vec<DocumentId>,
+}

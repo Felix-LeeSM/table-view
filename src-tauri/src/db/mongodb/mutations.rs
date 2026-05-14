@@ -8,10 +8,15 @@
 //! co-located.
 
 use bson::{doc, Bson, Document};
+use mongodb::options::{
+    DeleteManyModel, DeleteOneModel, InsertOneModel, ReplaceOneModel, UpdateManyModel,
+    UpdateOneModel, WriteModel,
+};
+use mongodb::Namespace;
 
 use crate::error::AppError;
 
-use super::super::DocumentId;
+use super::super::{BulkWriteOp, BulkWriteResult, DocumentId};
 use super::queries::validate_ns;
 use super::MongoAdapter;
 
@@ -178,6 +183,169 @@ impl MongoAdapter {
             .map_err(|e| AppError::Database(format!("drop collection failed: {e}")))?;
 
         Ok(())
+    }
+
+    /// Sprint 308 — body of `DocumentAdapter::insert_many`.
+    ///
+    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `db.coll.insertMany([...])`
+    /// 를 dispatch 했을 때 다수의 문서를 한 round-trip 으로 삽입.
+    /// 빈 배열은 driver round-trip 없이 `Ok(vec![])` 로 short-circuit —
+    /// driver (3.6) 가 empty input 을 거부하는 케이스를 wrap 하지 않고
+    /// "no-op insert" 의 유저-가시 의미를 그대로 보존한다.
+    pub(super) async fn insert_many_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        docs: Vec<Document>,
+    ) -> Result<Vec<DocumentId>, AppError> {
+        validate_ns(db, collection)?;
+
+        // Short-circuit empty input before any driver call so the empty-array
+        // case stays deterministic (`Ok(vec![])`) regardless of driver
+        // version. Driver 3.6+ rejects empty `insert_many` with a runtime
+        // error; treating "nothing to insert" as success matches the
+        // contract `Ok(BulkWriteResult::default())` symmetry.
+        if docs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let result = coll
+            .insert_many(docs)
+            .await
+            .map_err(|e| AppError::Database(format!("insert_many failed: {e}")))?;
+
+        // `inserted_ids: HashMap<usize, Bson>` is keyed by the *input index*
+        // — sort by index so the returned `Vec<DocumentId>` order matches
+        // the input doc order (the contract A5/A6 dispatch will expect).
+        let mut pairs: Vec<(usize, Bson)> = result.inserted_ids.into_iter().collect();
+        pairs.sort_by_key(|(idx, _)| *idx);
+        Ok(pairs
+            .into_iter()
+            .map(|(_, bson)| bson_id_to_document_id(&bson))
+            .collect())
+    }
+
+    /// Sprint 308 — body of `DocumentAdapter::bulk_write`.
+    ///
+    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `db.coll.bulkWrite([...])` 를
+    /// dispatch 했을 때 InsertOne / UpdateOne / UpdateMany / DeleteOne /
+    /// DeleteMany / ReplaceOne 의 heterogeneous 배열을 단일 round-trip 으로
+    /// 실행. driver 의 `ordered: true` default 를 유지해 첫 실패에서
+    /// short-circuit. 빈 배열은 `Ok(BulkWriteResult::default())` 로
+    /// short-circuit — driver 가 empty list 를 거부하는 케이스를 wrap 하지
+    /// 않는다.
+    ///
+    /// `verbose_results()` 를 호출해 각 update/replace 의 `upserted_id` 를
+    /// 모아 wire 의 `upserted_ids: Vec<DocumentId>` 로 surfacing.
+    pub(super) async fn bulk_write_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        ops: Vec<BulkWriteOp>,
+    ) -> Result<BulkWriteResult, AppError> {
+        validate_ns(db, collection)?;
+
+        if ops.is_empty() {
+            return Ok(BulkWriteResult::default());
+        }
+
+        let client = self.current_client().await?;
+        let namespace = Namespace::new(db.to_string(), collection.to_string());
+
+        let models: Vec<WriteModel> = ops
+            .into_iter()
+            .map(|op| -> WriteModel {
+                match op {
+                    BulkWriteOp::InsertOne { document } => WriteModel::InsertOne(
+                        InsertOneModel::builder()
+                            .namespace(namespace.clone())
+                            .document(document)
+                            .build(),
+                    ),
+                    BulkWriteOp::UpdateOne {
+                        filter,
+                        update,
+                        upsert,
+                    } => WriteModel::UpdateOne(
+                        UpdateOneModel::builder()
+                            .namespace(namespace.clone())
+                            .filter(filter)
+                            .update(update)
+                            .upsert(upsert)
+                            .build(),
+                    ),
+                    BulkWriteOp::UpdateMany {
+                        filter,
+                        update,
+                        upsert,
+                    } => WriteModel::UpdateMany(
+                        UpdateManyModel::builder()
+                            .namespace(namespace.clone())
+                            .filter(filter)
+                            .update(update)
+                            .upsert(upsert)
+                            .build(),
+                    ),
+                    BulkWriteOp::DeleteOne { filter } => WriteModel::DeleteOne(
+                        DeleteOneModel::builder()
+                            .namespace(namespace.clone())
+                            .filter(filter)
+                            .build(),
+                    ),
+                    BulkWriteOp::DeleteMany { filter } => WriteModel::DeleteMany(
+                        DeleteManyModel::builder()
+                            .namespace(namespace.clone())
+                            .filter(filter)
+                            .build(),
+                    ),
+                    BulkWriteOp::ReplaceOne {
+                        filter,
+                        replacement,
+                        upsert,
+                    } => WriteModel::ReplaceOne(
+                        ReplaceOneModel::builder()
+                            .namespace(namespace.clone())
+                            .filter(filter)
+                            .replacement(replacement)
+                            .upsert(upsert)
+                            .build(),
+                    ),
+                }
+            })
+            .collect();
+
+        // verbose_results() exposes per-op UpdateResult.upserted_id so the
+        // aggregate `upserted_ids` can be returned to the frontend. Without
+        // verbose, only counters (no individual ids) come back.
+        let verbose = client
+            .bulk_write(models)
+            .verbose_results()
+            .await
+            .map_err(|e| AppError::Database(format!("bulk_write failed: {e}")))?;
+
+        // Collect upserted ids in deterministic order by their input index.
+        let mut upserted_pairs: Vec<(usize, Bson)> = verbose
+            .update_results
+            .into_iter()
+            .filter_map(|(idx, update_result)| update_result.upserted_id.map(|id| (idx, id)))
+            .collect();
+        upserted_pairs.sort_by_key(|(idx, _)| *idx);
+        let upserted_ids: Vec<DocumentId> = upserted_pairs
+            .into_iter()
+            .map(|(_, bson)| bson_id_to_document_id(&bson))
+            .collect();
+
+        let summary = verbose.summary;
+        Ok(BulkWriteResult {
+            inserted_count: summary.inserted_count,
+            matched_count: summary.matched_count,
+            modified_count: summary.modified_count,
+            deleted_count: summary.deleted_count,
+            upserted_ids,
+        })
     }
 }
 

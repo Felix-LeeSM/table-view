@@ -62,7 +62,10 @@ use bson::Document;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, TableInfo};
 
-use super::{BoxFuture, DocumentAdapter, DocumentId, DocumentQueryResult, FindBody, NamespaceInfo};
+use super::{
+    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentAdapter, DocumentId, DocumentQueryResult,
+    DocumentRow, FindBody, NamespaceInfo,
+};
 
 impl DocumentAdapter for MongoAdapter {
     /// Sprint 131 — delegates to the inherent `switch_active_db` so the
@@ -222,5 +225,107 @@ impl DocumentAdapter for MongoAdapter {
         collection: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.drop_collection_impl(db, collection).await })
+    }
+
+    // ── Sprint 308 (2026-05-14) — 6 new trait wirings ──────────────────
+    //
+    // 작성 이유: A1 mongosh 파서가 dispatch 할 6 새 method 를 `find` /
+    // `aggregate` 의 cancel-token cooperation 패턴을 답습해 wire. read-path
+    // 4 method 는 `tokio::select!` 로 cooperative abort, write-path 2
+    // method 는 driver 가 in-flight write 중단을 지원하지 않아 cancel 인자
+    // 자체가 없다 (trait 정의 측에서 enforced).
+
+    fn find_one<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: Document,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> BoxFuture<'a, Result<Option<DocumentRow>, AppError>> {
+        Box::pin(async move {
+            let work = self.find_one_impl(db, collection, filter);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+
+    fn count_documents<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: Document,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        Box::pin(async move {
+            let work = self.count_documents_impl(db, collection, filter);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+
+    fn estimated_document_count<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        Box::pin(async move {
+            let work = self.estimated_document_count_impl(db, collection);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+
+    fn distinct<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        field: &'a str,
+        filter: Document,
+        cancel: Option<&'a tokio_util::sync::CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<serde_json::Value>, AppError>> {
+        Box::pin(async move {
+            let work = self.distinct_impl(db, collection, field, filter);
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+
+    fn insert_many<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        docs: Vec<Document>,
+    ) -> BoxFuture<'a, Result<Vec<DocumentId>, AppError>> {
+        Box::pin(async move { self.insert_many_impl(db, collection, docs).await })
+    }
+
+    fn bulk_write<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        ops: Vec<BulkWriteOp>,
+    ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
+        Box::pin(async move { self.bulk_write_impl(db, collection, ops).await })
     }
 }

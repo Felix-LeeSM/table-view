@@ -90,6 +90,21 @@ export interface DocumentQueryResult {
   execution_time_ms: number;
 }
 
+/**
+ * Sprint 308 (2026-05-14) — single-document projection.
+ *
+ * 작성 이유: A1 mongosh 파서가 `db.coll.findOne(<filter>)` 을 dispatch 했을
+ * 때 Rust 측 `DocumentRow` 가 grid (단일 row 모드) 또는 scalar panel 로
+ * 렌더링 가능한 wire shape. `columns` 는 `DocumentQueryResult` 와 동일하게
+ * BFS-ordered `_id` first, `row` 는 sentinel-flattened 셀 배열, `raw` 는
+ * 원본 BSON (Quick Look 트리 뷰어가 그대로 consumed).
+ */
+export interface DocumentRow {
+  columns: DocumentColumn[];
+  row: unknown[];
+  raw: Record<string, unknown>;
+}
+
 /** Sentinel strings emitted by the backend when a cell holds a composite. */
 export const DOCUMENT_SENTINELS = {
   DOCUMENT: "{...}",

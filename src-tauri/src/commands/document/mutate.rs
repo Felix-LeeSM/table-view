@@ -37,7 +37,7 @@
 //! `_inner(&AppState)` shape so unit tests can drive prod code directly.
 
 use crate::commands::connection::AppState;
-use crate::db::DocumentId;
+use crate::db::{BulkWriteOp, BulkWriteResult, DocumentId};
 use crate::error::AppError;
 
 use super::not_connected;
@@ -281,6 +281,95 @@ pub async fn drop_collection(
     drop_collection_inner(state.inner(), &connection_id, &database, &collection).await
 }
 
+// ── Sprint 308 (2026-05-14) — 2 new write commands ──────────────────────
+//
+// 작성 이유: A1 mongosh 파서가 dispatch 할 `insertMany` / `bulkWrite` 2
+// 메서드. write-path 라 cancel-token 인자 없음 (mongo driver 가 in-flight
+// write 중단을 지원하지 않음). 두 inner 함수 모두 `update_many_inner` 패턴
+// (`as_document()?` gate, no cancel handle) 을 그대로 답습.
+
+async fn insert_many_documents_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    documents: Vec<bson::Document>,
+) -> Result<Vec<DocumentId>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .insert_many(database, collection, documents)
+        .await
+}
+
+/// Sprint 308 — bulk insert multiple documents.
+///
+/// Returns the server-assigned `_id` for each input document in **input
+/// order** (`Vec<DocumentId>`). Empty input short-circuits to `Ok(vec![])`
+/// without a driver call.
+#[tauri::command]
+pub async fn insert_many_documents(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    documents: Vec<bson::Document>,
+) -> Result<Vec<DocumentId>, AppError> {
+    insert_many_documents_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        documents,
+    )
+    .await
+}
+
+async fn bulk_write_documents_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    operations: Vec<BulkWriteOp>,
+) -> Result<BulkWriteResult, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .bulk_write(database, collection, operations)
+        .await
+}
+
+/// Sprint 308 — heterogeneous bulk-write.
+///
+/// Dispatches `db.coll.bulkWrite([...])`. The driver's `ordered: true`
+/// default applies — first failure short-circuits the remaining ops.
+/// Returns aggregate counters + `upserted_ids` for the upsert-mode
+/// update / replace sub-ops. Empty input short-circuits to
+/// `Ok(BulkWriteResult::default())`.
+#[tauri::command]
+pub async fn bulk_write_documents(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    operations: Vec<BulkWriteOp>,
+) -> Result<BulkWriteResult, AppError> {
+    bulk_write_documents_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        operations,
+    )
+    .await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -522,5 +611,122 @@ mod tests {
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
         assert!(drop_collection_inner(&state, "d", "DB", "C").await.is_ok());
+    }
+
+    // ── Sprint 308 — insert_many_documents ─────────────────────────────
+    //
+    // 작성 이유 (2026-05-14): A2 의 write-path 2 commands 각각 NotFound /
+    // Unsupported(document) / 트레이트 위임 매트릭스 통과 검증. Stub 의
+    // override 슬롯을 이용해 inserted_ids 의 길이만 흘려보낸 minimal happy
+    // path 로 wiring 만 단언 (정확한 driver-id 모양은 integration test 에서
+    // testcontainers 실행으로 검증).
+
+    #[tokio::test]
+    async fn insert_many_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            insert_many_documents_inner(&state, "absent", "db", "c", Vec::new()).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn insert_many_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            insert_many_documents_inner(&state, "rdb", "db", "c", Vec::new()).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn insert_many_default_returns_empty_vec() {
+        let state = state_with("d", document_default()).await;
+        let r = insert_many_documents_inner(&state, "d", "db", "c", Vec::new())
+            .await
+            .unwrap();
+        assert!(r.is_empty());
+    }
+
+    #[tokio::test]
+    async fn insert_many_routes_to_stub_with_ids() {
+        let mut s = StubDocumentAdapter::default();
+        s.insert_many_fn = Some(Box::new(|_db: &str, _coll: &str| {
+            Ok(vec![DocumentId::Number(1), DocumentId::Number(2)])
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let r = insert_many_documents_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            vec![bson::Document::new(), bson::Document::new()],
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.len(), 2);
+    }
+
+    // ── Sprint 308 — bulk_write_documents ──────────────────────────────
+
+    #[tokio::test]
+    async fn bulk_write_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        assert!(matches!(
+            bulk_write_documents_inner(&state, "absent", "db", "c", Vec::new()).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn bulk_write_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            bulk_write_documents_inner(&state, "rdb", "db", "c", Vec::new()).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn bulk_write_default_returns_default_result() {
+        let state = state_with("d", document_default()).await;
+        let r = bulk_write_documents_inner(&state, "d", "db", "c", Vec::new())
+            .await
+            .unwrap();
+        // BulkWriteResult::default() — all counts zero, no upserted ids.
+        assert_eq!(r.inserted_count, 0);
+        assert_eq!(r.matched_count, 0);
+        assert_eq!(r.modified_count, 0);
+        assert_eq!(r.deleted_count, 0);
+        assert!(r.upserted_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn bulk_write_routes_to_stub_with_counters() {
+        let mut s = StubDocumentAdapter::default();
+        s.bulk_write_fn = Some(Box::new(|_db: &str, _coll: &str| {
+            Ok(BulkWriteResult {
+                inserted_count: 3,
+                matched_count: 2,
+                modified_count: 1,
+                deleted_count: 4,
+                upserted_ids: vec![DocumentId::Number(99)],
+            })
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let r = bulk_write_documents_inner(
+            &state,
+            "d",
+            "db",
+            "c",
+            vec![BulkWriteOp::InsertOne {
+                document: bson::Document::new(),
+            }],
+        )
+        .await
+        .unwrap();
+        assert_eq!(r.inserted_count, 3);
+        assert_eq!(r.deleted_count, 4);
+        assert_eq!(r.upserted_ids.len(), 1);
     }
 }

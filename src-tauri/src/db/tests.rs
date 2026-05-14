@@ -166,6 +166,60 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<(), AppError>> {
             Box::pin(async { Ok(()) })
         }
+        // Sprint 308 (2026-05-14) — 6 new trait methods. Bare-minimum
+        // stubs so the test impl block satisfies the trait surface.
+        fn find_one<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Option<DocumentRow>, AppError>> {
+            Box::pin(async { Ok(None) })
+        }
+        fn count_documents<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<i64, AppError>> {
+            Box::pin(async { Ok(0) })
+        }
+        fn estimated_document_count<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<i64, AppError>> {
+            Box::pin(async { Ok(0) })
+        }
+        fn distinct<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _field: &'a str,
+            _filter: bson::Document,
+            _cancel: Option<&'a CancellationToken>,
+        ) -> BoxFuture<'a, Result<Vec<serde_json::Value>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn insert_many<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _docs: Vec<bson::Document>,
+        ) -> BoxFuture<'a, Result<Vec<DocumentId>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn bulk_write<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _ops: Vec<BulkWriteOp>,
+        ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
+            Box::pin(async { Ok(BulkWriteResult::default()) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -602,6 +656,110 @@ impl DocumentAdapter for FakeCancellableDocument {
         _collection: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async { Ok(()) })
+    }
+    // Sprint 308 (2026-05-14) — cancel-token honouring stubs for the 4
+    // read methods + simple `Ok(default)` stubs for the 2 writes. Mirrors
+    // the `find` / `aggregate` `tokio::select!` shape so future cancel
+    // tests for the new methods can opt-in without a re-write.
+    fn find_one<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _filter: bson::Document,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Option<DocumentRow>, AppError>> {
+        Box::pin(async move {
+            let work = async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                Ok(None)
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+    fn count_documents<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _filter: bson::Document,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        Box::pin(async move {
+            let work = async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                Ok(0)
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+    fn estimated_document_count<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<i64, AppError>> {
+        Box::pin(async move {
+            let work = async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                Ok(0)
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+    fn distinct<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _field: &'a str,
+        _filter: bson::Document,
+        cancel: Option<&'a CancellationToken>,
+    ) -> BoxFuture<'a, Result<Vec<serde_json::Value>, AppError>> {
+        Box::pin(async move {
+            let work = async {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                Ok(Vec::new())
+            };
+            match cancel {
+                Some(token) => tokio::select! {
+                    result = work => result,
+                    _ = token.cancelled() => Err(AppError::Database("Operation cancelled".into())),
+                },
+                None => work.await,
+            }
+        })
+    }
+    fn insert_many<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _docs: Vec<bson::Document>,
+    ) -> BoxFuture<'a, Result<Vec<DocumentId>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn bulk_write<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _ops: Vec<BulkWriteOp>,
+    ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
+        Box::pin(async { Ok(BulkWriteResult::default()) })
     }
 }
 

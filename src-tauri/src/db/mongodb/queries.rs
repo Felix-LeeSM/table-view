@@ -7,7 +7,7 @@
 
 use std::time::Instant;
 
-use ::mongodb::options::FindOptions;
+use ::mongodb::options::{FindOneOptions, FindOptions};
 use bson::{Bson, Document};
 use futures_util::stream::StreamExt;
 
@@ -15,7 +15,7 @@ use super::category::map_mongo_data_type;
 use crate::error::AppError;
 use crate::models::QueryColumn;
 
-use super::super::{DocumentQueryResult, FindBody};
+use super::super::{DocumentQueryResult, DocumentRow, FindBody};
 use super::MongoAdapter;
 
 impl MongoAdapter {
@@ -108,6 +108,111 @@ impl MongoAdapter {
         })
     }
 
+    /// Sprint 308 — body of `DocumentAdapter::find_one`.
+    ///
+    /// 작성 이유 (2026-05-14): A1 mongosh 파서가 `findOne(<filter>)` 을
+    /// dispatch 하면 단일 row 의 projection 이 필요. `find_impl` 의 column
+    /// inference + `project_row` + `flatten_cell` 를 그대로 재사용해
+    /// `DocumentQueryResult` 와 동일 shape 의 슬라이스 (`DocumentRow`) 를
+    /// 만든다. 매칭이 없으면 `Ok(None)`.
+    pub(super) async fn find_one_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: Document,
+    ) -> Result<Option<DocumentRow>, AppError> {
+        validate_ns(db, collection)?;
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let opts = FindOneOptions::default();
+        let maybe = coll
+            .find_one(filter)
+            .with_options(opts)
+            .await
+            .map_err(|e| AppError::Database(format!("find_one failed: {e}")))?;
+
+        let Some(raw) = maybe else { return Ok(None) };
+
+        // Reuse the same column-inference + row-projection helpers `find`
+        // uses so wire shape (column ordering, sentinel cells, canonical
+        // extjson) is byte-for-byte identical between the two read paths.
+        let docs_slice: Vec<Document> = vec![raw.clone()];
+        let columns = columns_from_docs(&docs_slice);
+        let row = project_row(&raw, &columns);
+
+        Ok(Some(DocumentRow { columns, row, raw }))
+    }
+
+    /// Sprint 308 — body of `DocumentAdapter::count_documents`.
+    ///
+    /// 작성 이유 (2026-05-14): exact count 가 필요한 A1 dispatch path.
+    /// Mongo driver 의 `count_documents` 는 collection scan 을 수행.
+    pub(super) async fn count_documents_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: Document,
+    ) -> Result<i64, AppError> {
+        validate_ns(db, collection)?;
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let count_u64 = coll
+            .count_documents(filter)
+            .await
+            .map_err(|e| AppError::Database(format!("count_documents failed: {e}")))?;
+        Ok(clamp_u64_to_i64(count_u64))
+    }
+
+    /// Sprint 308 — body of `DocumentAdapter::estimated_document_count`.
+    ///
+    /// 작성 이유 (2026-05-14): metadata-based O(1) estimate.
+    pub(super) async fn estimated_document_count_impl(
+        &self,
+        db: &str,
+        collection: &str,
+    ) -> Result<i64, AppError> {
+        validate_ns(db, collection)?;
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let count_u64 = coll
+            .estimated_document_count()
+            .await
+            .map_err(|e| AppError::Database(format!("estimated_document_count failed: {e}")))?;
+        Ok(clamp_u64_to_i64(count_u64))
+    }
+
+    /// Sprint 308 — body of `DocumentAdapter::distinct`.
+    ///
+    /// 작성 이유 (2026-05-14): unique field-value set. Result 의 각 BSON
+    /// scalar 는 `flatten_cell` 로 wrap (canonical extjson + 수치 unwrap)
+    /// 해서 grid / Quick Look 가 동일 shape 으로 소비.
+    pub(super) async fn distinct_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        field: &str,
+        filter: Document,
+    ) -> Result<Vec<serde_json::Value>, AppError> {
+        validate_ns(db, collection)?;
+        if field.trim().is_empty() {
+            return Err(AppError::Validation(
+                "distinct: field name must not be empty".into(),
+            ));
+        }
+        let client = self.current_client().await?;
+        let coll = client.database(db).collection::<Document>(collection);
+
+        let values: Vec<Bson> = coll
+            .distinct(field, filter)
+            .await
+            .map_err(|e| AppError::Database(format!("distinct failed: {e}")))?;
+
+        Ok(values.iter().map(flatten_cell).collect())
+    }
+
     /// Sprint 197 — body of `DocumentAdapter::aggregate`.
     pub(super) async fn aggregate_impl(
         &self,
@@ -166,6 +271,15 @@ impl MongoAdapter {
 }
 
 // ── Helpers (Sprint 66) ────────────────────────────────────────────────
+
+/// Sprint 308 — clamp `u64` driver counts into `i64` (the wire type the
+/// frontend expects). Mongo can theoretically return values above
+/// `i64::MAX` for distributed sharded estimated counts; we clamp rather
+/// than overflow so the cell stays a finite number.
+#[inline]
+pub(super) fn clamp_u64_to_i64(n: u64) -> i64 {
+    n.min(i64::MAX as u64) as i64
+}
 
 /// Reject empty database or collection names before the driver does.
 ///

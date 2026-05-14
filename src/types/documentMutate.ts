@@ -137,3 +137,61 @@ export function formatDocumentIdForMql(id: DocumentId): string {
   if ("Number" in id) return String(id.Number);
   return JSON.stringify(id.Raw);
 }
+
+// ── Sprint 308 (2026-05-14) — bulkWrite wire types ─────────────────────────
+//
+// 작성 이유: A1 mongosh 파서가 `db.coll.bulkWrite([...])` 를 dispatch 했을
+// 때 reify 한 sub-op 배열을 그대로 IPC payload 로 보내고, 결과 카운터를
+// `WriteSummaryPanel` 이 per-op breakdown 으로 렌더링한다. Rust 측 `enum
+// BulkWriteOp` 는 `#[serde(tag = "op", rename_all = "camelCase")]` 로
+// camelCase wire tag (`"insertOne"` / `"updateOne"` / …) 를 emit 한다.
+
+/**
+ * `bulkWrite` sub-operation. Discriminated union mirrors Rust `enum
+ * BulkWriteOp` with serde `tag = "op", rename_all = "camelCase"`. Wire
+ * JSON example:
+ *
+ *     { "op": "updateOne", "filter": {...}, "update": {...}, "upsert": false }
+ *
+ * `upsert` is optional in the wire shape (serde `#[serde(default)]`); the
+ * TS mirror keeps it optional for the same reason.
+ */
+export type BulkWriteOp =
+  | { op: "insertOne"; document: Record<string, unknown> }
+  | {
+      op: "updateOne";
+      filter: Record<string, unknown>;
+      update: Record<string, unknown>;
+      upsert?: boolean;
+    }
+  | {
+      op: "updateMany";
+      filter: Record<string, unknown>;
+      update: Record<string, unknown>;
+      upsert?: boolean;
+    }
+  | { op: "deleteOne"; filter: Record<string, unknown> }
+  | { op: "deleteMany"; filter: Record<string, unknown> }
+  | {
+      op: "replaceOne";
+      filter: Record<string, unknown>;
+      replacement: Record<string, unknown>;
+      upsert?: boolean;
+    };
+
+/**
+ * Aggregate counters returned by `bulkWrite`. The Rust struct uses default
+ * (snake_case) serde — matching the existing `DocumentQueryResult.total_count`
+ * convention — so the wire field names stay snake_case here.
+ *
+ * `upserted_ids` carries the server-side `_id` for every upsert-mode
+ * update/replace that actually inserted (skipped when the matching filter
+ * found an existing doc).
+ */
+export interface BulkWriteResult {
+  inserted_count: number;
+  matched_count: number;
+  modified_count: number;
+  deleted_count: number;
+  upserted_ids: DocumentId[];
+}

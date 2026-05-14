@@ -25,8 +25,8 @@ pub use postgres::PostgresAdapter;
 pub use active::ActiveAdapter;
 pub use traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
 pub use types::{
-    BoxFuture, DocumentId, DocumentQueryResult, FindBody, NamespaceInfo, NamespaceLabel,
-    RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentId, DocumentQueryResult, DocumentRow,
+    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
 };
 
 #[cfg(test)]

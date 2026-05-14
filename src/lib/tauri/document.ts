@@ -9,9 +9,14 @@ import type {
   CollectionInfo,
   DatabaseInfo,
   DocumentQueryResult,
+  DocumentRow,
   FindBody,
 } from "@/types/document";
-import type { DocumentId } from "@/types/documentMutate";
+import type {
+  BulkWriteOp,
+  BulkWriteResult,
+  DocumentId,
+} from "@/types/documentMutate";
 import type { ColumnInfo } from "@/types/schema";
 
 import { wrapNumericCells } from "./numericWrap";
@@ -213,5 +218,134 @@ export async function dropCollection(
     connectionId,
     database,
     collection,
+  });
+}
+
+// ── Sprint 308 (2026-05-14) — mongosh dispatch wrappers ───────────────────
+//
+// 작성 이유: A1 mongosh 파서가 dispatch 할 6 신규 IPC. 각 함수는 단순
+// `invoke<T>(...)` passthrough — Safe Mode / Run dispatch gate 는 A5/A6 가
+// 호출 측에서 처리한다 (이 layer 는 thin wire layer).
+
+/**
+ * Execute `db.coll.findOne(<filter>)` and return a single
+ * {@link DocumentRow} (columns + projected row + raw BSON) or `null` when
+ * the filter matches nothing.
+ */
+export async function findOneDocument(
+  connectionId: string,
+  database: string,
+  collection: string,
+  filter?: Record<string, unknown>,
+  queryId?: string,
+): Promise<DocumentRow | null> {
+  return invoke<DocumentRow | null>("find_one_document", {
+    connectionId,
+    database,
+    collection,
+    filter: filter ?? null,
+    queryId: queryId ?? null,
+  });
+}
+
+/**
+ * Execute `db.coll.countDocuments(<filter>)` — exact match count via a
+ * full scan. For the cheap metadata estimate use
+ * {@link estimatedDocumentCount}.
+ */
+export async function countDocuments(
+  connectionId: string,
+  database: string,
+  collection: string,
+  filter?: Record<string, unknown>,
+  queryId?: string,
+): Promise<number> {
+  return invoke<number>("count_documents", {
+    connectionId,
+    database,
+    collection,
+    filter: filter ?? null,
+    queryId: queryId ?? null,
+  });
+}
+
+/**
+ * Execute `db.coll.estimatedDocumentCount()` — O(1) metadata estimate of
+ * the total document count.
+ */
+export async function estimatedDocumentCount(
+  connectionId: string,
+  database: string,
+  collection: string,
+  queryId?: string,
+): Promise<number> {
+  return invoke<number>("estimated_document_count", {
+    connectionId,
+    database,
+    collection,
+    queryId: queryId ?? null,
+  });
+}
+
+/**
+ * Execute `db.coll.distinct(<field>, <filter>)` and return the unique
+ * values flattened through the same `flatten_cell` helper the other read
+ * commands use (canonical EJSON for non-numeric BSON discriminators,
+ * plain JSON for scalars).
+ */
+export async function distinctDocuments(
+  connectionId: string,
+  database: string,
+  collection: string,
+  field: string,
+  filter?: Record<string, unknown>,
+  queryId?: string,
+): Promise<unknown[]> {
+  return invoke<unknown[]>("distinct_documents", {
+    connectionId,
+    database,
+    collection,
+    field,
+    filter: filter ?? null,
+    queryId: queryId ?? null,
+  });
+}
+
+/**
+ * Bulk-insert multiple documents. Returns the assigned `_id` for each
+ * input document in **input order** (`DocumentId[]`). Empty input
+ * short-circuits to `[]` without a driver round-trip.
+ */
+export async function insertManyDocuments(
+  connectionId: string,
+  database: string,
+  collection: string,
+  documents: Record<string, unknown>[],
+): Promise<DocumentId[]> {
+  return invoke<DocumentId[]>("insert_many_documents", {
+    connectionId,
+    database,
+    collection,
+    documents,
+  });
+}
+
+/**
+ * Execute `db.coll.bulkWrite([...])` — heterogeneous mix of insertOne /
+ * updateOne / updateMany / deleteOne / deleteMany / replaceOne. Driver's
+ * `ordered: true` default applies (first error short-circuits the
+ * remaining ops). Empty input short-circuits to a zero-counter result.
+ */
+export async function bulkWriteDocuments(
+  connectionId: string,
+  database: string,
+  collection: string,
+  operations: BulkWriteOp[],
+): Promise<BulkWriteResult> {
+  return invoke<BulkWriteResult>("bulk_write_documents", {
+    connectionId,
+    database,
+    collection,
+    operations,
   });
 }
