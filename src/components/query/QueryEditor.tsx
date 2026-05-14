@@ -3,7 +3,6 @@ import type { Extension } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { SQLDialect, SQLNamespace } from "@codemirror/lang-sql";
 import type { Paradigm } from "@/types/connection";
-import type { QueryMode } from "@stores/workspaceStore";
 import { assertNever } from "@/lib/paradigm";
 import SqlQueryEditor from "./SqlQueryEditor";
 import MongoQueryEditor from "./MongoQueryEditor";
@@ -18,6 +17,11 @@ import MongoQueryEditor from "./MongoQueryEditor";
  * paradigms plug in by extending one switch, and so the existing
  * `QueryEditor.test.tsx` paradigm-flip suite still asserts against a
  * stable surface.
+ *
+ * Sprint 309 — `queryMode` prop removed. The Mongo branch passes nothing
+ * extra to `MongoQueryEditor` (single mongosh surface); placeholder
+ * paradigms drop the `data-query-mode` attribute since no toggle drives
+ * it anymore.
  */
 
 interface QueryEditorProps {
@@ -38,12 +42,6 @@ interface QueryEditorProps {
    * paradigms render a paradigm-tagged placeholder.
    */
   paradigm?: Paradigm;
-  /**
-   * Query mode inside the paradigm. Document tabs pass `"find"` or
-   * `"aggregate"` (drives the aria-label of the underlying
-   * MongoQueryEditor). Ignored by the SQL editor.
-   */
-  queryMode?: QueryMode;
   /**
    * The CodeMirror `SQLDialect` to use when the tab is in the `rdb`
    * paradigm. Ignored for other paradigms but always accepted so the
@@ -70,7 +68,6 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
       onDryRun,
       schemaNamespace,
       paradigm = "rdb",
-      queryMode,
       sqlDialect,
       mongoExtensions,
     },
@@ -97,7 +94,6 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
             onSqlChange={onSqlChange}
             onExecute={onExecute}
             onDryRun={onDryRun}
-            queryMode={queryMode ?? "find"}
             mongoExtensions={mongoExtensions ?? EMPTY_EXTENSIONS}
           />
         );
@@ -116,7 +112,6 @@ const QueryEditor = forwardRef<EditorView | null, QueryEditorProps>(
             }
             aria-multiline="true"
             data-paradigm={paradigm}
-            data-query-mode={queryMode ?? paradigm}
           >
             {paradigm === "kv"
               ? "Redis query editor is planned but not yet available."

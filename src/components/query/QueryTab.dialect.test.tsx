@@ -242,26 +242,12 @@ describe("QueryTab — dialect", () => {
     expect(mockEditorProps.lastMongoExtensions?.length).toBe(2);
   });
 
-  // AC-10: A document-paradigm tab in `find` mode wires through a hook-built
-  // extension set that tracks the queryMode across re-renders via the hook's
-  // memo. Flipping queryMode produces a new extension array identity.
-  it("rebuilds mongoExtensions identity when queryMode flips find→aggregate", async () => {
-    const docTab = makeDocTab({ queryMode: "find" });
-    useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
-    const { rerender } = render(<QueryTab tab={docTab} />);
-    const findExt = mockEditorProps.lastMongoExtensions;
-    expect(findExt).toBeDefined();
-
-    // Flip to aggregate — the mongoExtensions memo key should change and a
-    // new array reference should be pushed down to the editor.
-    const aggTab = makeDocTab({ queryMode: "aggregate" });
-    useWorkspaceStore.setState(seedWorkspace([aggTab], "query-1"));
-    await act(async () => {
-      rerender(<QueryTab tab={aggTab} />);
-    });
-    expect(mockEditorProps.lastMongoExtensions).toBeDefined();
-    expect(mockEditorProps.lastMongoExtensions).not.toBe(findExt);
-  });
+  // Sprint 309 — the "queryMode flip rebuilds mongoExtensions" assertion
+  // (AC-10 Sprint 83 era) is intentionally deleted. The Find/Aggregate
+  // toggle is gone and `useMongoAutocomplete` no longer takes a
+  // queryMode argument, so a tab.queryMode change can no longer drive a
+  // memo recompute through this prop. The fieldNames-driven rebuild
+  // below remains the live regression guard for the hook's memo key.
 
   // AC-11: Document-paradigm tabs surface cached field names from the
   // documentStore through the mongoExtensions prop. Populating

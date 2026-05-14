@@ -28,8 +28,11 @@ function getKeymapBindings(view: EditorView): KeyBinding[] {
 /**
  * Sprint 139 — MongoQueryEditor unit tests.
  *
- * These guard the structural separation between the document-paradigm
- * editor and the SQL editor. The MongoQueryEditor must:
+ * Sprint 309 update: the editor is now a single mongosh surface. The
+ * `queryMode` prop is gone, the wrapper aria-label is the single string
+ * `"MongoDB Query Editor"`, and `data-query-mode` is no longer set. The
+ * old "Find aria-label" / "Aggregate aria-label" cases collapse into one
+ * "single aria-label" assertion. The structural guards below remain:
  *
  *  1. Mount the JSON language extension (NOT SQL).
  *  2. Surface MQL operator candidates through the autocomplete provider
@@ -38,8 +41,6 @@ function getKeymapBindings(view: EditorView): KeyBinding[] {
  *     candidates because the editor never imports `useSqlAutocomplete`
  *     and never registers the SQL namespace.
  *  4. Decorate MQL operator strings via the `cm-mql-operator` class.
- *  5. Switch its aria-label between "Find" and "Aggregate" so screen
- *     readers disambiguate the two modes.
  */
 
 function getContainer(label: string) {
@@ -63,38 +64,22 @@ describe("MongoQueryEditor (Sprint 139)", () => {
     onExecute.mockReset();
   });
 
-  // AC-S139-01a — find mode aria-label and JSON language.
-  it("renders with find aria-label and JSON language", () => {
+  // Sprint 309 — single aria-label `"MongoDB Query Editor"`, no
+  // `data-query-mode`, JSON language. Combines the old find/aggregate
+  // aria-label assertions into one.
+  it("renders with the unified MongoDB aria-label and JSON language (Sprint 309)", () => {
     render(
       <MongoQueryEditor
         sql="{}"
         onSqlChange={onSqlChange}
         onExecute={onExecute}
-        queryMode="find"
         mongoExtensions={[]}
       />,
     );
-    const container = getContainer("MongoDB Find Query Editor");
+    const container = getContainer("MongoDB Query Editor");
     expect(container).toHaveAttribute("data-paradigm", "document");
-    expect(container).toHaveAttribute("data-query-mode", "find");
-    const view = getEditorView("MongoDB Find Query Editor");
-    expect(view.state.facet(language)?.name).toBe("json");
-  });
-
-  // AC-S139-01a — aggregate aria-label.
-  it("renders with aggregate aria-label", () => {
-    render(
-      <MongoQueryEditor
-        sql="[]"
-        onSqlChange={onSqlChange}
-        onExecute={onExecute}
-        queryMode="aggregate"
-        mongoExtensions={[]}
-      />,
-    );
-    const container = getContainer("MongoDB Aggregate Pipeline Editor");
-    expect(container).toHaveAttribute("data-query-mode", "aggregate");
-    const view = getEditorView("MongoDB Aggregate Pipeline Editor");
+    expect(container).not.toHaveAttribute("data-query-mode");
+    const view = getEditorView("MongoDB Query Editor");
     expect(view.state.facet(language)?.name).toBe("json");
   });
 
@@ -165,21 +150,18 @@ describe("MongoQueryEditor (Sprint 139)", () => {
 
   // AC-S139-04 — `useMongoAutocomplete` returns extensions that, when
   // installed in the editor, never load an SQL grammar. Verifies via the
-  // active language facet.
+  // active language facet. Sprint 309 — hook called without arguments.
   it("useMongoAutocomplete extensions never bring in the SQL language", () => {
-    const { result } = renderHook(() =>
-      useMongoAutocomplete({ queryMode: "find" }),
-    );
+    const { result } = renderHook(() => useMongoAutocomplete());
     render(
       <MongoQueryEditor
         sql='{"$match": {}}'
         onSqlChange={onSqlChange}
         onExecute={onExecute}
-        queryMode="find"
         mongoExtensions={result.current}
       />,
     );
-    const view = getEditorView("MongoDB Find Query Editor");
+    const view = getEditorView("MongoDB Query Editor");
     // Active language must be JSON, never SQL.
     expect(view.state.facet(language)?.name).toBe("json");
     expect(view.state.facet(language)?.name).not.toBe("sql");
@@ -192,11 +174,10 @@ describe("MongoQueryEditor (Sprint 139)", () => {
         sql='{"$match": {"$eq": 1}}'
         onSqlChange={onSqlChange}
         onExecute={onExecute}
-        queryMode="aggregate"
         mongoExtensions={[createMongoOperatorHighlight()]}
       />,
     );
-    const view = getEditorView("MongoDB Aggregate Pipeline Editor");
+    const view = getEditorView("MongoDB Query Editor");
     view.requestMeasure();
     await waitFor(() => {
       const marks = view.dom.querySelectorAll(".cm-mql-operator");
@@ -216,11 +197,10 @@ describe("MongoQueryEditor (Sprint 139)", () => {
         sql="{}"
         onSqlChange={onSqlChange}
         onExecute={localOnExecute}
-        queryMode="find"
         mongoExtensions={[]}
       />,
     );
-    const view = getEditorView("MongoDB Find Query Editor");
+    const view = getEditorView("MongoDB Query Editor");
     const bindings = getKeymapBindings(view).filter(
       (b) => b.key === "Mod-Enter",
     );
@@ -239,11 +219,10 @@ describe("MongoQueryEditor (Sprint 139)", () => {
         sql="{}"
         onSqlChange={onSqlChange}
         onExecute={onExecute}
-        queryMode="find"
         mongoExtensions={initial}
       />,
     );
-    const viewBefore = getEditorView("MongoDB Find Query Editor");
+    const viewBefore = getEditorView("MongoDB Query Editor");
 
     const next = [createMongoOperatorHighlight()];
     rerender(
@@ -251,13 +230,12 @@ describe("MongoQueryEditor (Sprint 139)", () => {
         sql="{}"
         onSqlChange={onSqlChange}
         onExecute={onExecute}
-        queryMode="find"
         mongoExtensions={next}
       />,
     );
 
     await waitFor(() => {
-      const viewAfter = getEditorView("MongoDB Find Query Editor");
+      const viewAfter = getEditorView("MongoDB Query Editor");
       expect(viewAfter).toBe(viewBefore);
     });
   });

@@ -339,44 +339,28 @@ describe("QueryEditor", () => {
     expect(activeLanguageName(getEditorView())).toBe("sql");
   });
 
-  it("swaps to the JSON language when paradigm=document (find mode)", () => {
+  // Sprint 309 — `queryMode` prop removed from `MongoQueryEditor` (and
+  // therefore from `QueryEditor`'s document branch). Single mongosh
+  // surface: aria-label is `"MongoDB Query Editor"`, the wrapper carries
+  // no `data-query-mode`. The previous find/aggregate aria-label flip
+  // suite collapses into one assertion below.
+  it("uses JSON when paradigm=document with the unified mongosh aria-label (Sprint 309)", () => {
     render(
       <QueryEditor
         sql="{}"
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         paradigm="document"
-        queryMode="find"
       />,
     );
-    const container = screen.getByLabelText("MongoDB Find Query Editor");
+    const container = screen.getByLabelText("MongoDB Query Editor");
     expect(container).toBeInTheDocument();
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
     expect(activeLanguageName(view)).toBe("json");
     expect(container).toHaveAttribute("data-paradigm", "document");
-    expect(container).toHaveAttribute("data-query-mode", "find");
-  });
-
-  it("uses JSON for document paradigm + aggregate mode", () => {
-    render(
-      <QueryEditor
-        sql="[]"
-        onSqlChange={onSqlChange}
-        onExecute={onExecute}
-        paradigm="document"
-        queryMode="aggregate"
-      />,
-    );
-    const container = screen.getByLabelText(
-      "MongoDB Aggregate Pipeline Editor",
-    );
-    const view = EditorView.findFromDOM(
-      container.querySelector(".cm-editor") as HTMLElement,
-    )!;
-    expect(activeLanguageName(view)).toBe("json");
-    expect(container).toHaveAttribute("data-query-mode", "aggregate");
+    expect(container).not.toHaveAttribute("data-query-mode");
   });
 
   // Sprint 139 — paradigm-aware split. Flipping the paradigm now swaps
@@ -386,6 +370,7 @@ describe("QueryEditor", () => {
   // paradigm, the aria-label flips, and the swap completes without
   // throwing. Identity preservation across non-paradigm changes (schema,
   // dialect, mongoExtensions) is exercised by the per-editor tests.
+  // Sprint 309 — `queryMode` no longer passed (single Mongo surface).
   it("swaps the language extension when paradigm flips rdb → document", async () => {
     const { rerender } = render(
       <QueryEditor
@@ -404,43 +389,16 @@ describe("QueryEditor", () => {
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         paradigm="document"
-        queryMode="find"
       />,
     );
 
     await waitFor(() => {
-      const container = screen.getByLabelText("MongoDB Find Query Editor");
+      const container = screen.getByLabelText("MongoDB Query Editor");
       const viewAfter = EditorView.findFromDOM(
         container.querySelector(".cm-editor") as HTMLElement,
       )!;
       expect(activeLanguageName(viewAfter)).toBe("json");
     });
-  });
-
-  it("flips the aria-label when paradigm changes", () => {
-    const { rerender } = render(
-      <QueryEditor
-        sql=""
-        onSqlChange={onSqlChange}
-        onExecute={onExecute}
-        paradigm="document"
-        queryMode="find"
-      />,
-    );
-    expect(screen.getByLabelText("MongoDB Find Query Editor")).toBeDefined();
-
-    rerender(
-      <QueryEditor
-        sql=""
-        onSqlChange={onSqlChange}
-        onExecute={onExecute}
-        paradigm="document"
-        queryMode="aggregate"
-      />,
-    );
-    expect(
-      screen.getByLabelText("MongoDB Aggregate Pipeline Editor"),
-    ).toBeDefined();
   });
 
   // ── Sprint 82: provider-aware SQL dialect ────────────────────────────────
@@ -598,6 +556,7 @@ describe("QueryEditor", () => {
 
   // AC-06: Document paradigm is unaffected by the dialect prop — the editor
   // must still load the JSON language extension and keep its aria-label.
+  // Sprint 309 — single mongosh aria-label, no `queryMode` prop threaded.
   it("keeps JSON language when paradigm=document even if sqlDialect is passed", () => {
     render(
       <QueryEditor
@@ -605,11 +564,10 @@ describe("QueryEditor", () => {
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         paradigm="document"
-        queryMode="find"
         sqlDialect={MySQL}
       />,
     );
-    const container = screen.getByLabelText("MongoDB Find Query Editor");
+    const container = screen.getByLabelText("MongoDB Query Editor");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
@@ -626,6 +584,7 @@ describe("QueryEditor", () => {
   }
 
   // AC-06: Operator tokens receive the `cm-mql-operator` class.
+  // Sprint 309 — single mongosh aria-label.
   it("decorates MQL operator strings with cm-mql-operator when the highlight extension is loaded", async () => {
     render(
       <QueryEditor
@@ -633,13 +592,10 @@ describe("QueryEditor", () => {
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         paradigm="document"
-        queryMode="aggregate"
         mongoExtensions={[createMongoOperatorHighlight()]}
       />,
     );
-    const container = screen.getByLabelText(
-      "MongoDB Aggregate Pipeline Editor",
-    );
+    const container = screen.getByLabelText("MongoDB Query Editor");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
@@ -658,6 +614,7 @@ describe("QueryEditor", () => {
   });
 
   // AC-06: ordinary JSON strings do NOT receive the operator class.
+  // Sprint 309 — single mongosh aria-label.
   it("does not decorate non-operator JSON strings with cm-mql-operator", async () => {
     render(
       <QueryEditor
@@ -665,11 +622,10 @@ describe("QueryEditor", () => {
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         paradigm="document"
-        queryMode="find"
         mongoExtensions={[createMongoOperatorHighlight()]}
       />,
     );
-    const container = screen.getByLabelText("MongoDB Find Query Editor");
+    const container = screen.getByLabelText("MongoDB Query Editor");
     const view = EditorView.findFromDOM(
       container.querySelector(".cm-editor") as HTMLElement,
     )!;
@@ -689,6 +645,7 @@ describe("QueryEditor", () => {
   // contract: the JSON language is active in the new editor and the
   // mongoExtensions reach the document editor without leaking back into
   // any SQL editor.
+  // Sprint 309 — no `queryMode` prop threaded; single mongosh aria-label.
   it("mounts the document editor with mongoExtensions when paradigm flips rdb → document", async () => {
     const mongoExts = [createMongoOperatorHighlight()];
     const { rerender } = render(
@@ -708,13 +665,12 @@ describe("QueryEditor", () => {
         onSqlChange={onSqlChange}
         onExecute={onExecute}
         paradigm="document"
-        queryMode="find"
         mongoExtensions={mongoExts}
       />,
     );
 
     await waitFor(() => {
-      const container = screen.getByLabelText("MongoDB Find Query Editor");
+      const container = screen.getByLabelText("MongoDB Query Editor");
       const viewAfter = EditorView.findFromDOM(
         container.querySelector(".cm-editor") as HTMLElement,
       )!;

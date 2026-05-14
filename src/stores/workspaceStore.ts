@@ -392,8 +392,15 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     const id = `query-${queryCounter}`;
     const title = `Query ${queryCounter}`;
     const paradigm: Paradigm = opts.paradigm ?? "rdb";
-    const queryMode: QueryMode =
-      paradigm === "rdb" ? "sql" : (opts.queryMode ?? "find");
+    // Sprint 309 — Find/Aggregate toggle removed. RDB tabs still need
+    // `"sql"` (history filtering + dispatch read it); document tabs no
+    // longer default to `"find"` so the field stays `undefined` on new
+    // tabs. The legacy `useQueryExecution` dispatch branch checks
+    // `=== "aggregate"`, which `undefined` short-circuits — routing new
+    // doc tabs through the default find dispatch until A5 (sprint-311)
+    // replaces the branch with parser-driven dispatch.
+    const queryMode: QueryMode | undefined =
+      paradigm === "rdb" ? "sql" : opts.queryMode;
     set((state) => {
       const next = withWorkspace(state, connId, db, (ws) => {
         const newTab: QueryTab = {

@@ -4,11 +4,22 @@ import { EditorState } from "@codemirror/state";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import { useMongoAutocomplete } from "./useMongoAutocomplete";
 
-describe("useMongoAutocomplete", () => {
+/**
+ * Sprint 309 — Hook signature collapsed to a single dispatch surface.
+ * The `queryMode` argument is gone (Find/Aggregate toggle removed from
+ * `Toolbar.tsx`); the hook serves the union of find query operators +
+ * aggregate stages + accumulators + type tags so the user can type any
+ * mongosh expression without flipping a UI mode. Tests below assert the
+ * new contract: arrayful return, memoised across stable renders, new
+ * memo when `fieldNames` identity flips, and tolerant of `undefined`.
+ *
+ * The deleted "produces a new memo when queryMode flips" / "find vs
+ * aggregate" cases (Sprint 139 era) are intentionally gone — there is
+ * no queryMode parameter to flip anymore.
+ */
+describe("useMongoAutocomplete (Sprint 309 unified surface)", () => {
   it("returns an array containing at least the autocomplete + highlight extensions", () => {
-    const { result } = renderHook(() =>
-      useMongoAutocomplete({ queryMode: "find" }),
-    );
+    const { result } = renderHook(() => useMongoAutocomplete());
     expect(Array.isArray(result.current)).toBe(true);
     // autocompletion override + operator highlight = 2 entries.
     expect(result.current.length).toBe(2);
@@ -16,10 +27,7 @@ describe("useMongoAutocomplete", () => {
 
   it("produces extensions that load without throwing alongside JSON", () => {
     const { result } = renderHook(() =>
-      useMongoAutocomplete({
-        queryMode: "aggregate",
-        fieldNames: ["_id", "name"],
-      }),
+      useMongoAutocomplete({ fieldNames: ["_id", "name"] }),
     );
     const state = EditorState.create({
       doc: "[]",
@@ -29,30 +37,16 @@ describe("useMongoAutocomplete", () => {
   });
 
   it("memoises the extension array across renders with stable inputs", () => {
-    const { result, rerender } = renderHook(
-      ({ mode }) => useMongoAutocomplete({ queryMode: mode }),
-      { initialProps: { mode: "find" as const } },
-    );
+    const { result, rerender } = renderHook(() => useMongoAutocomplete());
     const first = result.current;
-    rerender({ mode: "find" });
+    rerender();
     expect(result.current).toBe(first);
-  });
-
-  it("produces a new memo when queryMode flips", () => {
-    const { result, rerender } = renderHook(
-      ({ mode }: { mode: "find" | "aggregate" }) =>
-        useMongoAutocomplete({ queryMode: mode }),
-      { initialProps: { mode: "find" as "find" | "aggregate" } },
-    );
-    const first = result.current;
-    rerender({ mode: "aggregate" });
-    expect(result.current).not.toBe(first);
   });
 
   it("produces a new memo when fieldNames identity changes", () => {
     const { result, rerender } = renderHook(
       ({ fields }: { fields: readonly string[] | undefined }) =>
-        useMongoAutocomplete({ queryMode: "find", fieldNames: fields }),
+        useMongoAutocomplete({ fieldNames: fields }),
       {
         initialProps: { fields: ["_id"] as readonly string[] | undefined },
       },
@@ -64,9 +58,11 @@ describe("useMongoAutocomplete", () => {
 
   it("accepts undefined fieldNames without throwing", () => {
     expect(() =>
-      renderHook(() =>
-        useMongoAutocomplete({ queryMode: "find", fieldNames: undefined }),
-      ),
+      renderHook(() => useMongoAutocomplete({ fieldNames: undefined })),
     ).not.toThrow();
+  });
+
+  it("accepts no arguments at all (default options)", () => {
+    expect(() => renderHook(() => useMongoAutocomplete())).not.toThrow();
   });
 });

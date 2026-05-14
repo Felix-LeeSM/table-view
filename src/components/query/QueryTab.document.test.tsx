@@ -334,33 +334,27 @@ describe("QueryTab — document", () => {
     });
   });
 
-  it("renders the Find | Aggregate toggle only for document paradigm", () => {
+  // Sprint 309 — Find/Aggregate ToggleGroup removed from the editor
+  // surface. Mongosh method parsing (A1) makes the mode toggle redundant:
+  // `db.coll.find(...)` and `db.coll.aggregate(...)` are now distinguished
+  // by the editor text itself. The previous "renders toggle" / "click flips
+  // state" cases (Sprint 73) are intentionally deleted — A5 replaces the
+  // dispatch branch keyed on `tab.queryMode`. This regression guard locks
+  // the new contract: no toggle on either paradigm, no `role="group"` with
+  // the Mongo-mode label, no per-mode toggle items.
+  it("does NOT render the Find / Aggregate toggle on either paradigm (Sprint 309)", () => {
     const rdbTab = makeQueryTab();
     const { rerender } = render(<QueryTab tab={rdbTab} />);
-    expect(screen.queryByLabelText("Find mode")).toBeNull();
-    expect(screen.queryByLabelText("Aggregate mode")).toBeNull();
+    expect(
+      screen.queryByRole("group", { name: /Mongo query mode/i }),
+    ).toBeNull();
 
     const docTab = makeDocTab({ id: "query-1" });
     useWorkspaceStore.setState(seedWorkspace([docTab], "query-1"));
     rerender(<QueryTab tab={docTab} />);
-    expect(screen.getByLabelText("Find mode")).toBeInTheDocument();
-    expect(screen.getByLabelText("Aggregate mode")).toBeInTheDocument();
-  });
-
-  it("clicking the Aggregate toggle calls setQueryMode and flips tab state", async () => {
-    const tab = makeDocTab({ queryMode: "find" });
-    useWorkspaceStore.setState(seedWorkspace([tab], "query-1"));
-    render(<QueryTab tab={tab} />);
-
-    await act(async () => {
-      screen.getByLabelText("Aggregate mode").click();
-    });
-
-    const state = getTestWorkspace();
-    const updated = state.tabs.find((t) => t.id === "query-1");
-    if (updated?.type === "query") {
-      expect(updated.queryMode).toBe("aggregate");
-    }
+    expect(
+      screen.queryByRole("group", { name: /Mongo query mode/i }),
+    ).toBeNull();
   });
 
   it("hides the Format SQL button on document tabs", () => {

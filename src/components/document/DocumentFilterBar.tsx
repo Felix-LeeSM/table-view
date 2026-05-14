@@ -389,10 +389,11 @@ function RawMqlEditor({
   onSubmit,
   children,
 }: RawMqlEditorProps) {
-  const mongoExtensions = useMongoAutocomplete({
-    queryMode: "find",
-    fieldNames,
-  });
+  // Sprint 309 — `useMongoAutocomplete` lost its queryMode argument;
+  // the unified completion source covers find operators + aggregate
+  // stages + accumulators + type tags. RawMqlEditor still threads its
+  // collection's fieldNames so key-position autocomplete works.
+  const mongoExtensions = useMongoAutocomplete({ fieldNames });
 
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);

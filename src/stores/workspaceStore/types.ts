@@ -88,7 +88,19 @@ export interface QueryTab {
   sql: string;
   queryState: QueryState;
   paradigm: Paradigm;
-  queryMode: QueryMode;
+  /**
+   * @deprecated Sprint 309 (Phase 28 Slice A3) — Find/Aggregate toggle
+   * removed from the editor surface, so the editor and toolbar no longer
+   * consume this field. RDB tabs continue to carry `"sql"`; legacy
+   * persisted document tabs may still carry `"find" | "aggregate"` and
+   * `useQueryExecution` (sprint-311 A5 target) still branches on
+   * `=== "aggregate"` until parser-driven dispatch lands. New document
+   * tabs created in sprint-309 leave this field `undefined` — that
+   * deliberately falls through the legacy `aggregate` check into the
+   * default find dispatch. The type union itself will be removed in a
+   * later sprint once A5 lands and no consumer remains.
+   */
+  queryMode?: QueryMode;
   database?: string;
   collection?: string;
 }

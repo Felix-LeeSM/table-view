@@ -48,18 +48,10 @@ interface QueryTabProps {
 export default function QueryTab({ tab }: QueryTabProps) {
   const workspaceKey = useCurrentWorkspaceKey();
   const updateQuerySqlAction = useWorkspaceStore((s) => s.updateQuerySql);
-  const setQueryModeAction = useWorkspaceStore((s) => s.setQueryMode);
   const loadQueryIntoTab = useWorkspaceStore((s) => s.loadQueryIntoTab);
   const updateQuerySql = (tabId: string, sql: string) => {
     if (!workspaceKey) return;
     updateQuerySqlAction(workspaceKey.connId, workspaceKey.db, tabId, sql);
-  };
-  const setQueryMode = (
-    tabId: string,
-    mode: Parameters<typeof setQueryModeAction>[3],
-  ) => {
-    if (!workspaceKey) return;
-    setQueryModeAction(workspaceKey.connId, workspaceKey.db, tabId, mode);
   };
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
   const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
@@ -107,8 +99,12 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.collection,
     tab.paradigm,
   ]);
+  // Sprint 309 — `useMongoAutocomplete` no longer branches on
+  // `tab.queryMode`. The unified completion source surfaces both the find
+  // operator set and aggregate stages / accumulators so the user can type
+  // either flavour without flipping a toggle; A4 will own the snippet
+  // menu that distinguishes intent at insertion time.
   const mongoExtensions = useMongoAutocomplete({
-    queryMode: tab.queryMode === "aggregate" ? "aggregate" : "find",
     fieldNames: mongoFieldNames,
   });
   const isDocument = tab.paradigm === "document";
@@ -152,7 +148,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
         onExecute={handleExecute}
         onDryRun={handleDryRun}
         onFormat={handleFormat}
-        onSetQueryMode={setQueryMode}
         favorites={favorites}
       />
 
@@ -180,13 +175,16 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "document":
               return (
+                // Sprint 309 — `queryMode` prop removed; the Mongo editor
+                // is a single mongosh-flavoured surface. `tab.queryMode`
+                // remains on the type for backward-compat (deprecated)
+                // but is no longer threaded into the editor.
                 <MongoQueryEditor
                   ref={editorRef}
                   sql={tab.sql}
                   onSqlChange={(sql) => updateQuerySql(tab.id, sql)}
                   onExecute={handleExecute}
                   onDryRun={handleDryRun}
-                  queryMode={tab.queryMode}
                   mongoExtensions={mongoExtensions}
                 />
               );

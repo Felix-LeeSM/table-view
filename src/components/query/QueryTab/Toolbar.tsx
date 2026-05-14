@@ -1,5 +1,4 @@
 import { Button } from "@components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@components/ui/toggle-group";
 import {
   Play,
   Square,
@@ -11,15 +10,20 @@ import {
   FlaskConical,
 } from "lucide-react";
 import FavoritesPanel from "../FavoritesPanel";
-import type { QueryTab, QueryMode } from "@stores/workspaceStore";
+import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
 
 /**
  * `QueryTab` 의 toolbar 컴포넌트.
  *
- * 책임: Run/Cancel + Format + Mongo Mode toggle (Find/Aggregate) +
- * Save/Favorites buttons + 2 popover (Save 폼 / `<FavoritesPanel>` mount).
- * Save 와 Favorites popover 는 상호 배타 — 한 쪽 열 때 다른 쪽 close.
+ * 책임: Run/Cancel + Format + Save/Favorites buttons + 2 popover
+ * (Save 폼 / `<FavoritesPanel>` mount). Save 와 Favorites popover 는
+ * 상호 배타 — 한 쪽 열 때 다른 쪽 close.
+ *
+ * Sprint 309 — Find/Aggregate `ToggleGroup` removed. The mongosh parser
+ * (A1) infers the method from the editor text, so the toggle no longer
+ * carries information. `onSetQueryMode` is gone from this surface; the
+ * store action stays exported for `loadQueryIntoTab` backward-compat.
  *
  * Invariants:
  * - The Save button is disabled iff `tab.sql` is empty. The save form's
@@ -44,7 +48,6 @@ export interface QueryTabToolbarProps {
    */
   onDryRun: () => void;
   onFormat: () => void;
-  onSetQueryMode: (tabId: string, mode: QueryMode) => void;
   favorites: QueryFavoritesState;
 }
 
@@ -54,7 +57,6 @@ export default function QueryTabToolbar({
   onExecute,
   onDryRun,
   onFormat,
-  onSetQueryMode,
   favorites,
 }: QueryTabToolbarProps) {
   const {
@@ -127,26 +129,12 @@ export default function QueryTabToolbar({
           <span>Format</span>
         </Button>
       )}
-      {isDocument && (
-        <ToggleGroup
-          type="single"
-          value={tab.queryMode}
-          onValueChange={(value) => {
-            if (value === "find" || value === "aggregate") {
-              onSetQueryMode(tab.id, value as QueryMode);
-            }
-          }}
-          aria-label="Mongo query mode"
-          className="ml-1"
-        >
-          <ToggleGroupItem value="find" aria-label="Find mode">
-            Find
-          </ToggleGroupItem>
-          <ToggleGroupItem value="aggregate" aria-label="Aggregate mode">
-            Aggregate
-          </ToggleGroupItem>
-        </ToggleGroup>
-      )}
+      {/* Sprint 309 — Mongo Find/Aggregate `ToggleGroup` removed. The
+          mongosh parser (Sprint 307 A1) infers the method from the editor
+          text; the toggle no longer carried information that the editor
+          itself doesn't already express. A5 (sprint-311) replaces the
+          legacy aggregate-flag dispatch branch with parser-driven
+          routing. */}
       <div className="ml-auto flex items-center gap-1 relative">
         <Button
           variant="ghost"

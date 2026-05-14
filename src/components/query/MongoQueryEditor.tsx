@@ -15,7 +15,6 @@ import {
   indentOnInput,
 } from "@codemirror/language";
 import { autocompletion, acceptCompletion } from "@codemirror/autocomplete";
-import type { QueryMode } from "@stores/workspaceStore";
 import { viewTableHighlightStyle } from "@lib/editor/highlightStyle";
 import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
 
@@ -23,6 +22,13 @@ import { autocompleteTooltipTheme } from "@lib/editor/autocompleteTheme";
  * MongoDB / document-paradigm query editor. Imports only MQL-aware
  * extensions — never the SQL language extension or `useSqlAutocomplete`,
  * so cross-paradigm contamination is structurally impossible.
+ *
+ * Sprint 309 — Find/Aggregate prop removed; the editor is a single
+ * mongosh surface. The wrapper `<div>` no longer carries the mode
+ * data-attribute, and the aria-label is the single string
+ * `"MongoDB Query Editor"`. Mode routing moved from "user toggle →
+ * dispatch" to "parser reads editor text → dispatch" (A5 owns the
+ * dispatch swap; A3 just simplifies the editor surface).
  */
 
 export interface MongoQueryEditorProps {
@@ -38,11 +44,6 @@ export interface MongoQueryEditorProps {
    * invoked on document tabs.
    */
   onDryRun?: () => void;
-  /**
-   * `"find"` or `"aggregate"` — drives the aria-label so screen readers
-   * disambiguate between the two MongoDB editor variants.
-   */
-  queryMode: QueryMode;
   /**
    * MongoDB-aware CodeMirror extensions: autocomplete override populated
    * with MQL operators / pipeline stages / accumulators / type tags +
@@ -65,7 +66,9 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
     // unconditionally), but the Mongo editor binds no keymap for it.
     // Intentionally omitted from the destructure so ESLint's
     // no-unused-vars rule stays clean.
-    { sql, onSqlChange, onExecute, queryMode, mongoExtensions },
+    // Sprint 309 — paradigm-mode prop dropped from the interface; the
+    // editor surface is a single mongosh-flavoured CodeMirror instance.
+    { sql, onSqlChange, onExecute, mongoExtensions },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -209,20 +212,16 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
       }
     }, [sql]);
 
-    const ariaLabel =
-      queryMode === "aggregate"
-        ? "MongoDB Aggregate Pipeline Editor"
-        : "MongoDB Find Query Editor";
-
+    // Sprint 309 — aria-label is hard-coded to the single mongosh
+    // editor identity. `data-query-mode` removed from the wrapper.
     return (
       <div
         ref={containerRef}
         className="h-full w-full overflow-hidden"
         role="textbox"
-        aria-label={ariaLabel}
+        aria-label="MongoDB Query Editor"
         aria-multiline="true"
         data-paradigm="document"
-        data-query-mode={queryMode ?? "find"}
       />
     );
   },

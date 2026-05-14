@@ -83,10 +83,11 @@ export default function AddDocumentModal({
     return fieldsCacheEntry.map((c) => c.name);
   }, [fieldsCacheEntry]);
 
-  const mongoExtensions = useMongoAutocomplete({
-    queryMode: "find",
-    fieldNames,
-  });
+  // Sprint 309 — `useMongoAutocomplete` no longer accepts a queryMode
+  // argument; the unified completion source serves the operator/stage
+  // union directly. AddDocumentModal still passes its collection's
+  // fieldNames so key-position autocomplete surfaces field names.
+  const mongoExtensions = useMongoAutocomplete({ fieldNames });
 
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
