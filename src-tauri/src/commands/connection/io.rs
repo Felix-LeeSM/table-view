@@ -595,9 +595,13 @@ mod tests {
         assert!(result.json.contains("\"kdf\": \"argon2id\""));
         assert!(result.json.contains("\"alg\": \"aes-256-gcm\""));
         assert!(result.json.contains("\"tag_attached\": true"));
-        // Plaintext payload must not leak through ciphertext
-        assert!(!result.json.contains("DB1"));
-        assert!(!result.json.contains("DB2"));
+        // Wrong password must be rejected — proves ciphertext is opaque
+        // without the key. (Substring search on base64 output is flaky:
+        // random ciphertext can coincidentally spell "DB1".)
+        assert!(
+            import_connections_encrypted(result.json.clone(), "wrong passphrase".into()).is_err(),
+            "wrong password must fail to decrypt"
+        );
 
         // Reset storage and import via the encrypted path using the
         // mnemonic the backend just emitted.
