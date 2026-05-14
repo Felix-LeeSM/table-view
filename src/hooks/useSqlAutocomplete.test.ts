@@ -507,27 +507,29 @@ describe("useSqlAutocomplete", () => {
     expect(ns.users).toHaveProperty("email");
   });
 
-  // 2026-04-30 regression: SQL keywords (and function names) MUST NOT be
-  // auto-quoted by CodeMirror's `nameCompletion`. The default behaviour
-  // wraps any label outside `[a-z_][a-z_0-9]*` in the dialect's identifier
-  // quote — so `SELECT` becomes `"SELECT"` for PG/SQLite, which the parser
-  // then treats as a string literal. The fix wraps each keyword / function
-  // in `{ self, children }` with an explicit `apply` so CodeMirror
-  // bypasses the quoting branch.
-  it("does NOT auto-quote uppercase SQL keywords for PG dialect", () => {
+  // 2026-04-30 regression: SQL keywords MUST NOT be auto-quoted by
+  // CodeMirror's `nameCompletion`. 본래는 ns 에 keyword 를 `{ self,
+  // children }` 형태로 직접 inject 해 quote 우회를 강제했었다.
+  //
+  // Sprint 302 갱신 (2026-05-14): keyword 의 책임을 lang-sql 의 자체
+  // `keywordCompletionSource` (line 691-693, dialect.dialect.words 기반,
+  // `defaultKeyword = (label, type) => ({ label, type, boost: -1 })`
+  // 라서 quote 발생 안 함) 로 일원화. ns 에 keyword 를 또 inject 하면
+  // 두 source 가 같은 라벨을 popup 으로 흘려보내 사용자에게 "SELECT 가
+  // 2번 뜨는" 회귀를 만든다 (CodeMirror autocomplete 는 source 간
+  // dedup 을 하지 않음). 따라서 ns 는 더 이상 keyword 를 노출하지 않는다.
+  it("ns 는 keyword 를 inject 하지 않는다 — lang-sql 의 자체 keyword source 책임", () => {
     const { result } = renderHook(() =>
       useSqlAutocomplete("conn1", "db1", {
         dialect: PostgreSQL,
         dbType: "postgresql",
       }),
     );
-    const ns = result.current as Record<
-      string,
-      { self?: { label?: string; apply?: string; type?: string } }
-    >;
-    expect(ns).toHaveProperty("SELECT");
-    expect(ns.SELECT?.self?.apply).toBe("SELECT");
-    expect(ns.SELECT?.self?.type).toBe("keyword");
+    const ns = result.current as Record<string, unknown>;
+    expect(ns).not.toHaveProperty("SELECT");
+    expect(ns).not.toHaveProperty("FROM");
+    expect(ns).not.toHaveProperty("WHERE");
+    expect(ns).not.toHaveProperty("RETURNING"); // PG-specific
   });
 
   it("does NOT auto-quote uppercase SQL function names", () => {

@@ -3,31 +3,16 @@ import { SQLNamespace, type SQLDialect } from "@codemirror/lang-sql";
 import type { Completion } from "@codemirror/autocomplete";
 import { useSchemaStore } from "@stores/schemaStore";
 import type { DatabaseType } from "@/types/connection";
-import { keywords as PG_KEYWORDS } from "@/lib/completion/pg";
-import { keywords as MYSQL_KEYWORDS } from "@/lib/completion/mysql";
-import { keywords as SQLITE_KEYWORDS } from "@/lib/completion/sqlite";
 
-/**
- * Resolve the dialect-specific keyword list. Returns `[]` for non-RDB
- * types — the SQL editor never mounts for them.
- */
-function keywordsForDbType(dbType: DatabaseType): readonly string[] {
-  switch (dbType) {
-    case "postgresql":
-      return PG_KEYWORDS;
-    case "mysql":
-      return MYSQL_KEYWORDS;
-    case "sqlite":
-      return SQLITE_KEYWORDS;
-    case "mongodb":
-    case "redis":
-      return [];
-    default: {
-      const _exhaust: never = dbType;
-      return _exhaust;
-    }
-  }
-}
+// Sprint 302 (2026-05-14) — keyword 책임은 lang-sql 의
+// `keywordCompletionSource` 가 dialect.dialect.words 기반으로 단독 수행.
+// 본래 ns 에 reservedToken 으로 keyword 를 직접 inject 했으나, 그 결과
+// `schemaCompletionSource` 도 ns 의 self 를 emit + `keywordCompletionSource`
+// 도 dialect 의 keyword 를 emit 해 같은 라벨이 popup 에 두 번 노출됐다
+// (사용자 보고: "SELECT 가 2번 뜬다"). lang-sql 의 dialect 정의가 우리가
+// 이전에 inject 했던 keyword set 의 superset 이고 auto-quote 도 발생하지
+// 않으므로 (defaultKeyword = (label, type) => ({ label, type, boost: -1 })),
+// ns 의 inject 책임은 제거됐다.
 
 /** Common SQL functions exposed as autocomplete candidates. */
 const SQL_FUNCTIONS = [
@@ -64,9 +49,10 @@ export interface UseSqlAutocompleteOptions {
    */
   dialect?: SQLDialect;
   /**
-   * Connection `db_type`. When supplied, surfaces dialect-specific SQL
-   * keywords (e.g. `RETURNING` for PG, `AUTO_INCREMENT` for MySQL,
-   * `PRAGMA` for SQLite). Without it the keyword list is skipped.
+   * Connection `db_type`. Sprint 302 이후로는 keyword surface 책임이
+   * lang-sql 의 `keywordCompletionSource` 로 이관되었으므로 이 옵션은
+   * keyword 라우팅에는 영향이 없다. ts 시그니처는 backwards-compat 을
+   * 위해 유지하며, 향후 다른 dialect-specific 분기에 활용될 자리로 둔다.
    */
   dbType?: DatabaseType;
 }
@@ -145,7 +131,7 @@ export function useSqlAutocomplete(
   const views = useSchemaStore((s) => s.views);
   const columnsCache = useSchemaStore((s) => s.tableColumnsCache);
   const opts = normalizeOptions(arg);
-  const { tableColumns, dialect, dbType } = opts;
+  const { tableColumns, dialect } = opts;
 
   return useMemo(() => {
     const ns: Record<string, SQLNamespace> = {};
@@ -168,15 +154,11 @@ export function useSqlAutocomplete(
       ns[fn] = reservedToken(fn, "function");
     }
 
-    // Surface dialect-specific SQL keywords alongside tables / views /
-    // functions. Skipped when no dbType is supplied.
-    if (dbType !== undefined) {
-      for (const kw of keywordsForDbType(dbType)) {
-        // Avoid clobbering an existing entry (e.g. `SELECT` would never
-        // collide with a table name, but stay defensive).
-        if (!(kw in ns)) ns[kw] = reservedToken(kw, "keyword");
-      }
-    }
+    // Sprint 302 — keyword inject 제거. lang-sql 의 dialect 자체
+    // `keywordCompletionSource` 가 dialect.dialect.words 기반으로 SELECT /
+    // FROM / RETURNING / ILIKE 등을 모두 emit 한다. ns 에 inject 하면
+    // schemaCompletionSource 가 같은 라벨을 추가 emit 해 popup 에 두 번
+    // 노출되는 회귀가 발생했다.
 
     // Sprint 268 (2026-05-13) — schema-preserving cache shape.
     // Previously `cachedColumnsByName[bareName]` was overwritten on each
@@ -361,14 +343,5 @@ export function useSqlAutocomplete(
     }
 
     return ns as SQLNamespace;
-  }, [
-    tables,
-    views,
-    columnsCache,
-    connectionId,
-    db,
-    tableColumns,
-    dialect,
-    dbType,
-  ]);
+  }, [tables, views, columnsCache, connectionId, db, tableColumns, dialect]);
 }
