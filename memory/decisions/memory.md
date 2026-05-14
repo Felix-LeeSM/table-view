@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-12
+updated: 2026-05-14
 ---
 
 # ADR 인덱스
@@ -34,6 +34,7 @@ updated: 2026-05-12
 | [0025](./0025-datagrid-self-managed-no-tanstack/memory.md) | DataGrid layout/sorting/filtering/virtualization 자체 관리 — TanStack Table 도입 안 함 | Accepted | 2026-05-11 | — |
 | [0026](./0026-numeric-wire-string-type-aware-wrap/memory.md) | 수치 wire-format — string token + frontend type-aware wrap (BigInt / Decimal / Number) | Accepted | 2026-05-11 | — |
 | [0027](./0027-per-workspace-state-store/memory.md) | Per-workspace state — workspaceStore (tabStore 흡수) keyed by (connId, db) with explicit-API | Accepted | 2026-05-12 | — |
+| [0028](./0028-mysql-driver-sqlx/memory.md) | MySQL adapter 라이브러리 — sqlx::mysql (mysql_async 미채택) | Accepted | 2026-05-14 | — |
 
 ## 역사 (Superseded / Deprecated)
 
