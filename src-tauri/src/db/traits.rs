@@ -793,6 +793,33 @@ pub trait DocumentAdapter: DbAdapter {
         collection: &'a str,
         validator: Option<serde_json::Value>,
     ) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 334 — create a collection with optional creation options
+    /// (capped, timeseries, validator, etc.).
+    ///
+    /// 작성 이유 (2026-05-15): Slice L live wire. `options` 는 raw JSON
+    /// object passthrough — `db.runCommand({create: <coll>, ...opts})` 로
+    /// 호출된다. Mongo server 가 unknown 옵션을 거부하므로 validation 은
+    /// driver/서버에 위임.
+    fn create_collection<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        options: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 334 — rename a collection within the same database.
+    ///
+    /// 작성 이유 (2026-05-15): Slice L live wire. Mongo manual 에 따라
+    /// `admin` db 에서 `runCommand({renameCollection: "<db>.<from>", to:
+    /// "<db>.<to>"})` 로 호출. cross-DB rename / dropTarget 옵션은 본
+    /// sprint scope 외.
+    fn rename_collection<'a>(
+        &'a self,
+        db: &'a str,
+        from: &'a str,
+        to: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

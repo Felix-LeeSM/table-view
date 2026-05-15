@@ -242,6 +242,22 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<(), AppError>> {
             Box::pin(async { Ok(()) })
         }
+        fn create_collection<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _options: Option<serde_json::Value>,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn rename_collection<'a>(
+            &'a self,
+            _db: &'a str,
+            _from: &'a str,
+            _to: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -802,6 +818,22 @@ impl DocumentAdapter for FakeCancellableDocument {
         _db: &'a str,
         _collection: &'a str,
         _validator: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn create_collection<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _options: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn rename_collection<'a>(
+        &'a self,
+        _db: &'a str,
+        _from: &'a str,
+        _to: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async { Ok(()) })
     }

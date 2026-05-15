@@ -612,6 +612,13 @@ pub(crate) struct StubDocumentAdapter {
     pub set_collection_validator_fn: Option<
         Box<dyn Fn(&str, &str, Option<serde_json::Value>) -> Result<(), AppError> + Send + Sync>,
     >,
+
+    // Sprint 334 — override slots for the create / rename collection pair.
+    pub create_collection_fn: Option<
+        Box<dyn Fn(&str, &str, Option<serde_json::Value>) -> Result<(), AppError> + Send + Sync>,
+    >,
+    pub rename_collection_fn:
+        Option<Box<dyn Fn(&str, &str, &str) -> Result<(), AppError> + Send + Sync>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -636,6 +643,8 @@ impl Default for StubDocumentAdapter {
             list_collection_indexes_fn: None,
             get_collection_validator_fn: None,
             set_collection_validator_fn: None,
+            create_collection_fn: None,
+            rename_collection_fn: None,
         }
     }
 }
@@ -902,6 +911,33 @@ impl DocumentAdapter for StubDocumentAdapter {
             .set_collection_validator_fn
             .as_ref()
             .map_or_else(|| Ok(()), |f| f(db, coll, validator));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 334 — create / rename collection stubs.
+    fn create_collection<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        options: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self
+            .create_collection_fn
+            .as_ref()
+            .map_or_else(|| Ok(()), |f| f(db, coll, options));
+        Box::pin(async move { r })
+    }
+
+    fn rename_collection<'a>(
+        &'a self,
+        db: &'a str,
+        from: &'a str,
+        to: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self
+            .rename_collection_fn
+            .as_ref()
+            .map_or_else(|| Ok(()), |f| f(db, from, to));
         Box::pin(async move { r })
     }
 }

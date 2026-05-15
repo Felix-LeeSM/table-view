@@ -93,6 +93,43 @@ export async function setMongoValidator(
 }
 
 /**
+ * Sprint 334 (Slice L live wire) — create a Mongo collection. `options`
+ * (capped, timeseries, validator, …) passes through to `runCommand
+ * create` unchanged.
+ */
+export async function createCollection(
+  connectionId: string,
+  database: string,
+  collection: string,
+  options: Record<string, unknown> | null = null,
+): Promise<void> {
+  return invoke<void>("create_collection", {
+    connectionId,
+    database,
+    collection,
+    options,
+  });
+}
+
+/**
+ * Sprint 334 (Slice L live wire) — rename a Mongo collection in-place
+ * (same database). Cross-DB rename is deferred — backend rejects.
+ */
+export async function renameCollection(
+  connectionId: string,
+  database: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  return invoke<void>("rename_collection", {
+    connectionId,
+    database,
+    from,
+    to,
+  });
+}
+
+/**
  * Infer the top-level column layout of `collection` by sampling up to
  * `sampleSize` documents. Defaults to 100 on the backend when omitted.
  */

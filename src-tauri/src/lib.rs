@@ -184,6 +184,9 @@ pub fn run() {
         // Sprint 333 (Slice K live wire) — Mongo collection validator.
         commands::document::browse::get_mongo_validator,
         commands::document::browse::set_mongo_validator,
+        // Sprint 334 (Slice L live wire) — Mongo create/rename collection.
+        commands::document::browse::create_collection,
+        commands::document::browse::rename_collection,
         commands::document::query::find_documents,
         commands::document::query::aggregate_documents,
         // Sprint 308 (2026-05-14) — 4 mongosh dispatch reads.

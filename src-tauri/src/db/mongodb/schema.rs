@@ -233,6 +233,81 @@ impl MongoAdapter {
             .map_err(|e| AppError::Database(format!("collMod failed: {e}")))?;
         Ok(())
     }
+
+    /// Sprint 334 (Slice L live wire) — `runCommand({create: coll, ...})`.
+    /// `options` is merged in as additional fields on the command body.
+    pub(super) async fn create_collection_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        options: Option<JsonValue>,
+    ) -> Result<(), AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, collection)?;
+
+        let mut cmd = doc! { "create": collection };
+        if let Some(opts) = options {
+            let opts_doc: Document = match bson::to_bson(&opts) {
+                Ok(Bson::Document(d)) => d,
+                Ok(_) => {
+                    return Err(AppError::Validation(
+                        "Collection options must be a JSON object".into(),
+                    ));
+                }
+                Err(e) => {
+                    return Err(AppError::Validation(format!(
+                        "Options JSON could not be encoded: {e}"
+                    )));
+                }
+            };
+            for (k, v) in opts_doc {
+                cmd.insert(k, v);
+            }
+        }
+
+        let client = self.current_client().await?;
+        client
+            .database(&resolved)
+            .run_command(cmd)
+            .await
+            .map_err(|e| AppError::Database(format!("create collection failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Sprint 334 (Slice L live wire) — `admin.runCommand({renameCollection,
+    /// to})`. Same-DB rename only; cross-DB rename is out of scope.
+    pub(super) async fn rename_collection_impl(
+        &self,
+        db: &str,
+        from: &str,
+        to: &str,
+    ) -> Result<(), AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, from)?;
+        validate_ns(&resolved, to)?;
+
+        let from_ns = format!("{resolved}.{from}");
+        let to_ns = format!("{resolved}.{to}");
+
+        let client = self.current_client().await?;
+        client
+            .database("admin")
+            .run_command(doc! {
+                "renameCollection": from_ns,
+                "to": to_ns,
+            })
+            .await
+            .map_err(|e| AppError::Database(format!("renameCollection failed: {e}")))?;
+        Ok(())
+    }
 }
 
 /// Sprint 332 — `mongodb::IndexModel` → `crate::models::IndexInfo`.
@@ -620,6 +695,86 @@ mod tests {
                 assert!(msg.contains("Collection name"), "unexpected: {msg}");
             }
             other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_collection_rejects_empty_db_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.create_collection("   ", "c", None).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_collection_rejects_empty_collection_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.create_collection("db", "   ", None).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_collection_rejects_non_object_options() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .create_collection("db", "c", Some(serde_json::json!([1, 2])))
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("JSON object"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_collection_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.create_collection("db", "c", None).await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn rename_collection_rejects_empty_db_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.rename_collection("   ", "a", "b").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn rename_collection_rejects_empty_target_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.rename_collection("db", "a", "   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn rename_collection_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.rename_collection("db", "a", "b").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
         }
     }
 

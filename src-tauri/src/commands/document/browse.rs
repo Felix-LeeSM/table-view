@@ -268,6 +268,75 @@ pub async fn set_mongo_validator(
     .await
 }
 
+async fn create_collection_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    options: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .create_collection(database, collection, options)
+        .await
+}
+
+/// Sprint 334 (Slice L live wire) — create a Mongo collection with
+/// optional creation options (capped, timeseries, validator, etc.) via
+/// the driver's `create` command.
+#[tauri::command]
+pub async fn create_collection(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    options: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    create_collection_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        options,
+    )
+    .await
+}
+
+async fn rename_collection_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    from: &str,
+    to: &str,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .rename_collection(database, from, to)
+        .await
+}
+
+/// Sprint 334 (Slice L live wire) — rename a Mongo collection inside
+/// the same database (admin runCommand renameCollection). Cross-DB
+/// renames are out of scope for this slice.
+#[tauri::command]
+pub async fn rename_collection(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    from: String,
+    to: String,
+) -> Result<(), AppError> {
+    rename_collection_inner(state.inner(), &connection_id, &database, &from, &to).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {

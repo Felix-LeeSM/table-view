@@ -356,4 +356,22 @@ impl DocumentAdapter for MongoAdapter {
                 .await
         })
     }
+
+    fn create_collection<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        options: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.create_collection_impl(db, collection, options).await })
+    }
+
+    fn rename_collection<'a>(
+        &'a self,
+        db: &'a str,
+        from: &'a str,
+        to: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.rename_collection_impl(db, from, to).await })
+    }
 }
