@@ -7,7 +7,7 @@ import {
   type CSSProperties,
 } from "react";
 import Decimal from "decimal.js";
-import { Loader2, Trash2, FileEdit } from "lucide-react";
+import { Loader2, Trash2, FileEdit, Filter } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { isDocumentSentinel } from "@/types/document";
@@ -29,6 +29,7 @@ import {
   useDataGridEdit,
 } from "@components/datagrid/useDataGridEdit";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
+import ProjectionDialog from "@components/document/ProjectionDialog";
 import AddDocumentModal from "@components/document/AddDocumentModal";
 import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
@@ -144,6 +145,13 @@ export default function DocumentDataGrid({
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
+  // Sprint 325 — Slice H: server-side field projection. `null` → no
+  // projection (backend returns all fields). Non-empty → wire-up via
+  // useDocumentGridData → find_documents body.
+  const [projection, setProjection] = useState<Record<string, 0 | 1> | null>(
+    null,
+  );
+  const [projectionOpen, setProjectionOpen] = useState(false);
 
   const filterFieldNames = useMemo<readonly string[]>(
     () => (fieldsCacheEntry ? fieldsCacheEntry.map((c) => c.name) : []),
@@ -171,6 +179,7 @@ export default function DocumentDataGrid({
     activeFilter,
     activeFilterCount,
     sorts,
+    projection: projection ?? undefined,
   });
 
   // Sprint 320 — Slice E.2: client-side schema accumulator. Mongo
@@ -592,6 +601,25 @@ export default function DocumentDataGrid({
             >
               <FileEdit />
             </Button>
+            {/* Sprint 325 — Slice H: field projection dialog trigger. */}
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className={
+                projection && Object.keys(projection).length > 0
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              }
+              onClick={() => setProjectionOpen(true)}
+              aria-label="Field projection"
+              title={
+                projection && Object.keys(projection).length > 0
+                  ? `Projection: ${Object.keys(projection).length} field(s)`
+                  : "Server-side field projection"
+              }
+            >
+              <Filter />
+            </Button>
           </>
         }
         onSetPage={setPage}
@@ -920,6 +948,21 @@ export default function DocumentDataGrid({
           onCancel={() => editState.setMqlPreview(null)}
         />
       )}
+
+      <ProjectionDialog
+        open={projectionOpen}
+        onOpenChange={setProjectionOpen}
+        columns={data?.columns ?? []}
+        initial={projection}
+        onApply={(next) => {
+          setProjection(Object.keys(next).length === 0 ? null : next);
+          setProjectionOpen(false);
+        }}
+        onClear={() => {
+          setProjection(null);
+          setProjectionOpen(false);
+        }}
+      />
 
       {addModalOpen && (
         <AddDocumentModal

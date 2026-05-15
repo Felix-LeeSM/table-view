@@ -34,6 +34,13 @@ export interface UseDocumentGridDataParams {
    * (`{ field: 1 | -1 }`).
    */
   sorts?: readonly SortInfo[];
+  /**
+   * Sprint 325 — Slice H: server-side field projection. `undefined` or
+   * empty object → backend returns all top-level fields. Mixed include /
+   * exclude is invalid in Mongo and the backend will reject it; the
+   * dialog only emits canonical shapes.
+   */
+  projection?: Record<string, 0 | 1>;
 }
 
 export interface UseDocumentGridDataResult {
@@ -71,6 +78,7 @@ export function useDocumentGridData({
   activeFilter,
   activeFilterCount,
   sorts,
+  projection,
 }: UseDocumentGridDataParams): UseDocumentGridDataResult {
   const runFind = useDocumentStore((s) => s.runFind);
   const queryResult = useDocumentStore(
@@ -96,6 +104,10 @@ export function useDocumentGridData({
       await runFind(connectionId, database, collection, {
         filter: activeFilterCount > 0 ? activeFilter : undefined,
         sort: mongoSort,
+        projection:
+          projection && Object.keys(projection).length > 0
+            ? projection
+            : undefined,
         skip: (page - 1) * pageSize,
         limit: pageSize,
       });
@@ -117,6 +129,7 @@ export function useDocumentGridData({
     activeFilter,
     activeFilterCount,
     mongoSort,
+    projection,
   ]);
 
   // Cancel handler for the threshold overlay. Bumps `fetchIdRef` so the
