@@ -449,6 +449,20 @@ impl RdbAdapter for PostgresAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<Vec<PostgresTypeInfo>, AppError>> + Send + 'a>> {
         Box::pin(async move { self.list_types().await })
     }
+
+    fn create_database<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.create_database(name).await })
+    }
+
+    fn drop_database<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.drop_database(name).await })
+    }
 }
 
 #[cfg(test)]

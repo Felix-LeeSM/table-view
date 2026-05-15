@@ -1097,6 +1097,44 @@ impl PostgresAdapter {
             Err(err) => Err(AppError::Database(err.to_string())),
         }
     }
+
+    /// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`.
+    ///
+    /// PG forbids CREATE/DROP DATABASE inside an explicit transaction
+    /// block, so we send the statement through `sqlx::query` against the
+    /// active pool — sqlx auto-commits a single statement that is not
+    /// wrapped in a transaction. The active pool's database does not need
+    /// to be `postgres`; PG only requires the connection to be outside a
+    /// transaction (default for fresh pool connections).
+    pub async fn create_database(&self, name: &str) -> Result<(), AppError> {
+        use crate::db::postgres::mutations::{quote_identifier, validate_identifier};
+        validate_identifier(name, "Database name")?;
+        let pool = self.active_pool().await?;
+        let sql = format!("CREATE DATABASE {}", quote_identifier(name.trim()));
+        sqlx::query(&sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("CREATE DATABASE failed: {e}")))?;
+        Ok(())
+    }
+
+    /// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`.
+    ///
+    /// Same auto-commit assumption as `create_database`. PG further
+    /// requires no active sessions on the target database; the user is
+    /// responsible for evicting connectors first (the error surfaces
+    /// verbatim if any session is still attached).
+    pub async fn drop_database(&self, name: &str) -> Result<(), AppError> {
+        use crate::db::postgres::mutations::{quote_identifier, validate_identifier};
+        validate_identifier(name, "Database name")?;
+        let pool = self.active_pool().await?;
+        let sql = format!("DROP DATABASE {}", quote_identifier(name.trim()));
+        sqlx::query(&sql)
+            .execute(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("DROP DATABASE failed: {e}")))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1213,6 +1251,59 @@ mod tests {
             err_msg.contains("Not connected"),
             "Expected 'Not connected' error, got: {err_msg}"
         );
+    }
+
+    #[tokio::test]
+    async fn create_database_rejects_empty_name() {
+        let adapter = PostgresAdapter::new();
+        match adapter.create_database("   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_database_rejects_invalid_identifier() {
+        let adapter = PostgresAdapter::new();
+        match adapter.create_database("1bad-name").await {
+            Err(AppError::Validation(_)) => {}
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_database_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.create_database("analytics").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_database_rejects_empty_name() {
+        let adapter = PostgresAdapter::new();
+        match adapter.drop_database("   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_database_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.drop_database("analytics").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
     }
     // ── Sprint 230 — list_types SQL builder fixture ────────────────────
 

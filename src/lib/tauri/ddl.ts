@@ -281,3 +281,25 @@ export async function countNullRows(
     expectedDatabase,
   });
 }
+
+/**
+ * Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG only
+ * for now; other RDB adapters surface `AppError::Unsupported`.
+ */
+export async function createRdbDatabase(
+  connectionId: string,
+  name: string,
+): Promise<void> {
+  return invoke<void>("create_rdb_database", { connectionId, name });
+}
+
+/**
+ * Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG only;
+ * caller is responsible for evicting active sessions on the target.
+ */
+export async function dropRdbDatabase(
+  connectionId: string,
+  name: string,
+): Promise<void> {
+  return invoke<void>("drop_rdb_database", { connectionId, name });
+}

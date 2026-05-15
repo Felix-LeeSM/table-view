@@ -278,6 +278,24 @@ impl MongoAdapter {
         Ok(())
     }
 
+    /// Sprint 335 (Slice M live wire) — `db.dropDatabase()`. The Mongo
+    /// driver's `Database::drop()` is idempotent: dropping a non-existent
+    /// database succeeds.
+    pub(super) async fn drop_database_impl(&self, name: &str) -> Result<(), AppError> {
+        if name.trim().is_empty() {
+            return Err(AppError::Validation(
+                "Database name must not be empty".into(),
+            ));
+        }
+        let client = self.current_client().await?;
+        client
+            .database(name)
+            .drop()
+            .await
+            .map_err(|e| AppError::Database(format!("dropDatabase failed: {e}")))?;
+        Ok(())
+    }
+
     /// Sprint 334 (Slice L live wire) — `admin.runCommand({renameCollection,
     /// to})`. Same-DB rename only; cross-DB rename is out of scope.
     pub(super) async fn rename_collection_impl(
@@ -771,6 +789,28 @@ mod tests {
     async fn rename_collection_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter.rename_collection("db", "a", "b").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_database_rejects_empty_name() {
+        let adapter = MongoAdapter::new();
+        match DocumentAdapter::drop_database(&adapter, "   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_database_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match DocumentAdapter::drop_database(&adapter, "db").await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected: {msg}");
             }

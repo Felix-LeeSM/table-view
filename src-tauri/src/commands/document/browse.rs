@@ -337,6 +337,30 @@ pub async fn rename_collection(
     rename_collection_inner(state.inner(), &connection_id, &database, &from, &to).await
 }
 
+async fn drop_mongo_database_inner(
+    state: &AppState,
+    connection_id: &str,
+    name: &str,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_document()?.drop_database(name).await
+}
+
+/// Sprint 335 (Slice M live wire) — drop the entire Mongo database
+/// (`db.dropDatabase()`). The driver is idempotent: dropping a
+/// non-existent DB succeeds.
+#[tauri::command]
+pub async fn drop_mongo_database(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    name: String,
+) -> Result<(), AppError> {
+    drop_mongo_database_inner(state.inner(), &connection_id, &name).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -525,5 +549,41 @@ mod tests {
         let _ = infer_collection_fields_inner(&state, "d", "db", "c", None, Some("q-icf")).await;
         let tokens = state.query_tokens.lock().await;
         assert!(!tokens.contains_key("q-icf"));
+    }
+
+    // ── Sprint 335 — drop_mongo_database wiring ────────────────────────────
+
+    #[tokio::test]
+    async fn drop_mongo_database_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match drop_mongo_database_inner(&state, "absent", "staging").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_mongo_database_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        match drop_mongo_database_inner(&state, "rdb", "staging").await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("document")),
+            other => panic!("Expected Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_mongo_database_routes_to_trait_method() {
+        // Sprint 335 — closure stub captures the name argument so the
+        // wiring proves the inner fn forwards verbatim. Happy-path
+        // dispatch (lock acquired → as_document() OK → trait fn → Ok).
+        let mut s = crate::db::testing::StubDocumentAdapter::default();
+        s.drop_database_fn = Some(Box::new(|name| {
+            assert_eq!(name, "staging");
+            Ok(())
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        drop_mongo_database_inner(&state, "d", "staging")
+            .await
+            .unwrap();
     }
 }

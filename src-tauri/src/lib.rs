@@ -187,6 +187,10 @@ pub fn run() {
         // Sprint 334 (Slice L live wire) — Mongo create/rename collection.
         commands::document::browse::create_collection,
         commands::document::browse::rename_collection,
+        // Sprint 335 (Slice M live wire) — RDB/Mongo database lifecycle.
+        commands::document::browse::drop_mongo_database,
+        commands::rdb::ddl::create_rdb_database,
+        commands::rdb::ddl::drop_rdb_database,
         commands::document::query::find_documents,
         commands::document::query::aggregate_documents,
         // Sprint 308 (2026-05-14) — 4 mongosh dispatch reads.

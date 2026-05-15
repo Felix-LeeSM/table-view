@@ -130,6 +130,17 @@ export async function renameCollection(
 }
 
 /**
+ * Sprint 335 (Slice M live wire) — drop the entire Mongo database. The
+ * driver is idempotent (dropping a non-existent DB succeeds).
+ */
+export async function dropMongoDatabase(
+  connectionId: string,
+  name: string,
+): Promise<void> {
+  return invoke<void>("drop_mongo_database", { connectionId, name });
+}
+
+/**
  * Infer the top-level column layout of `collection` by sampling up to
  * `sampleSize` documents. Defaults to 100 on the backend when omitted.
  */

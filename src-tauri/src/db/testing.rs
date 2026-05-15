@@ -619,6 +619,9 @@ pub(crate) struct StubDocumentAdapter {
     >,
     pub rename_collection_fn:
         Option<Box<dyn Fn(&str, &str, &str) -> Result<(), AppError> + Send + Sync>>,
+
+    // Sprint 335 — override slot for drop_database (document side).
+    pub drop_database_fn: Option<FnOne<str, ()>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -645,6 +648,7 @@ impl Default for StubDocumentAdapter {
             set_collection_validator_fn: None,
             create_collection_fn: None,
             rename_collection_fn: None,
+            drop_database_fn: None,
         }
     }
 }
@@ -938,6 +942,15 @@ impl DocumentAdapter for StubDocumentAdapter {
             .rename_collection_fn
             .as_ref()
             .map_or_else(|| Ok(()), |f| f(db, from, to));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 335 — drop_database stub.
+    fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self
+            .drop_database_fn
+            .as_ref()
+            .map_or_else(|| Ok(()), |f| f(name));
         Box::pin(async move { r })
     }
 }

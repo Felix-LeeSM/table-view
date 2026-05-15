@@ -374,4 +374,8 @@ impl DocumentAdapter for MongoAdapter {
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.rename_collection_impl(db, from, to).await })
     }
+
+    fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.drop_database_impl(name).await })
+    }
 }

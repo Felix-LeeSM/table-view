@@ -547,6 +547,27 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Sprint 335 — `CREATE DATABASE "<name>"`. PG override runs the
+    /// statement against the pool's `postgres` admin DB (transaction-less);
+    /// other RDB adapters inherit `Unsupported` until their dialect ships.
+    fn create_database<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support database creation".into(),
+            ))
+        })
+    }
+
+    /// Sprint 335 — `DROP DATABASE "<name>"`. Symmetric to
+    /// `create_database`.
+    fn drop_database<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support database drop".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
@@ -820,6 +841,14 @@ pub trait DocumentAdapter: DbAdapter {
         from: &'a str,
         to: &'a str,
     ) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 335 — drop the entire Mongo database (`db.dropDatabase()`).
+    ///
+    /// 작성 이유 (2026-05-15): Slice M live wire. Mongo create database
+    /// is implicit (lazy on first write) so no `create_database` trait
+    /// method is needed — the UX layer surfaces an informational copy
+    /// instead.
+    fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

@@ -332,6 +332,52 @@ pub async fn drop_trigger(
     drop_trigger_inner(state.inner(), &request).await
 }
 
+async fn create_rdb_database_inner(
+    state: &AppState,
+    connection_id: &str,
+    name: &str,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_rdb()?.create_database(name).await
+}
+
+/// Sprint 335 (Slice M live wire) — `CREATE DATABASE "<name>"`. PG only
+/// for now; MySQL/SQLite inherit the trait default `Unsupported`.
+#[tauri::command]
+pub async fn create_rdb_database(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    name: String,
+) -> Result<(), AppError> {
+    create_rdb_database_inner(state.inner(), &connection_id, &name).await
+}
+
+async fn drop_rdb_database_inner(
+    state: &AppState,
+    connection_id: &str,
+    name: &str,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_rdb()?.drop_database(name).await
+}
+
+/// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`. PG only;
+/// the user is responsible for evicting active sessions first.
+#[tauri::command]
+pub async fn drop_rdb_database(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    name: String,
+) -> Result<(), AppError> {
+    drop_rdb_database_inner(state.inner(), &connection_id, &name).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -1206,6 +1252,74 @@ mod tests {
                 assert_eq!(actual, "dbA");
             }
             other => panic!("Expected DbMismatch, got: {:?}", other),
+        }
+    }
+
+    // ── Sprint 335 — create_rdb_database / drop_rdb_database wiring ─────
+
+    #[tokio::test]
+    async fn create_rdb_database_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match create_rdb_database_inner(&state, "absent", "analytics").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_rdb_database_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        match create_rdb_database_inner(&state, "doc", "analytics").await {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("relational"), "kw missing: {msg}");
+            }
+            other => panic!("Expected Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_rdb_database_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match drop_rdb_database_inner(&state, "absent", "analytics").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_rdb_database_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        match drop_rdb_database_inner(&state, "doc", "analytics").await {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("relational"), "kw missing: {msg}");
+            }
+            other => panic!("Expected Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_rdb_database_routes_through_trait_default_unsupported() {
+        // Sprint 335 — `StubRdbAdapter` inherits the trait default for
+        // `create_database` (Unsupported). This case covers the happy
+        // wiring path: connection lookup OK, as_rdb() OK, trait dispatch
+        // returns the documented `Unsupported` from the trait default.
+        let state = state_with("c", rdb_default()).await;
+        match create_rdb_database_inner(&state, "c", "analytics").await {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("database creation"), "kw missing: {msg}");
+            }
+            other => panic!("Expected trait-default Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_rdb_database_routes_through_trait_default_unsupported() {
+        let state = state_with("c", rdb_default()).await;
+        match drop_rdb_database_inner(&state, "c", "analytics").await {
+            Err(AppError::Unsupported(msg)) => {
+                assert!(msg.contains("database drop"), "kw missing: {msg}");
+            }
+            other => panic!("Expected trait-default Unsupported, got: {:?}", other),
         }
     }
 }
