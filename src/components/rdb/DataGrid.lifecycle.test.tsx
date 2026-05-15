@@ -179,14 +179,28 @@ describe("DataGrid", () => {
     expect(nulls[0]!.tagName).toBe("SPAN");
   });
 
-  // 6. JSONB object display — Sprint 238 AC-238-07: compact 1-line JSON.
-  it("renders JSONB objects as compact one-line JSON (Sprint 238)", async () => {
+  // Sprint 343 (2026-05-15) — JSONB / ARRAY object cells now render as
+  // `{ ... }` / `[ N items ]` sentinels that toggle the inline JSON
+  // tree panel. Sprint 238's "compact one-line JSON" rendering was
+  // replaced because cell-level inline edit on a stringified JSON
+  // payload was lossy + error-prone; the tree panel edits leaves
+  // through jsonb_set so the wire literal stays canonical.
+  it("renders JSONB cells as expandable sentinels (Sprint 343)", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
+    // `{ key: "value" }` row → object sentinel (Expand meta button).
+    // `[1, 2, 3]` row → array sentinel (Expand meta button + "3 items").
+    const expandButtons = screen.getAllByRole("button", {
+      name: /Expand meta/i,
+    });
+    expect(expandButtons.length).toBe(2);
+    // One of them carries the array's child count.
+    const buttonTexts = expandButtons.map((b) => b.textContent);
+    expect(buttonTexts).toContain("3 items");
+    // Raw JSON text from Sprint 238 must NOT appear as a cell value.
     const cells = screen.getAllByRole("gridcell");
     const cellTexts = cells.map((c) => c.textContent);
-    expect(cellTexts).toContain(JSON.stringify({ key: "value" }));
-    expect(cellTexts).toContain(JSON.stringify([1, 2, 3]));
+    expect(cellTexts).not.toContain(JSON.stringify({ key: "value" }));
   });
 
   // 13. Executed query bar toggles visibility

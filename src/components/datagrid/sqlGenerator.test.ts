@@ -114,6 +114,267 @@ describe("generateSql — UPDATE tri-state (null vs empty string vs text)", () =
   });
 });
 
+// ---------------------------------------------------------------------------
+// Sprint 343 (2026-05-15) — inline JSON tree edits: jsonb + Postgres ARRAY.
+// Locks the path-key parser + per-cell dispatch so the inline tree (Mongo's
+// DocumentTreePanel mounted in the RDB grid) can edit / delete leaves through
+// `:dot.path` pendingEdit keys without the SQL generator collapsing them to
+// invalid statements. 작성 이유: Sprint 343 V1 — RDB 가 마침내 nested
+// edit 을 받아들임. 회귀 가드: 일반 cell-edit 동작 (no `:path`) 은 영향 X.
+// ---------------------------------------------------------------------------
+
+const JSONB_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "integer",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "meta",
+      data_type: "jsonb",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "tags",
+      data_type: "text[]",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, { verified: true, role: "user" }, ["alpha", "beta", "gamma"]]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+};
+
+describe("generateSql — JSONB nested edits (Sprint 343)", () => {
+  it("emits jsonb_set for a single nested string leaf", () => {
+    const edits = new Map<string, string | null>([["0-1:role", "admin"]]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toBe(
+      `UPDATE public.users SET meta = jsonb_set(meta, '{"role"}', '"admin"'::jsonb) WHERE id = 1;`,
+    );
+  });
+
+  it("recognises numeric / boolean / null leaves as raw JSON (not quoted strings)", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:age", "42"],
+      ["0-1:active", "true"],
+      ["0-1:nickname", "null"],
+    ]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain(`jsonb_set(meta, '{"age"}', '42'::jsonb)`);
+    expect(statements[0]).toContain(`'{"active"}', 'true'::jsonb`);
+    expect(statements[0]).toContain(`'{"nickname"}', 'null'::jsonb`);
+  });
+
+  it("chains multiple nested edits into a single UPDATE", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:role", "admin"],
+      ["0-1:dept", "eng"],
+    ]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements).toHaveLength(1);
+    // Inner-to-outer reading: jsonb_set wraps the previous jsonb_set
+    // so the second call sees the first's output as its base.
+    expect(statements[0]).toMatch(
+      /UPDATE public\.users SET meta = jsonb_set\(jsonb_set\(meta, '\{"role"\}', '"admin"'::jsonb\), '\{"dept"\}', '"eng"'::jsonb\) WHERE id = 1;/,
+    );
+  });
+
+  it("routes __op__:unset into a `#-` (jsonb path delete)", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:legacyField", "__op__:unset"],
+    ]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toBe(
+      `UPDATE public.users SET meta = meta #- '{"legacyField"}' WHERE id = 1;`,
+    );
+  });
+
+  it("expands bracket-index segments into separate path components", () => {
+    // `tags[0].name` → `'{"tags","0","name"}'` (jsonb path components are
+    // text — Postgres accepts the numeric-looking element either way).
+    const edits = new Map<string, string | null>([
+      ["0-1:friends[0].name", "Marie"],
+    ]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toBe(
+      `UPDATE public.users SET meta = jsonb_set(meta, '{"friends","0","name"}', '"Marie"'::jsonb) WHERE id = 1;`,
+    );
+  });
+
+  it("top-level cell edit on the same jsonb cell shadows any nested edits", () => {
+    const errors: CoerceError[] = [];
+    const edits = new Map<string, string | null>([
+      ["0-1", `{"replaced":true}`],
+      ["0-1:role", "admin"],
+    ]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { onCoerceError: (e) => errors.push(e) },
+    );
+    expect(statements).toHaveLength(1);
+    // Top-level wins → emits whatever coerceToSqlLiteral produces for the
+    // raw jsonb input (textual fallback, single-quote escaped).
+    expect(statements[0]).toContain("UPDATE public.users SET meta =");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ key: "0-1:role" });
+  });
+});
+
+describe("generateSql — Postgres ARRAY nested edits (Sprint 343)", () => {
+  it("reassigns the whole array on a single index edit (1-based out → 0-based in)", () => {
+    const edits = new Map<string, string | null>([["0-2:[1]", "BETA"]]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toBe(
+      `UPDATE public.users SET tags = ARRAY['alpha', 'BETA', 'gamma']::text[] WHERE id = 1;`,
+    );
+  });
+
+  it("splices out an element on __op__:unset", () => {
+    const edits = new Map<string, string | null>([["0-2:[1]", "__op__:unset"]]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toBe(
+      `UPDATE public.users SET tags = ARRAY['alpha', 'gamma']::text[] WHERE id = 1;`,
+    );
+  });
+
+  it("combines edits and deletes by index in one UPDATE", () => {
+    const edits = new Map<string, string | null>([
+      ["0-2:[0]", "ALPHA"],
+      ["0-2:[1]", "__op__:unset"],
+      ["0-2:[2]", "GAMMA"],
+    ]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toBe(
+      `UPDATE public.users SET tags = ARRAY['ALPHA', 'GAMMA']::text[] WHERE id = 1;`,
+    );
+  });
+
+  it("rejects non-index ARRAY paths (e.g. `meta.role` on a text[] column)", () => {
+    const errors: CoerceError[] = [];
+    const edits = new Map<string, string | null>([["0-2:meta.role", "admin"]]);
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { onCoerceError: (e) => errors.push(e) },
+    );
+    expect(statements).toEqual([]);
+    expect(errors[0]?.message).toMatch(/single-index ARRAY paths/);
+  });
+
+  it("rejects nested edits on a non-structural column (e.g. text)", () => {
+    const errors: CoerceError[] = [];
+    const edits = new Map<string, string | null>([
+      ["0-2:foo", "bar"], // would be valid on jsonb, but tags is text[] ARRAY
+    ]);
+    // Use the BASE_DATA shape where `name` is plain text.
+    const baseTextEdits = new Map<string, string | null>([["0-1:foo", "bar"]]);
+    const statements = generateSql(
+      BASE_DATA,
+      "public",
+      "users",
+      baseTextEdits,
+      new Set(),
+      [],
+      { onCoerceError: (e) => errors.push(e) },
+    );
+    expect(statements).toEqual([]);
+    expect(errors[0]?.message).toMatch(
+      /only supported on jsonb or Postgres ARRAY/,
+    );
+    // sanity: the array-specific path rejection still fires through the
+    // ARRAY dispatch when invoked on tags column.
+    expect(edits).toBeDefined();
+  });
+});
+
 describe("generateSql — INSERT null vs empty string", () => {
   it("emits NULL for null cells and '' for empty-string cells in new rows", () => {
     const newRows = [

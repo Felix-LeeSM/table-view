@@ -1,4 +1,5 @@
 import {
+  Fragment,
   forwardRef,
   useCallback,
   useEffect,
@@ -11,6 +12,8 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@components/ui/button";
 import AsyncProgressOverlay from "@components/feedback/AsyncProgressOverlay";
+import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
+import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
@@ -102,6 +105,17 @@ export interface DataGridTableProps {
     column: string,
     value: string,
   ) => void;
+  /**
+   * Sprint 343 (2026-05-15) — inline JSON tree expand wiring. The
+   * panel commits each leaf edit through `setPendingEdits` against a
+   * dot-path key (`"rowIdx-colIdx:meta.role"`); the SQL generator
+   * dispatches by column.data_type to emit `jsonb_set` for jsonb
+   * columns and a full `ARRAY[...]` reassign for Postgres arrays.
+   * Required for jsonb / ARRAY editing — omit on grids that don't
+   * carry those column types and the sentinel buttons simply won't
+   * commit anything (read-only fallback).
+   */
+  setPendingEdits?: (next: Map<string, string | null>) => void;
 }
 
 /**
@@ -160,6 +174,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       onDeleteRow,
       onDuplicateRow,
       onNavigateToFk,
+      setPendingEdits,
     },
     forwardedRef,
   ) {
@@ -184,6 +199,65 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       dataType: string;
     } | null>(null);
 
+    // Sprint 343 (2026-05-15) — inline JSON tree panel coordinate.
+    // Mirrors `DocumentDataGrid.expandedNested` (Sprint 341/342) so
+    // jsonb / Postgres ARRAY cells can mount the same tree UI.
+    //
+    // `pkSnapshot` is the JSON-stringified primary-key tuple captured
+    // at expand-time. On every data change an effect compares the
+    // current pk tuple at `rowIdx`; mismatch (sort / filter / refetch
+    // moved the row or replaced it) auto-closes the panel so the user
+    // never edits the wrong row by accident.
+    const [expandedNested, setExpandedNested] = useState<{
+      rowIdx: number;
+      colIdx: number;
+      pkSnapshot: string;
+    } | null>(null);
+
+    const pkSnapshotForRow = useCallback(
+      (rowIdx: number): string => {
+        const row = data.rows[rowIdx] as unknown[] | undefined;
+        if (!row) return "";
+        const pkValues: unknown[] = [];
+        data.columns.forEach((c, i) => {
+          if (c.is_primary_key) pkValues.push(row[i]);
+        });
+        // Fallback to the whole row when no PK column is declared —
+        // the WHERE clause builder does the same, so the snapshot
+        // semantics stay consistent.
+        return safeStringifyCell(
+          pkValues.length > 0 ? pkValues : (row as unknown),
+        );
+      },
+      [data.rows, data.columns],
+    );
+
+    const handleToggleNested = useCallback(
+      (rowIdx: number, colIdx: number) => {
+        setExpandedNested((prev) => {
+          if (prev && prev.rowIdx === rowIdx && prev.colIdx === colIdx) {
+            return null;
+          }
+          return {
+            rowIdx,
+            colIdx,
+            pkSnapshot: pkSnapshotForRow(rowIdx),
+          };
+        });
+      },
+      [pkSnapshotForRow],
+    );
+
+    useEffect(() => {
+      if (!expandedNested) return;
+      const currentSnapshot = pkSnapshotForRow(expandedNested.rowIdx);
+      // Row went away (rowIdx beyond rows.length) → currentSnapshot=""
+      // and won't match the captured snapshot, so we still close.
+      if (currentSnapshot !== expandedNested.pkSnapshot) {
+        setExpandedNested(null);
+      }
+    }, [data.rows, expandedNested, pkSnapshotForRow]);
+
     // Visual order: columnOrder[visualIdx] = dataIdx
     const visualCount = data.columns.length;
     const baseOrder =
@@ -204,6 +278,39 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     // Outer scroll container = `<div role="grid">`. Owns `--cols` CSS
     // variable. virtualizer 가 scrollElement 로 참조한다.
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    // Sprint 343 — viewport width tracking for the inline tree panel
+    // (same pattern as `DocumentDataGrid`). Sized via ResizeObserver
+    // so window resize / sidebar toggle stays in sync. Deps include
+    // `data` because the scroll container lives behind a `{data && ...}`
+    // guard at first paint.
+    const [scrollContainerWidth, setScrollContainerWidth] = useState(0);
+    useEffect(() => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      const update = () => setScrollContainerWidth(el.clientWidth);
+      update();
+      const obs = new ResizeObserver(update);
+      obs.observe(el);
+      return () => obs.disconnect();
+    }, [data]);
+
+    // Sprint 343 — pendingByPath helper for DocumentTreePanel. Filters
+    // the cell-keyed pendingEdits map down to the (rowIdx, colIdx)
+    // entries that carry a `:dot.path` suffix.
+    const buildNestedPendingByPath = useCallback(
+      (rowIdx: number, colIdx: number) => {
+        const prefix = `${rowIdx}-${colIdx}:`;
+        const out = new Map<string, string | Record<string, unknown>>();
+        pendingEdits.forEach((value, key) => {
+          if (!key.startsWith(prefix)) return;
+          const path = key.slice(prefix.length);
+          out.set(path, value ?? "");
+        });
+        return out;
+      },
+      [pendingEdits],
+    );
 
     const widthColumns = useMemo(
       () =>
@@ -314,6 +421,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         onSaveCurrentEdit,
         onCancelEdit,
         onNavigateToFk,
+        expandedNested,
+        onToggleNested: handleToggleNested,
       }),
       [
         data,
@@ -334,6 +443,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         onSaveCurrentEdit,
         onCancelEdit,
         onNavigateToFk,
+        expandedNested,
+        handleToggleNested,
       ],
     );
 
@@ -396,13 +507,90 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
           </div>
         ) : (
           <div role="rowgroup">
-            {data.rows.map((_row, rowIdx) => (
-              <DataRow
-                key={`row-${page}-${rowIdx}`}
-                rowIdx={rowIdx}
-                ctx={rowCtx}
-              />
-            ))}
+            {data.rows.map((row, rowIdx) => {
+              const isExpandedHere = expandedNested?.rowIdx === rowIdx;
+              const expandedCol = isExpandedHere
+                ? data.columns[expandedNested!.colIdx]
+                : null;
+              const expandedCell = isExpandedHere
+                ? (row as unknown[])[expandedNested!.colIdx]
+                : undefined;
+              return (
+                <Fragment key={`row-${page}-${rowIdx}`}>
+                  <DataRow rowIdx={rowIdx} ctx={rowCtx} />
+                  {/*
+                    Sprint 343 (2026-05-15) — inline JSON tree master/
+                    detail row for jsonb / Postgres ARRAY cells. Same
+                    layout contract as DocumentDataGrid: detail row
+                    matches the data row's grid template + minWidth so
+                    `position: sticky; left: 0` on the inner sticks to
+                    the visible viewport (not the col-1 left edge).
+                    Width pinned to `scrollContainerWidth` so the panel
+                    fills only the visible portion, not the full table.
+                  */}
+                  {isExpandedHere &&
+                    expandedCol &&
+                    expandedCell != null &&
+                    typeof expandedCell === "object" && (
+                      <div
+                        role="row"
+                        data-testid={`rdb-nested-detail-row-${rowIdx}`}
+                        className="border-b border-border bg-secondary/20"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "var(--cols)",
+                          minWidth: "max-content",
+                        }}
+                      >
+                        <div
+                          role="gridcell"
+                          style={{ gridColumn: "1 / -1" }}
+                          className="p-0"
+                        >
+                          <div
+                            className="sticky left-0"
+                            style={{
+                              width: scrollContainerWidth || undefined,
+                            }}
+                          >
+                            <DocumentTreePanel
+                              value={expandedCell}
+                              fieldName={expandedCol.name}
+                              pendingByPath={buildNestedPendingByPath(
+                                rowIdx,
+                                expandedNested!.colIdx,
+                              )}
+                              onCommitEdit={(path, value) => {
+                                if (!setPendingEdits) return;
+                                const next = new Map(pendingEdits);
+                                // The panel hands us `string |
+                                // Record<…>` but the RDB pendingEdits
+                                // map is `string | null`. Convert any
+                                // object value to its JSON literal so
+                                // the SQL generator sees a string.
+                                // Objects are only ever produced by
+                                // the BSON branch (Mongo-only), which
+                                // doesn't apply here — but keep the
+                                // safe stringify as a guard.
+                                const serialized: string =
+                                  typeof value === "string"
+                                    ? value
+                                    : safeStringifyCell(value);
+                                next.set(
+                                  `${rowIdx}-${expandedNested!.colIdx}:${path}`,
+                                  serialized,
+                                );
+                                setPendingEdits(next);
+                              }}
+                              onClose={() => setExpandedNested(null)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                </Fragment>
+              );
+            })}
           </div>
         )}
 

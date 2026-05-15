@@ -11,6 +11,8 @@ import {
   deriveEditorSeed,
   getInputTypeForColumn,
 } from "../useDataGridEdit";
+import { isJsonbColumn, isArrayColumn } from "../sqlGenerator";
+import { cn } from "@lib/utils";
 import { isBlobColumn, parseFkReference } from "./columnUtils";
 import type { CellNavigationDirection } from "./useCellNavigation";
 
@@ -96,6 +98,13 @@ export interface DataGridRowContext {
     column: string,
     value: string,
   ) => void;
+  /**
+   * Sprint 343 (2026-05-15) — inline JSON tree expand coordinate.
+   * Mirrors `DocumentDataGrid.expandedNested`. Only the structural
+   * sentinel button uses these; scalar cells ignore them.
+   */
+  expandedNested?: { rowIdx: number; colIdx: number } | null;
+  onToggleNested?: (rowIdx: number, colIdx: number) => void;
 }
 
 export interface DataRowProps {
@@ -130,6 +139,8 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
     onSaveCurrentEdit,
     onCancelEdit,
     onNavigateToFk,
+    expandedNested,
+    onToggleNested,
   } = ctx;
 
   const row = data.rows[rowIdx] as unknown[] | undefined;
@@ -185,6 +196,29 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             ? parseFkReference(col.fk_reference)
             : null;
 
+        // Sprint 343 (2026-05-15) — inline JSON tree entry-point for
+        // jsonb / Postgres ARRAY columns. Only non-null object / array
+        // cells get the sentinel (scalar jsonb values like `42` /
+        // `"foo"` / null stay editable through the regular cell path
+        // so the user can author an initial value).
+        const isNestedCapable =
+          (isJsonbColumn(col.data_type) || isArrayColumn(col.data_type)) &&
+          cell != null &&
+          typeof cell === "object";
+        const isExpandedHere =
+          isNestedCapable &&
+          expandedNested?.rowIdx === rowIdx &&
+          expandedNested?.colIdx === dIdx;
+        // Count nested pending edits on this cell so we can flag it
+        // with the same amber highlight a top-level pending uses.
+        let nestedPendingCount = 0;
+        if (isNestedCapable) {
+          const nestedPrefix = `${rowIdx}-${dIdx}:`;
+          for (const k of pendingEdits.keys()) {
+            if (k.startsWith(nestedPrefix)) nestedPendingCount++;
+          }
+        }
+
         return (
           <div
             key={`${dIdx}-${visualIdx}`}
@@ -194,12 +228,15 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
             className={`group/cell flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs text-foreground${alignClass}${
               isEditing
                 ? " bg-primary/10 ring-2 ring-inset ring-primary"
-                : hasPendingEdit
+                : hasPendingEdit || nestedPendingCount > 0
                   ? " bg-highlight/20"
                   : ""
             }`}
-            title={renderCellTitle(cell)}
-            onDoubleClick={() => onStartEdit(rowIdx, dIdx, editStartValue)}
+            title={isNestedCapable ? undefined : renderCellTitle(cell)}
+            onDoubleClick={() => {
+              if (isNestedCapable) return; // expand via the toggle button
+              onStartEdit(rowIdx, dIdx, editStartValue);
+            }}
             onClick={() => {
               if (editingCell) {
                 onSaveCurrentEdit();
@@ -210,7 +247,49 @@ export default function DataRow({ rowIdx, ctx, rowStyle }: DataRowProps) {
               handleContextMenu(e, rowIdx, dIdx);
             }}
           >
-            {isEditing ? (
+            {isNestedCapable ? (
+              (() => {
+                const isArr = Array.isArray(cell);
+                const childCount = isArr
+                  ? (cell as unknown[]).length
+                  : Object.keys(cell as Record<string, unknown>).length;
+                const open = isArr ? "[" : "{";
+                const close = isArr ? "]" : "}";
+                const middleLabel = isExpandedHere
+                  ? "✕"
+                  : isArr
+                    ? `${childCount} item${childCount === 1 ? "" : "s"}`
+                    : "...";
+                return (
+                  <span className="flex min-w-0 items-center gap-1 font-mono text-muted-foreground">
+                    <span>{open}</span>
+                    <button
+                      type="button"
+                      data-testid={`rdb-nested-toggle-${rowIdx}-${dIdx}`}
+                      aria-expanded={isExpandedHere}
+                      aria-label={`${isExpandedHere ? "Close" : "Expand"} ${col.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleNested?.(rowIdx, dIdx);
+                      }}
+                      className={cn(
+                        "inline-flex items-center justify-center rounded border border-border bg-muted px-1.5 font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+                        isExpandedHere &&
+                          "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
+                      )}
+                    >
+                      {middleLabel}
+                    </button>
+                    <span>{close}</span>
+                    {nestedPendingCount > 0 && (
+                      <span className="ml-1 text-3xs text-amber-400">
+                        ● {nestedPendingCount}
+                      </span>
+                    )}
+                  </span>
+                );
+              })()
+            ) : isEditing ? (
               (() => {
                 const errorMessage = pendingEditErrors?.get(key);
                 return (

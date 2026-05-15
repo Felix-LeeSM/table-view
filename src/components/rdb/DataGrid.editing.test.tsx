@@ -793,11 +793,13 @@ describe("DataGrid", () => {
       renderDataGrid();
       await screen.findByText("3 rows");
       // Edit a cell so the toolbar Commit button has something to commit.
+      // Sprint 343 — `meta` (index 2) is now a JSONB sentinel and no
+      // longer responds to double-click; switch to `name` (index 1).
       const tds = document.querySelectorAll(
         '[role="row"][aria-rowindex="2"] [role="gridcell"]',
       );
       act(() => {
-        fireEvent.doubleClick(tds[2]!);
+        fireEvent.doubleClick(tds[1]!);
       });
       const input = document.querySelector(
         '[role="row"][aria-rowindex="2"] input',
