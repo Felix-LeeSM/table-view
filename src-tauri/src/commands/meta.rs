@@ -18,6 +18,7 @@ use crate::commands::document::browse::DatabaseInfo;
 use crate::commands::not_connected;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
+use crate::models::ServerActivityRow;
 
 /// Paradigm-aware database list for the active connection.
 ///
@@ -144,6 +145,68 @@ pub async fn verify_active_db(
     }
 }
 
+async fn list_server_activity_inner(
+    state: &AppState,
+    connection_id: &str,
+) -> Result<Vec<ServerActivityRow>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    match active {
+        ActiveAdapter::Rdb(adapter) => adapter.list_server_activity().await,
+        ActiveAdapter::Document(adapter) => adapter.current_op().await,
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "list_server_activity not supported for Search paradigm".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "list_server_activity not supported for key-value paradigm".into(),
+        )),
+    }
+}
+
+/// Sprint 336 (U1 live wire) — paradigm-neutral server activity feed.
+/// PG → pg_stat_activity, Mongo → currentOp.
+#[tauri::command]
+pub async fn list_server_activity(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<Vec<ServerActivityRow>, AppError> {
+    list_server_activity_inner(state.inner(), &connection_id).await
+}
+
+async fn kill_server_activity_inner(
+    state: &AppState,
+    connection_id: &str,
+    id: i64,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    match active {
+        ActiveAdapter::Rdb(adapter) => adapter.kill_session(id).await,
+        ActiveAdapter::Document(adapter) => adapter.kill_op(id).await,
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "kill_server_activity not supported for Search paradigm".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "kill_server_activity not supported for key-value paradigm".into(),
+        )),
+    }
+}
+
+/// Sprint 336 (U1 live wire) — paradigm-neutral kill. PG →
+/// `pg_terminate_backend(pid)`, Mongo → `adminCommand({killOp, op: id})`.
+#[tauri::command]
+pub async fn kill_server_activity(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    id: i64,
+) -> Result<(), AppError> {
+    kill_server_activity_inner(state.inner(), &connection_id, id).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -224,6 +287,45 @@ mod tests {
             )),
             ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
                 "Key-value paradigm has no per-connection database concept".into(),
+            )),
+        }
+    }
+
+    async fn dispatch_list_server_activity(
+        connections: &ConnMap,
+        connection_id: &str,
+    ) -> Result<Vec<ServerActivityRow>, AppError> {
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        match active {
+            ActiveAdapter::Rdb(a) => a.list_server_activity().await,
+            ActiveAdapter::Document(a) => a.current_op().await,
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "list_server_activity not supported for Search paradigm".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "list_server_activity not supported for key-value paradigm".into(),
+            )),
+        }
+    }
+
+    async fn dispatch_kill_server_activity(
+        connections: &ConnMap,
+        connection_id: &str,
+        id: i64,
+    ) -> Result<(), AppError> {
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        match active {
+            ActiveAdapter::Rdb(a) => a.kill_session(id).await,
+            ActiveAdapter::Document(a) => a.kill_op(id).await,
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "kill_server_activity not supported for Search paradigm".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "kill_server_activity not supported for key-value paradigm".into(),
             )),
         }
     }
@@ -526,5 +628,139 @@ mod tests {
 
         // 두 호출 모두 lock 을 한 번씩 잡았는지 확인 — call_id 가 2.
         assert_eq!(call_id.load(Ordering::SeqCst), 2);
+    }
+
+    // ── Sprint 336 — list_server_activity / kill_server_activity ────────
+
+    #[tokio::test]
+    async fn list_server_activity_unknown_connection_returns_notfound() {
+        assert!(matches!(
+            dispatch_list_server_activity(&ConnMap::new(), "absent").await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn list_server_activity_rdb_arm_propagates_rows() {
+        let mut s = StubRdbAdapter::default();
+        // StubRdbAdapter inherits trait default `Unsupported` for
+        // list_server_activity. Override via the slot.
+        s.list_server_activity_fn = Some(Box::new(|| {
+            Ok(vec![ServerActivityRow {
+                id: 11,
+                db: Some("analytics".into()),
+                user: Some("alice".into()),
+                state: Some("active".into()),
+                query: Some("SELECT 1".into()),
+                wait_event: None,
+                started_at: None,
+            }])
+        }));
+        let connections = map_with("c", ActiveAdapter::Rdb(Box::new(s)));
+        let r = dispatch_list_server_activity(&connections, "c")
+            .await
+            .unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].id, 11);
+    }
+
+    #[tokio::test]
+    async fn list_server_activity_document_arm_propagates_rows() {
+        let mut s = StubDocumentAdapter::default();
+        s.current_op_fn = Some(Box::new(|| {
+            Ok(vec![ServerActivityRow {
+                id: 99,
+                db: Some("app".into()),
+                user: None,
+                state: Some("query".into()),
+                query: None,
+                wait_event: None,
+                started_at: Some("3s ago".into()),
+            }])
+        }));
+        let connections = map_with("c", ActiveAdapter::Document(Box::new(s)));
+        let r = dispatch_list_server_activity(&connections, "c")
+            .await
+            .unwrap();
+        assert_eq!(r[0].id, 99);
+    }
+
+    #[tokio::test]
+    async fn list_server_activity_search_arm_returns_unsupported() {
+        let connections = map_with("c", search_default());
+        assert!(matches!(
+            dispatch_list_server_activity(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    // 작성 이유 (2026-05-15): Sprint 336 dispatch 매트릭스의 마지막 빈
+    // arm — Kv paradigm 도 동일한 Unsupported 분기를 실행하는지 단언.
+    #[tokio::test]
+    async fn list_server_activity_kv_arm_returns_unsupported() {
+        let connections = map_with("c", kv_default());
+        assert!(matches!(
+            dispatch_list_server_activity(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn kill_server_activity_unknown_connection_returns_notfound() {
+        assert!(matches!(
+            dispatch_kill_server_activity(&ConnMap::new(), "absent", 1).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn kill_server_activity_rdb_arm_dispatches_with_id() {
+        use std::sync::atomic::{AtomicI64, Ordering};
+        use std::sync::Arc;
+        let captured = Arc::new(AtomicI64::new(0));
+        let captured_for_closure = captured.clone();
+        let mut s = StubRdbAdapter::default();
+        s.kill_session_fn = Some(Box::new(move |id| {
+            captured_for_closure.store(*id, Ordering::SeqCst);
+            Ok(())
+        }));
+        let connections = map_with("c", ActiveAdapter::Rdb(Box::new(s)));
+        dispatch_kill_server_activity(&connections, "c", 42)
+            .await
+            .unwrap();
+        assert_eq!(captured.load(Ordering::SeqCst), 42);
+    }
+
+    #[tokio::test]
+    async fn kill_server_activity_document_arm_dispatches() {
+        let mut s = StubDocumentAdapter::default();
+        s.kill_op_fn = Some(Box::new(|id| {
+            assert_eq!(id, 7);
+            Ok(())
+        }));
+        let connections = map_with("c", ActiveAdapter::Document(Box::new(s)));
+        dispatch_kill_server_activity(&connections, "c", 7)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn kill_server_activity_kv_arm_returns_unsupported() {
+        let connections = map_with("c", kv_default());
+        assert!(matches!(
+            dispatch_kill_server_activity(&connections, "c", 1).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    // 작성 이유 (2026-05-15): Sprint 336 dispatch 매트릭스의 마지막 빈
+    // arm — Search paradigm 도 Unsupported 분기를 실행.
+    #[tokio::test]
+    async fn kill_server_activity_search_arm_returns_unsupported() {
+        let connections = map_with("c", search_default());
+        assert!(matches!(
+            dispatch_kill_server_activity(&connections, "c", 1).await,
+            Err(AppError::Unsupported(_))
+        ));
     }
 }

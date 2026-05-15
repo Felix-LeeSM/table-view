@@ -463,6 +463,25 @@ impl RdbAdapter for PostgresAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
         Box::pin(async move { self.drop_database(name).await })
     }
+
+    fn list_server_activity<'a>(
+        &'a self,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Vec<crate::models::ServerActivityRow>, AppError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move { self.list_server_activity().await })
+    }
+
+    fn kill_session<'a>(
+        &'a self,
+        id: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.kill_session(id).await })
+    }
 }
 
 #[cfg(test)]

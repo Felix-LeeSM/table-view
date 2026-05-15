@@ -261,6 +261,14 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         fn drop_database<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
             Box::pin(async { Ok(()) })
         }
+        fn current_op<'a>(
+            &'a self,
+        ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+        fn kill_op<'a>(&'a self, _id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -841,6 +849,14 @@ impl DocumentAdapter for FakeCancellableDocument {
         Box::pin(async { Ok(()) })
     }
     fn drop_database<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn current_op<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+    fn kill_op<'a>(&'a self, _id: i64) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async { Ok(()) })
     }
 }
@@ -1543,4 +1559,217 @@ async fn test_document_default_current_database_returns_none() {
     let adapter = FakeCancellableDocument;
     let res = adapter.current_database().await.unwrap();
     assert_eq!(res, None);
+}
+
+// ── Sprint 335/336 — RdbAdapter default impl coverage ───────────────
+//
+// 작성 이유 (2026-05-15): `db/traits.rs` 의 새 default body (Sprint 335
+// `create_database` / `drop_database`; Sprint 336 `list_server_activity`
+// / `kill_session`) 는 PG 만 override 하고 FastFakeRdb 는 default 분기
+// 그대로 inherit. 그 default 가 `AppError::Unsupported` 를 반환하는지
+// 단언한다 (regions/functions coverage 보강).
+
+#[tokio::test]
+async fn test_rdb_default_create_database_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.create_database("any").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("database creation"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_drop_database_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.drop_database("any").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("database drop"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_list_server_activity_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.list_server_activity().await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("server activity"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_kill_session_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.kill_session(42).await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("kill session"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+// 작성 이유 (2026-05-15, Sprint 336 coverage backfill): traits.rs 의
+// pre-Sprint-336 default body 들도 FastFakeRdb 가 override 하지 않아
+// region 0% 인 채로 남아 있었다. 동일한 Unsupported / empty Vec 단언
+// 패턴으로 추가 cover.
+
+#[tokio::test]
+async fn test_rdb_default_count_null_rows_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.count_null_rows("public", "t", "col").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("NULL row counting"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_list_triggers_returns_empty_vec() {
+    let adapter = FastFakeRdb;
+    let triggers: Vec<crate::models::TriggerInfo> =
+        adapter.list_triggers("public", "t").await.unwrap();
+    assert!(triggers.is_empty());
+}
+
+#[tokio::test]
+async fn test_rdb_default_create_trigger_returns_unsupported() {
+    use crate::models::CreateTriggerRequest;
+    let adapter = FastFakeRdb;
+    let req = CreateTriggerRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: "t".into(),
+        trigger_name: "trg".into(),
+        timing: "BEFORE".into(),
+        events: vec!["INSERT".into()],
+        orientation: "ROW".into(),
+        when_expression: None,
+        function_schema: "public".into(),
+        function_name: "f".into(),
+        function_arguments: None,
+        preview_only: true,
+        expected_database: None,
+    };
+    match adapter.create_trigger(&req).await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("trigger creation"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_drop_trigger_returns_unsupported() {
+    use crate::models::DropTriggerRequest;
+    let adapter = FastFakeRdb;
+    let req = DropTriggerRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        table: "t".into(),
+        trigger_name: "trg".into(),
+        cascade: false,
+        preview_only: true,
+        expected_database: None,
+    };
+    match adapter.drop_trigger(&req).await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("trigger drop"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+#[tokio::test]
+async fn test_rdb_default_get_trigger_source_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.get_trigger_source("public", "t", "trg").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("trigger source"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+// 작성 이유 (2026-05-15, Sprint 336 coverage backfill): traits.rs 의
+// `create_table_plan` default body 는 sub-chain (create_table →
+// create_index* → add_constraint*) 을 합성하는 가장 큰 default block
+// 인데 PG 만 override 하고 FastFakeRdb 는 default 분기를 그대로 inherit.
+// FastFakeRdb 의 child trait 들은 다 Ok 를 반환하므로 빈 plan + 1 index
+// + 1 constraint 3-pillar 단언으로 default body 의 region 을 cover 한다.
+
+#[tokio::test]
+async fn test_rdb_default_create_table_plan_empty_plan_returns_parent_sql_only() {
+    use crate::models::CreateTablePlanRequest;
+    let adapter = FastFakeRdb;
+    let req = CreateTablePlanRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: "t".into(),
+        columns: Vec::new(),
+        primary_key: None,
+        table_comment: None,
+        indexes: Vec::new(),
+        constraints: Vec::new(),
+        preview_only: true,
+        expected_database: None,
+    };
+    let res = adapter.create_table_plan(&req).await.unwrap();
+    // FastFakeRdb.create_table returns SchemaChangeResult { sql: "" };
+    // empty children → joined sql is just the parent's empty string.
+    assert_eq!(res.sql, "");
+}
+
+#[tokio::test]
+async fn test_rdb_default_create_table_plan_with_one_index_chains_create_index() {
+    use crate::models::{CreateTablePlanIndex, CreateTablePlanRequest};
+    let adapter = FastFakeRdb;
+    let req = CreateTablePlanRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: "t".into(),
+        columns: Vec::new(),
+        primary_key: None,
+        table_comment: None,
+        indexes: vec![CreateTablePlanIndex {
+            index_name: "idx".into(),
+            columns: vec!["a".into()],
+            index_type: "btree".into(),
+            is_unique: false,
+        }],
+        constraints: Vec::new(),
+        preview_only: true,
+        expected_database: None,
+    };
+    // FastFakeRdb.create_index 도 Ok 라서 chain 통과. join 결과는 ";\n".
+    assert!(adapter.create_table_plan(&req).await.is_ok());
+}
+
+#[tokio::test]
+async fn test_rdb_default_create_table_plan_with_one_constraint_chains_add_constraint() {
+    use crate::models::{ConstraintDefinition, CreateTablePlanConstraint, CreateTablePlanRequest};
+    let adapter = FastFakeRdb;
+    let req = CreateTablePlanRequest {
+        connection_id: "c".into(),
+        schema: "public".into(),
+        name: "t".into(),
+        columns: Vec::new(),
+        primary_key: None,
+        table_comment: None,
+        indexes: Vec::new(),
+        constraints: vec![CreateTablePlanConstraint {
+            constraint_name: "pk".into(),
+            definition: ConstraintDefinition::PrimaryKey {
+                columns: vec!["id".into()],
+            },
+        }],
+        preview_only: true,
+        expected_database: None,
+    };
+    assert!(adapter.create_table_plan(&req).await.is_ok());
 }

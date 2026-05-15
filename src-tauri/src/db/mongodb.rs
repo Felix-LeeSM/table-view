@@ -378,4 +378,14 @@ impl DocumentAdapter for MongoAdapter {
     fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.drop_database_impl(name).await })
     }
+
+    fn current_op<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        Box::pin(async move { self.current_op_impl().await })
+    }
+
+    fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.kill_op_impl(id).await })
+    }
 }

@@ -45,6 +45,25 @@ pub struct QueryColumn {
     pub category: ColumnCategory,
 }
 
+/// Sprint 336 — U1 wire shape. PG `pg_stat_activity` row / Mongo
+/// `currentOp` op are flattened into the same struct so the activity
+/// grid renders both paradigms with the same component. Optional
+/// fields cover paradigm differences (PG has `wait_event`, Mongo has
+/// `secs_running` etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerActivityRow {
+    /// PG `pid` or Mongo `opid`. Wire shape uses i64 so very long-running
+    /// Mongo ops fit even when the driver hands back a 64-bit integer.
+    pub id: i64,
+    pub db: Option<String>,
+    pub user: Option<String>,
+    pub state: Option<String>,
+    pub query: Option<String>,
+    pub wait_event: Option<String>,
+    pub started_at: Option<String>,
+}
+
 /// Result of an arbitrary SQL query execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {

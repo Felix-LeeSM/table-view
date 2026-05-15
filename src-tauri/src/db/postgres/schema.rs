@@ -1118,6 +1118,68 @@ impl PostgresAdapter {
         Ok(())
     }
 
+    /// Sprint 336 (U1 live wire) — `pg_stat_activity` snapshot. Excludes
+    /// the current backend so the user does not see their own session
+    /// in the activity grid. `state`, `wait_event`, `query` are nullable
+    /// in PG → surfaced as `Option<String>` verbatim. `query_start` is
+    /// converted to ISO-8601 text on the server (`to_char`) so we do not
+    /// take a direct `chrono` dependency.
+    #[allow(clippy::type_complexity)]
+    pub async fn list_server_activity(
+        &self,
+    ) -> Result<Vec<crate::models::ServerActivityRow>, AppError> {
+        type Row = (
+            Option<i32>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        );
+        let pool = self.active_pool().await?;
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT pid, datname, usename, state, wait_event, query, \
+                    to_char(query_start AT TIME ZONE 'UTC', \
+                            'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS query_start_text \
+             FROM pg_stat_activity \
+             WHERE pid IS DISTINCT FROM pg_backend_pid() \
+             ORDER BY query_start DESC NULLS LAST",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("pg_stat_activity failed: {e}")))?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(pid, db, user, state, wait_event, query, started_at)| {
+                crate::models::ServerActivityRow {
+                    id: pid.unwrap_or(0) as i64,
+                    db,
+                    user,
+                    state,
+                    query,
+                    wait_event,
+                    started_at,
+                }
+            })
+            .collect())
+    }
+
+    /// Sprint 336 (U1 live wire) — `pg_terminate_backend(pid)`. Returns
+    /// `Ok(())` unconditionally on driver success — PG returns a boolean
+    /// indicating whether the backend was alive, but per the spec
+    /// "missing PID" is a successful no-op rather than an error.
+    pub async fn kill_session(&self, id: i64) -> Result<(), AppError> {
+        let pool = self.active_pool().await?;
+        sqlx::query("SELECT pg_terminate_backend($1)")
+            .bind(id as i32)
+            .execute(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("pg_terminate_backend failed: {e}")))?;
+        Ok(())
+    }
+
     /// Sprint 335 (Slice M live wire) — `DROP DATABASE "<name>"`.
     ///
     /// Same auto-commit assumption as `create_database`. PG further
@@ -1299,6 +1361,28 @@ mod tests {
     async fn drop_database_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         match adapter.drop_database("analytics").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_server_activity_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.list_server_activity().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn kill_session_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.kill_session(123).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("Not connected"), "unexpected: {msg}");
             }

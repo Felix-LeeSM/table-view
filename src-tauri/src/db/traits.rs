@@ -568,6 +568,29 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Sprint 336 — list every backend session/operation visible to the
+    /// active user. PG override queries `pg_stat_activity`; non-PG RDB
+    /// adapters return `Unsupported` until their dialect ships.
+    fn list_server_activity<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support server activity introspection".into(),
+            ))
+        })
+    }
+
+    /// Sprint 336 — terminate a backend session by id. PG override uses
+    /// `pg_terminate_backend`; non-PG adapters return `Unsupported`.
+    fn kill_session<'a>(&'a self, _id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support kill session".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
@@ -849,6 +872,16 @@ pub trait DocumentAdapter: DbAdapter {
     /// method is needed — the UX layer surfaces an informational copy
     /// instead.
     fn drop_database<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 336 — list running operations
+    /// (`adminCommand({currentOp: 1, "$all": true})`).
+    fn current_op<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>>;
+
+    /// Sprint 336 — terminate a running operation by id
+    /// (`adminCommand({killOp: 1, op: id})`).
+    fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

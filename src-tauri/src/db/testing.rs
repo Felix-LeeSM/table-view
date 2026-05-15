@@ -126,6 +126,10 @@ pub(crate) struct StubRdbAdapter {
     /// to assert the trait body is not reached when DbMismatch fires.
     pub count_null_rows_fn:
         Option<Box<dyn Fn(&str, &str, &str) -> Result<i64, AppError> + Send + Sync>>,
+
+    // Sprint 336 — override slots for the RDB server-activity pair.
+    pub list_server_activity_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
+    pub kill_session_fn: Option<FnOne<i64, ()>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -170,6 +174,8 @@ impl Default for StubRdbAdapter {
             create_trigger_fn: None,
             drop_trigger_fn: None,
             count_null_rows_fn: None,
+            list_server_activity_fn: None,
+            kill_session_fn: None,
         }
     }
 }
@@ -566,6 +572,25 @@ impl RdbAdapter for StubRdbAdapter {
             .map_or(Ok(0), |f| f(ns, table, column));
         Box::pin(async move { r })
     }
+
+    // Sprint 336 — list_server_activity / kill_session stubs.
+    fn list_server_activity<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        let r = self
+            .list_server_activity_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f());
+        Box::pin(async move { r })
+    }
+
+    fn kill_session<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self
+            .kill_session_fn
+            .as_ref()
+            .map_or_else(|| Ok(()), |f| f(&id));
+        Box::pin(async move { r })
+    }
 }
 
 // ── StubDocumentAdapter ──────────────────────────────────────────────────
@@ -622,6 +647,10 @@ pub(crate) struct StubDocumentAdapter {
 
     // Sprint 335 — override slot for drop_database (document side).
     pub drop_database_fn: Option<FnOne<str, ()>>,
+
+    // Sprint 336 — override slots for the Mongo activity pair.
+    pub current_op_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
+    pub kill_op_fn: Option<Box<dyn Fn(i64) -> Result<(), AppError> + Send + Sync>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -649,6 +678,8 @@ impl Default for StubDocumentAdapter {
             create_collection_fn: None,
             rename_collection_fn: None,
             drop_database_fn: None,
+            current_op_fn: None,
+            kill_op_fn: None,
         }
     }
 }
@@ -951,6 +982,22 @@ impl DocumentAdapter for StubDocumentAdapter {
             .drop_database_fn
             .as_ref()
             .map_or_else(|| Ok(()), |f| f(name));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 336 — currentOp / killOp stubs.
+    fn current_op<'a>(
+        &'a self,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::ServerActivityRow>, AppError>> {
+        let r = self
+            .current_op_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f());
+        Box::pin(async move { r })
+    }
+
+    fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self.kill_op_fn.as_ref().map_or_else(|| Ok(()), |f| f(id));
         Box::pin(async move { r })
     }
 }

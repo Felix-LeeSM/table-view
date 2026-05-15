@@ -278,6 +278,85 @@ impl MongoAdapter {
         Ok(())
     }
 
+    /// Sprint 336 (U1 live wire) — `adminCommand({currentOp: 1, "$all":
+    /// true})`. Maps each op into the same `ServerActivityRow` shape the
+    /// PG `pg_stat_activity` query produces. Mongo "opid" is the kill
+    /// id used by `killOp`.
+    pub(super) async fn current_op_impl(
+        &self,
+    ) -> Result<Vec<crate::models::ServerActivityRow>, AppError> {
+        let client = self.current_client().await?;
+        let resp = client
+            .database("admin")
+            .run_command(doc! { "currentOp": 1, "$all": true })
+            .await
+            .map_err(|e| AppError::Database(format!("currentOp failed: {e}")))?;
+
+        let inprog = resp
+            .get_array("inprog")
+            .map_err(|e| AppError::Database(format!("currentOp inprog missing: {e}")))?;
+
+        let mut out: Vec<crate::models::ServerActivityRow> = Vec::with_capacity(inprog.len());
+        for entry in inprog {
+            let Some(op) = entry.as_document() else {
+                continue;
+            };
+            let id = op
+                .get_i64("opid")
+                .or_else(|_| op.get_i32("opid").map(|v| v as i64))
+                .unwrap_or(0);
+            let ns = op.get_str("ns").ok().map(|s| s.to_string());
+            let user = op
+                .get_document("client_metadata")
+                .ok()
+                .and_then(|m| m.get_str("user").ok())
+                .map(|s| s.to_string())
+                .or_else(|| op.get_str("effectiveUsers").ok().map(|s| s.to_string()));
+            let state = op.get_str("op").ok().map(|s| s.to_string());
+            let query = op
+                .get_document("command")
+                .ok()
+                .map(|d| format!("{:?}", d))
+                .or_else(|| op.get_str("desc").ok().map(|s| s.to_string()));
+            let wait_event = op
+                .get_str("waitingForLock")
+                .ok()
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    op.get_bool("waitingForLock")
+                        .ok()
+                        .map(|b| if b { "lock" } else { "" }.to_string())
+                });
+            let started_at = op
+                .get_i32("secs_running")
+                .ok()
+                .map(|n| format!("{n}s ago"))
+                .or_else(|| op.get_i64("secs_running").ok().map(|n| format!("{n}s ago")));
+
+            out.push(crate::models::ServerActivityRow {
+                id,
+                db: ns,
+                user,
+                state,
+                query,
+                wait_event,
+                started_at,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Sprint 336 (U1 live wire) — `adminCommand({killOp: 1, op: id})`.
+    pub(super) async fn kill_op_impl(&self, id: i64) -> Result<(), AppError> {
+        let client = self.current_client().await?;
+        client
+            .database("admin")
+            .run_command(doc! { "killOp": 1, "op": id })
+            .await
+            .map_err(|e| AppError::Database(format!("killOp failed: {e}")))?;
+        Ok(())
+    }
+
     /// Sprint 335 (Slice M live wire) — `db.dropDatabase()`. The Mongo
     /// driver's `Database::drop()` is idempotent: dropping a non-existent
     /// database succeeds.
@@ -811,6 +890,28 @@ mod tests {
     async fn drop_database_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match DocumentAdapter::drop_database(&adapter, "db").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn current_op_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.current_op().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn kill_op_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.kill_op(99).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected: {msg}");
             }
