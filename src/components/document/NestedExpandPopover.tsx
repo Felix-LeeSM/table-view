@@ -10,6 +10,8 @@ import {
   getNestedExpansion,
   type NestedEntry,
 } from "@lib/document/nestedExpansion";
+import { detectBsonType } from "@lib/mongo/bsonTypes";
+import BsonTypeEditor from "@components/document/BsonTypeEditor";
 
 /**
  * Sprint 321 — Slice F.1: sentinel cell 의 1-depth 내용을 popover 로
@@ -38,13 +40,21 @@ interface NestedExpandPopoverProps {
    * 깊은 entry → `"key.subkey"`). value 는 사용자가 입력한 문자열을
    * 1차 raw 로 전달 — 캐스팅은 호출자 책임 (Slice G BSON editor 가
    * 별도 처리).
+   *
+   * Sprint 324 — Slice G.2: BSON wrapper (`{ $oid: ... }` etc.) entry 의
+   * 경우 value 는 raw string 이 아니라 canonical EJSON object 가 전달
+   * 된다. caller 는 둘을 동일하게 pendingEdits 에 보관 — mqlGenerator 가
+   * mongosh literal (`ObjectId("...")`) 로 풀어 표시.
    */
-  onCommitEdit?: (path: string, value: string) => void;
+  onCommitEdit?: (
+    path: string,
+    value: string | Record<string, unknown>,
+  ) => void;
   /**
    * 현재 path 의 pending value (있다면). 표시 시 시각 cue 와 input
    * 의 초기값으로 사용.
    */
-  pendingByPath?: ReadonlyMap<string, string>;
+  pendingByPath?: ReadonlyMap<string, string | Record<string, unknown>>;
 }
 
 function renderScalar(value: unknown): string {
@@ -111,12 +121,38 @@ export default function NestedExpandPopover({
     setEditingPath(null);
     setDraft("");
   };
-  const commitEdit = () => {
+  const commitEdit = (override?: string | Record<string, unknown>) => {
     if (editingPath !== null) {
-      onCommitEdit?.(editingPath, draft);
+      onCommitEdit?.(editingPath, override !== undefined ? override : draft);
     }
     setEditingPath(null);
     setDraft("");
+  };
+
+  // Sprint 324 — Slice G.2: per-entry pending display 가 string 또는
+  // EJSON wrapper 둘 다 수용. wrapper 는 사용자 친화 표기 (ObjectId 의
+  // hex / Date 의 ISO / NumberDecimal 의 string / BinData 의 base64) 로
+  // surface.
+  const pendingDisplayText = (
+    pending: string | Record<string, unknown>,
+  ): string => {
+    if (typeof pending === "string") return pending;
+    const type = detectBsonType(pending);
+    if (type === "objectId") return `ObjectId("${pending["$oid"] as string}")`;
+    if (type === "date") {
+      const d = pending["$date"];
+      return typeof d === "string"
+        ? `ISODate("${d}")`
+        : safeStringifyCell(pending);
+    }
+    if (type === "decimal128") {
+      return `NumberDecimal("${pending["$numberDecimal"] as string}")`;
+    }
+    if (type === "binData") {
+      const b = pending["$binary"] as Record<string, unknown>;
+      return `BinData("${b["base64"] as string}")`;
+    }
+    return safeStringifyCell(pending);
   };
 
   const containerLabel =
@@ -166,6 +202,14 @@ export default function NestedExpandPopover({
                 const hasPending = pendingValue !== undefined;
                 const isEditing = editingPath === path;
                 const canEdit = !entry.isNested && onCommitEdit !== undefined;
+                // Sprint 324 — Slice G.2: BSON wrapper 인지 (raw value OR
+                // pending value 가 wrapper) 판단. 둘 중 하나라도 wrapper
+                // 면 BsonTypeEditor 사용.
+                const bsonType =
+                  detectBsonType(entry.value) ??
+                  (typeof pendingValue === "object" && pendingValue !== null
+                    ? detectBsonType(pendingValue)
+                    : null);
                 return (
                   <li
                     key={`${entry.kind}:${path}`}
@@ -179,7 +223,20 @@ export default function NestedExpandPopover({
                       className="flex-1 truncate"
                       title={entryValueText(entry)}
                     >
-                      {isEditing ? (
+                      {isEditing && bsonType !== null ? (
+                        <BsonTypeEditor
+                          type={bsonType}
+                          initialValue={
+                            typeof pendingValue === "object" &&
+                            pendingValue !== null
+                              ? pendingValue
+                              : entry.value
+                          }
+                          ariaLabel={`Editing ${fieldName}.${path}`}
+                          onCommit={(wrapped) => commitEdit(wrapped)}
+                          onCancel={cancelEdit}
+                        />
+                      ) : isEditing ? (
                         <input
                           type="text"
                           autoFocus
@@ -210,7 +267,7 @@ export default function NestedExpandPopover({
                           className="block truncate rounded bg-highlight/20 px-1"
                           data-testid="nested-pending"
                         >
-                          {pendingValue}
+                          {pendingDisplayText(pendingValue)}
                         </span>
                       ) : entry.value === null ? (
                         <span className="italic text-muted-foreground">
@@ -230,10 +287,17 @@ export default function NestedExpandPopover({
                         className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (bsonType !== null) {
+                            // BsonTypeEditor manages its own draft state;
+                            // we only need to switch to "editing" mode.
+                            setEditingPath(path);
+                            setDraft("");
+                            return;
+                          }
                           startEdit(
                             path,
-                            hasPending
-                              ? pendingValue!
+                            hasPending && typeof pendingValue === "string"
+                              ? pendingValue
                               : entry.value === null
                                 ? ""
                                 : String(entry.value),

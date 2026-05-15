@@ -30,6 +30,7 @@ import {
 } from "@/types/documentMutate";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
+import { detectBsonType } from "@lib/mongo/bsonTypes";
 
 /** Column shape the generator needs — structurally compatible with the
  *  `ColumnInfo` used by the RDB path, but intentionally narrower so callers
@@ -113,10 +114,66 @@ function formatMqlValue(value: unknown): string {
   if (typeof value === "bigint") {
     return value.toString();
   }
+  // Sprint 324 — Slice G.2: canonical EJSON wrapper 는 mongosh literal
+  // 표기 (ObjectId / ISODate / NumberDecimal / BinData) 로 풀어 보여
+  // 사용자가 preview 에서 type 을 즉시 인지하도록 한다. multi-key /
+  // 미지원 wrapper 는 plain JSON fallback.
+  const bsonLiteral = tryFormatBsonLiteral(value);
+  if (bsonLiteral !== null) return bsonLiteral;
   // Objects/arrays — safeStringifyCell so nested BigInt (Mongo Int64 / NumberLong)
   // 가 들어와도 preview 가 throw 하지 않는다 (Sprint 306). commit payload
   // 는 별도 path 라 preview 텍스트의 BigInt-as-string 직렬화는 안전.
   return safeStringifyCell(value);
+}
+
+/** canonical EJSON 4 wrapper → mongosh literal. 미인식 시 null
+ *  (호출자가 fallback). */
+function tryFormatBsonLiteral(value: unknown): string | null {
+  const type = detectBsonType(value);
+  if (type === null) return null;
+  const obj = value as Record<string, unknown>;
+  switch (type) {
+    case "objectId": {
+      const oid = obj["$oid"];
+      if (typeof oid !== "string") return null;
+      return `ObjectId("${oid}")`;
+    }
+    case "date": {
+      const d = obj["$date"];
+      if (typeof d === "string") return `ISODate("${d}")`;
+      // canonical EJSON v2 numberLong shape — preserve roundtrip readability.
+      if (
+        typeof d === "object" &&
+        d !== null &&
+        "$numberLong" in (d as Record<string, unknown>)
+      ) {
+        const ms = (d as Record<string, unknown>)["$numberLong"];
+        if (typeof ms === "string") {
+          const iso = new Date(Number.parseInt(ms, 10)).toISOString();
+          return `ISODate("${iso}")`;
+        }
+      }
+      return null;
+    }
+    case "decimal128": {
+      const n = obj["$numberDecimal"];
+      if (typeof n !== "string") return null;
+      return `NumberDecimal("${n}")`;
+    }
+    case "binData": {
+      const b = obj["$binary"];
+      if (typeof b !== "object" || b === null) return null;
+      const inner = b as Record<string, unknown>;
+      const base64 = inner["base64"];
+      const subType = inner["subType"];
+      if (typeof base64 !== "string" || typeof subType !== "string") {
+        return null;
+      }
+      const subInt = Number.parseInt(subType, 16);
+      if (!Number.isInteger(subInt)) return null;
+      return `BinData(${subInt}, "${base64}")`;
+    }
+  }
 }
 
 /** Render a flat object as ` { key: <val>, … }` for the preview string.
@@ -232,6 +289,27 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
     }
   });
 
+  // Sprint 324 — Slice G.2: pendingEdits Map type 은 string|null 이므로
+  // BSON wrapper 는 caller (DocumentDataGrid) 가 `__bson__:` prefix 의
+  // 직렬화 string 으로 보관. 여기서 prefix detect 시 parse 해서 wrapper
+  // 객체로 복원 → mongosh literal (`ObjectId("...")`) 로 출력된다.
+  editsByRow.forEach((cells) => {
+    for (const cell of cells) {
+      if (
+        typeof cell.value === "string" &&
+        cell.value.startsWith("__bson__:")
+      ) {
+        try {
+          const parsed = JSON.parse(cell.value.slice("__bson__:".length));
+          if (typeof parsed === "object" && parsed !== null) {
+            cell.value = parsed;
+          }
+        } catch {
+          // leave as-is; downstream renders the raw tag string.
+        }
+      }
+    }
+  });
   editsByRow.forEach((cells, rowIdx) => {
     const row = rows[rowIdx];
     if (!row) {

@@ -367,3 +367,89 @@ describe("generateMqlPreview — edge cases", () => {
     expect(previewLines[0]).toContain('{ name: "Say \\"Hi\\"" }');
   });
 });
+
+// Sprint 324 (2026-05-15) — Slice G.2: canonical EJSON BSON wrapper 가
+// mongosh literal 로 출력되는 경로의 회귀 가드. G.1 helper 가 wrapper
+// shape 을 만들고, mqlGenerator 는 그 shape 을 사용자에게 친숙한 mongosh
+// 표기 (ObjectId("..."), ISODate("...") 등) 로 표시한다.
+describe("generateMqlPreview — BSON literal (Sprint 324 G.2)", () => {
+  it('formats $oid wrapper as ObjectId("...") in the preview', () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-1", { $oid: "65abcdef0123456789abcdef" }],
+        ]),
+      }),
+    );
+    expect(previewLines[0]).toContain(
+      '{ name: ObjectId("65abcdef0123456789abcdef") }',
+    );
+  });
+
+  it('formats $date wrapper as ISODate("...")', () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-1", { $date: "2026-05-15T12:00:00.000Z" }],
+        ]),
+      }),
+    );
+    expect(previewLines[0]).toContain(
+      '{ name: ISODate("2026-05-15T12:00:00.000Z") }',
+    );
+  });
+
+  it('formats $numberDecimal wrapper as NumberDecimal("...")', () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-2", { $numberDecimal: "1234.5678" }],
+        ]),
+      }),
+    );
+    expect(previewLines[0]).toContain('{ age: NumberDecimal("1234.5678") }');
+  });
+
+  it('formats $binary wrapper as BinData(<subType-int>, "<base64>")', () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-1", { $binary: { base64: "QUJDRA==", subType: "00" } }],
+        ]),
+      }),
+    );
+    expect(previewLines[0]).toContain('{ name: BinData(0, "QUJDRA==") }');
+  });
+
+  it("renders nested-dot edit + BSON wrapper together in a single $set", () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-1:meta.id", { $oid: "65abcdef0123456789abcdef" }],
+          ["0-1", "Ada"],
+        ]),
+      }),
+    );
+    // The dot-path BSON literal is quoted as "name.meta.id" and renders
+    // ObjectId(...); the bare top-level edit renders as plain string.
+    // (Insertion order of pendingEdits drives the patch ordering.)
+    expect(previewLines[0]).toContain(
+      '"name.meta.id": ObjectId("65abcdef0123456789abcdef")',
+    );
+    expect(previewLines[0]).toContain('name: "Ada"');
+  });
+
+  it("leaves multi-key objects (not canonical BSON) as plain JSON", () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        pendingEdits: new Map<string, unknown>([
+          ["0-1", { $oid: "abc", extra: 1 }],
+        ]),
+      }),
+    );
+    // No mongosh literal for the patch value — falls back to
+    // safeStringifyCell. The `_id` filter still renders as ObjectId(...).
+    expect(previewLines[0]).toContain('"$oid":"abc"');
+    expect(previewLines[0]).toContain('"extra":1');
+  });
+});

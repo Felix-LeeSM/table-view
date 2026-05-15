@@ -149,4 +149,61 @@ describe("NestedExpandPopover (Sprint 321 F.1)", () => {
     const pending = screen.getByTestId("nested-pending");
     expect(pending).toHaveTextContent("admin");
   });
+
+  // Sprint 324 (2026-05-15) — Slice G.2: BSON wrapper entry 의 Pencil
+  // 클릭은 BsonTypeEditor (type-aware input) 마운트.
+  it("Pencil on a $oid entry mounts the BsonTypeEditor (24-hex hint)", () => {
+    render(
+      <NestedExpandPopover
+        value={{ ownerId: { $oid: "65abcdef0123456789abcdef" } }}
+        fieldName="meta"
+        onCommitEdit={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit meta.ownerId" }));
+    expect(screen.getByLabelText("Editing meta.ownerId")).toHaveValue(
+      "65abcdef0123456789abcdef",
+    );
+    expect(screen.getByTestId("bson-editor-hint")).toHaveTextContent(/24-hex/i);
+  });
+
+  it("BsonTypeEditor commit emits the canonical EJSON wrapper as the new value", () => {
+    const onCommitEdit = vi.fn();
+    render(
+      <NestedExpandPopover
+        value={{ ownerId: { $oid: "65abcdef0123456789abcdef" } }}
+        fieldName="meta"
+        onCommitEdit={onCommitEdit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit meta.ownerId" }));
+    const input = screen.getByLabelText("Editing meta.ownerId");
+    fireEvent.change(input, {
+      target: { value: "1111111111111111aaaaaaaa" },
+    });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommitEdit).toHaveBeenCalledWith("ownerId", {
+      $oid: "1111111111111111aaaaaaaa",
+    });
+  });
+
+  it("BsonTypeEditor invalid input blocks commit and surfaces the hint", () => {
+    const onCommitEdit = vi.fn();
+    render(
+      <NestedExpandPopover
+        value={{ ownerId: { $oid: "65abcdef0123456789abcdef" } }}
+        fieldName="meta"
+        onCommitEdit={onCommitEdit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit meta.ownerId" }));
+    const input = screen.getByLabelText("Editing meta.ownerId");
+    fireEvent.change(input, { target: { value: "too-short" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommitEdit).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/24-hex/i);
+  });
 });

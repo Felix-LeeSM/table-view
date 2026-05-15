@@ -61,14 +61,41 @@ function buildNestedPendingByPath(
   pendingEdits: ReadonlyMap<string, string | null>,
   rowIdx: number,
   colIdx: number,
-): Map<string, string> {
+): Map<string, string | Record<string, unknown>> {
   const prefix = `${rowIdx}-${colIdx}:`;
-  const out = new Map<string, string>();
+  const out = new Map<string, string | Record<string, unknown>>();
   pendingEdits.forEach((value, key) => {
     if (!key.startsWith(prefix)) return;
-    out.set(key.slice(prefix.length), value ?? "");
+    const path = key.slice(prefix.length);
+    if (typeof value === "string" && value.startsWith(BSON_TAG)) {
+      try {
+        const parsed = JSON.parse(value.slice(BSON_TAG.length)) as unknown;
+        if (typeof parsed === "object" && parsed !== null) {
+          out.set(path, parsed as Record<string, unknown>);
+          return;
+        }
+      } catch {
+        // fall through to string fallback
+      }
+    }
+    out.set(path, value ?? "");
   });
   return out;
+}
+
+/**
+ * Sprint 324 — Slice G.2: pendingEdits Map type 은 `string | null` 만
+ * 허용하므로 BSON wrapper 객체를 보관하려면 prefix-tagged string 으로
+ * 직렬화한다. mqlGenerator 가 같은 prefix 를 인지하고 wrapper 로 복원.
+ *
+ * Format: `__bson__:<canonical EJSON JSON.stringify(wrapper)>`.
+ */
+const BSON_TAG = "__bson__:";
+
+function tagBsonWrapper(wrapper: Record<string, unknown>): string {
+  // safeStringifyCell 로 BigInt / Decimal 대응 — wrapper 안에 들어올 수
+  // 있는 Mongo Int64 / Decimal128 이 raw JSON.stringify 로는 throw 함.
+  return `${BSON_TAG}${safeStringifyCell(wrapper)}`;
 }
 
 /**
@@ -821,7 +848,14 @@ export default function DocumentDataGrid({
                               )}
                               onCommitEdit={(path, value) => {
                                 const next = new Map(editState.pendingEdits);
-                                next.set(`${rowIdx}-${colIdx}:${path}`, value);
+                                const serialized =
+                                  typeof value === "string"
+                                    ? value
+                                    : tagBsonWrapper(value);
+                                next.set(
+                                  `${rowIdx}-${colIdx}:${path}`,
+                                  serialized,
+                                );
                                 editState.setPendingEdits(next);
                               }}
                             />
