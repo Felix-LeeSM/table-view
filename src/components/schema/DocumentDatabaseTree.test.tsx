@@ -707,4 +707,40 @@ describe("DocumentDatabaseTree", () => {
     expect(yTab?.isPreview).toBe(true);
     expect(yTab?.collection).toBe("y_collection");
   });
+
+  // Sprint 330 (Slice DB-Scope.3) — sidebar 우클릭으로 mongosh query tab
+  // 을 spawn. TabDbChip popover (Sprint 329) 가 가리키는 entry-point.
+  // 작성 이유: 사용자가 "다른 DB 에서 query 하고 싶다" 를 마음 먹었을 때
+  // 가는 단일 진입점이 이 우클릭. 다른 곳에는 같은 액션이 없어야 한다
+  // (toolbar DbSwitcher 는 Sprint 328 에서 hide, TabDbChip 은 Sprint 329
+  // 에서 display only).
+  it("Sprint 330: right-click on a database row spawns a mongosh query tab for that database", async () => {
+    render(<DocumentDatabaseTree connectionId="conn-mongo" />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("table_view_test database"),
+      ).toBeInTheDocument(),
+    );
+    const row = screen.getByLabelText("table_view_test database");
+
+    fireEvent.contextMenu(row);
+
+    const menuItem = await screen.findByRole("menuitem", {
+      name: /new query here/i,
+    });
+    await act(async () => {
+      fireEvent.click(menuItem);
+    });
+
+    const tabs = getAllTabsForConnection("conn-mongo");
+    expect(tabs).toHaveLength(1);
+    const queryTab = tabs[0]!;
+    expect(queryTab.type).toBe("query");
+    if (queryTab.type === "query") {
+      expect(queryTab.paradigm).toBe("document");
+      expect(queryTab.database).toBe("table_view_test");
+      expect(queryTab.sql).toBe("");
+    }
+  });
 });

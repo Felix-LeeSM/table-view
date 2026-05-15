@@ -25,6 +25,10 @@ export interface DatabaseRowProps {
   isLoading: boolean;
   isSelected: boolean;
   onToggle: () => void;
+  // Sprint 330 (Slice DB-Scope.3) — sidebar 우클릭 entry-point. TabDbChip
+  // popover (Sprint 329) 가 가리키는 그 액션. 클릭한 row 의 database 로
+  // prefilled mongosh query tab 을 생성한다.
+  onNewQueryHere: () => void;
 }
 
 export function DatabaseRow({
@@ -33,33 +37,45 @@ export function DatabaseRow({
   isLoading,
   isSelected,
   onToggle,
+  onNewQueryHere,
 }: DatabaseRowProps) {
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted",
-        isSelected ? "bg-muted text-foreground" : "text-secondary-foreground",
-      )}
-      aria-expanded={isExpanded}
-      aria-label={`${db.name} database`}
-      onClick={onToggle}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onToggle();
-        }
-      }}
-    >
-      {isExpanded ? (
-        <ChevronDown size={12} className="shrink-0" />
-      ) : (
-        <ChevronRight size={12} className="shrink-0" />
-      )}
-      <DbIcon size={12} className="shrink-0 text-muted-foreground" />
-      <span className="truncate">{db.name}</span>
-      {isLoading && <Loader2 size={10} className="ml-auto animate-spin" />}
-    </button>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "flex w-full cursor-pointer items-center gap-1 px-3 py-1 text-xs font-medium hover:bg-muted",
+            isSelected
+              ? "bg-muted text-foreground"
+              : "text-secondary-foreground",
+          )}
+          aria-expanded={isExpanded}
+          aria-label={`${db.name} database`}
+          onClick={onToggle}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onToggle();
+            }
+          }}
+        >
+          {isExpanded ? (
+            <ChevronDown size={12} className="shrink-0" />
+          ) : (
+            <ChevronRight size={12} className="shrink-0" />
+          )}
+          <DbIcon size={12} className="shrink-0 text-muted-foreground" />
+          <span className="truncate">{db.name}</span>
+          {isLoading && <Loader2 size={10} className="ml-auto animate-spin" />}
+        </button>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={onNewQueryHere}>
+          New query here
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

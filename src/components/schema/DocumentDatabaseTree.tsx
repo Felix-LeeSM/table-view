@@ -22,6 +22,7 @@ export default function DocumentDatabaseTree({
   connectionId,
 }: DocumentDatabaseTreeProps) {
   const addTab = useWorkspaceStore((s) => s.addTab);
+  const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
   // MRU marking is the caller's responsibility — `addTab` no longer emits
   // it implicitly, so each tab-open path here pairs the call.
   const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
@@ -50,6 +51,20 @@ export default function DocumentDatabaseTree({
       markConnectionUsed(connectionId);
     },
     [addTab, markConnectionUsed, connectionId],
+  );
+
+  // Sprint 330 (Slice DB-Scope.3) — sidebar 의 database row 우클릭으로
+  // 클릭한 row 의 database 에 prefilled mongosh tab 을 spawn. TabDbChip
+  // popover (Sprint 329) 가 가리키는 명시적 entry-point.
+  const handleNewQueryHere = useCallback(
+    (dbName: string) => {
+      addQueryTab(connectionId, dbName, {
+        paradigm: "document",
+        database: dbName,
+      });
+      markConnectionUsed(connectionId);
+    },
+    [addQueryTab, markConnectionUsed, connectionId],
   );
 
   const handleCollectionDoubleClick = useCallback(
@@ -189,6 +204,7 @@ export default function DocumentDatabaseTree({
                 setSelectedNodeId(dbNodeId);
                 handleExpandDb(db.name);
               }}
+              onNewQueryHere={() => handleNewQueryHere(db.name)}
             />
 
             {isExpanded && (
