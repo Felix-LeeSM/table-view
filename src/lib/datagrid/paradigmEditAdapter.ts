@@ -9,7 +9,8 @@ import {
   type MqlPreview,
 } from "@/lib/mongo/mqlGenerator";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
-import { insertDocument, updateDocument, deleteDocument } from "@/lib/tauri";
+import { bulkWriteDocuments } from "@/lib/tauri";
+import { mqlCommandsToBulkOps } from "@/lib/mongo/mqlToBulk";
 import { toast } from "@/lib/toast";
 import type { SafeModeGate } from "@/hooks/useSafeModeGate";
 import type { TableData } from "@/types/schema";
@@ -238,41 +239,19 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
   };
 }
 
-async function dispatchMqlCommand(
+/**
+ * Sprint 326 — Slice I.1: per-command IPC roundtrip 을 단일
+ * `bulk_write_documents` 호출로 묶는다. 동일 collection 내의 모든 op 가
+ * 같은 (db, collection) 을 가짐을 generator 가 보장한다.
+ */
+async function dispatchMqlBatch(
   connectionId: string,
-  cmd: MqlCommand,
+  commands: ReadonlyArray<MqlCommand>,
 ): Promise<void> {
-  switch (cmd.kind) {
-    case "insertOne":
-      await insertDocument(
-        connectionId,
-        cmd.database,
-        cmd.collection,
-        cmd.document,
-      );
-      return;
-    case "updateOne":
-      await updateDocument(
-        connectionId,
-        cmd.database,
-        cmd.collection,
-        cmd.documentId,
-        cmd.patch,
-      );
-      return;
-    case "deleteOne":
-      await deleteDocument(
-        connectionId,
-        cmd.database,
-        cmd.collection,
-        cmd.documentId,
-      );
-      return;
-    default: {
-      const never: never = cmd;
-      return never;
-    }
-  }
+  if (commands.length === 0) return;
+  const first = commands[0]!;
+  const ops = mqlCommandsToBulkOps(commands);
+  await bulkWriteDocuments(connectionId, first.database, first.collection, ops);
 }
 
 export function documentEditAdapter(
@@ -329,9 +308,7 @@ export function documentEditAdapter(
           const joinedMql = mqlPreview.previewLines.join("\n");
           const count = commands.length;
           try {
-            for (let i = 0; i < commands.length; i++) {
-              await dispatchMqlCommand(deps.connectionId, commands[i]!);
-            }
+            await dispatchMqlBatch(deps.connectionId, commands);
             toast.success(
               `${count} document ${count === 1 ? "change" : "changes"} committed.`,
             );

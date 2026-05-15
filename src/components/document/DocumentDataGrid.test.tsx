@@ -96,6 +96,16 @@ const updateDocumentMock = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
 const deleteDocumentMock = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
   Promise.resolve(),
 );
+const bulkWriteDocumentsMock = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  () =>
+    Promise.resolve({
+      inserted_count: 0,
+      matched_count: 0,
+      modified_count: 0,
+      deleted_count: 0,
+      upserted_ids: [],
+    }),
+);
 
 vi.mock("@lib/tauri", () => ({
   listMongoDatabases: vi.fn(() => Promise.resolve([])),
@@ -106,6 +116,7 @@ vi.mock("@lib/tauri", () => ({
   insertDocument: (...args: unknown[]) => insertDocumentMock(...args),
   updateDocument: (...args: unknown[]) => updateDocumentMock(...args),
   deleteDocument: (...args: unknown[]) => deleteDocumentMock(...args),
+  bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocumentsMock(...args),
 }));
 
 beforeEach(() => {
@@ -377,15 +388,21 @@ describe("DocumentDataGrid", () => {
     const initialFindCalls = findMock.mock.calls.length;
     fireEvent.click(execute);
 
+    // Sprint 326 I.1: commit path uses single bulkWrite IPC.
     await waitFor(() => {
-      expect(updateDocumentMock).toHaveBeenCalledTimes(1);
+      expect(bulkWriteDocumentsMock).toHaveBeenCalledTimes(1);
     });
-    expect(updateDocumentMock).toHaveBeenCalledWith(
+    expect(bulkWriteDocumentsMock).toHaveBeenCalledWith(
       "conn-mongo",
       "table_view_test",
       "users",
-      { ObjectId: "65abcdef0123456789abcdef" },
-      { name: "Ada" },
+      [
+        {
+          op: "updateOne",
+          filter: { _id: { ObjectId: "65abcdef0123456789abcdef" } },
+          update: { $set: { name: "Ada" } },
+        },
+      ],
     );
     await waitFor(() => {
       expect(findMock.mock.calls.length).toBeGreaterThan(initialFindCalls);

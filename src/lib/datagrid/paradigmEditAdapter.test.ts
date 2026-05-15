@@ -41,10 +41,15 @@ vi.mock("@/lib/toast", () => ({
 const insertDocument = vi.fn();
 const updateDocument = vi.fn();
 const deleteDocument = vi.fn();
+// Sprint 326 — Slice I.1: commit path 가 bulkWriteDocuments 로 통합.
+// 기존 insert/update/deleteDocument mock 은 호출되지 않지만 type-mock
+// 호환을 위해 유지.
+const bulkWriteDocuments = vi.fn();
 vi.mock("@/lib/tauri", () => ({
   insertDocument: (...args: unknown[]) => insertDocument(...args),
   updateDocument: (...args: unknown[]) => updateDocument(...args),
   deleteDocument: (...args: unknown[]) => deleteDocument(...args),
+  bulkWriteDocuments: (...args: unknown[]) => bulkWriteDocuments(...args),
 }));
 
 function makeRdbData(): TableData {
@@ -365,8 +370,14 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     expect(session).toBeNull();
   });
 
-  it("execute dispatches commands one-by-one and reports ok:true", async () => {
-    updateDocument.mockResolvedValue(undefined);
+  it("execute dispatches the batch via bulkWriteDocuments and reports ok:true", async () => {
+    bulkWriteDocuments.mockResolvedValue({
+      inserted_count: 0,
+      matched_count: 1,
+      modified_count: 1,
+      deleted_count: 0,
+      upserted_ids: [],
+    });
     const adapter = documentEditAdapter({
       connectionId: "conn-mongo",
       history,
@@ -382,13 +393,14 @@ describe("documentEditAdapter.preparePreview + execute", () => {
     });
     const result = await session!.execute();
     expect(result.ok).toBe(true);
-    expect(updateDocument).toHaveBeenCalledTimes(1);
+    // Single bulkWrite IPC for the whole batch (Sprint 326 I.1).
+    expect(bulkWriteDocuments).toHaveBeenCalledTimes(1);
     expect(toastSuccess).toHaveBeenCalledWith("1 document change committed.");
     expect(history.recordSuccess).toHaveBeenCalledTimes(1);
   });
 
-  it("execute failure surfaces ok:false without failedIndex (per-command, no batch rollback)", async () => {
-    updateDocument.mockRejectedValue(new Error("write failed"));
+  it("execute failure surfaces ok:false without failedIndex (bulkWrite rejection)", async () => {
+    bulkWriteDocuments.mockRejectedValue(new Error("write failed"));
     const adapter = documentEditAdapter({
       connectionId: "conn-mongo",
       history,

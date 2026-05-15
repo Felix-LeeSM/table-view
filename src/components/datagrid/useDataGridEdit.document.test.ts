@@ -22,10 +22,22 @@ const mockExecuteQuery = vi.fn();
 const mockExecuteQueryBatch = vi.fn();
 const mockFetchData = vi.fn();
 
+const mockBulkWriteDocuments = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  () =>
+    Promise.resolve({
+      inserted_count: 0,
+      matched_count: 0,
+      modified_count: 0,
+      deleted_count: 0,
+      upserted_ids: [],
+    }),
+);
+
 vi.mock("@/lib/tauri", () => ({
   insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
   updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
   deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
+  bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
 }));
 
 vi.mock("@stores/schemaStore", () => ({
@@ -203,20 +215,25 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
       await result.current.handleExecuteCommit();
     });
 
-    expect(mockUpdateDocument).toHaveBeenCalledTimes(1);
-    expect(mockUpdateDocument).toHaveBeenCalledWith(
+    // Sprint 326 — Slice I.1: per-command updateDocument / deleteDocument
+    // 가 단일 bulkWriteDocuments 호출로 묶임. 두 ops 가 하나의 IPC 안에
+    // 매핑되어 있는지 assert.
+    expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(1);
+    expect(mockBulkWriteDocuments).toHaveBeenCalledWith(
       "conn-mongo",
       "app",
       "users",
-      { ObjectId: HEX_A },
-      { name: "Ada L." },
-    );
-    expect(mockDeleteDocument).toHaveBeenCalledTimes(1);
-    expect(mockDeleteDocument).toHaveBeenCalledWith(
-      "conn-mongo",
-      "app",
-      "users",
-      { ObjectId: HEX_B },
+      [
+        {
+          op: "updateOne",
+          filter: { _id: { ObjectId: HEX_A } },
+          update: { $set: { name: "Ada L." } },
+        },
+        {
+          op: "deleteOne",
+          filter: { _id: { ObjectId: HEX_B } },
+        },
+      ],
     );
     // Post-success cleanup: preview cleared, pending maps reset, editor
     // closed, fetchData called once to refresh the grid.
@@ -235,7 +252,8 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
   });
 
   it("handleExecuteCommit preserves pending state on dispatch failure", async () => {
-    mockUpdateDocument.mockRejectedValueOnce(new Error("boom"));
+    // Sprint 326 I.1: commit path is bulkWriteDocuments, not per-command.
+    mockBulkWriteDocuments.mockRejectedValueOnce(new Error("boom"));
     const { result } = renderDocHook();
 
     act(() => {

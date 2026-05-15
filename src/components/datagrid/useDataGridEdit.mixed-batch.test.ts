@@ -31,11 +31,22 @@ const mockDeleteDocument = vi.fn<(...args: unknown[]) => Promise<void>>(() =>
   Promise.resolve(),
 );
 const mockFetchData = vi.fn();
+const mockBulkWriteDocuments = vi.fn<(...args: unknown[]) => Promise<unknown>>(
+  () =>
+    Promise.resolve({
+      inserted_count: 0,
+      matched_count: 0,
+      modified_count: 0,
+      deleted_count: 0,
+      upserted_ids: [],
+    }),
+);
 
 vi.mock("@/lib/tauri", () => ({
   insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
   updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
   deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
+  bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
 }));
 
 vi.mock("@stores/schemaStore", () => ({
@@ -320,9 +331,18 @@ describe("useDataGridEdit — Sprint 184 mixed-batch + perf smoke", () => {
       await result.current.handleExecuteCommit();
     });
 
-    expect(mockInsertDocument).toHaveBeenCalledTimes(1);
-    expect(mockUpdateDocument).toHaveBeenCalledTimes(1);
-    expect(mockDeleteDocument).toHaveBeenCalledTimes(1);
+    // Sprint 326 — Slice I.1: per-command insert/update/delete IPC 가
+    // 단일 bulkWrite 호출로 묶임. 호출 자체는 1 회, ops 배열에 3 종이
+    // 모두 들어있는지 확인.
+    expect(mockBulkWriteDocuments).toHaveBeenCalledTimes(1);
+    const ops = mockBulkWriteDocuments.mock.calls[0]![3] as Array<{
+      op: string;
+    }>;
+    expect(ops.map((o) => o.op).sort()).toEqual([
+      "deleteOne",
+      "insertOne",
+      "updateOne",
+    ]);
 
     // RDB helpers must stay quiet on the Mongo branch.
     expect(mockExecuteQueryBatch).not.toHaveBeenCalled();
