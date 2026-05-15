@@ -225,3 +225,142 @@ describe("DataGridTable virtualization (sprint-114)", () => {
 // Document the assumed row height so a future contributor changing
 // `ROW_HEIGHT_ESTIMATE` knows to revisit these test thresholds.
 void ROW_HEIGHT;
+
+// Sprint 349 (2026-05-15) — virtualized branch master/detail row gap was
+// the third Sprint 343 deferred item. The virtualizer assumes uniform
+// row heights; opening the inline JSON tree adds a variable-height
+// detail row that the virtualizer can't measure cleanly. The minimal
+// fix is to disable virtualization while `expandedNested` is set so the
+// non-virtualized branch (which already renders the master/detail row)
+// takes over. On close, virtualization resumes on the next paint.
+describe("DataGridTable virtualization + inline tree (Sprint 349)", () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+      configurable: true,
+      get() {
+        return 800;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get() {
+        return VIEWPORT_HEIGHT;
+      },
+    });
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 800,
+        bottom: VIEWPORT_HEIGHT,
+        width: 800,
+        height: VIEWPORT_HEIGHT,
+        toJSON() {
+          return {};
+        },
+      } as DOMRect;
+    };
+  });
+
+  afterEach(() => {
+    if (originalOffsetWidth) {
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "offsetWidth",
+        originalOffsetWidth,
+      );
+    }
+    if (originalOffsetHeight) {
+      Object.defineProperty(
+        HTMLElement.prototype,
+        "offsetHeight",
+        originalOffsetHeight,
+      );
+    }
+    HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+  });
+
+  function makeJsonbTable(rowCount: number): TableData {
+    const rows: unknown[][] = [];
+    for (let i = 0; i < rowCount; i++) {
+      rows.push([i, { role: `r-${i}` }]);
+    }
+    return {
+      columns: [
+        {
+          name: "id",
+          data_type: "integer",
+          nullable: false,
+          default_value: null,
+          is_primary_key: true,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+        {
+          name: "meta",
+          data_type: "jsonb",
+          nullable: true,
+          default_value: null,
+          is_primary_key: false,
+          is_foreign_key: false,
+          fk_reference: null,
+          comment: null,
+        },
+      ],
+      rows,
+      total_count: rowCount,
+      page: 1,
+      page_size: rowCount,
+      executed_query: "q-jsonb-1",
+    };
+  }
+
+  it("renders a master/detail row on a >200-row virtualized grid when a jsonb cell is expanded", async () => {
+    const user = (await import("@testing-library/user-event")).default;
+    const u = user.setup();
+    const props = {
+      ...makeProps(),
+      data: makeJsonbTable(1000),
+      columnOrder: [0, 1],
+    };
+    render(<DataGridTable {...props} />);
+
+    // Toggle the first visible jsonb cell sentinel button. The virtualized
+    // window starts at row 0 + overscan; rdb-nested-toggle-0-1 exists for
+    // row 0's meta cell.
+    const toggle = screen.getByTestId("rdb-nested-toggle-0-1");
+    await u.click(toggle);
+
+    // After expanding, virtualization is paused, so the detail row appears.
+    expect(screen.getByTestId("rdb-nested-detail-row-0")).toBeInTheDocument();
+    // The DocumentTreePanel mounts inside the detail row.
+    expect(screen.getByTestId("document-tree-panel")).toBeInTheDocument();
+  });
+
+  it("closing the detail row restores virtualization on the next paint", async () => {
+    const user = (await import("@testing-library/user-event")).default;
+    const u = user.setup();
+    const props = {
+      ...makeProps(),
+      data: makeJsonbTable(1000),
+      columnOrder: [0, 1],
+    };
+    render(<DataGridTable {...props} />);
+
+    const toggle = screen.getByTestId("rdb-nested-toggle-0-1");
+    await u.click(toggle);
+    expect(screen.getByTestId("rdb-nested-detail-row-0")).toBeInTheDocument();
+
+    // Close (toggle a second time to dismiss).
+    await u.click(screen.getByTestId("rdb-nested-toggle-0-1"));
+    expect(
+      screen.queryByTestId("rdb-nested-detail-row-0"),
+    ).not.toBeInTheDocument();
+    // Virtualization is back: total rows in the DOM are bounded.
+    const rows = screen.getAllByRole("row");
+    expect(rows.length).toBeLessThanOrEqual(101);
+  });
+});

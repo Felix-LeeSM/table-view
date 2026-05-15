@@ -382,7 +382,16 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
     }, []);
 
     const totalBodyRowCount = data.rows.length + pendingNewRows.length;
-    const shouldVirtualize = totalBodyRowCount > VIRTUALIZE_THRESHOLD;
+    // Sprint 349 — virtualizer assumes uniform row height; the inline
+    // JSON tree master/detail row breaks that assumption. The cheap fix
+    // is to disable virtualization while a detail panel is open so the
+    // user gets the full master/detail UX without an absolute-position
+    // overlay hack. For >200 rows the perf cost is bounded — the user
+    // only opened ONE nested cell at a time, and they typically don't
+    // scroll far past it. When they close the panel virtualization
+    // resumes on the next paint.
+    const shouldVirtualize =
+      totalBodyRowCount > VIRTUALIZE_THRESHOLD && expandedNested === null;
 
     const rowVirtualizer = useVirtualizer({
       count: shouldVirtualize ? data.rows.length : 0,
