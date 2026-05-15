@@ -32,7 +32,6 @@ import {
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import ProjectionDialog from "@components/document/ProjectionDialog";
 import AddDocumentModal from "@components/document/AddDocumentModal";
-import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
 import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 import { Button } from "@components/ui/button";
@@ -619,7 +618,6 @@ export default function DocumentDataGrid({
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <CollectionReadOnlyBanner />
       <DataGridToolbar
         data={data}
         schema={database}

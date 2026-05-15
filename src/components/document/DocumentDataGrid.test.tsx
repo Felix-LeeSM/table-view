@@ -14,7 +14,6 @@ import {
   __resetDocumentStoreForTests,
 } from "@stores/documentStore";
 import type { DocumentQueryResult } from "@/types/document";
-import { COLLECTION_READONLY_BANNER_TEXT } from "@lib/strings/document";
 
 // Canned results used by the mocked store. Shaped to mirror the backend's
 // flattening: `rows` carry sentinels, `raw_documents` keep the nested
@@ -489,19 +488,6 @@ describe("DocumentDataGrid", () => {
       expect(entries[0]!.paradigm).toBe("document");
       expect(entries[0]!.collection).toBe("users");
     });
-  });
-
-  // ── Sprint 101 — collection beta/limitation banner ──────────────────────
-
-  it("renders the collection read-only banner above the toolbar", async () => {
-    renderGrid();
-
-    // The banner mounts immediately; we don't need to wait for the fetch.
-    const banner = await screen.findByRole("status");
-    expect(banner).toHaveTextContent(COLLECTION_READONLY_BANNER_TEXT);
-
-    // Banner has no dismiss affordance — Sprint 101 requires it to persist.
-    expect(screen.queryByRole("button", { name: /dismiss|close/i })).toBeNull();
   });
 
   it("pending-edit visual cue — edited cell receives the highlight background", async () => {

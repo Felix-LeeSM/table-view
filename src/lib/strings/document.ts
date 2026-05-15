@@ -9,15 +9,6 @@
 import { PARADIGM_VOCABULARY } from "./paradigm-vocabulary";
 
 /**
- * Banner copy shown above MongoDB collection grids. Cell-level editing
- * and Add Document already ship; the remaining gap is schema/DDL ops
- * (create collection, drop, indexes, validators) — the banner reflects
- * that.
- */
-export const COLLECTION_READONLY_BANNER_TEXT =
-  "Beta — schema and DDL operations are not yet supported.";
-
-/**
  * Document-paradigm wording overrides for the shared `DataGridToolbar`.
  * Document callers spread `DOCUMENT_LABELS` to swap user-visible
  * strings; the toolbar itself stays paradigm-agnostic.

@@ -210,8 +210,9 @@ describe("QueryTab — toolbar", () => {
     );
   });
 
-  // [AC-248-T2] document paradigm → disabled (Mongo dry-run unsupported).
-  it("[AC-248-T2] disables Dry Run button on document paradigm", () => {
+  // [AC-248-T2] document paradigm → button is not rendered at all
+  // (Mongo has no dry-run IPC; the affordance was a dead surface).
+  it("[AC-248-T2] hides Dry Run button on document paradigm", () => {
     const tab = makeQueryTab({
       paradigm: "document",
       queryMode: "find",
@@ -221,8 +222,7 @@ describe("QueryTab — toolbar", () => {
     });
     render(<QueryTab tab={tab} />);
 
-    const dryRunBtn = screen.getByLabelText("Dry run query");
-    expect(dryRunBtn).toBeDisabled();
+    expect(screen.queryByLabelText("Dry run query")).toBeNull();
   });
 
   // [AC-248-T3] running queryState → disabled.

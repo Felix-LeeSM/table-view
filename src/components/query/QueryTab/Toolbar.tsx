@@ -9,9 +9,7 @@ import {
   X,
   FlaskConical,
 } from "lucide-react";
-import type { EditorView } from "@codemirror/view";
 import FavoritesPanel from "../FavoritesPanel";
-import InsertSnippetMenu from "./InsertSnippetMenu";
 import TabDbChip from "./TabDbChip";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
@@ -42,25 +40,14 @@ export interface QueryTabToolbarProps {
   isDocument: boolean;
   onExecute: () => void;
   /**
-   * Sprint 248 (ADR 0022 Phase 4) — explicit "Dry Run" handler. Wraps
-   * the editor SQL in a transaction that is unconditionally rolled
-   * back, so the user can preview destructive results without
-   * committing. Mongo paradigm renders the button disabled (the IPC
-   * supports rdb only); the keyboard shortcut layer additionally
-   * surfaces a toast disclaimer when invoked on document tabs.
+   * Wraps the editor SQL in a transaction that is unconditionally
+   * rolled back, so the user can preview destructive results without
+   * committing. Rendered only for the RDB paradigm — the dry-run IPC
+   * has no Mongo equivalent.
    */
   onDryRun: () => void;
   onFormat: () => void;
   favorites: QueryFavoritesState;
-  /**
-   * Sprint 310 (Phase 28 Slice A4) — CodeMirror EditorView ref drilled
-   * from `useQueryEvents` so the `+ Insert ▾` popover can dispatch
-   * snippet insertion against the live editor. Decision D-09: prop
-   * drilling is preferred over context / store because the ref already
-   * lives in `useQueryEvents` and ergonomics + minimum diff favour a
-   * single explicit prop on the toolbar interface.
-   */
-  editorRef: React.RefObject<EditorView | null>;
 }
 
 export default function QueryTabToolbar({
@@ -70,7 +57,6 @@ export default function QueryTabToolbar({
   onDryRun,
   onFormat,
   favorites,
-  editorRef,
 }: QueryTabToolbarProps) {
   const {
     showSaveForm,
@@ -120,25 +106,20 @@ export default function QueryTabToolbar({
           <span className="text-3xs text-muted-foreground">{"⌘⏎"}</span>
         </Button>
       )}
-      {/* Sprint 248 (ADR 0022 Phase 4) — explicit "Dry Run" button.
-          BEGIN/ROLLBACK preview without commit. Mongo paradigm is
-          unsupported (IPC rejects with `Unsupported`), so the button is
-          disabled there. Disabled mirror of Run's gating: empty SQL or
-          a query already running both block dispatch. */}
-      <Button
-        variant="ghost"
-        size="xs"
-        onClick={onDryRun}
-        disabled={
-          isDocument || tab.queryState.status === "running" || !tab.sql.trim()
-        }
-        aria-label="Dry run query"
-        title="Dry run (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK"
-      >
-        <FlaskConical />
-        <span>Dry Run</span>
-        <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
-      </Button>
+      {!isDocument && (
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onDryRun}
+          disabled={tab.queryState.status === "running" || !tab.sql.trim()}
+          aria-label="Dry run query"
+          title="Dry run (Cmd+Shift+Enter) — BEGIN; ... ROLLBACK"
+        >
+          <FlaskConical />
+          <span>Dry Run</span>
+          <span className="text-3xs text-muted-foreground">{"⌘⇧⏎"}</span>
+        </Button>
+      )}
       {!isDocument && (
         <Button
           variant="ghost"
@@ -152,19 +133,6 @@ export default function QueryTabToolbar({
           <span>Format</span>
         </Button>
       )}
-      {/* Sprint 309 — Mongo Find/Aggregate `ToggleGroup` removed. The
-          mongosh parser (Sprint 307 A1) infers the method from the editor
-          text; the toggle no longer carried information that the editor
-          itself doesn't already express. A5 (sprint-311) replaces the
-          legacy aggregate-flag dispatch branch with parser-driven
-          routing. */}
-      {/* Sprint 310 (Phase 28 Slice A4) — `+ Insert ▾` snippet menu.
-          Document-paradigm only (the popover surfaces the 13 mongosh
-          methods + filter operators + aggregate stages; RDB has its own
-          SQL formatter path and intentionally does NOT mount this
-          button). The snippet engine drives CodeMirror's native
-          Tab/Shift+Tab/Esc placeholder navigation. */}
-      {isDocument && <InsertSnippetMenu editorRef={editorRef} />}
       <div className="ml-auto flex items-center gap-1 relative">
         <Button
           variant="ghost"

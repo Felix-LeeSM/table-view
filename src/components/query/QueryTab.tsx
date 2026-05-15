@@ -176,11 +176,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
         onDryRun={handleDryRun}
         onFormat={handleFormat}
         favorites={favorites}
-        // Sprint 310 (Phase 28 Slice A4) — editorRef drilled through so
-        // the `+ Insert ▾` popover (document-paradigm only) can dispatch
-        // snippet insertion against the live CodeMirror EditorView
-        // already managed by `useQueryEvents`.
-        editorRef={editorRef}
       />
 
       {/* Paradigm router lives inline (not in a wrapper) so the
