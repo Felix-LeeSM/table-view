@@ -413,4 +413,11 @@ impl DocumentAdapter for MongoAdapter {
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
         Box::pin(async move { self.server_info_impl().await })
     }
+
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        Box::pin(async move { self.slow_queries_impl(limit).await })
+    }
 }

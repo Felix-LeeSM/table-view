@@ -140,6 +140,9 @@ pub(crate) struct StubRdbAdapter {
 
     // Sprint 339 — override slot for RDB server_info.
     pub server_info_fn: Option<FnZero<crate::models::ServerInfoRow>>,
+
+    // Sprint 340 — override slot for RDB slow_queries.
+    pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -189,6 +192,7 @@ impl Default for StubRdbAdapter {
             explain_query_fn: None,
             collection_stats_fn: None,
             server_info_fn: None,
+            slow_queries_fn: None,
         }
     }
 }
@@ -658,6 +662,18 @@ impl RdbAdapter for StubRdbAdapter {
         );
         Box::pin(async move { r })
     }
+
+    // Sprint 340 — slow_queries stub.
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        let r = self
+            .slow_queries_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f(&limit));
+        Box::pin(async move { r })
+    }
 }
 
 // ── StubDocumentAdapter ──────────────────────────────────────────────────
@@ -734,6 +750,9 @@ pub(crate) struct StubDocumentAdapter {
 
     // Sprint 339 — override slot for Mongo server_info.
     pub server_info_fn: Option<FnZero<crate::models::ServerInfoRow>>,
+
+    // Sprint 340 — override slot for Mongo slow_queries.
+    pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -766,6 +785,7 @@ impl Default for StubDocumentAdapter {
             explain_query_fn: None,
             collection_stats_fn: None,
             server_info_fn: None,
+            slow_queries_fn: None,
         }
     }
 }
@@ -1141,6 +1161,18 @@ impl DocumentAdapter for StubDocumentAdapter {
             },
             |f| f(),
         );
+        Box::pin(async move { r })
+    }
+
+    // Sprint 340 — slow_queries stub.
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        let r = self
+            .slow_queries_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f(&limit));
         Box::pin(async move { r })
     }
 }

@@ -632,6 +632,21 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Sprint 340 — top-N slow queries. PG override reads
+    /// `pg_stat_statements`; non-PG RDB adapters inherit `Unsupported`.
+    /// `limit` is clamped to a sensible maximum by the caller — the
+    /// adapter trusts the value here.
+    fn slow_queries<'a>(
+        &'a self,
+        _limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support slow query introspection".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
@@ -949,6 +964,15 @@ pub trait DocumentAdapter: DbAdapter {
     /// Sprint 339 — server identity + key runtime info
     /// (`runCommand({buildInfo, serverStatus})`).
     fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>>;
+
+    /// Sprint 340 — top-N slow queries from `system.profile`. Caller is
+    /// responsible for enabling profiling beforehand
+    /// (`db.setProfilingLevel(level, slowms)`); when profiling is OFF
+    /// this returns `Ok(Vec::new())` rather than erroring out.
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

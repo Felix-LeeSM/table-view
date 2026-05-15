@@ -288,6 +288,39 @@ pub async fn server_info(
     server_info_inner(state.inner(), &connection_id).await
 }
 
+async fn slow_queries_inner(
+    state: &AppState,
+    connection_id: &str,
+    limit: i64,
+) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let cap = limit.clamp(1, 500);
+    match active {
+        ActiveAdapter::Rdb(adapter) => adapter.slow_queries(cap).await,
+        ActiveAdapter::Document(adapter) => adapter.slow_queries(cap).await,
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "slow_queries not supported for Search paradigm".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "slow_queries not supported for key-value paradigm".into(),
+        )),
+    }
+}
+
+/// Sprint 340 (U5 live wire) — paradigm-neutral slow query / profiler
+/// listing. `limit` is clamped to [1, 500].
+#[tauri::command]
+pub async fn slow_queries(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    limit: i64,
+) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
+    slow_queries_inner(state.inner(), &connection_id, limit).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -1007,6 +1040,109 @@ mod tests {
             dispatch_server_info(&connections, "c").await,
             Err(AppError::Unsupported(_))
         ));
+    }
+
+    // ── Sprint 340 — slow_queries ───────────────────────────────────────
+
+    async fn dispatch_slow_queries(
+        connections: &ConnMap,
+        connection_id: &str,
+        limit: i64,
+    ) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        let cap = limit.clamp(1, 500);
+        match active {
+            ActiveAdapter::Rdb(a) => a.slow_queries(cap).await,
+            ActiveAdapter::Document(a) => a.slow_queries(cap).await,
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "slow_queries not supported for Search paradigm".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "slow_queries not supported for key-value paradigm".into(),
+            )),
+        }
+    }
+
+    #[tokio::test]
+    async fn slow_queries_unknown_connection_returns_notfound() {
+        assert!(matches!(
+            dispatch_slow_queries(&ConnMap::new(), "absent", 10).await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn slow_queries_rdb_arm_propagates() {
+        let mut s = StubRdbAdapter::default();
+        s.slow_queries_fn = Some(Box::new(|limit: &i64| {
+            Ok(vec![crate::models::SlowQueryRow {
+                query: format!("SELECT * FROM t WHERE limit={limit}"),
+                calls: 42,
+                total_exec_time_ms: 1234.5,
+                mean_exec_time_ms: 29.4,
+                rows: 100,
+                extras: std::collections::HashMap::new(),
+            }])
+        }));
+        let connections = map_with("c", ActiveAdapter::Rdb(Box::new(s)));
+        let r = dispatch_slow_queries(&connections, "c", 10).await.unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].calls, 42);
+        assert!(r[0].query.contains("limit=10"));
+    }
+
+    #[tokio::test]
+    async fn slow_queries_document_arm_propagates() {
+        let mut s = StubDocumentAdapter::default();
+        s.slow_queries_fn = Some(Box::new(|_limit: &i64| {
+            Ok(vec![crate::models::SlowQueryRow {
+                query: "{\"find\":\"users\"}".into(),
+                calls: 1,
+                total_exec_time_ms: 87.0,
+                mean_exec_time_ms: 87.0,
+                rows: 5,
+                extras: std::collections::HashMap::new(),
+            }])
+        }));
+        let connections = map_with("c", ActiveAdapter::Document(Box::new(s)));
+        let r = dispatch_slow_queries(&connections, "c", 10).await.unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].rows, 5);
+    }
+
+    #[tokio::test]
+    async fn slow_queries_search_arm_returns_unsupported() {
+        let connections = map_with("c", search_default());
+        assert!(matches!(
+            dispatch_slow_queries(&connections, "c", 10).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn slow_queries_kv_arm_returns_unsupported() {
+        let connections = map_with("c", kv_default());
+        assert!(matches!(
+            dispatch_slow_queries(&connections, "c", 10).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn slow_queries_clamps_limit_to_safe_range() {
+        // limit < 1 → clamp to 1; limit > 500 → clamp to 500.
+        let mut s = StubRdbAdapter::default();
+        s.slow_queries_fn = Some(Box::new(|limit: &i64| {
+            assert!(*limit >= 1 && *limit <= 500, "limit clamp broken: {limit}");
+            Ok(Vec::new())
+        }));
+        let connections = map_with("c", ActiveAdapter::Rdb(Box::new(s)));
+        dispatch_slow_queries(&connections, "c", -5).await.unwrap();
+        dispatch_slow_queries(&connections, "c", 9999)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

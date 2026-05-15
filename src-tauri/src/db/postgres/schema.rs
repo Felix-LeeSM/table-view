@@ -1220,6 +1220,62 @@ impl PostgresAdapter {
         Ok(row.0)
     }
 
+    /// Sprint 340 (U5 live wire) — top-N slow queries from the
+    /// `pg_stat_statements` extension. The extension is OPTIONAL — when
+    /// it has not been created, sqlx surfaces a `relation
+    /// "pg_stat_statements" does not exist` error which we wrap with a
+    /// clearer hint so the panel UI can guide the user toward `CREATE
+    /// EXTENSION pg_stat_statements`.
+    pub async fn slow_queries(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
+        let pool = self.active_pool().await?;
+
+        #[allow(clippy::type_complexity)]
+        type Row = (
+            Option<String>,
+            Option<i64>,
+            Option<f64>,
+            Option<f64>,
+            Option<i64>,
+        );
+        let rows: Vec<Row> = sqlx::query_as(
+            "SELECT query, calls, total_exec_time, mean_exec_time, rows \
+             FROM pg_stat_statements \
+             ORDER BY mean_exec_time DESC NULLS LAST \
+             LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("pg_stat_statements") && msg.contains("does not exist") {
+                AppError::Database(
+                    "pg_stat_statements extension not enabled. Run \
+                     `CREATE EXTENSION pg_stat_statements;` as a superuser \
+                     and add the library to shared_preload_libraries."
+                        .into(),
+                )
+            } else {
+                AppError::Database(format!("pg_stat_statements failed: {msg}"))
+            }
+        })?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(q, calls, total, mean, n)| crate::models::SlowQueryRow {
+                query: q.unwrap_or_default(),
+                calls: calls.unwrap_or(0),
+                total_exec_time_ms: total.unwrap_or(0.0),
+                mean_exec_time_ms: mean.unwrap_or(0.0),
+                rows: n.unwrap_or(0),
+                extras: std::collections::HashMap::new(),
+            })
+            .collect())
+    }
+
     /// Sprint 339 (U4 live wire) — server identity (`version()` +
     /// host) + tuning flags from `pg_settings`. `extras` carries the
     /// full pg_settings whitelist row-by-row so the UI can render a
@@ -1626,6 +1682,21 @@ mod tests {
     async fn server_info_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         match adapter.server_info().await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 340 (U5 live wire) — slow_queries: takes only `limit` so
+    // only the no-connection path is unit-testable. The real
+    // pg_stat_statements shape + missing-extension error wrapping is
+    // covered by integration tests.
+    #[tokio::test]
+    async fn slow_queries_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.slow_queries(10).await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("Not connected"), "unexpected: {msg}");
             }

@@ -500,6 +500,14 @@ impl RdbAdapter for PostgresAdapter {
         Box::pin(async move { self.collection_stats(namespace, table).await })
     }
 
+    fn slow_queries<'a>(
+        &'a self,
+        limit: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<crate::models::SlowQueryRow>, AppError>> + Send + 'a>>
+    {
+        Box::pin(async move { self.slow_queries(limit).await })
+    }
+
     fn server_info<'a>(
         &'a self,
     ) -> Pin<Box<dyn Future<Output = Result<crate::models::ServerInfoRow, AppError>> + Send + 'a>>
@@ -745,5 +753,13 @@ mod tests {
         let a = PostgresAdapter::new();
         let r = <PostgresAdapter as RdbAdapter>::drop_database(&a, "olddb").await;
         assert!(r.is_err());
+    }
+
+    // Sprint 340 (U5 live wire) — slow_queries trait wrapper.
+    #[tokio::test]
+    async fn trait_slow_queries_without_connection_fails() {
+        let a = PostgresAdapter::new();
+        let r = <PostgresAdapter as RdbAdapter>::slow_queries(&a, 10).await;
+        assert!(matches!(r, Err(AppError::Connection(_))));
     }
 }

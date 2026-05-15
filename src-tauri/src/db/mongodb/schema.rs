@@ -595,6 +595,106 @@ impl MongoAdapter {
         serde_json::to_value(&resp)
             .map_err(|e| AppError::Database(format!("explain response decode failed: {e}")))
     }
+
+    /// Sprint 340 (U5 live wire) — top-N slow queries from
+    /// `system.profile` of the currently-active DB. Mongo profiling is
+    /// off by default — when the collection is empty/absent we return
+    /// an empty Vec rather than erroring. Caller enables profiling via
+    /// `db.setProfilingLevel(level, slowms)`.
+    pub(super) async fn slow_queries_impl(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<crate::models::SlowQueryRow>, AppError> {
+        let resolved = self
+            .resolved_db_name(None)
+            .await
+            .ok_or_else(|| AppError::Validation("No active database for profiling".into()))?;
+        let client = self.current_client().await?;
+        let coll = client
+            .database(&resolved)
+            .collection::<Document>("system.profile");
+
+        let cap: i64 = limit.clamp(1, 500);
+        // system.profile may not exist when profiling is OFF — list it
+        // first and short-circuit to an empty Vec instead of bubbling the
+        // "NamespaceNotFound" error to the user.
+        let names = client
+            .database(&resolved)
+            .list_collection_names()
+            .await
+            .map_err(|e| AppError::Database(format!("list_collection_names failed: {e}")))?;
+        if !names.iter().any(|n| n == "system.profile") {
+            return Ok(Vec::new());
+        }
+
+        let mut cursor = coll
+            .find(Document::new())
+            .sort(doc! { "ts": -1 })
+            .limit(cap)
+            .await
+            .map_err(|e| AppError::Database(format!("system.profile find failed: {e}")))?;
+
+        let mut out: Vec<crate::models::SlowQueryRow> = Vec::new();
+        while let Some(next) = cursor.next().await {
+            let doc =
+                next.map_err(|e| AppError::Database(format!("system.profile cursor: {e}")))?;
+
+            let millis = doc
+                .get_f64("millis")
+                .ok()
+                .or_else(|| doc.get_i64("millis").ok().map(|n| n as f64))
+                .or_else(|| doc.get_i32("millis").ok().map(|n| n as f64))
+                .unwrap_or(0.0);
+            let nreturned = doc
+                .get_i64("nreturned")
+                .ok()
+                .or_else(|| doc.get_i32("nreturned").ok().map(|n| n as i64))
+                .unwrap_or(0);
+
+            let query_text = if let Ok(cmd) = doc.get_document("command") {
+                bson::Bson::Document(cmd.clone())
+                    .into_canonical_extjson()
+                    .to_string()
+            } else if let Ok(q) = doc.get_document("query") {
+                bson::Bson::Document(q.clone())
+                    .into_canonical_extjson()
+                    .to_string()
+            } else {
+                doc.get_str("op").unwrap_or("").to_string()
+            };
+
+            let mut extras: std::collections::HashMap<String, serde_json::Value> =
+                std::collections::HashMap::new();
+            for key in &[
+                "ts",
+                "ns",
+                "op",
+                "keysExamined",
+                "docsExamined",
+                "planSummary",
+                "user",
+                "client",
+                "appName",
+            ] {
+                if let Some(value) = doc.get(*key) {
+                    if let Ok(jv) = serde_json::to_value(value) {
+                        extras.insert((*key).to_string(), jv);
+                    }
+                }
+            }
+
+            out.push(crate::models::SlowQueryRow {
+                query: query_text,
+                calls: 1,
+                total_exec_time_ms: millis,
+                mean_exec_time_ms: millis,
+                rows: nreturned,
+                extras,
+            });
+        }
+
+        Ok(out)
+    }
 }
 
 /// Sprint 332 — `mongodb::IndexModel` → `crate::models::IndexInfo`.
@@ -1199,6 +1299,21 @@ mod tests {
                 assert!(msg.contains("not established"), "unexpected: {msg}");
             }
             other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 340 (U5 live wire) — slow_queries: no-DB path bails at
+    // `resolved_db_name` with a Validation error before touching the
+    // client. Real system.profile shape mapping (millis/nreturned/extras)
+    // is covered by Mongo integration tests.
+    #[tokio::test]
+    async fn slow_queries_without_active_db_returns_validation_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.slow_queries_impl(10).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("active database"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
         }
     }
 

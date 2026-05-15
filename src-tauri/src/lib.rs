@@ -187,6 +187,8 @@ pub fn run() {
         commands::meta::collection_stats_mongo,
         // Sprint 339 (U4 live wire) — server info.
         commands::meta::server_info,
+        // Sprint 340 (U5 live wire) — slow queries / profiler.
+        commands::meta::slow_queries,
         commands::document::browse::list_mongo_databases,
         commands::document::browse::list_mongo_collections,
         commands::document::browse::infer_collection_fields,

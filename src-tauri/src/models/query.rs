@@ -95,6 +95,27 @@ pub struct CollectionStatsRow {
     pub extras: std::collections::HashMap<String, Value>,
 }
 
+/// Sprint 340 — U5 wire shape. PG `pg_stat_statements` row / Mongo
+/// `system.profile` document flattened into the same struct for the
+/// SlowQueryPanel. `extras` carries paradigm-specific fields (Mongo
+/// keysExamined/docsExamined/ts/ns/...).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlowQueryRow {
+    /// PG: `query` text; Mongo: `command` BSON serialised to JSON.
+    pub query: String,
+    /// PG: `calls`; Mongo: 1 per profile doc (no aggregation upstream).
+    pub calls: i64,
+    /// PG: `total_exec_time` ms; Mongo: `millis`.
+    pub total_exec_time_ms: f64,
+    /// PG: `mean_exec_time` ms; Mongo: same as total (single sample).
+    pub mean_exec_time_ms: f64,
+    /// PG: `rows`; Mongo: `nreturned`.
+    pub rows: i64,
+    /// Paradigm-specific raw fields (Mongo ts/ns/keysExamined/...).
+    pub extras: std::collections::HashMap<String, Value>,
+}
+
 /// Sprint 339 — U4 wire shape. PG `version() + pg_settings` row /
 /// Mongo `buildInfo + serverStatus` response flattened into the same
 /// struct for the ServerInfoPanel.

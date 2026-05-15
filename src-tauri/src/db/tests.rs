@@ -310,6 +310,12 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
                 })
             })
         }
+        fn slow_queries<'a>(
+            &'a self,
+            _limit: i64,
+        ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -938,6 +944,12 @@ impl DocumentAdapter for FakeCancellableDocument {
                 extras: std::collections::HashMap::new(),
             })
         })
+    }
+    fn slow_queries<'a>(
+        &'a self,
+        _limit: i64,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 }
 
@@ -1866,6 +1878,20 @@ async fn test_rdb_default_server_info_returns_unsupported() {
     match adapter.server_info().await {
         Err(AppError::Unsupported(msg)) => {
             assert!(msg.contains("server info"), "unexpected: {msg}");
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+// 작성 이유 (2026-05-15, Sprint 340): RdbAdapter::slow_queries default
+// body Unsupported 단언. PG 만 override (pg_stat_statements), 다른 RDB
+// 어댑터는 trait default 에서 Unsupported.
+#[tokio::test]
+async fn test_rdb_default_slow_queries_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.slow_queries(10).await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("slow query"), "unexpected: {msg}");
         }
         other => panic!("expected Unsupported, got {:?}", other.is_ok()),
     }
