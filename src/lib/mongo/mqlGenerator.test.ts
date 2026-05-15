@@ -51,7 +51,7 @@ describe("generateMqlPreview — happy paths", () => {
         database: "app",
         collection: "users",
         documentId: { ObjectId: HEX_A },
-        patch: { name: "Ada Lovelace" },
+        patch: { $set: { name: "Ada Lovelace" } },
       },
     ]);
   });
@@ -73,7 +73,7 @@ describe("generateMqlPreview — happy paths", () => {
     expect(commands).toHaveLength(1);
     expect(commands[0]).toMatchObject({
       kind: "updateOne",
-      patch: { name: "Ada L.", age: 37 },
+      patch: { $set: { name: "Ada L.", age: 37 } },
     });
   });
 
@@ -280,7 +280,7 @@ describe("generateMqlPreview — edge cases", () => {
       `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.verified": true } })`,
     ]);
     expect(commands[0]).toMatchObject({
-      patch: { "meta.verified": true },
+      patch: { $set: { "meta.verified": true } },
     });
   });
 
@@ -321,6 +321,60 @@ describe("generateMqlPreview — edge cases", () => {
     expect(previewLines[0]).toBe(
       `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.profile.avatar": "https://example.com/a.png" } })`,
     );
+  });
+
+  // Sprint 342 V2 (2026-05-15) — DocumentTreePanel's delete action stores
+  // the `__op__:unset` sentinel against a field path. The generator must
+  // route that into a `$unset` operator (and let it coexist with `$set`
+  // on the same row so one click of Save covers overwrite + delete).
+  // 작성 이유: 기존 sprint 322 의 `$set` 단독 patch 가 inline-tree 의 leaf
+  // 삭제 (예: `meta.legacyField`) 를 표현할 수 없었다.
+  it("routes __op__:unset sentinel into a $unset patch", () => {
+    const { previewLines, commands, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        pendingEdits: new Map<string, unknown>([
+          ["0-1:legacyField", "__op__:unset"],
+        ]),
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(previewLines).toEqual([
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $unset: { "meta.legacyField": "" } })`,
+    ]);
+    expect(commands[0]).toMatchObject({
+      patch: { $unset: { "meta.legacyField": "" } },
+    });
+  });
+
+  it("combines $set and $unset for the same row in one updateOne", () => {
+    const { previewLines, commands } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        pendingEdits: new Map<string, unknown>([
+          ["0-1:role", "admin"],
+          ["0-1:legacyField", "__op__:unset"],
+        ]),
+      }),
+    );
+    expect(previewLines).toHaveLength(1);
+    expect(previewLines[0]).toBe(
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.role": "admin" }, $unset: { "meta.legacyField": "" } })`,
+    );
+    expect(commands[0]).toMatchObject({
+      patch: {
+        $set: { "meta.role": "admin" },
+        $unset: { "meta.legacyField": "" },
+      },
+    });
   });
 
   it("rejects a nested edit under _id with id-in-patch error", () => {

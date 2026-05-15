@@ -28,14 +28,19 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
     ]);
   });
 
-  it("maps updateOne command to { op: updateOne, filter: { _id }, update: { $set: patch } }", () => {
+  // Sprint 342 V2 (2026-05-15) — `cmd.patch` now carries the full update
+  // operator (`{ $set, $unset }`) instead of the raw $set body, so a
+  // single row can mix overwrite + structural delete. mqlToBulk just
+  // forwards the operator object unchanged. 작성 이유: tree-panel delete
+  // 가 $unset 을 같은 row 의 patch 에 묶을 수 있어야 했다.
+  it("maps updateOne command — patch already wraps $set/$unset operators", () => {
     const cmds: MqlCommand[] = [
       {
         kind: "updateOne",
         database: DB,
         collection: COLL,
         documentId: { ObjectId: "507f1f77bcf86cd799439011" },
-        patch: { name: "Ada L." },
+        patch: { $set: { name: "Ada L." } },
       },
     ];
     expect(mqlCommandsToBulkOps(cmds)).toEqual([
@@ -43,6 +48,25 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
         op: "updateOne",
         filter: { _id: { ObjectId: "507f1f77bcf86cd799439011" } },
         update: { $set: { name: "Ada L." } },
+      },
+    ]);
+  });
+
+  it("maps updateOne with combined $set + $unset patch", () => {
+    const cmds: MqlCommand[] = [
+      {
+        kind: "updateOne",
+        database: DB,
+        collection: COLL,
+        documentId: { ObjectId: "507f1f77bcf86cd799439011" },
+        patch: { $set: { name: "Ada L." }, $unset: { legacyField: "" } },
+      },
+    ];
+    expect(mqlCommandsToBulkOps(cmds)).toEqual([
+      {
+        op: "updateOne",
+        filter: { _id: { ObjectId: "507f1f77bcf86cd799439011" } },
+        update: { $set: { name: "Ada L." }, $unset: { legacyField: "" } },
       },
     ]);
   });
@@ -77,7 +101,7 @@ describe("mqlCommandsToBulkOps (Sprint 326 I.1)", () => {
         database: DB,
         collection: COLL,
         documentId: { ObjectId: "507f1f77bcf86cd799439011" },
-        patch: { name: "Ada L." },
+        patch: { $set: { name: "Ada L." } },
       },
       {
         kind: "deleteOne",

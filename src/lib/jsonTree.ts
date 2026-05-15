@@ -187,24 +187,46 @@ export function renderLeafValue(node: TreeNode): string {
   return safeStringifyCell(node.leafValue);
 }
 
+export interface FilterOptions {
+  /** When true, `query` is compiled as a JS regex (case-insensitive). */
+  regex?: boolean;
+}
+
 /**
  * Case-insensitive substring match over key (path tail) + rendered
  * leaf value. Returns the set of paths that should remain visible
  * (matches *and* all of their ancestors so the tree stays connected).
+ *
+ * Sprint 342 V2 — pass `{ regex: true }` to switch to JS regex matching.
+ * Invalid regex sources fall back to substring (so the user can type a
+ * partial pattern without the tree blanking out mid-edit).
  */
 export function filterTreeNodes(
   nodes: TreeNode[],
   query: string,
+  options: FilterOptions = {},
 ): Set<string> | null {
-  const trimmed = query.trim().toLowerCase();
+  const trimmed = query.trim();
   if (trimmed === "") return null;
+
+  let matcher: (s: string) => boolean;
+  if (options.regex) {
+    try {
+      const re = new RegExp(trimmed, "i");
+      matcher = (s: string) => re.test(s);
+    } catch {
+      const lower = trimmed.toLowerCase();
+      matcher = (s: string) => s.toLowerCase().includes(lower);
+    }
+  } else {
+    const lower = trimmed.toLowerCase();
+    matcher = (s: string) => s.toLowerCase().includes(lower);
+  }
 
   const visible = new Set<string>();
   for (const node of nodes) {
-    const labelHit = node.label.toLowerCase().includes(trimmed);
-    const valueHit =
-      node.kind === "leaf" &&
-      renderLeafValue(node).toLowerCase().includes(trimmed);
+    const labelHit = matcher(node.label);
+    const valueHit = node.kind === "leaf" && matcher(renderLeafValue(node));
     if (labelHit || valueHit) {
       // walk the path back up by splitting on "." / "[i]" segments.
       visible.add(node.path);

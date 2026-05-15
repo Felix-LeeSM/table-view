@@ -13,7 +13,10 @@
  *
  * Policy:
  * - Updates wrap the per-row patch in a single `$set`. Top-level fields
- *   only — dot-path / nested-field editing is out of scope.
+ *   and dot-paths from F.2 nested edits. Sprint 342 (V2) — structural
+ *   edits join the same per-row patch: cells whose value equals the
+ *   sentinel string `__op__:unset` lift into `$unset` instead of `$set`,
+ *   so a row can mix add-key / overwrite / delete in one round-trip.
  * - `_id` in a `$set` patch is rejected here (the backend rejects it
  *   too); the preview never shows an unexecutable statement.
  * - Sentinel cells (`"{...}"` for documents, `"[N items]"` for arrays)
@@ -350,18 +353,43 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       return;
     }
 
-    const patch: Record<string, unknown> = {};
+    // Sprint 342 V2 — split cells into $set vs $unset by sentinel.
+    // The `__op__:unset` sentinel is owned by DocumentTreePanel's delete
+    // action; it's a string so the existing pendingEdits Map type stays
+    // unchanged (string | object).
+    const setOps: Record<string, unknown> = {};
+    const unsetOps: Record<string, unknown> = {};
     for (const { column, value } of cells) {
-      patch[column] = value;
+      if (value === "__op__:unset") {
+        unsetOps[column] = "";
+      } else {
+        setOps[column] = value;
+      }
     }
     // Empty patch (all edits resolved back to original values upstream)
     // should never happen because `useDataGridEdit` already prunes those,
     // but we guard defensively — generating `updateOne({_id}, {$set: {}})`
     // is a server-side no-op that still costs a roundtrip.
-    if (Object.keys(patch).length === 0) return;
+    if (
+      Object.keys(setOps).length === 0 &&
+      Object.keys(unsetOps).length === 0
+    ) {
+      return;
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (Object.keys(setOps).length > 0) patch.$set = setOps;
+    if (Object.keys(unsetOps).length > 0) patch.$unset = unsetOps;
 
     const filterLiteral = `{ _id: ${formatDocumentIdForMql(id)} }`;
-    const patchLiteral = `{ $set: ${formatMqlObject(patch)} }`;
+    const patchParts: string[] = [];
+    if (Object.keys(setOps).length > 0) {
+      patchParts.push(`$set: ${formatMqlObject(setOps)}`);
+    }
+    if (Object.keys(unsetOps).length > 0) {
+      patchParts.push(`$unset: ${formatMqlObject(unsetOps)}`);
+    }
+    const patchLiteral = `{ ${patchParts.join(", ")} }`;
     updateLines.push(
       `db.${collection}.updateOne(${filterLiteral}, ${patchLiteral})`,
     );

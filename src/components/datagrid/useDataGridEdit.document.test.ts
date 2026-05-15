@@ -178,7 +178,7 @@ describe("useDataGridEdit — document paradigm (Sprint 86)", () => {
         database: "app",
         collection: "users",
         documentId: { ObjectId: HEX_A },
-        patch: { name: "Ada Lovelace" },
+        patch: { $set: { name: "Ada Lovelace" } },
       },
     ]);
     // sqlPreview remains null for the document paradigm so Sprint 87 can

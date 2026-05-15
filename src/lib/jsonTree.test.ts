@@ -146,4 +146,35 @@ describe("filterTreeNodes", () => {
       visible!.has("glossary.GlossDiv.GlossList.GlossEntry.GlossDef.para"),
     ).toBe(true);
   });
+
+  // Sprint 342 V2 (2026-05-15) — regex mode lets users find e.g. `Gloss\w+`
+  // patterns. Locking the option=true branch so a future refactor (e.g.
+  // moving the matcher into a hook) can't silently revert it to substring.
+  it("regex option matches by JS regex (case-insensitive)", () => {
+    const nodes = buildTreeNodes(GLOSSARY);
+    const visible = filterTreeNodes(nodes, "^Gloss(See|Def)", { regex: true });
+    expect(visible).not.toBeNull();
+    expect(
+      visible!.has("glossary.GlossDiv.GlossList.GlossEntry.GlossDef"),
+    ).toBe(true);
+    expect(
+      visible!.has(
+        "glossary.GlossDiv.GlossList.GlossEntry.GlossDef.GlossSeeAlso",
+      ),
+    ).toBe(true);
+    // `ID` doesn't match — should NOT be in the visible set on its own.
+    // (It would only be there if it sat on the path to a match.)
+  });
+
+  // Sprint 342 V2 — invalid regex source (e.g. user typing "[" mid-flight)
+  // must not blank the tree out; fall back to substring matching so the
+  // search bar stays responsive instead of throwing.
+  it("regex option falls back to substring when source is invalid", () => {
+    const nodes = buildTreeNodes(GLOSSARY);
+    const visible = filterTreeNodes(nodes, "Gloss[", { regex: true });
+    // "Gloss[" doesn't appear anywhere as substring; visible should be
+    // an empty (but non-null) set.
+    expect(visible).not.toBeNull();
+    expect(visible!.size).toBe(0);
+  });
 });

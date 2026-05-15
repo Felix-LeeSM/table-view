@@ -18,10 +18,16 @@ export function mqlCommandsToBulkOps(
       case "insertOne":
         return { op: "insertOne", document: cmd.document };
       case "updateOne":
+        // Sprint 342 V2 — `cmd.patch` is already the full update operator
+        // (`{ $set: {...}, $unset: {...} }`) so that mqlGenerator can mix
+        // overwrite + structural delete in a single round-trip. Earlier
+        // sprints emitted the raw `$set` body here, but with structural
+        // edits joining the same per-row patch we move the operator
+        // wrapping up into the generator.
         return {
           op: "updateOne",
           filter: { _id: cmd.documentId },
-          update: { $set: cmd.patch },
+          update: cmd.patch,
         };
       case "deleteOne":
         return {

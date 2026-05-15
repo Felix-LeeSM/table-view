@@ -155,7 +155,13 @@ describe("DocumentTreePanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("BSON wrapper leaves are read-only (no edit input)", async () => {
+  // Sprint 342 V2 (2026-05-15) — BSON wrappers now open the type-aware
+  // BsonTypeEditor instead of being read-only. Commits are normalized
+  // back to a __bson__: wrapper at the grid layer (tagBsonWrapper round-
+  // trip) so pendingEdits Map shape doesn't change. 작성 이유: Sprint 341
+  // V1 은 BSON 을 잠금 처리해서 ObjectId/Date 등을 inline 수정하지 못했고,
+  // 사용자가 별도 cell 단위 BSON editor 로 돌아가야 했다.
+  it("BSON wrapper leaves open BsonTypeEditor and commit EJSON wrappers", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
     render(
@@ -165,10 +171,135 @@ describe("DocumentTreePanel", () => {
         onCommitEdit={commit}
       />,
     );
-    const btn = screen.getByTestId("tree-leaf-_id");
-    expect(btn).toBeDisabled();
-    await user.click(btn);
-    expect(screen.queryByTestId("tree-edit-_id")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("tree-leaf-_id"));
+    expect(screen.getByTestId("tree-edit-bson-_id")).toBeInTheDocument();
+    const input = screen.getByLabelText(/Editing _id \(objectId\)/);
+    await user.clear(input);
+    await user.type(input, "6679abcdcdef012345678902");
+    await user.keyboard("{Enter}");
+    expect(commit).toHaveBeenCalledWith("_id", {
+      $oid: "6679abcdcdef012345678902",
+    });
+  });
+
+  // Sprint 342 V2 (2026-05-15) — structural edit: leaf delete. Trash icon
+  // commits a `__op__:unset` sentinel against the leaf path; the grid-
+  // level commit bar then routes it through mqlGenerator into a `$unset`
+  // operator. 작성 이유: 사용자가 legacy field 를 별도 dialog 로 가지 않고
+  // tree 안에서 바로 mark-for-delete 할 수 있어야 했다.
+  it("trash icon commits __op__:unset and renders strike + 'will delete' badge", async () => {
+    const user = userEvent.setup();
+    const commit = vi.fn();
+    const pending = new Map<string, string>([
+      ["glossary.title", "__op__:unset"],
+    ]);
+    const { rerender } = render(
+      <DocumentTreePanel
+        value={VALUE}
+        fieldName="profile"
+        onCommitEdit={commit}
+      />,
+    );
+    // pre-click: trash exists, no strike marker.
+    expect(
+      screen.queryByTestId("tree-unset-glossary.title"),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("tree-delete-glossary.title"));
+    expect(commit).toHaveBeenCalledWith("glossary.title", "__op__:unset");
+
+    // Re-render with the pending map populated — the leaf must switch
+    // to the strike-through display.
+    rerender(
+      <DocumentTreePanel
+        value={VALUE}
+        fieldName="profile"
+        onCommitEdit={commit}
+        pendingByPath={pending}
+      />,
+    );
+    expect(screen.getByTestId("tree-unset-glossary.title")).toBeInTheDocument();
+    expect(screen.getByText(/will delete/)).toBeInTheDocument();
+    // Trash button disappears once the leaf is already marked.
+    expect(
+      screen.queryByTestId("tree-delete-glossary.title"),
+    ).not.toBeInTheDocument();
+  });
+
+  // Sprint 342 V2 (2026-05-15) — `_id` MUST NOT have a trash button.
+  // MongoDB rejects $unset on _id and mqlGenerator's id-in-patch guard
+  // would drop the whole row; surfacing a non-functional trash icon would
+  // be a UX trap.
+  it("does not render trash for _id leaves", () => {
+    render(
+      <DocumentTreePanel
+        value={{ _id: "abc", name: "Felix" }}
+        fieldName="profile"
+        onCommitEdit={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("tree-delete-_id")).not.toBeInTheDocument();
+    // sanity: non-_id leaves still get the trash.
+    expect(screen.getByTestId("tree-delete-name")).toBeInTheDocument();
+  });
+
+  // Sprint 342 V2 (2026-05-15) — diff toggle: when enabled, leaves with a
+  // pending edit render `original (strike) → pending (amber)` so the user
+  // can audit the change before pressing Save at the grid level. Without
+  // this lock, a future refactor of the leaf render branch could silently
+  // drop the strike-through and the diff button would become decorative.
+  it("diff toggle renders original → pending for pending leaves", async () => {
+    const user = userEvent.setup();
+    const pending = new Map<string, string>([
+      ["glossary.GlossDiv.GlossList.GlossEntry.ID", "SGML-v2"],
+    ]);
+    render(
+      <DocumentTreePanel
+        value={VALUE}
+        fieldName="profile"
+        pendingByPath={pending}
+      />,
+    );
+    // pre-toggle: no diff row.
+    expect(
+      screen.queryByTestId(
+        "tree-diff-glossary.GlossDiv.GlossList.GlossEntry.ID",
+      ),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("document-tree-diff-toggle"));
+    const diff = screen.getByTestId(
+      "tree-diff-glossary.GlossDiv.GlossList.GlossEntry.ID",
+    );
+    expect(diff).toBeInTheDocument();
+    // original (with the rendered quotes) survives, pending is the new value.
+    expect(
+      screen.getByTestId(
+        "tree-diff-original-glossary.GlossDiv.GlossList.GlossEntry.ID",
+      ).textContent,
+    ).toBe('"SGML"');
+    expect(diff.textContent).toContain("SGML-v2");
+  });
+
+  // Sprint 342 V2 (2026-05-15) — regex toggle promotes the search box to
+  // JS-regex mode. Locking the wire-up so a future refactor of the
+  // visiblePaths memo can't silently drop the option.
+  it("regex toggle switches the search to JS regex matching", async () => {
+    const user = userEvent.setup();
+    render(<DocumentTreePanel value={VALUE} fieldName="profile" />);
+    await user.click(screen.getByTestId("document-tree-regex-toggle"));
+    await user.type(
+      screen.getByTestId("document-tree-search"),
+      "^Gloss(List|Entry)$",
+    );
+    expect(
+      screen.getByTestId("tree-node-glossary.GlossDiv.GlossList"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId("tree-node-glossary.GlossDiv.GlossList.GlossEntry"),
+    ).toBeInTheDocument();
+    // `title` should NOT match the regex.
+    expect(
+      screen.queryByTestId("tree-node-glossary.title"),
+    ).not.toBeInTheDocument();
   });
 
   it("close button fires onClose", async () => {
