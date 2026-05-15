@@ -156,7 +156,13 @@ describe("WorkspaceToolbar", () => {
     expect(db).toBeInTheDocument();
   });
 
-  it("shows mongo database labels for document query tabs", () => {
+  // Sprint 328 — Mongo (document) paradigm no longer surfaces the toolbar
+  // DbSwitcher at all. The tab-local DB chip (Sprint 329, DataGrip-style)
+  // will own this surface; sidebar selection is browse-only and does not
+  // mutate connection-level state. The toolbar still shows other slots
+  // (History, SafeMode, Disconnect) — we just guard that the DbSwitcher
+  // chip is absent.
+  it("hides the DbSwitcher entirely for document query tabs (Sprint 328)", () => {
     const mongo = makeConnection("m1", {
       db_type: "mongodb",
       paradigm: "document",
@@ -174,14 +180,12 @@ describe("WorkspaceToolbar", () => {
     useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
 
     render(<WorkspaceToolbar />);
-    // Sprint 128 — the document paradigm + connected status now activates
-    // the DB switcher. The label assertion is unchanged; the role/label
-    // surface flipped from read-only to interactive.
-    const db = screen.getByRole("button", {
-      name: /active database switcher/i,
-    });
-
-    expect(db.textContent).toMatch(/analytics/);
+    expect(
+      screen.queryByRole("button", { name: /active database switcher/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /active database \(read-only\)/i }),
+    ).not.toBeInTheDocument();
   });
 
   // Post-Sprint-187 hotfix [HF-187-A3] — the History button surfaces the

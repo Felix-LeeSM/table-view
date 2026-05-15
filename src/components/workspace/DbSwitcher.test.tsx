@@ -256,12 +256,15 @@ describe("DbSwitcher", () => {
     expect(trigger).toHaveAttribute("aria-haspopup", "listbox");
   });
 
-  it("renders an active switcher when the active tab paradigm is document and connected", () => {
+  // Sprint 328 — Mongo paradigm hides the toolbar switcher entirely (no
+  // chip, no read-only fallback). DataGrip-style tab-local chip will take
+  // over in Sprint 329; sidebar selection no longer mutates connection
+  // state. RDB keeps the switcher because PG's strong database isolation
+  // makes a global active-sub-pool chip meaningful.
+  it("renders nothing when active tab paradigm is document (Sprint 328)", () => {
     setStores({ paradigm: "document", connected: true });
-    render(<DbSwitcher />);
-    expect(
-      screen.getByRole("button", { name: /active database switcher/i }),
-    ).toBeInTheDocument();
+    const { container } = render(<DbSwitcher />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("fetches the database list on click and renders the popover items", async () => {
@@ -442,96 +445,12 @@ describe("DbSwitcher", () => {
     expect(schemaState.tables.c1?.postgres?.public).toHaveLength(1);
   });
 
-  // -- Sprint 131 — Document paradigm switch --
-
-  it("clears the document store for the connection after a successful Mongo switch", async () => {
-    setStores({ paradigm: "document", connected: true, activeDb: "analytics" });
-    // Seed a couple of document-store entries so we can verify they're
-    // cleared. Mirrors the RDB schema-cache test above.
-    useDocumentStore.setState({
-      databases: {
-        c1: [{ name: "analytics" }, { name: "warehouse" }],
-      },
-      // Sprint 265 — nested `(connId, db)` cache shape.
-      collections: {
-        c1: {
-          analytics: [
-            { name: "events", database: "analytics", document_count: null },
-          ],
-        },
-      },
-      fieldsCache: {},
-      queryResults: {},
-      loading: false,
-      error: null,
-    });
-    listDatabasesMock.mockResolvedValueOnce([
-      { name: "analytics" },
-      { name: "warehouse" },
-    ]);
-    switchActiveDbMock.mockResolvedValueOnce(undefined);
-    render(<DbSwitcher />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /active database switcher/i }),
-    );
-    const listbox = await screen.findByRole("listbox", {
-      name: /available databases/i,
-    });
-    const warehouse = within(listbox)
-      .getAllByRole("option")
-      .find((o) => o.textContent?.includes("warehouse"))!;
-    await act(async () => {
-      fireEvent.click(warehouse);
-    });
-    // Backend dispatch must have fired with the new DB name.
-    expect(switchActiveDbMock).toHaveBeenCalledWith("c1", "warehouse");
-    // The document-store cache for the connection must have been wiped
-    // so the sidebar re-fetches against the new active DB.
-    const docState = useDocumentStore.getState();
-    expect(docState.databases["c1"]).toBeUndefined();
-    expect(docState.collections["c1"]).toBeUndefined();
-  });
-
-  it("does NOT clear the schema store on a Mongo paradigm switch", async () => {
-    // Cross-paradigm regression guard — clearing schemaStore on a Mongo
-    // switch would wipe an unrelated RDB connection's tree state if the
-    // sidebar happens to be showing both connections at once.
-    setStores({ paradigm: "document", connected: true, activeDb: "analytics" });
-    useSchemaStore.setState({
-      schemas: { other: { db1: [{ name: "public" }] } },
-      tables: {
-        other: {
-          db1: {
-            public: [{ name: "users", schema: "public", row_count: null }],
-          },
-        },
-      },
-      views: {},
-      functions: {},
-      tableColumnsCache: {},
-    });
-    listDatabasesMock.mockResolvedValueOnce([
-      { name: "analytics" },
-      { name: "warehouse" },
-    ]);
-    switchActiveDbMock.mockResolvedValueOnce(undefined);
-    render(<DbSwitcher />);
-    fireEvent.click(
-      screen.getByRole("button", { name: /active database switcher/i }),
-    );
-    const listbox = await screen.findByRole("listbox", {
-      name: /available databases/i,
-    });
-    const warehouse = within(listbox)
-      .getAllByRole("option")
-      .find((o) => o.textContent?.includes("warehouse"))!;
-    await act(async () => {
-      fireEvent.click(warehouse);
-    });
-    // schemaStore must remain untouched.
-    const schemaState = useSchemaStore.getState();
-    expect(schemaState.schemas.other?.db1).toEqual([{ name: "public" }]);
-  });
+  // Sprint 131 "Document paradigm switch" cases (clears document store on
+  // Mongo switch / does NOT clear schema store on Mongo switch) were
+  // removed in Sprint 328 — the Mongo branch of this component no longer
+  // renders, so its dispatch path is unreachable. The cross-paradigm
+  // guard below ("does NOT clear the document store on an RDB paradigm
+  // switch") is preserved because the symmetric RDB path is still live.
 
   it("does NOT clear the document store on an RDB paradigm switch", async () => {
     // Symmetric guard — clearing documentStore from a PG switch would
@@ -707,27 +626,11 @@ describe("DbSwitcher", () => {
     expect(trigger.textContent).toMatch(/warehouse/);
   });
 
-  it("shows focused connection's activeDb when no tab is open (document)", () => {
-    const conn = makeConnection({
-      paradigm: "document",
-      id: "m1",
-      db_type: "mongodb",
-    });
-    useConnectionStore.setState({
-      connections: [conn],
-      activeStatuses: {
-        m1: { type: "connected", activeDb: "analytics" },
-      },
-      focusedConnId: "m1",
-    });
-    useWorkspaceStore.setState({ workspaces: {} });
-
-    render(<DbSwitcher />);
-    const trigger = screen.getByRole("button", {
-      name: /active database switcher/i,
-    });
-    expect(trigger.textContent).toMatch(/analytics/);
-  });
+  // Sprint 328 — Mongo display branches removed. The two cases below
+  // ("shows focused connection's activeDb when no tab is open (document)"
+  // and "falls back to the document tab database when paradigm is
+  // document") asserted Mongo-side rendering of the toolbar chip, which
+  // no longer exists. RDB equivalents above still apply.
 
   // Reason: when no tab AND no focused connection exist, the em-dash sentinel
   // must still appear. (2026-04-29)
@@ -753,15 +656,6 @@ describe("DbSwitcher", () => {
       name: /active database switcher/i,
     });
     expect(trigger.textContent).toMatch(/warehouse/);
-  });
-
-  it("falls back to the document tab database when paradigm is document", () => {
-    setStores({ paradigm: "document", connected: true });
-    render(<DbSwitcher />);
-    const trigger = screen.getByRole("button", {
-      name: /active database switcher/i,
-    });
-    expect(trigger.textContent).toMatch(/analytics/);
   });
 
   // ADR 0027 (Sprint 262) — workspace state is keyed by `(connId, db)`,

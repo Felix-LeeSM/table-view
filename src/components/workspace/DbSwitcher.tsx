@@ -213,6 +213,16 @@ export default function DbSwitcher() {
     [activeConn, activeDb, paradigm, setActiveDb, clearDocumentConnection],
   );
 
+  // Sprint 328 — Mongo (document) paradigm no longer surfaces a global
+  // switcher in the toolbar. DataGrip-style tab-local DB chip (Sprint 329)
+  // replaces this role; sidebar selection is for browsing only and does
+  // not mutate connection-level state. RDB stays on the toolbar because
+  // PG's strong database isolation makes a global active-sub-pool chip
+  // meaningful. See `docs/explorations/mongo-db-scope-patterns.html`.
+  if (paradigm === "document") {
+    return null;
+  }
+
   // Read-only fallback — Search/Kv paradigms, no connection, or
   // disconnected tab. Preserves chrome footprint so the toolbar doesn't
   // shift when paradigm/state changes.
