@@ -606,6 +606,21 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Sprint 338 — collection / table stats. PG override queries
+    /// `pg_stat_user_tables` + `pg_class`; non-PG RDB adapters inherit
+    /// `Unsupported`.
+    fn collection_stats<'a>(
+        &'a self,
+        _namespace: &'a str,
+        _table: &'a str,
+    ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support collection stats".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
@@ -912,6 +927,13 @@ pub trait DocumentAdapter: DbAdapter {
         filter: bson::Document,
         verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
+
+    /// Sprint 338 — collection stats (`runCommand({collStats})`).
+    fn collection_stats<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

@@ -401,4 +401,12 @@ impl DocumentAdapter for MongoAdapter {
                 .await
         })
     }
+
+    fn collection_stats<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>> {
+        Box::pin(async move { self.collection_stats_impl(db, collection).await })
+    }
 }

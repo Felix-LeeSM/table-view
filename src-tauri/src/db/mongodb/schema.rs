@@ -406,6 +406,78 @@ impl MongoAdapter {
         Ok(())
     }
 
+    /// Sprint 338 (U3 live wire) — `runCommand({collStats: <coll>})`.
+    ///
+    /// PG `pg_stat_user_tables` row 와 같은 `CollectionStatsRow` 슬롯
+    /// 으로 매핑. Mongo-only 필드 (`capped`, `avgObjSize`, `totalIndexSize`,
+    /// `paddingFactor`, …) 는 `extras` 에 raw JSON 값으로 surface 한다.
+    pub(super) async fn collection_stats_impl(
+        &self,
+        db: &str,
+        collection: &str,
+    ) -> Result<crate::models::CollectionStatsRow, AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        if collection.trim().is_empty() {
+            return Err(AppError::Validation(
+                "Collection name must not be empty".into(),
+            ));
+        }
+        let client = self.current_client().await?;
+        let resp = client
+            .database(&resolved)
+            .run_command(doc! { "collStats": collection })
+            .await
+            .map_err(|e| AppError::Database(format!("collStats failed: {e}")))?;
+
+        let rows = resp
+            .get_i64("count")
+            .or_else(|_| resp.get_i32("count").map(|v| v as i64))
+            .unwrap_or(0);
+        let size_bytes = resp
+            .get_i64("storageSize")
+            .or_else(|_| resp.get_i32("storageSize").map(|v| v as i64))
+            .or_else(|_| resp.get_i64("size"))
+            .unwrap_or(0);
+        let indexes = resp
+            .get_i64("nindexes")
+            .or_else(|_| resp.get_i32("nindexes").map(|v| v as i64))
+            .unwrap_or(0);
+
+        // Surface Mongo-only fields verbatim into `extras`.
+        let mut extras: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
+        for key in &[
+            "capped",
+            "avgObjSize",
+            "totalIndexSize",
+            "paddingFactor",
+            "wiredTiger",
+            "ns",
+        ] {
+            if let Some(value) = resp.get(*key) {
+                if let Ok(jv) = serde_json::to_value(value) {
+                    extras.insert((*key).to_string(), jv);
+                }
+            }
+        }
+
+        Ok(crate::models::CollectionStatsRow {
+            rows,
+            size_bytes,
+            indexes,
+            last_vacuum: None,
+            last_analyze: None,
+            seq_scans: None,
+            idx_scans: None,
+            n_dead: None,
+            extras,
+        })
+    }
+
     /// Sprint 337 (U2 live wire) — Mongo `find` query plan.
     ///
     /// `runCommand({explain: {find, filter}, verbosity})` 를 target DB 에
@@ -1003,6 +1075,40 @@ mod tests {
             .explain_query("db", "c", bson::Document::new(), "queryPlanner")
             .await
         {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 338 (U3 live wire) — collection_stats unit cases.
+    #[tokio::test]
+    async fn collection_stats_rejects_empty_db_and_no_active() {
+        let adapter = MongoAdapter::new();
+        match adapter.collection_stats("", "c").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_rejects_empty_collection() {
+        let adapter = MongoAdapter::new();
+        match adapter.collection_stats("db", "   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.collection_stats("db", "c").await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected: {msg}");
             }

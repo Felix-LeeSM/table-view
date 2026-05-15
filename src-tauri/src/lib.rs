@@ -182,6 +182,9 @@ pub fn run() {
         // Sprint 337 (U2 live wire) — RDB / Mongo explain.
         commands::rdb::query::explain_rdb_query,
         commands::document::query::explain_mongo_find,
+        // Sprint 338 (U3 live wire) — collection / table stats.
+        commands::meta::collection_stats_rdb,
+        commands::meta::collection_stats_mongo,
         commands::document::browse::list_mongo_databases,
         commands::document::browse::list_mongo_collections,
         commands::document::browse::infer_collection_fields,

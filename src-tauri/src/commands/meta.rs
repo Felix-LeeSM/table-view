@@ -207,6 +207,57 @@ pub async fn kill_server_activity(
     kill_server_activity_inner(state.inner(), &connection_id, id).await
 }
 
+async fn collection_stats_rdb_inner(
+    state: &AppState,
+    connection_id: &str,
+    schema: &str,
+    table: &str,
+) -> Result<crate::models::CollectionStatsRow, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_rdb()?.collection_stats(schema, table).await
+}
+
+/// Sprint 338 (U3 live wire) — RDB collection (table) stats.
+#[tauri::command]
+pub async fn collection_stats_rdb(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    schema: String,
+    table: String,
+) -> Result<crate::models::CollectionStatsRow, AppError> {
+    collection_stats_rdb_inner(state.inner(), &connection_id, &schema, &table).await
+}
+
+async fn collection_stats_mongo_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+) -> Result<crate::models::CollectionStatsRow, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .collection_stats(database, collection)
+        .await
+}
+
+/// Sprint 338 (U3 live wire) — Mongo `runCommand({collStats: <coll>})`.
+#[tauri::command]
+pub async fn collection_stats_mongo(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+) -> Result<crate::models::CollectionStatsRow, AppError> {
+    collection_stats_mongo_inner(state.inner(), &connection_id, &database, &collection).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -762,5 +813,113 @@ mod tests {
             dispatch_kill_server_activity(&connections, "c", 1).await,
             Err(AppError::Unsupported(_))
         ));
+    }
+
+    // ── Sprint 338 — collection_stats_rdb / collection_stats_mongo ────────
+
+    fn rdb_default_state() -> crate::commands::connection::AppState {
+        // 작성 이유 (2026-05-15): meta.rs 의 inner 는 AppState 를 직접
+        // 받으므로 helper 로 single-connection state 를 만든다.
+        crate::commands::connection::AppState::new()
+    }
+
+    async fn state_with(id: &str, active: ActiveAdapter) -> crate::commands::connection::AppState {
+        let state = rdb_default_state();
+        state
+            .active_connections
+            .lock()
+            .await
+            .insert(id.to_string(), active);
+        state
+    }
+
+    #[tokio::test]
+    async fn collection_stats_rdb_unknown_connection_returns_notfound() {
+        let state = rdb_default_state();
+        match collection_stats_rdb_inner(&state, "absent", "public", "users").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_rdb_document_paradigm_returns_unsupported() {
+        let state = state_with("d", document_default()).await;
+        assert!(matches!(
+            collection_stats_rdb_inner(&state, "d", "public", "users").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn collection_stats_rdb_routes_to_trait_method() {
+        let mut s = StubRdbAdapter::default();
+        s.collection_stats_fn = Some(Box::new(|schema: &str, table: &str| {
+            Ok(crate::models::CollectionStatsRow {
+                rows: 42,
+                size_bytes: 100,
+                indexes: 2,
+                last_vacuum: None,
+                last_analyze: None,
+                seq_scans: None,
+                idx_scans: None,
+                n_dead: None,
+                extras: std::collections::HashMap::from([(
+                    "echo".into(),
+                    serde_json::json!(format!("{schema}.{table}")),
+                )]),
+            })
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = collection_stats_rdb_inner(&state, "c", "public", "users")
+            .await
+            .unwrap();
+        assert_eq!(r.rows, 42);
+        assert_eq!(r.extras["echo"], serde_json::json!("public.users"));
+    }
+
+    #[tokio::test]
+    async fn collection_stats_mongo_unknown_connection_returns_notfound() {
+        let state = rdb_default_state();
+        match collection_stats_mongo_inner(&state, "absent", "db", "c").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_mongo_rdb_paradigm_returns_unsupported() {
+        let state = state_with("r", rdb_default()).await;
+        assert!(matches!(
+            collection_stats_mongo_inner(&state, "r", "db", "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn collection_stats_mongo_routes_to_trait_method() {
+        let mut s = StubDocumentAdapter::default();
+        s.collection_stats_fn = Some(Box::new(|db: &str, coll: &str| {
+            Ok(crate::models::CollectionStatsRow {
+                rows: 7,
+                size_bytes: 500,
+                indexes: 3,
+                last_vacuum: None,
+                last_analyze: None,
+                seq_scans: None,
+                idx_scans: None,
+                n_dead: None,
+                extras: std::collections::HashMap::from([(
+                    "ns".into(),
+                    serde_json::json!(format!("{db}.{coll}")),
+                )]),
+            })
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let r = collection_stats_mongo_inner(&state, "d", "mydb", "mycoll")
+            .await
+            .unwrap();
+        assert_eq!(r.rows, 7);
+        assert_eq!(r.extras["ns"], serde_json::json!("mydb.mycoll"));
     }
 }

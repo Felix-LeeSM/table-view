@@ -278,6 +278,25 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
             Box::pin(async { Ok(serde_json::Value::Null) })
         }
+        fn collection_stats<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+        ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>> {
+            Box::pin(async {
+                Ok(crate::models::CollectionStatsRow {
+                    rows: 0,
+                    size_bytes: 0,
+                    indexes: 0,
+                    last_vacuum: None,
+                    last_analyze: None,
+                    seq_scans: None,
+                    idx_scans: None,
+                    n_dead: None,
+                    extras: std::collections::HashMap::new(),
+                })
+            })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -876,6 +895,25 @@ impl DocumentAdapter for FakeCancellableDocument {
         _verbosity: &'a str,
     ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
         Box::pin(async { Ok(serde_json::Value::Null) })
+    }
+    fn collection_stats<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+    ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>> {
+        Box::pin(async {
+            Ok(crate::models::CollectionStatsRow {
+                rows: 0,
+                size_bytes: 0,
+                indexes: 0,
+                last_vacuum: None,
+                last_analyze: None,
+                seq_scans: None,
+                idx_scans: None,
+                n_dead: None,
+                extras: std::collections::HashMap::new(),
+            })
+        })
     }
 }
 
@@ -1777,6 +1815,19 @@ async fn test_rdb_default_explain_query_returns_unsupported() {
     match adapter.explain_query("SELECT 1").await {
         Err(AppError::Unsupported(msg)) => {
             assert!(msg.contains("EXPLAIN"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+// 작성 이유 (2026-05-15, Sprint 338): RdbAdapter::collection_stats default
+// body Unsupported 단언.
+#[tokio::test]
+async fn test_rdb_default_collection_stats_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.collection_stats("public", "t").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("collection stats"), "unexpected: {msg}");
         }
         other => panic!("expected Unsupported, got {:?}", other.is_ok()),
     }

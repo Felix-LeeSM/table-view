@@ -489,6 +489,16 @@ impl RdbAdapter for PostgresAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<serde_json::Value, AppError>> + Send + 'a>> {
         Box::pin(async move { self.explain_query(sql).await })
     }
+
+    fn collection_stats<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> Pin<
+        Box<dyn Future<Output = Result<crate::models::CollectionStatsRow, AppError>> + Send + 'a>,
+    > {
+        Box::pin(async move { self.collection_stats(namespace, table).await })
+    }
 }
 
 #[cfg(test)]

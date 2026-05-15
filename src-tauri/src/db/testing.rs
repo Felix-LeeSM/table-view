@@ -134,6 +134,9 @@ pub(crate) struct StubRdbAdapter {
     // Sprint 337 — override slot for RDB explain.
     pub explain_query_fn:
         Option<Box<dyn Fn(&str) -> Result<serde_json::Value, AppError> + Send + Sync>>,
+
+    // Sprint 338 — override slot for RDB collection_stats.
+    pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -181,6 +184,7 @@ impl Default for StubRdbAdapter {
             list_server_activity_fn: None,
             kill_session_fn: None,
             explain_query_fn: None,
+            collection_stats_fn: None,
         }
     }
 }
@@ -608,6 +612,31 @@ impl RdbAdapter for StubRdbAdapter {
             .map_or_else(|| Ok(serde_json::Value::Null), |f| f(sql));
         Box::pin(async move { r })
     }
+
+    // Sprint 338 — collection_stats stub.
+    fn collection_stats<'a>(
+        &'a self,
+        namespace: &'a str,
+        table: &'a str,
+    ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>> {
+        let r = self.collection_stats_fn.as_ref().map_or_else(
+            || {
+                Ok(crate::models::CollectionStatsRow {
+                    rows: 0,
+                    size_bytes: 0,
+                    indexes: 0,
+                    last_vacuum: None,
+                    last_analyze: None,
+                    seq_scans: None,
+                    idx_scans: None,
+                    n_dead: None,
+                    extras: std::collections::HashMap::new(),
+                })
+            },
+            |f| f(namespace, table),
+        );
+        Box::pin(async move { r })
+    }
 }
 
 // ── StubDocumentAdapter ──────────────────────────────────────────────────
@@ -678,6 +707,9 @@ pub(crate) struct StubDocumentAdapter {
                 + Sync,
         >,
     >,
+
+    // Sprint 338 — override slot for Mongo collection_stats.
+    pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -708,6 +740,7 @@ impl Default for StubDocumentAdapter {
             current_op_fn: None,
             kill_op_fn: None,
             explain_query_fn: None,
+            collection_stats_fn: None,
         }
     }
 }
@@ -1040,6 +1073,31 @@ impl DocumentAdapter for StubDocumentAdapter {
         let r = self.explain_query_fn.as_ref().map_or_else(
             || Ok(serde_json::Value::Null),
             |f| f(db, collection, filter, verbosity),
+        );
+        Box::pin(async move { r })
+    }
+
+    // Sprint 338 — collection_stats stub.
+    fn collection_stats<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>> {
+        let r = self.collection_stats_fn.as_ref().map_or_else(
+            || {
+                Ok(crate::models::CollectionStatsRow {
+                    rows: 0,
+                    size_bytes: 0,
+                    indexes: 0,
+                    last_vacuum: None,
+                    last_analyze: None,
+                    seq_scans: None,
+                    idx_scans: None,
+                    n_dead: None,
+                    extras: std::collections::HashMap::new(),
+                })
+            },
+            |f| f(db, collection),
         );
         Box::pin(async move { r })
     }

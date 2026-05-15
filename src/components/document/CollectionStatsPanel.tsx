@@ -1,8 +1,16 @@
-// Sprint 327 (2026-05-15) — U3 scaffolding. Collection / table stats panel.
-// Mongo `collStats` / `dbStats` runCommand wrappers pending; RDB
-// `pg_stat_user_tables` query reuses execute_query (Sprint 334).
+// Sprint 338 (2026-05-15) — U3 live wire. Replaces the
+// BackendPendingPlaceholder with a live stats grid sourced from
+// `pg_stat_user_tables` (RDB) or `runCommand({collStats})` (Mongo).
 
-import { BackendPendingPlaceholder } from "@/components/shared/BackendPendingPlaceholder";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  collectionStatsMongo,
+  collectionStatsRdb,
+  type CollectionStatsRow,
+} from "@/lib/api/collectionStats";
+import { safeStringifyCell } from "@/lib/jsonCell";
 
 export interface CollectionStatsPanelProps {
   connectionId: string;
@@ -17,22 +25,119 @@ export function CollectionStatsPanel({
   collection,
   paradigm,
 }: CollectionStatsPanelProps) {
+  const [stats, setStats] = useState<CollectionStatsRow | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next =
+        paradigm === "document"
+          ? await collectionStatsMongo(connectionId, database, collection)
+          : await collectionStatsRdb(connectionId, database, collection);
+      setStats(next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [connectionId, paradigm, database, collection]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
   return (
     <section
       aria-label="Collection stats"
       data-paradigm={paradigm}
       data-testid="collection-stats-panel"
+      className="flex flex-col gap-2 p-3"
     >
-      <BackendPendingPlaceholder
-        title={`Stats — ${database}.${collection}`}
-        pendingSprint="Sprint 334"
-        description={
-          paradigm === "document"
-            ? `Mongo collStats runCommand wrapper pending (conn ${connectionId}).`
-            : `RDB pg_stat_user_tables / pg_class wiring pending (conn ${connectionId}).`
-        }
-        testId="collection-stats-placeholder"
-      />
+      <header className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+        <span>
+          Stats — {database}.{collection}{" "}
+          {paradigm === "table" ? "(PG)" : "(Mongo)"}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid="collection-stats-refresh"
+          onClick={() => void refresh()}
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader2 className="animate-spin" size={12} aria-hidden />
+          ) : (
+            <RefreshCw size={12} aria-hidden />
+          )}
+          Refresh
+        </Button>
+      </header>
+
+      {error !== null && (
+        <div
+          role="alert"
+          data-testid="collection-stats-error"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+        >
+          {error}
+        </div>
+      )}
+
+      {!loading && error === null && stats !== null && (
+        <dl
+          data-testid="collection-stats-grid"
+          className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs"
+        >
+          <dt className="text-muted-foreground">Rows</dt>
+          <dd className="font-mono">{stats.rows.toLocaleString()}</dd>
+          <dt className="text-muted-foreground">Size (bytes)</dt>
+          <dd className="font-mono">{stats.sizeBytes.toLocaleString()}</dd>
+          <dt className="text-muted-foreground">Indexes</dt>
+          <dd className="font-mono">{stats.indexes}</dd>
+          {stats.lastVacuum !== null && (
+            <>
+              <dt className="text-muted-foreground">Last vacuum</dt>
+              <dd className="font-mono">{stats.lastVacuum}</dd>
+            </>
+          )}
+          {stats.lastAnalyze !== null && (
+            <>
+              <dt className="text-muted-foreground">Last analyze</dt>
+              <dd className="font-mono">{stats.lastAnalyze}</dd>
+            </>
+          )}
+          {stats.seqScans !== null && (
+            <>
+              <dt className="text-muted-foreground">Seq scans</dt>
+              <dd className="font-mono">{stats.seqScans.toLocaleString()}</dd>
+            </>
+          )}
+          {stats.idxScans !== null && (
+            <>
+              <dt className="text-muted-foreground">Idx scans</dt>
+              <dd className="font-mono">{stats.idxScans.toLocaleString()}</dd>
+            </>
+          )}
+          {stats.nDead !== null && (
+            <>
+              <dt className="text-muted-foreground">Dead rows</dt>
+              <dd className="font-mono">{stats.nDead.toLocaleString()}</dd>
+            </>
+          )}
+          {Object.keys(stats.extras).length > 0 && (
+            <>
+              <dt className="col-span-2 mt-2 text-muted-foreground">Extras</dt>
+              <dd className="col-span-2 max-h-48 overflow-auto rounded-md border border-border bg-secondary/30 p-2 font-mono text-xs">
+                {safeStringifyCell(stats.extras, 2)}
+              </dd>
+            </>
+          )}
+        </dl>
+      )}
     </section>
   );
 }

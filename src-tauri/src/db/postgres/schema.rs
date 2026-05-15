@@ -1219,6 +1219,79 @@ impl PostgresAdapter {
             .map_err(|e| AppError::Database(format!("EXPLAIN failed: {e}")))?;
         Ok(row.0)
     }
+
+    /// Sprint 338 (U3 live wire) — table stats from
+    /// `pg_stat_user_tables` + `pg_total_relation_size`. Identifiers
+    /// are validated by the shared `validate_identifier` helper before
+    /// SQL emission. Returns row count from `n_live_tup` (approximate;
+    /// for an exact count the caller would need `SELECT COUNT(*)` which
+    /// is intentionally avoided — `pg_stat_user_tables` is meant as
+    /// per-relation telemetry, not a precise tally).
+    pub async fn collection_stats(
+        &self,
+        schema: &str,
+        table: &str,
+    ) -> Result<crate::models::CollectionStatsRow, AppError> {
+        use crate::db::postgres::mutations::validate_identifier;
+        validate_identifier(schema, "Schema name")?;
+        validate_identifier(table, "Table name")?;
+
+        let pool = self.active_pool().await?;
+
+        #[allow(clippy::type_complexity)]
+        type Row = (
+            Option<i64>,    // n_live_tup
+            Option<i64>,    // n_dead_tup
+            Option<i64>,    // seq_scan
+            Option<i64>,    // idx_scan
+            Option<String>, // last_vacuum (text)
+            Option<String>, // last_analyze (text)
+        );
+        let stat: Row = sqlx::query_as(
+            "SELECT n_live_tup, n_dead_tup, seq_scan, idx_scan, \
+                    to_char(last_vacuum AT TIME ZONE 'UTC', \
+                            'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), \
+                    to_char(last_analyze AT TIME ZONE 'UTC', \
+                            'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') \
+             FROM pg_stat_user_tables \
+             WHERE schemaname = $1 AND relname = $2",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("pg_stat_user_tables failed: {e}")))?
+        .unwrap_or((None, None, None, None, None, None));
+
+        // Size + index count come from pg_catalog (not pg_stat_user_tables).
+        let qualified = format!("\"{schema}\".\"{table}\"");
+        let size: i64 = sqlx::query_scalar("SELECT pg_total_relation_size($1)::bigint")
+            .bind(&qualified)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("pg_total_relation_size failed: {e}")))?;
+        let indexes: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM pg_indexes \
+             WHERE schemaname = $1 AND tablename = $2",
+        )
+        .bind(schema)
+        .bind(table)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("pg_indexes count failed: {e}")))?;
+
+        Ok(crate::models::CollectionStatsRow {
+            rows: stat.0.unwrap_or(0),
+            size_bytes: size,
+            indexes,
+            last_vacuum: stat.4,
+            last_analyze: stat.5,
+            seq_scans: stat.2,
+            idx_scans: stat.3,
+            n_dead: stat.1,
+            extras: std::collections::HashMap::new(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -1437,6 +1510,49 @@ mod tests {
     async fn explain_query_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         match adapter.explain_query("SELECT 1").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 338 (U3 live wire) — collection_stats unit cases.
+    #[tokio::test]
+    async fn collection_stats_rejects_empty_schema() {
+        let adapter = PostgresAdapter::new();
+        match adapter.collection_stats("", "users").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Schema name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_rejects_empty_table() {
+        let adapter = PostgresAdapter::new();
+        match adapter.collection_stats("public", "").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Table name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_rejects_invalid_identifier() {
+        let adapter = PostgresAdapter::new();
+        match adapter.collection_stats("public", "users; DROP").await {
+            Err(AppError::Validation(_)) => {}
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn collection_stats_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.collection_stats("public", "users").await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("Not connected"), "unexpected: {msg}");
             }

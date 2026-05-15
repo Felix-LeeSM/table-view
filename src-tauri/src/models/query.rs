@@ -64,6 +64,37 @@ pub struct ServerActivityRow {
     pub started_at: Option<String>,
 }
 
+/// Sprint 338 — U3 wire shape. PG `pg_stat_user_tables` + `pg_class`
+/// row / Mongo `collStats` runCommand response are mapped into the
+/// same struct so the stats panel renders both paradigms with the
+/// same component. Paradigm-specific extras land in `extras` as a
+/// loose JSON map (UI surfaces them as a "raw" subsection without
+/// owning their semantics).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionStatsRow {
+    /// Approximate row / document count.
+    pub rows: i64,
+    /// On-disk size in bytes (PG: `pg_total_relation_size`,
+    /// Mongo: `storageSize`).
+    pub size_bytes: i64,
+    /// Number of secondary indexes (PG: `idx_scan` count not relevant —
+    /// uses `pg_index` count; Mongo: `nindexes`).
+    pub indexes: i64,
+    /// Last vacuum / compaction (PG: `last_vacuum`; Mongo: None).
+    pub last_vacuum: Option<String>,
+    /// Last analyze / sample (PG: `last_analyze`; Mongo: None).
+    pub last_analyze: Option<String>,
+    /// Sequential scans (PG: `seq_scan`; Mongo: None).
+    pub seq_scans: Option<i64>,
+    /// Index scans (PG: `idx_scan`; Mongo: None).
+    pub idx_scans: Option<i64>,
+    /// Dead tuple count (PG: `n_dead_tup`; Mongo: None).
+    pub n_dead: Option<i64>,
+    /// Paradigm-specific extras (Mongo: `capped`, `avgObjSize`, etc.).
+    pub extras: std::collections::HashMap<String, Value>,
+}
+
 /// Result of an arbitrary SQL query execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {
