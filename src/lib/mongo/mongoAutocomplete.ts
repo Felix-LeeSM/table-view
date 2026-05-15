@@ -140,23 +140,240 @@ export const MONGO_ALL_OPERATORS: readonly string[] = [
 export const MONGOSH_DB_METHODS: ReadonlyArray<{
   label: string;
   type: "function";
+  /** Inline signature surfaced as `Completion.detail`. */
+  detail: string;
+  /** One-liner surfaced in the right-side `Completion.info` panel. */
+  info: string;
 }> = [
-  { label: "find", type: "function" },
-  { label: "findOne", type: "function" },
-  { label: "aggregate", type: "function" },
-  { label: "countDocuments", type: "function" },
-  { label: "estimatedDocumentCount", type: "function" },
-  { label: "distinct", type: "function" },
-  { label: "insertOne", type: "function" },
-  { label: "insertMany", type: "function" },
-  { label: "updateOne", type: "function" },
-  { label: "updateMany", type: "function" },
-  { label: "replaceOne", type: "function" },
-  { label: "deleteOne", type: "function" },
-  { label: "deleteMany", type: "function" },
-  { label: "createIndex", type: "function" },
-  { label: "dropIndex", type: "function" },
+  {
+    label: "find",
+    type: "function",
+    detail: "(filter?, options?)",
+    info: "Return a cursor over documents matching the filter.",
+  },
+  {
+    label: "findOne",
+    type: "function",
+    detail: "(filter, options?)",
+    info: "Return the first document matching the filter, or null.",
+  },
+  {
+    label: "aggregate",
+    type: "function",
+    detail: "(pipeline, options?)",
+    info: "Run an aggregation pipeline and return the resulting cursor.",
+  },
+  {
+    label: "countDocuments",
+    type: "function",
+    detail: "(filter?, options?)",
+    info: "Exact count of documents matching the filter.",
+  },
+  {
+    label: "estimatedDocumentCount",
+    type: "function",
+    detail: "(options?)",
+    info: "Fast metadata-based count of all documents (no filter).",
+  },
+  {
+    label: "distinct",
+    type: "function",
+    detail: "(field, filter?, options?)",
+    info: "Distinct values of `field` for documents matching the filter.",
+  },
+  {
+    label: "insertOne",
+    type: "function",
+    detail: "(doc, options?)",
+    info: "Insert a single document; returns the inserted `_id`.",
+  },
+  {
+    label: "insertMany",
+    type: "function",
+    detail: "(docs[], options?)",
+    info: "Insert multiple documents in order (or unordered with options).",
+  },
+  {
+    label: "updateOne",
+    type: "function",
+    detail: "(filter, update, options?)",
+    info: "Update the first document matching the filter.",
+  },
+  {
+    label: "updateMany",
+    type: "function",
+    detail: "(filter, update, options?)",
+    info: "Update every document matching the filter.",
+  },
+  {
+    label: "replaceOne",
+    type: "function",
+    detail: "(filter, replacement, options?)",
+    info: "Replace the matched document wholesale (preserves `_id`).",
+  },
+  {
+    label: "deleteOne",
+    type: "function",
+    detail: "(filter, options?)",
+    info: "Delete the first document matching the filter.",
+  },
+  {
+    label: "deleteMany",
+    type: "function",
+    detail: "(filter, options?)",
+    info: "Delete every document matching the filter.",
+  },
+  {
+    label: "createIndex",
+    type: "function",
+    detail: "(keys, options?)",
+    info: "Create an index on the given key spec (e.g. `{ email: 1 }`).",
+  },
+  {
+    label: "dropIndex",
+    type: "function",
+    detail: "(indexName)",
+    info: "Drop the named index from the collection.",
+  },
 ];
+
+/**
+ * Per-operator metadata for `Completion.detail` (inline signature) and
+ * `Completion.info` (right-side help panel). The list is intentionally a
+ * lookup map so the per-operator entry is colocated with the trigger
+ * token; missing entries fall through to a default surface (label only).
+ */
+const OPERATOR_META: Record<string, { detail: string; info: string }> = {
+  // Query operators
+  $eq: { detail: "value", info: "Matches values equal to the operand." },
+  $ne: { detail: "value", info: "Matches values not equal to the operand." },
+  $gt: { detail: "value", info: "Strictly greater than the operand." },
+  $gte: { detail: "value", info: "Greater than or equal to the operand." },
+  $lt: { detail: "value", info: "Strictly less than the operand." },
+  $lte: { detail: "value", info: "Less than or equal to the operand." },
+  $in: { detail: "[…]", info: "Matches any value in the given array." },
+  $nin: { detail: "[…]", info: "Matches values not in the given array." },
+  $and: { detail: "[expr,…]", info: "All sub-expressions must match." },
+  $or: { detail: "[expr,…]", info: "At least one sub-expression must match." },
+  $nor: { detail: "[expr,…]", info: "None of the sub-expressions match." },
+  $not: { detail: "expr", info: "Negates the inner expression." },
+  $exists: { detail: "boolean", info: "Field exists (true) / absent (false)." },
+  $type: {
+    detail: "bsonType",
+    info: "Matches documents where the field has the given BSON type.",
+  },
+  $regex: {
+    detail: "regex",
+    info: "Matches strings against a regular expression.",
+  },
+  $elemMatch: {
+    detail: "{…}",
+    info: "At least one array element matches the inner expression.",
+  },
+  $size: {
+    detail: "number",
+    info: "Matches arrays of exactly the given length.",
+  },
+  $all: { detail: "[…]", info: "Array contains every listed value." },
+
+  // Aggregation stages
+  $match: {
+    detail: "{filter}",
+    info: "Filter documents to those matching the predicate.",
+  },
+  $project: {
+    detail: "{spec}",
+    info: "Reshape documents — include / exclude / compute fields.",
+  },
+  $group: {
+    detail: "{_id, …}",
+    info: "Group documents by `_id` and apply accumulators.",
+  },
+  $sort: {
+    detail: "{field: 1|-1}",
+    info: "Sort the pipeline (1 = asc, -1 = desc).",
+  },
+  $limit: { detail: "n", info: "Keep only the first n documents." },
+  $skip: { detail: "n", info: "Skip the first n documents." },
+  $unwind: {
+    detail: "$path",
+    info: "Emit one document per element of the array field.",
+  },
+  $lookup: {
+    detail: "{from, localField, …}",
+    info: "Left-outer join against another collection.",
+  },
+  $count: {
+    detail: '"name"',
+    info: "Replace the pipeline with a single doc of the given key = count.",
+  },
+  $addFields: {
+    detail: "{spec}",
+    info: "Append computed fields to each document.",
+  },
+  $replaceRoot: {
+    detail: "{newRoot}",
+    info: "Replace the document with the given subdocument.",
+  },
+  $facet: {
+    detail: "{name: [stages]}",
+    info: "Run multiple sub-pipelines in parallel.",
+  },
+  $out: {
+    detail: '"coll"',
+    info: "Write the pipeline output to a target collection (destructive).",
+  },
+  $merge: {
+    detail: "{into, …}",
+    info: "Upsert pipeline output into a target collection.",
+  },
+
+  // Accumulators
+  $sum: { detail: "expr", info: "Sum of numeric values across the group." },
+  $avg: { detail: "expr", info: "Mean of numeric values across the group." },
+  $min: { detail: "expr", info: "Minimum value across the group." },
+  $max: { detail: "expr", info: "Maximum value across the group." },
+  $push: {
+    detail: "expr",
+    info: "Append each expression to an array (preserves duplicates).",
+  },
+  $addToSet: {
+    detail: "expr",
+    info: "Append each expression to an array (deduplicated).",
+  },
+  $first: { detail: "expr", info: "First value encountered in the group." },
+  $last: { detail: "expr", info: "Last value encountered in the group." },
+
+  // BSON type tags
+  $oid: { detail: '"hex"', info: "ObjectId literal — 24-char hex string." },
+  $date: {
+    detail: "ISO|epoch",
+    info: 'ISO-8601 date string or `{ $numberLong: "ms" }`.',
+  },
+  $numberLong: { detail: '"int64"', info: "64-bit signed integer literal." },
+  $numberDouble: { detail: '"double"', info: "IEEE-754 double literal." },
+  $numberInt: { detail: '"int32"', info: "32-bit signed integer literal." },
+  $numberDecimal: { detail: '"decimal"', info: "IEEE-754 decimal128 literal." },
+  $binary: { detail: "{base64, subType}", info: "Binary blob with subtype." },
+  $regularExpression: {
+    detail: "{pattern, options}",
+    info: "BSON regex literal.",
+  },
+  $timestamp: {
+    detail: "{t, i}",
+    info: "Replication timestamp (seconds + increment).",
+  },
+  $minKey: {
+    detail: "1",
+    info: "Lower bound sentinel — sorts before any value.",
+  },
+  $maxKey: {
+    detail: "1",
+    info: "Upper bound sentinel — sorts after any value.",
+  },
+  $symbol: { detail: '"sym"', info: "Deprecated BSON symbol type." },
+  $code: { detail: '"js"', info: "Server-side JavaScript code literal." },
+};
 
 export type MongoQueryMode = "find" | "aggregate";
 
@@ -408,7 +625,17 @@ function pushOperators(
   type: string,
 ): void {
   for (const label of list) {
-    out.push({ label, apply: label, type });
+    // 2026-05-15 — UX 옵션 5/6: 알려진 operator 면 시그니처(detail)와
+    // 한 줄 설명(info)을 같이 surface. 누락된 토큰은 label only 로 fall
+    // through 해서 popup 이 깨지지 않는다.
+    const meta = OPERATOR_META[label];
+    out.push({
+      label,
+      apply: label,
+      type,
+      detail: meta?.detail,
+      info: meta?.info,
+    });
   }
 }
 
@@ -452,6 +679,8 @@ export function createMongoshDbSource(
         label: cand.label,
         apply: cand.label,
         type: cand.type,
+        detail: cand.detail,
+        info: cand.info,
       }));
       return {
         from,
@@ -481,6 +710,8 @@ export function createMongoshDbSource(
               label: cand.label,
               apply: cand.label,
               type: cand.type,
+              detail: cand.detail,
+              info: cand.info,
             }));
       return {
         from,

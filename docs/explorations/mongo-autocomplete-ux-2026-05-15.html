@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Autocomplete UX options — 2026-05-15</title>
+    <style>
+      :root {
+        --bg: #f6f6f8;
+        --panel: #ffffff;
+        --editor: #1f2126;
+        --editor-fg: #d8d8e0;
+        --line: #2a2c33;
+        --popover: #2d2f36;
+        --popover-fg: #e3e3ea;
+        --border: #4a4d57;
+        --muted: #8a8c95;
+        --primary: #7c5cff;
+        --primary-fg: #ffffff;
+        --type-fn: #5fb3ff;
+        --type-class: #8de28d;
+        --type-keyword: #f0a85a;
+        --type-property: #ff9bd6;
+        --type-tag: #c9a9ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: #1f2126;
+      }
+      header {
+        margin-bottom: 28px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+      header p {
+        margin: 0;
+        color: #555;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid #e1e1e6;
+        border-radius: 12px;
+        padding: 18px 18px 20px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+      .card h2 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card .badge {
+        font-size: 11px;
+        color: var(--primary);
+        background: rgba(124, 92, 255, 0.12);
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .card .why {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        color: #6b6d77;
+        line-height: 1.55;
+      }
+      .editor {
+        background: var(--editor);
+        color: var(--editor-fg);
+        font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+        font-size: 12.5px;
+        border-radius: 6px;
+        padding: 14px 14px 18px;
+        position: relative;
+        min-height: 230px;
+      }
+      .ln {
+        color: #5a5d68;
+        margin-right: 10px;
+        display: inline-block;
+        width: 18px;
+        text-align: right;
+        user-select: none;
+      }
+      .code-line {
+        padding: 2px 0;
+      }
+      .cursor {
+        display: inline-block;
+        width: 1px;
+        height: 14px;
+        background: var(--editor-fg);
+        vertical-align: -2px;
+        animation: blink 1s steps(2) infinite;
+      }
+      @keyframes blink {
+        0%,
+        50% {
+          opacity: 1;
+        }
+        51%,
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* popover */
+      .popover {
+        position: absolute;
+        background: var(--popover);
+        color: var(--popover-fg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        box-shadow:
+          0 4px 12px rgba(0, 0, 0, 0.35),
+          0 2px 4px rgba(0, 0, 0, 0.25);
+        font-family: "JetBrains Mono", "Fira Code", monospace;
+        font-size: 12px;
+        min-width: 220px;
+        overflow: hidden;
+      }
+      .opt {
+        padding: 4px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+      }
+      .opt.active {
+        background: var(--primary);
+        color: var(--primary-fg);
+      }
+      .opt .icon {
+        width: 14px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 700;
+        opacity: 0.85;
+      }
+      .opt .match {
+        font-weight: 700;
+      }
+      .opt .detail {
+        margin-left: auto;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .opt.active .detail {
+        color: rgba(255, 255, 255, 0.78);
+      }
+
+      /* OPTION 1 — highlight bar */
+      .pop-1 .opt.active {
+        position: relative;
+      }
+      .pop-1 .opt.active::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: #ffd166;
+      }
+
+      /* OPTION 2 — hint bar */
+      .hint {
+        border-top: 1px solid var(--border);
+        padding: 5px 10px;
+        font-size: 10.5px;
+        color: var(--muted);
+        display: flex;
+        gap: 12px;
+      }
+      .hint kbd {
+        font-family: inherit;
+        font-size: 10px;
+        background: rgba(255, 255, 255, 0.07);
+        border: 1px solid var(--border);
+        padding: 1px 5px;
+        border-radius: 3px;
+        margin-right: 3px;
+      }
+
+      /* OPTION 3 — Tab cycle */
+      .pop-3 .opt.active .detail::before {
+        content: "↩ ";
+      }
+
+      /* OPTION 4 — category icon colors */
+      .icon-fn {
+        color: var(--type-fn);
+      }
+      .icon-class {
+        color: var(--type-class);
+      }
+      .icon-keyword {
+        color: var(--type-keyword);
+      }
+      .icon-property {
+        color: var(--type-property);
+      }
+      .icon-tag {
+        color: var(--type-tag);
+      }
+
+      /* OPTION 5 — signature detail */
+      .pop-5 .opt .sig {
+        color: var(--muted);
+        font-size: 11px;
+        margin-left: 6px;
+      }
+      .pop-5 .opt.active .sig {
+        color: rgba(255, 255, 255, 0.82);
+      }
+
+      /* OPTION 6 — info panel */
+      .pop-6 {
+        display: flex;
+        min-width: 360px;
+      }
+      .pop-6 .col-list {
+        min-width: 180px;
+        border-right: 1px solid var(--border);
+      }
+      .pop-6 .col-info {
+        padding: 10px 12px;
+        font-size: 11.5px;
+        line-height: 1.55;
+        color: var(--popover-fg);
+        max-width: 200px;
+      }
+      .pop-6 .col-info h4 {
+        margin: 0 0 4px;
+        font-size: 11.5px;
+        color: var(--type-fn);
+        font-family: inherit;
+      }
+      .pop-6 .col-info p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .pop-6 .col-info code {
+        background: rgba(255, 255, 255, 0.06);
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 10.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Autocomplete UX 옵션 비교 (Mongo / SQL 공유)</h1>
+      <p>
+        현재 baseline 은 popup 외곽선 + 항목 highlight + ↑↓ navigate +
+        Tab/Enter accept + Esc close. 아래 6 옵션은 그 위에 얹는 변형들.
+        모두 같은 popup component 에 적용되므로 SQL editor 의
+        SELECT/SELECTIVE popup 에도 동일하게 반영됨.
+      </p>
+    </header>
+
+    <div class="grid">
+      <!-- OPTION 1 — highlight 강화 -->
+      <section class="card">
+        <h2>1 · 선택 highlight 강화 <span class="badge">low cost</span></h2>
+        <p class="why">
+          현재 active 항목은 보라색 배경뿐. 좌측에 3px accent bar 를 추가해
+          어두운 배경에서도 즉시 어디가 active 인지 인식.
+        </p>
+        <div class="editor">
+          <div class="code-line">
+            <span class="ln">1</span>db.users.fi<span class="cursor"></span>
+          </div>
+          <div class="popover pop-1" style="left: 110px; top: 38px">
+            <div class="opt active">
+              <span class="icon">ƒ</span><span class="match">fi</span>nd
+              <span class="detail">method</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span><span class="match">fi</span>ndOne
+              <span class="detail">method</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span>findOneAndUpdate
+              <span class="detail">method</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OPTION 2 — hint bar -->
+      <section class="card">
+        <h2>2 · 키 안내 hint bar <span class="badge">low cost</span></h2>
+        <p class="why">
+          popup 하단에 한 줄. 신규 사용자가 ↑↓/Enter/Esc 를 자동으로 학습.
+          폭이 늘어나 좁은 화면에서 거슬릴 가능성 트레이드오프.
+        </p>
+        <div class="editor">
+          <div class="code-line">
+            <span class="ln">1</span>db.users.fi<span class="cursor"></span>
+          </div>
+          <div class="popover pop-2" style="left: 110px; top: 38px">
+            <div class="opt active">
+              <span class="icon">ƒ</span><span class="match">fi</span>nd
+              <span class="detail">method</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span><span class="match">fi</span>ndOne
+              <span class="detail">method</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span>findOneAndUpdate
+              <span class="detail">method</span>
+            </div>
+            <div class="hint">
+              <span><kbd>↑↓</kbd>navigate</span>
+              <span><kbd>⏎</kbd>accept</span>
+              <span><kbd>Esc</kbd>close</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OPTION 3 — Tab cycle 의미 재정의 -->
+      <section class="card">
+        <h2>
+          3 · Tab cycle (Vim/Helix 스타일)
+          <span class="badge">medium · 트레이드오프</span>
+        </h2>
+        <p class="why">
+          Tab = next / Shift+Tab = prev / Enter = accept. fzf · Vim
+          completion 친화. 단 RDB 워크플로우와 동시 변경되므로 사용자 hint
+          없이 도입하면 회귀 체감 가능.
+        </p>
+        <div class="editor">
+          <div class="code-line">
+            <span class="ln">1</span>db.users.fi<span class="cursor"></span>
+          </div>
+          <div class="popover pop-3" style="left: 110px; top: 38px">
+            <div class="opt active">
+              <span class="icon">ƒ</span><span class="match">fi</span>nd
+              <span class="detail">accept</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span><span class="match">fi</span>ndOne
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span>findOneAndUpdate
+            </div>
+            <div class="hint">
+              <span><kbd>Tab</kbd>next</span>
+              <span><kbd>⇧Tab</kbd>prev</span>
+              <span><kbd>⏎</kbd>accept</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OPTION 4 — 카테고리 아이콘/색 -->
+      <section class="card">
+        <h2>4 · 카테고리 시각 분리 <span class="badge">medium</span></h2>
+        <p class="why">
+          completion type 별로 아이콘 색을 분기 — 메서드/컬렉션/연산자/필드/
+          타입태그 5종. 같은 prefix 라도 카테고리 즉시 식별. 색 5종은 한
+          popup 안에서만 쓰여 globally 노이즈는 적음.
+        </p>
+        <div class="editor">
+          <div class="code-line">
+            <span class="ln">1</span>db.<span class="cursor"></span>
+          </div>
+          <div class="popover pop-4" style="left: 60px; top: 38px">
+            <div class="opt active">
+              <span class="icon icon-class">▣</span>users
+              <span class="detail">collection</span>
+            </div>
+            <div class="opt">
+              <span class="icon icon-class">▣</span>catalog_products
+              <span class="detail">collection</span>
+            </div>
+            <div class="opt">
+              <span class="icon icon-fn">ƒ</span>find
+              <span class="detail">method</span>
+            </div>
+            <div class="opt">
+              <span class="icon icon-keyword">$</span>$match
+              <span class="detail">stage</span>
+            </div>
+            <div class="opt">
+              <span class="icon icon-property">▸</span>email
+              <span class="detail">field</span>
+            </div>
+            <div class="opt">
+              <span class="icon icon-tag">τ</span>$oid
+              <span class="detail">type</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OPTION 5 — signature detail -->
+      <section class="card">
+        <h2>5 · 함수 시그니처 inline <span class="badge">medium</span></h2>
+        <p class="why">
+          항목 옆에 `(filter, options?)` 형태로 호출 시그니처. mongosh 문서
+          참조 없이도 인자 순서 인지. detail 영역 폭이 늘어남.
+        </p>
+        <div class="editor">
+          <div class="code-line">
+            <span class="ln">1</span>db.users.fi<span class="cursor"></span>
+          </div>
+          <div class="popover pop-5" style="left: 110px; top: 38px">
+            <div class="opt active">
+              <span class="icon">ƒ</span><span class="match">fi</span>nd
+              <span class="sig">(filter?, options?)</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span><span class="match">fi</span>ndOne
+              <span class="sig">(filter, options?)</span>
+            </div>
+            <div class="opt">
+              <span class="icon">ƒ</span>findOneAndUpdate
+              <span class="sig">(filter, update, options?)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OPTION 6 — info side panel -->
+      <section class="card">
+        <h2>6 · 우측 info 패널 <span class="badge">higher cost</span></h2>
+        <p class="why">
+          항목 선택 시 우측에 한 줄 설명 + 예제. CM 의 `info` API.
+          학습용으로 좋지만 popup 폭이 커지고 좁은 에디터에서 잘림 위험.
+        </p>
+        <div class="editor">
+          <div class="code-line">
+            <span class="ln">1</span>db.users.find({ age: { $g<span class="cursor"></span> } })
+          </div>
+          <div class="popover pop-6" style="left: 200px; top: 38px">
+            <div class="col-list">
+              <div class="opt active">
+                <span class="icon icon-keyword">$</span><span class="match">$g</span>t
+                <span class="detail">op</span>
+              </div>
+              <div class="opt">
+                <span class="icon icon-keyword">$</span><span class="match">$g</span>te
+                <span class="detail">op</span>
+              </div>
+              <div class="opt">
+                <span class="icon icon-keyword">$</span>$group
+                <span class="detail">stage</span>
+              </div>
+            </div>
+            <div class="col-info">
+              <h4>$gt</h4>
+              <p>
+                Matches values that are strictly greater than the operand.
+                Example: <code>{ age: { $gt: 18 } }</code>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
