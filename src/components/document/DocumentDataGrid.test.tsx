@@ -161,23 +161,23 @@ describe("DocumentDataGrid", () => {
     expect(screen.getByRole("button", { name: /export/i })).toBeInTheDocument();
   });
 
-  it("renders composite sentinels via isDocumentSentinel with muted italic styling", async () => {
+  it("renders composite sentinels as inline tree toggles (Sprint 341 Option D)", async () => {
     renderGrid();
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    // Document sentinel ({...}) rendered with muted italic class.
-    const documentSentinels = screen.getAllByText("{...}");
-    expect(documentSentinels.length).toBeGreaterThanOrEqual(1);
-    for (const el of documentSentinels) {
-      expect(el).toHaveClass("italic");
-      expect(el).toHaveClass("text-muted-foreground");
-    }
-
-    // Array sentinels: `[3 items]` + `[0 items]` both go through the
-    // same helper, so both must render muted-italic.
-    expect(screen.getByText("[3 items]")).toHaveClass("italic");
-    expect(screen.getByText("[0 items]")).toHaveClass("text-muted-foreground");
+    // Document sentinel ({...}) — closed state shows "..." as the toggle.
+    const documentToggles = screen.getAllByRole("button", {
+      name: /Expand .*/,
+    });
+    expect(documentToggles.length).toBeGreaterThanOrEqual(1);
+    // At least one of those buttons reads "...", and another reads "3 items"
+    // (the array sentinel inner label).
+    const labels = documentToggles.map((b) => b.textContent);
+    expect(labels).toContain("...");
+    expect(labels).toContain("3 items");
+    // Empty-array sentinel — "[0 items]" splits into "[ 0 items ]".
+    expect(labels).toContain("0 items");
   });
 
   it("selects a row with aria-selected when the row is clicked", async () => {
@@ -338,11 +338,12 @@ describe("DocumentDataGrid", () => {
 
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    const sentinels = screen.getAllByText("{...}");
-    expect(sentinels.length).toBeGreaterThan(0);
-    fireEvent.doubleClick(sentinels[0]!);
+    // Sprint 341 — the sentinel renders as `{` + toggle button + `}`, so
+    // double-clicking the toggle (or its wrapper cell) must not start a
+    // cell-level edit. The grid panel below handles inline editing.
+    const toggle = screen.getAllByRole("button", { name: /Expand .*/ })[0]!;
+    fireEvent.doubleClick(toggle);
 
-    // No input renders for the sentinel cell.
     expect(screen.queryByLabelText(/Editing /)).not.toBeInTheDocument();
   });
 
@@ -518,5 +519,46 @@ describe("DocumentDataGrid", () => {
     const cell = pendingText.closest('[role="gridcell"]') as HTMLElement | null;
     expect(cell).not.toBeNull();
     expect(cell!.className).toMatch(/bg-highlight/);
+  });
+
+  // Sprint 341 (2026-05-15, Option D) — nested cell toggle ↔ inline
+  // detail row contract. Clicking the in-cell toggle expands the tree
+  // panel beneath that row; toggling again (or another cell) collapses.
+  it("nested cell toggle expands an inline tree row underneath", async () => {
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    // Pre-state — no detail rows.
+    expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
+
+    // Open Alice's `meta` cell — the toggle inside `{ ... }`.
+    // Two rows render — Alice (row 0) and Bob (row 1) — both have an
+    // Expand meta button, so pick the first.
+    const toggle = screen.getAllByRole("button", { name: /Expand meta/ })[0]!;
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
+    // The DocumentTreePanel renders the verified field as a leaf.
+    expect(screen.getByTestId("tree-node-verified")).toBeInTheDocument();
+    // Toggle label flipped to ✕.
+    expect(toggle.textContent).toBe("✕");
+
+    // Same toggle again closes the detail row.
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
+  });
+
+  it("opening a second nested cell switches the detail row to that cell", async () => {
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Expand meta/ })[0]!);
+    expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
+
+    // Click the tags toggle on the same row.
+    fireEvent.click(screen.getAllByRole("button", { name: /Expand tags/ })[0]!);
+    // Detail row still anchored on row 0 — but it's now showing the tags
+    // tree, which has the [0]/[1]/[2] index leaves.
+    expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
+    expect(screen.getByTestId("tree-node-[0]")).toBeInTheDocument();
   });
 });

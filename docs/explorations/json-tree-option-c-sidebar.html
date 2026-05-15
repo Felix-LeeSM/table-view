@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Option C — Side panel (split view) 안에 트리 뷰</title>
+    <style>
+      :root {
+        --bg: #0e0f12;
+        --panel: #16181d;
+        --panel2: #1d2027;
+        --border: #2b2f38;
+        --text: #d6d8de;
+        --muted: #8a8f99;
+        --accent: #4f8cff;
+        --key: #6cc6e8;
+        --str: #5dd39e;
+        --num: #ffae57;
+        --tag-bg: #20242c;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 28px;
+        background: var(--bg); color: var(--text);
+        font-family: -apple-system, "SF Pro Text", Segoe UI, Roboto, sans-serif;
+        font-size: 13px; line-height: 1.5;
+      }
+      h1 { font-size: 16px; margin: 0 0 4px; }
+      .lead { color: var(--muted); margin: 0 0 24px; max-width: 760px; }
+
+      .stage {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        height: 680px;
+        display: grid;
+        grid-template-columns: 1.1fr 12px 1fr; /* grid | splitter | panel */
+      }
+
+      /* ── left: grid ───────────────────────────────────────── */
+      .left { overflow: auto; }
+      .grid-header, .grid-row {
+        display: grid;
+        grid-template-columns: 60px 100px 140px 1fr;
+      }
+      .grid-header > div, .grid-row > div {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        border-right: 1px solid var(--border);
+        font-size: 12px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .grid-header > div { color: var(--muted); background: var(--panel2); position: sticky; top: 0; }
+      .row-selected { background: rgba(79,140,255,0.10); }
+      .cell-nested { color: var(--accent); text-decoration: underline dotted; cursor: pointer; }
+
+      /* ── splitter ─────────────────────────────────────────── */
+      .splitter {
+        background: var(--border);
+        cursor: col-resize;
+        position: relative;
+      }
+      .splitter::after {
+        content: "";
+        position: absolute; left: 50%; top: 50%;
+        width: 2px; height: 36px; background: var(--muted);
+        transform: translate(-50%, -50%); border-radius: 1px; opacity: 0.4;
+      }
+
+      /* ── right: tree panel ────────────────────────────────── */
+      .right { display: flex; flex-direction: column; min-width: 0; }
+      .right-head {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel2);
+      }
+      .right-head h2 { font-size: 12px; margin: 0; font-weight: 600; }
+      .right-head .path { font-family: ui-monospace, monospace; color: var(--muted); font-size: 11px; }
+      .right-head .actions { display: flex; gap: 6px; }
+      .right-head button {
+        background: transparent; border: 1px solid var(--border);
+        color: var(--text); padding: 3px 8px; border-radius: 4px;
+        font-size: 11px; cursor: pointer;
+      }
+      .right-head .save { background: var(--accent); color: white; border-color: var(--accent); }
+
+      .search-bar {
+        display: flex; gap: 8px; padding: 8px 14px;
+        border-bottom: 1px solid var(--border);
+      }
+      .search-bar input {
+        flex: 1; background: var(--bg);
+        border: 1px solid var(--border);
+        padding: 5px 8px; border-radius: 4px;
+        color: var(--text); font-size: 12px;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-bottom: 1px solid var(--border);
+      }
+      .stat {
+        padding: 8px 12px;
+        border-right: 1px solid var(--border);
+      }
+      .stat:nth-child(3n) { border-right: 0; }
+      .stat:nth-child(n+4) { border-top: 1px solid var(--border); }
+      .stat .label { font-size: 10px; color: var(--muted); letter-spacing: 0.06em; }
+      .stat .value { font-size: 16px; font-weight: 600; font-family: ui-monospace, monospace; margin-top: 2px; }
+
+      .tree-area {
+        flex: 1; overflow: auto;
+        padding: 10px 14px;
+        font-family: ui-monospace, "SF Mono", monospace;
+        font-size: 12px;
+      }
+      .node { padding: 1px 0; white-space: nowrap; }
+      .node .indent { display: inline-block; width: 14px; }
+      .node .twist { color: var(--muted); cursor: pointer; user-select: none; width: 12px; display: inline-block; }
+      .node .key { color: var(--key); }
+      .node .meta { color: var(--muted); margin-left: 4px; }
+      .node .str { color: var(--str); }
+      .tag {
+        display: inline-block;
+        font-size: 9px;
+        background: var(--tag-bg);
+        color: var(--muted);
+        padding: 1px 5px;
+        margin-left: 6px;
+        border-radius: 2px;
+      }
+      .editing {
+        background: var(--bg);
+        border: 1px solid var(--accent);
+        color: var(--text);
+        padding: 0 4px;
+        font: inherit;
+        outline: none;
+        width: 160px;
+      }
+      .row-changed { background: rgba(255,174,87,0.06); }
+      .note {
+        padding: 8px 14px;
+        background: var(--panel2);
+        border-top: 1px solid var(--border);
+        font-size: 11px; color: var(--muted);
+        display: flex; justify-content: space-between;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Option C — Side panel (split view)</h1>
+    <p class="lead">
+      grid 옆에 항상 떠 있는(또는 토글 가능한) detail panel. 셀 선택 → 우측 panel 이 즉시 그 값의 트리로 갱신.
+      장점: row 간 빠른 비교(클릭만으로 갱신), modal 띄울 필요 없음. 단점: grid 가 좁아지고, 통계 카드 6개를 가로로 못 담아 3×2 그리드.
+    </p>
+
+    <div class="stage">
+      <!-- left grid -->
+      <div class="left">
+        <div class="grid-header"><div>_id</div><div>name</div><div>tags</div><div>profile</div></div>
+        <div class="grid-row"><div>6678…ab</div><div>Felix</div><div class="cell-nested">[3] ARR</div><div class="cell-nested">{4} OBJ</div></div>
+        <div class="grid-row row-selected"><div>6679…cd</div><div>Glossary</div><div class="cell-nested">[2] ARR</div><div class="cell-nested" style="background:rgba(79,140,255,0.18); border-radius:3px;">▶ {1} OBJ</div></div>
+        <div class="grid-row"><div>6680…ef</div><div>Acronym</div><div class="cell-nested">[0]</div><div class="cell-nested">{2}</div></div>
+        <div class="grid-row"><div>6681…12</div><div>—</div><div></div><div></div></div>
+        <div class="grid-row"><div>6682…34</div><div>—</div><div></div><div></div></div>
+        <div class="grid-row"><div>6683…56</div><div>—</div><div></div><div></div></div>
+      </div>
+
+      <div class="splitter"></div>
+
+      <!-- right tree panel -->
+      <div class="right">
+        <div class="right-head">
+          <div>
+            <h2>Tree · _id 6679…cd</h2>
+            <div class="path">$.profile</div>
+          </div>
+          <div class="actions">
+            <button>Pin</button>
+            <button>↗ Detach</button>
+            <button class="save">Save 2</button>
+          </div>
+        </div>
+
+        <div class="search-bar">
+          <input placeholder="🔎 search…" />
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="label">NODES</div><div class="value">18</div></div>
+          <div class="stat"><div class="label">KEYS</div><div class="value">15</div></div>
+          <div class="stat"><div class="label">DEPTH</div><div class="value">7</div></div>
+          <div class="stat"><div class="label">OBJ</div><div class="value">6</div></div>
+          <div class="stat"><div class="label">ARR</div><div class="value">1</div></div>
+          <div class="stat"><div class="label">MAX ARR</div><div class="value">2</div></div>
+        </div>
+
+        <div class="tree-area">
+          <div class="node"><span class="twist">▼</span><span class="key">root</span><span class="meta">: {1}</span><span class="tag">OBJ</span></div>
+          <div class="node"><span class="indent"></span><span class="twist">▼</span><span class="key">glossary</span><span class="meta">: {2}</span><span class="tag">OBJ</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="key">title</span>: <span class="str">"example glossary"</span><span class="tag">STR</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="twist">▼</span><span class="key">GlossDiv</span><span class="meta">: {2}</span><span class="tag">OBJ</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="key">title</span>: <span class="str">"S"</span><span class="tag">STR</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="twist">▼</span><span class="key">GlossList</span><span class="meta">: {1}</span><span class="tag">OBJ</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="twist">▼</span><span class="key">GlossEntry</span><span class="meta">: {7}</span><span class="tag">OBJ</span></div>
+          <div class="node row-changed"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="key">ID</span>: <input class="editing" value='"SGML-v2"' /><span class="tag">STR</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="key">GlossTerm</span>: <span class="str">"Standard Generalized…"</span><span class="tag">STR</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="twist">▼</span><span class="key">GlossDef</span><span class="meta">: {2}</span><span class="tag">OBJ</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="key">para</span>: <span class="str">"A meta-markup…"</span><span class="tag">STR</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="twist">▼</span><span class="key">GlossSeeAlso</span><span class="meta">: [2]</span><span class="tag">ARR</span></div>
+          <div class="node"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="key">[0]</span>: <span class="str">"GML"</span><span class="tag">STR</span></div>
+          <div class="node row-changed"><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="indent"></span><span class="key">[1]</span>: <input class="editing" value='"XHTML"' /><span class="tag">STR</span></div>
+        </div>
+
+        <div class="note">
+          <span>row 클릭만으로 트리 즉시 갱신 · pin 누르면 행 따라가지 않음</span>
+          <span>2 unsaved</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

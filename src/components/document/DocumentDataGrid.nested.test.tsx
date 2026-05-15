@@ -1,9 +1,13 @@
-// Sprint 321 (2026-05-15) — Slice F.1: DocumentDataGrid sentinel cell
-// expand popover 통합.
+// Sprint 341 (2026-05-15) — Option D: inline tree row.
 //
-// 작성 이유: sentinel cell ({...} / [N items]) 옆에 "Expand nested"
-// 트리거가 마운트되고, 일반 cell 에는 미노출되며, 트리거 클릭이
-// row selection 으로 propagate 되지 않는지를 회귀 가드.
+// Replaces the Sprint 321/322 NestedExpandPopover regression guards with
+// the equivalent contract on the inline tree:
+//   - sentinel cell mounts an in-cell toggle (the `...` or `N items`
+//     middle button); scalar cells do not.
+//   - clicking the toggle does not propagate row selection.
+//   - opening expands a master/detail row containing DocumentTreePanel.
+//   - inline edit on a tree leaf records the dot-path pendingEdit, and
+//     the MQL preview emits `$set: { "<col>.<path>": <value> }`.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -70,116 +74,92 @@ function renderGrid() {
   );
 }
 
-describe("DocumentDataGrid — nested expand (Sprint 321 F.1)", () => {
-  it("mounts the expand trigger on sentinel cells (meta and tags)", async () => {
+describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => {
+  it("mounts the toggle on sentinel cells (meta and tags), not on scalar cells", async () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
     expect(
-      screen.getByRole("button", { name: "Expand nested meta" }),
+      screen.getByRole("button", { name: "Expand meta" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Expand nested tags" }),
+      screen.getByRole("button", { name: "Expand tags" }),
     ).toBeInTheDocument();
+
+    // Scalar cells have no Expand button.
+    expect(screen.queryByRole("button", { name: "Expand name" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand _id" })).toBeNull();
   });
 
-  it("does not mount the trigger for scalar cells", async () => {
+  it("clicking the toggle expands the inline tree row, second click collapses", async () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    expect(
-      screen.queryByRole("button", { name: "Expand nested name" }),
-    ).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Expand nested _id" }),
-    ).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Expand meta" });
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
+    expect(screen.getByTestId("tree-node-verified")).toBeInTheDocument();
+    expect(screen.getByTestId("tree-node-role")).toBeInTheDocument();
+
+    fireEvent.click(toggle); // now labelled "Close meta"
+    expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
   });
 
-  it("opens the popover with object entries on click", async () => {
+  it("array sentinel toggle shows [i] index leaves", async () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
-    const region = await screen.findByRole("region", {
-      name: "Nested fields for meta",
-    });
-    expect(region).toHaveTextContent("verified");
-    expect(region).toHaveTextContent("true");
-    expect(region).toHaveTextContent("role");
-    expect(region).toHaveTextContent("admin");
+    fireEvent.click(screen.getByRole("button", { name: "Expand tags" }));
+    expect(screen.getByTestId("tree-node-[0]")).toBeInTheDocument();
+    expect(screen.getByTestId("tree-node-[2]")).toBeInTheDocument();
   });
 
-  it("opens the popover with array entries on click (tags)", async () => {
-    renderGrid();
-    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole("button", { name: "Expand nested tags" }));
-    const region = await screen.findByRole("region", {
-      name: "Nested fields for tags",
-    });
-    expect(region).toHaveTextContent("[0]");
-    expect(region).toHaveTextContent("alpha");
-    expect(region).toHaveTextContent("[2]");
-    expect(region).toHaveTextContent("gamma");
-  });
-
-  it("trigger click does not toggle row selection", async () => {
+  it("toggle click does not propagate row selection", async () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
     const row = screen.getByText("Alice").closest('[role="row"]')!;
     expect(row).toHaveAttribute("aria-selected", "false");
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
     expect(row).toHaveAttribute("aria-selected", "false");
   });
 
-  // Sprint 322 (2026-05-15) — Slice F.2: dot-notation inline edit.
-  //
-  // 작성 이유: nested edit 가 (a) pendingEdits 에 `row-col:path` 키로
-  // 기록되어 (b) sentinel cell 의 highlight chip 으로 시각화되며
-  // (c) MQL Preview 가 `$set: { "col.path": value }` 를 생성하는지를
-  // 회귀 가드. (mqlGenerator 단위 테스트로 SQL 빌딩은 검증되지만,
-  // 그리드 wire-up 이 dot-notation key 를 올바르게 흘려보내는지 별도
-  // 통합 가드 필요.)
-  describe("Slice F.2 — inline edit through popover", () => {
-    it("pencil → input → Enter records the pendingEdit and renders the highlight chip in-place", async () => {
+  describe("inline edit on tree leaf", () => {
+    it("Enter records the pendingEdit and surfaces the edited value", async () => {
       renderGrid();
       await waitFor(() =>
         expect(screen.getByText("Alice")).toBeInTheDocument(),
       );
 
-      fireEvent.click(
-        screen.getByRole("button", { name: "Expand nested meta" }),
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Edit meta.role" }));
-      const input = screen.getByLabelText("Editing meta.role");
-      fireEvent.change(input, { target: { value: "owner" } });
+      fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
+      fireEvent.click(screen.getByTestId("tree-leaf-role"));
+      const input = screen.getByTestId("tree-edit-role");
+      fireEvent.change(input, { target: { value: '"owner"' } });
       fireEvent.keyDown(input, { key: "Enter" });
 
-      // After Enter, the input is replaced by the highlight chip in-place
-      // (popover stays open so the user sees the pending mutation
-      // immediately).
+      // After commit the leaf renders the pending value (unquoted, since
+      // the panel strips outer quotes for string leaves).
       await waitFor(() => {
-        expect(screen.getByTestId("nested-pending")).toHaveTextContent("owner");
+        expect(screen.getByTestId("tree-leaf-role").textContent).toBe("owner");
       });
+      expect(
+        screen.getByTestId("document-tree-pending-pill").textContent,
+      ).toMatch(/1 unsaved edit/);
     });
 
-    it("MQL preview emits `$set: { 'meta.role': ... }` after a nested edit and Commit", async () => {
+    it("MQL preview emits `$set: { 'meta.role': ... }` after the nested edit + Commit", async () => {
       renderGrid();
       await waitFor(() =>
         expect(screen.getByText("Alice")).toBeInTheDocument(),
       );
 
-      fireEvent.click(
-        screen.getByRole("button", { name: "Expand nested meta" }),
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Edit meta.role" }));
-      const input = screen.getByLabelText("Editing meta.role");
-      fireEvent.change(input, { target: { value: "owner" } });
+      fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
+      fireEvent.click(screen.getByTestId("tree-leaf-role"));
+      const input = screen.getByTestId("tree-edit-role");
+      fireEvent.change(input, { target: { value: '"owner"' } });
       fireEvent.keyDown(input, { key: "Enter" });
 
-      // Open MQL preview via the toolbar's Commit-to-preview affordance.
       const commitBtn = await screen.findByRole("button", {
         name: /Commit changes/i,
       });

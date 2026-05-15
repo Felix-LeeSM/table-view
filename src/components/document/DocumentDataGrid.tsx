@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -33,7 +34,7 @@ import ProjectionDialog from "@components/document/ProjectionDialog";
 import AddDocumentModal from "@components/document/AddDocumentModal";
 import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
-import NestedExpandPopover from "@components/document/NestedExpandPopover";
+import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 import { Button } from "@components/ui/button";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
@@ -132,6 +133,13 @@ export default function DocumentDataGrid({
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  // Sprint 341 (Option D) — inline tree panel coordinate. Only one
+  // cell may be expanded at a time per grid; toggling another cell
+  // collapses the previous one. `null` = none expanded.
+  const [expandedNested, setExpandedNested] = useState<{
+    rowIdx: number;
+    colIdx: number;
+  } | null>(null);
   const [showQuickLook, setShowQuickLook] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Record<string, unknown>>({});
@@ -733,177 +741,228 @@ export default function DocumentDataGrid({
               const isDeleted = editState.pendingDeletedRowKeys.has(
                 rowKeyOf(rowIdx),
               );
+              const isExpandedHere = expandedNested?.rowIdx === rowIdx;
+              const expandedColName = isExpandedHere
+                ? (visibleEntries[expandedNested!.colIdx]?.[0]?.name ?? null)
+                : null;
+              const expandedRawValue =
+                isExpandedHere && expandedColName
+                  ? queryResult?.raw_documents[rowIdx]?.[expandedColName]
+                  : undefined;
               return (
-                <div
-                  key={`row-${page}-${rowIdx}`}
-                  role="row"
-                  aria-rowindex={rowIdx + 2}
-                  aria-selected={selected}
-                  onClick={(e) =>
-                    editState.handleSelectRow(
-                      rowIdx,
-                      e.metaKey || e.ctrlKey,
-                      e.shiftKey,
-                    )
-                  }
-                  className={cn(
-                    "min-h-8 cursor-pointer border-b border-border hover:bg-muted",
-                    selected && "bg-accent dark:bg-accent/60",
-                    isDeleted &&
-                      "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",
-                  )}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "var(--cols)",
-                    minWidth: "max-content",
-                  }}
-                >
-                  {visibleEntries.map(([col, colIdx], visualIdx) => {
-                    const cell = (row as unknown[])[colIdx];
-                    const isSentinel = isDocumentSentinel(cell);
-                    const isNull = cell == null;
-                    const key = editKey(rowIdx, colIdx);
-                    const isEditing =
-                      editState.editingCell?.row === rowIdx &&
-                      editState.editingCell?.col === colIdx;
-                    const hasPendingEdit = editState.pendingEdits.has(key);
-                    const pendingValue = hasPendingEdit
-                      ? (editState.pendingEdits.get(key) as string | null)
-                      : null;
+                <Fragment key={`row-${page}-${rowIdx}`}>
+                  <div
+                    role="row"
+                    aria-rowindex={rowIdx + 2}
+                    aria-selected={selected}
+                    onClick={(e) =>
+                      editState.handleSelectRow(
+                        rowIdx,
+                        e.metaKey || e.ctrlKey,
+                        e.shiftKey,
+                      )
+                    }
+                    className={cn(
+                      "min-h-8 cursor-pointer border-b border-border hover:bg-muted",
+                      selected && "bg-accent dark:bg-accent/60",
+                      isDeleted &&
+                        "bg-destructive/10 line-through opacity-60 hover:bg-destructive/20",
+                    )}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "var(--cols)",
+                      minWidth: "max-content",
+                    }}
+                  >
+                    {visibleEntries.map(([col, colIdx], visualIdx) => {
+                      const cell = (row as unknown[])[colIdx];
+                      const isSentinel = isDocumentSentinel(cell);
+                      const isNull = cell == null;
+                      const key = editKey(rowIdx, colIdx);
+                      const isEditing =
+                        editState.editingCell?.row === rowIdx &&
+                        editState.editingCell?.col === colIdx;
+                      const hasPendingEdit = editState.pendingEdits.has(key);
+                      const pendingValue = hasPendingEdit
+                        ? (editState.pendingEdits.get(key) as string | null)
+                        : null;
 
-                    return (
-                      <div
-                        key={col.name}
-                        role="gridcell"
-                        aria-colindex={visualIdx + 1}
-                        data-editing={isEditing ? "true" : undefined}
-                        className={cn(
-                          "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",
-                          isEditing &&
-                            "bg-primary/10 ring-2 ring-inset ring-primary",
-                          !isEditing && hasPendingEdit && "bg-highlight/20",
-                        )}
-                        title={
-                          isNull
-                            ? "null"
-                            : cell instanceof Decimal
-                              ? cell.toString()
-                              : typeof cell === "bigint"
+                      return (
+                        <div
+                          key={col.name}
+                          role="gridcell"
+                          aria-colindex={visualIdx + 1}
+                          data-editing={isEditing ? "true" : undefined}
+                          className={cn(
+                            "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",
+                            isEditing &&
+                              "bg-primary/10 ring-2 ring-inset ring-primary",
+                            !isEditing && hasPendingEdit && "bg-highlight/20",
+                          )}
+                          title={
+                            isNull
+                              ? "null"
+                              : cell instanceof Decimal
                                 ? cell.toString()
-                                : typeof cell === "object"
-                                  ? safeStringifyCell(cell)
-                                  : String(cell)
-                        }
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          handleStartEditCell(rowIdx, colIdx);
-                        }}
-                      >
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            aria-label={`Editing ${col.name}`}
-                            className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
-                            value={editState.editValue ?? ""}
-                            onChange={(e) =>
-                              editState.setEditValue(e.target.value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                editState.saveCurrentEdit();
-                              } else if (e.key === "Escape") {
-                                e.stopPropagation();
-                                editState.cancelEdit();
+                                : typeof cell === "bigint"
+                                  ? cell.toString()
+                                  : typeof cell === "object"
+                                    ? safeStringifyCell(cell)
+                                    : String(cell)
+                          }
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEditCell(rowIdx, colIdx);
+                          }}
+                        >
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              aria-label={`Editing ${col.name}`}
+                              className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none"
+                              value={editState.editValue ?? ""}
+                              onChange={(e) =>
+                                editState.setEditValue(e.target.value)
                               }
-                            }}
-                            onBlur={() => editState.saveCurrentEdit()}
-                          />
-                        ) : hasPendingEdit ? (
-                          pendingValue === null ? (
-                            <span
-                              className="italic text-muted-foreground"
-                              aria-label="NULL"
-                            >
-                              NULL
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  editState.saveCurrentEdit();
+                                } else if (e.key === "Escape") {
+                                  e.stopPropagation();
+                                  editState.cancelEdit();
+                                }
+                              }}
+                              onBlur={() => editState.saveCurrentEdit()}
+                            />
+                          ) : hasPendingEdit ? (
+                            pendingValue === null ? (
+                              <span
+                                className="italic text-muted-foreground"
+                                aria-label="NULL"
+                              >
+                                NULL
+                              </span>
+                            ) : (
+                              <span
+                                dir="auto"
+                                className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
+                              >
+                                {pendingValue}
+                              </span>
+                            )
+                          ) : isNull ? (
+                            <span className="italic text-muted-foreground">
+                              null
                             </span>
-                          ) : (
-                            <span
-                              dir="auto"
-                              className="block overflow-hidden text-ellipsis whitespace-nowrap [unicode-bidi:isolate]"
-                            >
-                              {pendingValue}
-                            </span>
-                          )
-                        ) : isNull ? (
-                          <span className="italic text-muted-foreground">
-                            null
-                          </span>
-                        ) : isSentinel ? (
-                          // Sprint 321 — Slice F.1: sentinel cell 옆에
-                          // expand popover trigger. raw_documents 의
-                          // 해당 field 값으로 1-depth inspect.
-                          // Sprint 322 — Slice F.2: 같은 popover 가
-                          // 1-depth scalar entry 의 inline edit 를 수용,
-                          // dot-notation key (`row-col:path`) 로
-                          // pendingEdits 에 등록. mqlGenerator 는
-                          // `$set: { "col.path": value }` 생성.
-                          <span className="flex min-w-0 items-center gap-1">
-                            <span
-                              className={cn(
-                                "truncate italic text-muted-foreground",
+                          ) : isSentinel ? (
+                            // Sprint 341 (Option D) — sentinel cell 가
+                            // 자체적으로 inline tree 토글을 갖는다. closed
+                            // 형태는 `{ ... }` / `[ N items ]`; open 형태는
+                            // `{ ✕ }` / `[ ✕ ]`. detail row 는 별도 master/
+                            // detail row 로 grid 안에 삽입된다 (아래).
+                            // pendingByPath / onCommitEdit 흐름은 Sprint 322
+                            // F.2 NestedExpandPopover 와 동일하게 유지.
+                            (() => {
+                              const sentinelStr = String(cell);
+                              const isArr = sentinelStr.startsWith("[");
+                              const isOpen =
+                                expandedNested?.rowIdx === rowIdx &&
+                                expandedNested?.colIdx === colIdx;
+                              const innerLabel = isOpen
+                                ? "✕"
+                                : isArr
+                                  ? sentinelStr.slice(1, -1).trim() // "3 items"
+                                  : "...";
+                              const hasPending =
                                 buildNestedPendingByPath(
                                   editState.pendingEdits,
                                   rowIdx,
                                   colIdx,
-                                ).size > 0 &&
-                                  "rounded bg-highlight/20 px-1 not-italic text-foreground",
-                              )}
+                                ).size > 0;
+                              return (
+                                <span className="flex min-w-0 items-center gap-1 font-mono text-muted-foreground">
+                                  <span>{isArr ? "[" : "{"}</span>
+                                  <button
+                                    type="button"
+                                    data-testid={`nested-toggle-${rowIdx}-${colIdx}`}
+                                    aria-expanded={isOpen}
+                                    aria-label={`${isOpen ? "Close" : "Expand"} ${col.name}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setExpandedNested(
+                                        isOpen ? null : { rowIdx, colIdx },
+                                      );
+                                    }}
+                                    className={cn(
+                                      "rounded px-1.5 text-primary underline decoration-dotted hover:bg-primary/10",
+                                      isOpen &&
+                                        "bg-primary/20 text-foreground no-underline",
+                                      hasPending && "ring-1 ring-highlight",
+                                    )}
+                                  >
+                                    {innerLabel}
+                                  </button>
+                                  <span>{isArr ? "]" : "}"}</span>
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            <span
+                              dir="auto"
+                              className="block overflow-hidden text-ellipsis whitespace-nowrap text-foreground [unicode-bidi:isolate]"
                             >
-                              {String(cell)}
+                              {cell instanceof Decimal
+                                ? cell.toString()
+                                : typeof cell === "object"
+                                  ? safeStringifyCell(cell)
+                                  : String(cell)}
                             </span>
-                            <NestedExpandPopover
-                              value={
-                                queryResult?.raw_documents[rowIdx]?.[col.name]
-                              }
-                              fieldName={col.name}
-                              pendingByPath={buildNestedPendingByPath(
-                                editState.pendingEdits,
-                                rowIdx,
-                                colIdx,
-                              )}
-                              onCommitEdit={(path, value) => {
-                                const next = new Map(editState.pendingEdits);
-                                const serialized =
-                                  typeof value === "string"
-                                    ? value
-                                    : tagBsonWrapper(value);
-                                next.set(
-                                  `${rowIdx}-${colIdx}:${path}`,
-                                  serialized,
-                                );
-                                editState.setPendingEdits(next);
-                              }}
-                            />
-                          </span>
-                        ) : (
-                          <span
-                            dir="auto"
-                            className="block overflow-hidden text-ellipsis whitespace-nowrap text-foreground [unicode-bidi:isolate]"
-                          >
-                            {cell instanceof Decimal
-                              ? cell.toString()
-                              : typeof cell === "object"
-                                ? safeStringifyCell(cell)
-                                : String(cell)}
-                          </span>
-                        )}
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {isExpandedHere && expandedNested && expandedColName && (
+                    <div
+                      role="row"
+                      data-testid={`nested-detail-row-${rowIdx}`}
+                      className="border-b border-border bg-secondary/20"
+                      style={{ minWidth: "max-content" }}
+                    >
+                      <div
+                        role="gridcell"
+                        style={{ gridColumn: "1 / -1" }}
+                        className="p-0"
+                      >
+                        <DocumentTreePanel
+                          value={expandedRawValue}
+                          fieldName={expandedColName}
+                          pendingByPath={buildNestedPendingByPath(
+                            editState.pendingEdits,
+                            rowIdx,
+                            expandedNested.colIdx,
+                          )}
+                          onCommitEdit={(path, value) => {
+                            const next = new Map(editState.pendingEdits);
+                            const serialized =
+                              typeof value === "string"
+                                ? value
+                                : tagBsonWrapper(value);
+                            next.set(
+                              `${rowIdx}-${expandedNested.colIdx}:${path}`,
+                              serialized,
+                            );
+                            editState.setPendingEdits(next);
+                          }}
+                          onClose={() => setExpandedNested(null)}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
+                </Fragment>
               );
             })}
             {data.rows.length === 0 && (
