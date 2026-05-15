@@ -116,10 +116,15 @@ export function DocumentTreePanel({
 
   const commitDraft = useCallback(() => {
     if (editingPath === null) return;
-    if (onCommitEdit) {
+    // Sprint 341 feedback (1) — only fire onCommitEdit when the draft
+    // actually differs from what the panel rendered, otherwise a click
+    // + blur on a leaf registers a phantom "edit" with no semantic
+    // change. Comparison is done on the *rendered* form so a string
+    // round-tripped with its quotes still matches.
+    const node = nodes.find((n) => n.path === editingPath);
+    const original = node ? renderLeafValue(node) : "";
+    if (onCommitEdit && draft !== original) {
       // Strip surrounding quotes for string leaves; commit raw otherwise.
-      // Pendings map normalises to a string (or BSON object) — V1 only
-      // emits strings here. mqlGenerator handles JSON coercion downstream.
       let next = draft;
       if (next.length >= 2 && next.startsWith('"') && next.endsWith('"')) {
         next = next.slice(1, -1);
@@ -128,7 +133,7 @@ export function DocumentTreePanel({
     }
     setEditingPath(null);
     setDraft("");
-  }, [editingPath, draft, onCommitEdit]);
+  }, [editingPath, draft, nodes, onCommitEdit]);
 
   const pendingCount = pendingByPath?.size ?? 0;
 
@@ -232,7 +237,9 @@ export function DocumentTreePanel({
                   )}
                 </button>
               )}
-              <span className="ml-1 text-sky-300">{node.label}</span>
+              <span className="ml-1 text-sky-700 dark:text-sky-300">
+                {node.label}
+              </span>
               {node.kind === "obj" && (
                 <span className="ml-1 text-muted-foreground">
                   : {"{"}
@@ -256,7 +263,7 @@ export function DocumentTreePanel({
                     type="button"
                     onClick={() => startEdit(node)}
                     data-testid={`tree-leaf-${node.path}`}
-                    className="ml-1 align-middle text-emerald-400 hover:underline disabled:cursor-not-allowed disabled:hover:no-underline"
+                    className="ml-1 align-middle text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:hover:no-underline dark:text-emerald-300"
                     disabled={node.isBson}
                   >
                     {pending !== undefined && typeof pending === "string"

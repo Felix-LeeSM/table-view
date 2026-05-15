@@ -897,9 +897,15 @@ export default function DocumentDataGrid({
                                       );
                                     }}
                                     className={cn(
-                                      "rounded px-1.5 text-primary underline decoration-dotted hover:bg-primary/10",
+                                      // Sprint 341 feedback (3) — closed
+                                      // state reads as a normal button:
+                                      // border + bg + hover. Open state
+                                      // flips to the primary fill so the
+                                      // expanded cell is obvious at a
+                                      // glance.
+                                      "inline-flex items-center justify-center rounded border border-border bg-muted px-1.5 font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
                                       isOpen &&
-                                        "bg-primary/20 text-foreground no-underline",
+                                        "border-primary bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                                       hasPending && "ring-1 ring-highlight",
                                     )}
                                   >
@@ -937,28 +943,37 @@ export default function DocumentDataGrid({
                         style={{ gridColumn: "1 / -1" }}
                         className="p-0"
                       >
-                        <DocumentTreePanel
-                          value={expandedRawValue}
-                          fieldName={expandedColName}
-                          pendingByPath={buildNestedPendingByPath(
-                            editState.pendingEdits,
-                            rowIdx,
-                            expandedNested.colIdx,
-                          )}
-                          onCommitEdit={(path, value) => {
-                            const next = new Map(editState.pendingEdits);
-                            const serialized =
-                              typeof value === "string"
-                                ? value
-                                : tagBsonWrapper(value);
-                            next.set(
-                              `${rowIdx}-${expandedNested.colIdx}:${path}`,
-                              serialized,
-                            );
-                            editState.setPendingEdits(next);
-                          }}
-                          onClose={() => setExpandedNested(null)}
-                        />
+                        {/*
+                          Sprint 341 feedback (2) — keep the panel visible
+                          when the grid is scrolled horizontally. The
+                          inner wrapper sticks to viewport's left edge so
+                          the panel does not drift off-screen with the
+                          first column.
+                        */}
+                        <div className="sticky left-0 w-fit max-w-full">
+                          <DocumentTreePanel
+                            value={expandedRawValue}
+                            fieldName={expandedColName}
+                            pendingByPath={buildNestedPendingByPath(
+                              editState.pendingEdits,
+                              rowIdx,
+                              expandedNested.colIdx,
+                            )}
+                            onCommitEdit={(path, value) => {
+                              const next = new Map(editState.pendingEdits);
+                              const serialized =
+                                typeof value === "string"
+                                  ? value
+                                  : tagBsonWrapper(value);
+                              next.set(
+                                `${rowIdx}-${expandedNested.colIdx}:${path}`,
+                                serialized,
+                              );
+                              editState.setPendingEdits(next);
+                            }}
+                            onClose={() => setExpandedNested(null)}
+                          />
+                        </div>
                       </div>
                     </div>
                   )}

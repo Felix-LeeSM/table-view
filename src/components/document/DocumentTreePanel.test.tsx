@@ -109,6 +109,30 @@ describe("DocumentTreePanel", () => {
     expect(leaf.textContent).toBe("SGML-v2");
   });
 
+  // Sprint 341 feedback (1) — Enter on an unchanged value must NOT fire
+  // onCommitEdit, otherwise a stray click+blur on a leaf creates a
+  // phantom pendingEdit. 작성 이유 (2026-05-15): 사용자가 클릭만 하고
+  // 같은 값으로 Enter 했을 때 mqlGenerator 가 빈 $set 을 만들어 update
+  // 가 silently 실행되던 회귀.
+  it("no-op commit (draft equals rendered value) skips onCommitEdit", async () => {
+    const user = userEvent.setup();
+    const commit = vi.fn();
+    render(
+      <DocumentTreePanel
+        value={VALUE}
+        fieldName="profile"
+        onCommitEdit={commit}
+      />,
+    );
+    await user.click(
+      screen.getByTestId("tree-leaf-glossary.GlossDiv.GlossList.GlossEntry.ID"),
+    );
+    // input already contains "SGML" (with quotes — the rendered form).
+    // Pressing Enter without editing should commit nothing.
+    await user.keyboard("{Enter}");
+    expect(commit).not.toHaveBeenCalled();
+  });
+
   it("escape cancels the edit without committing", async () => {
     const user = userEvent.setup();
     const commit = vi.fn();
