@@ -1,11 +1,22 @@
 import { useRef } from "react";
 import { Key } from "lucide-react";
 import type { SortInfo, TableData } from "@/types/schema";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@components/ui/context-menu";
 
 /**
  * Sprint 258 — `<thead>` 폐기, `<div role="rowgroup">` + sticky header
  * row. column widths 는 outer container 의 `--cols` CSS variable cascade
  * 로 결정된다.
+ *
+ * Sprint 316 — Slice C.2: column header 우클릭 → Radix ContextMenu.
+ * 6 item (Sort ASC/DESC, Add to sort ASC/DESC, Clear per-column,
+ * Clear all). 신규 callback 3개는 optional 이라 기존 caller 회귀 0.
  *
  * Invariants:
  * - Sort fires only when click ↔ mousedown movement ≤ 4px, so dragging
@@ -26,6 +37,21 @@ export interface HeaderRowProps {
     colName: string,
     visualIdx: number,
   ) => void;
+  /**
+   * Sprint 316 — explicit sort override invoked by the context menu.
+   * `append=true` mirrors the shift+click multi-key behaviour (push to
+   * the end); `append=false` replaces the current sort with a single
+   * key. Optional so existing tests / callers stay valid.
+   */
+  onSortColumn?: (
+    columnName: string,
+    direction: "ASC" | "DESC",
+    append: boolean,
+  ) => void;
+  /** Remove this column from the sort list, preserving the rest. */
+  onClearColumnSort?: (columnName: string) => void;
+  /** Drop every sort key. */
+  onClearAllSorts?: () => void;
 }
 
 export default function HeaderRow({
@@ -36,8 +62,16 @@ export default function HeaderRow({
   onSort,
   onSaveCurrentEdit,
   onResizeStart,
+  onSortColumn,
+  onClearColumnSort,
+  onClearAllSorts,
 }: HeaderRowProps) {
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hasContextMenu = !!(
+    onSortColumn ||
+    onClearColumnSort ||
+    onClearAllSorts
+  );
 
   return (
     <div
@@ -59,7 +93,8 @@ export default function HeaderRow({
           const col = data.columns[dIdx]!;
           const sortInfo = sorts.find((s) => s.column === col.name);
           const sortRank = sortInfo ? sorts.indexOf(sortInfo) + 1 : 0;
-          return (
+          const isSorted = !!sortInfo;
+          const headerInner = (
             <div
               key={col.name}
               role="columnheader"
@@ -110,6 +145,61 @@ export default function HeaderRow({
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
+          );
+
+          if (!hasContextMenu) {
+            return headerInner;
+          }
+
+          return (
+            <ContextMenu key={col.name}>
+              <ContextMenuTrigger asChild>{headerInner}</ContextMenuTrigger>
+              <ContextMenuContent aria-label={`Column actions for ${col.name}`}>
+                {onSortColumn && (
+                  <>
+                    <ContextMenuItem
+                      onSelect={() => onSortColumn(col.name, "ASC", false)}
+                    >
+                      Sort ASC
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={() => onSortColumn(col.name, "DESC", false)}
+                    >
+                      Sort DESC
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={() => onSortColumn(col.name, "ASC", true)}
+                    >
+                      Add to sort ASC
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onSelect={() => onSortColumn(col.name, "DESC", true)}
+                    >
+                      Add to sort DESC
+                    </ContextMenuItem>
+                  </>
+                )}
+                {(onClearColumnSort || onClearAllSorts) && onSortColumn && (
+                  <ContextMenuSeparator />
+                )}
+                {onClearColumnSort && (
+                  <ContextMenuItem
+                    disabled={!isSorted}
+                    onSelect={() => onClearColumnSort(col.name)}
+                  >
+                    Clear sort for this column
+                  </ContextMenuItem>
+                )}
+                {onClearAllSorts && (
+                  <ContextMenuItem
+                    disabled={sorts.length === 0}
+                    onSelect={() => onClearAllSorts()}
+                  >
+                    Clear all sorts
+                  </ContextMenuItem>
+                )}
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </div>

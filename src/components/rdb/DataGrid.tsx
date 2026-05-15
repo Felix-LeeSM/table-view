@@ -401,6 +401,42 @@ export default function DataGrid({
     return () => window.removeEventListener("keydown", handler);
   }, [canUndo, undoPending]);
 
+  // Sprint 316 — explicit sort helpers driven by the column header
+  // context menu. `append` mirrors shift+click semantics (multi-key
+  // append). The plain `handleSort` (cycle on click) stays as-is.
+  const handleSortColumn = useCallback(
+    (columnName: string, direction: "ASC" | "DESC", append: boolean) => {
+      setSorts((prev) => {
+        const next: SortInfo = { column: columnName, direction };
+        if (append) {
+          const idx = prev.findIndex((s) => s.column === columnName);
+          if (idx !== -1) {
+            const out = [...prev];
+            out[idx] = next;
+            return out;
+          }
+          return [...prev, next];
+        }
+        return [next];
+      });
+      setPage(1);
+    },
+    [setSorts],
+  );
+
+  const handleClearColumnSort = useCallback(
+    (columnName: string) => {
+      setSorts((prev) => prev.filter((s) => s.column !== columnName));
+      setPage(1);
+    },
+    [setSorts],
+  );
+
+  const handleClearAllSorts = useCallback(() => {
+    setSorts(() => []);
+    setPage(1);
+  }, [setSorts]);
+
   const handleSort = (columnName: string, shiftKey: boolean = false) => {
     if (shiftKey) {
       setSorts((prev) => {
@@ -594,6 +630,9 @@ export default function DataGrid({
           onStartEdit={editState.handleStartEdit}
           onSelectRow={editState.handleSelectRow}
           onSort={handleSort}
+          onSortColumn={handleSortColumn}
+          onClearColumnSort={handleClearColumnSort}
+          onClearAllSorts={handleClearAllSorts}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
           onNavigateToFk={handleNavigateToFk}

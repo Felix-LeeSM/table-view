@@ -223,6 +223,39 @@ export default function DocumentDataGrid({
     return () => window.removeEventListener("reset-column-widths", handler);
   }, [resetColumnWidths]);
 
+  // Sprint 316 — explicit sort helpers driven by the column header
+  // context menu. `append` mirrors shift+click semantics. The plain
+  // `handleSort` (cycle on click) below stays as-is.
+  const handleSortColumn = useCallback(
+    (columnName: string, direction: "ASC" | "DESC", append: boolean) => {
+      setSorts((prev) => {
+        const next: SortInfo = { column: columnName, direction };
+        if (append) {
+          const idx = prev.findIndex((s) => s.column === columnName);
+          if (idx !== -1) {
+            const out = [...prev];
+            out[idx] = next;
+            return out;
+          }
+          return [...prev, next];
+        }
+        return [next];
+      });
+      setPage(1);
+    },
+    [],
+  );
+
+  const handleClearColumnSort = useCallback((columnName: string) => {
+    setSorts((prev) => prev.filter((s) => s.column !== columnName));
+    setPage(1);
+  }, []);
+
+  const handleClearAllSorts = useCallback(() => {
+    setSorts([]);
+    setPage(1);
+  }, []);
+
   // Sprint 315 — RDB DataGrid handleSort 패턴 1:1 복제. shift+click =
   // multi-key (ASC→DESC→remove cycle per column), plain click = single
   // key reset (ASC→DESC→clear). page=1 로 리셋해 sort 가 reflect.
@@ -507,6 +540,9 @@ export default function DocumentDataGrid({
             onSort={handleSort}
             onSaveCurrentEdit={editState.saveCurrentEdit}
             onResizeStart={handleResizeStart}
+            onSortColumn={handleSortColumn}
+            onClearColumnSort={handleClearColumnSort}
+            onClearAllSorts={handleClearAllSorts}
           />
 
           <div role="rowgroup">

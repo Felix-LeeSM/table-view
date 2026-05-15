@@ -72,6 +72,18 @@ export interface DataGridTableProps {
   ) => void;
   onSelectRow: (rowIdx: number, metaKey: boolean, shiftKey: boolean) => void;
   onSort: (columnName: string, shiftKey: boolean) => void;
+  /**
+   * Sprint 316 — header context menu callbacks. Optional so non-sorting
+   * callers stay valid; HeaderRow only mounts the menu when at least
+   * one of these is provided.
+   */
+  onSortColumn?: (
+    columnName: string,
+    direction: "ASC" | "DESC",
+    append: boolean,
+  ) => void;
+  onClearColumnSort?: (columnName: string) => void;
+  onClearAllSorts?: () => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
   onNavigateToFk?: (
@@ -130,6 +142,9 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       onStartEdit,
       onSelectRow,
       onSort,
+      onSortColumn,
+      onClearColumnSort,
+      onClearAllSorts,
       onDeleteRow,
       onDuplicateRow,
       onNavigateToFk,
@@ -327,6 +342,9 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
           onSort={onSort}
           onSaveCurrentEdit={onSaveCurrentEdit}
           onResizeStart={handleResizeStart}
+          onSortColumn={onSortColumn}
+          onClearColumnSort={onClearColumnSort}
+          onClearAllSorts={onClearAllSorts}
         />
 
         {shouldVirtualize ? (

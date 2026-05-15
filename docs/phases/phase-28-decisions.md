@@ -941,3 +941,86 @@ shell syntax (`{ field: 1 }`).
 chain 삽입. 기존 history snapshot 호환 (sort 없으면 빈 chain).
 
 ---
+
+## Sprint 316 (Slice C.2 — Slice C FINAL) — Column header context menu
+
+### D-32: "Sort ASC" = 명시적 override (toggle 아님)
+
+**문제**: Context menu 의 "Sort ASC" 가 (a) 현재 sort 와 무관하게 ASC
+override vs (b) toggle (이미 ASC면 no-op or DESC).
+
+**결정**: (a) override. 현재 sort 가 어떤 상태든 클릭한 column 만
+ASC single-key 로 set.
+
+**근거**:
+1. Context menu 는 **명시적** intent. user 가 "Sort ASC" 를 누른 건
+   "ASC 로 정렬해" 의 직설적 요청.
+2. toggle 은 plain click 으로 이미 제공 (Sprint 315 의 `handleSort`).
+   context menu 가 동일 동작 또 노출하면 redundancy.
+3. 사용자가 multi-key 후에 "Sort ASC" 누르면 → single-key reset. 이게
+   "이 column 만 정렬해" intent 와 정합.
+
+**대안**: toggle (이미 ASC 면 DESC) — context menu 안의 모든 item 이
+다른 효과를 줘야 sense make. 하지만 5+1 item 분리 (ASC / DESC /
+Add ASC / Add DESC / Clear col / Clear all) 가 더 좋은 UX.
+
+**영향**: `handleSortColumn(col, "ASC", append=false)` 가 무조건 `[{
+col, ASC }]` 로 set. `append=true` 분기에서만 push.
+
+---
+
+### D-33: HeaderRow 가 paradigm-shared, context menu 는 한 곳에서
+
+**문제**: RDB DataGrid 와 Mongo DocumentDataGrid 가 각자 context menu
+를 구현하면 6 item × 2 grid = 12 callsite. 변경 비용 + 회귀 면적
+양극화.
+
+**결정**: `HeaderRow` 가 context menu 를 mount. callback 3개를
+optional prop 으로 받는다. 두 grid 가 각자 helper 작성하여 prop 으로
+전달.
+
+**근거**:
+1. `HeaderRow` 는 이미 paradigm-shared (Sprint 315 D-30). context
+   menu 추가도 자연.
+2. callback shape (`onSortColumn` / `onClearColumnSort` /
+   `onClearAllSorts`) 가 paradigm 분기 없음.
+3. 6 item 의 UX (label, separator, disabled 상태) 가 한 곳에 모임 →
+   향후 polish 시 한 곳만 변경.
+4. callback 셋 모두 optional — HeaderRow 의 다른 caller (test 등) 가
+   회귀 없음.
+
+**대안**: 각 grid 가 자기 context menu — 중복 코드 + UX divergence
+위험. HeaderRow 의 단일 책임 위반.
+
+**영향**: DataGridTable 의 prop forwarding 추가 (RDB 경로). RDB
+DataGrid + DocumentDataGrid 의 callback helper 3개씩. test 는
+HeaderRow 단위 RTL (paradigm-agnostic verify).
+
+---
+
+### D-34: disabled state — sort 안 된 column 의 "Clear column" + 빈 sorts 의 "Clear all"
+
+**문제**: context menu 의 "Clear sort for this column" 이 sort 안 된
+column 에서 클릭되면 no-op. "Clear all sorts" 도 sorts 가 빈 상태면
+의미 없음. visual feedback 부재 → 사용자 혼란.
+
+**결정**: 각 item 에 `disabled` 조건:
+- "Clear sort for this column" → `!isSorted` 일 때 disabled.
+- "Clear all sorts" → `sorts.length === 0` 일 때 disabled.
+
+**근거**:
+1. disabled 가 Radix `data-disabled` 속성으로 자연 표현 → CSS 가
+   opacity 50% 처리 (`data-[disabled]:opacity-50`).
+2. 사용자가 클릭해도 callback 호출 안 됨 — bug 가능성 차단.
+3. 의미 없는 액션을 click 했을 때 grid 가 아무 반응 없으면 사용자가
+   "버그?" 의문. disabled 가 "할 게 없다" 신호.
+
+**대안**: 항상 enabled (callback 이 no-op 처리) — UX feedback 부재.
+또는 item 자체 hide — UX inconsistency (어떤 때는 보이고 어떤 때는
+안 보임).
+
+**영향**: RTL 의 "Clear sort for this column is disabled when the
+column is not sorted" + "Clear all sorts is disabled when sorts is
+empty" 2 case 가 lock.
+
+---
