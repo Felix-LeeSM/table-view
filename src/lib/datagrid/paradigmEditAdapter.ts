@@ -2,6 +2,7 @@ import {
   generateSqlWithKeys,
   type CoerceError,
   type GeneratedSqlStatement,
+  type SqlDialect,
 } from "@/components/datagrid/sqlGenerator";
 import {
   generateMqlPreview,
@@ -137,6 +138,13 @@ export interface RdbAdapterDeps {
     correlationId: string,
   ) => Promise<unknown>;
   history: HistoryRecorder;
+  /**
+   * Sprint 347 — DBMS dialect for the SQL generator. Postgres jsonb edits
+   * stay on `jsonb_set`; MySQL JSON edits route through `JSON_SET` /
+   * `JSON_REMOVE`. Defaults to `"postgresql"` when callers haven't been
+   * plumbed yet (preserves Sprint 343/344 behaviour).
+   */
+  dialect?: SqlDialect;
 }
 
 export interface DocumentAdapterDeps {
@@ -224,6 +232,10 @@ export function rdbEditAdapter(deps: RdbAdapterDeps): ParadigmEditAdapter {
           onCoerceError: (e: CoerceError) => {
             coerceErrors.set(e.key, e.message);
           },
+          // Sprint 347 — forward the dialect so JSON dispatch knows which
+          // emit (jsonb_set / JSON_SET) to use. Undefined falls back to
+          // postgresql inside the generator for Sprint 343/344 callers.
+          dialect: deps.dialect,
         },
       );
       if (statements.length === 0) {

@@ -595,6 +595,394 @@ describe("generateSql — Slice E add-key / add-item dispatch (Sprint 344)", () 
   });
 });
 
+// Sprint 347 (2026-05-15) — MySQL / SQLite JSON dispatch. `dialect` option
+// routes nested edits to per-DBMS emit. MySQL uses JSON_SET / JSON_REMOVE
+// against the jQuery-style `'$.path'` literals (vs Postgres' segment-array
+// `'{a,b,c}'`). SQLite stays rejected with a clear message until a
+// follow-up sprint plumbs `json1` extension dispatch.
+const MYSQL_JSON_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "int",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "meta",
+      data_type: "json",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, { verified: true, role: "user" }]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM app.users LIMIT 100 OFFSET 0",
+};
+
+describe("generateSql — MySQL JSON nested edits (Sprint 347)", () => {
+  it("AC-344-E-01 (MySQL): emits JSON_SET for a single nested string leaf", () => {
+    const edits = new Map<string, string | null>([["0-1:role", "admin"]]);
+    const statements = generateSql(
+      MYSQL_JSON_DATA,
+      "app",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { dialect: "mysql" },
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toBe(
+      `UPDATE app.users SET meta = JSON_SET(meta, '$.role', CAST('"admin"' AS JSON)) WHERE id = 1;`,
+    );
+  });
+
+  it("emits chained JSON_SET for multiple nested leaves", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:role", "admin"],
+      ["0-1:dept", "eng"],
+    ]);
+    const statements = generateSql(
+      MYSQL_JSON_DATA,
+      "app",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { dialect: "mysql" },
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toMatch(
+      /UPDATE app\.users SET meta = JSON_SET\(JSON_SET\(meta, '\$\.role', CAST\('"admin"' AS JSON\)\), '\$\.dept', CAST\('"eng"' AS JSON\)\) WHERE id = 1;/,
+    );
+  });
+
+  it("routes __op__:unset through JSON_REMOVE", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:role", "__op__:unset"],
+    ]);
+    const statements = generateSql(
+      MYSQL_JSON_DATA,
+      "app",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { dialect: "mysql" },
+    );
+    expect(statements[0]).toBe(
+      `UPDATE app.users SET meta = JSON_REMOVE(meta, '$.role') WHERE id = 1;`,
+    );
+  });
+
+  it("expands bracket-index path to MySQL JSON $.tags[0].name form", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:friends[0].name", "Marie"],
+    ]);
+    const statements = generateSql(
+      MYSQL_JSON_DATA,
+      "app",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { dialect: "mysql" },
+    );
+    expect(statements[0]).toBe(
+      `UPDATE app.users SET meta = JSON_SET(meta, '$.friends[0].name', CAST('"Marie"' AS JSON)) WHERE id = 1;`,
+    );
+  });
+
+  it("scalar value types: number / bool / null pass through correctly", () => {
+    const cases: Array<[string, string]> = [
+      ["42", "42"],
+      ["true", "TRUE"],
+      ["false", "FALSE"],
+      ["null", "CAST('null' AS JSON)"],
+    ];
+    for (const [input, expected] of cases) {
+      const edits = new Map<string, string | null>([["0-1:k", input]]);
+      const statements = generateSql(
+        MYSQL_JSON_DATA,
+        "app",
+        "users",
+        edits,
+        new Set(),
+        [],
+        { dialect: "mysql" },
+      );
+      expect(statements[0]).toBe(
+        `UPDATE app.users SET meta = JSON_SET(meta, '$.k', ${expected}) WHERE id = 1;`,
+      );
+    }
+  });
+
+  it("wraps null cell base in COALESCE(col, JSON_OBJECT())", () => {
+    const dataWithNullCell: TableData = {
+      ...MYSQL_JSON_DATA,
+      rows: [[1, null]],
+    };
+    const edits = new Map<string, string | null>([["0-1:newKey", "42"]]);
+    const statements = generateSql(
+      dataWithNullCell,
+      "app",
+      "users",
+      edits,
+      new Set(),
+      [],
+      { dialect: "mysql" },
+    );
+    expect(statements[0]).toBe(
+      `UPDATE app.users SET meta = JSON_SET(COALESCE(meta, JSON_OBJECT()), '$.newKey', 42) WHERE id = 1;`,
+    );
+  });
+
+  it("Postgres jsonb path is not affected by dialect:mysql on a different column type", () => {
+    // jsonb dataset with dialect:mysql → falls through (data_type is 'jsonb'
+    // which the mysql branch rejects), so `onCoerceError` fires. This guards
+    // the cross-dialect: a Postgres-typed schema accidentally combined with
+    // dialect:mysql shouldn't silently emit broken SQL.
+    const edits = new Map<string, string | null>([["0-1:role", "admin"]]);
+    const errors: string[] = [];
+    const statements = generateSql(
+      JSONB_DATA,
+      "public",
+      "users",
+      edits,
+      new Set(),
+      [],
+      {
+        dialect: "mysql",
+        onCoerceError: (e) => errors.push(e.message),
+      },
+    );
+    expect(statements).toHaveLength(0);
+    expect(errors[0]).toMatch(/Nested edits are only supported/);
+  });
+});
+
+describe("generateSql — SQLite JSON nested edits (Sprint 347)", () => {
+  // Sprint 347 (2026-05-15) — SQLite has no formal JSON column type
+  // (data_type comes through as TEXT/JSON depending on driver). Until
+  // `json1` extension dispatch lands, nested edits on a `json` column under
+  // dialect:sqlite are rejected with a clear message rather than emitting
+  // broken SQL.
+  const SQLITE_DATA: TableData = {
+    columns: [
+      {
+        name: "id",
+        data_type: "INTEGER",
+        nullable: false,
+        default_value: null,
+        is_primary_key: true,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+      {
+        name: "meta",
+        data_type: "json",
+        nullable: true,
+        default_value: null,
+        is_primary_key: false,
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      },
+    ],
+    rows: [[1, { role: "user" }]],
+    total_count: 1,
+    page: 1,
+    page_size: 100,
+    executed_query: "SELECT * FROM main.users LIMIT 100 OFFSET 0",
+  };
+
+  it("rejects nested edits with a deferred message", () => {
+    const edits = new Map<string, string | null>([["0-1:role", "admin"]]);
+    const errors: string[] = [];
+    const statements = generateSql(
+      SQLITE_DATA,
+      "main",
+      "users",
+      edits,
+      new Set(),
+      [],
+      {
+        dialect: "sqlite",
+        onCoerceError: (e) => errors.push(e.message),
+      },
+    );
+    expect(statements).toHaveLength(0);
+    expect(errors[0]).toMatch(/SQLite JSON column edits/);
+  });
+});
+
+// Sprint 348 (2026-05-15) — jsonb[] inner-path edit. Sprint 343 deferred
+// the element edit on jsonb[] / json[] columns; the path syntax for an
+// inner edit is `[N].inner.path`. The emit reassigns the whole array
+// (ARRAY[...]::jsonb[]) with edited slots wrapped in jsonb_set / #- and
+// untouched slots referencing `col[i+1]` (Postgres 1-indexed).
+const JSONB_ARRAY_DATA: TableData = {
+  columns: [
+    {
+      name: "id",
+      data_type: "integer",
+      nullable: false,
+      default_value: null,
+      is_primary_key: true,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+    {
+      name: "items",
+      data_type: "jsonb[]",
+      nullable: true,
+      default_value: null,
+      is_primary_key: false,
+      is_foreign_key: false,
+      fk_reference: null,
+      comment: null,
+    },
+  ],
+  rows: [[1, [{ a: 1 }, { b: 2 }, { c: 3 }]]],
+  total_count: 1,
+  page: 1,
+  page_size: 100,
+  executed_query: "SELECT * FROM public.t LIMIT 100 OFFSET 0",
+};
+
+describe("generateSql — jsonb[] inner-path edit (Sprint 348)", () => {
+  it("emits ARRAY[...] with jsonb_set on the edited slot", () => {
+    const edits = new Map<string, string | null>([["0-1:[1].b", "20"]]);
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toBe(
+      `UPDATE public.t SET items = ARRAY[items[1], jsonb_set(items[2], '{"b"}', '20'::jsonb, true), items[3]]::jsonb[] WHERE id = 1;`,
+    );
+  });
+
+  it("inner-path delete uses #-", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:[0].a", "__op__:unset"],
+    ]);
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toBe(
+      `UPDATE public.t SET items = ARRAY[items[1] #- '{"a"}', items[2], items[3]]::jsonb[] WHERE id = 1;`,
+    );
+  });
+
+  it("whole-element delete drops the slot", () => {
+    const edits = new Map<string, string | null>([["0-1:[1]", "__op__:unset"]]);
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toBe(
+      `UPDATE public.t SET items = ARRAY[items[1], items[3]]::jsonb[] WHERE id = 1;`,
+    );
+  });
+
+  it("whole-element replace emits jsonb literal in that slot", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:[1]", '{"replaced":true}'],
+    ]);
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+    );
+    // safeStringifyCell on a JSON-text string still re-encodes once — the
+    // resulting jsonb literal carries the inner string verbatim (callers
+    // who want a parsed-object replace must commit the structural value
+    // via the tree's coerce helper which produces a JS object, not a JSON
+    // text).
+    expect(statements[0]).toContain("items[1]");
+    expect(statements[0]).toContain("'::jsonb");
+    expect(statements[0]).toContain("items[3]");
+  });
+
+  it("two inner edits on the same element chain jsonb_set", () => {
+    const edits = new Map<string, string | null>([
+      ["0-1:[0].a", "10"],
+      ["0-1:[0].b", "20"],
+    ]);
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toBe(
+      `UPDATE public.t SET items = ARRAY[jsonb_set(jsonb_set(items[1], '{"a"}', '10'::jsonb, true), '{"b"}', '20'::jsonb, true), items[2], items[3]]::jsonb[] WHERE id = 1;`,
+    );
+  });
+
+  it("inner-path edit on missing index rejects", () => {
+    const edits = new Map<string, string | null>([["0-1:[10].x", "1"]]);
+    const errors: string[] = [];
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+      { onCoerceError: (e) => errors.push(e.message) },
+    );
+    expect(statements).toHaveLength(0);
+    expect(errors[0]).toMatch(/add the element first/);
+  });
+
+  it("push past end of array (whole-element)", () => {
+    const edits = new Map<string, string | null>([["0-1:[3]", '{"new":1}']]);
+    const statements = generateSql(
+      JSONB_ARRAY_DATA,
+      "public",
+      "t",
+      edits,
+      new Set(),
+      [],
+    );
+    expect(statements[0]).toContain("items[1], items[2], items[3]");
+    expect(statements[0]).toContain("::jsonb[]");
+  });
+});
+
 describe("generateSql — INSERT null vs empty string", () => {
   it("emits NULL for null cells and '' for empty-string cells in new rows", () => {
     const newRows = [

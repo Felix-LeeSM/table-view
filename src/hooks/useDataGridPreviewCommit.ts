@@ -7,6 +7,7 @@
 // stay populated for downstream UI components.
 import { useCallback, useMemo, useState } from "react";
 import { useSchemaStore } from "@stores/schemaStore";
+import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { toast } from "@/lib/toast";
@@ -22,6 +23,16 @@ import {
 import type { MqlPreview } from "@/lib/mongo/mqlGenerator";
 import type { TableData } from "@/types/schema";
 import type { CommitError } from "@/components/datagrid/useDataGridEdit";
+import type { SqlDialect } from "@/components/datagrid/sqlGenerator";
+
+/** Sprint 347 — connection.db_type → sqlGenerator dialect tag. Redis /
+ *  unsupported types fall through to undefined (the generator default). */
+function dialectFromDbType(dbType: string | undefined): SqlDialect | undefined {
+  if (dbType === "postgresql") return "postgresql";
+  if (dbType === "mysql") return "mysql";
+  if (dbType === "sqlite") return "sqlite";
+  return undefined;
+}
 
 export interface UseDataGridPreviewCommitParams {
   data: TableData | null;
@@ -124,6 +135,12 @@ export function useDataGridPreviewCommit(
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);
+  // Sprint 347 — derive SQL dialect from the connection's db_type so the
+  // generator can dispatch jsonb_set vs JSON_SET correctly.
+  const dialect = useConnectionStore((s) => {
+    const conn = s.connections.find((c) => c.id === connectionId);
+    return dialectFromDbType(conn?.db_type);
+  });
 
   // Paradigm-keyed adapter. Selection happens here exactly once per
   // dep change — the hook body never branches on `paradigm` again.
@@ -166,6 +183,7 @@ export function useDataGridPreviewCommit(
       connectionId,
       safeModeGate,
       executeQueryBatch,
+      dialect,
       history: {
         recordSuccess: ({ sql, startedAt, duration }) =>
           addHistoryEntry({
@@ -200,6 +218,7 @@ export function useDataGridPreviewCommit(
     safeModeGate,
     executeQueryBatch,
     addHistoryEntry,
+    dialect,
   ]);
 
   const [session, setSession] = useState<PreviewSession | null>(null);
@@ -226,6 +245,7 @@ export function useDataGridPreviewCommit(
         connectionId,
         safeModeGate,
         executeQueryBatch,
+        dialect,
         history: {
           recordSuccess: ({ sql, startedAt, duration }) =>
             addHistoryEntry({
@@ -259,7 +279,7 @@ export function useDataGridPreviewCommit(
       setSession(synth);
       setCommitError(null);
     },
-    [connectionId, safeModeGate, executeQueryBatch, addHistoryEntry],
+    [connectionId, safeModeGate, executeQueryBatch, addHistoryEntry, dialect],
   );
 
   // `setMqlPreview(null)` dismisses the preview dialog. Non-null sets

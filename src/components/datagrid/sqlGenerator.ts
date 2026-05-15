@@ -296,6 +296,14 @@ export interface GenerateSqlOptions {
    * Valid edits in the same batch are unaffected (independent validation).
    */
   onCoerceError?: (err: CoerceError) => void;
+  /**
+   * Sprint 347 — DBMS dialect tag. Postgres remains the default for
+   * back-compat with callers that haven't been plumbed yet (the legacy
+   * jsonb-only flow). MySQL routes nested edits through
+   * `JSON_SET` / `JSON_REMOVE`. SQLite rejects nested edits with a clear
+   * message (`json1` extension dispatch is a follow-up sprint).
+   */
+  dialect?: SqlDialect;
 }
 
 /**
@@ -395,8 +403,152 @@ export function isJsonbColumn(dataType: string): boolean {
   return dataType.toLowerCase() === "jsonb";
 }
 
+/**
+ * Sprint 347 — DBMS dialect tag for the SQL generator. Postgres is the
+ * only path that emits jsonb_set today; MySQL emits JSON_SET/JSON_REMOVE
+ * instead, and SQLite rejects nested edits until a follow-up sprint adds
+ * the `json1` extension dispatch.
+ */
+export type SqlDialect = "postgresql" | "mysql" | "sqlite";
+
+/**
+ * Sprint 347 — Does this column hold structural JSON we can dispatch
+ * on? The check is dialect-aware so Postgres `json` (not jsonb) is
+ * correctly excluded — Postgres' `jsonb_set` rejects plain `json`.
+ *
+ * - postgresql → `jsonb`
+ * - mysql → `json`
+ * - sqlite → none (deferred — sqlite has no JSON column type, only TEXT
+ *   that happens to hold JSON, which we cannot detect from a schema
+ *   round-trip alone)
+ */
+export function isStructuralJsonColumn(
+  dataType: string,
+  dialect: SqlDialect | undefined,
+): boolean {
+  const lower = dataType.toLowerCase().trim();
+  if (dialect === "postgresql") return lower === "jsonb";
+  if (dialect === "mysql") return lower === "json";
+  // sqlite / undefined → no structural-JSON dispatch.
+  return false;
+}
+
 export function isArrayColumn(dataType: string): boolean {
   return arrayElementType(dataType) !== null;
+}
+
+/**
+ * Sprint 347 — MySQL JSON-path literal. MySQL uses jQuery-style
+ * `'$.a.b[0].c'` syntax (vs Postgres' `'{a,b,0,c}'` segment array).
+ * Bracket-indexed segments stay as `[N]`; named segments are prefixed
+ * by `.`. Names are quoted with double quotes only when they contain
+ * characters MySQL's path parser rejects (anything outside ASCII
+ * identifier rules), matching the dialect's own escaping policy.
+ */
+function mysqlPathLiteral(path: string): string {
+  const segments = splitJsonbPath(path); // reuse — same dot/bracket tokenizer
+  if (segments.length === 0) return "'$'";
+  let out = "$";
+  for (const seg of segments) {
+    if (/^\d+$/.test(seg)) {
+      out += `[${seg}]`;
+    } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(seg)) {
+      out += `.${seg}`;
+    } else {
+      // unsafe identifier — quote it. Embedded double quotes get
+      // backslash-escaped per MySQL JSON path grammar.
+      out += `."${seg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    }
+  }
+  return `'${out.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Sprint 347 — MySQL JSON value literal. Scalars print verbatim;
+ * objects/arrays / strings round-trip through `CAST('<json>' AS JSON)`
+ * so nested adds expand correctly on the server side.
+ */
+function mysqlJsonValueLiteral(value: string): string {
+  // Scalars: pass through as-is (MySQL JSON_SET accepts native scalars).
+  if (value === "null") return "CAST('null' AS JSON)";
+  if (value === "true" || value === "false") return value.toUpperCase();
+  if (NUMERIC_RE.test(value)) return value;
+  // Object/array/string: encode as JSON, cast to JSON. JSON.stringify
+  // is the natural builder; quoting follows escapeSqlString so the SQL
+  // single-quote contract is preserved.
+  return `CAST(${escapeSqlString(safeStringifyCell(value))} AS JSON)`;
+}
+
+/**
+ * Sprint 347 — emit a chained `JSON_SET(... JSON_REMOVE(...) ...)` expression
+ * for a MySQL JSON column. Same accumulator pattern as Postgres' jsonb
+ * emit — order preserved, last-write-wins per path, null base wrapped in
+ * `COALESCE(<col>, JSON_OBJECT())` once so adds can grow from empty.
+ */
+function emitMysqlJsonUpdate(
+  colName: string,
+  cellValue: unknown,
+  nested: Array<{ key: string; path: string | null; value: string | null }>,
+): { kind: "expr"; expr: string } | { kind: "error"; message: string } {
+  const base =
+    cellValue === null || cellValue === undefined
+      ? `COALESCE(${colName}, JSON_OBJECT())`
+      : colName;
+  let expr = base;
+  for (const ne of nested) {
+    if (!ne.path) {
+      return { kind: "error", message: "nested edit missing path" };
+    }
+    const pathLit = mysqlPathLiteral(ne.path);
+    if (pathLit === "'$'") {
+      return {
+        kind: "error",
+        message: `Cannot derive a JSON path from "${ne.path}"`,
+      };
+    }
+    if (ne.value === UNSET_OP) {
+      expr = `JSON_REMOVE(${expr}, ${pathLit})`;
+    } else if (ne.value === null) {
+      expr = `JSON_SET(${expr}, ${pathLit}, CAST('null' AS JSON))`;
+    } else {
+      expr = `JSON_SET(${expr}, ${pathLit}, ${mysqlJsonValueLiteral(ne.value)})`;
+    }
+  }
+  return { kind: "expr", expr };
+}
+
+/**
+ * Sprint 347 — tokenize a dot/bracket path into segments. Shared by
+ * Postgres `jsonbPathLiteral` (kept) and the new MySQL emit so both
+ * dialects agree on what "the segments of `meta.tags[0].name`" means.
+ */
+function splitJsonbPath(path: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  for (let i = 0; i < path.length; i++) {
+    const ch = path[i];
+    if (ch === ".") {
+      if (buf) out.push(buf);
+      buf = "";
+    } else if (ch === "[") {
+      if (buf) out.push(buf);
+      buf = "";
+      // collect digits until ]
+      const end = path.indexOf("]", i + 1);
+      if (end === -1) {
+        // malformed — caller decides; we drop the rest.
+        return [];
+      }
+      const idx = path.slice(i + 1, end);
+      if (!/^\d+$/.test(idx)) return [];
+      out.push(idx);
+      i = end;
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf) out.push(buf);
+  return out;
 }
 
 /**
@@ -529,11 +681,12 @@ function emitArrayUpdate(
     return { kind: "error", message: `Not an ARRAY column: ${dataType}` };
   }
   if (elementType === "jsonb" || elementType === "json") {
-    return {
-      kind: "error",
-      message:
-        "jsonb[] / json[] element edits are not yet supported (Sprint 343 follow-up).",
-    };
+    return emitJsonbArrayUpdate(
+      _colName,
+      elementType as "jsonb" | "json",
+      cellValue,
+      nested,
+    );
   }
   const elementFamily = classifySqlType(elementType);
 
@@ -583,6 +736,133 @@ function emitArrayUpdate(
       return { kind: "error", message: coerced.message };
     }
     out.push(coerced.sql);
+  }
+
+  return {
+    kind: "expr",
+    expr: `ARRAY[${out.join(", ")}]::${elementType}[]`,
+  };
+}
+
+/**
+ * Sprint 348 — emit a per-element-rewritten `ARRAY[...]::jsonb[]` for
+ * inner-path edits / deletes on a jsonb[] column. Untouched elements
+ * reference the original via `col[i+1]` (Postgres 1-indexed). Edited
+ * elements wrap as `jsonb_set(col[i+1], '{seg}', val::jsonb, true)` or
+ * `col[i+1] #- '{seg}'` for unset. Whole-element replace (path=`[N]`
+ * with non-unset value) writes the new jsonb literal directly.
+ * Whole-element delete (path=`[N]` with `__op__:unset`) drops the slot
+ * from the output array.
+ *
+ * Multiple inner-path edits on the SAME element chain their jsonb_set /
+ * #- wraps inside that element's slot. Order = pendingByPath insertion
+ * order (last-write-wins per identical path, consistent with `Map.set`).
+ */
+function emitJsonbArrayUpdate(
+  colName: string,
+  elementType: "jsonb" | "json",
+  cellValue: unknown,
+  nested: Array<{ key: string; path: string | null; value: string | null }>,
+): { kind: "expr"; expr: string } | { kind: "error"; message: string } {
+  const original = Array.isArray(cellValue) ? (cellValue as unknown[]) : [];
+  // Path shape: `[N]` (whole element) or `[N].inner.path` (inner jsonb path).
+  type Action =
+    | { kind: "whole-edit"; value: string }
+    | { kind: "whole-delete" }
+    | { kind: "inner-edit"; innerPath: string; value: string | null };
+  const actions = new Map<number, Action[]>();
+  const PATH_RE = /^\[(\d+)\](?:\.(.+))?$/;
+  for (const ne of nested) {
+    if (!ne.path) {
+      return { kind: "error", message: "nested jsonb[] edit missing path" };
+    }
+    const m = PATH_RE.exec(ne.path);
+    if (!m) {
+      return {
+        kind: "error",
+        message: `jsonb[] paths must start with [N], got "${ne.path}".`,
+      };
+    }
+    const idx = parseInt(m[1]!, 10);
+    const inner = m[2];
+    const bucket = actions.get(idx) ?? [];
+    if (!inner) {
+      if (ne.value === UNSET_OP) bucket.push({ kind: "whole-delete" });
+      else if (ne.value === null) {
+        return {
+          kind: "error",
+          message: "jsonb[] whole-element edit cannot use null value",
+        };
+      } else bucket.push({ kind: "whole-edit", value: ne.value });
+    } else {
+      bucket.push({ kind: "inner-edit", innerPath: inner, value: ne.value });
+    }
+    actions.set(idx, bucket);
+  }
+
+  const out: string[] = [];
+  for (let i = 0; i < original.length; i++) {
+    const acts = actions.get(i);
+    if (!acts || acts.length === 0) {
+      out.push(`${colName}[${i + 1}]`);
+      continue;
+    }
+    // Last whole-* action wins for that index (matches Map.set semantics);
+    // partial-edits accumulate up to / following the whole-* slot.
+    let dropSlot = false;
+    let baseExpr = `${colName}[${i + 1}]`;
+    for (const a of acts) {
+      if (a.kind === "whole-delete") {
+        dropSlot = true;
+        baseExpr = ""; // unused
+      } else if (a.kind === "whole-edit") {
+        dropSlot = false;
+        baseExpr = jsonbValueLiteral(a.value);
+      } else {
+        // inner-edit
+        const pathLit = jsonbPathLiteral(a.innerPath);
+        if (pathLit === "'{}'") {
+          return {
+            kind: "error",
+            message: `Cannot derive a JSON path from "${a.innerPath}"`,
+          };
+        }
+        if (a.value === UNSET_OP) {
+          baseExpr = `${baseExpr} #- ${pathLit}`;
+        } else if (a.value === null) {
+          baseExpr = `jsonb_set(${baseExpr}, ${pathLit}, 'null'::jsonb, true)`;
+        } else {
+          baseExpr = `jsonb_set(${baseExpr}, ${pathLit}, ${jsonbValueLiteral(a.value)}, true)`;
+        }
+      }
+    }
+    if (!dropSlot) out.push(baseExpr);
+  }
+  // Append actions on indexes beyond the current array length (jsonb[] push).
+  const extraIndexes = Array.from(actions.keys())
+    .filter((i) => i >= original.length)
+    .sort((a, b) => a - b);
+  for (const i of extraIndexes) {
+    const acts = actions.get(i)!;
+    let baseExpr: string | null = null;
+    let dropSlot = false;
+    for (const a of acts) {
+      if (a.kind === "whole-delete") {
+        dropSlot = true;
+        baseExpr = null;
+      } else if (a.kind === "whole-edit") {
+        dropSlot = false;
+        baseExpr = jsonbValueLiteral(a.value);
+      } else {
+        // inner-edit on a non-existing element — `jsonb_set` on a missing
+        // base is undefined. Reject so the user adds the element first.
+        return {
+          kind: "error",
+          message: `jsonb[] inner-path edit on missing index [${i}] — add the element first.`,
+        };
+      }
+    }
+    if (!dropSlot && baseExpr !== null) out.push(baseExpr);
   }
 
   return {
@@ -723,9 +1003,13 @@ export function generateSqlWithKeys(
       return;
     }
 
-    // Nested-only branch — dispatch by column type.
-    if (isJsonbColumn(col.data_type)) {
-      const emitted = emitJsonbUpdate(col.name, row[colIdx], nested);
+    // Nested-only branch — dispatch by column type + dialect.
+    const dialect = options.dialect ?? "postgresql";
+    if (isStructuralJsonColumn(col.data_type, dialect)) {
+      const emitted =
+        dialect === "mysql"
+          ? emitMysqlJsonUpdate(col.name, row[colIdx], nested)
+          : emitJsonbUpdate(col.name, row[colIdx], nested);
       if (emitted.kind === "error") {
         options.onCoerceError?.({
           key: nested[0]!.key,
@@ -741,8 +1025,21 @@ export function generateSqlWithKeys(
       });
       return;
     }
+    // Sprint 347 — Postgres jsonb / MySQL json are handled above.
+    // SQLite: no JSON column type to detect; nested edits must go through
+    // the `json1` extension which is a follow-up sprint.
+    if (dialect === "sqlite" && col.data_type.toLowerCase().trim() === "json") {
+      options.onCoerceError?.({
+        key: nested[0]!.key,
+        rowIdx,
+        colIdx,
+        message:
+          "SQLite JSON column edits via inline tree are not yet supported.",
+      });
+      return;
+    }
 
-    if (isArrayColumn(col.data_type)) {
+    if (isArrayColumn(col.data_type) && dialect === "postgresql") {
       const emitted = emitArrayUpdate(
         col.name,
         col.data_type,
