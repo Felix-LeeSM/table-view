@@ -197,4 +197,52 @@ describe("DocumentFilterBar", () => {
       screen.getByRole("button", { name: /Add Filter/ }),
     ).toBeInTheDocument();
   });
+
+  // Sprint 313 (2026-05-14) — Slice B.1 wires `$in` / `$nin` through the
+  // structured row. The dropdown must expose the IN / NOT IN labels and
+  // CSV input must round-trip into an array via `buildMqlFilter`.
+  it("exposes IN and NOT IN options in the operator dropdown", () => {
+    renderBar();
+
+    fireEvent.click(
+      screen.getAllByRole("combobox", { name: "Filter operator" })[0]!,
+    );
+    expect(screen.getByRole("option", { name: "IN" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "NOT IN" })).toBeInTheDocument();
+  });
+
+  it("applies $in with a coerced numeric array from CSV input", () => {
+    const onApply = vi.fn();
+    renderBar({ onApply });
+
+    fireEvent.click(
+      screen.getAllByRole("combobox", { name: "Filter operator" })[0]!,
+    );
+    fireEvent.click(screen.getByRole("option", { name: "IN" }));
+
+    const valueInput = screen.getByRole("textbox", { name: "Filter value" });
+    expect(valueInput).toHaveAttribute("placeholder", "1, 2, 3");
+
+    fireEvent.change(valueInput, { target: { value: "18, 19, 20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+
+    expect(onApply).toHaveBeenCalledWith({ age: { $in: [18, 19, 20] } });
+  });
+
+  it("applies $nin with mixed-type tokens preserving non-numeric strings", () => {
+    const onApply = vi.fn();
+    renderBar({ onApply });
+
+    fireEvent.click(
+      screen.getAllByRole("combobox", { name: "Filter operator" })[0]!,
+    );
+    fireEvent.click(screen.getByRole("option", { name: "NOT IN" }));
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter value" }), {
+      target: { value: "1, alpha, 2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+
+    expect(onApply).toHaveBeenCalledWith({ age: { $nin: [1, "alpha", 2] } });
+  });
 });

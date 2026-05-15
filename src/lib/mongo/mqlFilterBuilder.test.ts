@@ -90,6 +90,53 @@ describe("buildMqlFilter", () => {
       age: { $eq: "   " },
     });
   });
+
+  // Sprint 313 (2026-05-14) — Slice B.1 introduces `$in` / `$nin`. The
+  // form layer surfaces a single comma-separated input that the builder
+  // splits, trims, and per-token coerces. Empty arrays are dropped (D-23)
+  // because `$in: []` is almost always a typo.
+  it("builds a $in clause with per-token numeric coercion from CSV input", () => {
+    expect(buildMqlFilter([condition("age", "$in", "18, 19, 20")])).toEqual({
+      age: { $in: [18, 19, 20] },
+    });
+  });
+
+  it("builds a $in clause keeping non-numeric tokens as strings", () => {
+    expect(buildMqlFilter([condition("name", "$in", "Ada, Linus")])).toEqual({
+      name: { $in: ["Ada", "Linus"] },
+    });
+  });
+
+  it("builds a $nin clause with mixed numeric and string tokens", () => {
+    expect(buildMqlFilter([condition("tag", "$nin", "1, alpha, 2")])).toEqual({
+      tag: { $nin: [1, "alpha", 2] },
+    });
+  });
+
+  it("drops whitespace-only tokens from $in arrays", () => {
+    expect(buildMqlFilter([condition("age", "$in", "1, , 3")])).toEqual({
+      age: { $in: [1, 3] },
+    });
+  });
+
+  it("skips a $in clause entirely when input parses to an empty array", () => {
+    // D-23: `$in: []` matches nothing, almost always a typo, so the row
+    // degrades to a no-op instead of silently zeroing the result set.
+    expect(buildMqlFilter([condition("age", "$in", "")])).toEqual({});
+    expect(buildMqlFilter([condition("age", "$in", ", , ")])).toEqual({});
+  });
+
+  it("skips a $nin clause when input parses to an empty array", () => {
+    expect(buildMqlFilter([condition("age", "$nin", "")])).toEqual({});
+  });
+
+  it("merges $in with other operators on the same field", () => {
+    const result = buildMqlFilter([
+      condition("age", "$gte", "18"),
+      condition("age", "$in", "21, 25, 30"),
+    ]);
+    expect(result).toEqual({ age: { $gte: 18, $in: [21, 25, 30] } });
+  });
 });
 
 describe("stringifyMqlFilter", () => {

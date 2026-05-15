@@ -70,6 +70,24 @@ function newCondition(field: string): MqlCondition {
   };
 }
 
+// Operator-specific placeholder hint. Sprint 313 D-24: `$in` / `$nin`
+// take CSV input, so show "1, 2, 3" instead of the generic "Value..."
+// so the user does not have to read the operator docs to know the
+// shape.
+function placeholderFor(operator: MqlOperator): string {
+  switch (operator) {
+    case "$exists":
+      return "true / false";
+    case "$in":
+    case "$nin":
+      return "1, 2, 3";
+    case "$regex":
+      return "^pattern";
+    default:
+      return "Value...";
+  }
+}
+
 export default function DocumentFilterBar({
   fieldNames,
   onApply,
@@ -350,9 +368,7 @@ function StructuredRow({
       <Input
         type="text"
         className="h-7 min-w-30 flex-1 border-border bg-background px-2 py-1 text-xs text-foreground"
-        placeholder={
-          condition.operator === "$exists" ? "true / false" : "Value..."
-        }
+        placeholder={placeholderFor(condition.operator)}
         value={condition.value}
         onChange={(e) => onChange({ value: e.target.value })}
         onKeyDown={(e) => {

@@ -649,3 +649,110 @@ Search placeholder 분기에 잔존. Global Slice A AC #1 위반.
 **영향**: `grep queryMode in QueryTab.tsx` 정확히 0.
 
 ---
+
+## Sprint 313 (Slice B.1) — `$in` / `$nin` field-level ops
+
+### D-21: Slice B 의 13 operators 를 2 sub-sprint 로 분할
+
+**문제**: phase-28 Q7 (13 ops 빈도순) — 한 sprint 에 모두 구현하면
+generator/evaluator scope 가 너무 넓고, composite (`$or`/`$and`/`$not`)
+는 `MqlCondition` (field-keyed flat) 모델로 자연 매핑이 안 됨.
+flat row + composite group 을 한 PR 에 묶으면 (a) builder shape 양극화,
+(b) UI layout 재설계, (c) 회귀 가드 부담이 동시에 들어옴.
+
+**결정**: Slice B 를 두 sub-sprint 로 분할.
+- **B.1 (Sprint 313)**: field-level 10 ops 중 신규 2 (`$in`, `$nin`).
+  CSV → array. `MqlCondition` 모델 미변경.
+- **B.2 (Sprint 314)**: composite 3 (`$or`, `$and`, `$not`). MqlGroup
+  모델 도입, nested condition tree, group row UI.
+
+**근거**: 빈도 우선순위에서 `$in` / `$nin` 이 `$or`/`$and`/`$not` 보다
+사용 빈도 높음. 먼저 field-level 을 잠그면 Raw MQL fall-back 의존이
+감소. composite UI 는 별 모델이 필요해 분리 변경이 자연스러움.
+
+**대안**: 한 sprint 에 묶기 (큰 PR, 회귀 가드 위험), 또는 composite 를
+Raw MQL 만으로 노출하고 영구 미구현 (사용자 자율 directive 의 "모두
+구현" 위반).
+
+**영향**: Slice B 일정이 2 commit 으로 늘어남. 단 각 commit 회귀 면적
+좁아져 검토/롤백 용이.
+
+---
+
+### D-22: operator dropdown 순서 = 빈도순, label = SQL idiom (`IN` / `NOT IN`)
+
+**문제**: 기존 `MQL_OPERATORS` 순서는 `$eq $ne $gt $lt $gte $lte $regex
+$exists` — 빈도순과 불일치 (`$gt $lt $gte $lte` vs 빈도순 `$gt $gte $lt
+$lte`). 신규 `$in` / `$nin` label 도 `"in"` (Mongo) vs `"IN"` (SQL)
+선택 필요.
+
+**결정**:
+- 순서 = phase-28 Q7 의 빈도순 정합: `$eq $ne $gt $gte $lt $lte $in
+  $nin $exists $regex`.
+- Label = SQL idiom: `=`, `≠`, `>`, `≥`, `<`, `≤`, `IN`, `NOT IN`,
+  `exists`, `regex`. RDB FilterBar 의 `LIKE` / `IS NULL` 와 같은
+  upper-case SQL 관용을 따른다.
+
+**근거**:
+1. memory palace 의 명세와 정합.
+2. RDB ↔ Mongo 전환 시 사용자가 같은 단어 (`IN`, `LIKE`) 를 인식 —
+   인지 부하 감소.
+3. `$exists` / `$regex` 는 SQL 대응이 약해 Mongo 이름 유지.
+
+**대안**: lower-case `"in"` / `"not in"` (Mongo-native) — 정합성은
+좋지만 SQL 사용자와의 단절. Generator 가 `IN` / `NOT IN` 채택.
+
+**영향**: 기존 dropdown 순서 변경 — 신규 RTL 테스트는 dropdown order
+의존 안 함 (`getByRole("option", { name })`).
+
+---
+
+### D-23: `$in: []` / `$nin: []` 빈 array clause 자동 drop
+
+**문제**: 사용자가 `$in` 선택 후 value 입력 비움 또는 `", , "` 같은
+공백만 입력. `coerceArray` 가 빈 `[]` 반환. `{ field: { $in: [] } }`
+는 Mongo 에서 항상 매칭 0건 — 거의 항상 사용자 실수.
+
+**결정**: `buildOperatorClause` 가 빈 array 일 때 `null` 반환 →
+`buildMqlFilter` 가 해당 condition 통째로 skip. 결과적으로 row 가
+no-op 으로 degrade.
+
+**근거**:
+1. `$in: []` 은 합법적 의도가 거의 없음 (전체 결과 제거 의도라면 사용자가
+   다른 더 명확한 방식 사용).
+2. 다른 op (`$eq: ""`, `$exists: false`) 은 자연스러운 의미가 있어 emit
+   유지. `$in: []` 는 그렇지 않음.
+3. row 가 silent zero 대신 no-op 으로 degrade → 사용자가 다른 row 의
+   결과를 정상 관찰 가능.
+
+**대안**: 빈 array 그대로 emit (사용자 책임), 또는 row 자체에 inline
+warning 표시. 후자는 layout 변경 + RDB parity 깨짐. 본 결정은 silent
+& safe.
+
+**영향**: `mqlFilterBuilder.test.ts` 에 "skips a $in clause when input
+parses to an empty array" case 2건 추가.
+
+---
+
+### D-24: `$in` / `$nin` placeholder hint = CSV 예시 (`"1, 2, 3"`)
+
+**문제**: row 의 value input 은 모든 op 에 대해 단일 `<Input>`. 사용자가
+`$in` 선택했을 때 array 형태로 입력해야 한다는 신호 필요.
+
+**결정**: operator 가 `$in` / `$nin` 일 때 placeholder = `"1, 2, 3"`.
+`$exists` 의 `"true / false"`, `$regex` 의 `"^pattern"` 과 동일 패턴.
+
+**근거**:
+1. placeholder 는 row layout 변경 없이 hint 전달 — RDB parity 유지.
+2. CSV 가 결정된 입력 grammar 이므로 (D-Q1) `"1, 2, 3"` 이 즉시
+   가르침.
+3. operator dropdown 의 `IN` label 이 SQL 사용자에게 의미 전달 +
+   placeholder 가 grammar 전달 = 학습 곡선 최소화.
+
+**대안**: chip / token UI (입력 시각화 강화, 그러나 row 구조 변경),
+별도 multi-value modal (오버킬). placeholder 가 마찰 최소화 옵션.
+
+**영향**: `placeholderFor()` 헬퍼 함수 추가. `$regex` placeholder 도
+함께 명시화 (`"^pattern"`) — 기존 generic "Value..." 보다 명확.
+
+---
