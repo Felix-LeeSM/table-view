@@ -507,3 +507,100 @@ describe("generateMqlPreview — BSON literal (Sprint 324 G.2)", () => {
     expect(previewLines[0]).toContain('"extra":1');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Sprint 344 (2026-05-15) — Slice E — Generator dispatch for inline-tree
+// `+ key` adds on Mongo grid. mqlGenerator 자체는 코드 변경 없이 dot-path
+// 를 native 로 처리 — `$set` 가 missing path 를 자동 생성한다. 본 회귀
+// 가드는 두 가지를 잠근다:
+//  - AC-344-E-05: cell `meta = {}` 에 `meta.role` add → 정확히 1개의
+//    updateOne 이 `$set: { "meta.role": "admin" }` 를 emit.
+//  - AC-344-E-06: nested-only path edit (top-level edit 없음) 가 sentinel-edit
+//    guard 를 발동시키지 않음 — guard 는 path === null 일 때만 fire.
+// ---------------------------------------------------------------------------
+
+describe("generateMqlPreview — Slice E add-key dispatch (Sprint 344)", () => {
+  it("AC-344-E-05: nested $set 가 missing path 를 native 로 생성 (resulting patch key = 'meta.role')", () => {
+    // Slice B/C 의 + key affordance 가 `role` 을 meta 컬럼 (colIdx=1) 에
+    // commit 했을 때 pendingEdits 는 `"0-1:role" => "admin"` 으로 저장된다.
+    // mqlGenerator 는 col.name (meta) + path (role) 을 dot-join 해서
+    // patch field path `meta.role` 을 만든다 → MongoDB 의 `$set` 가
+    // native 로 missing key (`role`) 를 `meta = {}` 위에 생성한다. 한 개의
+    // updateOne 만 emit. 작성 이유: AC-344-E-05 generator dispatch lock.
+    const { previewLines, commands, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        // cell value 가 empty object (`{}`) — sentinel string 이 아니다.
+        // sentinel-edit guard 는 nested path 에 발동하지 않는다 (path !== null).
+        rows: [[{ $oid: HEX_A }, {}]],
+        pendingEdits: new Map<string, unknown>([["0-1:role", "admin"]]),
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(previewLines).toHaveLength(1);
+    expect(previewLines[0]).toBe(
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.role": "admin" } })`,
+    );
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({
+      kind: "updateOne",
+      patch: { $set: { "meta.role": "admin" } },
+    });
+  });
+
+  it("AC-344-E-06: sentinel cell `{}` + nested-only newKey — guard 미발동", () => {
+    // Slice B 의 + key 가 sentinel cell `{...}` 에 newKey 를 commit 했을 때.
+    // pendingEdits Map { "0-1:newKey" => "alpha" } only — top-level edit 없음.
+    // sentinel-edit guard 는 path === null (top-level) 일 때만 fire 하므로
+    // 이 nested-only path 는 그대로 $set 로 emit 된다. column name 과 path 가
+    // dot-join 되어 `<col>.<newKey>` 가 patch field path.
+    const { previewLines, commands, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        // sentinel string "{...}" — top-level edit 는 막혀야 하지만 nested 는 허용.
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        pendingEdits: new Map<string, unknown>([["0-1:newKey", "alpha"]]),
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(previewLines).toHaveLength(1);
+    expect(previewLines[0]).toBe(
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.newKey": "alpha" } })`,
+    );
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({
+      kind: "updateOne",
+      patch: { $set: { "meta.newKey": "alpha" } },
+    });
+  });
+
+  it("AC-344-E-06 contrast: top-level sentinel edit STILL blocked (guard fires only on top-level)", () => {
+    // 회귀 가드 — sentinel-edit guard 는 top-level (path === null) 의
+    // edit value 가 sentinel 문자열일 때 정상 동작해야 한다. nested 는
+    // 우회한다는 invariant 의 contrapositive (top-level 은 blocked).
+    // 작성 이유: AC-344-E-06 가 sentinel guard 의 nested 우회만 잠그므로,
+    // top-level sentinel guard 의 회귀를 별도로 한 줄로 같이 cover.
+    const { previewLines, commands, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        // top-level edit 의 value 자체가 sentinel — guard 가 fire 해야 함.
+        pendingEdits: new Map<string, unknown>([["0-1", "{...}"]]),
+      }),
+    );
+    expect(previewLines).toEqual([]);
+    expect(commands).toEqual([]);
+    expect(errors).toEqual([
+      { kind: "sentinel-edit", rowIdx: 0, column: "meta" },
+    ]);
+  });
+});

@@ -447,12 +447,28 @@ export interface GeneratedSqlStatement {
  * the same path, the LAST entry wins (consistent with `Map.set`).
  * Empty/garbage paths drop the whole emit with an error so the user
  * fixes the offending edit instead of seeing a partial UPDATE.
+ *
+ * Sprint 344 (2026-05-15) — `jsonb_set` now passes `create_missing=true`
+ * (the 4th arg) so adding a brand-new key to an existing object actually
+ * creates it instead of being a no-op when the path doesn't exist. When
+ * the current cell value is SQL `null` (jsonb column nullable, row has
+ * no object yet), the base is wrapped in `COALESCE(<col>, '{}'::jsonb)`
+ * once so the chained `jsonb_set` sees an empty object to grow from.
  */
 function emitJsonbUpdate(
   colName: string,
+  cellValue: unknown,
   nested: Array<{ key: string; path: string | null; value: string | null }>,
 ): { kind: "expr"; expr: string } | { kind: "error"; message: string } {
-  let expr = colName;
+  // Sprint 344 (2026-05-15) — jsonb-null base: a row whose jsonb column is
+  // SQL NULL has no object to grow into. Fall back to `'{}'::jsonb` so the
+  // add path can create the key. The wrap is applied once on the base; the
+  // chained jsonb_set inherits it via the `expr` accumulator.
+  const base =
+    cellValue === null || cellValue === undefined
+      ? `COALESCE(${colName}, '{}'::jsonb)`
+      : colName;
+  let expr = base;
   for (const ne of nested) {
     if (!ne.path) {
       return { kind: "error", message: "nested edit missing path" };
@@ -470,9 +486,12 @@ function emitJsonbUpdate(
       // null at a jsonb leaf means JSON null (not SQL NULL) — the
       // tree's "● will delete" affordance routes through __op__:unset
       // explicitly, so plain null is treated as "set to JSON null".
-      expr = `jsonb_set(${expr}, ${pathLit}, 'null'::jsonb)`;
+      // Sprint 344 — `, true` enables create_missing so a leaf can be
+      // added even when the parent path doesn't yet exist.
+      expr = `jsonb_set(${expr}, ${pathLit}, 'null'::jsonb, true)`;
     } else {
-      expr = `jsonb_set(${expr}, ${pathLit}, ${jsonbValueLiteral(ne.value)})`;
+      // Sprint 344 — `, true` enables create_missing (see above).
+      expr = `jsonb_set(${expr}, ${pathLit}, ${jsonbValueLiteral(ne.value)}, true)`;
     }
   }
   return { kind: "expr", expr };
@@ -706,7 +725,7 @@ export function generateSqlWithKeys(
 
     // Nested-only branch — dispatch by column type.
     if (isJsonbColumn(col.data_type)) {
-      const emitted = emitJsonbUpdate(col.name, nested);
+      const emitted = emitJsonbUpdate(col.name, row[colIdx], nested);
       if (emitted.kind === "error") {
         options.onCoerceError?.({
           key: nested[0]!.key,

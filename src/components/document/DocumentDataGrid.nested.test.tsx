@@ -215,4 +215,112 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
       expect(preview).toHaveTextContent(/"owner"/);
     });
   });
+
+  // -----------------------------------------------------------------
+  // Sprint 344 Slice F (2026-05-15) — end-to-end `+ key` add through
+  // the Mongo grid: open the inline tree on an object cell, click the
+  // `+ key` affordance, type a key/value pair, Enter, and assert that
+  // (a) the ghost row appears with a NEW badge in the panel, and
+  // (b) the MQL preview line emits `$set: { "<col>.<newkey>": <v> }`.
+  //
+  // Locks Slice E's central assumption: the panel's
+  // `onCommitEdit("role", v)` for `meta` (col idx 2) materialises a
+  // pendingEdit at key `"0-2:role"` (NOT `"0-2:meta.role"`), and the
+  // mqlGenerator joins `col.name` with the per-cell path at emit time
+  // to produce the `"meta.role"` dotted field.
+  // -----------------------------------------------------------------
+  describe("inline `+ key` add on tree object (AC-344-F-01)", () => {
+    it("AC-344-F-01: `+ key` add on `meta` shows a NEW ghost row + MQL preview emits `$set: { 'meta.role': 'owner' }`", async () => {
+      renderGrid();
+      await waitFor(() =>
+        expect(screen.getByText("Alice")).toBeInTheDocument(),
+      );
+
+      // Open the inline tree on the `meta` object cell.
+      fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
+      expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
+
+      // Click `+ key` on the root of the cell's tree (Slice B affordance).
+      // The fixture's `meta` is `{ verified: true, role: "admin" }` — the
+      // existing `role` would collide, so this test uses a non-colliding
+      // key. The grid mounts the tree against a fresh `meta` whose
+      // pre-existing keys are `verified` and `role` — we add a brand-new
+      // key `team` here.
+      fireEvent.click(screen.getByTestId("tree-add-key-__root"));
+
+      // Type the key + value. Outer-quoted value → Slice D coerces to
+      // string; bare value would coerce to a number/bool/null. Mongo
+      // grid forwards the typed value through `tagBsonWrapper`-or-string
+      // — string `"owner"` stays a plain pendingEdit string.
+      const keyInput = screen.getByTestId("tree-add-key-input-__root");
+      const valueInput = screen.getByTestId("tree-add-value-input-__root");
+      fireEvent.change(keyInput, { target: { value: "team" } });
+      fireEvent.change(valueInput, { target: { value: '"owner"' } });
+      fireEvent.keyDown(valueInput, { key: "Enter" });
+
+      // (a) Ghost row appears with NEW badge — Slice A's ghost render.
+      await waitFor(() => {
+        expect(screen.getByTestId("tree-node-team")).toBeInTheDocument();
+      });
+      const ghostRow = screen.getByTestId("tree-node-team");
+      expect(ghostRow).toHaveTextContent("NEW");
+      // Pending pill increments to "1 unsaved edit".
+      expect(
+        screen.getByTestId("document-tree-pending-pill").textContent,
+      ).toMatch(/1 unsaved edit/);
+
+      // (b) Commit → MQL preview emits the $set with the joined path.
+      const commitBtn = await screen.findByRole("button", {
+        name: /Commit changes/i,
+      });
+      fireEvent.click(commitBtn);
+      const preview = await screen.findByRole("dialog");
+      expect(preview).toHaveTextContent(/updateOne/);
+      expect(preview).toHaveTextContent(/"meta\.team"/);
+      expect(preview).toHaveTextContent(/"owner"/);
+    });
+
+    // AC-344-F-04 (2026-05-15) — root-level `_id` add is rejected by
+    // the Mongo grid's `forbiddenRootKeys` prop. Verifies the wire-up
+    // by mounting the Mongo grid (not the panel alone) and confirming
+    // (a) the inline rejection UX surfaces, (b) the pending pill does
+    // not increment, and (c) no Commit button appears (no pending
+    // edits were recorded). The same prop is omitted for the RDB grid
+    // (see DataGrid.lifecycle.test.tsx) so DocumentTreePanel stays
+    // paradigm-agnostic.
+    it("AC-344-F-04: Mongo grid rejects `_id` root add via forbiddenRootKeys", async () => {
+      renderGrid();
+      await waitFor(() =>
+        expect(screen.getByText("Alice")).toBeInTheDocument(),
+      );
+
+      // The root document cell isn't a tree panel — but the inline tree
+      // panel mounts on the `meta` object cell. For the Mongo guard,
+      // root-level means the **document root** of the panel's view —
+      // i.e. the root of `meta`'s tree. Open `meta` and try to add
+      // `_id` at its root.
+      fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
+      fireEvent.click(screen.getByTestId("tree-add-key-__root"));
+
+      const keyInput = screen.getByTestId("tree-add-key-input-__root");
+      const valueInput = screen.getByTestId("tree-add-value-input-__root");
+      fireEvent.change(keyInput, { target: { value: "_id" } });
+      fireEvent.change(valueInput, { target: { value: '"x"' } });
+      fireEvent.keyDown(valueInput, { key: "Enter" });
+
+      // Rejection: aria-invalid + inline message; no pending pill, no
+      // Commit button. The inputs stay open so the user can correct
+      // the key.
+      expect(keyInput).toHaveAttribute("aria-invalid", "true");
+      expect(
+        screen.getByText(/cannot be added to the document root/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("document-tree-pending-pill"),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /Commit changes/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

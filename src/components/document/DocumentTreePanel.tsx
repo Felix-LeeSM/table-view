@@ -10,11 +10,26 @@
 // diff view toggle (shows original vs pending side-by-side), structural
 // edits (add key on objects, push item on arrays, delete leaf).
 
-import { useMemo, useState, useCallback } from "react";
-import { ChevronRight, ChevronDown, X, Search, Trash2 } from "lucide-react";
+import {
+  Fragment,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+} from "react";
+import {
+  ChevronRight,
+  ChevronDown,
+  X,
+  Search,
+  Trash2,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  buildTreeNodes,
+  buildTreeNodesWithGhosts,
+  coerceTreeAddValue,
   computeTreeStats,
   filterTreeNodes,
   renderLeafValue,
@@ -46,6 +61,17 @@ function renderPendingText(pending: string | Record<string, unknown>): string {
     : pending;
 }
 
+// Sprint 344 Slice B (2026-05-15) — local copy of the dot/bracket path
+// joiner used by jsonTree.buildTreeNodes. Kept private here because the
+// helper is purely a `+ key` UX concern: the panel only ever joins a
+// parent object path with a typed key (never an array index segment),
+// so a tiny inline implementation is clearer than re-exporting and
+// drags fewer regressions across the lib boundary.
+function joinObjectPath(parent: string, key: string): string {
+  if (parent === "") return key;
+  return `${parent}.${key}`;
+}
+
 function parseBsonLeaf(node: TreeNode): {
   type: BsonType;
   ejson: Record<string, unknown>;
@@ -71,13 +97,38 @@ export interface DocumentTreePanelProps {
   fieldName: string;
   /** Pending edits scoped to this cell — same Map shape NestedExpandPopover uses. */
   pendingByPath?: ReadonlyMap<string, string | Record<string, unknown>>;
-  /** Commit a single leaf edit; grid owns Save/Discard. */
+  /** Commit a single leaf edit; grid owns Save/Discard.
+   *
+   * Sprint 344 Slice B (2026-05-15) — the panel may also call this with
+   * a Slice D-coerced JSON value (number / boolean / null / array) for
+   * `+ key` adds. The prop signature stays narrow on
+   * `string | Record<string, unknown>` so downstream type-narrowing in
+   * the grid (which does `typeof value === "string" ? value :
+   * tagBsonWrapper(value)`) keeps compiling without grid-side edits;
+   * Slice F is responsible for widening the grid wiring to forward
+   * non-string non-object coerced values to the SQL / MQL emit layer.
+   * The runtime value is whatever `coerceTreeAddValue` returned.
+   */
   onCommitEdit?: (
     path: string,
     value: string | Record<string, unknown>,
   ) => void;
   /** Close button on the detail row header (mirrors the cell-level toggle). */
   onClose?: () => void;
+  /**
+   * Sprint 344 Slice F (2026-05-15) — paradigm-agnostic guard against
+   * adding reserved keys at the **document root**. Each Set member is
+   * a bare key name (no dot/bracket). The panel rejects `+ key` commits
+   * where `parentPath === ""` AND the typed key matches any entry,
+   * surfacing the same aria-invalid + inline message UX as the empty/
+   * duplicate-key reject branches. Nested objects are unaffected — a
+   * literal `_id` field inside `meta` is still allowed because Mongo
+   * permits arbitrary keys below the root.
+   *
+   * Mongo grid passes `new Set(["_id"])`; RDB grid passes `undefined`
+   * (or omits the prop) — DocumentTreePanel stays paradigm-agnostic.
+   */
+  forbiddenRootKeys?: ReadonlySet<string>;
 }
 
 const KIND_TAG: Record<TreeNode["kind"], string> = {
@@ -109,8 +160,21 @@ export function DocumentTreePanel({
   pendingByPath,
   onCommitEdit,
   onClose,
+  forbiddenRootKeys,
 }: DocumentTreePanelProps) {
-  const nodes = useMemo(() => buildTreeNodes(value), [value]);
+  // Sprint 344 Slice A — feed pendingByPath into the tree builder so
+  // paths that exist only as pending adds render as ghost nodes
+  // alongside `value`'s real children. Empty / undefined pendingByPath
+  // collapses to the previous `buildTreeNodes(value)` output exactly
+  // (regression-zero, asserted in jsonTree.test.ts).
+  const nodes = useMemo(
+    () =>
+      buildTreeNodesWithGhosts(
+        value,
+        pendingByPath ?? new Map<string, string | Record<string, unknown>>(),
+      ),
+    [value, pendingByPath],
+  );
   const stats = useMemo(() => computeTreeStats(value), [value]);
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -118,6 +182,258 @@ export function DocumentTreePanel({
   const [searchRegex, setSearchRegex] = useState(false);
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+
+  // Sprint 344 Slice B (2026-05-15) — `+ key` add UI state. Only one
+  // object node can be in "add key" mode at a time (the rendered input
+  // pair captures focus). `addingPath` holds the parent object's path
+  // (root = ""). `keyDraft` / `valueDraft` hold the typed inputs.
+  // `addError` is the active validation message (null = no error).
+  // Sprint 344 Slice C (2026-05-15) — `addingKind` distinguishes object
+  // `+ key` from array `+ item` so the panel renders the right UI
+  // branch (paired inputs vs. read-only index label + single input).
+  // The same `addingPath` slot drives both — only one inline add UI is
+  // visible at a time across the whole tree, by design.
+  const [addingPath, setAddingPath] = useState<string | null>(null);
+  const [addingKind, setAddingKind] = useState<"obj" | "arr" | null>(null);
+  const [keyDraft, setKeyDraft] = useState("");
+  const [valueDraft, setValueDraft] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const keyInputRef = useRef<HTMLInputElement | null>(null);
+  const valueInputRef = useRef<HTMLInputElement | null>(null);
+  // Sprint 344 Slice C — the `+ item` flow uses a separate ref because
+  // the value input renders in a different DOM subtree (AddItemRow vs.
+  // AddKeyRow). Reusing `valueInputRef` would race on parallel
+  // mounting in renders where both rows happen to exist transiently.
+  const itemValueInputRef = useRef<HTMLInputElement | null>(null);
+
+  const startAddKey = useCallback((parentPath: string) => {
+    setAddingPath(parentPath);
+    setAddingKind("obj");
+    setKeyDraft("");
+    setValueDraft("");
+    setAddError(null);
+  }, []);
+
+  const cancelAddKey = useCallback(() => {
+    setAddingPath(null);
+    setAddingKind(null);
+    setKeyDraft("");
+    setValueDraft("");
+    setAddError(null);
+  }, []);
+
+  // Sprint 344 Slice C — entering array-add mode. Reuses the same
+  // `addingPath` slot but marks the kind as "arr". The index label
+  // (`[N]`) is computed at render time from the array node's
+  // childCount + any pending appends to the same path.
+  const startAddItem = useCallback((arrayPath: string) => {
+    setAddingPath(arrayPath);
+    setAddingKind("arr");
+    setKeyDraft("");
+    setValueDraft("");
+    setAddError(null);
+  }, []);
+
+  // Autofocus the key input (object add) or value input (array add)
+  // whenever we enter add-mode for a new path.
+  useEffect(() => {
+    if (addingPath === null) return;
+    if (addingKind === "arr") {
+      itemValueInputRef.current?.focus();
+    } else {
+      keyInputRef.current?.focus();
+    }
+  }, [addingPath, addingKind]);
+
+  const commitAddKey = useCallback(() => {
+    if (addingPath === null || addingKind !== "obj") return;
+    const trimmedKey = keyDraft.trim();
+    if (trimmedKey === "") {
+      setAddError("key required");
+      return;
+    }
+    // Sprint 344 Slice F (2026-05-15) — paradigm-agnostic reserved-key
+    // guard. Only applies at the document root (`parentPath === ""`) so
+    // a `_id` field inside a nested object is still legal — only the
+    // root document's `_id` is protected (Mongo rejects re-adding it,
+    // and the mqlGenerator's id-in-patch guard would drop the row
+    // anyway). The Mongo grid wires this with `Set(["_id"])`; the RDB
+    // grid omits it — keeping DocumentTreePanel paradigm-agnostic.
+    if (
+      addingPath === "" &&
+      forbiddenRootKeys !== undefined &&
+      forbiddenRootKeys.has(trimmedKey)
+    ) {
+      setAddError(`\`${trimmedKey}\` cannot be added to the document root`);
+      return;
+    }
+    // Duplicate-key check against existing children of the parent in
+    // `value` AND against same-parent entries already in pendingByPath
+    // (so two consecutive `+ key` commits with the same key are blocked).
+    const candidatePath = joinObjectPath(addingPath, trimmedKey);
+    const existingChildPaths = new Set<string>();
+    for (const node of nodes) {
+      // Direct children of the parent — their path is parent + "." + label
+      // (or just label when parent is root). The candidate collides iff
+      // node.path === candidatePath.
+      if (node.path === candidatePath) {
+        existingChildPaths.add(node.path);
+      }
+    }
+    if (pendingByPath) {
+      for (const path of pendingByPath.keys()) {
+        if (path === candidatePath) existingChildPaths.add(path);
+      }
+    }
+    if (existingChildPaths.has(candidatePath)) {
+      setAddError("key already exists");
+      return;
+    }
+
+    // Coerce raw input → JSON-typed value per Slice D's outer-quotes
+    // rule (number / boolean / null / object / array / string). The
+    // panel forwards the typed result verbatim; the test contract
+    // asserts on the runtime type at the callback boundary.
+    //
+    // The prop signature is intentionally narrower than what we may
+    // pass at runtime (number / boolean / null / array can flow
+    // through). Slice F owns widening the grid wiring; for now the
+    // cast keeps TS quiet while preserving the runtime type for
+    // assertion. Consumers MUST narrow on `typeof value` before
+    // serialising — see DocumentDataGrid + DataGridTable for the
+    // existing precedent.
+    const coerced = coerceTreeAddValue(valueDraft);
+    if (onCommitEdit) {
+      onCommitEdit(candidatePath, coerced as string | Record<string, unknown>);
+    }
+    cancelAddKey();
+  }, [
+    addingPath,
+    addingKind,
+    keyDraft,
+    valueDraft,
+    nodes,
+    pendingByPath,
+    onCommitEdit,
+    cancelAddKey,
+    forbiddenRootKeys,
+  ]);
+
+  // Sprint 344 Slice B (2026-05-15) — precompute, for each obj node
+  // index, the index right after its subtree ends. We splice the
+  // `+ key` affordance (or its input pair, when active) at that point
+  // so the row renders at the END of the object's children, matching
+  // Slice A's ghost-row insertion order.
+  const objAffordanceAfter = useMemo(() => {
+    // Map<base node index `i`, list of obj paths whose subtree ends at i+1>
+    const map = new Map<number, Array<{ path: string; depth: number }>>();
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i];
+      if (node === undefined) continue;
+      if (node.kind !== "obj") continue;
+      // Find the last index j such that nodes[k].depth > node.depth for
+      // k in (i, j]. The subtree ends at the first k where depth ≤ node.depth.
+      let endIdx = i; // exclusive: end-of-subtree index = endIdx
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const inner = nodes[j];
+        if (inner === undefined) break;
+        if (inner.depth <= node.depth) break;
+        endIdx = j;
+      }
+      // Affordance renders AFTER endIdx, so we attach it to map[endIdx].
+      const entries = map.get(endIdx) ?? [];
+      entries.push({ path: node.path, depth: node.depth });
+      map.set(endIdx, entries);
+    }
+    return map;
+  }, [nodes]);
+
+  // Sprint 344 Slice C (2026-05-15) — same end-of-subtree index map,
+  // but keyed on `arr` nodes so the `+ item` row renders at the END
+  // of the array's children. Each entry also carries `childCount` so
+  // the auto-derived index label can be computed without re-walking
+  // the tree at render time.
+  const arrAffordanceAfter = useMemo(() => {
+    const map = new Map<
+      number,
+      Array<{ path: string; depth: number; baseLength: number }>
+    >();
+    for (let i = 0; i < nodes.length; i += 1) {
+      const node = nodes[i];
+      if (node === undefined) continue;
+      if (node.kind !== "arr") continue;
+      let endIdx = i;
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const inner = nodes[j];
+        if (inner === undefined) break;
+        if (inner.depth <= node.depth) break;
+        endIdx = j;
+      }
+      const entries = map.get(endIdx) ?? [];
+      entries.push({
+        path: node.path,
+        depth: node.depth,
+        baseLength: node.childCount ?? 0,
+      });
+      map.set(endIdx, entries);
+    }
+    return map;
+  }, [nodes]);
+
+  // Sprint 344 Slice C (2026-05-15) — auto-index for the `+ item` row.
+  // The next index for an array at `arrayPath` is:
+  //   baseLength + count(prior pending bracket-index appends to this
+  //                       same array path).
+  // The "prior pending appends" set is read from `pendingByPath`: any
+  // key matching `<arrayPath>[N]` where N ≥ baseLength counts as an
+  // already-occupied append slot, so the new index is the smallest
+  // free slot at or beyond baseLength.
+  const nextItemIndex = useCallback(
+    (arrayPath: string, baseLength: number): number => {
+      if (!pendingByPath || pendingByPath.size === 0) return baseLength;
+      let max = baseLength - 1;
+      const prefix = `${arrayPath}[`;
+      for (const path of pendingByPath.keys()) {
+        if (!path.startsWith(prefix)) continue;
+        const rest = path.slice(prefix.length);
+        const close = rest.indexOf("]");
+        if (close < 0) continue;
+        const segment = rest.slice(0, close);
+        // Only count direct child slots (no further dot/bracket after
+        // the closing `]`). A pending path like `tags[2].name` is a
+        // nested edit on an already-tracked slot, not a new append —
+        // its slot count was added when `tags[2]` itself was appended.
+        const tail = rest.slice(close + 1);
+        if (tail !== "") continue;
+        const idx = Number.parseInt(segment, 10);
+        if (!Number.isInteger(idx) || idx < 0) continue;
+        if (idx > max) max = idx;
+      }
+      return max + 1;
+    },
+    [pendingByPath],
+  );
+
+  const commitAddItem = useCallback(() => {
+    if (addingPath === null || addingKind !== "arr") return;
+    const arrayNode = nodes.find((n) => n.path === addingPath);
+    const baseLength = arrayNode?.childCount ?? 0;
+    const idx = nextItemIndex(addingPath, baseLength);
+    const targetPath = `${addingPath}[${idx}]`;
+    const coerced = coerceTreeAddValue(valueDraft);
+    if (onCommitEdit) {
+      onCommitEdit(targetPath, coerced as string | Record<string, unknown>);
+    }
+    cancelAddKey();
+  }, [
+    addingPath,
+    addingKind,
+    nodes,
+    nextItemIndex,
+    valueDraft,
+    onCommitEdit,
+    cancelAddKey,
+  ]);
 
   const visiblePaths = useMemo(
     () => filterTreeNodes(nodes, search, { regex: searchRegex }),
@@ -263,193 +579,541 @@ export function DocumentTreePanel({
         data-testid="document-tree-list"
         className="max-h-96 overflow-auto rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
       >
-        {nodes.map((node) => {
-          if (isHidden(node.path)) return null;
+        {nodes.map((node, idx) => {
+          const objAffsAfter = onCommitEdit
+            ? (objAffordanceAfter.get(idx) ?? [])
+            : [];
+          const arrAffsAfter = onCommitEdit
+            ? (arrAffordanceAfter.get(idx) ?? [])
+            : [];
+          // Build the trailing `+ key` / `+ item` affordance(s) once
+          // per index so both the visible-row and hidden-row branches
+          // reuse them. We only emit affordances whose container is
+          // itself visible (collapsed/filtered ancestors hide their
+          // entire subtree including the add row, matching the leaf-
+          // row behaviour).
+          const visibleObjAffs = objAffsAfter
+            .filter((aff) => !isHidden(aff.path))
+            .filter(
+              (aff) =>
+                !Array.from(collapsed).some((cp) => {
+                  if (aff.path === cp) return true;
+                  return (
+                    aff.path.startsWith(cp + ".") ||
+                    aff.path.startsWith(cp + "[")
+                  );
+                }),
+            );
+          const visibleArrAffs = arrAffsAfter
+            .filter((aff) => !isHidden(aff.path))
+            .filter(
+              (aff) =>
+                !Array.from(collapsed).some((cp) => {
+                  if (aff.path === cp) return true;
+                  return (
+                    aff.path.startsWith(cp + ".") ||
+                    aff.path.startsWith(cp + "[")
+                  );
+                }),
+            );
+          const trailingObj = visibleObjAffs.map((aff) => (
+            <AddKeyRow
+              key={`__add-key-${aff.path || "__root"}`}
+              parentPath={aff.path}
+              parentDepth={aff.depth}
+              isOpen={addingPath === aff.path && addingKind === "obj"}
+              keyDraft={keyDraft}
+              valueDraft={valueDraft}
+              addError={addError}
+              onStart={() => startAddKey(aff.path)}
+              onKeyDraftChange={(v) => {
+                setKeyDraft(v);
+                if (addError) setAddError(null);
+              }}
+              onValueDraftChange={setValueDraft}
+              onCommit={commitAddKey}
+              onCancel={cancelAddKey}
+              keyInputRef={keyInputRef}
+              valueInputRef={valueInputRef}
+            />
+          ));
+          const trailingArr = visibleArrAffs.map((aff) => (
+            <AddItemRow
+              key={`__add-item-${aff.path}`}
+              arrayPath={aff.path}
+              parentDepth={aff.depth}
+              isOpen={addingPath === aff.path && addingKind === "arr"}
+              valueDraft={valueDraft}
+              nextIndex={nextItemIndex(aff.path, aff.baseLength)}
+              onStart={() => startAddItem(aff.path)}
+              onValueDraftChange={setValueDraft}
+              onCommit={commitAddItem}
+              onCancel={cancelAddKey}
+              valueInputRef={itemValueInputRef}
+            />
+          ));
+          const trailing = [...trailingObj, ...trailingArr];
+          if (isHidden(node.path)) {
+            // Hidden row — still surface the trailing affordances if
+            // the parent obj is otherwise visible at this index. In
+            // practice the filter-ancestor rule keeps obj parents
+            // visible while leaves get hidden, so this branch only
+            // fires for fully-collapsed subtrees where `trailing`
+            // is already empty by the filter above.
+            return trailing.length > 0 ? (
+              <Fragment key={`__hidden-trailing-${idx}`}>{trailing}</Fragment>
+            ) : null;
+          }
           const isCollapsed = collapsed.has(node.path);
           const pending = pendingByPath?.get(node.path);
           const isEditing = editingPath === node.path;
           return (
-            <div
-              key={node.path || "__root"}
-              data-testid={`tree-node-${node.path || "__root"}`}
-              className={
-                pending !== undefined
-                  ? "rounded bg-amber-400/10 px-1 py-0.5"
-                  : "px-1 py-0.5"
-              }
-              style={{ paddingLeft: `${node.depth * 16}px` }}
-            >
-              {(node.kind === "obj" || node.kind === "arr") && (
-                <button
-                  type="button"
-                  onClick={() => toggleCollapsed(node.path)}
-                  className="inline-flex items-center align-middle text-muted-foreground"
-                  data-testid={`tree-twist-${node.path || "__root"}`}
-                  aria-expanded={!isCollapsed}
-                  aria-label={`Toggle ${node.label}`}
-                >
-                  {isCollapsed ? (
-                    <ChevronRight size={12} aria-hidden />
-                  ) : (
-                    <ChevronDown size={12} aria-hidden />
-                  )}
-                </button>
-              )}
-              <span className="ml-1 text-sky-700 dark:text-sky-300">
-                {node.label}
-              </span>
-              {node.kind === "obj" && (
-                <span className="ml-1 text-muted-foreground">
-                  : {"{"}
-                  {node.childCount} item{node.childCount === 1 ? "" : "s"}
-                  {"}"}
+            <Fragment key={node.path || "__root"}>
+              <div
+                data-testid={`tree-node-${node.path || "__root"}`}
+                className={
+                  node.isGhost
+                    ? "rounded border border-amber-400/30 bg-amber-400/10 px-1 py-0.5"
+                    : pending !== undefined
+                      ? "rounded bg-amber-400/10 px-1 py-0.5"
+                      : "px-1 py-0.5"
+                }
+                style={{ paddingLeft: `${node.depth * 16}px` }}
+              >
+                {(node.kind === "obj" || node.kind === "arr") && (
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(node.path)}
+                    className="inline-flex items-center align-middle text-muted-foreground"
+                    data-testid={`tree-twist-${node.path || "__root"}`}
+                    aria-expanded={!isCollapsed}
+                    aria-label={`Toggle ${node.label}`}
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight size={12} aria-hidden />
+                    ) : (
+                      <ChevronDown size={12} aria-hidden />
+                    )}
+                  </button>
+                )}
+                <span className="ml-1 text-sky-700 dark:text-sky-300">
+                  {node.label}
                 </span>
-              )}
-              {node.kind === "arr" && (
-                <span className="ml-1 text-muted-foreground">
-                  : [{node.childCount} item{node.childCount === 1 ? "" : "s"}]
-                </span>
-              )}
-              {node.kind !== "leaf" && KIND_TAG[node.kind] && (
-                <TagBadge>{KIND_TAG[node.kind]}</TagBadge>
-              )}
+                {node.kind === "obj" && (
+                  <span className="ml-1 text-muted-foreground">
+                    : {"{"}
+                    {node.childCount} item{node.childCount === 1 ? "" : "s"}
+                    {"}"}
+                  </span>
+                )}
+                {node.kind === "arr" && (
+                  <span className="ml-1 text-muted-foreground">
+                    : [{node.childCount} item{node.childCount === 1 ? "" : "s"}]
+                  </span>
+                )}
+                {node.kind !== "leaf" && KIND_TAG[node.kind] && (
+                  <TagBadge>{KIND_TAG[node.kind]}</TagBadge>
+                )}
+                {/* Sprint 344 Slice A — NEW badge on ghost (`+ key` / `+
+                  item` adds). Rendered on obj/arr ghost containers too
+                  so a brand-new nested object shows the badge on the
+                  parent row, distinct from the per-leaf `● edited`. */}
+                {node.isGhost && node.kind !== "leaf" && <NewBadge />}
 
-              {node.kind === "leaf" && !isEditing && (
-                <>
-                  <span className="ml-1 text-muted-foreground">:</span>
-                  {/* Sprint 342 V2 — two render branches for leaves with
+                {node.kind === "leaf" && !isEditing && (
+                  <>
+                    <span className="ml-1 text-muted-foreground">:</span>
+                    {/* Sprint 342 V2 — two render branches for leaves with
                       a pending edit:
                        1. pending = __op__:unset → strike-through original,
                           "● will delete" badge.
                        2. otherwise → pending (or original) as the
                           clickable editor entry-point. */}
-                  {isPendingUnset(pending) ? (
-                    <span
-                      data-testid={`tree-unset-${node.path}`}
-                      className="ml-1 align-middle text-emerald-700/60 line-through decoration-rose-500 dark:text-emerald-300/50"
-                    >
-                      {renderLeafValue(node)}
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(node)}
-                      data-testid={`tree-leaf-${node.path}`}
-                      className="ml-1 align-middle text-emerald-700 hover:underline dark:text-emerald-300"
-                    >
-                      {pending !== undefined
-                        ? renderPendingText(pending)
-                        : renderLeafValue(node)}
-                    </button>
-                  )}
-                  <TagBadge>{leafTypeTag(node)}</TagBadge>
-                  {isPendingUnset(pending) ? (
-                    <span className="ml-2 text-3xs text-rose-500">
-                      ● will delete
-                    </span>
-                  ) : (
-                    pending !== undefined && (
-                      <span className="ml-2 text-3xs text-amber-400">
-                        ● edited
+                    {isPendingUnset(pending) ? (
+                      <span
+                        data-testid={`tree-unset-${node.path}`}
+                        className="ml-1 align-middle text-emerald-700/60 line-through decoration-rose-500 dark:text-emerald-300/50"
+                      >
+                        {renderLeafValue(node)}
                       </span>
-                    )
-                  )}
-                  {/* Sprint 342 V2 — leaf delete entry-point. `_id`
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(node)}
+                        data-testid={`tree-leaf-${node.path}`}
+                        className="ml-1 align-middle text-emerald-700 hover:underline dark:text-emerald-300"
+                      >
+                        {pending !== undefined
+                          ? renderPendingText(pending)
+                          : renderLeafValue(node)}
+                      </button>
+                    )}
+                    <TagBadge>{leafTypeTag(node)}</TagBadge>
+                    {/* Sprint 344 Slice A — distinct visual states:
+                       - ghost (add): "NEW" badge, no "● edited".
+                       - existing leaf with pending unset: strike +
+                         "● will delete".
+                       - existing leaf with pending edit: "● edited".
+                      Ghost takes priority because a ghost path also
+                      has a `pending` entry (the new value lives there). */}
+                    {node.isGhost ? (
+                      <NewBadge />
+                    ) : isPendingUnset(pending) ? (
+                      <span className="ml-2 text-3xs text-rose-500">
+                        ● will delete
+                      </span>
+                    ) : (
+                      pending !== undefined && (
+                        <span className="ml-2 text-3xs text-amber-400">
+                          ● edited
+                        </span>
+                      )
+                    )}
+                    {/* Sprint 342 V2 — leaf delete entry-point. `_id`
                       cannot be unset (MongoDB rejects it; mqlGenerator's
                       id-in-patch guard would drop the row anyway), so
                       hide the trash for those leaves to keep the UI
                       honest. */}
-                  {onCommitEdit &&
-                    node.path !== "_id" &&
-                    !isPendingUnset(pending) && (
-                      <button
-                        type="button"
-                        data-testid={`tree-delete-${node.path}`}
-                        aria-label={`Delete ${node.path}`}
-                        title="Mark this field for $unset on Save"
-                        onClick={() => onCommitEdit(node.path, UNSET_OP)}
-                        className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-rose-500"
-                      >
-                        <Trash2 size={12} aria-hidden />
-                      </button>
-                    )}
-                </>
-              )}
+                    {onCommitEdit &&
+                      node.path !== "_id" &&
+                      !isPendingUnset(pending) && (
+                        <button
+                          type="button"
+                          data-testid={`tree-delete-${node.path}`}
+                          aria-label={`Delete ${node.path}`}
+                          title="Mark this field for $unset on Save"
+                          onClick={() => onCommitEdit(node.path, UNSET_OP)}
+                          className="ml-2 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-rose-500"
+                        >
+                          <Trash2 size={12} aria-hidden />
+                        </button>
+                      )}
+                  </>
+                )}
 
-              {/* Sprint 342 V2 — BSON wrappers (ObjectId / Date /
+                {/* Sprint 342 V2 — BSON wrappers (ObjectId / Date /
                   Decimal128 / binData) get the type-aware
                   BsonTypeEditor instead of the plain string input.
                   The editor commits an EJSON wrapper object; the
                   parent's onCommitEdit -> tagBsonWrapper round-trip
                   keeps the pendingEdits Map shape unchanged. */}
-              {node.kind === "leaf" &&
-                isEditing &&
-                node.isBson &&
-                (() => {
-                  const parsed = parseBsonLeaf(node);
-                  if (parsed === null) {
-                    // Unknown BSON wrapper shape — fall back to a plain
-                    // string editor against the raw EJSON payload.
-                    return (
-                      <PlainLeafInput
-                        draft={draft}
-                        onDraftChange={setDraft}
-                        onCommit={commitDraft}
-                        onCancel={() => {
-                          setEditingPath(null);
-                          setDraft("");
-                        }}
-                        testId={`tree-edit-${node.path}`}
-                        typeTag={leafTypeTag(node)}
-                      />
-                    );
-                  }
-                  return (
-                    <div
-                      data-testid={`tree-edit-bson-${node.path}`}
-                      className="mt-1 flex w-full items-center gap-2 rounded border border-primary bg-background p-1.5"
-                    >
-                      <span className="text-3xs uppercase tracking-wider text-muted-foreground">
-                        {parsed.type}
-                      </span>
-                      <div className="flex-1">
-                        <BsonTypeEditor
-                          type={parsed.type}
-                          initialValue={parsed.ejson}
-                          ariaLabel={`Editing ${node.path} (${parsed.type})`}
-                          onCommit={(v) => {
-                            if (onCommitEdit) onCommitEdit(node.path, v);
-                            setEditingPath(null);
-                            setDraft("");
-                          }}
+                {node.kind === "leaf" &&
+                  isEditing &&
+                  node.isBson &&
+                  (() => {
+                    const parsed = parseBsonLeaf(node);
+                    if (parsed === null) {
+                      // Unknown BSON wrapper shape — fall back to a plain
+                      // string editor against the raw EJSON payload.
+                      return (
+                        <PlainLeafInput
+                          draft={draft}
+                          onDraftChange={setDraft}
+                          onCommit={commitDraft}
                           onCancel={() => {
                             setEditingPath(null);
                             setDraft("");
                           }}
+                          testId={`tree-edit-${node.path}`}
+                          typeTag={leafTypeTag(node)}
                         />
+                      );
+                    }
+                    return (
+                      <div
+                        data-testid={`tree-edit-bson-${node.path}`}
+                        className="mt-1 flex w-full items-center gap-2 rounded border border-primary bg-background p-1.5"
+                      >
+                        <span className="text-3xs uppercase tracking-wider text-muted-foreground">
+                          {parsed.type}
+                        </span>
+                        <div className="flex-1">
+                          <BsonTypeEditor
+                            type={parsed.type}
+                            initialValue={parsed.ejson}
+                            ariaLabel={`Editing ${node.path} (${parsed.type})`}
+                            onCommit={(v) => {
+                              if (onCommitEdit) onCommitEdit(node.path, v);
+                              setEditingPath(null);
+                              setDraft("");
+                            }}
+                            onCancel={() => {
+                              setEditingPath(null);
+                              setDraft("");
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
 
-              {node.kind === "leaf" && isEditing && !node.isBson && (
-                <PlainLeafInput
-                  draft={draft}
-                  onDraftChange={setDraft}
-                  onCommit={commitDraft}
-                  onCancel={() => {
-                    setEditingPath(null);
-                    setDraft("");
-                  }}
-                  testId={`tree-edit-${node.path}`}
-                  typeTag={leafTypeTag(node)}
-                />
-              )}
-            </div>
+                {node.kind === "leaf" && isEditing && !node.isBson && (
+                  <PlainLeafInput
+                    draft={draft}
+                    onDraftChange={setDraft}
+                    onCommit={commitDraft}
+                    onCancel={() => {
+                      setEditingPath(null);
+                      setDraft("");
+                    }}
+                    testId={`tree-edit-${node.path}`}
+                    typeTag={leafTypeTag(node)}
+                  />
+                )}
+              </div>
+              {trailing}
+            </Fragment>
           );
         })}
       </div>
     </section>
+  );
+}
+
+// Sprint 344 Slice B (2026-05-15) — `+ key` row. Two render branches:
+//  1. Closed: a small dashed-button affordance ("+ key") that opens
+//     the input pair on click.
+//  2. Open: key + value inputs side-by-side at the parent's child
+//     indent. Tab/Shift+Tab move focus between them (browser default
+//     handles this — the ref-driven focus calls below are jsdom
+//     fallbacks). Enter commits, Esc cancels. Validation message
+//     renders inline below the inputs with aria-live="polite".
+//
+// The component is intentionally dumb: it owns no state. The parent
+// (`DocumentTreePanel`) drives `isOpen`, drafts, and validation so
+// only one add UI is visible at a time across the whole tree.
+function AddKeyRow({
+  parentPath,
+  parentDepth,
+  isOpen,
+  keyDraft,
+  valueDraft,
+  addError,
+  onStart,
+  onKeyDraftChange,
+  onValueDraftChange,
+  onCommit,
+  onCancel,
+  keyInputRef,
+  valueInputRef,
+}: {
+  parentPath: string;
+  parentDepth: number;
+  isOpen: boolean;
+  keyDraft: string;
+  valueDraft: string;
+  addError: string | null;
+  onStart: () => void;
+  onKeyDraftChange: (v: string) => void;
+  onValueDraftChange: (v: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  keyInputRef: React.RefObject<HTMLInputElement | null>;
+  valueInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const indent = (parentDepth + 1) * 16;
+  const pathKey = parentPath || "__root";
+  const ariaLabel = `Add key to ${parentPath === "" ? "root" : parentPath}`;
+
+  if (!isOpen) {
+    return (
+      <div
+        data-testid={`tree-add-key-row-${pathKey}`}
+        className="px-1 py-0.5"
+        style={{ paddingLeft: `${indent}px` }}
+      >
+        <button
+          type="button"
+          role="button"
+          data-testid={`tree-add-key-${pathKey}`}
+          aria-label={ariaLabel}
+          onClick={onStart}
+          className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary"
+        >
+          <Plus size={10} aria-hidden />
+          <span>+ key</span>
+        </button>
+      </div>
+    );
+  }
+
+  // Open — paired key + value inputs.
+  const onKeyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onCommit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === "Tab" && !e.shiftKey) {
+      // Browser default would move focus to the next focusable element;
+      // jsdom does not always honour that across testing-library
+      // user-event versions, so we manually focus the value input as
+      // a deterministic fallback. preventDefault keeps the cursor
+      // here when the ref-call is the active mechanism.
+      e.preventDefault();
+      valueInputRef.current?.focus();
+    }
+  };
+  const onValueKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onCommit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === "Tab" && e.shiftKey) {
+      e.preventDefault();
+      keyInputRef.current?.focus();
+    }
+  };
+
+  return (
+    <div
+      data-testid={`tree-add-key-row-${pathKey}`}
+      className="flex flex-col gap-0.5 px-1 py-0.5"
+      style={{ paddingLeft: `${indent}px` }}
+    >
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          ref={keyInputRef}
+          value={keyDraft}
+          onChange={(e) => onKeyDraftChange(e.target.value)}
+          onKeyDown={onKeyKeyDown}
+          placeholder="key"
+          aria-label={`${ariaLabel} — key`}
+          aria-invalid={addError !== null ? "true" : undefined}
+          data-testid={`tree-add-key-input-${pathKey}`}
+          className="inline-block w-32 rounded border border-primary bg-background px-1 text-foreground"
+        />
+        <span className="text-muted-foreground">:</span>
+        <input
+          type="text"
+          ref={valueInputRef}
+          value={valueDraft}
+          onChange={(e) => onValueDraftChange(e.target.value)}
+          onKeyDown={onValueKeyDown}
+          placeholder="value"
+          aria-label={`${ariaLabel} — value`}
+          data-testid={`tree-add-value-input-${pathKey}`}
+          className="inline-block w-40 rounded border border-primary bg-background px-1 text-foreground"
+        />
+      </div>
+      {addError !== null && (
+        <span
+          aria-live="polite"
+          data-testid={`tree-add-key-error-${pathKey}`}
+          className="text-3xs text-red-500"
+        >
+          {addError}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Sprint 344 Slice C (2026-05-15) — `+ item` row for array nodes.
+// Closed state: dashed `+ item` button at the array's child indent.
+// Open state: a muted, read-only `[N]` index label sitting next to a
+// single value input. Enter commits, Esc cancels — there is no key
+// input because arrays are indexed automatically (see `nextItemIndex`
+// in the panel; the parent passes the resolved next-slot index in).
+//
+// Like AddKeyRow this component owns no state; the panel drives
+// `isOpen`, `valueDraft`, and the commit/cancel callbacks so only one
+// inline add UI is ever visible across the whole tree.
+function AddItemRow({
+  arrayPath,
+  parentDepth,
+  isOpen,
+  valueDraft,
+  nextIndex,
+  onStart,
+  onValueDraftChange,
+  onCommit,
+  onCancel,
+  valueInputRef,
+}: {
+  arrayPath: string;
+  parentDepth: number;
+  isOpen: boolean;
+  valueDraft: string;
+  nextIndex: number;
+  onStart: () => void;
+  onValueDraftChange: (v: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  valueInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const indent = (parentDepth + 1) * 16;
+  const ariaLabel = `Add item to ${arrayPath}`;
+
+  if (!isOpen) {
+    return (
+      <div
+        data-testid={`tree-add-item-row-${arrayPath}`}
+        className="px-1 py-0.5"
+        style={{ paddingLeft: `${indent}px` }}
+      >
+        <button
+          type="button"
+          role="button"
+          data-testid={`tree-add-item-${arrayPath}`}
+          aria-label={ariaLabel}
+          onClick={onStart}
+          className="inline-flex items-center gap-1 rounded border border-dashed border-muted-foreground/40 px-2 py-0 text-3xs text-muted-foreground hover:border-primary hover:text-primary"
+        >
+          <Plus size={10} aria-hidden />
+          <span>+ item</span>
+        </button>
+      </div>
+    );
+  }
+
+  const onValueKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      onCommit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
+  return (
+    <div
+      data-testid={`tree-add-item-row-${arrayPath}`}
+      className="flex items-center gap-1 px-1 py-0.5"
+      style={{ paddingLeft: `${indent}px` }}
+    >
+      {/* Index label — read-only span so users cannot click/type
+          inside it. The index is owned entirely by the panel
+          (`nextItemIndex`) and advances automatically across
+          consecutive adds. `onMouseDown` preventDefault keeps the
+          focus on the value input when the user mis-clicks the label
+          (jsdom otherwise steals focus to <body>). */}
+      <span
+        aria-hidden
+        data-testid={`tree-add-item-index-${arrayPath}`}
+        onMouseDown={(e) => e.preventDefault()}
+        className="font-mono text-muted-foreground"
+      >
+        [{nextIndex}]
+      </span>
+      <span className="text-muted-foreground">:</span>
+      <input
+        type="text"
+        ref={valueInputRef}
+        value={valueDraft}
+        onChange={(e) => onValueDraftChange(e.target.value)}
+        onKeyDown={onValueKeyDown}
+        placeholder="value"
+        aria-label={`${ariaLabel} — value`}
+        data-testid={`tree-add-item-input-${arrayPath}`}
+        className="inline-block w-40 rounded border border-primary bg-background px-1 text-foreground"
+      />
+    </div>
   );
 }
 
@@ -509,6 +1173,18 @@ function TagBadge({ children }: { children: React.ReactNode }) {
   return (
     <span className="ml-1.5 inline-block rounded bg-muted px-1 py-0 align-middle text-4xs tracking-wider text-muted-foreground">
       {children}
+    </span>
+  );
+}
+
+// Sprint 344 Slice A — amber NEW pill for ghost rows (paths that exist
+// only in `pendingByPath`). Visually distinct from the inline
+// "● edited" marker used for edits on existing leaves; same amber tone
+// keeps it in the pending family.
+function NewBadge() {
+  return (
+    <span className="ml-2 inline-block rounded bg-amber-400/20 px-1 py-0 align-middle text-4xs font-semibold uppercase tracking-wider text-amber-500 dark:text-amber-300">
+      NEW
     </span>
   );
 }

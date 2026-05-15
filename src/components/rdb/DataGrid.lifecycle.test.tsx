@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { SortInfo } from "@/types/schema";
+import type { SortInfo, TableData } from "@/types/schema";
 import { COLLECTION_READONLY_BANNER_TEXT } from "@lib/strings/document";
 import {
   MOCK_DATA,
@@ -387,5 +387,146 @@ describe("DataGrid", () => {
     // No sort indicator on any column header.
     expect(screen.queryByText("▲")).not.toBeInTheDocument();
     expect(screen.queryByText("▼")).not.toBeInTheDocument();
+  });
+
+  // -----------------------------------------------------------------
+  // Sprint 344 Slice F (2026-05-15) — end-to-end `+ key` / `+ item`
+  // adds through the RDB grid. Locks Slice E's central assumption that
+  // the inline tree panel's `onCommitEdit("<segment>", v)` for a
+  // jsonb / ARRAY cell at column idx C materialises a pendingEdit
+  // keyed `"<row>-<C>:<segment>"`, and that the SQL preview emits the
+  // expected `jsonb_set(..., true)` / `ARRAY[..., <new>]::etype[]`
+  // wire shape.
+  //
+  // Uses a custom fixture (text[] + jsonb) because MOCK_DATA's `meta`
+  // is jsonb but has no Postgres ARRAY column for the `+ item` flow.
+  // -----------------------------------------------------------------
+  describe("inline tree `+ key` / `+ item` end-to-end (Sprint 344 Slice F)", () => {
+    // Fixture used by both AC-344-F-02 and AC-344-F-03. Row 0:
+    //   meta = { existing: "foo" }  (jsonb)  — add `newKey: 42`
+    //   tags = ["a", "b"]           (text[]) — push `c`
+    function buildSliceFData(): TableData {
+      return {
+        columns: [
+          {
+            name: "id",
+            data_type: "integer",
+            nullable: false,
+            default_value: null,
+            is_primary_key: true,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+          {
+            name: "meta",
+            data_type: "jsonb",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+          {
+            name: "tags",
+            data_type: "text[]",
+            nullable: true,
+            default_value: null,
+            is_primary_key: false,
+            is_foreign_key: false,
+            fk_reference: null,
+            comment: null,
+          },
+        ],
+        rows: [[1, { existing: "foo" }, ["a", "b"]]],
+        total_count: 1,
+        page: 1,
+        page_size: 100,
+        executed_query: "SELECT * FROM public.users LIMIT 100 OFFSET 0",
+      };
+    }
+
+    it("AC-344-F-02: jsonb `+ key` add — preview SQL contains `jsonb_set(meta, '{\"newKey\"}', '42'::jsonb, true)`", async () => {
+      mockQueryTableData.mockResolvedValue(buildSliceFData());
+      renderDataGrid();
+      await screen.findByText("1 rows");
+
+      // Open the inline tree on the jsonb `meta` cell (col idx 1).
+      const expandMeta = screen.getByRole("button", { name: /Expand meta/i });
+      fireEvent.click(expandMeta);
+      expect(screen.getByTestId("rdb-nested-detail-row-0")).toBeInTheDocument();
+
+      // `+ key` on the root of the cell tree.
+      fireEvent.click(screen.getByTestId("tree-add-key-__root"));
+      const keyInput = screen.getByTestId("tree-add-key-input-__root");
+      const valueInput = screen.getByTestId("tree-add-value-input-__root");
+      fireEvent.change(keyInput, { target: { value: "newKey" } });
+      // Bare numeric → Slice D coerces to number 42 → jsonb literal `'42'`.
+      fireEvent.change(valueInput, { target: { value: "42" } });
+      fireEvent.keyDown(valueInput, { key: "Enter" });
+
+      // Pending pill appears on the panel.
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("document-tree-pending-pill"),
+        ).toBeInTheDocument();
+      });
+
+      // Commit → SQL preview emits the create-missing `jsonb_set` form.
+      const commitBtn = screen.getByLabelText("Commit changes");
+      await act(async () => {
+        fireEvent.click(commitBtn);
+      });
+      const preview = await screen.findByRole("dialog");
+      // The dialog body is split across `<SqlSyntax>` token spans, so we
+      // assert on the dialog's flattened text content.
+      const previewText = preview.textContent ?? "";
+      expect(previewText).toMatch(/UPDATE/);
+      expect(previewText).toMatch(/jsonb_set/);
+      expect(previewText).toContain(`'{"newKey"}'`);
+      expect(previewText).toContain(`'42'::jsonb`);
+      // 4-arg form with create_missing=true.
+      expect(previewText).toMatch(/, true\)/);
+    });
+
+    it("AC-344-F-03: text[] `+ item` push — preview SQL contains `ARRAY['a', 'b', 'c']::text[]`", async () => {
+      mockQueryTableData.mockResolvedValue(buildSliceFData());
+      renderDataGrid();
+      await screen.findByText("1 rows");
+
+      // Open the inline tree on the text[] `tags` cell (col idx 2).
+      const expandTags = screen.getByRole("button", { name: /Expand tags/i });
+      fireEvent.click(expandTags);
+      expect(screen.getByTestId("rdb-nested-detail-row-0")).toBeInTheDocument();
+
+      // `+ item` on the root array. The auto-derived next index is [2]
+      // (cellValue length = 2, no prior pending appends).
+      fireEvent.click(screen.getByTestId("tree-add-item-"));
+      const valueInput = screen.getByTestId("tree-add-item-input-");
+      // Quoted value → Slice D coerces to the string "c" (jsonb-style
+      // outer-quotes rule). For text[] elementType the SQL generator
+      // single-quotes it.
+      fireEvent.change(valueInput, { target: { value: '"c"' } });
+      fireEvent.keyDown(valueInput, { key: "Enter" });
+
+      // Pending pill appears.
+      await waitFor(() => {
+        expect(
+          screen.getByTestId("document-tree-pending-pill"),
+        ).toBeInTheDocument();
+      });
+
+      const commitBtn = screen.getByLabelText("Commit changes");
+      await act(async () => {
+        fireEvent.click(commitBtn);
+      });
+      const preview = await screen.findByRole("dialog");
+      const previewText = preview.textContent ?? "";
+      expect(previewText).toMatch(/UPDATE/);
+      // Original two items preserved + new 'c' appended, all single-
+      // quoted as text[] elements.
+      expect(previewText).toContain(`ARRAY['a', 'b', 'c']::text[]`);
+    });
   });
 });

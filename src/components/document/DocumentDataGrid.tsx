@@ -94,6 +94,15 @@ function buildNestedPendingByPath(
  */
 const BSON_TAG = "__bson__:";
 
+/**
+ * Sprint 344 Slice F (2026-05-15) — Mongo paradigm's reserved root keys
+ * passed to `DocumentTreePanel.forbiddenRootKeys`. Module-level constant
+ * so the Set identity stays stable across renders (the panel's
+ * commitAddKey deps include this prop; an inline `new Set(...)` would
+ * invalidate the callback every render).
+ */
+const MONGO_ROOT_RESERVED_KEYS: ReadonlySet<string> = new Set(["_id"]);
+
 function tagBsonWrapper(wrapper: Record<string, unknown>): string {
   // safeStringifyCell 로 BigInt / Decimal 대응 — wrapper 안에 들어올 수
   // 있는 Mongo Int64 / Decimal128 이 raw JSON.stringify 로는 throw 함.
@@ -1066,6 +1075,13 @@ export default function DocumentDataGrid({
                               editState.setPendingEdits(next);
                             }}
                             onClose={() => setExpandedNested(null)}
+                            // Sprint 344 Slice F (2026-05-15) — guard `_id`
+                            // re-add at the Mongo document root. MongoDB
+                            // rejects mutating `_id` on a patch, and the
+                            // mqlGenerator's id-in-patch check would drop
+                            // the row entirely; refusing the add at the
+                            // UI surface keeps the failure mode honest.
+                            forbiddenRootKeys={MONGO_ROOT_RESERVED_KEYS}
                           />
                         </div>
                       </div>
