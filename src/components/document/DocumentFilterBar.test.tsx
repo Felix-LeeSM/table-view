@@ -245,4 +245,113 @@ describe("DocumentFilterBar", () => {
 
     expect(onApply).toHaveBeenCalledWith({ age: { $nin: [1, "alpha", 2] } });
   });
+
+  // Sprint 314 (2026-05-15) — Slice B.2 composite ops. Match ALL/ANY
+  // toggle + per-row NOT button. ALL = implicit $and (default), ANY =
+  // top-level $or. NOT wraps the clause in $not.
+  it("exposes Match ALL / ANY toggle defaulting to ALL", () => {
+    renderBar();
+    const all = screen.getByRole("radio", { name: "ALL" });
+    const any = screen.getByRole("radio", { name: "ANY" });
+    expect(all).toBeInTheDocument();
+    expect(any).toBeInTheDocument();
+    expect(all).toHaveAttribute("data-state", "on");
+    expect(any).toHaveAttribute("data-state", "off");
+  });
+
+  it("emits a $or array when Match ANY is selected with multiple rows", () => {
+    const onApply = vi.fn();
+    renderBar({ onApply });
+
+    // Auto-row 1: age $eq "" (will be ignored or kept as string). Set value.
+    const valueInputs1 = screen.getAllByRole("textbox", {
+      name: "Filter value",
+    });
+    fireEvent.change(valueInputs1[0]!, { target: { value: "18" } });
+    fireEvent.click(
+      screen.getAllByRole("combobox", { name: "Filter operator" })[0]!,
+    );
+    fireEvent.click(screen.getByRole("option", { name: "≥" }));
+
+    // Add a second row.
+    fireEvent.click(screen.getByRole("button", { name: /Add Filter/ }));
+
+    // Configure the second row: name $eq Ada. By default the new row's
+    // field is the first field ("age") — change it.
+    const fieldTriggers = screen.getAllByRole("combobox", {
+      name: "Filter field",
+    });
+    fireEvent.click(fieldTriggers[1]!);
+    fireEvent.click(screen.getByRole("option", { name: "name" }));
+    const valueInputs2 = screen.getAllByRole("textbox", {
+      name: "Filter value",
+    });
+    fireEvent.change(valueInputs2[1]!, { target: { value: "Ada" } });
+
+    // Flip Match to ANY.
+    fireEvent.click(screen.getByRole("radio", { name: "ANY" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+
+    expect(onApply).toHaveBeenCalledWith({
+      $or: [{ age: { $gte: 18 } }, { name: { $eq: "Ada" } }],
+    });
+  });
+
+  it("wraps a single row's clause in $not when the NOT button is pressed", () => {
+    const onApply = vi.fn();
+    renderBar({ onApply });
+
+    fireEvent.click(
+      screen.getAllByRole("combobox", { name: "Filter operator" })[0]!,
+    );
+    fireEvent.click(screen.getByRole("option", { name: ">" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter value" }), {
+      target: { value: "18" },
+    });
+
+    const notButton = screen.getByRole("button", { name: "Negate filter" });
+    expect(notButton).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(notButton);
+    expect(notButton).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+
+    expect(onApply).toHaveBeenCalledWith({ age: { $not: { $gt: 18 } } });
+  });
+
+  it("combines NOT and Match ANY across rows", () => {
+    const onApply = vi.fn();
+    renderBar({ onApply });
+
+    // Row 1: NOT active $eq true (negated).
+    fireEvent.click(
+      screen.getAllByRole("combobox", { name: "Filter field" })[0]!,
+    );
+    fireEvent.click(screen.getByRole("option", { name: "active" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter value" }), {
+      target: { value: "true" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Negate filter" }));
+
+    // Row 2: age $gte 18.
+    fireEvent.click(screen.getByRole("button", { name: /Add Filter/ }));
+    const opTriggers = screen.getAllByRole("combobox", {
+      name: "Filter operator",
+    });
+    fireEvent.click(opTriggers[1]!);
+    fireEvent.click(screen.getByRole("option", { name: "≥" }));
+    const valueInputs = screen.getAllByRole("textbox", {
+      name: "Filter value",
+    });
+    fireEvent.change(valueInputs[1]!, { target: { value: "18" } });
+
+    // Match ANY.
+    fireEvent.click(screen.getByRole("radio", { name: "ANY" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply filter" }));
+
+    expect(onApply).toHaveBeenCalledWith({
+      $or: [{ active: { $not: { $eq: "true" } } }, { age: { $gte: 18 } }],
+    });
+  });
 });

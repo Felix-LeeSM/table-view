@@ -6,8 +6,17 @@
  * Scope:
  * - Flat field paths only (no nested `a.b.c`).
  * - Operators (field-level, 10): `$eq`, `$ne`, `$gt`, `$gte`, `$lt`,
- *   `$lte`, `$in`, `$nin`, `$exists`, `$regex`. Composite operators
- *   (`$or` / `$and` / `$not`) are reserved for Sprint 314 (Slice B.2).
+ *   `$lte`, `$in`, `$nin`, `$exists`, `$regex`.
+ * - Composite operators (13 ops total = 10 + 3):
+ *   - `$or` — surfaced through `matchMode: "any"` on `buildMqlFilter`.
+ *     All rows become elements of a top-level `$or` array. Single-row
+ *     `any` mode is emitted without the array wrap (Mongo-equivalent
+ *     but shorter; see sprint-314 D-26).
+ *   - `$and` — implicit. Multi-field flat object is already
+ *     Mongo-equivalent to `$and: [...]`. No explicit wrap is emitted
+ *     (sprint-314 D-25).
+ *   - `$not` — per-row toggle via `MqlCondition.negate`. The
+ *     operator clause is wrapped: `{ $not: <clause> }`.
  * - Numeric coercion is best-effort. A whitespace-only string is NOT
  *   coerced — `Number("  ") === 0` would otherwise silently turn blank
  *   cells into zero.
@@ -38,7 +47,17 @@ export interface MqlCondition {
   operator: MqlOperator;
   /** Always a string at the form layer; coerced at build time. */
   value: string;
+  /** When true, wrap the operator clause in `$not`. Sprint-314 D-Q8. */
+  negate?: boolean;
 }
+
+/**
+ * How the structured rows combine. `"all"` = implicit `$and` (current
+ * default, flat object). `"any"` = `$or` array of per-row clauses.
+ * Single-element `any` mode collapses to the inner clause to avoid the
+ * pointless `[single]` wrap (D-26).
+ */
+export type MatchMode = "all" | "any";
 
 // Order = frequency (phase-28 Q7: "13 ops 빈도순"). Display label uses
 // SQL idiom for IN / NOT IN so RDB ↔ Mongo flippers see the same word
@@ -114,18 +133,54 @@ function buildOperatorClause(
   return { [operator]: raw };
 }
 
+function wrapNot(
+  clause: Record<string, unknown> | null,
+  negate: boolean | undefined,
+): Record<string, unknown> | null {
+  if (clause === null) return null;
+  if (!negate) return clause;
+  return { $not: clause };
+}
+
 /**
- * Build a Mongo filter document from a list of conditions. Multiple
- * operators on the same field are merged into a nested object. Multiple
- * fields become top-level keys (implicit `$and`).
+ * Build a Mongo filter document from a list of conditions.
+ *
+ * - `matchMode="all"` (default): multi-field flat object — implicit
+ *   `$and`. Multiple operators on the same field merge into one nested
+ *   object (`{ age: { $gte: 18, $lt: 65 } }`).
+ * - `matchMode="any"`: per-row clauses become elements of a top-level
+ *   `$or` array. Same-field merging is intentionally disabled in this
+ *   mode (each row is its own element). Single-row collapses to the
+ *   inner clause (D-26).
+ *
+ * Rows with `negate: true` have their operator clause wrapped in
+ * `$not`. Rows whose `buildOperatorClause` returns null (e.g. empty
+ * `$in` array) are dropped silently per sprint-313 D-23.
  */
 export function buildMqlFilter(
   conditions: readonly MqlCondition[],
+  matchMode: MatchMode = "all",
 ): Record<string, unknown> {
+  if (matchMode === "any") {
+    const elements: Record<string, unknown>[] = [];
+    for (const c of conditions) {
+      if (c.field.length === 0) continue;
+      const clause = wrapNot(
+        buildOperatorClause(c.operator, c.value),
+        c.negate,
+      );
+      if (clause === null) continue;
+      elements.push({ [c.field]: clause });
+    }
+    if (elements.length === 0) return {};
+    if (elements.length === 1) return elements[0]!;
+    return { $or: elements };
+  }
+
   const result: Record<string, unknown> = {};
   for (const c of conditions) {
     if (c.field.length === 0) continue;
-    const clause = buildOperatorClause(c.operator, c.value);
+    const clause = wrapNot(buildOperatorClause(c.operator, c.value), c.negate);
     if (clause === null) continue;
     const existing = result[c.field];
     if (existing && typeof existing === "object" && !Array.isArray(existing)) {

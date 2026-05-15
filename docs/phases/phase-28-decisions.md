@@ -756,3 +756,106 @@ parses to an empty array" case 2건 추가.
 함께 명시화 (`"^pattern"`) — 기존 generic "Value..." 보다 명확.
 
 ---
+
+## Sprint 314 (Slice B.2) — composite ops (`$or` / `$and` / `$not`)
+
+### D-25: `$and` 는 implicit 만 emit (explicit `$and: [...]` 미사용)
+
+**문제**: ALL 모드의 multi-field/multi-row 결과를 implicit (`{ age:
+..., name: ... }`) 와 explicit (`$and: [{ age: ... }, { name: ... }]`)
+중 무엇으로 emit 할지 결정 필요.
+
+**결정**: implicit 만 emit. `buildMqlFilter` 는 ALL 모드에서 flat
+object 를 만든다. explicit `$and` wrap 은 코드 경로에 존재하지 않음.
+
+**근거**:
+1. Mongo 가 두 표현을 동등 처리 — 결과 집합 동일.
+2. implicit object 가 훨씬 짧음 — Raw MQL prefill 시 가독성, 콘솔
+   debug 시 가독성.
+3. nested grouping (`(A AND B) OR (C AND D)`) 같은 시나리오는 본
+   sprint scope 밖 (Raw MQL).
+4. 같은 field 의 multiple ops (`age $gte 18` + `age $lt 65`) 도
+   `{ age: { $gte: 18, $lt: 65 } }` 로 merge → object 가 자연.
+
+**대안**: explicit `$and` (Mongo official docs 의 한 예시 — 같은
+field 에 같은 op 두 번 쓸 때 필요). 본 sprint 의 UI 는 그런 입력을
+생성하지 못함 (operator merge 가 sole-key 보존).
+
+**영향**: `buildMqlFilter` 의 ALL branch = 기존 동작 (B.1 까지)
+유지. test 에 "does not emit explicit $and even for many same-field
+rows" assertion 추가.
+
+---
+
+### D-26: ANY 모드 single-element collapse — `{ $or: [single] }` → `single`
+
+**문제**: matchMode="any" + 1 row 만 있을 때 결과를 `{ $or: [...] }`
+로 wrap 할지 `single` 그대로 둘지.
+
+**결정**: 1 element 일 때 array wrap 생략 — inner clause 그대로
+return. 2+ element 일 때만 `$or` array 생성.
+
+**근거**:
+1. `$or: [single]` 과 `single` 는 Mongo 결과 동일.
+2. shorter object → Raw prefill / log 가독성.
+3. 사용자가 ANY 모드로 toggle 한 후 row 1개만 남기는 시나리오에서
+   visual noise 감소.
+
+**대안**: 항상 array wrap (consistent shape). 그러나 빈 `[]` /
+single `[X]` 모두 의미 없는 wrap — Lean shape 채택.
+
+**영향**: `mqlFilterBuilder.test.ts` 의 "collapses a single-row
+matchMode='any' to the inner clause" case 가 lock.
+
+---
+
+### D-27: per-row `$not` toggle — operator wrap (not standalone op)
+
+**문제**: `$not` 을 (a) `MqlOperator` union 에 추가하여 row 의 op
+선택지로 노출 vs (b) `MqlCondition.negate` boolean 으로 wrap 옵션.
+
+**결정**: (b). `negate?: boolean` 필드 + `wrapNot` 헬퍼.
+
+**근거**:
+1. `$not` 은 standalone op 가 아니라 다른 op 를 wrap — Mongo 문법
+   상 `{ field: { $not: { $gt: 18 } } }` 형태로 항상 다른 op 가
+   안에 들어가야 함.
+2. `MqlOperator` union 에 `$not` 을 추가하면 사용자가 value 만
+   입력하고 inner op 없이 row 가 invalid 상태가 됨.
+3. row UX 는 "op + value" 가 메인, NOT 은 modifier — 별도 toggle
+   button 으로 표현하는 게 mental model 정합.
+4. `$exists` / `$regex` 등 모든 field-level op 와 자유 조합 가능.
+
+**대안**: standalone `$not` op + nested sub-row UI (a more advanced
+nested editor). overkill — flat row 모델이 충분.
+
+**영향**: `MqlOperator` union 크기 유지 (10). `MqlCondition` 에
+optional 필드 1 개 추가. RTL test 에서 `aria-pressed` 단언.
+
+---
+
+### D-28: NOT button 위치 = operator dropdown 좌측 prefix
+
+**문제**: row 의 NOT toggle 을 어디에 둘지 — operator 좌 / operator
+우 / value input 우 / 별도 prefix column / 별도 prefix row.
+
+**결정**: operator dropdown 좌측 prefix button (`<Ban>` icon, amber
+when active).
+
+**근거**:
+1. 사용자가 operator 결정 전 NOT 결정 → 자연스러운 좌→우 흐름.
+2. 좌 prefix 는 row 의 시작 시각 anchor — active NOT 가 즉시 보임.
+3. value input 우는 remove 버튼과 충돌 + row 끝이 시각 종료
+   anchor 라 modifier 두기 부적합.
+4. 별도 prefix column 은 RDB FilterBar parity 깨짐 (RDB 는 column
+   structure 4 단). NOT 만 column 추가는 oversized.
+
+**대안**: 모든 row 좌측에 한 칸 추가 — RDB parity 손상. 별도 row
+prefix — 작은 modifier 에 row layout 오버킬. icon-xs button 이
+minimal & accessible.
+
+**영향**: `StructuredRow` 의 첫 번째 element 다음에 `<Button>` 삽입.
+`aria-label="Negate filter"`, `aria-pressed="true|false"`. RTL 이
+`aria-pressed` 단언으로 lock.
+
+---

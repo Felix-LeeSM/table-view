@@ -137,6 +137,86 @@ describe("buildMqlFilter", () => {
     ]);
     expect(result).toEqual({ age: { $gte: 18, $in: [21, 25, 30] } });
   });
+
+  // Sprint 314 (2026-05-15) — Slice B.2: composite ops. The builder
+  // gains `matchMode` (`$or` wrapping) and per-row `negate` (`$not`
+  // wrapping). `$and` stays implicit (D-25). Single-row `any` collapses
+  // to the inner clause (D-26).
+  describe("composite operators (Slice B.2)", () => {
+    it("wraps a single negated condition in $not", () => {
+      const result = buildMqlFilter([
+        { ...condition("age", "$gt", "18"), negate: true },
+      ]);
+      expect(result).toEqual({ age: { $not: { $gt: 18 } } });
+    });
+
+    it("preserves field-keyed shape and skips the wrap when negate is false or absent", () => {
+      expect(buildMqlFilter([condition("age", "$gt", "18")])).toEqual({
+        age: { $gt: 18 },
+      });
+      expect(
+        buildMqlFilter([{ ...condition("age", "$gt", "18"), negate: false }]),
+      ).toEqual({ age: { $gt: 18 } });
+    });
+
+    it("emits $or array for multi-row matchMode='any'", () => {
+      const result = buildMqlFilter(
+        [condition("age", "$gte", "18"), condition("name", "$eq", "Ada")],
+        "any",
+      );
+      expect(result).toEqual({
+        $or: [{ age: { $gte: 18 } }, { name: { $eq: "Ada" } }],
+      });
+    });
+
+    it("collapses a single-row matchMode='any' to the inner clause (D-26)", () => {
+      const result = buildMqlFilter([condition("age", "$gte", "18")], "any");
+      expect(result).toEqual({ age: { $gte: 18 } });
+    });
+
+    it("returns the empty filter for zero rows in matchMode='any'", () => {
+      expect(buildMqlFilter([], "any")).toEqual({});
+    });
+
+    it("keeps same-field rows as separate $or elements (no merge in any mode)", () => {
+      const result = buildMqlFilter(
+        [condition("age", "$gt", "18"), condition("age", "$lt", "65")],
+        "any",
+      );
+      expect(result).toEqual({
+        $or: [{ age: { $gt: 18 } }, { age: { $lt: 65 } }],
+      });
+    });
+
+    it("combines negate with matchMode='any'", () => {
+      const result = buildMqlFilter(
+        [
+          { ...condition("active", "$eq", "true"), negate: true },
+          condition("age", "$gte", "18"),
+        ],
+        "any",
+      );
+      expect(result).toEqual({
+        $or: [{ active: { $not: { $eq: "true" } } }, { age: { $gte: 18 } }],
+      });
+    });
+
+    it("drops empty $in clauses even when negated (sprint-313 D-23 still applies)", () => {
+      const result = buildMqlFilter([
+        { ...condition("age", "$in", ""), negate: true },
+      ]);
+      expect(result).toEqual({});
+    });
+
+    it("does not emit explicit $and even for many same-field rows (D-25)", () => {
+      const result = buildMqlFilter([
+        condition("age", "$gte", "18"),
+        condition("age", "$lt", "65"),
+      ]);
+      expect(result).toEqual({ age: { $gte: 18, $lt: 65 } });
+      expect(result).not.toHaveProperty("$and");
+    });
+  });
 });
 
 describe("stringifyMqlFilter", () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Trash2, X } from "lucide-react";
+import { Ban, Plus, Trash2, X } from "lucide-react";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { json as jsonLanguage } from "@codemirror/lang-json";
@@ -27,6 +27,7 @@ import {
   buildMqlFilter,
   stringifyMqlFilter,
   MQL_OPERATORS,
+  type MatchMode,
   type MqlCondition,
   type MqlOperator,
 } from "@lib/mongo/mqlFilterBuilder";
@@ -96,6 +97,9 @@ export default function DocumentFilterBar({
 }: DocumentFilterBarProps) {
   const [mode, setMode] = useState<FilterMode>("structured");
   const [conditions, setConditions] = useState<MqlCondition[]>([]);
+  // Sprint 314 — Slice B.2. ALL = implicit `$and` (default). ANY =
+  // top-level `$or` array. Per-row `$not` lives on each MqlCondition.
+  const [matchMode, setMatchMode] = useState<MatchMode>("all");
   const [rawText, setRawText] = useState<string>(RAW_DEFAULT_TEMPLATE);
   const [rawError, setRawError] = useState<string | null>(null);
 
@@ -137,7 +141,7 @@ export default function DocumentFilterBar({
   };
 
   const handleStructuredApply = () => {
-    const filter = buildMqlFilter(conditions);
+    const filter = buildMqlFilter(conditions, matchMode);
     onApply(filter);
   };
 
@@ -177,7 +181,7 @@ export default function DocumentFilterBar({
   const handleModeChange = (next: FilterMode) => {
     if (next === mode) return;
     if (next === "raw") {
-      const filter = buildMqlFilter(conditions);
+      const filter = buildMqlFilter(conditions, matchMode);
       const seeded = stringifyMqlFilter(filter);
       setRawText(seeded);
       setRawError(null);
@@ -258,6 +262,31 @@ export default function DocumentFilterBar({
         </RawMqlEditor>
       ) : (
         <>
+          {/* Sprint 314 — Match ALL/ANY toggle. ALL = implicit $and,
+              ANY = top-level $or. Effective only when ≥ 2 rows; we show
+              it unconditionally so users discover it. */}
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-2xs text-muted-foreground">Match</span>
+            <ToggleGroup
+              type="single"
+              value={matchMode}
+              onValueChange={(v) => v && setMatchMode(v as MatchMode)}
+              aria-label="Match mode"
+            >
+              <ToggleGroupItem
+                value="all"
+                className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+              >
+                ALL
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="any"
+                className="px-2 text-2xs data-[state=on]:bg-primary data-[state=on]:text-white data-[state=on]:shadow-none"
+              >
+                ANY
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
           {conditions.map((c, index) => (
             <StructuredRow
               key={c.id}
@@ -319,6 +348,7 @@ function StructuredRow({
   onRemove,
   onApply,
 }: StructuredRowProps) {
+  const negate = !!condition.negate;
   return (
     <div className="mb-1.5 flex items-center gap-2">
       <Select
@@ -345,6 +375,24 @@ function StructuredRow({
           )}
         </SelectContent>
       </Select>
+
+      {/* Sprint 314 — NOT toggle. Wraps the operator clause in $not.
+          Sits left of the operator dropdown so users decide negation
+          before picking the comparator. */}
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        className={
+          negate
+            ? "bg-amber-500 text-white hover:bg-amber-500/90"
+            : "text-muted-foreground"
+        }
+        aria-label="Negate filter"
+        aria-pressed={negate}
+        onClick={() => onChange({ negate: !negate })}
+      >
+        <Ban size={12} />
+      </Button>
 
       <Select
         value={condition.operator}
