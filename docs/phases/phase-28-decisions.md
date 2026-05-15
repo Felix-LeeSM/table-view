@@ -1371,3 +1371,122 @@ inferred 될 수 있음 (schemaless). type 표시를 어떻게 할지.
 triple changes" 가 leak 방지 단언.
 
 ---
+
+## Sprint 320 — Slice E.2 (DocumentDataGrid schema accumulator wire-up) — 자율 결정 dict
+
+### D-47: accumulator merge 시점 = `queryResult.columns` 변경 useEffect
+
+**문제**: backend 의 fetch 결과를 accumulator 에 넘길 트리거를 어디
+둘지. `fetchData` 끝에서 merge 호출? `queryResult` 변경 useEffect?
+
+**결정**: `queryResult?.columns` 를 deps 로 한 useEffect 에서
+`schemaAccumulator.merge(queryResult.columns)` 호출.
+
+**근거**:
+1. `queryResult` 는 documentStore 의 reactive cache (sprint-265
+   path: `(connId, db, coll)`). store 외부에서 다른 surface 가 같은
+   collection 을 fetch 해도 (예: 다른 grid 마운트) cache 가 갱신될
+   수 있음. useEffect 가 reactively 따라가서 accumulator 가 모든
+   reactive 변경에 반응.
+2. `fetchData` 안에서 호출 하면 stale-guard race 와 결합 — fetchId
+   다시 검사해야 함. useEffect path 가 stale 감안 불필요 (zustand
+   selector 가 최종 상태만 surface).
+3. eslint `react-hooks/exhaustive-deps` 는 `schemaAccumulator.merge`
+   도 dep 추가 요구. 그러나 merge 는 ref 기반 stable callback —
+   `// eslint-disable-next-line` 으로 deps 명시 (D-48 과 함께 정당화).
+
+**대안**:
+- fetchData 안에서 직접 merge — stale race 와 결합, 회귀 표면 증가.
+- documentStore 내부에서 자동 merge — 다른 grid (예: 짧은 ad-hoc
+  query) 와 결합. 분리 유지.
+
+**영향**: useEffect 1줄. test "accumulates new fields across pages"
+가 lock.
+
+---
+
+### D-48: accumulator 빈 상태 = backend columns fallback (flicker 방지)
+
+**문제**: accumulator 가 비어 있을 때 (첫 fetch 이전 한 frame, 혹은
+collection 직후) grid 가 빈 columns 로 잠시 렌더되면 flicker.
+
+**결정**: `schemaAccumulator.columns.length === 0` 이면 backend `data`
+를 그대로 surface. accumulator merge useEffect 가 다음 cycle 에
+호출되어 누적되면 그때부터 accumulator-driven render.
+
+**근거**:
+1. accumulator 는 누적 의도. 첫 fetch 직후엔 backend columns 와 100%
+   일치 — fallback 이 사용자 경험에 차이 0.
+2. flicker (빈 grid → backend columns → accumulator columns) 가 한
+   frame 이라도 보이면 산만. fallback 이 첫 frame 부터 의미 있는
+   columns 를 표시.
+3. backend 가 0 column 을 반환하면 그대로 빈 grid — 그건 backend
+   의도 그대로 보존 (rows 0 인 empty collection).
+
+**대안**:
+- `schemaAccumulator.merge(...)` 를 first render 에 동기 호출 — render
+  중 set state → React warn. NO.
+- useLayoutEffect 로 merge — same 문제 + render race.
+- 빈 grid 노출 — UX overshoot.
+
+**영향**: `data` memo 의 `if (schemaAccumulator.columns.length === 0)
+return backendData` 분기. test "renders the columns from the first
+fetch alphabetically" 가 fallback path 의 결과를 lock (첫 페이지에선
+backend columns == accumulator columns 라 visually identical).
+
+---
+
+### D-49: row 의 missing field cell = null (기존 NULL chip 재사용)
+
+**문제**: accumulator 가 보유한 field 가 현재 page backend columns 에
+없을 때, row 의 해당 cell 을 어떻게 표시할지.
+
+**결정**: cell value 를 `null` 로 채워 grid 의 기존 NULL chip 로직
+(`<span className="italic text-muted-foreground">null</span>`) 재사용.
+
+**근거**:
+1. Document paradigm 에서 schema 상 "이 field 가 이 document 에 없음"
+   과 "field 는 있지만 값이 null" 은 의미가 다름. 단, grid 시각화
+   레벨에서는 둘 다 "값이 비어있음" — 사용자가 둘을 구분해야 할 use
+   case 가 거의 없음. 통합 표현이 단순.
+2. 별도 "absent" chip 디자인은 i18n + a11y 추가 부담. Slice E.2 의
+   scope 초과.
+3. inline edit 시도 → backend 에서 reject (없는 field 에 update 시
+   $set new field 가 됨, 사용자 의도 일치). edit 흐름 변경 0.
+
+**대안**:
+- "absent" 라벨 chip → UX 복잡도 + 신규 디자인 결정.
+- 빈 cell (visual 아무것도 없음) → 사용자가 빈 cell 의 의미 모름.
+- `"undefined"` 문자열 → 데이터 와 표현 혼동.
+
+**영향**: `data` memo 가 `idx === undefined ? null : row[idx]` 로
+채움. test "renders 'null' chips for accumulated fields missing in
+the current page" 가 NULL chip 의 visible 회귀 가드.
+
+---
+
+### D-50: backend → accumulator column index map = O(1) cell lookup
+
+**문제**: accumulator 의 column 별로 backend rows 의 인덱스를 찾는
+순회 cost. row 수 × column 수 곱이면 N×M.
+
+**결정**: `data` memo 안에서 `Map<columnName, backendIdx>` 를 한 번
+빌드 후 row map 이 그 map 으로 O(1) lookup.
+
+**근거**:
+1. N×M 의 column-name lookup (linear scan per cell) 은 grid 의
+   가독성 한계 (수십 columns × 수백 rows) 에서 무시할 정도이지만,
+   Map 이 같은 코드 라인 수로 더 명확. 미래의 large schema 도 호환.
+2. memo deps `[backendData, schemaAccumulator.columns]` 안에서만 map
+   생성 — 페이지 안에서는 map 재사용.
+
+**대안**:
+- 순회 linear (`findIndex`) — 작은 grid 에선 OK 지만 의미 없는
+  비효율.
+- accumulator 가 자체적으로 map 도 expose — hook API 비대.
+
+**영향**: `data` memo 의 6 line. test 의 모든 page-2 row 단언이 cell
+의 정확한 값을 단언 (`carol@example.com`, `42`, `high` 등) — index
+map 동작 회귀.
+
+---

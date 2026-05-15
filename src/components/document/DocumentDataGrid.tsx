@@ -14,6 +14,7 @@ import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useHiddenColumns } from "@/hooks/useHiddenColumns";
+import { useDocumentSchemaAccumulator } from "@/hooks/useDocumentSchemaAccumulator";
 import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
 import HeaderRow from "@components/datagrid/DataGridTable/HeaderRow";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
@@ -106,17 +107,76 @@ export default function DocumentDataGrid({
     [activeFilter],
   );
 
-  const { data, queryResult, loading, error, fetchData, handleCancelRefetch } =
-    useDocumentGridData({
-      connectionId,
-      database,
-      collection,
-      page,
-      pageSize,
-      activeFilter,
-      activeFilterCount,
-      sorts,
-    });
+  const {
+    data: backendData,
+    queryResult,
+    loading,
+    error,
+    fetchData,
+    handleCancelRefetch,
+  } = useDocumentGridData({
+    connectionId,
+    database,
+    collection,
+    page,
+    pageSize,
+    activeFilter,
+    activeFilterCount,
+    sorts,
+  });
+
+  // Sprint 320 — Slice E.2: client-side schema accumulator. Mongo
+  // collection 은 schemaless — fetch 마다 backend 가 보내는
+  // `queryResult.columns` 가 다를 수 있다. accumulator 가 페이지 간
+  // 누적해 grid header / row 가 흔들리지 않게 한다. triple 변경시
+  // hook 내부에서 auto-reset (sprint 319 D-43).
+  const schemaAccumulator = useDocumentSchemaAccumulator({
+    connId: connectionId,
+    db: database,
+    collection,
+  });
+  useEffect(() => {
+    if (queryResult) {
+      schemaAccumulator.merge(queryResult.columns);
+    }
+    // accumulator.merge 는 hook 내부에서 ref 기반 stable identity.
+    // queryResult.columns 만 deps 로 충분.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryResult?.columns]);
+
+  // accumulator 가 backend columns 와 다를 수 있어 (a) 누적된 column 만
+  // surface 하고 (b) cell lookup 시 backend rows 의 인덱스를 찾는다.
+  // accumulator 가 빈 상태 (첫 fetch 전) 면 backend columns fallback
+  // 으로 flicker 방지 (D-48).
+  const data = useMemo(() => {
+    if (!backendData) return null;
+    if (schemaAccumulator.columns.length === 0) return backendData;
+    const backendIdx = new Map<string, number>();
+    backendData.columns.forEach((c, i) => backendIdx.set(c.name, i));
+    const effectiveColumns: ColumnInfo[] = schemaAccumulator.columns.map(
+      (c) => ({
+        name: c.name,
+        data_type: c.data_type,
+        nullable: true,
+        default_value: null,
+        is_primary_key: c.name === "_id",
+        is_foreign_key: false,
+        fk_reference: null,
+        comment: null,
+      }),
+    );
+    const effectiveRows = backendData.rows.map((row) =>
+      schemaAccumulator.columns.map((c) => {
+        const idx = backendIdx.get(c.name);
+        return idx === undefined ? null : (row as unknown[])[idx];
+      }),
+    );
+    return {
+      ...backendData,
+      columns: effectiveColumns,
+      rows: effectiveRows,
+    };
+  }, [backendData, schemaAccumulator.columns]);
 
   // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
   // as `DataGrid.tsx` so keyboard behaviour stays consistent across
