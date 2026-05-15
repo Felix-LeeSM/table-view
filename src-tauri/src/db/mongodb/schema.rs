@@ -406,6 +406,78 @@ impl MongoAdapter {
         Ok(())
     }
 
+    /// Sprint 339 (U4 live wire) — server identity (`buildInfo`) +
+    /// runtime info (`serverStatus`). Two `adminCommand` round trips
+    /// merged into the same `ServerInfoRow` slot.
+    pub(super) async fn server_info_impl(&self) -> Result<crate::models::ServerInfoRow, AppError> {
+        let client = self.current_client().await?;
+        let build = client
+            .database("admin")
+            .run_command(doc! { "buildInfo": 1 })
+            .await
+            .map_err(|e| AppError::Database(format!("buildInfo failed: {e}")))?;
+        let status = client
+            .database("admin")
+            .run_command(doc! { "serverStatus": 1 })
+            .await
+            .map_err(|e| AppError::Database(format!("serverStatus failed: {e}")))?;
+
+        let version = build.get_str("version").unwrap_or("").to_string();
+        let host = status.get_str("host").ok().map(|s| s.to_string());
+        let uptime = status
+            .get_f64("uptime")
+            .ok()
+            .map(|f| f as i64)
+            .or_else(|| status.get_i64("uptime").ok())
+            .or_else(|| status.get_i32("uptime").ok().map(|n| n as i64));
+        let connections_active = status
+            .get_document("connections")
+            .ok()
+            .and_then(|c| c.get_i32("active").ok().map(|n| n as i64))
+            .or_else(|| {
+                status
+                    .get_document("connections")
+                    .ok()
+                    .and_then(|c| c.get_i64("active").ok())
+            });
+
+        let mut extras: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
+        for key in &[
+            "connections",
+            "opcounters",
+            "mem",
+            "repl",
+            "wiredTiger",
+            "process",
+            "pid",
+            "storageEngine",
+            "uptimeMillis",
+            "localTime",
+        ] {
+            if let Some(value) = status.get(*key) {
+                if let Ok(jv) = serde_json::to_value(value) {
+                    extras.insert((*key).to_string(), jv);
+                }
+            }
+        }
+        for key in &["gitVersion", "modules", "openssl", "javascriptEngine"] {
+            if let Some(value) = build.get(*key) {
+                if let Ok(jv) = serde_json::to_value(value) {
+                    extras.insert((*key).to_string(), jv);
+                }
+            }
+        }
+
+        Ok(crate::models::ServerInfoRow {
+            version,
+            host,
+            uptime_sec: uptime,
+            connections_active,
+            extras,
+        })
+    }
+
     /// Sprint 338 (U3 live wire) — `runCommand({collStats: <coll>})`.
     ///
     /// PG `pg_stat_user_tables` row 와 같은 `CollectionStatsRow` 슬롯
@@ -1109,6 +1181,20 @@ mod tests {
     async fn collection_stats_without_connection_returns_connection_error() {
         let adapter = MongoAdapter::new();
         match adapter.collection_stats("db", "c").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 339 (U4 live wire) — server_info no-param path. Real
+    // buildInfo/serverStatus shape mapping is covered by Mongo
+    // integration tests; unit test only asserts the no-connection guard.
+    #[tokio::test]
+    async fn server_info_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.server_info_impl().await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("not established"), "unexpected: {msg}");
             }

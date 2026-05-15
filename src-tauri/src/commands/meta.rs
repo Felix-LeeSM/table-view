@@ -258,6 +258,36 @@ pub async fn collection_stats_mongo(
     collection_stats_mongo_inner(state.inner(), &connection_id, &database, &collection).await
 }
 
+async fn server_info_inner(
+    state: &AppState,
+    connection_id: &str,
+) -> Result<crate::models::ServerInfoRow, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    match active {
+        ActiveAdapter::Rdb(adapter) => adapter.server_info().await,
+        ActiveAdapter::Document(adapter) => adapter.server_info().await,
+        ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+            "server_info not supported for Search paradigm".into(),
+        )),
+        ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+            "server_info not supported for key-value paradigm".into(),
+        )),
+    }
+}
+
+/// Sprint 339 (U4 live wire) — paradigm-neutral server identity +
+/// runtime info.
+#[tauri::command]
+pub async fn server_info(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+) -> Result<crate::models::ServerInfoRow, AppError> {
+    server_info_inner(state.inner(), &connection_id).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -892,6 +922,89 @@ mod tests {
         let state = state_with("r", rdb_default()).await;
         assert!(matches!(
             collection_stats_mongo_inner(&state, "r", "db", "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    // ── Sprint 339 — server_info ────────────────────────────────────────
+
+    async fn dispatch_server_info(
+        connections: &ConnMap,
+        connection_id: &str,
+    ) -> Result<crate::models::ServerInfoRow, AppError> {
+        let active = connections
+            .get(connection_id)
+            .ok_or_else(|| not_connected(connection_id))?;
+        match active {
+            ActiveAdapter::Rdb(a) => a.server_info().await,
+            ActiveAdapter::Document(a) => a.server_info().await,
+            ActiveAdapter::Search(_) => Err(AppError::Unsupported(
+                "server_info not supported for Search paradigm".into(),
+            )),
+            ActiveAdapter::Kv(_) => Err(AppError::Unsupported(
+                "server_info not supported for key-value paradigm".into(),
+            )),
+        }
+    }
+
+    #[tokio::test]
+    async fn server_info_unknown_connection_returns_notfound() {
+        assert!(matches!(
+            dispatch_server_info(&ConnMap::new(), "absent").await,
+            Err(AppError::NotFound(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn server_info_rdb_arm_propagates() {
+        let mut s = StubRdbAdapter::default();
+        s.server_info_fn = Some(Box::new(|| {
+            Ok(crate::models::ServerInfoRow {
+                version: "PG-99".into(),
+                host: Some("10.0.0.1/32".into()),
+                uptime_sec: Some(123),
+                connections_active: Some(5),
+                extras: std::collections::HashMap::new(),
+            })
+        }));
+        let connections = map_with("c", ActiveAdapter::Rdb(Box::new(s)));
+        let r = dispatch_server_info(&connections, "c").await.unwrap();
+        assert_eq!(r.version, "PG-99");
+        assert_eq!(r.uptime_sec, Some(123));
+    }
+
+    #[tokio::test]
+    async fn server_info_document_arm_propagates() {
+        let mut s = StubDocumentAdapter::default();
+        s.server_info_fn = Some(Box::new(|| {
+            Ok(crate::models::ServerInfoRow {
+                version: "Mongo-7".into(),
+                host: Some("mongohost".into()),
+                uptime_sec: Some(7777),
+                connections_active: Some(10),
+                extras: std::collections::HashMap::new(),
+            })
+        }));
+        let connections = map_with("c", ActiveAdapter::Document(Box::new(s)));
+        let r = dispatch_server_info(&connections, "c").await.unwrap();
+        assert_eq!(r.version, "Mongo-7");
+        assert_eq!(r.host, Some("mongohost".into()));
+    }
+
+    #[tokio::test]
+    async fn server_info_search_arm_returns_unsupported() {
+        let connections = map_with("c", search_default());
+        assert!(matches!(
+            dispatch_server_info(&connections, "c").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn server_info_kv_arm_returns_unsupported() {
+        let connections = map_with("c", kv_default());
+        assert!(matches!(
+            dispatch_server_info(&connections, "c").await,
             Err(AppError::Unsupported(_))
         ));
     }

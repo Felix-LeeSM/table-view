@@ -297,6 +297,19 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
                 })
             })
         }
+        fn server_info<'a>(
+            &'a self,
+        ) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+            Box::pin(async {
+                Ok(crate::models::ServerInfoRow {
+                    version: String::new(),
+                    host: None,
+                    uptime_sec: None,
+                    connections_active: None,
+                    extras: std::collections::HashMap::new(),
+                })
+            })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -911,6 +924,17 @@ impl DocumentAdapter for FakeCancellableDocument {
                 seq_scans: None,
                 idx_scans: None,
                 n_dead: None,
+                extras: std::collections::HashMap::new(),
+            })
+        })
+    }
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+        Box::pin(async {
+            Ok(crate::models::ServerInfoRow {
+                version: String::new(),
+                host: None,
+                uptime_sec: None,
+                connections_active: None,
                 extras: std::collections::HashMap::new(),
             })
         })
@@ -1828,6 +1852,20 @@ async fn test_rdb_default_collection_stats_returns_unsupported() {
     match adapter.collection_stats("public", "t").await {
         Err(AppError::Unsupported(msg)) => {
             assert!(msg.contains("collection stats"), "unexpected: {msg}");
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
+}
+
+// 작성 이유 (2026-05-15, Sprint 339): RdbAdapter::server_info default
+// body Unsupported 단언. PG 만 override, 다른 RDB 어댑터는 trait default
+// 분기에서 Unsupported 를 반환해야 함을 회귀 가드한다.
+#[tokio::test]
+async fn test_rdb_default_server_info_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.server_info().await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("server info"), "unexpected: {msg}");
         }
         other => panic!("expected Unsupported, got {:?}", other.is_ok()),
     }

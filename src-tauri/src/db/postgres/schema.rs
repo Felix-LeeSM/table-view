@@ -1220,6 +1220,65 @@ impl PostgresAdapter {
         Ok(row.0)
     }
 
+    /// Sprint 339 (U4 live wire) — server identity (`version()` +
+    /// host) + tuning flags from `pg_settings`. `extras` carries the
+    /// full pg_settings whitelist row-by-row so the UI can render a
+    /// raw subsection without hardcoding setting names.
+    pub async fn server_info(&self) -> Result<crate::models::ServerInfoRow, AppError> {
+        let pool = self.active_pool().await?;
+
+        let version: String = sqlx::query_scalar("SELECT version()")
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("version() failed: {e}")))?;
+        let host: Option<String> = sqlx::query_scalar("SELECT inet_server_addr()::text")
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| AppError::Database(format!("inet_server_addr failed: {e}")))?;
+        let uptime: Option<f64> = sqlx::query_scalar(
+            "SELECT EXTRACT(EPOCH FROM (now() - pg_postmaster_start_time()))::float8",
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("uptime failed: {e}")))?;
+        let active: Option<i64> = sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM pg_stat_activity WHERE state IS NOT NULL",
+        )
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("pg_stat_activity count failed: {e}")))?;
+
+        let settings: Vec<(String, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT name, setting, category FROM pg_settings \
+             WHERE name IN ('server_version', 'shared_buffers', 'work_mem', \
+                            'max_connections', 'effective_cache_size', 'timezone') \
+             ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| AppError::Database(format!("pg_settings failed: {e}")))?;
+
+        let mut extras: std::collections::HashMap<String, serde_json::Value> =
+            std::collections::HashMap::new();
+        for (name, setting, category) in settings {
+            extras.insert(
+                name,
+                serde_json::json!({
+                    "setting": setting,
+                    "category": category,
+                }),
+            );
+        }
+
+        Ok(crate::models::ServerInfoRow {
+            version,
+            host,
+            uptime_sec: uptime.map(|f| f as i64),
+            connections_active: active,
+            extras,
+        })
+    }
+
     /// Sprint 338 (U3 live wire) — table stats from
     /// `pg_stat_user_tables` + `pg_total_relation_size`. Identifiers
     /// are validated by the shared `validate_identifier` helper before
@@ -1553,6 +1612,20 @@ mod tests {
     async fn collection_stats_without_connection_fails() {
         let adapter = PostgresAdapter::new();
         match adapter.collection_stats("public", "users").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("Not connected"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 339 (U4 live wire) — server_info: takes no parameters so
+    // only the no-connection path is reachable from unit tests; real
+    // version()/pg_settings shape is covered by integration tests.
+    #[tokio::test]
+    async fn server_info_without_connection_fails() {
+        let adapter = PostgresAdapter::new();
+        match adapter.server_info().await {
             Err(AppError::Connection(msg)) => {
                 assert!(msg.contains("Not connected"), "unexpected: {msg}");
             }

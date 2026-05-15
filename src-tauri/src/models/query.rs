@@ -95,6 +95,28 @@ pub struct CollectionStatsRow {
     pub extras: std::collections::HashMap<String, Value>,
 }
 
+/// Sprint 339 — U4 wire shape. PG `version() + pg_settings` row /
+/// Mongo `buildInfo + serverStatus` response flattened into the same
+/// struct for the ServerInfoPanel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerInfoRow {
+    /// PG: `version()` string; Mongo: `buildInfo.version`.
+    pub version: String,
+    /// PG: `inet_server_addr()` (optional, NULL on local socket);
+    /// Mongo: `serverStatus.host`.
+    pub host: Option<String>,
+    /// PG: `pg_postmaster_start_time()` (relative seconds);
+    /// Mongo: `serverStatus.uptime`.
+    pub uptime_sec: Option<i64>,
+    /// PG: count from `pg_stat_activity`;
+    /// Mongo: `serverStatus.connections.active`.
+    pub connections_active: Option<i64>,
+    /// Paradigm-specific raw blob — pg_settings rows or
+    /// serverStatus subsections.
+    pub extras: std::collections::HashMap<String, Value>,
+}
+
 /// Result of an arbitrary SQL query execution
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {

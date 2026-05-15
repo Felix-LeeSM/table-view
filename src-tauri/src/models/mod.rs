@@ -8,6 +8,7 @@ pub use connection::{
 };
 pub use query::{
     CollectionStatsRow, ColumnCategory, QueryColumn, QueryResult, QueryType, ServerActivityRow,
+    ServerInfoRow,
 };
 pub use schema::{
     AddColumnRequest, AddConstraintRequest, AlterTableRequest, ColumnChange, ColumnDefinition,

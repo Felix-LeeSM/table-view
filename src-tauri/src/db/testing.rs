@@ -137,6 +137,9 @@ pub(crate) struct StubRdbAdapter {
 
     // Sprint 338 — override slot for RDB collection_stats.
     pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
+
+    // Sprint 339 — override slot for RDB server_info.
+    pub server_info_fn: Option<FnZero<crate::models::ServerInfoRow>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -185,6 +188,7 @@ impl Default for StubRdbAdapter {
             kill_session_fn: None,
             explain_query_fn: None,
             collection_stats_fn: None,
+            server_info_fn: None,
         }
     }
 }
@@ -637,6 +641,23 @@ impl RdbAdapter for StubRdbAdapter {
         );
         Box::pin(async move { r })
     }
+
+    // Sprint 339 — server_info stub.
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+        let r = self.server_info_fn.as_ref().map_or_else(
+            || {
+                Ok(crate::models::ServerInfoRow {
+                    version: String::new(),
+                    host: None,
+                    uptime_sec: None,
+                    connections_active: None,
+                    extras: std::collections::HashMap::new(),
+                })
+            },
+            |f| f(),
+        );
+        Box::pin(async move { r })
+    }
 }
 
 // ── StubDocumentAdapter ──────────────────────────────────────────────────
@@ -710,6 +731,9 @@ pub(crate) struct StubDocumentAdapter {
 
     // Sprint 338 — override slot for Mongo collection_stats.
     pub collection_stats_fn: Option<FnTwo<str, str, crate::models::CollectionStatsRow>>,
+
+    // Sprint 339 — override slot for Mongo server_info.
+    pub server_info_fn: Option<FnZero<crate::models::ServerInfoRow>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -741,6 +765,7 @@ impl Default for StubDocumentAdapter {
             kill_op_fn: None,
             explain_query_fn: None,
             collection_stats_fn: None,
+            server_info_fn: None,
         }
     }
 }
@@ -1098,6 +1123,23 @@ impl DocumentAdapter for StubDocumentAdapter {
                 })
             },
             |f| f(db, collection),
+        );
+        Box::pin(async move { r })
+    }
+
+    // Sprint 339 — server_info stub.
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+        let r = self.server_info_fn.as_ref().map_or_else(
+            || {
+                Ok(crate::models::ServerInfoRow {
+                    version: String::new(),
+                    host: None,
+                    uptime_sec: None,
+                    connections_active: None,
+                    extras: std::collections::HashMap::new(),
+                })
+            },
+            |f| f(),
         );
         Box::pin(async move { r })
     }

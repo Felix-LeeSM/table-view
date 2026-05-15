@@ -621,6 +621,17 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Sprint 339 — server identity + key tuning flags. PG override
+    /// runs `version()` + `pg_settings` queries; non-PG RDB adapters
+    /// inherit `Unsupported`.
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support server info".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
@@ -934,6 +945,10 @@ pub trait DocumentAdapter: DbAdapter {
         db: &'a str,
         collection: &'a str,
     ) -> BoxFuture<'a, Result<crate::models::CollectionStatsRow, AppError>>;
+
+    /// Sprint 339 — server identity + key runtime info
+    /// (`runCommand({buildInfo, serverStatus})`).
+    fn server_info<'a>(&'a self) -> BoxFuture<'a, Result<crate::models::ServerInfoRow, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

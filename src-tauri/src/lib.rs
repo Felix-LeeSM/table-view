@@ -185,6 +185,8 @@ pub fn run() {
         // Sprint 338 (U3 live wire) — collection / table stats.
         commands::meta::collection_stats_rdb,
         commands::meta::collection_stats_mongo,
+        // Sprint 339 (U4 live wire) — server info.
+        commands::meta::server_info,
         commands::document::browse::list_mongo_databases,
         commands::document::browse::list_mongo_collections,
         commands::document::browse::infer_collection_fields,
