@@ -599,6 +599,11 @@ pub(crate) struct StubDocumentAdapter {
     >,
     pub insert_many_fn: Option<FnTwo<str, str, Vec<DocumentId>>>,
     pub bulk_write_fn: Option<FnTwo<str, str, BulkWriteResult>>,
+
+    // Sprint 332 — override slot for list_collection_indexes. Default
+    // returns an empty Vec so wiring tests for unrelated commands compile
+    // with no override.
+    pub list_collection_indexes_fn: Option<FnTwo<str, str, Vec<crate::models::IndexInfo>>>,
 }
 
 impl Default for StubDocumentAdapter {
@@ -620,6 +625,7 @@ impl Default for StubDocumentAdapter {
             distinct_fn: None,
             insert_many_fn: None,
             bulk_write_fn: None,
+            list_collection_indexes_fn: None,
         }
     }
 }
@@ -847,6 +853,19 @@ impl DocumentAdapter for StubDocumentAdapter {
             .bulk_write_fn
             .as_ref()
             .map_or_else(|| Ok(BulkWriteResult::default()), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 332 — list_collection_indexes stub.
+    fn list_collection_indexes<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
+        let r = self
+            .list_collection_indexes_fn
+            .as_ref()
+            .map_or_else(|| Ok(Vec::new()), |f| f(db, coll));
         Box::pin(async move { r })
     }
 }

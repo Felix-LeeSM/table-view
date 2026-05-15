@@ -328,4 +328,12 @@ impl DocumentAdapter for MongoAdapter {
     ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
         Box::pin(async move { self.bulk_write_impl(db, collection, ops).await })
     }
+
+    fn list_collection_indexes<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
+        Box::pin(async move { self.list_collection_indexes_impl(db, collection).await })
+    }
 }

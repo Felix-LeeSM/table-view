@@ -17,7 +17,7 @@ import type {
   BulkWriteResult,
   DocumentId,
 } from "@/types/documentMutate";
-import type { ColumnInfo } from "@/types/schema";
+import type { ColumnInfo, IndexInfo } from "@/types/schema";
 
 import { wrapNumericCells } from "./numericWrap";
 
@@ -36,6 +36,23 @@ export async function listMongoCollections(
   return invoke<CollectionInfo[]>("list_mongo_collections", {
     connectionId,
     database,
+  });
+}
+
+/**
+ * Sprint 332 (Slice J live wire) — list every index on `collection`. Returns
+ * the same `IndexInfo` shape as the RDB `getTableIndexes` so the index grid
+ * is paradigm-agnostic.
+ */
+export async function listMongoIndexes(
+  connectionId: string,
+  database: string,
+  collection: string,
+): Promise<IndexInfo[]> {
+  return invoke<IndexInfo[]>("list_mongo_indexes", {
+    connectionId,
+    database,
+    collection,
   });
 }
 

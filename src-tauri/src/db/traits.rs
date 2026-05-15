@@ -749,6 +749,21 @@ pub trait DocumentAdapter: DbAdapter {
         collection: &'a str,
         ops: Vec<BulkWriteOp>,
     ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>>;
+
+    /// Sprint 332 — collection indexes (Mongo `listIndexes` admin cmd).
+    ///
+    /// 작성 이유 (2026-05-15): Slice J live wire. driver 의
+    /// `Collection::list_indexes()` 를 호출하고, 각 IndexModel 을
+    /// `crate::models::IndexInfo` (RDB 와 같은 shape) 로 매핑한다 —
+    /// `columns` = key spec 의 field 이름 리스트, `index_type` 은
+    /// special index (text/hashed/2dsphere/geo*) 면 그 이름, 일반 BTree
+    /// 면 "btree", compound (≥2 fields) 면 "compound", `is_primary` 는
+    /// name === "_id_" 일 때만 true.
+    fn list_collection_indexes<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

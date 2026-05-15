@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::connection::AppState;
 use crate::error::AppError;
-use crate::models::{ColumnInfo, TableInfo};
+use crate::models::{ColumnInfo, IndexInfo, TableInfo};
 
 use super::{not_connected, register_cancel_token, release_cancel_token};
 
@@ -171,6 +171,35 @@ pub async fn infer_collection_fields(
         query_id.as_deref(),
     )
     .await
+}
+
+async fn list_mongo_indexes_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+) -> Result<Vec<IndexInfo>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .list_collection_indexes(database, collection)
+        .await
+}
+
+/// Sprint 332 (Slice J live wire) — Mongo collection 인덱스 메타데이터를
+/// `IndexInfo[]` 로 반환. RDB 의 `get_table_indexes` 와 같은 wire shape 이라
+/// frontend 가 같은 grid 컴포넌트로 두 paradigm 의 인덱스를 렌더할 수 있다.
+#[tauri::command]
+pub async fn list_mongo_indexes(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+) -> Result<Vec<IndexInfo>, AppError> {
+    list_mongo_indexes_inner(state.inner(), &connection_id, &database, &collection).await
 }
 
 #[cfg(test)]

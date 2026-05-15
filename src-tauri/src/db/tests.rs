@@ -220,6 +220,13 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
             Box::pin(async { Ok(BulkWriteResult::default()) })
         }
+        fn list_collection_indexes<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+        ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
+            Box::pin(async { Ok(Vec::new()) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -760,6 +767,13 @@ impl DocumentAdapter for FakeCancellableDocument {
         _ops: Vec<BulkWriteOp>,
     ) -> BoxFuture<'a, Result<BulkWriteResult, AppError>> {
         Box::pin(async { Ok(BulkWriteResult::default()) })
+    }
+    fn list_collection_indexes<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 }
 

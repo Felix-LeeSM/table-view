@@ -11,7 +11,7 @@ use bson::{Bson, Document};
 use futures_util::stream::StreamExt;
 
 use crate::error::AppError;
-use crate::models::{ColumnInfo, TableInfo};
+use crate::models::{ColumnInfo, IndexInfo, TableInfo};
 
 use super::super::NamespaceInfo;
 use super::category::map_mongo_data_type;
@@ -97,6 +97,110 @@ impl MongoAdapter {
 
         Ok(infer_columns_from_samples(&samples))
     }
+
+    /// Sprint 332 (Slice J live wire) — collection 의 인덱스 메타데이터를
+    /// driver `Collection::list_indexes()` 로 받아 RDB 와 같은 `IndexInfo`
+    /// shape 으로 매핑한다. Mongo 의 IndexModel 은 `{ name, key, unique?,
+    /// hidden?, expire_after_seconds?, ... }` — 우리는 그 중 (name, key
+    /// fields, unique, hashed/text/geo special index name) 만 노출한다.
+    ///
+    /// Routing 은 `list_collections_impl` 과 동일 — caller 가 빈 db 를
+    /// 넘기면 `resolved_db_name` 으로 active DB 까지 fallback. 빈 collection
+    /// 은 `validate_ns` 가 거부.
+    pub(super) async fn list_collection_indexes_impl(
+        &self,
+        db: &str,
+        collection: &str,
+    ) -> Result<Vec<IndexInfo>, AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, collection)?;
+        let client = self.current_client().await?;
+        let coll = client
+            .database(&resolved)
+            .collection::<Document>(collection);
+
+        let mut cursor = coll
+            .list_indexes()
+            .await
+            .map_err(|e| AppError::Database(format!("list_indexes failed: {e}")))?;
+
+        let mut out: Vec<IndexInfo> = Vec::new();
+        while let Some(next) = cursor.next().await {
+            let model =
+                next.map_err(|e| AppError::Database(format!("list_indexes cursor: {e}")))?;
+            out.push(map_index_model(&model));
+        }
+
+        Ok(out)
+    }
+}
+
+/// Sprint 332 — `mongodb::IndexModel` → `crate::models::IndexInfo`.
+///
+/// 매핑 규칙:
+/// - `columns` = key spec 의 field 이름 (insertion order). text / geo index
+///   는 weights spec 의 field 도 같은 슬롯에 담긴다.
+/// - `index_type` = special key value 우선 ("text", "hashed", "2dsphere",
+///   "2d", "geoHaystack"). 일반 (1 / -1 BTree) 이면 compound vs single 로
+///   "compound" / "btree" 분기.
+/// - `is_unique` = options.unique == Some(true).
+/// - `is_primary` = name == "_id_" (Mongo 가 자동 생성하는 primary key
+///   인덱스).
+fn map_index_model(model: &mongodb::IndexModel) -> IndexInfo {
+    let name = model
+        .options
+        .as_ref()
+        .and_then(|o| o.name.clone())
+        .unwrap_or_else(|| keys_to_default_name(&model.keys));
+    let is_unique = model
+        .options
+        .as_ref()
+        .and_then(|o| o.unique)
+        .unwrap_or(false);
+    let is_primary = name == "_id_";
+
+    let columns: Vec<String> = model.keys.keys().cloned().collect();
+    let mut index_type = "btree".to_string();
+    for (_, v) in model.keys.iter() {
+        if let Bson::String(s) = v {
+            // text / hashed / 2dsphere / 2d / geoHaystack
+            index_type = s.clone();
+            break;
+        }
+    }
+    if index_type == "btree" && columns.len() > 1 {
+        index_type = "compound".to_string();
+    }
+
+    IndexInfo {
+        name,
+        columns,
+        index_type,
+        is_unique,
+        is_primary,
+    }
+}
+
+/// Mongo driver 가 IndexModel.options.name 을 비워둔 경우의 fallback —
+/// `field_1_other_-1` 같은 기본 명명 규칙. 실제로는 driver 가 거의
+/// 항상 name 을 채워 보내므로 방어용.
+fn keys_to_default_name(keys: &Document) -> String {
+    let mut parts: Vec<String> = Vec::with_capacity(keys.len());
+    for (k, v) in keys.iter() {
+        let suffix = match v {
+            Bson::Int32(n) => n.to_string(),
+            Bson::Int64(n) => n.to_string(),
+            Bson::Double(n) => format!("{n}"),
+            Bson::String(s) => s.clone(),
+            _ => "unknown".to_string(),
+        };
+        parts.push(format!("{k}_{suffix}"));
+    }
+    parts.join("_")
 }
 
 // ── Helpers (Sprint 66) ────────────────────────────────────────────────
