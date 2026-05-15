@@ -15,7 +15,7 @@
  */
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import type { Paradigm } from "@/types/connection";
+import { paradigmOf, type Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
@@ -90,6 +90,23 @@ export function resolveActiveDb(connectionId: string): string {
     return status.activeDb;
   }
   return conn.connections.find((c) => c.id === connectionId)?.database ?? "";
+}
+
+/**
+ * Derive the paradigm for `connectionId` from its `db_type`. Used as the
+ * `addQueryTab` paradigm fallback when the caller (sidebar "+ Query"
+ * button, Cmd+N) does not pass an explicit paradigm. Previously the
+ * store hard-coded `"rdb"` here, which produced an RDB query tab on
+ * Mongo connections and immediately failed at execute time with
+ * `Operation requires a relational (RDB) connection`. Returns `"rdb"`
+ * when the connection is not found (defensive — keeps tab creation
+ * crash-free; the live `useConnectionStore` lookup mirrors
+ * `resolveActiveDb` above).
+ */
+function resolveParadigmForConnection(connectionId: string): Paradigm {
+  const conn = useConnectionStore.getState();
+  const dbType = conn.connections.find((c) => c.id === connectionId)?.db_type;
+  return dbType ? paradigmOf(dbType) : "rdb";
 }
 
 /**
@@ -391,7 +408,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
     queryCounter++;
     const id = `query-${queryCounter}`;
     const title = `Query ${queryCounter}`;
-    const paradigm: Paradigm = opts.paradigm ?? "rdb";
+    const paradigm: Paradigm =
+      opts.paradigm ?? resolveParadigmForConnection(connId);
     // Sprint 309 — Find/Aggregate toggle removed. RDB tabs still need
     // `"sql"` (history filtering + dispatch read it); document tabs no
     // longer default to `"find"` so the field stays `undefined` on new
@@ -450,6 +468,32 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
           if (t.id !== tabId || t.type !== "query") return t;
           changed = true;
           return { ...t, queryState };
+        });
+        return changed ? { ...ws, tabs } : ws;
+      });
+      return next ? { workspaces: next } : state;
+    });
+  },
+
+  setQueryTabDatabase: (connId, db, tabId, nextDatabase) => {
+    set((state) => {
+      const next = patchExistingWorkspace(state, connId, db, (ws) => {
+        let changed = false;
+        const tabs = ws.tabs.map((t) => {
+          if (t.id !== tabId || t.type !== "query") return t;
+          if (t.database === nextDatabase) return t;
+          changed = true;
+          // Clear the collection binding when the database changes —
+          // a stale `(database, collection)` pair would otherwise reject
+          // queries that the user composes against the new database.
+          // queryState is reset to idle so the previous database's result
+          // grid doesn't linger and mislead the user.
+          return {
+            ...t,
+            database: nextDatabase,
+            collection: undefined,
+            queryState: { status: "idle" } as QueryState,
+          };
         });
         return changed ? { ...ws, tabs } : ws;
       });

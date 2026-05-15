@@ -128,6 +128,36 @@ export const MONGO_ALL_OPERATORS: readonly string[] = [
   ...MONGO_TYPE_TAGS,
 ];
 
+/**
+ * mongosh collection methods surfaced after `db.<collection>.`. Mirrors
+ * the legacy `dbMethodCandidates` list in `src/lib/completion/mongo.ts`
+ * (re-exported below for backward-compat) but now lives here because
+ * the CodeMirror-friendly `createMongoshDbSource` is the only live
+ * consumer and the older `createDbMethodCompletionSource` is no longer
+ * wired to the editor. Kept aligned with the Phase 28 method whitelist
+ * in `docs/phases/phase-28.md`.
+ */
+export const MONGOSH_DB_METHODS: ReadonlyArray<{
+  label: string;
+  type: "function";
+}> = [
+  { label: "find", type: "function" },
+  { label: "findOne", type: "function" },
+  { label: "aggregate", type: "function" },
+  { label: "countDocuments", type: "function" },
+  { label: "estimatedDocumentCount", type: "function" },
+  { label: "distinct", type: "function" },
+  { label: "insertOne", type: "function" },
+  { label: "insertMany", type: "function" },
+  { label: "updateOne", type: "function" },
+  { label: "updateMany", type: "function" },
+  { label: "replaceOne", type: "function" },
+  { label: "deleteOne", type: "function" },
+  { label: "deleteMany", type: "function" },
+  { label: "createIndex", type: "function" },
+  { label: "dropIndex", type: "function" },
+];
+
 export type MongoQueryMode = "find" | "aggregate";
 
 export interface MongoCompletionOptions {
@@ -380,6 +410,87 @@ function pushOperators(
   for (const label of list) {
     out.push({ label, apply: label, type });
   }
+}
+
+/**
+ * CodeMirror `CompletionSource` that fires when the cursor sits right
+ * after `db.` or `db.<collectionName>.` and surfaces the mongosh
+ * collection-method whitelist (`find`, `aggregate`, `insertOne`, etc.).
+ *
+ * Why a second source: the existing `createMongoCompletionSource`
+ * triggers on `$`-prefixed tokens and quoted key fragments. Those
+ * patterns only match once the user has already opened a JSON body —
+ * which makes typing `db.users.fi` give no candidates, the exact gap
+ * the user hit. This source closes that gap so the editor finally
+ * earns the "fully featured autocomplete" claim Phase 28 promised.
+ *
+ * Collection names are pulled from `collectionNames` when the caller
+ * has them cached (typically the connection's `fieldsCache` keys).
+ * When the cache is empty the source still fires for the
+ * `db.` → method case so the user always sees the method whitelist.
+ */
+export interface MongoshDbSourceOptions {
+  /** Known collection names for the active database. Sourced from the
+   *  schema/document store; may be empty until the user has browsed
+   *  the database in the sidebar. */
+  collectionNames?: readonly string[];
+}
+
+export function createMongoshDbSource(
+  opts: MongoshDbSourceOptions = {},
+): CompletionSource {
+  return (context: CompletionContext): CompletionResult | null => {
+    const upTo = context.state.doc.sliceString(0, context.pos);
+
+    const methodMatch = /\bdb\.([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_]*)$/.exec(
+      upTo,
+    );
+    if (methodMatch) {
+      const prefix = methodMatch[2] ?? "";
+      const from = context.pos - prefix.length;
+      const options: Completion[] = MONGOSH_DB_METHODS.map((cand) => ({
+        label: cand.label,
+        apply: cand.label,
+        type: cand.type,
+      }));
+      return {
+        from,
+        options,
+        validFor: /^[A-Za-z_][A-Za-z0-9_]*$/,
+      };
+    }
+
+    const collectionMatch = /\bdb\.([A-Za-z_][A-Za-z0-9_]*)?$/.exec(upTo);
+    if (collectionMatch) {
+      const prefix = collectionMatch[1] ?? "";
+      const from = context.pos - prefix.length;
+      const collections = opts.collectionNames ?? [];
+      const options: Completion[] =
+        collections.length > 0
+          ? collections.map((name) => ({
+              label: name,
+              apply: name,
+              type: "class",
+            }))
+          : // No cached collection list yet — surface the method whitelist
+            // anyway so the popup is never empty after `db.`. The user
+            // can still type the collection name manually; the popup
+            // keeps `find`/`aggregate`/... visible as the muscle-memory
+            // affordance the user expects from a mongosh prompt.
+            MONGOSH_DB_METHODS.map((cand) => ({
+              label: cand.label,
+              apply: cand.label,
+              type: cand.type,
+            }));
+      return {
+        from,
+        options,
+        validFor: /^[A-Za-z0-9_]*$/,
+      };
+    }
+
+    return null;
+  };
 }
 
 /**

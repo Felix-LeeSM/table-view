@@ -1,35 +1,153 @@
-// Sprint 329 (2026-05-15) — Slice DB-Scope.2: Mongo query tab inline DB
-// chip. DataGrip-style — tab-local display + popover that points users at
-// the sidebar entry-point for switching DBs. Actual mutation happens in
-// Sprint 330 via the sidebar right-click "New query here" path.
+// TabDbChip — Mongo query tab의 tab-local database selector.
 //
-// 작성 이유: chip 이 (a) database 텍스트를 노출하고 (b) 클릭 시 popover 가
-// 진입점 문구를 가시화하는지 가드. tab.database 가 빈 문자열인 mongosh tab
-// (초기화 중) 에서는 chip 자체가 렌더되지 않는지도 확인.
+// 2026-05-15 — Sprint 329 의 display-only chip 을 interactive selector 로
+// 교체. 사용자가 "database 선택도 못 한다 친구야" 로 lock 해제 요구해서
+// chip 동작이 완전히 바뀌었다. 본 suite 는 새 contract 를 guard:
+//
+//   1. database label 이 chip 텍스트로 노출.
+//   2. database === "" 일 때도 affordance 가 사라지지 않고 "(select
+//      database)" 로 self-rendering (옛 self-hide 동작 폐기 — 그게 바로
+//      사용자가 "선택 못 한다" 라고 한 정확한 증상).
+//   3. 클릭 → popover 열림 → `listDatabases(connectionId)` 호출.
+//   4. 항목 선택 → `setQueryTabDatabase(connId, db, tabId, target)` 호출.
 
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  cleanup,
+} from "@testing-library/react";
+import { useConnectionStore } from "@stores/connectionStore";
+import { useWorkspaceStore } from "@stores/workspaceStore";
 import TabDbChip from "./TabDbChip";
 
-describe("TabDbChip (Sprint 329)", () => {
+vi.mock("@/lib/api/listDatabases", () => ({
+  listDatabases: vi.fn(async () => [{ name: "admin" }, { name: "analytics" }]),
+}));
+
+vi.mock("@/lib/toast", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
+
+import { listDatabases } from "@/lib/api/listDatabases";
+
+describe("TabDbChip — interactive database selector", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useConnectionStore.setState({
+      focusedConnId: "conn-mongo",
+      activeStatuses: {
+        "conn-mongo": { type: "connected", activeDb: "analytics" },
+      },
+    });
+    useWorkspaceStore.setState({ workspaces: {} });
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders the database label as the chip text", () => {
-    render(<TabDbChip database="analytics" />);
+    render(
+      <TabDbChip
+        tabId="query-1"
+        database="analytics"
+        connectionId="conn-mongo"
+      />,
+    );
     expect(
-      screen.getByRole("button", { name: /current database/i }),
+      screen.getByRole("button", { name: /current database: analytics/i }),
     ).toHaveTextContent("analytics");
   });
 
-  it("does not render when database is empty (tab still initializing)", () => {
-    const { container } = render(<TabDbChip database="" />);
-    expect(container).toBeEmptyDOMElement();
+  it("renders an actionable placeholder when the database is empty", () => {
+    // The display-only Sprint 329 chip self-hid when database was "". That
+    // produced the exact symptom the user complained about: "데이터베이스
+    // 선택도 못 한다." The new contract keeps the affordance visible so
+    // the user always has a clickable surface to set a database.
+    render(<TabDbChip tabId="query-1" database="" connectionId="conn-mongo" />);
+    const trigger = screen.getByRole("button", {
+      name: /no database selected/i,
+    });
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveTextContent(/select database/i);
   });
 
-  it("opens a popover with the sidebar entry-point hint on click", () => {
-    render(<TabDbChip database="analytics" />);
-    fireEvent.click(screen.getByRole("button", { name: /current database/i }));
-    expect(
-      screen.getByText(/right-click a database in the sidebar/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/new query here/i)).toBeInTheDocument();
+  it("fetches the database list on click and renders the entries", async () => {
+    render(
+      <TabDbChip
+        tabId="query-1"
+        database="analytics"
+        connectionId="conn-mongo"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /current database: analytics/i }),
+    );
+
+    await waitFor(() => {
+      expect(listDatabases).toHaveBeenCalledWith("conn-mongo");
+    });
+    expect(await screen.findByRole("option", { name: "admin" })).toBeVisible();
+    expect(screen.getByRole("option", { name: "analytics" })).toBeVisible();
+  });
+
+  it("selecting an entry dispatches setQueryTabDatabase against the current workspace", async () => {
+    // Seed the workspace at (conn-mongo, analytics) so the action has
+    // something to patch. `useCurrentWorkspaceKey()` will resolve this
+    // pair from the connectionStore seeding in beforeEach.
+    useWorkspaceStore.setState({
+      workspaces: {
+        "conn-mongo": {
+          analytics: {
+            tabs: [
+              {
+                type: "query",
+                id: "query-1",
+                title: "Query 1",
+                connectionId: "conn-mongo",
+                closable: true,
+                sql: "",
+                queryState: { status: "idle" },
+                paradigm: "document",
+                database: "analytics",
+              },
+            ],
+            activeTabId: "query-1",
+            closedTabHistory: [],
+            dirtyTabIds: [],
+            sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+          },
+        },
+      },
+    });
+
+    render(
+      <TabDbChip
+        tabId="query-1"
+        database="analytics"
+        connectionId="conn-mongo"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /current database: analytics/i }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "admin" }));
+
+    await waitFor(() => {
+      const tab =
+        useWorkspaceStore.getState().workspaces["conn-mongo"]?.analytics
+          ?.tabs[0];
+      expect(tab && tab.type === "query" && tab.database).toBe("admin");
+    });
   });
 });

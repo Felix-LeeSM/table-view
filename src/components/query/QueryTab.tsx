@@ -99,6 +99,18 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.collection,
     tab.paradigm,
   ]);
+  // Collection-name candidates surfaced after `db.`. Sourced from
+  // `fieldsCache` keys for the active (connId, database) — they are the
+  // collections the user has already opened in the sidebar. The list may
+  // be empty before the sidebar has expanded the database; the mongosh
+  // method whitelist still fires through `createMongoshDbSource` so
+  // `db.<anyName>.fi` autocompletes regardless.
+  const mongoCollectionNames = useMemo(() => {
+    if (tab.paradigm !== "document" || !tab.database) return undefined;
+    const dbCache = fieldsCache[tab.connectionId]?.[tab.database];
+    if (!dbCache) return undefined;
+    return Object.keys(dbCache);
+  }, [fieldsCache, tab.connectionId, tab.database, tab.paradigm]);
   // Sprint 309 — `useMongoAutocomplete` no longer branches on the legacy
   // mode toggle. The unified completion source surfaces both the find
   // operator set and aggregate stages / accumulators so the user can type
@@ -106,6 +118,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
   // that distinguishes intent at insertion time.
   const mongoExtensions = useMongoAutocomplete({
     fieldNames: mongoFieldNames,
+    collectionNames: mongoCollectionNames,
   });
   const isDocument = tab.paradigm === "document";
 

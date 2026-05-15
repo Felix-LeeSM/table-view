@@ -348,7 +348,7 @@ export function useQueryExecution({
         updateQueryState(tab.id, {
           status: "error",
           error:
-            "Document query tabs require a target database and collection.",
+            "Select a target database from the toolbar chip, then type a mongosh expression (e.g. `db.users.find({})`).",
         });
         return;
       }
@@ -1719,7 +1719,7 @@ export function useQueryExecution({
         updateQueryState(tab.id, {
           status: "error",
           error:
-            "Document query tabs require a target database and collection.",
+            "Select a target database from the toolbar chip, then type a mongosh expression (e.g. `db.users.find({})`).",
         });
         return;
       }

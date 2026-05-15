@@ -5,6 +5,7 @@ import {
   keymap,
   lineNumbers,
   highlightActiveLine,
+  placeholder,
 } from "@codemirror/view";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import { defaultKeymap } from "@codemirror/commands";
@@ -105,6 +106,10 @@ const MongoQueryEditor = forwardRef<EditorView | null, MongoQueryEditorProps>(
           highlightActiveLine(),
           indentOnInput(),
           bracketMatching(),
+          // First-run affordance: tell the user the editor accepts
+          // mongosh expressions (`db.<collection>.<method>(...)`) so they
+          // are not staring at a blank pane wondering what syntax to type.
+          placeholder("db.collection.find({})"),
           langCompartment.current.of(buildJsonLang(mongoExtensionsRef.current)),
           syntaxHighlighting(viewTableHighlightStyle),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),

@@ -86,11 +86,16 @@ export default function QueryTabToolbar({
 
   return (
     <div className="flex items-center gap-2 border-b border-border bg-secondary px-2 py-1">
-      {/* Sprint 329 (Slice DB-Scope.2) — Mongo query tab의 tab-local DB
-          chip. RDB는 toolbar의 global DbSwitcher가 같은 역할을 하므로
-          여기서는 isDocument에서만 mount. tab.database === "" 이면 chip
-          내부에서 self-hide. */}
-      {isDocument && <TabDbChip database={tab.database ?? ""} />}
+      {/* 2026-05-15 — Sprint 329 의 display-only chip 을 interactive
+          selector 로 교체. tab-local 시맨틱은 유지 (`tab.database` 만
+          갱신; connection.activeDb 는 그대로). */}
+      {isDocument && (
+        <TabDbChip
+          tabId={tab.id}
+          database={tab.database ?? ""}
+          connectionId={tab.connectionId}
+        />
+      )}
       {tab.queryState.status === "running" ? (
         <Button
           variant="ghost"

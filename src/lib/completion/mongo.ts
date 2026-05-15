@@ -7,6 +7,7 @@ import { prefixMatch } from "./shared";
 import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
+  MONGOSH_DB_METHODS,
 } from "@lib/mongo/mongoAutocomplete";
 
 export { createMongoCompletionSource, createMongoOperatorHighlight };
@@ -18,26 +19,12 @@ export interface MongoMethodCandidate {
 
 /**
  * Collection-method candidates surfaced after `db.` in a Mongo query buffer.
- * Intentionally a small, well-known subset — popup useful without bloating
- * the candidate set.
+ * Now an alias of `MONGOSH_DB_METHODS` — the canonical list lives next to
+ * the CodeMirror `createMongoshDbSource` consumer so a future edit can
+ * keep the popup and the highlight in sync without touching two files.
  */
-export const dbMethodCandidates: readonly MongoMethodCandidate[] = [
-  { label: "find", type: "function" },
-  { label: "findOne", type: "function" },
-  { label: "aggregate", type: "function" },
-  { label: "countDocuments", type: "function" },
-  { label: "estimatedDocumentCount", type: "function" },
-  { label: "distinct", type: "function" },
-  { label: "insertOne", type: "function" },
-  { label: "insertMany", type: "function" },
-  { label: "updateOne", type: "function" },
-  { label: "updateMany", type: "function" },
-  { label: "replaceOne", type: "function" },
-  { label: "deleteOne", type: "function" },
-  { label: "deleteMany", type: "function" },
-  { label: "createIndex", type: "function" },
-  { label: "dropIndex", type: "function" },
-];
+export const dbMethodCandidates: readonly MongoMethodCandidate[] =
+  MONGOSH_DB_METHODS;
 
 export interface MongoCompletionCursor {
   text: string;

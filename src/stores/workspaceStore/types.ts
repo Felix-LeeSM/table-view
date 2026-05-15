@@ -221,6 +221,12 @@ export interface WorkspaceStoreState {
     tabId: string,
     state: QueryState,
   ) => void;
+  setQueryTabDatabase: (
+    connId: string,
+    db: string,
+    tabId: string,
+    nextDatabase: string,
+  ) => void;
   setQueryMode: (
     connId: string,
     db: string,

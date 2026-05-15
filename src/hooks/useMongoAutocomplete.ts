@@ -5,6 +5,7 @@ import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
 } from "@/lib/completion/mongo";
+import { createMongoshDbSource } from "@/lib/mongo/mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {
   /**
@@ -16,6 +17,15 @@ export interface UseMongoAutocompleteOptions {
    * rebuild, so the impact is limited to a cheap reconfigure dispatch).
    */
   fieldNames?: readonly string[];
+  /**
+   * Known collection names for the active database — surfaced after the
+   * user types `db.` so the popup proposes the collections that actually
+   * exist before the user even picks a method. May be empty when the
+   * sidebar has not yet listed the database; the hook still wires the
+   * mongosh method whitelist so `db.<anyName>.fi` triggers `find` /
+   * `findOne` / etc. either way.
+   */
+  collectionNames?: readonly string[];
 }
 
 /**
@@ -41,16 +51,23 @@ export interface UseMongoAutocompleteOptions {
 export function useMongoAutocomplete(
   opts: UseMongoAutocompleteOptions = {},
 ): Extension[] {
-  const { fieldNames } = opts;
+  const { fieldNames, collectionNames } = opts;
   return useMemo(
     () => [
       autocompletion({
+        // Both sources are registered as `override` so CodeMirror's
+        // built-in word completion never shadows them. The mongosh
+        // `db.<col>.method` source fires earlier in the lexical pattern
+        // (it owns `db.` tokens); `createMongoCompletionSource` owns the
+        // JSON-body `$operator` / quoted-key positions. The two patterns
+        // don't overlap, so registration order does not matter.
         override: [
+          createMongoshDbSource({ collectionNames }),
           createMongoCompletionSource({ queryMode: "aggregate", fieldNames }),
         ],
       }),
       createMongoOperatorHighlight(),
     ],
-    [fieldNames],
+    [fieldNames, collectionNames],
   );
 }
