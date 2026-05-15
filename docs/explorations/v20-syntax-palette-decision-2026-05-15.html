@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>V20 — Syntax palette source-of-truth 결정 (2026-05-15)</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --fg: #e6ecff;
+    --muted: #8b96b8;
+    --accent: #6ea8ff;
+    --good: #4ade80;
+    --bad: #f87171;
+    --warn: #fbbf24;
+    --border: #2a3354;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background: var(--bg); color: var(--fg);
+    line-height: 1.5;
+  }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .question {
+    background: var(--panel); border: 1px solid var(--accent);
+    border-left: 4px solid var(--accent);
+    padding: 16px 20px; border-radius: 8px; margin-bottom: 24px;
+  }
+  .question h2 { margin: 0 0 8px; font-size: 16px; color: var(--accent); }
+  .question p { margin: 0; font-size: 14px; }
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px; margin-bottom: 24px;
+  }
+  .col {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; display: flex; flex-direction: column;
+  }
+  .col.recommended { border-color: var(--good); box-shadow: 0 0 0 1px rgba(74,222,128,0.2); }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 10px; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 8px;
+  }
+  .badge.rec { background: var(--good); color: #0a2614; }
+  .badge.alt { background: var(--muted); color: #0b1020; }
+  .col h3 { margin: 0 0 4px; font-size: 18px; }
+  .col .tag { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .col h4 {
+    margin: 12px 0 6px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  }
+  .col ul { margin: 0; padding-left: 18px; font-size: 13px; }
+  .col li { margin-bottom: 4px; }
+  .pro::before { content: "✓ "; color: var(--good); font-weight: 700; }
+  .con::before { content: "✗ "; color: var(--bad); font-weight: 700; }
+  .scenario {
+    background: var(--panel-2); border-left: 3px solid var(--warn);
+    padding: 10px 12px; margin: 12px 0 0; font-size: 12px; border-radius: 4px;
+  }
+  .scenario b { color: var(--warn); }
+  table {
+    width: 100%; border-collapse: collapse; margin-top: 16px;
+    background: var(--panel); border-radius: 8px; overflow: hidden;
+    font-size: 13px;
+  }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 11px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  td.good { color: var(--good); }
+  td.bad { color: var(--bad); }
+  td.warn { color: var(--warn); }
+  .footer {
+    margin-top: 24px; padding: 16px 20px; background: var(--panel);
+    border-radius: 8px; border: 1px dashed var(--border);
+  }
+  .footer h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent); }
+  .footer p { margin: 4px 0; font-size: 13px; }
+  code {
+    background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px;
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px;
+  }
+</style>
+</head>
+<body>
+
+<h1>V20 — Syntax palette source-of-truth</h1>
+<p class="subtitle">ADR 0023 (Sprint 257, <code>generate-syntax-palette.ts</code>) vs 새 시방서의 1728 수동 값</p>
+
+<div class="question">
+  <h2>핵심 질문</h2>
+  <p>새 시방서가 박은 <b>72 테마 × 2 모드 × 12 토큰 = 1728 값</b> 과
+  ADR 0023 의 <b>"per-theme primary 에서 HSL 도출"</b> 원리 중,
+  <b>어느 쪽을 source of truth</b> 로 삼을 것인가?
+  이 결정이 미래 76번째 테마 추가, lamborghini 같은 의문점 해결, drift 위험 모두를 결정한다.</p>
+</div>
+
+<div class="grid">
+
+  <!-- Option A: 폐기 -->
+  <div class="col">
+    <span class="badge alt">옵션 A</span>
+    <h3>(a) 스크립트 폐기</h3>
+    <div class="tag">수동 데이터 → source of truth</div>
+
+    <h4>접근</h4>
+    <ul>
+      <li><code>generate-syntax-palette.ts</code> 삭제</li>
+      <li>새 시방서 1728 값을 <code>themes.css</code> 에 그대로 append</li>
+      <li>ADR 0023 → Superseded</li>
+      <li>신규 ADR: "syntax palette 는 시방서 산출물 manual import"</li>
+    </ul>
+
+    <h4>장점</h4>
+    <ul>
+      <li class="pro">당장 작업량 0</li>
+      <li class="pro">디자이너 의도 (lamborghini 등 brand 예외) 100% 보존</li>
+      <li class="pro">결정 룰 추가 없음</li>
+    </ul>
+
+    <h4>단점</h4>
+    <ul>
+      <li class="con">76번째 테마 추가 시 사람이 12 값 입력 (forget 사고)</li>
+      <li class="con">1728 값 사람 관리 — drift 위험</li>
+      <li class="con">"lamborghini light = cool_dark" 의문이 영원히 미해결</li>
+      <li class="con">ADR 0023 정신 폐기 (감점)</li>
+    </ul>
+
+    <div class="scenario">
+      <b>1년 후 시나리오:</b> 76번째 테마 "tableplus" 추가.
+      개발자가 <code>themes.css</code> 에 base 토큰만 추가하고
+      syntax 12 값 잊음 → 그 테마에서 syntax highlight 가 빈 색 (transparent)
+      으로 떨어짐. PR review 에서 우연히 발견 또는 production 도달.
+    </div>
+  </div>
+
+  <!-- Option B: 확장 (추천) -->
+  <div class="col recommended">
+    <span class="badge rec">추천 옵션 B</span>
+    <h3>(b) 스크립트 12 토큰 확장</h3>
+    <div class="tag">자동 도출 → source of truth</div>
+
+    <h4>접근</h4>
+    <ul>
+      <li><code>generate-syntax-palette.ts</code> 의 HSL 도출 룰을 3 → 12 토큰으로 확장</li>
+      <li>신규 ADR 0026 — ADR 0023 의 <b>Extended</b> (Superseded 아님)</li>
+      <li>본 시방서 1728 값은 <b>검증 베이스라인</b>: 스크립트 재생성 결과와 diff</li>
+      <li>diff 가 크면 룰 또는 시방서 중 어느 쪽이 맞는지 토론</li>
+    </ul>
+
+    <h4>장점</h4>
+    <ul>
+      <li class="pro">미래 테마 자동 cover — 76·77·78… 무한 확장</li>
+      <li class="pro">per-theme 일관성 보장 (사람 손실수 0)</li>
+      <li class="pro">ADR 0023 정신 보존 (Extended)</li>
+      <li class="pro">drift 위험 0 — 재생성으로 reset</li>
+      <li class="pro">새 시방서 데이터를 <b>1회 검증</b>에 활용 → lamborghini 의문 해결</li>
+    </ul>
+
+    <h4>단점</h4>
+    <ul>
+      <li class="con">9 토큰 (atom/builtin/property/punct/operator/function/comment/type/error) HSL 룰 정의 비용</li>
+      <li class="con">brand 예외 (lamborghini light=dark) 는 룰에 박아야</li>
+      <li class="con">스크립트 코드량 +200줄</li>
+    </ul>
+
+    <div class="scenario">
+      <b>1년 후 시나리오:</b> 76번째 테마 "tableplus" 추가.
+      개발자가 base 토큰만 추가, <code>pnpm tsx scripts/generate-syntax-palette.ts</code>
+      실행 → 12 토큰 자동 계산되어 themes.css 에 추가. 0 사람 손길.
+      lamborghini 류 brand 예외도 룰에 박혀 있어 자동 적용.
+    </div>
+  </div>
+
+  <!-- Option C: 혼합 -->
+  <div class="col">
+    <span class="badge alt">옵션 C</span>
+    <h3>(c) 혼합</h3>
+    <div class="tag">자동 9 + 수동 3 (분리된 책임)</div>
+
+    <h4>접근</h4>
+    <ul>
+      <li>"규칙적" 9 토큰 (keyword/string/number/function/operator/type/property/comment/error) → 자동 확장</li>
+      <li>"비규칙적" 3 토큰 (atom/builtin/punct) → 수동 입력</li>
+      <li>두 source 가 같은 파일 안에서 공존</li>
+    </ul>
+
+    <h4>장점</h4>
+    <ul>
+      <li class="pro">규칙성 있는 9 토큰은 자동 cover</li>
+      <li class="pro">디자이너 의도 살릴 3 토큰은 수동 (유연성)</li>
+    </ul>
+
+    <h4>단점</h4>
+    <ul>
+      <li class="con">책임 라인 모호 — 어느 토큰이 자동인지 매번 확인</li>
+      <li class="con">스크립트 가 themes.css 의 일부 라인만 overwrite 하는 fragile 로직</li>
+      <li class="con">76번째 테마 시 자동 9 + 수동 3 — forget 사고 still 가능</li>
+      <li class="con">두 source 의 일관성 보장 메커니즘 추가 필요</li>
+    </ul>
+
+    <div class="scenario">
+      <b>1년 후 시나리오:</b> 새 테마 추가 시 개발자가
+      "atom/builtin/punct 는 자동인가 수동인가?" 매번 확인.
+      문서 의존 → 문서가 stale 되면 forget 사고. b 보다 worst case 가 같고,
+      best case 만 조금 다름.
+    </div>
+  </div>
+
+</div>
+
+<!-- 비교 표 -->
+<table>
+  <thead>
+    <tr>
+      <th>측면</th>
+      <th>(a) 폐기</th>
+      <th>(b) 확장 ⭐</th>
+      <th>(c) 혼합</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>당장 작업량</td>
+      <td class="good">0</td>
+      <td class="warn">~200줄 + 룰 9개</td>
+      <td class="warn">~100줄 + 룰 9개</td>
+    </tr>
+    <tr>
+      <td>1년 후 76번째 테마 추가 비용</td>
+      <td class="bad">사람이 12값 (forget 위험)</td>
+      <td class="good">0 (스크립트 자동)</td>
+      <td class="warn">자동 9 + 수동 3</td>
+    </tr>
+    <tr>
+      <td>ADR 0023 처리</td>
+      <td class="bad">Superseded</td>
+      <td class="good">Extended</td>
+      <td class="warn">Partially superseded</td>
+    </tr>
+    <tr>
+      <td>drift 위험</td>
+      <td class="bad">높음</td>
+      <td class="good">0</td>
+      <td class="warn">중</td>
+    </tr>
+    <tr>
+      <td>lamborghini 의문 해결</td>
+      <td class="bad">불가</td>
+      <td class="good">diff 로 즉시</td>
+      <td class="warn">부분적</td>
+    </tr>
+    <tr>
+      <td>새 시방서 1728 값 운명</td>
+      <td class="good">source of truth</td>
+      <td class="warn">검증 베이스라인 (1회 사용 후 폐기)</td>
+      <td class="warn">3 토큰만 source</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="footer">
+  <h3>추천: (b) 확장</h3>
+  <p>이유 — TablePlus parity 가 목표인 본 프로젝트는 테마가 76→100+ 확장 가능성 있음.
+  사람이 12 값 × 100+ 테마 = 1200+ 값 관리는 비현실적.
+  ADR 0023 의 "primary 에서 도출" 정신을 보존하면서 12 토큰까지 cover 하면
+  본 시방서 1728 값은 <b>1회 검증 후 자동 산출물로 교체</b> — 디자이너 노력은 룰 정의로 흡수.</p>
+  <p>"lamborghini light = cool_dark" 같은 의문 케이스도
+  <code>brandExceptions: { lamborghini: { light: 'cool_dark' } }</code>
+  같이 룰에 명시되면 의도가 코드에 박힌다.</p>
+</div>
+
+</body>
+</html>

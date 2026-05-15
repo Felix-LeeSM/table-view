@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Browser 에서 theme 이 작동하는 원리</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #131a2e;
+    --panel-2: #1a2340;
+    --fg: #e6ecff;
+    --muted: #8b96b8;
+    --accent: #6ea8ff;
+    --good: #4ade80;
+    --bad: #f87171;
+    --warn: #fbbf24;
+    --code-bg: #050816;
+    --border: #2a3354;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    background: var(--bg); color: var(--fg); line-height: 1.55;
+  }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 18px; color: var(--accent); margin: 32px 0 8px; }
+  h3 { font-size: 14px; color: var(--warn); margin: 16px 0 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .step {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; margin-bottom: 16px;
+  }
+  pre {
+    background: var(--code-bg); padding: 12px 16px; border-radius: 6px;
+    overflow-x: auto; font-size: 12.5px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    line-height: 1.5;
+    border: 1px solid var(--border);
+    margin: 8px 0;
+  }
+  code { color: var(--accent); }
+  code.var { color: #f0a85a; }
+  code.value { color: #86efac; }
+  code.selector { color: #c4b5fd; }
+  p { font-size: 14px; margin: 8px 0; }
+  .note {
+    background: var(--panel-2); border-left: 3px solid var(--warn);
+    padding: 10px 14px; margin: 8px 0; font-size: 13px; border-radius: 4px;
+  }
+  .note.good { border-color: var(--good); }
+  .note.bad { border-color: var(--bad); }
+  .demo {
+    background: var(--panel); border: 1px solid var(--good);
+    border-radius: 8px; padding: 20px; margin: 16px 0;
+  }
+  .demo-controls {
+    display: flex; gap: 8px; margin-bottom: 16px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .demo-controls label { font-size: 12px; color: var(--muted); }
+  .demo-controls select, .demo-controls button {
+    background: var(--panel-2); color: var(--fg);
+    border: 1px solid var(--border); padding: 6px 10px;
+    border-radius: 4px; font-size: 13px;
+    font-family: inherit;
+  }
+  .demo-controls button { cursor: pointer; }
+  .demo-controls button:hover { background: var(--accent); color: #0b1020; }
+  .demo-box {
+    padding: 16px; border-radius: 6px; transition: all 0.3s;
+    border: 1px solid var(--border);
+    background: var(--swatch-bg, #ffffff);
+    color: var(--swatch-fg, #000000);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+  }
+  .demo-box .kw { color: var(--swatch-keyword, #7c3aed); font-weight: 600; }
+  .demo-box .str { color: var(--swatch-string, #15803d); }
+  .demo-box .num { color: var(--swatch-number, #c2410c); }
+  .demo-box .com { color: var(--swatch-comment, #64748b); font-style: italic; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--panel-2); color: var(--muted); font-weight: 600;
+       font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .spec {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 600;
+    background: var(--panel-2); border: 1px solid var(--border);
+  }
+  .spec.high { background: rgba(248,113,113,0.15); border-color: var(--bad); color: var(--bad); }
+  .spec.mid { background: rgba(251,191,36,0.15); border-color: var(--warn); color: var(--warn); }
+  .spec.low { background: rgba(74,222,128,0.15); border-color: var(--good); color: var(--good); }
+  .winner { color: var(--good); font-weight: 700; }
+  .loser { color: var(--muted); text-decoration: line-through; }
+</style>
+</head>
+<body>
+
+<h1>Browser 에서 theme 이 작동하는 원리</h1>
+<p class="subtitle">CSS variable + selector specificity + data-attribute = 본 프로젝트 theme 시스템</p>
+
+<!-- =========================================================== -->
+<h2>1. CSS variable — 변수 같은 거</h2>
+<div class="step">
+  <p>일반 CSS 는 값을 하드코딩한다 — <code>color: red;</code>. 변수가 있으면 한 곳에서 정의하고 여러 곳에서 참조 가능. CSS 의 변수 문법:</p>
+  <pre><code class="var">--my-color</code>: <code class="value">red</code>;
+color: var(<code class="var">--my-color</code>);</pre>
+  <p>이름이 반드시 <code>--</code> 두 줄로 시작해야 한다. 참조할 땐 <code>var(--이름)</code>.</p>
+</div>
+
+<!-- =========================================================== -->
+<h2>2. Cascade — 같은 변수 여러 곳에 정의되면?</h2>
+<div class="step">
+  <p>같은 변수가 여러 selector 에 정의되면 browser 는 <b>specificity (구체성)</b> 가 높은 selector 의 값을 우선한다.</p>
+  <pre><code class="selector">:root</code> {
+  <code class="var">--my-color</code>: <code class="value">red</code>;       /* specificity = (0,1,0) */
+}
+<code class="selector">.special</code> {
+  <code class="var">--my-color</code>: <code class="value">blue</code>;      /* specificity = (0,1,0) */
+}
+<code class="selector">#header .special</code> {
+  <code class="var">--my-color</code>: <code class="value">green</code>;     /* specificity = (1,1,0) — 가장 specific */
+}</pre>
+  <p>specificity 는 보통 3자리 (a,b,c) 로 표현. a=ID 개수, b=클래스/attribute 개수, c=tag 개수. <b>왼쪽이 클수록 이김</b>.</p>
+  <table>
+    <tr><th>Selector</th><th>Specificity</th><th>이김?</th></tr>
+    <tr><td><code class="selector">:root</code></td><td><span class="spec low">(0,1,0)</span></td><td class="loser">red</td></tr>
+    <tr><td><code class="selector">.special</code></td><td><span class="spec low">(0,1,0)</span></td><td class="loser">blue (같은 specificity → 마지막 정의 이김)</td></tr>
+    <tr><td><code class="selector">#header .special</code></td><td><span class="spec high">(1,1,0)</span></td><td class="winner">green ✓</td></tr>
+  </table>
+</div>
+
+<!-- =========================================================== -->
+<h2>3. data-attribute selector — 본 프로젝트의 핵심 트릭</h2>
+<div class="step">
+  <p>HTML element 에 <code>data-*</code> attribute 를 박을 수 있다. CSS 는 그걸 selector 로 매칭 가능:</p>
+  <pre>&lt;<code class="selector">html</code> <code class="var">data-theme</code>=<code class="value">"slate"</code> <code class="var">data-mode</code>=<code class="value">"light"</code>&gt;
+  ...
+&lt;/html&gt;</pre>
+  <pre><code class="selector">[data-theme="slate"]</code> {
+  /* html 의 data-theme 이 slate 일 때만 발동 */
+  <code class="var">--bg</code>: <code class="value">#fafafa</code>;
+}
+<code class="selector">[data-theme="github"]</code> {
+  /* data-theme 이 github 일 때만 발동 */
+  <code class="var">--bg</code>: <code class="value">#ffffff</code>;
+}</pre>
+  <p>specificity 는 attribute selector 가 <span class="spec low">(0,1,0)</span> (class 와 동일). <code>[data-theme]</code> 와 <code>[data-mode]</code> 둘 다 쓰면 (0,2,0).</p>
+</div>
+
+<!-- =========================================================== -->
+<h2>4. 본 프로젝트의 실제 흐름</h2>
+<div class="step">
+  <p>JavaScript (themeBoot.ts) 가 페이지 로드 시 <code>&lt;html&gt;</code> 에 <code>data-theme</code> 과 <code>data-mode</code> 를 박는다:</p>
+  <pre>// themeBoot.ts
+document.documentElement.setAttribute(<code class="value">"data-theme"</code>, <code class="var">themeId</code>);
+document.documentElement.setAttribute(<code class="value">"data-mode"</code>, <code class="var">"light"</code>);</pre>
+  <p>그러면 themes.css 의 selector 들 중 매칭되는 블록의 변수 값이 활성화:</p>
+  <pre><code class="selector">[data-theme="slate"][data-mode="light"]</code> {  /* (0,2,0) */
+  <code class="var">--tv-syntax-keyword</code>: <code class="value">#7c3aed</code>;
+  ...
+}
+<code class="selector">[data-theme="slate"][data-mode="dark"]</code> {   /* (0,2,0) */
+  <code class="var">--tv-syntax-keyword</code>: <code class="value">#c4b5fd</code>;
+  ...
+}</pre>
+</div>
+
+<!-- =========================================================== -->
+<h2>5. Fallback — 새 테마가 syntax 토큰을 잊으면?</h2>
+<div class="step">
+  <p>본 결정의 핵심. 새 테마 "tableplus" 가 base 토큰만 정의하고 syntax 토큰을 잊었다고 가정:</p>
+  <pre><code class="selector">[data-theme="tableplus"][data-mode="light"]</code> {  /* (0,2,0) */
+  <code class="var">--tv-bg</code>: <code class="value">#fff</code>;
+  /* syntax 토큰 정의 X — 잊음 */
+}</pre>
+  <p>이 상태에서 <code>color: var(--tv-syntax-keyword)</code> 하면 → <b>tableplus 블록엔 정의 없음</b>. browser 는 <b>specificity 가 더 낮은 다른 selector</b> 에서 찾는다.</p>
+  <p>그래서 더 낮은 specificity 의 <b>fallback block</b> 을 따로 만들어둠:</p>
+  <pre><code class="selector">:root[data-mode="light"]</code> {  /* (0,1,1) — tableplus 블록 (0,2,0) 보다 낮음 */
+  <code class="var">--tv-syntax-keyword</code>: <code class="value">#7c3aed</code>;  /* slate light 값 */
+  ...
+}</pre>
+  <p>cascade 동작:</p>
+  <table>
+    <tr><th>변수</th><th>tableplus 블록 (0,2,0)</th><th>fallback (0,1,1)</th><th>발동 값</th></tr>
+    <tr><td><code class="var">--tv-bg</code></td><td><code class="value">#fff</code></td><td>(미정의)</td><td class="winner">#fff</td></tr>
+    <tr><td><code class="var">--tv-syntax-keyword</code></td><td>(미정의)</td><td><code class="value">#7c3aed</code></td><td class="winner">#7c3aed (slate fallback)</td></tr>
+  </table>
+  <div class="note good">
+    핵심 — tableplus 가 정의한 토큰만 override, 잊은 토큰은 자동으로 fallback (slate) 발동.
+    빈 색 / 깨진 highlight 0. 디자이너가 나중에 채우면 그 값이 자동으로 fallback 을 덮음.
+  </div>
+</div>
+
+<!-- =========================================================== -->
+<h2>6. 실제 작동 데모 — 토글해봐</h2>
+<div class="step">
+  <p>아래 demo 에서 mode 와 "syntax 토큰 정의 여부" 를 토글하면 fallback 메커니즘이 실시간으로 보임.</p>
+
+  <div class="demo">
+    <div class="demo-controls">
+      <label>data-mode:</label>
+      <select id="mode-toggle">
+        <option value="light">light</option>
+        <option value="dark">dark</option>
+      </select>
+
+      <label>syntax 토큰 정의?</label>
+      <select id="syntax-toggle">
+        <option value="defined">slate 가 정의함 (정상)</option>
+        <option value="undefined">newtheme 이 잊음 (fallback 발동!)</option>
+      </select>
+
+      <button id="reset">초기화</button>
+    </div>
+
+    <div class="demo-box" id="demo-box">
+      <span class="kw">SELECT</span> id, name <span class="kw">FROM</span> users<br>
+      <span class="kw">WHERE</span> age &gt; <span class="num">18</span><br>
+      &nbsp;&nbsp;<span class="kw">AND</span> name = <span class="str">'felix'</span>;<br>
+      <span class="com">-- comment</span>
+    </div>
+
+    <div style="margin-top: 12px; font-size: 12px; color: var(--muted);">
+      <b>관찰:</b> "newtheme 이 잊음" 으로 바꿔도 색이 안 깨지고 fallback (slate) 값으로 표시됨.
+      mode 를 바꾸면 light/dark 별 fallback 이 발동.
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================== -->
+<h2>7. 결정 — 어느 selector 로 fallback 박을지</h2>
+<div class="step">
+  <h3>(i) <code class="selector">:root</code> 단독 — mode 무관 한 세트</h3>
+  <p>specificity (0,1,0). 가장 낮음. 단 하나만 정의 — light fallback 박으면 dark 모드에서도 light syntax 가 발동 → 어두운 bg 에 진한 색 → 대비 깨짐.</p>
+  <div class="note bad">✗ light/dark 구분 못함. 권장 안 함.</div>
+
+  <h3>(ii) <code class="selector">:root[data-mode="light"]</code> + <code class="selector">:root[data-mode="dark"]</code> — 분리</h3>
+  <p>specificity (0,1,1). 테마 블록 (0,2,0) 보다 낮음 → fallback 으로 작동. 두 selector 분리되어 mode 별 적절 fallback.</p>
+  <div class="note good">✓ 추천. 본 프로젝트의 themeBoot 가 박는 <code>data-mode</code> 와 자연스럽게 매칭.</div>
+
+  <h3>(iii) <code class="selector">:root</code> 에 light + <code>@media (prefers-color-scheme: dark)</code> 로 dark</h3>
+  <p>OS 시스템 dark mode 따라감. 단 본 프로젝트는 themeBoot 가 explicit <code>data-mode</code> 박으므로, user 선택 (e.g. light theme 강제) 과 OS 설정 (dark) 이 충돌하면 OS 가 이김 → 혼란.</p>
+  <div class="note bad">✗ 본 프로젝트 user-controlled mode 시스템과 충돌. 권장 안 함.</div>
+</div>
+
+<script>
+  // demo 토글
+  const box = document.getElementById('demo-box');
+  const modeToggle = document.getElementById('mode-toggle');
+  const syntaxToggle = document.getElementById('syntax-toggle');
+  const resetBtn = document.getElementById('reset');
+
+  // slate light/dark syntax values (from new tokens-full.css)
+  const slateValues = {
+    light: {
+      bg: '#ffffff', fg: '#0f172a',
+      keyword: '#7c3aed', string: '#15803d', number: '#c2410c', comment: '#64748b',
+    },
+    dark: {
+      bg: '#0f172a', fg: '#e2e8f0',
+      keyword: '#c4b5fd', string: '#86efac', number: '#fdba74', comment: '#64748b',
+    },
+  };
+
+  // newtheme = base 만 정의 (bg/fg) — syntax 잊음
+  const newthemeValues = {
+    light: { bg: '#fef3c7', fg: '#1c1917' }, // 노란빛 light
+    dark: { bg: '#1c1917', fg: '#fef3c7' },  // 어두운 갈색 dark
+  };
+
+  function applyStyle() {
+    const mode = modeToggle.value;
+    const undefined_ = syntaxToggle.value === 'undefined';
+    const base = undefined_ ? newthemeValues[mode] : slateValues[mode];
+    const syntax = slateValues[mode]; // fallback 은 항상 slate
+
+    box.style.setProperty('--swatch-bg', base.bg);
+    box.style.setProperty('--swatch-fg', base.fg);
+    box.style.setProperty('--swatch-keyword', syntax.keyword);
+    box.style.setProperty('--swatch-string', syntax.string);
+    box.style.setProperty('--swatch-number', syntax.number);
+    box.style.setProperty('--swatch-comment', syntax.comment);
+  }
+
+  modeToggle.addEventListener('change', applyStyle);
+  syntaxToggle.addEventListener('change', applyStyle);
+  resetBtn.addEventListener('click', () => {
+    modeToggle.value = 'light';
+    syntaxToggle.value = 'defined';
+    applyStyle();
+  });
+  applyStyle();
+</script>
+
+</body>
+</html>

@@ -37,6 +37,7 @@ updated: 2026-05-15
 | [0028](./0028-mysql-driver-sqlx/memory.md) | MySQL adapter 라이브러리 — sqlx::mysql (mysql_async 미채택) | Accepted | 2026-05-14 | — |
 | [0029](./0029-mongosh-parser-strategy/memory.md) | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택) | Accepted | 2026-05-14 | — |
 | [0030](./0030-mongo-db-scope-tab-local/memory.md) | Mongo DB-scope — toolbar chip 제거, tab-local chip + sidebar 우클릭 entry-point | Accepted | 2026-05-15 | — |
+| [0031](./0031-syntax-palette-manual-and-token-integrity/memory.md) | Syntax palette — manual themes.css + theme-agnostic fallback + token integrity 강제 | Accepted | 2026-05-15 | — |
 
 ## 역사 (Superseded / Deprecated)
 

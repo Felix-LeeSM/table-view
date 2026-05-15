@@ -70,6 +70,46 @@
   --spacing-execute-label: 16.25rem; /* 260px */
 }
 
+/* Sprint 345 (ADR 0031) — theme-agnostic syntax token fallback.
+ * 새 테마가 `--tv-syntax-*` 12 토큰 정의를 잊으면 cascade 로 slate 의 값을
+ * 발동시킨다. specificity (0,1,1) — `[data-theme="X"][data-mode="Y"]`
+ * 테마 블록 (0,2,0) 보다 낮아 정의된 곳은 자동 override 되고, 누락 시
+ * 시각 깨짐 (transparent 색) 없이 slate placeholder 가 보인다.
+ *
+ * 위치 — index.css: fallback 은 *theme-agnostic baseline* 이므로
+ * themes.css (theme-specific values 단일 책임) 가 아니라 base layer 에
+ * 둔다. mode 분기는 light/dark 별 적절 톤 보장 (dark bg 에 light syntax
+ * 가 들어가 대비가 깨지는 일 방지).
+ */
+:root[data-mode="light"] {
+  --tv-syntax-keyword: #7c3aed;
+  --tv-syntax-operator: #475569;
+  --tv-syntax-punct: #64748b;
+  --tv-syntax-type: #2563eb;
+  --tv-syntax-builtin: #0891b2;
+  --tv-syntax-function: #0891b2;
+  --tv-syntax-property: #0f766e;
+  --tv-syntax-string: #15803d;
+  --tv-syntax-number: #c2410c;
+  --tv-syntax-atom: #be185d;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #dc2626;
+}
+:root[data-mode="dark"] {
+  --tv-syntax-keyword: #c4b5fd;
+  --tv-syntax-operator: #cbd5e1;
+  --tv-syntax-punct: #94a3b8;
+  --tv-syntax-type: #93c5fd;
+  --tv-syntax-builtin: #67e8f9;
+  --tv-syntax-function: #67e8f9;
+  --tv-syntax-property: #5eead4;
+  --tv-syntax-string: #86efac;
+  --tv-syntax-number: #fdba74;
+  --tv-syntax-atom: #f9a8d4;
+  --tv-syntax-comment: #64748b;
+  --tv-syntax-error: #f87171;
+}
+
 body {
   margin: 0;
   font-family: var(--tv-font-sans);

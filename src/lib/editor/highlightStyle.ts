@@ -8,8 +8,10 @@ import { tags as t } from "@lezer/highlight";
  * monochrome tone 으로 렌더 — `CREATE TABLE foo (id BIGSERIAL PRIMARY KEY)`
  * 같은 DDL 도 색 차이로 보이지 않아 "highlight 없음" 으로 인식된다.
  *
- * 우리 design-token 의 `--tv-syntax-*` 를 우선 참조하고, 누락된 카테고리는
- * 의미가 인접한 다른 design token 으로 fallback. 테마별 override 는 점진적.
+ * 2026-05-15 (ADR 0031) — 12 syntax 토큰 모두 wire. atom/builtin/punct/error
+ * 추가. `:root[data-mode]` fallback 이 index.css 에 박혀 있어 토큰 정의
+ * 누락이 cascade 로 slate 값 발동 → 옛 fallback chain (`var(--tv-syntax-X,
+ * var(--tv-Y))`) 은 redundant 하지만 ESLint rule 도입 전 defensive 로 유지.
  *
  * SqlQueryEditor / MongoQueryEditor 가 같은 style 을 mount → JSON property /
  * SQL identifier 가 같은 시각 톤을 공유.
@@ -22,7 +24,7 @@ export const viewTableHighlightStyle = HighlightStyle.define([
   },
   {
     tag: [t.typeName, t.standard(t.tagName), t.namespace],
-    color: "var(--tv-syntax-type, var(--tv-primary))",
+    color: "var(--tv-syntax-type)",
     fontWeight: "500",
   },
   {
@@ -30,25 +32,33 @@ export const viewTableHighlightStyle = HighlightStyle.define([
     color: "var(--tv-syntax-string)",
   },
   {
-    tag: [t.number, t.integer, t.float, t.bool, t.null],
+    tag: [t.number, t.integer, t.float],
     color: "var(--tv-syntax-number)",
   },
   {
+    tag: [t.bool, t.null, t.atom],
+    color: "var(--tv-syntax-atom)",
+  },
+  {
     tag: [t.function(t.variableName), t.function(t.propertyName)],
-    color: "var(--tv-syntax-function, var(--tv-status-connecting))",
+    color: "var(--tv-syntax-function)",
+  },
+  {
+    tag: [t.standard(t.variableName), t.standard(t.name)],
+    color: "var(--tv-syntax-builtin)",
   },
   {
     tag: [t.comment, t.lineComment, t.blockComment, t.docComment],
-    color: "var(--tv-syntax-comment, var(--tv-muted-foreground))",
+    color: "var(--tv-syntax-comment)",
     fontStyle: "italic",
   },
   {
     tag: [t.operator, t.compareOperator, t.arithmeticOperator, t.logicOperator],
-    color: "var(--tv-syntax-operator, var(--tv-syntax-keyword))",
+    color: "var(--tv-syntax-operator)",
   },
   {
     tag: [t.propertyName, t.attributeName],
-    color: "var(--tv-syntax-property, var(--tv-foreground))",
+    color: "var(--tv-syntax-property)",
     fontWeight: "500",
   },
   {
@@ -56,15 +66,19 @@ export const viewTableHighlightStyle = HighlightStyle.define([
     color: "var(--tv-foreground)",
   },
   {
-    tag: [t.bracket, t.paren, t.brace, t.squareBracket, t.angleBracket],
-    color: "var(--tv-muted-foreground)",
-  },
-  {
-    tag: [t.punctuation, t.separator],
-    color: "var(--tv-muted-foreground)",
+    tag: [
+      t.bracket,
+      t.paren,
+      t.brace,
+      t.squareBracket,
+      t.angleBracket,
+      t.punctuation,
+      t.separator,
+    ],
+    color: "var(--tv-syntax-punct)",
   },
   {
     tag: [t.invalid],
-    color: "var(--tv-status-error)",
+    color: "var(--tv-syntax-error)",
   },
 ]);

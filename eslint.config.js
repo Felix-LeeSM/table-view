@@ -2,6 +2,8 @@ import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 
 // Flags Tailwind arbitrary pixel values on size-class prefixes — the
 // reason they exist is almost always a missing design token. Prefixes
@@ -11,6 +13,38 @@ import tseslint from "typescript-eslint";
 // user-facing rule is "no raw pixels".
 const ARBITRARY_PX =
   /\b(?:text|w|h|max-w|max-h|min-w|min-h|p[xytblrse]?|m[xytblrse]?|gap|top|bottom|left|right|inset)-\[-?\d+(?:\.\d+)?px\]/;
+
+// ADR 0031 (2026-05-15) — `var(--xxx)` 참조 토큰이 themes.css / index.css
+// 에 정의되어 있는지 검사. 본 사건 (`var(--primary)` raw 변수 invalid CSS
+// 도달) 의 재발 방지. stylelint 는 .ts 파일을 안 보고, TypeScript 도
+// 문자열 안 CSS 를 못 보는 갭을 메운다.
+const TOKEN_REF = /var\((--[a-z][a-z0-9-]+)/g;
+const TOKEN_ALLOW_PREFIX = ["--tw-", "--cm-", "--radix-"];
+// Cross-file component-local custom properties — parent 가 `style={{ "--X":
+// ... }}` 로 inline 정의, descendant 가 `var(--X)` 로 참조. 같은 파일
+// 안 패턴은 rule 의 Property visitor 가 자동 인식하지만, cross-file 은
+// AST scan 으로 못 잡으므로 명시 등록.
+const TOKEN_ALLOW_NAMES = new Set([
+  "--cols", // Sprint 258 — DataGrid grid-template-columns sharing.
+]);
+let DEFINED_TOKENS_CACHE = null;
+function loadDefinedTokens(cwd) {
+  if (DEFINED_TOKENS_CACHE) return DEFINED_TOKENS_CACHE;
+  const set = new Set();
+  const files = [
+    resolve(cwd, "src/themes.css"),
+    resolve(cwd, "src/index.css"),
+  ];
+  for (const file of files) {
+    if (!existsSync(file)) continue;
+    const content = readFileSync(file, "utf8");
+    for (const m of content.matchAll(/(--[a-z][a-z0-9-]+)\s*:/g)) {
+      set.add(m[1]);
+    }
+  }
+  DEFINED_TOKENS_CACHE = set;
+  return set;
+}
 
 const tvLocal = {
   rules: {
@@ -49,6 +83,67 @@ const tvLocal = {
         };
       },
     },
+    "no-undefined-css-token": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Disallow var() references to CSS tokens not defined in src/themes.css or src/index.css. Catches the var(--primary) raw-var sleeper bug pattern.",
+        },
+        schema: [],
+        messages: {
+          undefined:
+            "Undefined CSS token '{{token}}'. Define it in src/themes.css or src/index.css, or use an existing --tv-* token.",
+        },
+      },
+      create(context) {
+        const defined = loadDefinedTokens(context.cwd);
+        // File-local custom property collection: `style={{ "--cols": ... }}`
+        // 같은 inline 정의는 같은 파일 내 `var(--cols)` 참조와 짝. 두 번째
+        // pass 에서 검사하기 위해 정의 + 참조 둘 다 모은다.
+        const localTokens = new Set();
+        const refs = [];
+        function collectRefs(raw, node) {
+          if (typeof raw !== "string") return;
+          for (const m of raw.matchAll(TOKEN_REF)) {
+            refs.push({ token: m[1], node });
+          }
+        }
+        return {
+          Property(node) {
+            const key = node.key;
+            let name = null;
+            if (key?.type === "Literal" && typeof key.value === "string") {
+              name = key.value;
+            } else if (key?.type === "Identifier") {
+              name = key.name;
+            }
+            if (name && /^--[a-z][a-z0-9-]+$/.test(name)) {
+              localTokens.add(name);
+            }
+          },
+          Literal(node) {
+            collectRefs(node.value, node);
+          },
+          TemplateElement(node) {
+            collectRefs(node.value?.raw, node);
+          },
+          "Program:exit"() {
+            for (const { token, node } of refs) {
+              if (TOKEN_ALLOW_PREFIX.some((p) => token.startsWith(p))) continue;
+              if (TOKEN_ALLOW_NAMES.has(token)) continue;
+              if (defined.has(token)) continue;
+              if (localTokens.has(token)) continue;
+              context.report({
+                node,
+                messageId: "undefined",
+                data: { token },
+              });
+            }
+          },
+        };
+      },
+    },
   },
 };
 
@@ -68,6 +163,7 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       "tv-local/no-tailwind-arbitrary-px": "error",
+      "tv-local/no-undefined-css-token": "error",
     },
   },
   // Sprint-112: forbid new native <select> JSX. All dropdowns must use the

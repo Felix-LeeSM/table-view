@@ -21,13 +21,66 @@ import { dirname, resolve } from "node:path";
 
 export const AA_THRESHOLD = 4.5;
 
-export const PAIRS: ReadonlyArray<{ fg: string; bg: string; label: string }> = [
+interface Pair {
+  fg: string;
+  bg: string;
+  label: string;
+  /**
+   * ADR 0031 (2026-05-15) — `critical: true` 인 pair 의 AA 미달은
+   * allowlist 진입 부적격 (반드시 토큰 값 fix). syntax 의미 구분에
+   * 결정적인 6 토큰 (keyword/string/number/function/type/error) 이 여기
+   * 속한다. 다른 syntax 토큰 (comment/operator/property/punct/atom/
+   * builtin) 과 base UI pair 는 brand identity 우선시 allowlist 진입
+   * 허용 (사유 명시 필요).
+   */
+  critical?: boolean;
+}
+
+export const PAIRS: ReadonlyArray<Pair> = [
   { fg: "foreground", bg: "background", label: "body text" },
   { fg: "card-foreground", bg: "card", label: "card text" },
   { fg: "popover-foreground", bg: "popover", label: "popover text" },
   { fg: "primary-foreground", bg: "primary", label: "primary button" },
   { fg: "secondary-foreground", bg: "secondary", label: "secondary panel" },
   { fg: "accent-foreground", bg: "accent", label: "accent surface" },
+  // ADR 0031 — syntax 12 토큰 × `background`. critical 6 / 부수 6.
+  {
+    fg: "syntax-keyword",
+    bg: "background",
+    label: "syntax-keyword",
+    critical: true,
+  },
+  {
+    fg: "syntax-string",
+    bg: "background",
+    label: "syntax-string",
+    critical: true,
+  },
+  {
+    fg: "syntax-number",
+    bg: "background",
+    label: "syntax-number",
+    critical: true,
+  },
+  {
+    fg: "syntax-function",
+    bg: "background",
+    label: "syntax-function",
+    critical: true,
+  },
+  { fg: "syntax-type", bg: "background", label: "syntax-type", critical: true },
+  {
+    fg: "syntax-error",
+    bg: "background",
+    label: "syntax-error",
+    critical: true,
+  },
+  { fg: "syntax-comment", bg: "background", label: "syntax-comment" },
+  { fg: "syntax-operator", bg: "background", label: "syntax-operator" },
+  { fg: "syntax-property", bg: "background", label: "syntax-property" },
+  { fg: "syntax-punct", bg: "background", label: "syntax-punct" },
+  { fg: "syntax-atom", bg: "background", label: "syntax-atom" },
+  { fg: "syntax-builtin", bg: "background", label: "syntax-builtin" },
 ];
 
 export interface ThemeBlock {
@@ -50,6 +103,8 @@ export interface Violation {
   fg: string;
   bg: string;
   ratio: number;
+  /** ADR 0031 — critical pair 의 미달은 allowlist 진입 부적격. */
+  critical?: boolean;
 }
 
 export interface CheckResult {
@@ -91,21 +146,29 @@ export function contrastRatio(fg: string, bg: string): number | null {
 }
 
 export function parseThemes(css: string): ThemeBlock[] {
-  const blocks: ThemeBlock[] = [];
+  // ADR 0031 (2026-05-15) — 같은 selector 의 다중 블록을 (theme, mode)
+  // 키로 merge. themes.css 는 base 토큰 블록 + syntax 토큰 블록을 같은
+  // selector 로 따로 정의하므로 union 으로 합쳐야 base bg 와 syntax fg 가
+  // 한 블록 안에서 pair check 가능하다.
+  const map = new Map<string, ThemeBlock>();
   const re =
     /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]+)\}/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(css)) !== null) {
     const [, theme, mode, body] = m;
-    const tokens: Record<string, string> = {};
+    const key = `${theme}/${mode}`;
+    let block = map.get(key);
+    if (!block) {
+      block = { theme, mode: mode as "light" | "dark", tokens: {} };
+      map.set(key, block);
+    }
     const tokenRe = /--tv-([a-z0-9-]+)\s*:\s*([^;]+);/g;
     let t: RegExpExecArray | null;
     while ((t = tokenRe.exec(body)) !== null) {
-      tokens[t[1].trim()] = t[2].trim();
+      block.tokens[t[1].trim()] = t[2].trim();
     }
-    blocks.push({ theme, mode: mode as "light" | "dark", tokens });
   }
-  return blocks;
+  return [...map.values()];
 }
 
 export function entryKey(e: {
@@ -140,16 +203,22 @@ export function check(css: string, allowlist: AllowlistEntry[]): CheckResult {
           fg,
           bg,
           ratio,
+          critical: pair.critical === true,
         });
       }
     }
   }
 
+  // ADR 0031 — critical pair 미달은 allowlist 진입 부적격. allowlist 에
+  // entry 가 있어도 newViolations 로 분류해 항상 차단.
   const newViolations: Violation[] = [];
   const allowlistedViolations: Violation[] = [];
   for (const v of violations) {
     const key = entryKey(v);
-    if (allowSet.has(key)) {
+    if (v.critical) {
+      newViolations.push(v);
+      if (allowSet.has(key)) usedAllowKeys.add(key);
+    } else if (allowSet.has(key)) {
       usedAllowKeys.add(key);
       allowlistedViolations.push(v);
     } else {
@@ -200,13 +269,17 @@ function runCli(): number {
     );
     console.error("");
     for (const v of result.newViolations) {
+      const tag = v.critical ? "[CRIT]" : "[NEW] ";
       console.error(
-        `  [NEW] ${v.theme}/${v.mode} — ${v.pair}: ${v.fg} on ${v.bg} = ${v.ratio.toFixed(2)}:1`,
+        `  ${tag} ${v.theme}/${v.mode} — ${v.pair}: ${v.fg} on ${v.bg} = ${v.ratio.toFixed(2)}:1`,
       );
     }
     console.error("");
     console.error(
       `Fix the contrast or add the entry to scripts/theme-contrast-allowlist.json with a justification.`,
+    );
+    console.error(
+      `[CRIT] = critical syntax pair (keyword/string/number/function/type/error) — allowlist 진입 부적격, 토큰 값 fix 필수 (ADR 0031).`,
     );
   }
 
