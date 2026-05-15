@@ -208,6 +208,26 @@ describe("ConnectionDialog", () => {
     expect(mockAddConnection).not.toHaveBeenCalled();
   });
 
+  // Sprint 345 (2026-05-15) — database required for non-SQLite DBMS. 사용자가
+  // prefill 된 default 를 지우고 submit 하면 backend round-trip 전에 reject.
+  it("shows error when database is empty on save (non-SQLite)", async () => {
+    renderDialog();
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    const dbInput = screen.getByLabelText("Database") as HTMLInputElement;
+
+    await act(async () => {
+      fireEvent.change(nameInput, { target: { value: "Test DB" } });
+      fireEvent.change(dbInput, { target: { value: "" } });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Save"));
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Database is required");
+    expect(mockAddConnection).not.toHaveBeenCalled();
+  });
+
   it("shows error when name is whitespace-only on save", async () => {
     renderDialog();
     const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
@@ -845,7 +865,9 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
-    it("relabels Database as optional when MongoDB is selected", async () => {
+    // Sprint 345 (2026-05-15) — Mongo database 가 더 이상 optional 이 아님.
+    // paradigm 별 default 'admin' 으로 prefill, 빈 submit 은 reject.
+    it("renders Database label (required) when MongoDB is selected", async () => {
       const user = userEvent.setup();
       renderDialog();
       const trigger = screen.getByLabelText("Database Type");
@@ -853,7 +875,8 @@ describe("ConnectionDialog", () => {
       await user.click(trigger);
       await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
-      expect(screen.getByText("Database (optional)")).toBeInTheDocument();
+      expect(screen.getByLabelText("Database")).toBeInTheDocument();
+      expect(screen.queryByText("Database (optional)")).not.toBeInTheDocument();
     });
 
     it("includes auth_source, replica_set, tls_enabled in the saved draft", async () => {

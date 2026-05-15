@@ -196,6 +196,16 @@ export default function ConnectionDialog({
       setError("Database file is required");
       return;
     }
+    // Sprint 345 — non-SQLite DBMSes also require a database name.
+    // Empty submit used to silently default to the server-side fallback
+    // (Postgres → `postgres`, Mongo → no DB at all) which surprised users
+    // who expected the form's intent to round-trip. The form now seeds
+    // a paradigm-appropriate default at draft init, so blank here means
+    // the user deleted it on purpose — reject explicitly.
+    if (!isSqlite && !trimmed.database) {
+      setError("Database is required");
+      return;
+    }
 
     setSaving(true);
     setError(null);

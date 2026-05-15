@@ -131,17 +131,18 @@ export default function MongoFormFields({
         )}
       </div>
 
-      {/* Default Database (optional for Mongo — DbSwitcher can swap later) */}
+      {/* Default Database — Sprint 345 made required (defaults to `admin`).
+          DbSwitcher still swaps the active DB at runtime. */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database (optional)
+          Database
         </label>
         <input
           id="conn-database"
           className={inputClass}
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
-          placeholder="Leave blank to default"
+          placeholder="admin"
         />
       </div>
 

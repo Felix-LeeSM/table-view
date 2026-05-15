@@ -150,9 +150,9 @@ export const DATABASE_DEFAULT_FIELDS: Record<
   ConnectionDefaultFields
 > = {
   postgresql: { port: 5432, user: "postgres", database: "postgres" },
-  mysql: { port: 3306, user: "root", database: "" },
+  mysql: { port: 3306, user: "root", database: "mysql" },
   sqlite: { port: 0, user: "", database: "" },
-  mongodb: { port: 27017, user: "", database: "" },
+  mongodb: { port: 27017, user: "", database: "admin" },
   redis: { port: 6379, user: "", database: "0" },
 };
 
@@ -180,7 +180,7 @@ export function createEmptyDraft(): ConnectionDraft {
     port: 5432,
     user: "postgres",
     password: "",
-    database: "",
+    database: "postgres",
     group_id: null,
     color: null,
     paradigm: "rdb",

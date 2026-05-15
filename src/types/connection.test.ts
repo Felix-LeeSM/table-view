@@ -88,6 +88,14 @@ describe("createEmptyDraft", () => {
     const conn = createEmptyDraft();
     expect(conn.paradigm).toBe("rdb");
   });
+
+  // Sprint 345 (2026-05-15) — createEmptyDraft 의 db_type 이 postgresql 이라
+  // database 도 PG default ('postgres') 로 prefill. 사용자가 폼 열자마자
+  // submit 해도 빈 database 가 backend 로 가지 않는다.
+  it("prefills database with PG default for the initial postgresql draft", () => {
+    const conn = createEmptyDraft();
+    expect(conn.database).toBe("postgres");
+  });
 });
 
 describe("parseConnectionUrl paradigm tagging (Sprint 65)", () => {
@@ -224,11 +232,14 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
-  it("MySQL defaults: port=3306, user=root, database=''", () => {
+  // Sprint 345 (2026-05-15) — MySQL/Mongo database default 추가 (이전엔 ''
+  // 였음). 빈 채로 connect 시 surprise UX 가 발생해 paradigm 별 system db
+  // 로 prefill. 사용자가 수정 가능. ConnectionDialog 는 빈 submit 도 reject.
+  it("MySQL defaults: port=3306, user=root, database='mysql'", () => {
     expect(DATABASE_DEFAULT_FIELDS.mysql).toEqual({
       port: 3306,
       user: "root",
-      database: "",
+      database: "mysql",
     });
   });
 
@@ -240,11 +251,13 @@ describe("DATABASE_DEFAULT_FIELDS (Sprint 138)", () => {
     });
   });
 
-  it("Mongo defaults: port=27017, user='', database=''", () => {
+  // Sprint 345 (2026-05-15) — Mongo default 가 'admin'. Mongo native 의
+  // system db 라 어디든 항상 존재하고, DbSwitcher 가 runtime swap.
+  it("Mongo defaults: port=27017, user='', database='admin'", () => {
     expect(DATABASE_DEFAULT_FIELDS.mongodb).toEqual({
       port: 27017,
       user: "",
-      database: "",
+      database: "admin",
     });
   });
 
