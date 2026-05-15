@@ -84,6 +84,16 @@ export interface DataGridTableProps {
   ) => void;
   onClearColumnSort?: (columnName: string) => void;
   onClearAllSorts?: () => void;
+  /**
+   * Sprint 318 — Slice D.2: hide column. When `hiddenColumnNames`
+   * carries a column's name, that column drops out of the header
+   * row, body rows, pendingNewRows, the `--cols` template, and the
+   * aria-colcount. `onHideColumn` wires the header context menu's
+   * "Hide column" item to the caller's `useHiddenColumns.hide`.
+   * Both optional → 미제공 caller 의 회귀 0.
+   */
+  hiddenColumnNames?: ReadonlySet<string>;
+  onHideColumn?: (columnName: string) => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
   onNavigateToFk?: (
@@ -145,6 +155,8 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       onSortColumn,
       onClearColumnSort,
       onClearAllSorts,
+      hiddenColumnNames,
+      onHideColumn,
       onDeleteRow,
       onDuplicateRow,
       onNavigateToFk,
@@ -174,10 +186,20 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
 
     // Visual order: columnOrder[visualIdx] = dataIdx
     const visualCount = data.columns.length;
-    const order =
+    const baseOrder =
       columnOrder.length === visualCount
         ? columnOrder
         : data.columns.map((_, i) => i);
+    // Sprint 318 D.2 — hidden columns are dropped from the visible
+    // order before any layout / virtualization / aria-* derivation.
+    // `useMemo` keeps the identity stable across renders so the
+    // virtualizer's `count` and `rowCtx` deps don't churn.
+    const order = useMemo(() => {
+      if (!hiddenColumnNames || hiddenColumnNames.size === 0) return baseOrder;
+      return baseOrder.filter(
+        (dIdx) => !hiddenColumnNames.has(data.columns[dIdx]!.name),
+      );
+    }, [baseOrder, hiddenColumnNames, data.columns]);
 
     // Outer scroll container = `<div role="grid">`. Owns `--cols` CSS
     // variable. virtualizer 가 scrollElement 로 참조한다.
@@ -315,7 +337,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       ],
     );
 
-    const colCount = data.columns.length;
+    const colCount = order.length;
     const gridStyle = {
       "--cols": colsTemplate,
     } as CSSProperties;
@@ -345,6 +367,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
           onSortColumn={onSortColumn}
           onClearColumnSort={onClearColumnSort}
           onClearAllSorts={onClearAllSorts}
+          onHideColumn={onHideColumn}
         />
 
         {shouldVirtualize ? (

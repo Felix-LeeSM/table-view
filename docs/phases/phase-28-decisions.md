@@ -1149,3 +1149,118 @@ guard 코드 부재. RTL 의 "Show all" 5번째 case 가 0-column 복원
 적용 가능.
 
 ---
+
+## Sprint 318 — Slice D.2 (RDB DataGrid hide column) — 자율 결정 dict
+
+### D-39: RDB hide column persist 단위 = `hidden-columns:rdb:<schema>:<table>`
+
+**문제**: Mongo D.1 의 persist namespace 가 `document:<db>:<coll>`.
+RDB 도 schema.table 단위로 분리할지, server-only / connection-only
+로 묶을지.
+
+**결정**: `rdb:<schema>:<table>` (즉, `hidden-columns:rdb:<schema>:<table>`).
+`useColumnWidths` 의 RDB 측 key 와 namespace 공유.
+
+**근거**:
+1. column widths 와 동일한 lifecycle — schema 가 같아도 table 마다
+   다른 column 구성을 가질 수 있고, 사용자가 "이 테이블에서 이 column
+   만 안 보고 싶다" 가 가장 흔한 use case.
+2. Mongo D.1 의 결정 (D-35) 과 paradigm parity. paradigm prefix
+   (`rdb:` vs `document:`) 가 어휘 충돌 차단.
+3. workspaceStore migration 0 — 그 store 와 무관하게 hook 단독 persist.
+
+**대안**:
+- per-schema (`rdb:<schema>`) — 다른 table 에 영향.
+- per-connection — 너무 거친 단위.
+- workspaceStore.tab.hiddenColumns — migration 비용.
+
+**영향**: `useHiddenColumns('rdb:${schema}:${table}')` 호출. RDB
+`DataGrid.hide.test.tsx` 의 "persists ..." case 가 이 key 형식을 lock.
+
+---
+
+### D-40: DataGridTable 가 visible filter 책임 (RDB DataGrid 는 prop 만 전달)
+
+**문제**: hide 의 visible-column filter 를 어디에 둘지. paradigm-shared
+`DataGridTable` 안? RDB caller 안에서 columnOrder 를 거른 뒤 전달?
+
+**결정**: `DataGridTable` 안에 `hiddenColumnNames` prop + `order =
+baseOrder.filter(!hidden)` 도입. 모든 down-stream (HeaderRow, DataRow,
+pendingNewRows, aria-colcount, --cols template) 가 이 단일 `order`
+를 소비.
+
+**근거**:
+1. `DataGridTable` 가 이미 `useColumnWidths` 를 자기 안에서 호출 —
+   width 와 hide 가 paradigm-shared shell 의 책임. caller 가 한 번 더
+   filter 하면 책임 분산 → 회귀 위험 증가.
+2. RDB caller 는 hook 호출 + 배지 + prop 전달만. Mongo `DocumentDataGrid`
+   는 HeaderRow / row map 을 자체 inline 하므로 caller 차원에서 filter
+   (현재 구조).
+3. `useMemo([baseOrder, hiddenColumnNames, data.columns])` 로 identity
+   안정성 보장 → virtualizer 의 `count` / `rowCtx` deps churn 없음.
+
+**대안**:
+- caller-level filter — 책임 분산, 회귀 위험.
+- HeaderRow 와 DataRow 가 각자 받음 — 두 곳 동기화 부담.
+
+**영향**: `DataGridTable.tsx` 의 `order` 가 hidden 적용된 `visibleOrder`.
+`DataGridTable.hide.test.tsx` 6 case 가 header / row / pendingNewRows /
+aria-colcount / --cols / no-callback fallback 모두 lock.
+
+---
+
+### D-41: 배지 마크업은 Mongo 와 1:1 — paradigm 간 UX uniformity
+
+**문제**: RDB 배지 strip 의 마크업·라벨·a11y 를 Mongo 와 다르게
+디자인할지? 예: "row hidden" 어휘, 다른 위치.
+
+**결정**: Mongo `DocumentDataGrid` 의 strip 을 그대로 복제.
+`aria-label="Hidden columns badge"`, "1 column hidden" / "N columns
+hidden" 어휘, ghost variant `Show all hidden columns` 버튼.
+
+**근거**:
+1. 한 paradigm 에서 한 번 익힌 UX 가 다른 paradigm 에서도 즉시 인식
+   가능 → 학습 비용 0.
+2. RTL 의 `screen.findByLabelText("Hidden columns badge")` selector
+   가 paradigm 간 일치 → 미래의 paradigm-shared component refactor
+   여지.
+3. 어휘 "row" 대신 "column" 은 RDB 에서도 정확. "columns" 라는 단어
+   가 paradigm-neutral.
+
+**대안**:
+- 토스트로 노출 → 영구 visible 한 affordance 필요 (회복 lifeline).
+- toolbar 안 chip → 좁음 (이미 7+ icon button).
+
+**영향**: RDB `DataGrid.tsx` 의 strip JSX 가 Mongo 와 동일. RTL
+"Show all" + "1 column hidden" + "2 columns hidden" 라벨 셋 모두 lock.
+
+---
+
+### D-42: hidden 미제공 caller (기존 RDB grid 테스트) 회귀 0 — prop 둘 다 optional
+
+**문제**: `DataGridTable` 의 신규 prop 두 개를 required 로 만들면
+기존 caller (test setup 포함) 모두 수정 필요. blast radius 증가.
+
+**결정**: `hiddenColumnNames?` + `onHideColumn?` 둘 다 optional.
+- 미제공 시 `order = baseOrder` (필터 미적용).
+- HeaderRow 는 `onHideColumn` 미제공 시 "Hide column" item 미렌더
+  (sprint 317 의 HeaderRow 기 결정 D-32).
+
+**근거**:
+1. `DataGridTable.column-sort.test.tsx`, `DataGridTable.aria-grid.test.tsx`
+   등 기존 11 axis test 가 hide 무관 — required 로 만들면 모두 수정.
+2. Mongo `DocumentDataGrid` 는 `DataGridTable` 미사용 (자체 inline) —
+   prop 강제 의미 없음.
+3. ad-hoc 사용 (query result grid 등) 도 hide 가 필요 없는 경우 prop
+   생략 가능.
+
+**대안**:
+- required 로 강제 + 기본값 — defensive 하지만 caller 수정 폭증.
+- 별도 `DataGridTableWithHide` wrapper — 책임 분기 의미 없음 (filter
+  로직이 동일).
+
+**영향**: 기존 11 DataGridTable axis test 모두 수정 0. 신규
+`DataGridTable.hide.test.tsx` 가 미제공 case 를 명시적으로 단언
+("renders every column when hiddenColumnNames is not provided").
+
+---

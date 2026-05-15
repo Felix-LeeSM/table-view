@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
+import { useHiddenColumns } from "@/hooks/useHiddenColumns";
+import { Button } from "@components/ui/button";
 import { useSchemaStore } from "@stores/schemaStore";
 import {
   useCurrentWorkspaceKey,
@@ -130,6 +132,12 @@ export default function DataGrid({
   const [appliedRawSql, setAppliedRawSql] = useState("");
   const [columnOrder, setColumnOrder] = useState<number[]>([]);
   const [showQuickLook, setShowQuickLook] = useState(false);
+
+  // Sprint 318 — Slice D.2: per-table hide column. localStorage key =
+  // `hidden-columns:rdb:<schema>:<table>` (D-39 — `useColumnWidths`
+  // 와 namespace 공유). Hook 자체는 mount 시 자동 load + persistenceKey
+  // swap 시 자동 swap.
+  const hiddenColumns = useHiddenColumns(`rdb:${schema}:${table}`);
 
   // Sprint 238 — DataGridTable owns column-width state via
   // `useColumnWidths`. Reset is exposed via imperative handle and wired
@@ -574,6 +582,32 @@ export default function DataGrid({
         onResetColumnWidths={handleResetColumnWidths}
       />
 
+      {/* Sprint 318 D.2 — hidden columns badge. Only mounts when at
+          least one column is hidden. "Show all" wipes the persisted
+          state for the current `schema.table`. Marked-up identically
+          to DocumentDataGrid 의 strip (D-36). */}
+      {hiddenColumns.hidden.size > 0 && (
+        <div
+          className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5 text-xs"
+          aria-label="Hidden columns badge"
+        >
+          <span className="text-muted-foreground">
+            {hiddenColumns.hidden.size === 1
+              ? "1 column hidden"
+              : `${hiddenColumns.hidden.size} columns hidden`}
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-primary hover:text-primary/80"
+            onClick={() => hiddenColumns.clear()}
+            aria-label="Show all hidden columns"
+          >
+            Show all
+          </Button>
+        </div>
+      )}
+
       {/* Filter bar */}
       {showFilters && (
         <FilterBar
@@ -633,6 +667,8 @@ export default function DataGrid({
           onSortColumn={handleSortColumn}
           onClearColumnSort={handleClearColumnSort}
           onClearAllSorts={handleClearAllSorts}
+          hiddenColumnNames={hiddenColumns.hidden}
+          onHideColumn={hiddenColumns.hide}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
           onNavigateToFk={handleNavigateToFk}
