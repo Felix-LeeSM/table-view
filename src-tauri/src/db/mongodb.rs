@@ -63,8 +63,8 @@ use crate::error::AppError;
 use crate::models::{ColumnInfo, TableInfo};
 
 use super::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentAdapter, DocumentId, DocumentQueryResult,
-    DocumentRow, FindBody, NamespaceInfo,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
+    DocumentAdapter, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
 };
 
 impl DocumentAdapter for MongoAdapter {
@@ -335,6 +335,27 @@ impl DocumentAdapter for MongoAdapter {
         collection: &'a str,
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
         Box::pin(async move { self.list_collection_indexes_impl(db, collection).await })
+    }
+
+    fn create_collection_index<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        request: CreateMongoIndexRequest,
+    ) -> BoxFuture<'a, Result<CreateMongoIndexResult, AppError>> {
+        Box::pin(async move {
+            self.create_collection_index_impl(db, collection, request)
+                .await
+        })
+    }
+
+    fn drop_collection_index<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.drop_collection_index_impl(db, collection, name).await })
     }
 
     fn get_collection_validator<'a>(

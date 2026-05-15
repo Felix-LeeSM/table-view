@@ -149,6 +149,73 @@ pub enum BulkWriteOp {
     },
 }
 
+/// Sprint 351 — direction tag for a single field of a Mongo index key spec.
+///
+/// 작성 이유 (2026-05-15): MongoDB index key documents use `1` / `-1`
+/// integers, but the wire shape from the frontend is intentionally a
+/// string enum so the JSON payload is self-documenting. The adapter maps
+/// `Asc → 1`, `Desc → -1` when assembling the `IndexModel.keys`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum MongoIndexDirection {
+    Asc,
+    Desc,
+}
+
+/// Sprint 351 — single field in a compound (or single-field) index key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MongoIndexField {
+    pub name: String,
+    pub direction: MongoIndexDirection,
+}
+
+/// Sprint 351 — optional collation block for a Mongo index. `locale` is
+/// required when the block is present; `strength` is `1..=5` per the
+/// ICU level convention (`Primary..Identical`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MongoIndexCollation {
+    pub locale: String,
+    #[serde(default)]
+    pub strength: Option<u32>,
+}
+
+/// Sprint 351 — full-option create-index request.
+///
+/// 작성 이유 (2026-05-15): Mongo index 의 옵션 전부를 한 request 로 묶어
+/// trait surface 를 single-method 로 유지한다. compound 인덱스는 `fields`
+/// 의 길이로 결정되고, TTL(`expire_after_seconds`) 는 단일 필드일 때만
+/// 허용 — compound + TTL 조합은 command 계층에서 `AppError::Validation`
+/// 로 거부한다.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMongoIndexRequest {
+    /// Optional caller-supplied name. `None` lets the driver fall back to
+    /// its default `field_dir_field_dir` naming.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// 1+ field rows. Empty input is rejected at the command layer.
+    pub fields: Vec<MongoIndexField>,
+    #[serde(default)]
+    pub unique: Option<bool>,
+    #[serde(default)]
+    pub sparse: Option<bool>,
+    /// TTL — only valid on a single-field index per MongoDB's contract.
+    #[serde(default)]
+    pub expire_after_seconds: Option<u32>,
+    /// Raw JSON object passed through to `partialFilterExpression`.
+    /// Validation (must be a `Document`) lives in the adapter.
+    #[serde(default)]
+    pub partial_filter_expression: Option<serde_json::Value>,
+    #[serde(default)]
+    pub collation: Option<MongoIndexCollation>,
+}
+
+/// Sprint 351 — server-returned canonical index name from `create_index`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateMongoIndexResult {
+    pub name: String,
+}
+
 /// Sprint 308 — aggregate counters returned by `bulkWrite`.
 ///
 /// 작성 이유 (2026-05-14): A6 `WriteSummaryPanel` 의 per-op breakdown row

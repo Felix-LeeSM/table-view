@@ -56,6 +56,78 @@ export async function listMongoIndexes(
   });
 }
 
+// ── Sprint 351 (2026-05-15) — Mongo index CRUD ──────────────────────────
+//
+// Direction is a string enum on the wire so payloads are self-documenting;
+// the Rust side maps `asc` / `desc` → `1` / `-1` when assembling the BSON
+// key document.
+
+export type MongoIndexDirection = "asc" | "desc";
+
+export interface MongoIndexField {
+  name: string;
+  direction: MongoIndexDirection;
+}
+
+export interface MongoIndexCollation {
+  locale: string;
+  /** ICU level 1..=5. Omitted leaves the driver default (Tertiary). */
+  strength?: number;
+}
+
+export interface CreateMongoIndexRequest {
+  name?: string;
+  fields: MongoIndexField[];
+  unique?: boolean;
+  sparse?: boolean;
+  /** TTL — only valid on single-field indexes; backend rejects otherwise. */
+  expireAfterSeconds?: number;
+  /** Raw JSON object — backend rejects non-object payloads. */
+  partialFilterExpression?: Record<string, unknown>;
+  collation?: MongoIndexCollation;
+}
+
+export interface CreateMongoIndexResult {
+  name: string;
+}
+
+/**
+ * Sprint 351 — create a Mongo collection index with the full option set.
+ * On success returns the canonical server-assigned name (so the toast can
+ * carry e.g. `Index "email_1" created`).
+ */
+export async function createMongoIndex(
+  connectionId: string,
+  database: string,
+  collection: string,
+  request: CreateMongoIndexRequest,
+): Promise<CreateMongoIndexResult> {
+  return invoke<CreateMongoIndexResult>("create_mongo_index", {
+    connectionId,
+    database,
+    collection,
+    request,
+  });
+}
+
+/**
+ * Sprint 351 — drop a Mongo collection index by canonical name. Dropping
+ * `_id_` is rejected at the Tauri layer with `AppError::Validation`.
+ */
+export async function dropMongoIndex(
+  connectionId: string,
+  database: string,
+  collection: string,
+  name: string,
+): Promise<void> {
+  return invoke<void>("drop_mongo_index", {
+    connectionId,
+    database,
+    collection,
+    name,
+  });
+}
+
 /**
  * Sprint 333 (Slice K live wire) — read the validator stored on
  * `collection` (Mongo `listCollections.options.validator`). Returns

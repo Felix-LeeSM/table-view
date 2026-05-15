@@ -20,8 +20,9 @@ use crate::models::{
 };
 
 use super::types::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentId, DocumentQueryResult, DocumentRow,
-    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
+    DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo, NamespaceLabel,
+    RdbQueryResult,
 };
 
 // ── Lifecycle trait ───────────────────────────────────────────────────────
@@ -864,6 +865,35 @@ pub trait DocumentAdapter: DbAdapter {
         db: &'a str,
         collection: &'a str,
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>>;
+
+    /// Sprint 351 — create a collection index from a fully-typed request.
+    ///
+    /// 작성 이유 (2026-05-15): Mongo index 옵션 전부 (unique / sparse / TTL /
+    /// partialFilterExpression / collation / compound asc-desc) 을 한
+    /// request 로 묶어 trait surface 를 single-method 로 유지한다. driver
+    /// 의 `Collection::create_index` 가 반환하는 canonical name 을 그대로
+    /// 토해낸다 — caller (frontend toast / 후속 list refresh) 가 정확한
+    /// server-assigned 이름을 알 수 있다. 입력 검증 (빈 fields, compound
+    /// TTL) 은 Tauri command 계층 + 어댑터 양쪽에서 enforce.
+    fn create_collection_index<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        request: CreateMongoIndexRequest,
+    ) -> BoxFuture<'a, Result<CreateMongoIndexResult, AppError>>;
+
+    /// Sprint 351 — drop a collection index by canonical name.
+    ///
+    /// 작성 이유 (2026-05-15): driver `Collection::drop_index(name)` 의
+    /// thin wrap. `_id_` drop 거부는 Tauri command 계층에서 처리 — 어댑터
+    /// 는 driver 가 거부하는 정상 경로로 흐른다 (MongoDB 가 서버 측에서도
+    /// `_id_` drop 을 거부하므로 UI 우회 시도라도 결국 차단된다).
+    fn drop_collection_index<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 
     /// Sprint 333 — read the collection's stored validator (Mongo
     /// `listCollections` options.validator).

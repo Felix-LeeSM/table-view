@@ -194,6 +194,9 @@ pub fn run() {
         commands::document::browse::infer_collection_fields,
         // Sprint 332 (Slice J live wire) — Mongo collection 인덱스.
         commands::document::browse::list_mongo_indexes,
+        // Sprint 351 — Mongo collection index CRUD.
+        commands::document::browse::create_mongo_index,
+        commands::document::browse::drop_mongo_index,
         // Sprint 333 (Slice K live wire) — Mongo collection validator.
         commands::document::browse::get_mongo_validator,
         commands::document::browse::set_mongo_validator,

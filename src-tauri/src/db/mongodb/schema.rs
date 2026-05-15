@@ -14,7 +14,10 @@ use serde_json::Value as JsonValue;
 use crate::error::AppError;
 use crate::models::{ColumnInfo, IndexInfo, TableInfo};
 
-use super::super::NamespaceInfo;
+use super::super::{
+    CreateMongoIndexRequest, CreateMongoIndexResult, MongoIndexCollation, MongoIndexDirection,
+    NamespaceInfo,
+};
 use super::category::map_mongo_data_type;
 use super::queries::{bson_type_name, validate_ns};
 use super::MongoAdapter;
@@ -137,6 +140,144 @@ impl MongoAdapter {
         }
 
         Ok(out)
+    }
+
+    /// Sprint 351 — create a Mongo collection index from a fully-typed
+    /// request. Translates `CreateMongoIndexRequest` into a
+    /// `mongodb::IndexModel` + `mongodb::options::IndexOptions` and
+    /// forwards driver errors verbatim as `AppError::Database(<msg>)`
+    /// so the UI can surface MongoDB's native message (E11000 duplicate,
+    /// IndexOptionsConflict, etc.).
+    pub(super) async fn create_collection_index_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        request: CreateMongoIndexRequest,
+    ) -> Result<CreateMongoIndexResult, AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, collection)?;
+
+        if request.fields.is_empty() {
+            return Err(AppError::Validation(
+                "create_index requires at least one field".into(),
+            ));
+        }
+        if request.expire_after_seconds.is_some() && request.fields.len() > 1 {
+            return Err(AppError::Validation(
+                "expireAfterSeconds requires a single-field index".into(),
+            ));
+        }
+
+        // Assemble the keys document. Insertion order matters — Mongo
+        // treats `(a:1, b:-1)` and `(b:-1, a:1)` as distinct compound
+        // indexes. `bson::Document` preserves insertion order so the
+        // user's UI ordering is honoured byte-for-byte.
+        let mut keys = Document::new();
+        for field in &request.fields {
+            if field.name.trim().is_empty() {
+                return Err(AppError::Validation(
+                    "Index field name must not be empty".into(),
+                ));
+            }
+            let dir: i32 = match field.direction {
+                MongoIndexDirection::Asc => 1,
+                MongoIndexDirection::Desc => -1,
+            };
+            keys.insert(&field.name, Bson::Int32(dir));
+        }
+
+        let mut options = mongodb::options::IndexOptions::builder().build();
+        if let Some(name) = request.name.as_deref() {
+            let trimmed = name.trim();
+            if !trimmed.is_empty() {
+                options.name = Some(trimmed.to_string());
+            }
+        }
+        if let Some(true) = request.unique {
+            options.unique = Some(true);
+        }
+        if let Some(true) = request.sparse {
+            options.sparse = Some(true);
+        }
+        if let Some(secs) = request.expire_after_seconds {
+            options.expire_after = Some(std::time::Duration::from_secs(secs as u64));
+        }
+        if let Some(filter_value) = request.partial_filter_expression {
+            let doc = match bson::to_bson(&filter_value) {
+                Ok(Bson::Document(d)) => d,
+                Ok(_) => {
+                    return Err(AppError::Validation(
+                        "partialFilterExpression must be a JSON object".into(),
+                    ));
+                }
+                Err(e) => {
+                    return Err(AppError::Validation(format!(
+                        "partialFilterExpression JSON could not be encoded: {e}"
+                    )));
+                }
+            };
+            options.partial_filter_expression = Some(doc);
+        }
+        if let Some(collation) = request.collation {
+            options.collation = Some(build_collation(collation)?);
+        }
+
+        let model = mongodb::IndexModel::builder()
+            .keys(keys)
+            .options(options)
+            .build();
+
+        let client = self.current_client().await?;
+        let coll = client
+            .database(&resolved)
+            .collection::<Document>(collection);
+
+        let result = coll
+            .create_index(model)
+            .await
+            .map_err(|e| AppError::Database(format!("create_index failed: {e}")))?;
+
+        Ok(CreateMongoIndexResult {
+            name: result.index_name,
+        })
+    }
+
+    /// Sprint 351 — drop a Mongo collection index by canonical name.
+    /// Driver errors (e.g. `IndexNotFound`) flow through as
+    /// `AppError::Database` so the panel-level alert reads the verbatim
+    /// driver message. The `_id_` guard lives in the Tauri command layer
+    /// — at the adapter we let MongoDB enforce the same rule server-side
+    /// in case a future caller bypasses the command shim.
+    pub(super) async fn drop_collection_index_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        name: &str,
+    ) -> Result<(), AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, collection)?;
+
+        if name.trim().is_empty() {
+            return Err(AppError::Validation("Index name must not be empty".into()));
+        }
+
+        let client = self.current_client().await?;
+        let coll = client
+            .database(&resolved)
+            .collection::<Document>(collection);
+
+        coll.drop_index(name)
+            .await
+            .map_err(|e| AppError::Database(format!("drop_index failed: {e}")))?;
+        Ok(())
     }
 
     /// Sprint 333 (Slice K live wire) — read the collection's stored
@@ -741,6 +882,37 @@ fn map_index_model(model: &mongodb::IndexModel) -> IndexInfo {
         is_unique,
         is_primary,
     }
+}
+
+/// Sprint 351 — build a `mongodb::options::Collation` from the wire-side
+/// `MongoIndexCollation`. The frontend only exposes the two ICU knobs we
+/// care about for index tuning (`locale` + `strength` 1..5); the other
+/// Collation flags stay at the driver's defaults.
+fn build_collation(input: MongoIndexCollation) -> Result<mongodb::options::Collation, AppError> {
+    if input.locale.trim().is_empty() {
+        return Err(AppError::Validation(
+            "Collation locale must not be empty".into(),
+        ));
+    }
+    let mut collation = mongodb::options::Collation::builder()
+        .locale(input.locale)
+        .build();
+    if let Some(level) = input.strength {
+        let strength = match level {
+            1 => mongodb::options::CollationStrength::Primary,
+            2 => mongodb::options::CollationStrength::Secondary,
+            3 => mongodb::options::CollationStrength::Tertiary,
+            4 => mongodb::options::CollationStrength::Quaternary,
+            5 => mongodb::options::CollationStrength::Identical,
+            other => {
+                return Err(AppError::Validation(format!(
+                    "Collation strength must be 1..=5, got {other}"
+                )));
+            }
+        };
+        collation.strength = Some(strength);
+    }
+    Ok(collation)
 }
 
 /// Mongo driver 가 IndexModel.options.name 을 비워둔 경우의 fallback —

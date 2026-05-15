@@ -33,7 +33,10 @@ use bson::{doc, oid::ObjectId, Bson, Document};
 use mongodb::options::{ClientOptions, Credential, ServerAddress};
 use mongodb::Client;
 use serde_json::Value;
-use table_view_lib::db::{BulkWriteOp, DbAdapter, DocumentAdapter, DocumentId, FindBody};
+use table_view_lib::db::{
+    BulkWriteOp, CreateMongoIndexRequest, DbAdapter, DocumentAdapter, DocumentId, FindBody,
+    MongoIndexCollation, MongoIndexDirection, MongoIndexField,
+};
 use table_view_lib::error::AppError;
 use table_view_lib::models::ConnectionConfig;
 
@@ -1251,6 +1254,496 @@ async fn test_mongo_adapter_bulk_write_aggregate_counters() {
     assert_eq!(updated.get_i32("version").expect("version field"), 2);
 
     coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+// ── Sprint 351 (2026-05-15) — Mongo index CRUD integration ────────────────
+//
+// 작성 이유: Mongo index CRUD trait method (`create_collection_index` /
+// `drop_collection_index`) 가 실제 mongod 에 대해 의도된 wire shape (unique,
+// TTL, partialFilterExpression, compound + collation) 을 round-trip 하는지
+// 검증. 각 테스트가 `table_view_test.idx_*` 자체 collection 을 써서
+// read-path 픽스처와 충돌 없이 직렬 실행. 컨테이너가 없으면 setup helper
+// 가 None → early return → 통과 (기존 skip-on-no-container 패턴 답습).
+
+/// Sprint 351 — unique single-field index round-trip.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_create_index_unique_roundtrip() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_unique");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "email": "a@example.com" })
+        .await
+        .expect("seed insert should succeed");
+
+    let request = CreateMongoIndexRequest {
+        name: None,
+        fields: vec![MongoIndexField {
+            name: "email".into(),
+            direction: MongoIndexDirection::Asc,
+        }],
+        unique: Some(true),
+        sparse: None,
+        expire_after_seconds: None,
+        partial_filter_expression: None,
+        collation: None,
+    };
+    let result = adapter
+        .create_collection_index("table_view_test", "idx_unique", request)
+        .await
+        .expect("create_collection_index should succeed");
+    assert_eq!(
+        result.name, "email_1",
+        "driver should return the canonical email_1 name"
+    );
+
+    let indexes = adapter
+        .list_collection_indexes("table_view_test", "idx_unique")
+        .await
+        .expect("list_collection_indexes should succeed");
+    let email_idx = indexes
+        .iter()
+        .find(|i| i.name == "email_1")
+        .expect("email_1 must be in listed indexes");
+    assert!(email_idx.is_unique, "email_1 must carry unique=true");
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — TTL single-field index (`expireAfterSeconds`).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_create_index_ttl_single_field() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_ttl");
+    let _ = coll.drop().await;
+
+    let request = CreateMongoIndexRequest {
+        name: Some("session_ttl".into()),
+        fields: vec![MongoIndexField {
+            name: "createdAt".into(),
+            direction: MongoIndexDirection::Asc,
+        }],
+        unique: None,
+        sparse: None,
+        expire_after_seconds: Some(3600),
+        partial_filter_expression: None,
+        collation: None,
+    };
+    let result = adapter
+        .create_collection_index("table_view_test", "idx_ttl", request)
+        .await
+        .expect("create_collection_index should succeed");
+    assert_eq!(result.name, "session_ttl");
+
+    let mut cursor = coll
+        .list_indexes()
+        .await
+        .expect("list_indexes should succeed");
+    let mut found_ttl = false;
+    while let Some(next) = futures_util::StreamExt::next(&mut cursor).await {
+        let model = next.expect("cursor next");
+        let name = model
+            .options
+            .as_ref()
+            .and_then(|o| o.name.clone())
+            .unwrap_or_default();
+        if name == "session_ttl" {
+            let secs = model
+                .options
+                .as_ref()
+                .and_then(|o| o.expire_after.as_ref())
+                .map(|d| d.as_secs())
+                .expect("expire_after must be set");
+            assert_eq!(secs, 3600);
+            found_ttl = true;
+        }
+    }
+    assert!(found_ttl, "session_ttl index must be present");
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — partialFilterExpression round-trip.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_create_index_partial_filter() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_partial");
+    let _ = coll.drop().await;
+
+    let filter = serde_json::json!({ "active": true });
+    let request = CreateMongoIndexRequest {
+        name: Some("active_only".into()),
+        fields: vec![MongoIndexField {
+            name: "user".into(),
+            direction: MongoIndexDirection::Asc,
+        }],
+        unique: None,
+        sparse: None,
+        expire_after_seconds: None,
+        partial_filter_expression: Some(filter),
+        collation: None,
+    };
+    let result = adapter
+        .create_collection_index("table_view_test", "idx_partial", request)
+        .await
+        .expect("create_collection_index should succeed");
+    assert_eq!(result.name, "active_only");
+
+    let mut cursor = coll
+        .list_indexes()
+        .await
+        .expect("list_indexes should succeed");
+    let mut found = false;
+    while let Some(next) = futures_util::StreamExt::next(&mut cursor).await {
+        let model = next.expect("cursor next");
+        let name = model
+            .options
+            .as_ref()
+            .and_then(|o| o.name.clone())
+            .unwrap_or_default();
+        if name == "active_only" {
+            let pfe = model
+                .options
+                .as_ref()
+                .and_then(|o| o.partial_filter_expression.clone())
+                .expect("partial_filter_expression must be set");
+            assert!(pfe.get_bool("active").unwrap_or(false));
+            found = true;
+        }
+    }
+    assert!(found, "active_only index must be present");
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — compound (2-field) index with collation.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_create_index_compound_with_collation() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_compound");
+    let _ = coll.drop().await;
+
+    let request = CreateMongoIndexRequest {
+        name: Some("name_asc_age_desc".into()),
+        fields: vec![
+            MongoIndexField {
+                name: "name".into(),
+                direction: MongoIndexDirection::Asc,
+            },
+            MongoIndexField {
+                name: "age".into(),
+                direction: MongoIndexDirection::Desc,
+            },
+        ],
+        unique: None,
+        sparse: None,
+        expire_after_seconds: None,
+        partial_filter_expression: None,
+        collation: Some(MongoIndexCollation {
+            locale: "en".into(),
+            strength: Some(2),
+        }),
+    };
+    let result = adapter
+        .create_collection_index("table_view_test", "idx_compound", request)
+        .await
+        .expect("create_collection_index should succeed");
+    assert_eq!(result.name, "name_asc_age_desc");
+
+    let indexes = adapter
+        .list_collection_indexes("table_view_test", "idx_compound")
+        .await
+        .expect("list_collection_indexes should succeed");
+    let compound = indexes
+        .iter()
+        .find(|i| i.name == "name_asc_age_desc")
+        .expect("compound index must be listed");
+    assert_eq!(
+        compound.columns,
+        vec!["name".to_string(), "age".to_string()]
+    );
+    assert_eq!(compound.index_type, "compound");
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — drop an existing index by name.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_drop_existing_index() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_drop");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "email": "a@example.com" })
+        .await
+        .expect("seed insert should succeed");
+
+    let req = CreateMongoIndexRequest {
+        name: None,
+        fields: vec![MongoIndexField {
+            name: "email".into(),
+            direction: MongoIndexDirection::Asc,
+        }],
+        unique: None,
+        sparse: None,
+        expire_after_seconds: None,
+        partial_filter_expression: None,
+        collation: None,
+    };
+    adapter
+        .create_collection_index("table_view_test", "idx_drop", req)
+        .await
+        .expect("create should succeed");
+
+    let before = adapter
+        .list_collection_indexes("table_view_test", "idx_drop")
+        .await
+        .expect("list should succeed");
+    assert!(before.iter().any(|i| i.name == "email_1"));
+
+    adapter
+        .drop_collection_index("table_view_test", "idx_drop", "email_1")
+        .await
+        .expect("drop_collection_index should succeed");
+
+    let after = adapter
+        .list_collection_indexes("table_view_test", "idx_drop")
+        .await
+        .expect("list should succeed");
+    assert!(
+        !after.iter().any(|i| i.name == "email_1"),
+        "email_1 must be gone after drop"
+    );
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — dropping the `_id_` index goes through the driver and is
+/// rejected (MongoDB enforces this server-side; the adapter does not
+/// special-case `_id_` because the Tauri command shim handles the
+/// friendly Validation message before the driver round-trip).
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_drop_id_index_rejected() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_drop_id");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "name": "ada" })
+        .await
+        .expect("seed insert should succeed");
+
+    let err = adapter
+        .drop_collection_index("table_view_test", "idx_drop_id", "_id_")
+        .await
+        .expect_err("dropping _id_ must fail");
+    match err {
+        AppError::Database(msg) => {
+            assert!(
+                msg.to_lowercase().contains("_id") || msg.to_lowercase().contains("drop"),
+                "unexpected driver message: {msg}"
+            );
+        }
+        other => panic!("expected Database error, got {other:?}"),
+    }
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — creating two indexes with the same name + different
+/// options yields an `IndexOptionsConflict` (or similar) driver error.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_create_index_duplicate_name_errors() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("idx_dup");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "email": "a@example.com" })
+        .await
+        .expect("seed insert should succeed");
+
+    let req1 = CreateMongoIndexRequest {
+        name: Some("conflict".into()),
+        fields: vec![MongoIndexField {
+            name: "email".into(),
+            direction: MongoIndexDirection::Asc,
+        }],
+        unique: Some(true),
+        sparse: None,
+        expire_after_seconds: None,
+        partial_filter_expression: None,
+        collation: None,
+    };
+    adapter
+        .create_collection_index("table_view_test", "idx_dup", req1)
+        .await
+        .expect("first create should succeed");
+
+    let req2 = CreateMongoIndexRequest {
+        name: Some("conflict".into()),
+        fields: vec![MongoIndexField {
+            name: "email".into(),
+            direction: MongoIndexDirection::Asc,
+        }],
+        unique: Some(false),
+        sparse: None,
+        expire_after_seconds: None,
+        partial_filter_expression: None,
+        collation: None,
+    };
+    let err = adapter
+        .create_collection_index("table_view_test", "idx_dup", req2)
+        .await
+        .expect_err("second create should fail");
+    match err {
+        AppError::Database(_) => { /* driver wording can vary */ }
+        other => panic!("expected Database error, got {other:?}"),
+    }
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 351 — TTL on a compound index is rejected by the adapter
+/// before any driver round-trip.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_create_index_ttl_on_compound_rejected() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let req = CreateMongoIndexRequest {
+        name: None,
+        fields: vec![
+            MongoIndexField {
+                name: "createdAt".into(),
+                direction: MongoIndexDirection::Asc,
+            },
+            MongoIndexField {
+                name: "userId".into(),
+                direction: MongoIndexDirection::Asc,
+            },
+        ],
+        unique: None,
+        sparse: None,
+        expire_after_seconds: Some(3600),
+        partial_filter_expression: None,
+        collation: None,
+    };
+    let err = adapter
+        .create_collection_index("table_view_test", "idx_ttl_compound", req)
+        .await
+        .expect_err("compound + TTL must be rejected");
+    match err {
+        AppError::Validation(msg) => assert!(msg.contains("single-field")),
+        other => panic!("expected Validation, got {other:?}"),
+    }
+
     adapter
         .disconnect()
         .await

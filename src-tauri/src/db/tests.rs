@@ -227,6 +227,26 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
+        fn create_collection_index<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _request: CreateMongoIndexRequest,
+        ) -> BoxFuture<'a, Result<CreateMongoIndexResult, AppError>> {
+            Box::pin(async {
+                Ok(CreateMongoIndexResult {
+                    name: String::new(),
+                })
+            })
+        }
+        fn drop_collection_index<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _name: &'a str,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
         fn get_collection_validator<'a>(
             &'a self,
             _db: &'a str,
@@ -863,6 +883,26 @@ impl DocumentAdapter for FakeCancellableDocument {
         _collection: &'a str,
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+    fn create_collection_index<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _request: CreateMongoIndexRequest,
+    ) -> BoxFuture<'a, Result<CreateMongoIndexResult, AppError>> {
+        Box::pin(async {
+            Ok(CreateMongoIndexResult {
+                name: String::new(),
+            })
+        })
+    }
+    fn drop_collection_index<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _name: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
     }
     fn get_collection_validator<'a>(
         &'a self,

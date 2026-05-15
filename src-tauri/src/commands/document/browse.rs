@@ -15,6 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::commands::connection::AppState;
+use crate::db::{CreateMongoIndexRequest, CreateMongoIndexResult};
 use crate::error::AppError;
 use crate::models::{ColumnInfo, IndexInfo, TableInfo};
 
@@ -200,6 +201,102 @@ pub async fn list_mongo_indexes(
     collection: String,
 ) -> Result<Vec<IndexInfo>, AppError> {
     list_mongo_indexes_inner(state.inner(), &connection_id, &database, &collection).await
+}
+
+async fn create_mongo_index_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    request: CreateMongoIndexRequest,
+) -> Result<CreateMongoIndexResult, AppError> {
+    // Server-side input validation. Each gate fires before the adapter
+    // round-trip so callers that bypass the UI still see the same
+    // contract MongoDB enforces server-side.
+    if request.fields.is_empty() {
+        return Err(AppError::Validation(
+            "create_index requires at least one field".into(),
+        ));
+    }
+    if request.expire_after_seconds.is_some() && request.fields.len() > 1 {
+        return Err(AppError::Validation(
+            "expireAfterSeconds requires a single-field index".into(),
+        ));
+    }
+
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .create_collection_index(database, collection, request)
+        .await
+}
+
+/// Sprint 351 — create a Mongo collection index. Accepts the full
+/// option set (unique / sparse / TTL / partialFilterExpression /
+/// collation / compound asc-desc). Driver errors (E11000,
+/// IndexOptionsConflict, …) flow back as `AppError::Database` so the
+/// UI can render the verbatim message in the dialog alert.
+#[tauri::command]
+pub async fn create_mongo_index(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    request: CreateMongoIndexRequest,
+) -> Result<CreateMongoIndexResult, AppError> {
+    create_mongo_index_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        request,
+    )
+    .await
+}
+
+async fn drop_mongo_index_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    name: &str,
+) -> Result<(), AppError> {
+    // The `_id_` guard fires before the adapter round-trip so the UX
+    // contract holds even when the UI is bypassed (programmatic
+    // callers, REPL, tests). MongoDB enforces the same server-side —
+    // we surface the friendlier message before the driver error.
+    if name == "_id_" {
+        return Err(AppError::Validation(
+            "The _id_ index cannot be dropped".into(),
+        ));
+    }
+
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .drop_collection_index(database, collection, name)
+        .await
+}
+
+/// Sprint 351 — drop a Mongo collection index by canonical name. The
+/// `_id_` index is rejected at the Tauri layer (`AppError::Validation`)
+/// so the contract holds even when callers bypass the UI's disabled
+/// trash button.
+#[tauri::command]
+pub async fn drop_mongo_index(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    name: String,
+) -> Result<(), AppError> {
+    drop_mongo_index_inner(state.inner(), &connection_id, &database, &collection, &name).await
 }
 
 async fn get_mongo_validator_inner(
@@ -583,6 +680,165 @@ mod tests {
         }));
         let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
         drop_mongo_database_inner(&state, "d", "staging")
+            .await
+            .unwrap();
+    }
+
+    // ── Sprint 351 — create_mongo_index / drop_mongo_index wiring ──────────
+    //
+    // 작성 이유 (2026-05-15): 새 두 Tauri command shim 의 server-side
+    // validation gate 와 trait dispatch 를 통합 테스트와 별개로 단위 검증.
+    // 시나리오:
+    //   * empty fields → Validation (어댑터 도달 전 차단)
+    //   * compound + TTL → Validation
+    //   * happy path → adapter 에 같은 request 가 전달되고 returned name 이
+    //     wire 로 propagate
+    //   * unknown connection → NotFound
+    //   * rdb paradigm → Unsupported
+    //   * `_id_` drop → Validation
+    //   * non-`_id_` drop → adapter 호출 happen
+
+    use crate::db::{
+        CreateMongoIndexRequest, CreateMongoIndexResult, MongoIndexDirection, MongoIndexField,
+    };
+
+    fn make_simple_request() -> CreateMongoIndexRequest {
+        CreateMongoIndexRequest {
+            name: None,
+            fields: vec![MongoIndexField {
+                name: "email".into(),
+                direction: MongoIndexDirection::Asc,
+            }],
+            unique: Some(true),
+            sparse: None,
+            expire_after_seconds: None,
+            partial_filter_expression: None,
+            collation: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn create_mongo_index_empty_fields_returns_validation() {
+        let state = state_with("d", document_default()).await;
+        let req = CreateMongoIndexRequest {
+            name: None,
+            fields: Vec::new(),
+            unique: None,
+            sparse: None,
+            expire_after_seconds: None,
+            partial_filter_expression: None,
+            collation: None,
+        };
+        match create_mongo_index_inner(&state, "d", "app", "users", req).await {
+            Err(AppError::Validation(msg)) => assert!(msg.contains("at least one field")),
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_mongo_index_ttl_on_compound_returns_validation() {
+        let state = state_with("d", document_default()).await;
+        let req = CreateMongoIndexRequest {
+            name: None,
+            fields: vec![
+                MongoIndexField {
+                    name: "a".into(),
+                    direction: MongoIndexDirection::Asc,
+                },
+                MongoIndexField {
+                    name: "b".into(),
+                    direction: MongoIndexDirection::Desc,
+                },
+            ],
+            unique: None,
+            sparse: None,
+            expire_after_seconds: Some(60),
+            partial_filter_expression: None,
+            collation: None,
+        };
+        match create_mongo_index_inner(&state, "d", "app", "users", req).await {
+            Err(AppError::Validation(msg)) => assert!(msg.contains("single-field")),
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_mongo_index_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match create_mongo_index_inner(&state, "absent", "app", "users", make_simple_request())
+            .await
+        {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_mongo_index_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        match create_mongo_index_inner(&state, "rdb", "app", "users", make_simple_request()).await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("document")),
+            other => panic!("Expected Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn create_mongo_index_routes_request_to_trait_and_returns_name() {
+        let mut s = crate::db::testing::StubDocumentAdapter::default();
+        s.create_collection_index_fn = Some(Box::new(|db, coll, req| {
+            assert_eq!(db, "app");
+            assert_eq!(coll, "users");
+            assert_eq!(req.fields.len(), 1);
+            assert_eq!(req.fields[0].name, "email");
+            Ok(CreateMongoIndexResult {
+                name: "email_1".into(),
+            })
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let out = create_mongo_index_inner(&state, "d", "app", "users", make_simple_request())
+            .await
+            .unwrap();
+        assert_eq!(out.name, "email_1");
+    }
+
+    #[tokio::test]
+    async fn drop_mongo_index_blocks_id_index() {
+        let state = state_with("d", document_default()).await;
+        match drop_mongo_index_inner(&state, "d", "app", "users", "_id_").await {
+            Err(AppError::Validation(msg)) => assert!(msg.contains("_id_")),
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_mongo_index_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match drop_mongo_index_inner(&state, "absent", "app", "users", "email_1").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_mongo_index_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        match drop_mongo_index_inner(&state, "rdb", "app", "users", "email_1").await {
+            Err(AppError::Unsupported(msg)) => assert!(msg.contains("document")),
+            other => panic!("Expected Unsupported, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn drop_mongo_index_routes_to_trait_method() {
+        let mut s = crate::db::testing::StubDocumentAdapter::default();
+        s.drop_collection_index_fn = Some(Box::new(|db, coll, name| {
+            assert_eq!(db, "app");
+            assert_eq!(coll, "users");
+            assert_eq!(name, "email_1");
+            Ok(())
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        drop_mongo_index_inner(&state, "d", "app", "users", "email_1")
             .await
             .unwrap();
     }

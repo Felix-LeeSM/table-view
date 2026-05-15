@@ -25,8 +25,9 @@ use tokio_util::sync::CancellationToken;
 
 use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
 use super::types::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, DocumentId, DocumentQueryResult, DocumentRow,
-    FindBody, NamespaceInfo, NamespaceLabel, RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
+    DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo, NamespaceLabel,
+    RdbQueryResult,
 };
 use crate::error::AppError;
 use crate::models::{
@@ -713,6 +714,18 @@ pub(crate) struct StubDocumentAdapter {
     // with no override.
     pub list_collection_indexes_fn: Option<FnTwo<str, str, Vec<crate::models::IndexInfo>>>,
 
+    // Sprint 351 — override slots for the create / drop index pair.
+    #[allow(clippy::type_complexity)]
+    pub create_collection_index_fn: Option<
+        Box<
+            dyn Fn(&str, &str, CreateMongoIndexRequest) -> Result<CreateMongoIndexResult, AppError>
+                + Send
+                + Sync,
+        >,
+    >,
+    pub drop_collection_index_fn:
+        Option<Box<dyn Fn(&str, &str, &str) -> Result<(), AppError> + Send + Sync>>,
+
     // Sprint 333 — override slots for the validator pair. Default returns
     // `None` / `Ok(())` so wiring tests for unrelated commands compile
     // without a hand-rolled override.
@@ -775,6 +788,8 @@ impl Default for StubDocumentAdapter {
             insert_many_fn: None,
             bulk_write_fn: None,
             list_collection_indexes_fn: None,
+            create_collection_index_fn: None,
+            drop_collection_index_fn: None,
             get_collection_validator_fn: None,
             set_collection_validator_fn: None,
             create_collection_fn: None,
@@ -1026,6 +1041,37 @@ impl DocumentAdapter for StubDocumentAdapter {
             .list_collection_indexes_fn
             .as_ref()
             .map_or_else(|| Ok(Vec::new()), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 351 — create / drop collection index stubs.
+    fn create_collection_index<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        request: CreateMongoIndexRequest,
+    ) -> BoxFuture<'a, Result<CreateMongoIndexResult, AppError>> {
+        let r = self.create_collection_index_fn.as_ref().map_or_else(
+            || {
+                Ok(CreateMongoIndexResult {
+                    name: String::new(),
+                })
+            },
+            |f| f(db, coll, request),
+        );
+        Box::pin(async move { r })
+    }
+
+    fn drop_collection_index<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self
+            .drop_collection_index_fn
+            .as_ref()
+            .map_or_else(|| Ok(()), |f| f(db, coll, name));
         Box::pin(async move { r })
     }
 
