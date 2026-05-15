@@ -18,9 +18,17 @@ export const autocompleteTooltipTheme = EditorView.theme({
     color: "var(--popover-foreground)",
     border: "1px solid var(--border)",
   },
+  // 2026-05-15 — `.cm-tooltip` 의 border 가 더 specific selector 의
+  // background override 에 가려 외곽이 흐릿하던 문제를 직접 specific
+  // selector 에 다시 박아 해결. 함께 box-shadow + radius 를 얹어
+  // popup 이 본문 위로 명확히 떠 보이도록 한다.
   ".cm-tooltip.cm-tooltip-autocomplete": {
     backgroundColor: "var(--popover)",
     color: "var(--popover-foreground)",
+    border: "1px solid var(--border)",
+    borderRadius: "6px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.18), 0 2px 4px rgba(0, 0, 0, 0.12)",
+    overflow: "hidden",
   },
   ".cm-tooltip-autocomplete > ul": {
     fontFamily: '"JetBrains Mono", "Fira Code", monospace',

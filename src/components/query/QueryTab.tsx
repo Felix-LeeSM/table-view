@@ -84,6 +84,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
   // stable against unrelated cache updates. RDB tabs compute `undefined`
   // and the resulting no-op extension set is gated out by paradigm.
   const fieldsCache = useDocumentStore((s) => s.fieldsCache);
+  const collectionsCache = useDocumentStore((s) => s.collections);
   const mongoFieldNames = useMemo(() => {
     if (tab.paradigm !== "document" || !tab.database || !tab.collection) {
       return undefined;
@@ -99,18 +100,31 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.collection,
     tab.paradigm,
   ]);
-  // Collection-name candidates surfaced after `db.`. Sourced from
-  // `fieldsCache` keys for the active (connId, database) — they are the
-  // collections the user has already opened in the sidebar. The list may
-  // be empty before the sidebar has expanded the database; the mongosh
-  // method whitelist still fires through `createMongoshDbSource` so
-  // `db.<anyName>.fi` autocompletes regardless.
+  // Collection-name candidates surfaced after `db.`. Primary source is
+  // `documentStore.collections` — the same cache that backs the sidebar
+  // tree (`list_mongo_collections` IPC), so the popup proposes every
+  // collection the user can see in the sidebar even when they haven't
+  // opened any. `fieldsCache` is the secondary source for collections
+  // that were opened ad-hoc without populating the database's list (rare,
+  // but kept so the union never shrinks). The mongosh method whitelist
+  // still fires through `createMongoshDbSource` so `db.<anyName>.fi`
+  // autocompletes regardless of whether either cache is populated.
   const mongoCollectionNames = useMemo(() => {
     if (tab.paradigm !== "document" || !tab.database) return undefined;
-    const dbCache = fieldsCache[tab.connectionId]?.[tab.database];
-    if (!dbCache) return undefined;
-    return Object.keys(dbCache);
-  }, [fieldsCache, tab.connectionId, tab.database, tab.paradigm]);
+    const fromList = collectionsCache[tab.connectionId]?.[tab.database];
+    const fromFields = fieldsCache[tab.connectionId]?.[tab.database];
+    if (!fromList && !fromFields) return undefined;
+    const names = new Set<string>();
+    fromList?.forEach((c) => names.add(c.name));
+    if (fromFields) Object.keys(fromFields).forEach((name) => names.add(name));
+    return Array.from(names);
+  }, [
+    collectionsCache,
+    fieldsCache,
+    tab.connectionId,
+    tab.database,
+    tab.paradigm,
+  ]);
   // Sprint 309 — `useMongoAutocomplete` no longer branches on the legacy
   // mode toggle. The unified completion source surfaces both the find
   // operator set and aggregate stages / accumulators so the user can type
