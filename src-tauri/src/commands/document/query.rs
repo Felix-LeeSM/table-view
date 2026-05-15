@@ -373,6 +373,52 @@ pub async fn distinct_documents(
     .await
 }
 
+async fn explain_mongo_find_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    filter: bson::Document,
+    verbosity: &str,
+) -> Result<serde_json::Value, AppError> {
+    if collection.trim().is_empty() {
+        return Err(AppError::Validation(
+            "Collection name must not be empty".into(),
+        ));
+    }
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .explain_query(database, collection, filter, verbosity)
+        .await
+}
+
+/// Sprint 337 (U2 live wire) — Mongo `runCommand({explain: {find, filter},
+/// verbosity})`. Returns the raw explain response as
+/// `serde_json::Value`.
+#[tauri::command]
+pub async fn explain_mongo_find(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    filter: Option<bson::Document>,
+    verbosity: Option<String>,
+) -> Result<serde_json::Value, AppError> {
+    explain_mongo_find_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        filter.unwrap_or_default(),
+        verbosity.as_deref().unwrap_or("queryPlanner"),
+    )
+    .await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -689,5 +735,91 @@ mod tests {
         .unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0], serde_json::json!("got:myfield"));
+    }
+
+    // ── Sprint 337 (U2 live wire) — explain_mongo_find ────────────────────
+
+    #[tokio::test]
+    async fn explain_mongo_find_rejects_empty_collection() {
+        let state = state_with("d", document_default()).await;
+        match explain_mongo_find_inner(
+            &state,
+            "d",
+            "db",
+            "  ",
+            bson::Document::new(),
+            "queryPlanner",
+        )
+        .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}")
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_mongo_find_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match explain_mongo_find_inner(
+            &state,
+            "absent",
+            "db",
+            "c",
+            bson::Document::new(),
+            "queryPlanner",
+        )
+        .await
+        {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_mongo_find_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        assert!(matches!(
+            explain_mongo_find_inner(
+                &state,
+                "rdb",
+                "db",
+                "c",
+                bson::Document::new(),
+                "queryPlanner"
+            )
+            .await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn explain_mongo_find_routes_to_trait_method_with_args() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+        let called = Arc::new(AtomicBool::new(false));
+        let called_for_closure = called.clone();
+        let mut s = StubDocumentAdapter::default();
+        s.explain_query_fn = Some(Box::new(move |db, coll, _filter, verbosity| {
+            assert_eq!(db, "mydb");
+            assert_eq!(coll, "mycoll");
+            assert_eq!(verbosity, "executionStats");
+            called_for_closure.store(true, Ordering::SeqCst);
+            Ok(serde_json::json!({ "ok": 1 }))
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let r = explain_mongo_find_inner(
+            &state,
+            "d",
+            "mydb",
+            "mycoll",
+            bson::Document::new(),
+            "executionStats",
+        )
+        .await
+        .unwrap();
+        assert!(called.load(Ordering::SeqCst));
+        assert_eq!(r["ok"], serde_json::Value::from(1));
     }
 }

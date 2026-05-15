@@ -130,6 +130,10 @@ pub(crate) struct StubRdbAdapter {
     // Sprint 336 — override slots for the RDB server-activity pair.
     pub list_server_activity_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
     pub kill_session_fn: Option<FnOne<i64, ()>>,
+
+    // Sprint 337 — override slot for RDB explain.
+    pub explain_query_fn:
+        Option<Box<dyn Fn(&str) -> Result<serde_json::Value, AppError> + Send + Sync>>,
 }
 
 impl Default for StubRdbAdapter {
@@ -176,6 +180,7 @@ impl Default for StubRdbAdapter {
             count_null_rows_fn: None,
             list_server_activity_fn: None,
             kill_session_fn: None,
+            explain_query_fn: None,
         }
     }
 }
@@ -591,6 +596,18 @@ impl RdbAdapter for StubRdbAdapter {
             .map_or_else(|| Ok(()), |f| f(&id));
         Box::pin(async move { r })
     }
+
+    // Sprint 337 — explain_query stub.
+    fn explain_query<'a>(
+        &'a self,
+        sql: &'a str,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        let r = self
+            .explain_query_fn
+            .as_ref()
+            .map_or_else(|| Ok(serde_json::Value::Null), |f| f(sql));
+        Box::pin(async move { r })
+    }
 }
 
 // ── StubDocumentAdapter ──────────────────────────────────────────────────
@@ -651,6 +668,16 @@ pub(crate) struct StubDocumentAdapter {
     // Sprint 336 — override slots for the Mongo activity pair.
     pub current_op_fn: Option<FnZero<Vec<crate::models::ServerActivityRow>>>,
     pub kill_op_fn: Option<Box<dyn Fn(i64) -> Result<(), AppError> + Send + Sync>>,
+
+    // Sprint 337 — override slot for Mongo explain (find).
+    #[allow(clippy::type_complexity)]
+    pub explain_query_fn: Option<
+        Box<
+            dyn Fn(&str, &str, bson::Document, &str) -> Result<serde_json::Value, AppError>
+                + Send
+                + Sync,
+        >,
+    >,
 }
 
 impl Default for StubDocumentAdapter {
@@ -680,6 +707,7 @@ impl Default for StubDocumentAdapter {
             drop_database_fn: None,
             current_op_fn: None,
             kill_op_fn: None,
+            explain_query_fn: None,
         }
     }
 }
@@ -998,6 +1026,21 @@ impl DocumentAdapter for StubDocumentAdapter {
 
     fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
         let r = self.kill_op_fn.as_ref().map_or_else(|| Ok(()), |f| f(id));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 337 — explain_query (find) stub.
+    fn explain_query<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+        verbosity: &'a str,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        let r = self.explain_query_fn.as_ref().map_or_else(
+            || Ok(serde_json::Value::Null),
+            |f| f(db, collection, filter, verbosity),
+        );
         Box::pin(async move { r })
     }
 }

@@ -269,6 +269,15 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         fn kill_op<'a>(&'a self, _id: i64) -> BoxFuture<'a, Result<(), AppError>> {
             Box::pin(async { Ok(()) })
         }
+        fn explain_query<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _filter: bson::Document,
+            _verbosity: &'a str,
+        ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+            Box::pin(async { Ok(serde_json::Value::Null) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -858,6 +867,15 @@ impl DocumentAdapter for FakeCancellableDocument {
     }
     fn kill_op<'a>(&'a self, _id: i64) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async { Ok(()) })
+    }
+    fn explain_query<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _filter: bson::Document,
+        _verbosity: &'a str,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        Box::pin(async { Ok(serde_json::Value::Null) })
     }
 }
 
@@ -1748,6 +1766,20 @@ async fn test_rdb_default_create_table_plan_with_one_index_chains_create_index()
     };
     // FastFakeRdb.create_index 도 Ok 라서 chain 통과. join 결과는 ";\n".
     assert!(adapter.create_table_plan(&req).await.is_ok());
+}
+
+// 작성 이유 (2026-05-15, Sprint 337): RdbAdapter::explain_query 의
+// default body 가 Unsupported 를 반환하는지 단언 — FastFakeRdb 가
+// override 하지 않으므로 default 분기로 떨어진다.
+#[tokio::test]
+async fn test_rdb_default_explain_query_returns_unsupported() {
+    let adapter = FastFakeRdb;
+    match adapter.explain_query("SELECT 1").await {
+        Err(AppError::Unsupported(msg)) => {
+            assert!(msg.contains("EXPLAIN"), "unexpected msg: {}", msg);
+        }
+        other => panic!("expected Unsupported, got {:?}", other.is_ok()),
+    }
 }
 
 #[tokio::test]

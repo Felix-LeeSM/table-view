@@ -541,6 +541,34 @@ pub async fn count_null_rows(
     .await
 }
 
+async fn explain_rdb_query_inner(
+    state: &AppState,
+    connection_id: &str,
+    sql: &str,
+) -> Result<serde_json::Value, AppError> {
+    if sql.trim().is_empty() {
+        return Err(AppError::Validation("SQL must not be empty".into()));
+    }
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    let adapter = active.as_rdb()?;
+    adapter.explain_query(sql).await
+}
+
+/// Sprint 337 (U2 live wire) — RDB `EXPLAIN (ANALYZE, FORMAT JSON)` for
+/// the given SQL. Frontend `ExplainViewer` renders the raw JSON plan
+/// tree.
+#[tauri::command]
+pub async fn explain_rdb_query(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    sql: String,
+) -> Result<serde_json::Value, AppError> {
+    explain_rdb_query_inner(state.inner(), &connection_id, &sql).await
+}
+
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn query_table_data(
@@ -1415,5 +1443,50 @@ mod tests {
             }
             other => panic!("Expected DbMismatch, got: {:?}", other),
         }
+    }
+
+    // ── Sprint 337 (U2 live wire) — explain_rdb_query ────────────────────
+
+    #[tokio::test]
+    async fn explain_rdb_query_rejects_empty_sql() {
+        let state = AppState::new();
+        match explain_rdb_query_inner(&state, "c", "  ").await {
+            Err(AppError::Validation(msg)) => assert!(msg.contains("must not be empty")),
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_rdb_query_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        match explain_rdb_query_inner(&state, "absent", "SELECT 1").await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_rdb_query_document_paradigm_returns_unsupported() {
+        let state = state_with("doc", document_default()).await;
+        assert!(matches!(
+            explain_rdb_query_inner(&state, "doc", "SELECT 1").await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn explain_rdb_query_routes_to_trait_method_with_sql() {
+        let mut s = StubRdbAdapter::default();
+        s.explain_query_fn = Some(Box::new(|sql| {
+            Ok(serde_json::json!([{ "Plan": { "Node Type": "Seq Scan", "echo": sql } }]))
+        }));
+        let state = state_with("c", ActiveAdapter::Rdb(Box::new(s))).await;
+        let r = explain_rdb_query_inner(&state, "c", "SELECT 42")
+            .await
+            .unwrap();
+        assert_eq!(
+            r[0]["Plan"]["echo"],
+            serde_json::Value::String("SELECT 42".into())
+        );
     }
 }

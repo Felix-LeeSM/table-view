@@ -591,6 +591,21 @@ pub trait RdbAdapter: DbAdapter {
             ))
         })
     }
+
+    /// Sprint 337 — return the query execution plan for `sql`. PG override
+    /// runs `EXPLAIN (ANALYZE, FORMAT JSON) <sql>` and parses the first
+    /// cell (a JSON array with a single `Plan` node). Non-PG RDB adapters
+    /// inherit `Unsupported`.
+    fn explain_query<'a>(
+        &'a self,
+        _sql: &'a str,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support EXPLAIN".into(),
+            ))
+        })
+    }
 }
 
 // ── DocumentAdapter (Phase 6 placeholder — signatures only) ───────────────
@@ -882,6 +897,21 @@ pub trait DocumentAdapter: DbAdapter {
     /// Sprint 336 — terminate a running operation by id
     /// (`adminCommand({killOp: 1, op: id})`).
     fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 337 — explain a `find` against `(db, collection)`.
+    ///
+    /// 작성 이유 (2026-05-15): Slice U2 live wire. Mongo `explain` 은
+    /// `runCommand({explain: {find, filter}, verbosity})` 형태로 호출된다.
+    /// verbosity 는 `"queryPlanner"`, `"executionStats"`, `"allPlansExecution"`
+    /// 셋 중 하나. 결과는 raw `serde_json::Value` 로 반환 — frontend tree
+    /// viewer 가 paradigm 차이 없이 같은 shape 으로 렌더.
+    fn explain_query<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+        verbosity: &'a str,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

@@ -482,6 +482,13 @@ impl RdbAdapter for PostgresAdapter {
     ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
         Box::pin(async move { self.kill_session(id).await })
     }
+
+    fn explain_query<'a>(
+        &'a self,
+        sql: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<serde_json::Value, AppError>> + Send + 'a>> {
+        Box::pin(async move { self.explain_query(sql).await })
+    }
 }
 
 #[cfg(test)]

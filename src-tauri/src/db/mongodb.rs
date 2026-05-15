@@ -388,4 +388,17 @@ impl DocumentAdapter for MongoAdapter {
     fn kill_op<'a>(&'a self, id: i64) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move { self.kill_op_impl(id).await })
     }
+
+    fn explain_query<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        filter: bson::Document,
+        verbosity: &'a str,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        Box::pin(async move {
+            self.explain_query_impl(db, collection, filter, verbosity)
+                .await
+        })
+    }
 }

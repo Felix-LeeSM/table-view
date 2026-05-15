@@ -405,6 +405,52 @@ impl MongoAdapter {
             .map_err(|e| AppError::Database(format!("renameCollection failed: {e}")))?;
         Ok(())
     }
+
+    /// Sprint 337 (U2 live wire) — Mongo `find` query plan.
+    ///
+    /// `runCommand({explain: {find, filter}, verbosity})` 를 target DB 에
+    /// dispatch. verbosity 는 `"queryPlanner"`, `"executionStats"`,
+    /// `"allPlansExecution"` 중 하나 — 비어 있으면 `"queryPlanner"` 로
+    /// fallback. 응답 Document 를 raw `serde_json::Value` 로 변환 —
+    /// frontend tree viewer 가 paradigm-neutral shape 으로 렌더.
+    pub(super) async fn explain_query_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        filter: bson::Document,
+        verbosity: &str,
+    ) -> Result<serde_json::Value, AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        if collection.trim().is_empty() {
+            return Err(AppError::Validation(
+                "Collection name must not be empty".into(),
+            ));
+        }
+        let v = if verbosity.trim().is_empty() {
+            "queryPlanner"
+        } else {
+            verbosity
+        };
+        let client = self.current_client().await?;
+        let cmd = doc! {
+            "explain": {
+                "find": collection,
+                "filter": filter,
+            },
+            "verbosity": v,
+        };
+        let resp = client
+            .database(&resolved)
+            .run_command(cmd)
+            .await
+            .map_err(|e| AppError::Database(format!("explain failed: {e}")))?;
+        serde_json::to_value(&resp)
+            .map_err(|e| AppError::Database(format!("explain response decode failed: {e}")))
+    }
 }
 
 /// Sprint 332 — `mongodb::IndexModel` → `crate::models::IndexInfo`.
@@ -916,6 +962,51 @@ mod tests {
                 assert!(msg.contains("not established"), "unexpected: {msg}");
             }
             other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    // Sprint 337 (U2 live wire) — explain_query unit cases.
+    #[tokio::test]
+    async fn explain_query_rejects_empty_db_and_no_active() {
+        // 작성 이유 (2026-05-15): 빈 db 입력은 active-db fallback 으로
+        // 떨어지는데 active 가 없으므로 Validation 으로 reject.
+        let adapter = MongoAdapter::new();
+        match adapter
+            .explain_query("", "c", bson::Document::new(), "queryPlanner")
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_query_rejects_empty_collection() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .explain_query("db", "   ", bson::Document::new(), "queryPlanner")
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn explain_query_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter
+            .explain_query("db", "c", bson::Document::new(), "queryPlanner")
+            .await
+        {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection, got ok? {}", other.is_ok()),
         }
     }
 

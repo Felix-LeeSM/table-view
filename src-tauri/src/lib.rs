@@ -179,6 +179,9 @@ pub fn run() {
         // Sprint 336 (U1 live wire) — server activity + kill.
         commands::meta::list_server_activity,
         commands::meta::kill_server_activity,
+        // Sprint 337 (U2 live wire) — RDB / Mongo explain.
+        commands::rdb::query::explain_rdb_query,
+        commands::document::query::explain_mongo_find,
         commands::document::browse::list_mongo_databases,
         commands::document::browse::list_mongo_collections,
         commands::document::browse::infer_collection_fields,
