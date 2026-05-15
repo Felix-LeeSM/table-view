@@ -181,6 +181,9 @@ pub fn run() {
         commands::document::browse::infer_collection_fields,
         // Sprint 332 (Slice J live wire) — Mongo collection 인덱스.
         commands::document::browse::list_mongo_indexes,
+        // Sprint 333 (Slice K live wire) — Mongo collection validator.
+        commands::document::browse::get_mongo_validator,
+        commands::document::browse::set_mongo_validator,
         commands::document::query::find_documents,
         commands::document::query::aggregate_documents,
         // Sprint 308 (2026-05-14) — 4 mongosh dispatch reads.

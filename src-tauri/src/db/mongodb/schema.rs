@@ -7,8 +7,9 @@
 
 use std::collections::HashMap;
 
-use bson::{Bson, Document};
+use bson::{doc, Bson, Document};
 use futures_util::stream::StreamExt;
+use serde_json::Value as JsonValue;
 
 use crate::error::AppError;
 use crate::models::{ColumnInfo, IndexInfo, TableInfo};
@@ -136,6 +137,101 @@ impl MongoAdapter {
         }
 
         Ok(out)
+    }
+
+    /// Sprint 333 (Slice K live wire) — read the collection's stored
+    /// validator via `listCollections({filter: {name}})`. Returns
+    /// `Ok(None)` when no validator is set, `Ok(Some(json))` otherwise.
+    /// `json` is the validator expression as canonical JSON so the
+    /// frontend can hand it directly to a JSON textarea.
+    pub(super) async fn get_collection_validator_impl(
+        &self,
+        db: &str,
+        collection: &str,
+    ) -> Result<Option<JsonValue>, AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, collection)?;
+        let client = self.current_client().await?;
+        let resp = client
+            .database(&resolved)
+            .run_command(doc! {
+                "listCollections": 1,
+                "filter": { "name": collection },
+                "nameOnly": false,
+            })
+            .await
+            .map_err(|e| AppError::Database(format!("listCollections failed: {e}")))?;
+
+        let validator = resp
+            .get_document("cursor")
+            .ok()
+            .and_then(|c| c.get_array("firstBatch").ok())
+            .and_then(|arr| arr.first())
+            .and_then(|b| b.as_document())
+            .and_then(|spec| spec.get_document("options").ok())
+            .and_then(|opts| opts.get_document("validator").ok())
+            .cloned();
+
+        match validator {
+            None => Ok(None),
+            Some(doc) => {
+                let json = bson::Bson::Document(doc).into_canonical_extjson();
+                Ok(Some(json))
+            }
+        }
+    }
+
+    /// Sprint 333 (Slice K live wire) — apply / clear the collection
+    /// validator via `runCommand(collMod)`. `None` resets the validator
+    /// (`{}` per Mongo manual). validationLevel / validationAction are
+    /// hard-coded to "moderate" / "error" — the per-collection toggles
+    /// belong to a follow-up sprint.
+    pub(super) async fn set_collection_validator_impl(
+        &self,
+        db: &str,
+        collection: &str,
+        validator: Option<JsonValue>,
+    ) -> Result<(), AppError> {
+        let requested = if db.trim().is_empty() { None } else { Some(db) };
+        let resolved = self
+            .resolved_db_name(requested)
+            .await
+            .ok_or_else(|| AppError::Validation("Database name must not be empty".into()))?;
+        validate_ns(&resolved, collection)?;
+
+        let validator_bson: Document = match validator {
+            None => Document::new(),
+            Some(val) => match bson::to_bson(&val) {
+                Ok(Bson::Document(d)) => d,
+                Ok(_) => {
+                    return Err(AppError::Validation(
+                        "Validator must be a JSON object".into(),
+                    ));
+                }
+                Err(e) => {
+                    return Err(AppError::Validation(format!(
+                        "Validator JSON could not be encoded: {e}"
+                    )));
+                }
+            },
+        };
+
+        let client = self.current_client().await?;
+        client
+            .database(&resolved)
+            .run_command(doc! {
+                "collMod": collection,
+                "validator": validator_bson,
+                "validationLevel": "moderate",
+                "validationAction": "error",
+            })
+            .await
+            .map_err(|e| AppError::Database(format!("collMod failed: {e}")))?;
+        Ok(())
     }
 }
 
@@ -448,6 +544,99 @@ mod tests {
             age_col.nullable,
             "age must be nullable when absent in sample2"
         );
+    }
+
+    #[tokio::test]
+    async fn list_collection_indexes_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.list_collection_indexes("db", "c").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn list_collection_indexes_rejects_empty_db_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.list_collection_indexes("   ", "c").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_collection_validator_without_connection_returns_connection_error() {
+        let adapter = MongoAdapter::new();
+        match adapter.get_collection_validator("db", "c").await {
+            Err(AppError::Connection(msg)) => {
+                assert!(msg.contains("not established"), "unexpected: {msg}");
+            }
+            other => panic!("expected Connection error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_collection_validator_rejects_empty_db_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.get_collection_validator("   ", "c").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn get_collection_validator_rejects_empty_collection_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.get_collection_validator("db", "   ").await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn set_collection_validator_rejects_empty_db_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.set_collection_validator("   ", "c", None).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Database name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn set_collection_validator_rejects_empty_collection_name() {
+        let adapter = MongoAdapter::new();
+        match adapter.set_collection_validator("db", "   ", None).await {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("Collection name"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
+    }
+
+    #[tokio::test]
+    async fn set_collection_validator_rejects_non_object_json() {
+        // Sprint 333 — payload 가 array / scalar 이면 collMod validator 가
+        // bson Document 일 수 없으므로 fast-fail.
+        let adapter = MongoAdapter::new();
+        match adapter
+            .set_collection_validator("db", "c", Some(serde_json::json!([1, 2, 3])))
+            .await
+        {
+            Err(AppError::Validation(msg)) => {
+                assert!(msg.contains("JSON object"), "unexpected: {msg}");
+            }
+            other => panic!("expected Validation error, got ok? {}", other.is_ok()),
+        }
     }
 
     #[test]

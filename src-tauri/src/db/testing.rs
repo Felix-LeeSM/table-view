@@ -604,6 +604,14 @@ pub(crate) struct StubDocumentAdapter {
     // returns an empty Vec so wiring tests for unrelated commands compile
     // with no override.
     pub list_collection_indexes_fn: Option<FnTwo<str, str, Vec<crate::models::IndexInfo>>>,
+
+    // Sprint 333 — override slots for the validator pair. Default returns
+    // `None` / `Ok(())` so wiring tests for unrelated commands compile
+    // without a hand-rolled override.
+    pub get_collection_validator_fn: Option<FnTwo<str, str, Option<serde_json::Value>>>,
+    pub set_collection_validator_fn: Option<
+        Box<dyn Fn(&str, &str, Option<serde_json::Value>) -> Result<(), AppError> + Send + Sync>,
+    >,
 }
 
 impl Default for StubDocumentAdapter {
@@ -626,6 +634,8 @@ impl Default for StubDocumentAdapter {
             insert_many_fn: None,
             bulk_write_fn: None,
             list_collection_indexes_fn: None,
+            get_collection_validator_fn: None,
+            set_collection_validator_fn: None,
         }
     }
 }
@@ -866,6 +876,32 @@ impl DocumentAdapter for StubDocumentAdapter {
             .list_collection_indexes_fn
             .as_ref()
             .map_or_else(|| Ok(Vec::new()), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 333 — validator pair stubs.
+    fn get_collection_validator<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>> {
+        let r = self
+            .get_collection_validator_fn
+            .as_ref()
+            .map_or_else(|| Ok(None), |f| f(db, coll));
+        Box::pin(async move { r })
+    }
+
+    fn set_collection_validator<'a>(
+        &'a self,
+        db: &'a str,
+        coll: &'a str,
+        validator: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        let r = self
+            .set_collection_validator_fn
+            .as_ref()
+            .map_or_else(|| Ok(()), |f| f(db, coll, validator));
         Box::pin(async move { r })
     }
 }

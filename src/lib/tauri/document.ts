@@ -57,6 +57,42 @@ export async function listMongoIndexes(
 }
 
 /**
+ * Sprint 333 (Slice K live wire) — read the validator stored on
+ * `collection` (Mongo `listCollections.options.validator`). Returns
+ * `null` when the collection has no validator configured.
+ */
+export async function getMongoValidator(
+  connectionId: string,
+  database: string,
+  collection: string,
+): Promise<Record<string, unknown> | null> {
+  return invoke<Record<string, unknown> | null>("get_mongo_validator", {
+    connectionId,
+    database,
+    collection,
+  });
+}
+
+/**
+ * Sprint 333 (Slice K live wire) — apply (`validator !== null`) or
+ * clear (`validator === null`) the collection validator. validationLevel
+ * + validationAction are server-side defaulted to "moderate" / "error".
+ */
+export async function setMongoValidator(
+  connectionId: string,
+  database: string,
+  collection: string,
+  validator: Record<string, unknown> | null,
+): Promise<void> {
+  return invoke<void>("set_mongo_validator", {
+    connectionId,
+    database,
+    collection,
+    validator,
+  });
+}
+
+/**
  * Infer the top-level column layout of `collection` by sampling up to
  * `sampleSize` documents. Defaults to 100 on the backend when omitted.
  */

@@ -336,4 +336,24 @@ impl DocumentAdapter for MongoAdapter {
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
         Box::pin(async move { self.list_collection_indexes_impl(db, collection).await })
     }
+
+    fn get_collection_validator<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>> {
+        Box::pin(async move { self.get_collection_validator_impl(db, collection).await })
+    }
+
+    fn set_collection_validator<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        validator: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move {
+            self.set_collection_validator_impl(db, collection, validator)
+                .await
+        })
+    }
 }

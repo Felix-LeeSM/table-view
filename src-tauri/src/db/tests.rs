@@ -227,6 +227,21 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
+        fn get_collection_validator<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+        ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>> {
+            Box::pin(async { Ok(None) })
+        }
+        fn set_collection_validator<'a>(
+            &'a self,
+            _db: &'a str,
+            _collection: &'a str,
+            _validator: Option<serde_json::Value>,
+        ) -> BoxFuture<'a, Result<(), AppError>> {
+            Box::pin(async { Ok(()) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -774,6 +789,21 @@ impl DocumentAdapter for FakeCancellableDocument {
         _collection: &'a str,
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+    fn get_collection_validator<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>> {
+        Box::pin(async { Ok(None) })
+    }
+    fn set_collection_validator<'a>(
+        &'a self,
+        _db: &'a str,
+        _collection: &'a str,
+        _validator: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async { Ok(()) })
     }
 }
 

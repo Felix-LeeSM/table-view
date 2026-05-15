@@ -202,6 +202,72 @@ pub async fn list_mongo_indexes(
     list_mongo_indexes_inner(state.inner(), &connection_id, &database, &collection).await
 }
 
+async fn get_mongo_validator_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+) -> Result<Option<serde_json::Value>, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .get_collection_validator(database, collection)
+        .await
+}
+
+/// Sprint 333 (Slice K live wire) — read the validator currently stored
+/// on the Mongo collection (`listCollections.options.validator`).
+/// `Ok(None)` means no validator is set.
+#[tauri::command]
+pub async fn get_mongo_validator(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+) -> Result<Option<serde_json::Value>, AppError> {
+    get_mongo_validator_inner(state.inner(), &connection_id, &database, &collection).await
+}
+
+async fn set_mongo_validator_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: &str,
+    collection: &str,
+    validator: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active
+        .as_document()?
+        .set_collection_validator(database, collection, validator)
+        .await
+}
+
+/// Sprint 333 (Slice K live wire) — apply (`Some(value)`) or clear
+/// (`None`) the validator on a Mongo collection via `collMod`.
+#[tauri::command]
+pub async fn set_mongo_validator(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: String,
+    collection: String,
+    validator: Option<serde_json::Value>,
+) -> Result<(), AppError> {
+    set_mongo_validator_inner(
+        state.inner(),
+        &connection_id,
+        &database,
+        &collection,
+        validator,
+    )
+    .await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {

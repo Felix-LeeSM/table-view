@@ -764,6 +764,35 @@ pub trait DocumentAdapter: DbAdapter {
         db: &'a str,
         collection: &'a str,
     ) -> BoxFuture<'a, Result<Vec<crate::models::IndexInfo>, AppError>>;
+
+    /// Sprint 333 — read the collection's stored validator (Mongo
+    /// `listCollections` options.validator).
+    ///
+    /// 작성 이유 (2026-05-15): Slice K live wire. ValidatorPanel 이
+    /// 에디터를 초기화하기 위해 현재 validator 를 가져온다. driver 의
+    /// `Database::list_collections().filter(...)` cursor 를 사용해
+    /// options.validator 만 추출한다. validator 가 설정되지 않은
+    /// collection 은 `Ok(None)`.
+    fn get_collection_validator<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>>;
+
+    /// Sprint 333 — apply / clear the collection validator (Mongo `collMod`
+    /// admin cmd).
+    ///
+    /// 작성 이유 (2026-05-15): Slice K live wire. `validator == Some(doc)`
+    /// 면 `runCommand({collMod, validator, validationLevel: "moderate",
+    /// validationAction: "error"})` 로 적용. `validator == None` 이면
+    /// `{}` 빈 도큐먼트로 reset (Mongo 공식 reset 방법). validationLevel /
+    /// validationAction 토글은 본 sprint scope 외 — default 고정.
+    fn set_collection_validator<'a>(
+        &'a self,
+        db: &'a str,
+        collection: &'a str,
+        validator: Option<serde_json::Value>,
+    ) -> BoxFuture<'a, Result<(), AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────
