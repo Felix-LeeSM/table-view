@@ -1264,3 +1264,110 @@ hidden" 어휘, ghost variant `Show all hidden columns` 버튼.
 ("renders every column when hiddenColumnNames is not provided").
 
 ---
+
+## Sprint 319 — Slice E.1 (Document schema accumulator hook) — 자율 결정 dict
+
+### D-43: 누적 단위 = `(connId, db, collection)` triple — sprint 265 cache 패턴 정합
+
+**문제**: schemaless accumulator 가 무슨 단위로 격리될지. db 단위?
+collection 단위? connection 단위?
+
+**결정**: `(connId, db, collection)` triple. hook 의 `key` prop 으로
+받고, 그 stringified spelling 이 useEffect dep → 변경시 auto-reset.
+
+**근거**:
+1. sprint-265 의 documentStore cache 가 이미 동일 triple 단위. UI
+   상태 (hidden columns, accumulator) 도 같은 결 단위로 유지하면
+   사용자 멘탈 모델 일치.
+2. 다른 collection 으로 navigate 시 field 가 leak 되면 grid 가
+   "다른 collection 의 잔재" 를 보여줘 혼란.
+3. server / db 단위는 너무 거침 — 같은 db 안 다른 collection 은
+   완전 별개 schema.
+
+**대안**:
+- 컴포넌트별 fresh state — 누적 의미 상실 (페이지 이동마다 column
+  깜빡).
+- localStorage persist — schemaless 흔들림이 영구화. UX overshoot.
+
+**영향**: hook signature `useDocumentSchemaAccumulator(key?: {connId,
+db, collection})`. test 의 "auto-resets when the (connId, db,
+collection) triple changes" case 가 lock.
+
+---
+
+### D-44: 정렬 = `_id` first + 그 외 case-insensitive alphabetical
+
+**문제**: 누적된 field 의 column order 를 어떻게 정할지. 발견순?
+random? 알파벳? `_id` 따로?
+
+**결정**: `_id` 항상 first. 그 외는 case-insensitive 알파벳
+(localeCompare).
+
+**근거**:
+1. `_id` 는 Mongo 의 universal PK — RDB grid 에서 PK 가 left 첫
+   column 인 관습 정합.
+2. 발견순은 random — 사용자가 페이지 넘기는 순서에 의존. 같은
+   collection 도 다른 세션에선 다른 order. 예측 불가.
+3. case-insensitive 알파벳은 `name` / `Name` / `NAME` 의 인접
+   grouping 보장 — 같은 의미의 field 가 흩어지지 않음.
+
+**대안**:
+- 발견순 보존 — 예측 불가.
+- case-sensitive 알파벳 — `Z*` 가 `a*` 보다 먼저. 사용자 직관과 불일치.
+- backend 가 정한 순서 따라가기 — 페이지 마다 다른 순서 가능 (BFS).
+
+**영향**: hook 의 `sortColumns()` 가 두 단계 정렬. test 의 "orders
+`_id` first, then case-insensitive alphabetical" + "preserves
+existing fields..." 가 lock.
+
+---
+
+### D-45: type 충돌 = first-wins (subsequent type 무시)
+
+**문제**: 같은 field 가 page A 에선 int, page B 에선 string 으로
+inferred 될 수 있음 (schemaless). type 표시를 어떻게 할지.
+
+**결정**: 최초 발견된 type 만 유지. 후속 호출의 다른 type 은 무시.
+
+**근거**:
+1. heuristic 단순 + 예측 가능. "mixed" 표기는 grid 표현 복잡도
+   증가 (지금은 column header 가 단일 type subtitle 만 출력).
+2. 실제 use case 의 압도적 다수는 단일 type. "mixed" 가 정말
+   필요한 경우는 Slice G (BSON type editor) 또는 후속 explain
+   pane 의 책임.
+3. 사용자가 cell 값 보면 실제 type 즉시 확인 가능. column-level
+   type 은 hint 일 뿐.
+
+**대안**:
+- 마지막 본 type 으로 overwrite → flicker.
+- "mixed" 라벨 → grid 표시 복잡도 + i18n 추가.
+- type histogram → over-engineering.
+
+**영향**: hook 의 `seen.has(name)` 체크가 first-wins 보장. test 의
+"keeps the first-seen type for a given field (first-wins)" 가 lock.
+
+---
+
+### D-46: in-memory only — persist 미적용
+
+**문제**: hidden columns 처럼 localStorage 에 persist 할지.
+
+**결정**: in-memory only. 페이지 reload 시 reset 허용.
+
+**근거**:
+1. accumulator 는 fetch 마다 자동 채워짐 (페이지 1만 fetch 해도
+   대부분의 field 가 등장). reload 후 첫 fetch 에 다시 누적 시작.
+2. persist 하면 stale schema 가 새 collection 변경 / TTL 미반영
+   문제 발생. 누적 schema 가 outdated 되어도 사용자 알아차리기
+   어려움.
+3. hidden columns 와 다른 의미 — hide 는 명시적 사용자 선택, accumulator
+   는 자동 학습. 자동 학습 결과를 persist 하면 사용자가 통제 못 함.
+
+**대안**:
+- sessionStorage — 페이지 reload 마다 reset 되어 의미 약함.
+- IndexedDB — over-engineering.
+
+**영향**: hook 에 localStorage 코드 0. test 의 "auto-resets when
+triple changes" 가 leak 방지 단언.
+
+---
