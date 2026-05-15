@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::commands::connection::AppState;
-use crate::db::{CreateMongoIndexRequest, CreateMongoIndexResult};
+use crate::db::{CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult};
 use crate::error::AppError;
 use crate::models::{ColumnInfo, IndexInfo, TableInfo};
 
@@ -304,7 +304,7 @@ async fn get_mongo_validator_inner(
     connection_id: &str,
     database: &str,
     collection: &str,
-) -> Result<Option<serde_json::Value>, AppError> {
+) -> Result<CollectionValidatorRead, AppError> {
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
@@ -315,17 +315,45 @@ async fn get_mongo_validator_inner(
         .await
 }
 
-/// Sprint 333 (Slice K live wire) — read the validator currently stored
-/// on the Mongo collection (`listCollections.options.validator`).
-/// `Ok(None)` means no validator is set.
+/// Sprint 333/352 (Slice K live wire) — read the validator currently
+/// stored on the Mongo collection (`listCollections.options.validator`)
+/// along with the persisted `validationLevel` / `validationAction`. Each
+/// of the three fields is `None` when MongoDB has not stored a value;
+/// the UI then falls back to MongoDB's server-side defaults
+/// (`strict` / `error`).
 #[tauri::command]
 pub async fn get_mongo_validator(
     state: tauri::State<'_, AppState>,
     connection_id: String,
     database: String,
     collection: String,
-) -> Result<Option<serde_json::Value>, AppError> {
+) -> Result<CollectionValidatorRead, AppError> {
     get_mongo_validator_inner(state.inner(), &connection_id, &database, &collection).await
+}
+
+/// Sprint 352 — whitelist allowed `validationLevel` values. `None` means
+/// the caller omitted the field; the adapter then skips the field in the
+/// `collMod` doc and MongoDB applies its server-side default.
+fn validate_level(level: Option<&str>) -> Result<(), AppError> {
+    match level {
+        None => Ok(()),
+        Some("off") | Some("strict") | Some("moderate") => Ok(()),
+        Some(_) => Err(AppError::Validation(
+            "validationLevel must be one of off|strict|moderate".into(),
+        )),
+    }
+}
+
+/// Sprint 352 — whitelist allowed `validationAction` values. Same
+/// semantics as [`validate_level`].
+fn validate_action(action: Option<&str>) -> Result<(), AppError> {
+    match action {
+        None => Ok(()),
+        Some("error") | Some("warn") => Ok(()),
+        Some(_) => Err(AppError::Validation(
+            "validationAction must be one of error|warn".into(),
+        )),
+    }
 }
 
 async fn set_mongo_validator_inner(
@@ -334,19 +362,38 @@ async fn set_mongo_validator_inner(
     database: &str,
     collection: &str,
     validator: Option<serde_json::Value>,
+    validation_level: Option<String>,
+    validation_action: Option<String>,
 ) -> Result<(), AppError> {
+    // Whitelist validation runs before the connection lookup so a
+    // malformed payload short-circuits without touching the adapter pool.
+    validate_level(validation_level.as_deref())?;
+    validate_action(validation_action.as_deref())?;
+
     let connections = state.active_connections.lock().await;
     let active = connections
         .get(connection_id)
         .ok_or_else(|| not_connected(connection_id))?;
     active
         .as_document()?
-        .set_collection_validator(database, collection, validator)
+        .set_collection_validator(
+            database,
+            collection,
+            validator,
+            validation_level,
+            validation_action,
+        )
         .await
 }
 
-/// Sprint 333 (Slice K live wire) — apply (`Some(value)`) or clear
-/// (`None`) the validator on a Mongo collection via `collMod`.
+/// Sprint 333/352 (Slice K live wire) — apply (`Some(value)`) or clear
+/// (`None`) the validator on a Mongo collection via `collMod`. Sprint
+/// 352 extends the payload with optional `validation_level` /
+/// `validation_action`. Both default to MongoDB's server-side defaults
+/// (`strict` / `error`) when the field is omitted by the caller —
+/// preserving wire-level backward compatibility with pre-sprint
+/// payloads. Unknown values are rejected with `AppError::Validation`
+/// before the adapter is invoked.
 #[tauri::command]
 pub async fn set_mongo_validator(
     state: tauri::State<'_, AppState>,
@@ -354,6 +401,8 @@ pub async fn set_mongo_validator(
     database: String,
     collection: String,
     validator: Option<serde_json::Value>,
+    validation_level: Option<String>,
+    validation_action: Option<String>,
 ) -> Result<(), AppError> {
     set_mongo_validator_inner(
         state.inner(),
@@ -361,6 +410,8 @@ pub async fn set_mongo_validator(
         &database,
         &collection,
         validator,
+        validation_level,
+        validation_action,
     )
     .await
 }
@@ -841,5 +892,129 @@ mod tests {
         drop_mongo_index_inner(&state, "d", "app", "users", "email_1")
             .await
             .unwrap();
+    }
+
+    // ── Sprint 352 — set_mongo_validator whitelist + dispatch wiring ───────
+    //
+    // 작성 이유 (2026-05-15): Validator IPC 가 새 level/action 인자를 받기
+    // 시작했으므로 (a) 화이트리스트가 어댑터 도달 전에 차단하는지, (b) 정상
+    // 입력이 verbatim 으로 전달되는지, (c) 옴미트되었을 때 어댑터에도 None
+    // 으로 흐르는지 (백워드 컴팻 보장) 를 단위로 검증한다.
+
+    #[tokio::test]
+    async fn set_mongo_validator_rejects_unknown_level_with_validation_error() {
+        let state = state_with("d", document_default()).await;
+        let result = set_mongo_validator_inner(
+            &state,
+            "d",
+            "app",
+            "users",
+            None,
+            Some("bogus".into()),
+            None,
+        )
+        .await;
+        match result {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("validationLevel"),
+                    "expected level whitelist message, got: {msg}"
+                );
+                assert!(msg.contains("off"), "expected `off` in copy: {msg}");
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn set_mongo_validator_rejects_unknown_action_with_validation_error() {
+        let state = state_with("d", document_default()).await;
+        let result = set_mongo_validator_inner(
+            &state,
+            "d",
+            "app",
+            "users",
+            None,
+            None,
+            Some("silent".into()),
+        )
+        .await;
+        match result {
+            Err(AppError::Validation(msg)) => {
+                assert!(
+                    msg.contains("validationAction"),
+                    "expected action whitelist message, got: {msg}"
+                );
+                assert!(msg.contains("error"), "expected `error` in copy: {msg}");
+            }
+            other => panic!("Expected Validation, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn set_mongo_validator_forwards_level_and_action_verbatim() {
+        let mut s = crate::db::testing::StubDocumentAdapter::default();
+        s.set_collection_validator_fn = Some(Box::new(|db, coll, validator, level, action| {
+            assert_eq!(db, "app");
+            assert_eq!(coll, "users");
+            assert!(
+                validator.is_some(),
+                "validator payload should pass through verbatim"
+            );
+            assert_eq!(level.as_deref(), Some("moderate"));
+            assert_eq!(action.as_deref(), Some("warn"));
+            Ok(())
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        set_mongo_validator_inner(
+            &state,
+            "d",
+            "app",
+            "users",
+            Some(serde_json::json!({ "$jsonSchema": {} })),
+            Some("moderate".into()),
+            Some("warn".into()),
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn set_mongo_validator_omitted_level_action_remains_backward_compatible() {
+        // Backward-compat — payload that carries only a validator (no
+        // level/action keys) must reach the adapter with `None` on both
+        // optional positions. This is the byte-equivalent of the
+        // pre-Sprint-352 wire format.
+        let mut s = crate::db::testing::StubDocumentAdapter::default();
+        s.set_collection_validator_fn = Some(Box::new(|_db, _coll, _validator, level, action| {
+            assert!(
+                level.is_none() && action.is_none(),
+                "omitted keys must arrive as None"
+            );
+            Ok(())
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        set_mongo_validator_inner(&state, "d", "app", "users", None, None, None)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_mongo_validator_returns_trio_from_adapter() {
+        let mut s = crate::db::testing::StubDocumentAdapter::default();
+        s.get_collection_validator_fn = Some(Box::new(|_db, _coll| {
+            Ok(crate::db::CollectionValidatorRead {
+                validator: Some(serde_json::json!({ "$jsonSchema": {} })),
+                validation_level: Some("moderate".into()),
+                validation_action: Some("warn".into()),
+            })
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+        let out = get_mongo_validator_inner(&state, "d", "app", "users")
+            .await
+            .unwrap();
+        assert!(out.validator.is_some());
+        assert_eq!(out.validation_level.as_deref(), Some("moderate"));
+        assert_eq!(out.validation_action.as_deref(), Some("warn"));
     }
 }

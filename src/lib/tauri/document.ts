@@ -129,16 +129,50 @@ export async function dropMongoIndex(
 }
 
 /**
- * Sprint 333 (Slice K live wire) — read the validator stored on
- * `collection` (Mongo `listCollections.options.validator`). Returns
- * `null` when the collection has no validator configured.
+ * Sprint 352 — whitelisted MongoDB `validationLevel` values. `off`
+ * disables validation, `strict` rejects every operation that violates
+ * the rule, `moderate` only rejects operations on documents that
+ * already matched the rule (migration pattern).
+ */
+export type MongoValidationLevel = "off" | "strict" | "moderate";
+
+/**
+ * Sprint 352 — whitelisted MongoDB `validationAction` values. `error`
+ * rejects offending writes, `warn` accepts them and logs.
+ */
+export type MongoValidationAction = "error" | "warn";
+
+/**
+ * Sprint 352 — round-trip shape for {@link getMongoValidator}. The
+ * three fields are independent: any field is `null` when MongoDB has
+ * not persisted a custom value (the UI then falls back to the
+ * MongoDB defaults `strict` / `error`).
+ *
+ * Backward compat note: a pre-Sprint-352 backend or test stub may
+ * still return the legacy shape `{ validator } | null` — callers that
+ * destructure should normalise via the `?? null` pattern so missing
+ * `validationLevel` / `validationAction` cleanly fall through to the
+ * MongoDB defaults.
+ */
+export interface MongoValidatorRead {
+  validator: Record<string, unknown> | null;
+  validationLevel: MongoValidationLevel | null;
+  validationAction: MongoValidationAction | null;
+}
+
+/**
+ * Sprint 333/352 (Slice K live wire) — read the validator stored on
+ * `collection` (Mongo `listCollections.options.validator`) together
+ * with the persisted `validationLevel` / `validationAction`. Each
+ * field is `null` when MongoDB has not stored a value; the UI then
+ * falls back to the MongoDB defaults (`strict` / `error`).
  */
 export async function getMongoValidator(
   connectionId: string,
   database: string,
   collection: string,
-): Promise<Record<string, unknown> | null> {
-  return invoke<Record<string, unknown> | null>("get_mongo_validator", {
+): Promise<MongoValidatorRead> {
+  return invoke<MongoValidatorRead>("get_mongo_validator", {
     connectionId,
     database,
     collection,
@@ -146,21 +180,29 @@ export async function getMongoValidator(
 }
 
 /**
- * Sprint 333 (Slice K live wire) — apply (`validator !== null`) or
- * clear (`validator === null`) the collection validator. validationLevel
- * + validationAction are server-side defaulted to "moderate" / "error".
+ * Sprint 333/352 (Slice K live wire) — apply (`validator !== null`)
+ * or clear (`validator === null`) the collection validator. Sprint
+ * 352 adds optional `validationLevel` / `validationAction` positional
+ * args; legacy callers that pass only `(connectionId, database,
+ * collection, validator)` keep working, since both optional fields
+ * default to `null` and the backend then omits them from the
+ * `collMod` doc — MongoDB applies its server-side defaults.
  */
 export async function setMongoValidator(
   connectionId: string,
   database: string,
   collection: string,
   validator: Record<string, unknown> | null,
+  validationLevel: MongoValidationLevel | null = null,
+  validationAction: MongoValidationAction | null = null,
 ): Promise<void> {
   return invoke<void>("set_mongo_validator", {
     connectionId,
     database,
     collection,
     validator,
+    validationLevel,
+    validationAction,
   });
 }
 

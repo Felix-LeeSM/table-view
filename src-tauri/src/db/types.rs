@@ -216,6 +216,25 @@ pub struct CreateMongoIndexResult {
     pub name: String,
 }
 
+/// Sprint 352 — round-trip shape for `get_collection_validator`.
+///
+/// `validator` is the validator expression JSON (or `null` when the
+/// collection has no validator configured). `validation_level` and
+/// `validation_action` mirror MongoDB's `validationLevel` /
+/// `validationAction` options. `None` on either field signals the server
+/// never persisted a custom value — the UI then falls back to the
+/// MongoDB defaults (`"strict"` / `"error"`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionValidatorRead {
+    #[serde(default)]
+    pub validator: Option<serde_json::Value>,
+    #[serde(default)]
+    pub validation_level: Option<String>,
+    #[serde(default)]
+    pub validation_action: Option<String>,
+}
+
 /// Sprint 308 — aggregate counters returned by `bulkWrite`.
 ///
 /// 작성 이유 (2026-05-14): A6 `WriteSummaryPanel` 의 per-op breakdown row

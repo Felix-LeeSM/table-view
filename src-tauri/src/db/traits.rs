@@ -20,9 +20,9 @@ use crate::models::{
 };
 
 use super::types::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
-    DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo, NamespaceLabel,
-    RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
+    CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
+    NamespaceLabel, RdbQueryResult,
 };
 
 // ── Lifecycle trait ───────────────────────────────────────────────────────
@@ -896,32 +896,34 @@ pub trait DocumentAdapter: DbAdapter {
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
     /// Sprint 333 — read the collection's stored validator (Mongo
-    /// `listCollections` options.validator).
+    /// `listCollections` options.validator). Sprint 352 extends the return
+    /// shape to also surface `validationLevel` / `validationAction` so the
+    /// frontend can hydrate select controls without a second IPC.
     ///
-    /// 작성 이유 (2026-05-15): Slice K live wire. ValidatorPanel 이
-    /// 에디터를 초기화하기 위해 현재 validator 를 가져온다. driver 의
-    /// `Database::list_collections().filter(...)` cursor 를 사용해
-    /// options.validator 만 추출한다. validator 가 설정되지 않은
-    /// collection 은 `Ok(None)`.
+    /// `validator` is the validator expression JSON (or `None` if absent).
+    /// `validation_level` / `validation_action` are the stored option
+    /// strings (or `None` when the server has never applied a custom
+    /// value — the UI then falls back to the MongoDB defaults
+    /// `"strict"` / `"error"`).
     fn get_collection_validator<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
-    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>>;
+    ) -> BoxFuture<'a, Result<CollectionValidatorRead, AppError>>;
 
     /// Sprint 333 — apply / clear the collection validator (Mongo `collMod`
-    /// admin cmd).
-    ///
-    /// 작성 이유 (2026-05-15): Slice K live wire. `validator == Some(doc)`
-    /// 면 `runCommand({collMod, validator, validationLevel: "moderate",
-    /// validationAction: "error"})` 로 적용. `validator == None` 이면
-    /// `{}` 빈 도큐먼트로 reset (Mongo 공식 reset 방법). validationLevel /
-    /// validationAction 토글은 본 sprint scope 외 — default 고정.
+    /// admin cmd). Sprint 352 extends the signature to accept optional
+    /// `validation_level` / `validation_action` so the migration pattern
+    /// (`moderate` + `warn`) is reachable from the UI. When either is
+    /// `None`, the corresponding field is omitted from the `collMod` doc
+    /// and MongoDB applies its own default (`strict` / `error`).
     fn set_collection_validator<'a>(
         &'a self,
         db: &'a str,
         collection: &'a str,
         validator: Option<serde_json::Value>,
+        validation_level: Option<String>,
+        validation_action: Option<String>,
     ) -> BoxFuture<'a, Result<(), AppError>>;
 
     /// Sprint 334 — create a collection with optional creation options

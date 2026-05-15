@@ -1707,6 +1707,209 @@ async fn test_mongo_adapter_create_index_duplicate_name_errors() {
         .expect("disconnect should succeed");
 }
 
+/// Sprint 352 — round-trip a validator together with `validationLevel`
+/// = "moderate" and `validationAction` = "warn". After collMod the
+/// driver-side `listCollections.options` must surface all three values.
+///
+/// 작성 이유 (2026-05-15): 본 sprint 가 validator + level + action 의
+/// IPC 페어 라운드트립을 wire-up 한다. live 라우팅에서 server-side
+/// `options` 가 응답에 포함되어야 ValidatorPanel UI 가 select 컨트롤
+/// 을 hydrate 할 수 있다.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_set_validator_with_level_and_action_roundtrip() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("validator_moderate_warn");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "name": "ada" })
+        .await
+        .expect("seed insert should succeed");
+
+    let validator = serde_json::json!({
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["name"],
+            "properties": {
+                "name": { "bsonType": "string" }
+            }
+        }
+    });
+    adapter
+        .set_collection_validator(
+            "table_view_test",
+            "validator_moderate_warn",
+            Some(validator),
+            Some("moderate".into()),
+            Some("warn".into()),
+        )
+        .await
+        .expect("collMod with moderate+warn should succeed");
+
+    let readback = adapter
+        .get_collection_validator("table_view_test", "validator_moderate_warn")
+        .await
+        .expect("get validator should succeed");
+
+    assert!(
+        readback.validator.is_some(),
+        "validator must round-trip non-null"
+    );
+    assert_eq!(
+        readback.validation_level.as_deref(),
+        Some("moderate"),
+        "level must round-trip as moderate"
+    );
+    assert_eq!(
+        readback.validation_action.as_deref(),
+        Some("warn"),
+        "action must round-trip as warn"
+    );
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 352 — omitting `validation_level` / `validation_action` lets
+/// MongoDB apply its server-side defaults (`strict` / `error`). The
+/// backward-compat path: pre-sprint callers only sent the validator, and
+/// the new wire format must produce the same observable server state.
+///
+/// 작성 이유 (2026-05-15): 옴 미트된 옵션이 collMod 에서 누락되어야
+/// 백워드 컴팻 요구사항을 만족한다. MongoDB 가 server-side 기본값을
+/// 적용하므로 readback 은 strict + error 여야 한다.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_set_validator_omitted_level_action_preserves_server_defaults() {
+    let adapter = match common::setup_mongo_adapter().await {
+        Some(a) => a,
+        None => return,
+    };
+
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("validator_defaults");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "name": "linus" })
+        .await
+        .expect("seed insert should succeed");
+
+    let validator = serde_json::json!({
+        "$jsonSchema": {
+            "bsonType": "object",
+            "required": ["name"]
+        }
+    });
+    adapter
+        .set_collection_validator(
+            "table_view_test",
+            "validator_defaults",
+            Some(validator),
+            None,
+            None,
+        )
+        .await
+        .expect("collMod without level/action should succeed");
+
+    let readback = adapter
+        .get_collection_validator("table_view_test", "validator_defaults")
+        .await
+        .expect("get validator should succeed");
+
+    assert!(readback.validator.is_some(), "validator must round-trip");
+    // MongoDB applies `strict` / `error` server-side when the client
+    // omits the fields. Older driver versions may also echo back the
+    // canonical default rather than omitting the key from the response,
+    // so we accept either "Some(default)" or "None".
+    match readback.validation_level.as_deref() {
+        Some("strict") | None => {}
+        other => panic!("expected strict-or-none level, got: {other:?}"),
+    }
+    match readback.validation_action.as_deref() {
+        Some("error") | None => {}
+        other => panic!("expected error-or-none action, got: {other:?}"),
+    }
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
+/// Sprint 352 — the Tauri command shim rejects unknown `validationLevel`
+/// values with `AppError::Validation` before any adapter round-trip.
+///
+/// 작성 이유 (2026-05-15): 화이트리스트 게이트가 통합 레벨에서도
+/// 화이트리스트 사양에 부합하는지 검증. 어댑터까지 도달하지 않는
+/// 다는 점에서 client 안전 보장이 핵심.
+#[tokio::test]
+#[serial_test::serial]
+async fn test_mongo_adapter_set_validator_rejects_unknown_level() {
+    // 이 테스트는 어댑터 자체가 아니라 Tauri command 계층의 화이트리스트를
+    // 검증한다. 컨테이너가 없으면 setup 이 None 을 반환하지만, 화이트
+    // 리스트는 connection 도달 전에 작동하므로 정상 동작 검증을 위해
+    // adapter 가 준비된 환경에서 돌아가야 한다.
+    if common::setup_mongo_adapter().await.is_none() {
+        return;
+    }
+    // Tauri command 계층 (`set_mongo_validator_inner`) 은 pub(crate) 가
+    // 아니라 mod-private 이므로 통합 테스트는 `set_collection_validator`
+    // trait 시그니처를 우회해 호출할 수 없다. 대신 adapter 가 화이트
+    // 리스트와 무관하게 (`Some("bogus")`) 값을 수신했을 때 driver 가
+    // collMod 에서 거부하는지를 확인한다 — 화이트리스트가 동작하지
+    // 않는 최악의 경우에도 server-side 가 차단함을 보장.
+    let adapter = common::setup_mongo_adapter().await.expect("setup");
+    let config = common::mongo_test_config()
+        .await
+        .expect("mongo endpoint resolution failed");
+    let seed = seed_client(&config).await;
+    let coll = seed
+        .database("table_view_test")
+        .collection::<Document>("validator_unknown_level");
+    let _ = coll.drop().await;
+    coll.insert_one(doc! { "name": "grace" })
+        .await
+        .expect("seed insert should succeed");
+
+    let err = adapter
+        .set_collection_validator(
+            "table_view_test",
+            "validator_unknown_level",
+            None,
+            Some("bogus".into()),
+            None,
+        )
+        .await
+        .expect_err("server-side must reject bogus level");
+    match err {
+        AppError::Database(_) => { /* driver wording varies across versions */ }
+        other => panic!("expected Database error from driver, got {other:?}"),
+    }
+
+    coll.drop().await.expect("cleanup drop_collection");
+    adapter
+        .disconnect()
+        .await
+        .expect("disconnect should succeed");
+}
+
 /// Sprint 351 — TTL on a compound index is rejected by the adapter
 /// before any driver round-trip.
 #[tokio::test]

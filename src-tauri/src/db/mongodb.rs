@@ -63,8 +63,9 @@ use crate::error::AppError;
 use crate::models::{ColumnInfo, TableInfo};
 
 use super::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
-    DocumentAdapter, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
+    CreateMongoIndexResult, DocumentAdapter, DocumentId, DocumentQueryResult, DocumentRow,
+    FindBody, NamespaceInfo,
 };
 
 impl DocumentAdapter for MongoAdapter {
@@ -362,7 +363,7 @@ impl DocumentAdapter for MongoAdapter {
         &'a self,
         db: &'a str,
         collection: &'a str,
-    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>> {
+    ) -> BoxFuture<'a, Result<CollectionValidatorRead, AppError>> {
         Box::pin(async move { self.get_collection_validator_impl(db, collection).await })
     }
 
@@ -371,10 +372,18 @@ impl DocumentAdapter for MongoAdapter {
         db: &'a str,
         collection: &'a str,
         validator: Option<serde_json::Value>,
+        validation_level: Option<String>,
+        validation_action: Option<String>,
     ) -> BoxFuture<'a, Result<(), AppError>> {
         Box::pin(async move {
-            self.set_collection_validator_impl(db, collection, validator)
-                .await
+            self.set_collection_validator_impl(
+                db,
+                collection,
+                validator,
+                validation_level,
+                validation_action,
+            )
+            .await
         })
     }
 

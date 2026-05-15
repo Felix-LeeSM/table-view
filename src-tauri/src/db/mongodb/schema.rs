@@ -15,8 +15,8 @@ use crate::error::AppError;
 use crate::models::{ColumnInfo, IndexInfo, TableInfo};
 
 use super::super::{
-    CreateMongoIndexRequest, CreateMongoIndexResult, MongoIndexCollation, MongoIndexDirection,
-    NamespaceInfo,
+    CollectionValidatorRead, CreateMongoIndexRequest, CreateMongoIndexResult, MongoIndexCollation,
+    MongoIndexDirection, NamespaceInfo,
 };
 use super::category::map_mongo_data_type;
 use super::queries::{bson_type_name, validate_ns};
@@ -280,16 +280,17 @@ impl MongoAdapter {
         Ok(())
     }
 
-    /// Sprint 333 (Slice K live wire) — read the collection's stored
-    /// validator via `listCollections({filter: {name}})`. Returns
-    /// `Ok(None)` when no validator is set, `Ok(Some(json))` otherwise.
-    /// `json` is the validator expression as canonical JSON so the
-    /// frontend can hand it directly to a JSON textarea.
+    /// Sprint 333/352 (Slice K live wire) — read the collection's stored
+    /// validator, validationLevel, and validationAction via
+    /// `listCollections({filter: {name}})`. Each field is `None` when the
+    /// server has never persisted a value (validator absent or `options`
+    /// doc omits the field) — the UI then falls back to MongoDB's
+    /// defaults (`"strict"` / `"error"`).
     pub(super) async fn get_collection_validator_impl(
         &self,
         db: &str,
         collection: &str,
-    ) -> Result<Option<JsonValue>, AppError> {
+    ) -> Result<CollectionValidatorRead, AppError> {
         let requested = if db.trim().is_empty() { None } else { Some(db) };
         let resolved = self
             .resolved_db_name(requested)
@@ -307,35 +308,50 @@ impl MongoAdapter {
             .await
             .map_err(|e| AppError::Database(format!("listCollections failed: {e}")))?;
 
-        let validator = resp
+        let options = resp
             .get_document("cursor")
             .ok()
             .and_then(|c| c.get_array("firstBatch").ok())
             .and_then(|arr| arr.first())
             .and_then(|b| b.as_document())
             .and_then(|spec| spec.get_document("options").ok())
-            .and_then(|opts| opts.get_document("validator").ok())
             .cloned();
 
-        match validator {
-            None => Ok(None),
-            Some(doc) => {
-                let json = bson::Bson::Document(doc).into_canonical_extjson();
-                Ok(Some(json))
+        let (validator, validation_level, validation_action) = match options {
+            None => (None, None, None),
+            Some(opts) => {
+                let validator = opts
+                    .get_document("validator")
+                    .ok()
+                    .cloned()
+                    .map(|d| bson::Bson::Document(d).into_canonical_extjson());
+                let validation_level = opts.get_str("validationLevel").ok().map(|s| s.to_string());
+                let validation_action =
+                    opts.get_str("validationAction").ok().map(|s| s.to_string());
+                (validator, validation_level, validation_action)
             }
-        }
+        };
+
+        Ok(CollectionValidatorRead {
+            validator,
+            validation_level,
+            validation_action,
+        })
     }
 
-    /// Sprint 333 (Slice K live wire) — apply / clear the collection
-    /// validator via `runCommand(collMod)`. `None` resets the validator
-    /// (`{}` per Mongo manual). validationLevel / validationAction are
-    /// hard-coded to "moderate" / "error" — the per-collection toggles
-    /// belong to a follow-up sprint.
+    /// Sprint 333/352 (Slice K live wire) — apply / clear the collection
+    /// validator via `runCommand(collMod)`. `validator == None` resets the
+    /// validator (`{}` per Mongo manual). When `validation_level` /
+    /// `validation_action` are `Some`, they are merged into the command
+    /// doc; when `None`, the field is omitted so MongoDB applies its
+    /// server-side default (`"strict"` / `"error"`).
     pub(super) async fn set_collection_validator_impl(
         &self,
         db: &str,
         collection: &str,
         validator: Option<JsonValue>,
+        validation_level: Option<String>,
+        validation_action: Option<String>,
     ) -> Result<(), AppError> {
         let requested = if db.trim().is_empty() { None } else { Some(db) };
         let resolved = self
@@ -361,15 +377,26 @@ impl MongoAdapter {
             },
         };
 
+        // Build the command doc explicitly so optional level/action fields
+        // are omitted (not written as `null`) when the caller leaves them
+        // unset. MongoDB rejects null values for these options, so the
+        // omit-when-None semantic preserves the byte-equivalent wire
+        // contract for legacy callers (validator-only payload).
+        let mut cmd = doc! {
+            "collMod": collection,
+            "validator": validator_bson,
+        };
+        if let Some(level) = validation_level {
+            cmd.insert("validationLevel", level);
+        }
+        if let Some(action) = validation_action {
+            cmd.insert("validationAction", action);
+        }
+
         let client = self.current_client().await?;
         client
             .database(&resolved)
-            .run_command(doc! {
-                "collMod": collection,
-                "validator": validator_bson,
-                "validationLevel": "moderate",
-                "validationAction": "error",
-            })
+            .run_command(cmd)
             .await
             .map_err(|e| AppError::Database(format!("collMod failed: {e}")))?;
         Ok(())
@@ -1238,7 +1265,10 @@ mod tests {
     #[tokio::test]
     async fn set_collection_validator_rejects_empty_db_name() {
         let adapter = MongoAdapter::new();
-        match adapter.set_collection_validator("   ", "c", None).await {
+        match adapter
+            .set_collection_validator("   ", "c", None, None, None)
+            .await
+        {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Database name"), "unexpected: {msg}");
             }
@@ -1249,7 +1279,10 @@ mod tests {
     #[tokio::test]
     async fn set_collection_validator_rejects_empty_collection_name() {
         let adapter = MongoAdapter::new();
-        match adapter.set_collection_validator("db", "   ", None).await {
+        match adapter
+            .set_collection_validator("db", "   ", None, None, None)
+            .await
+        {
             Err(AppError::Validation(msg)) => {
                 assert!(msg.contains("Collection name"), "unexpected: {msg}");
             }
@@ -1495,7 +1528,7 @@ mod tests {
         // bson Document 일 수 없으므로 fast-fail.
         let adapter = MongoAdapter::new();
         match adapter
-            .set_collection_validator("db", "c", Some(serde_json::json!([1, 2, 3])))
+            .set_collection_validator("db", "c", Some(serde_json::json!([1, 2, 3])), None, None)
             .await
         {
             Err(AppError::Validation(msg)) => {

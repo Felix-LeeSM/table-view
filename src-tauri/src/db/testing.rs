@@ -25,9 +25,9 @@ use tokio_util::sync::CancellationToken;
 
 use super::traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
 use super::types::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
-    DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo, NamespaceLabel,
-    RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
+    CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody, NamespaceInfo,
+    NamespaceLabel, RdbQueryResult,
 };
 use crate::error::AppError;
 use crate::models::{
@@ -726,12 +726,25 @@ pub(crate) struct StubDocumentAdapter {
     pub drop_collection_index_fn:
         Option<Box<dyn Fn(&str, &str, &str) -> Result<(), AppError> + Send + Sync>>,
 
-    // Sprint 333 — override slots for the validator pair. Default returns
-    // `None` / `Ok(())` so wiring tests for unrelated commands compile
-    // without a hand-rolled override.
-    pub get_collection_validator_fn: Option<FnTwo<str, str, Option<serde_json::Value>>>,
+    // Sprint 333/352 — override slots for the validator pair. Default
+    // returns the natural `CollectionValidatorRead::default()` /
+    // `Ok(())` so wiring tests for unrelated commands compile without a
+    // hand-rolled override. Sprint 352 widened `set` to capture the new
+    // level/action arguments alongside the validator payload.
+    pub get_collection_validator_fn: Option<FnTwo<str, str, CollectionValidatorRead>>,
+    #[allow(clippy::type_complexity)]
     pub set_collection_validator_fn: Option<
-        Box<dyn Fn(&str, &str, Option<serde_json::Value>) -> Result<(), AppError> + Send + Sync>,
+        Box<
+            dyn Fn(
+                    &str,
+                    &str,
+                    Option<serde_json::Value>,
+                    Option<String>,
+                    Option<String>,
+                ) -> Result<(), AppError>
+                + Send
+                + Sync,
+        >,
     >,
 
     // Sprint 334 — override slots for the create / rename collection pair.
@@ -1075,16 +1088,16 @@ impl DocumentAdapter for StubDocumentAdapter {
         Box::pin(async move { r })
     }
 
-    // Sprint 333 — validator pair stubs.
+    // Sprint 333/352 — validator pair stubs.
     fn get_collection_validator<'a>(
         &'a self,
         db: &'a str,
         coll: &'a str,
-    ) -> BoxFuture<'a, Result<Option<serde_json::Value>, AppError>> {
+    ) -> BoxFuture<'a, Result<CollectionValidatorRead, AppError>> {
         let r = self
             .get_collection_validator_fn
             .as_ref()
-            .map_or_else(|| Ok(None), |f| f(db, coll));
+            .map_or_else(|| Ok(CollectionValidatorRead::default()), |f| f(db, coll));
         Box::pin(async move { r })
     }
 
@@ -1093,11 +1106,13 @@ impl DocumentAdapter for StubDocumentAdapter {
         db: &'a str,
         coll: &'a str,
         validator: Option<serde_json::Value>,
+        validation_level: Option<String>,
+        validation_action: Option<String>,
     ) -> BoxFuture<'a, Result<(), AppError>> {
-        let r = self
-            .set_collection_validator_fn
-            .as_ref()
-            .map_or_else(|| Ok(()), |f| f(db, coll, validator));
+        let r = self.set_collection_validator_fn.as_ref().map_or_else(
+            || Ok(()),
+            |f| f(db, coll, validator, validation_level, validation_action),
+        );
         Box::pin(async move { r })
     }
 

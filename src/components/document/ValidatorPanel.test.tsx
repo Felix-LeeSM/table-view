@@ -95,12 +95,18 @@ describe("ValidatorPanel (Sprint 333 — Slice K live wire)", () => {
 
     await user.click(screen.getByTestId("validator-panel-save"));
 
+    // Sprint 352 widened the wire shape with `validationLevel` /
+    // `validationAction` positional args. When the legacy backend
+    // returns `null`, the selects default to MongoDB's server-side
+    // defaults (`strict` / `error`) and Save forwards those values.
     await waitFor(() => {
       expect(setMongoValidatorMock).toHaveBeenCalledWith(
         "conn-mongo",
         "app",
         "users",
         { $jsonSchema: { bsonType: "object" } },
+        "strict",
+        "error",
       );
     });
   });
@@ -145,12 +151,18 @@ describe("ValidatorPanel (Sprint 333 — Slice K live wire)", () => {
 
     await user.click(screen.getByTestId("validator-panel-clear"));
 
+    // Sprint 352 — Clear retains the current level/action so the
+    // collection's enforcement posture is preserved across a payload
+    // reset. Legacy backend returns the bare validator JSON; the panel
+    // normalises that to defaults (`strict` / `error`).
     await waitFor(() => {
       expect(setMongoValidatorMock).toHaveBeenCalledWith(
         "conn-mongo",
         "app",
         "users",
         null,
+        "strict",
+        "error",
       );
     });
   });

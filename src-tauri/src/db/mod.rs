@@ -25,9 +25,10 @@ pub use postgres::PostgresAdapter;
 pub use active::ActiveAdapter;
 pub use traits::{DbAdapter, DocumentAdapter, KvAdapter, RdbAdapter, SearchAdapter};
 pub use types::{
-    BoxFuture, BulkWriteOp, BulkWriteResult, CreateMongoIndexRequest, CreateMongoIndexResult,
-    DocumentId, DocumentQueryResult, DocumentRow, FindBody, MongoIndexCollation,
-    MongoIndexDirection, MongoIndexField, NamespaceInfo, NamespaceLabel, RdbQueryResult,
+    BoxFuture, BulkWriteOp, BulkWriteResult, CollectionValidatorRead, CreateMongoIndexRequest,
+    CreateMongoIndexResult, DocumentId, DocumentQueryResult, DocumentRow, FindBody,
+    MongoIndexCollation, MongoIndexDirection, MongoIndexField, NamespaceInfo, NamespaceLabel,
+    RdbQueryResult,
 };
 
 #[cfg(test)]
