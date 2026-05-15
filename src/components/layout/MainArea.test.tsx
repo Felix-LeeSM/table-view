@@ -93,6 +93,75 @@ vi.mock("@components/query/QueryTab", () => ({
   ),
 }));
 
+// Sprint 350 (2026-05-15) — Mongo document-paradigm branch now renders a
+// Records/Structure sub-tab bar that mounts `DocumentDataGrid` (Records)
+// or `MongoStructurePanel` (Structure). Both are mocked so this suite
+// focuses on the routing logic in `MainArea`, not the panels' bodies.
+vi.mock("@components/document/DocumentDataGrid", () => ({
+  default: ({
+    connectionId,
+    database,
+    collection,
+  }: {
+    connectionId: string;
+    database: string;
+    collection: string;
+  }) => (
+    <div
+      data-testid="mock-document-datagrid"
+      data-connection={connectionId}
+      data-database={database}
+      data-collection={collection}
+    />
+  ),
+}));
+
+// Sprint 350 (2026-05-15) — the mock renders the controlled `active` prop
+// and exposes a button that calls `onActiveChange`. AC-350-02 requires the
+// inner Indexes/Validator pick to survive an outer Records ↔ Structure
+// remount, so the mock must let the test (a) read whatever value the
+// parent passes down and (b) drive a change without depending on the real
+// `MongoIndexesPanel` body.
+type MockMongoStructurePanelProps = {
+  connectionId: string;
+  database: string;
+  collection: string;
+  active?: "indexes" | "validator";
+  onActiveChange?: (next: "indexes" | "validator") => void;
+};
+vi.mock("@components/document/MongoStructurePanel", () => ({
+  MongoStructurePanel: ({
+    connectionId,
+    database,
+    collection,
+    active,
+    onActiveChange,
+  }: MockMongoStructurePanelProps) => (
+    <div
+      data-testid="mock-mongo-structure"
+      data-connection={connectionId}
+      data-database={database}
+      data-collection={collection}
+      data-active={active}
+    >
+      <button
+        type="button"
+        data-testid="mock-mongo-structure-select-validator"
+        onClick={() => onActiveChange?.("validator")}
+      >
+        select-validator
+      </button>
+      <button
+        type="button"
+        data-testid="mock-mongo-structure-select-indexes"
+        onClick={() => onActiveChange?.("indexes")}
+      >
+        select-indexes
+      </button>
+    </div>
+  ),
+}));
+
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {
     type: "table",
@@ -103,6 +172,24 @@ function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
     schema: "public",
     table: "users",
     subView: "records",
+    ...overrides,
+  };
+}
+
+// Sprint 350 (2026-05-15) — document-paradigm tab fixture. The document
+// branch keys on `database` / `collection` (mongo names) rather than
+// `schema` / `table`.
+function makeDocumentTab(overrides: Partial<TableTab> = {}): TableTab {
+  return {
+    type: "table",
+    id: "doc-tab-1",
+    title: "users",
+    connectionId: "mongo1",
+    closable: true,
+    database: "app",
+    collection: "users",
+    subView: "records",
+    paradigm: "document",
     ...overrides,
   };
 }
@@ -766,6 +853,141 @@ describe("MainArea", () => {
       // First-connected fallback fired (c1) → tab open against c1 →
       // tabStore.addQueryTab dispatches markConnectionUsed("c1").
       expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
+    });
+  });
+
+  // ------------------------------------------------------------------
+  // Sprint 350 (2026-05-15) — Mongo Records/Structure sub-tab bar.
+  // ------------------------------------------------------------------
+  // 작성 이유: 본 sprint 가 document-paradigm tab 의 "render
+  // DocumentDataGrid directly" 패턴을 Records/Structure sub-tab bar 로
+  // 교체한다. AC-350-01 (sub-tab bar shape + Records 기본 선택),
+  // AC-350-02 (Structure 활성화 시 MongoStructurePanel 마운트), 그리고
+  // AC-350-05 (RDB regression guard — mongo testids 가 RDB tab 에서
+  // 노출되지 않음) 을 한 describe 에 묶어 가드한다.
+  describe("Sprint 350 — Mongo Records/Structure sub-tab bar", () => {
+    it("AC-350-01 — renders Records/Structure sub-tab bar with Records selected by default for document paradigm", () => {
+      const tab = makeDocumentTab({ subView: "records" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      const tablist = screen.getByTestId("mongo-table-subtab-bar");
+      expect(tablist).toHaveAttribute("role", "tablist");
+      const recordsTab = screen.getByRole("tab", { name: "Records" });
+      const structureTab = screen.getByRole("tab", { name: "Structure" });
+      expect(recordsTab).toHaveAttribute("aria-selected", "true");
+      expect(structureTab).toHaveAttribute("aria-selected", "false");
+
+      // Records pane mounts DocumentDataGrid; MongoStructurePanel stays
+      // unmounted while Records is selected.
+      expect(screen.getByTestId("mock-document-datagrid")).toBeInTheDocument();
+      expect(screen.queryByTestId("mock-mongo-structure")).toBeNull();
+    });
+
+    it("AC-350-02 — switching to Structure mounts MongoStructurePanel and unmounts DocumentDataGrid", () => {
+      const tab = makeDocumentTab({ subView: "records" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      act(() => {
+        fireEvent.click(screen.getByRole("tab", { name: "Structure" }));
+      });
+
+      // Underlying store flips subView.
+      const state = getTestWorkspace("mongo1", "app");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated && updated.type === "table" ? updated.subView : "").toBe(
+        "structure",
+      );
+
+      // MongoStructurePanel mounts in the Structure slot.
+      const panel = screen.getByTestId("mock-mongo-structure");
+      expect(panel).toHaveAttribute("data-connection", "mongo1");
+      expect(panel).toHaveAttribute("data-database", "app");
+      expect(panel).toHaveAttribute("data-collection", "users");
+      expect(screen.queryByTestId("mock-document-datagrid")).toBeNull();
+    });
+
+    it("AC-350-02 — ArrowRight on Records toggles to Structure (keyboard navigation parity with RDB)", () => {
+      const tab = makeDocumentTab({ subView: "records" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      const recordsTab = screen.getByRole("tab", { name: "Records" });
+      act(() => {
+        fireEvent.keyDown(recordsTab, { key: "ArrowRight" });
+      });
+
+      const state = getTestWorkspace("mongo1", "app");
+      const updated = state.tabs.find((t) => t.id === tab.id);
+      expect(updated && updated.type === "table" ? updated.subView : "").toBe(
+        "structure",
+      );
+    });
+
+    // Sprint 350 (2026-05-15) — AC-350-02 literal wording: "the inner
+    // selection survives Structure-tab re-activation". Toggling outer
+    // Records → Structure → Records → Structure must NOT reset the
+    // user's Indexes/Validator pick. Owned by `TableTabView` so the
+    // state outlives the conditional remount of `MongoStructurePanel`.
+    it("AC-350-02 — inner selection survives outer Records → Structure → Records → Structure cycle", () => {
+      const tab = makeDocumentTab({ subView: "structure" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      // Initial render: Structure pane, inner pick defaults to "indexes".
+      const initialPanel = screen.getByTestId("mock-mongo-structure");
+      expect(initialPanel).toHaveAttribute("data-active", "indexes");
+
+      // User picks Validator inside Structure.
+      act(() => {
+        fireEvent.click(
+          screen.getByTestId("mock-mongo-structure-select-validator"),
+        );
+      });
+      expect(screen.getByTestId("mock-mongo-structure")).toHaveAttribute(
+        "data-active",
+        "validator",
+      );
+
+      // Outer cycle: Structure → Records (unmounts MongoStructurePanel).
+      act(() => {
+        fireEvent.click(screen.getByRole("tab", { name: "Records" }));
+      });
+      expect(screen.queryByTestId("mock-mongo-structure")).toBeNull();
+      expect(screen.getByTestId("mock-document-datagrid")).toBeInTheDocument();
+
+      // Outer cycle: Records → Structure (re-mounts MongoStructurePanel).
+      act(() => {
+        fireEvent.click(screen.getByRole("tab", { name: "Structure" }));
+      });
+
+      // The inner pick must still be "validator", not the default
+      // "indexes". This is the survival contract that AC-350-02 asks for.
+      const remountedPanel = screen.getByTestId("mock-mongo-structure");
+      expect(remountedPanel).toHaveAttribute("data-active", "validator");
+    });
+
+    it("AC-350-05 — RDB regression guard: rdb tab still renders the existing 'Table view' tab bar and mongo testids stay absent", () => {
+      const tab = makeTableTab({ subView: "records" });
+      useWorkspaceStore.setState(seedWorkspace([tab], tab.id));
+
+      render(<MainArea />);
+
+      // The RDB branch keeps its `aria-label="Table view"` tablist.
+      expect(
+        screen.getByRole("tablist", { name: "Table view" }),
+      ).toBeInTheDocument();
+      // Document-paradigm testids are NOT present.
+      expect(screen.queryByTestId("mongo-table-subtab-bar")).toBeNull();
+      expect(screen.queryByTestId("mock-mongo-structure")).toBeNull();
+      expect(screen.queryByTestId("mock-document-datagrid")).toBeNull();
+      // RDB grid still mounts via its mocked stand-in.
+      expect(screen.getByTestId("mock-datagrid")).toBeInTheDocument();
     });
   });
 });

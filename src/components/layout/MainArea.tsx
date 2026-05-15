@@ -13,6 +13,10 @@ import { useMruStore } from "@stores/mruStore";
 import { Plus } from "lucide-react";
 import DataGrid from "@components/rdb/DataGrid";
 import DocumentDataGrid from "@components/document/DocumentDataGrid";
+import {
+  MongoStructurePanel,
+  type MongoStructureSubTab,
+} from "@components/document/MongoStructurePanel";
 import StructurePanel from "@components/schema/StructurePanel";
 import ViewStructurePanel from "@components/schema/ViewStructurePanel";
 import QueryTab from "@components/query/QueryTab";
@@ -29,26 +33,95 @@ interface TableTabProps {
 }
 
 function TableTabView({ tab, onSubViewChange }: TableTabProps) {
-  // Document-paradigm tabs bypass the Records/Structure sub-tabs (no
-  // collection-structure inspector yet). Paradigm dispatch is wrapped in an
-  // exhaustive switch so adding a new variant to the `Paradigm` union
-  // surfaces a TypeScript error here.
+  // Paradigm dispatch is wrapped in an exhaustive switch so adding a new
+  // variant to the `Paradigm` union surfaces a TypeScript error here.
   const paradigm: Paradigm = tab.paradigm ?? "rdb";
 
+  // Owned here (not in `MongoStructurePanel`) so the user's inner
+  // Indexes/Validator pick survives an outer Records ↔ Structure
+  // remount. `TableTabView` is keyed by `activeTab.id` upstream, so this
+  // state outlives outer-toggle re-renders and only resets when the
+  // user closes/swaps the tab itself.
+  const [mongoStructureSubTab, setMongoStructureSubTab] =
+    useState<MongoStructureSubTab>("indexes");
+
   switch (paradigm) {
-    case "document":
+    case "document": {
       // Prefer the dedicated `database` / `collection` fields; fall back to
       // legacy `schema` / `table` aliasing for persisted tabs that predate
       // the migration in `loadPersistedTabs`.
+      const database = tab.database ?? tab.schema ?? "";
+      const collection = tab.collection ?? tab.table ?? "";
       return (
         <div className="flex flex-1 flex-col overflow-hidden">
-          <DocumentDataGrid
-            connectionId={tab.connectionId}
-            database={tab.database ?? tab.schema!}
-            collection={tab.collection ?? tab.table!}
-          />
+          <div
+            className="flex items-center border-b border-border bg-secondary"
+            role="tablist"
+            aria-label="Mongo collection view"
+            data-testid="mongo-table-subtab-bar"
+          >
+            <button
+              role="tab"
+              aria-selected={tab.subView === "records"}
+              tabIndex={tab.subView === "records" ? 0 : -1}
+              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                tab.subView === "records"
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground hover:text-secondary-foreground"
+              }`}
+              onClick={() => onSubViewChange("records")}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  onSubViewChange(
+                    tab.subView === "records" ? "structure" : "records",
+                  );
+                }
+              }}
+            >
+              Records
+            </button>
+            <button
+              role="tab"
+              aria-selected={tab.subView === "structure"}
+              tabIndex={tab.subView === "structure" ? 0 : -1}
+              className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                tab.subView === "structure"
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground hover:text-secondary-foreground"
+              }`}
+              onClick={() => onSubViewChange("structure")}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  onSubViewChange(
+                    tab.subView === "structure" ? "records" : "structure",
+                  );
+                }
+              }}
+            >
+              Structure
+            </button>
+          </div>
+
+          {tab.subView === "records" ? (
+            <DocumentDataGrid
+              connectionId={tab.connectionId}
+              database={database}
+              collection={collection}
+            />
+          ) : (
+            <MongoStructurePanel
+              connectionId={tab.connectionId}
+              database={database}
+              collection={collection}
+              active={mongoStructureSubTab}
+              onActiveChange={setMongoStructureSubTab}
+            />
+          )}
         </div>
       );
+    }
     case "rdb":
     case "search":
     case "kv":
