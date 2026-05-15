@@ -82,6 +82,51 @@ describe("DocumentDatabaseTree", () => {
     });
   });
 
+  // Sprint 346 (2026-05-15) — admin/config/local 시스템 DB 는 sidebar 의 맨
+  // 아래로 정렬, italic + muted 시각으로 사용자 DB 와 구분. backend 의
+  // list_database_names 가 정렬을 보장 안 해 admin 이 맨 위에 떠 사용자
+  // 자신의 DB 가 묻히는 UX 회귀를 막는다.
+  it("renders system databases (admin/config/local) after user DBs, italic + muted", async () => {
+    const tauri = (await import("@lib/tauri")) as unknown as {
+      listMongoDatabases: ReturnType<typeof vi.fn>;
+    };
+    tauri.listMongoDatabases.mockResolvedValueOnce([
+      { name: "admin" },
+      { name: "local" },
+      { name: "config" },
+      { name: "zeta_app" },
+      { name: "alpha_app" },
+    ]);
+
+    render(<DocumentDatabaseTree connectionId="conn-mongo-sys" />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("alpha_app database")).toBeInTheDocument();
+      expect(screen.getByLabelText("admin database")).toBeInTheDocument();
+    });
+
+    const dbButtons = screen.getAllByRole("button", {
+      name: /database$/,
+    });
+    const order = dbButtons.map((b) => b.getAttribute("aria-label"));
+    expect(order).toEqual([
+      "alpha_app database",
+      "zeta_app database",
+      "admin database",
+      "config database",
+      "local database",
+    ]);
+
+    const adminRow = screen.getByLabelText("admin database");
+    expect(adminRow).toHaveAttribute("data-system-db", "true");
+    expect(adminRow.className).toMatch(/italic/);
+    expect(adminRow.className).toMatch(/opacity-60/);
+
+    const userRow = screen.getByLabelText("alpha_app database");
+    expect(userRow).not.toHaveAttribute("data-system-db");
+    expect(userRow.className).not.toMatch(/italic/);
+  });
+
   it("expanding a database node lazy-loads its collections", async () => {
     render(<DocumentDatabaseTree connectionId="conn-mongo" />);
 

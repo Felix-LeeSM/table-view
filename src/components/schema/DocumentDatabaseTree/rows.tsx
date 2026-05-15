@@ -12,7 +12,11 @@ import {
   ContextMenuTrigger,
 } from "@components/ui/context-menu";
 import { cn } from "@lib/utils";
-import type { CollectionInfo, DatabaseInfo } from "@/types/document";
+import {
+  isMongoSystemDatabase,
+  type CollectionInfo,
+  type DatabaseInfo,
+} from "@/types/document";
 
 /**
  * Leaf row renderers for `DocumentDatabaseTree`. Plain props in, no store
@@ -39,6 +43,9 @@ export function DatabaseRow({
   onToggle,
   onNewQueryHere,
 }: DatabaseRowProps) {
+  // Sprint 346 — admin/config/local 은 사용자가 평소 안 건드림. italic +
+  // muted opacity 로 시각 구분 (선택/펼침 동작은 동일).
+  const isSystem = isMongoSystemDatabase(db.name);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -49,9 +56,11 @@ export function DatabaseRow({
             isSelected
               ? "bg-muted text-foreground"
               : "text-secondary-foreground",
+            isSystem && "italic opacity-60",
           )}
           aria-expanded={isExpanded}
           aria-label={`${db.name} database`}
+          data-system-db={isSystem ? "true" : undefined}
           onClick={onToggle}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {

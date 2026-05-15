@@ -26,6 +26,19 @@ export interface DatabaseInfo {
 }
 
 /**
+ * Sprint 346 — MongoDB 의 시스템 데이터베이스 (사용자가 평소 안 건드림).
+ * `admin` 은 인증 / role / runCommand 의 출입구, `config` 는 sharded
+ * cluster metadata (단일 노드에선 거의 비어있음), `local` 은 replication
+ * oplog. sidebar 에선 사용자 DB 와 시각 구분 (italic + muted) 하고 정렬
+ * 시 맨 아래로.
+ */
+export const MONGO_SYSTEM_DATABASES = ["admin", "config", "local"] as const;
+
+export function isMongoSystemDatabase(name: string): boolean {
+  return (MONGO_SYSTEM_DATABASES as readonly string[]).includes(name);
+}
+
+/**
  * A MongoDB collection — the `list_mongo_collections` response item. The
  * backend derives `document_count` from the server's cheap metadata
  * estimate when available; frontends must treat `null` as "unknown" rather

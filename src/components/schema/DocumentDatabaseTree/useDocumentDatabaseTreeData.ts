@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useDocumentStore } from "@stores/documentStore";
-import type { CollectionInfo, DatabaseInfo } from "@/types/document";
+import {
+  isMongoSystemDatabase,
+  MONGO_SYSTEM_DATABASES,
+  type CollectionInfo,
+  type DatabaseInfo,
+} from "@/types/document";
 
 /**
  * Data + UI-state hook for `DocumentDatabaseTree`: fetches the database
@@ -104,7 +109,25 @@ export function useDocumentDatabaseTreeData(
     [expandedDbs, connectionId, collectionsByDb, loadCollections],
   );
 
-  const databaseList = useMemo(() => databases ?? [], [databases]);
+  // Sprint 346 — user DB 가 먼저 (알파벳), system DB (admin/config/local) 가
+  // 끝. backend 의 list_database_names 가 자체 정렬을 보장하지 않아 자주
+  // `admin` 이 맨 위에 뜨는데, 사용자가 평소 작업할 DB 가 묻혀버리는 UX
+  // 회귀. 시각 구분 (italic + muted) 은 row 컴포넌트에서.
+  const databaseList = useMemo(() => {
+    const raw = databases ?? [];
+    const userDbs: DatabaseInfo[] = [];
+    const systemByName = new Map<string, DatabaseInfo>();
+    for (const db of raw) {
+      if (isMongoSystemDatabase(db.name)) systemByName.set(db.name, db);
+      else userDbs.push(db);
+    }
+    userDbs.sort((a, b) => a.name.localeCompare(b.name));
+    const systemDbs = MONGO_SYSTEM_DATABASES.flatMap((n) => {
+      const found = systemByName.get(n);
+      return found ? [found] : [];
+    });
+    return [...userDbs, ...systemDbs];
+  }, [databases]);
 
   // Client-side filter: a database matches when its own name matches OR
   // any of its already-loaded collections match (case-insensitive
