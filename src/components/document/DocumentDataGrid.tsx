@@ -13,10 +13,11 @@ import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
+import { useHiddenColumns } from "@/hooks/useHiddenColumns";
 import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
 import HeaderRow from "@components/datagrid/DataGridTable/HeaderRow";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
-import type { SortInfo } from "@/types/schema";
+import type { ColumnInfo, SortInfo } from "@/types/schema";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
@@ -178,7 +179,26 @@ export default function DocumentDataGrid({
     reset: resetColumnWidths,
   } = useColumnWidths(widthColumns, persistenceKey);
 
+  // Sprint 317 — Slice D.1: per-collection hide column.
+  // localStorage key = `hidden-columns:document:<db>:<coll>`. Sharing
+  // the same `document:<db>:<coll>` namespace as widths keeps the
+  // persisted state cohesive (D-35).
+  const hiddenColumns = useHiddenColumns(persistenceKey);
+
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Sprint 317 D.1 — visible column subset. Hidden columns drop out of
+  // the header row, the `--cols` template, and the per-row cell map.
+  // Tuples carry the original idx so cell lookups (`row[origIdx]`) stay
+  // correct after filtering.
+  const visibleEntries = useMemo<
+    ReadonlyArray<readonly [ColumnInfo, number]>
+  >(() => {
+    if (!data) return [];
+    return data.columns
+      .map((c, i) => [c, i] as const)
+      .filter(([c]) => !hiddenColumns.hidden.has(c.name));
+  }, [data, hiddenColumns.hidden]);
 
   const visualWidthsPx = useMemo(() => {
     if (!data) return [] as number[];
@@ -191,13 +211,13 @@ export default function DocumentDataGrid({
             return Number.isFinite(measured) ? measured : 16;
           })()
         : 16;
-    return data.columns.map((col) => {
+    return visibleEntries.map(([col]) => {
       const stored = widths[col.name];
       if (stored != null) return stored;
       const cat = (col.category ?? "unknown") as ColumnCategory;
       return getDefaultRem(cat) * rootFontSizePx;
     });
-  }, [data, widths]);
+  }, [data, widths, visibleEntries]);
 
   const colsTemplate = useMemo(
     () => visualWidthsPx.map((w) => `${w}px`).join(" "),
@@ -481,6 +501,31 @@ export default function DocumentDataGrid({
         onDuplicateRow={editState.handleDuplicateRow}
       />
 
+      {/* Sprint 317 D.1 — hidden columns badge. Only shown when at
+          least one column is hidden. "Show all" wipes the persisted
+          state for the current collection (D-37). */}
+      {hiddenColumns.hidden.size > 0 && (
+        <div
+          className="flex items-center justify-between border-b border-border bg-muted/40 px-3 py-1.5 text-xs"
+          aria-label="Hidden columns badge"
+        >
+          <span className="text-muted-foreground">
+            {hiddenColumns.hidden.size === 1
+              ? "1 column hidden"
+              : `${hiddenColumns.hidden.size} columns hidden`}
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-primary hover:text-primary/80"
+            onClick={() => hiddenColumns.clear()}
+            aria-label="Show all hidden columns"
+          >
+            Show all
+          </Button>
+        </div>
+      )}
+
       {showFilters && (
         <DocumentFilterBar
           fieldNames={filterFieldNames}
@@ -517,7 +562,7 @@ export default function DocumentDataGrid({
           className="relative flex-1 overflow-auto text-sm"
           role="grid"
           aria-rowcount={1 + data.rows.length}
-          aria-colcount={data.columns.length}
+          aria-colcount={visibleEntries.length}
           style={{ "--cols": colsTemplate } as CSSProperties}
         >
           {/* `AsyncProgressOverlay` paints only after `loading` has
@@ -534,7 +579,7 @@ export default function DocumentDataGrid({
               indicator (rank + ▲/▼) 가 column 별로 표시된다. */}
           <HeaderRow
             data={data}
-            order={data.columns.map((_, i) => i)}
+            order={visibleEntries.map(([, i]) => i)}
             sorts={sorts}
             editingCell={editState.editingCell}
             onSort={handleSort}
@@ -543,6 +588,7 @@ export default function DocumentDataGrid({
             onSortColumn={handleSortColumn}
             onClearColumnSort={handleClearColumnSort}
             onClearAllSorts={handleClearAllSorts}
+            onHideColumn={hiddenColumns.hide}
           />
 
           <div role="rowgroup">
@@ -576,7 +622,7 @@ export default function DocumentDataGrid({
                     minWidth: "max-content",
                   }}
                 >
-                  {data.columns.map((col, colIdx) => {
+                  {visibleEntries.map(([col, colIdx], visualIdx) => {
                     const cell = (row as unknown[])[colIdx];
                     const isSentinel = isDocumentSentinel(cell);
                     const isNull = cell == null;
@@ -593,7 +639,7 @@ export default function DocumentDataGrid({
                       <div
                         key={col.name}
                         role="gridcell"
-                        aria-colindex={colIdx + 1}
+                        aria-colindex={visualIdx + 1}
                         data-editing={isEditing ? "true" : undefined}
                         className={cn(
                           "flex min-w-0 items-center overflow-hidden border-r border-border px-3 py-1 text-xs",

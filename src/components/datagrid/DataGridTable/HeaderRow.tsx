@@ -52,6 +52,12 @@ export interface HeaderRowProps {
   onClearColumnSort?: (columnName: string) => void;
   /** Drop every sort key. */
   onClearAllSorts?: () => void;
+  /**
+   * Sprint 317 — Slice D.1: hide this column. When provided, the
+   * context menu surfaces a "Hide column" item below a separator.
+   * `useHiddenColumns` handles state + persist on the caller side.
+   */
+  onHideColumn?: (columnName: string) => void;
 }
 
 export default function HeaderRow({
@@ -65,12 +71,14 @@ export default function HeaderRow({
   onSortColumn,
   onClearColumnSort,
   onClearAllSorts,
+  onHideColumn,
 }: HeaderRowProps) {
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
   const hasContextMenu = !!(
     onSortColumn ||
     onClearColumnSort ||
-    onClearAllSorts
+    onClearAllSorts ||
+    onHideColumn
   );
 
   return (
@@ -197,6 +205,16 @@ export default function HeaderRow({
                   >
                     Clear all sorts
                   </ContextMenuItem>
+                )}
+                {onHideColumn && (
+                  <>
+                    {(onSortColumn || onClearColumnSort || onClearAllSorts) && (
+                      <ContextMenuSeparator />
+                    )}
+                    <ContextMenuItem onSelect={() => onHideColumn(col.name)}>
+                      Hide column
+                    </ContextMenuItem>
+                  </>
                 )}
               </ContextMenuContent>
             </ContextMenu>

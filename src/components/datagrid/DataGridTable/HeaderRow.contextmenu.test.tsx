@@ -50,6 +50,7 @@ interface SetupOpts {
   ) => void;
   onClearColumnSort?: (column: string) => void;
   onClearAllSorts?: () => void;
+  onHideColumn?: (column: string) => void;
 }
 
 function setup(opts: SetupOpts = {}) {
@@ -68,6 +69,7 @@ function setup(opts: SetupOpts = {}) {
     onSortColumn: opts.onSortColumn,
     onClearColumnSort: opts.onClearColumnSort,
     onClearAllSorts: opts.onClearAllSorts,
+    onHideColumn: opts.onHideColumn,
   };
   render(<HeaderRow {...props} />);
   return props;
@@ -192,5 +194,21 @@ describe("HeaderRow context menu (Sprint 316)", () => {
     openContextMenuOn("name");
     const item = screen.getByRole("menuitem", { name: "Clear all sorts" });
     expect(item).toHaveAttribute("data-disabled");
+  });
+
+  // Sprint 317 — Slice D.1: Hide column item appears under a separator
+  // when `onHideColumn` is provided.
+  it("Hide column item dispatches onHideColumn(col) when provided", () => {
+    const onHideColumn = vi.fn();
+    setup({ onHideColumn });
+    openContextMenuOn("name");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Hide column" }));
+    expect(onHideColumn).toHaveBeenCalledWith("name");
+  });
+
+  it("Hide column item is absent when onHideColumn is not provided", () => {
+    setup({ onSortColumn: vi.fn() });
+    openContextMenuOn("name");
+    expect(screen.queryByRole("menuitem", { name: "Hide column" })).toBeNull();
   });
 });

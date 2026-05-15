@@ -1024,3 +1024,128 @@ column is not sorted" + "Clear all sorts is disabled when sorts is
 empty" 2 case 가 lock.
 
 ---
+
+## Sprint 317 — Slice D.1 (Mongo hide column) — 자율 결정 dict
+
+### D-35: persist 단위 = `document:<db>:<coll>` (column-widths 와 namespace 공유)
+
+**문제**: hide column 상태를 어느 단위로 persist 할지. workspaceStore
+의 활성 connection 단위? collection 단위? schema 단위? sprint-265
+이후 documentStore 의 캐시도 `(connId, db, collection)` 단위로 분리됨.
+
+**결정**: localStorage key = `hidden-columns:document:<db>:<coll>`.
+즉, `useColumnWidths` 의 persist namespace (`document:<db>:<coll>`) 와
+동일한 키 공간을 공유. 단순 prefix 만 다름 (`column-widths:` vs
+`hidden-columns:`).
+
+**근거**:
+1. column width 와 hide 는 동일한 사용자 의도 — "이 collection 에서
+   이 column 을 어떻게 보고 싶다" — 한 묶음으로 라이프사이클 관리.
+2. workspace 가 바뀌어도 같은 collection 으로 돌아오면 hide 상태
+   유지 (column-widths 와 동일 정책).
+3. workspaceStore 가 아니라 hook-local state + localStorage 로
+   격리해 sprint-262 의 workspaceStore migration 종료 이후 추가
+   migration 부담 0.
+
+**대안**:
+- workspaceStore `documentTab.hiddenColumns` 필드 → migration 비용,
+  cross-window 비호환.
+- session-only (메모리) → 페이지 reload 마다 다시 hide 작업 필요.
+- per-database (`document:<db>` 만) → 다른 collection 에 영향, UX
+  의도 어긋남.
+
+**영향**: `useHiddenColumns.ts` 의 STORAGE_PREFIX = `hidden-columns:`,
+DocumentDataGrid 가 `useColumnWidths` 와 동일 `persistenceKey`
+재사용. `DocumentDataGrid.hide.test.tsx` 의 5번 case (mount-load
+회귀) 가 이 키 형식을 lock.
+
+---
+
+### D-36: hidden columns 배지 위치 = Toolbar 와 grid 사이 inline strip
+
+**문제**: column 이 hide 되면 사용자가 (a) "지금 몇 개가 숨어있는가"
+(b) "어떻게 복원하는가" 를 인지할 수단 필요. 배치 위치 선택:
+toolbar 안의 chip? grid header 위 separate strip? floating button?
+
+**결정**: DataGridToolbar 와 grid container 사이의 inline strip.
+좌측에 `"N column(s) hidden"`, 우측에 ghost variant "Show all" button.
+배경은 `bg-muted/40`, 텍스트 `text-xs`, 1.5px padding.
+
+**근거**:
+1. DataGridFilterBar / filterCount 와 시각적 일관성 — 둘 다
+   "현재 grid 상태에 대한 modifier" 카테고리. 동일 위치에 등장.
+2. Toolbar 안에 chip 추가 시 toolbar 가 비좁아짐 (현재 7+ icon
+   button 이 우측에 있음).
+3. floating button 은 grid 위에 떠 row 가려서 NO.
+4. hidden columns 가 0 개일 때는 strip 자체를 unmount → DOM
+   부담 0.
+
+**대안**:
+- toolbar 내부 chip (Filters 옆) — 공간 부족.
+- grid header 위 좌측 inline link — header sticky 와 layering 충돌.
+
+**영향**: `aria-label="Hidden columns badge"` 로 RTL 가 strip 의
+존재/부재를 단언. "Show all hidden columns" aria-label 의 button
+이 wipe action.
+
+---
+
+### D-37: Show all = 전체 clear + localStorage 도 clear (per-column show 는 별도 슬라이스)
+
+**문제**: 배지의 우측 액션을 어떤 의미로 만들지. 모든 hidden column
+을 한 번에 복원? 아니면 hidden column 리스트 popover 에서 개별
+복원?
+
+**결정**: 단일 "Show all" 액션. 클릭 시 `hiddenColumns.clear()` →
+in-memory + localStorage entry 둘 다 wipe. 개별 복원 UI 는 Slice D
+의 추가 sub-sprint 또는 Slice H (field projection dialog) 로 연기.
+
+**근거**:
+1. Slice D.1 의 scope 는 "hide column" 본체 + 회복 lifeline. lifeline
+   은 "한 번에 다 복원" 하나로도 회복 가능 — 안전망 1개면 충분.
+2. per-column show 는 popover/listbox UI 가 필요 — 별도 디자인
+   결정 + 테스트 부담. Slice D.1 의 blast radius 를 좁힘.
+3. 사용자 use case: hide 는 "이 column 한두 개 안 보고 싶음", 복원은
+   "다시 전부 보기" 가 압도적으로 흔함 (TablePlus / DataGrip 도
+   동일 정책).
+4. localStorage 도 clear — 다음 mount 때 부활하면 사용자 의도와
+   충돌.
+
+**대안**:
+- 배지 클릭 → popover 안에 column list + per-row show button →
+  Slice D.1 scope 초과.
+- "Show all" 만 두고 localStorage 는 보존 → unmount/remount 시 hide
+  부활 → 사용자가 또 Show all 눌러야. NO.
+
+**영향**: RTL "Show all clears every hidden column and removes the
+badge" + localStorage entry null assertion 으로 lock.
+
+---
+
+### D-38: "전부 hide" 가드레일 없음 — column 0개 visible 허용
+
+**문제**: 사용자가 모든 column 을 hide 하면 grid 가 빈 column space
+가 됨. 가드레일 (마지막 column 은 hide 못 함) 둘지?
+
+**결정**: 가드레일 없음. 0 column visible 도 허용. 단, badge 가
+계속 표시되어 "Show all" 로 즉시 복원 가능.
+
+**근거**:
+1. 가드레일은 implicit "이 column 만은 못 숨김" rule → 사용자가
+   왜 disabled 인지 추측해야. UX 복잡도 증가.
+2. 회복 affordance ("Show all") 가 항상 visible 하니 막다른 골목
+   아님.
+3. row 가 0 col 로 rendered 되어도 aria-rowcount 는 정상, "No
+   documents" 빈상태는 row 0 일 때 별도 처리 (기존 로직).
+
+**대안**:
+- 마지막 column hide 시 disabled 처리 → 어떤 column 이 "마지막"
+  인지 모호 (visible order 의 마지막? 원본 order 의 마지막?).
+- toast "최소 1개 column 이 보여야 합니다" → 사용자 행동 막힘.
+
+**영향**: HeaderRow 의 ContextMenu "Hide column" item 은 항상 enabled.
+guard 코드 부재. RTL 의 "Show all" 5번째 case 가 0-column 복원
+회귀를 lock 하진 않지만, 후속 슬라이스 (D.2 RDB) 에서 동일 정책
+적용 가능.
+
+---
