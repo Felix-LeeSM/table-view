@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDocumentStore } from "@stores/documentStore";
 import { cancelQuery } from "@lib/tauri";
-import type { ColumnInfo, TableData } from "@/types/schema";
+import type { ColumnInfo, SortInfo, TableData } from "@/types/schema";
 import type { DocumentQueryResult } from "@/types/document";
 
 /**
@@ -27,6 +27,13 @@ export interface UseDocumentGridDataParams {
   pageSize: number;
   activeFilter: Record<string, unknown>;
   activeFilterCount: number;
+  /**
+   * Sprint 315 — multi-column sort. Empty array → no sort field on
+   * the find body (Mongo default = natural order). The hook converts
+   * `SortInfo` (`column` + `ASC|DESC`) into the Mongo wire shape
+   * (`{ field: 1 | -1 }`).
+   */
+  sorts?: readonly SortInfo[];
 }
 
 export interface UseDocumentGridDataResult {
@@ -38,6 +45,23 @@ export interface UseDocumentGridDataResult {
   handleCancelRefetch: () => void;
 }
 
+/**
+ * Convert RDB-style `SortInfo[]` into the Mongo wire shape
+ * (`{ field: 1 | -1 }`). Preserves insertion order, which is the
+ * priority for multi-key sort. Empty array → undefined so the find
+ * body omits the field entirely.
+ */
+function toMongoSort(
+  sorts: readonly SortInfo[] | undefined,
+): Record<string, 1 | -1> | undefined {
+  if (!sorts || sorts.length === 0) return undefined;
+  const result: Record<string, 1 | -1> = {};
+  for (const s of sorts) {
+    result[s.column] = s.direction === "ASC" ? 1 : -1;
+  }
+  return result;
+}
+
 export function useDocumentGridData({
   connectionId,
   database,
@@ -46,6 +70,7 @@ export function useDocumentGridData({
   pageSize,
   activeFilter,
   activeFilterCount,
+  sorts,
 }: UseDocumentGridDataParams): UseDocumentGridDataResult {
   const runFind = useDocumentStore((s) => s.runFind);
   const queryResult = useDocumentStore(
@@ -61,6 +86,8 @@ export function useDocumentGridData({
   // the overlay drops within one frame even before the driver settles.
   const queryIdRef = useRef<string | null>(null);
 
+  const mongoSort = useMemo(() => toMongoSort(sorts), [sorts]);
+
   const fetchData = useCallback(async () => {
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
@@ -68,6 +95,7 @@ export function useDocumentGridData({
     try {
       await runFind(connectionId, database, collection, {
         filter: activeFilterCount > 0 ? activeFilter : undefined,
+        sort: mongoSort,
         skip: (page - 1) * pageSize,
         limit: pageSize,
       });
@@ -88,6 +116,7 @@ export function useDocumentGridData({
     pageSize,
     activeFilter,
     activeFilterCount,
+    mongoSort,
   ]);
 
   // Cancel handler for the threshold overlay. Bumps `fetchIdRef` so the
@@ -129,17 +158,25 @@ export function useDocumentGridData({
       fk_reference: null,
       comment: null,
     }));
+    // Hand-spell the sort literal so lint's `JSON.stringify` ban (cell
+    // domain — Decimal/BigInt traps) doesn't fire. `mongoSort` only
+    // holds `1 | -1` values, so a manual join is safe and faithful.
+    const sortChain = mongoSort
+      ? `.sort({ ${Object.entries(mongoSort)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", ")} })`
+      : "";
     return {
       columns,
       rows: queryResult.rows,
       total_count: queryResult.total_count,
       page,
       page_size: pageSize,
-      executed_query: `db.${collection}.find({}).skip(${
+      executed_query: `db.${collection}.find({})${sortChain}.skip(${
         (page - 1) * pageSize
       }).limit(${pageSize})`,
     };
-  }, [queryResult, page, pageSize, collection]);
+  }, [queryResult, page, pageSize, collection, mongoSort]);
 
   return {
     data,

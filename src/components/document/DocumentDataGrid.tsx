@@ -14,7 +14,9 @@ import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useColumnResize } from "@components/datagrid/DataGridTable/useColumnResize";
+import HeaderRow from "@components/datagrid/DataGridTable/HeaderRow";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
+import type { SortInfo } from "@/types/schema";
 import QuickLookPanel from "@components/shared/QuickLookPanel";
 import { ExportButton } from "@components/shared/ExportButton";
 import DataGridToolbar from "@components/datagrid/DataGridToolbar";
@@ -82,6 +84,12 @@ export default function DocumentDataGrid({
   const [showQuickLook, setShowQuickLook] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Record<string, unknown>>({});
+  // Sprint 315 — Slice C.1: multi-column sort. Local state mirrors the
+  // RDB DataGrid's `handleSort` mechanic (click = primary ASC↔DESC↔clear,
+  // shift+click = add/cycle/remove secondary keys). D-29: kept local
+  // instead of routed through workspaceStore to limit Slice C.1 blast
+  // radius. Cross-session persist is a Slice C.2 (Sprint 316) decision.
+  const [sorts, setSorts] = useState<SortInfo[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -106,6 +114,7 @@ export default function DocumentDataGrid({
       pageSize,
       activeFilter,
       activeFilterCount,
+      sorts,
     });
 
   // Cmd+L (Mac) / Ctrl+L (other) toggles the Quick Look panel. Same shape
@@ -213,6 +222,44 @@ export default function DocumentDataGrid({
     window.addEventListener("reset-column-widths", handler);
     return () => window.removeEventListener("reset-column-widths", handler);
   }, [resetColumnWidths]);
+
+  // Sprint 315 — RDB DataGrid handleSort 패턴 1:1 복제. shift+click =
+  // multi-key (ASC→DESC→remove cycle per column), plain click = single
+  // key reset (ASC→DESC→clear). page=1 로 리셋해 sort 가 reflect.
+  const handleSort = useCallback(
+    (columnName: string, shiftKey: boolean = false) => {
+      if (shiftKey) {
+        setSorts((prev) => {
+          const existingIndex = prev.findIndex((s) => s.column === columnName);
+          if (existingIndex !== -1) {
+            const existing = prev[existingIndex]!;
+            if (existing.direction === "ASC") {
+              const newSorts = [...prev];
+              newSorts[existingIndex] = {
+                column: columnName,
+                direction: "DESC",
+              };
+              return newSorts;
+            }
+            return prev.filter((s) => s.column !== columnName);
+          }
+          return [...prev, { column: columnName, direction: "ASC" }];
+        });
+      } else {
+        setSorts((prev) => {
+          if (prev.length === 0 || prev[0]!.column !== columnName) {
+            return [{ column: columnName, direction: "ASC" }];
+          }
+          if (prev[0]!.direction === "ASC") {
+            return [{ column: columnName, direction: "DESC" }];
+          }
+          return [];
+        });
+      }
+      setPage(1);
+    },
+    [],
+  );
 
   const handleStartEditCell = useCallback(
     (rowIdx: number, colIdx: number) => {
@@ -335,7 +382,7 @@ export default function DocumentDataGrid({
         page={page}
         pageSize={pageSize}
         totalPages={totalPages}
-        sorts={[]}
+        sorts={sorts}
         activeFilterCount={activeFilterCount}
         showFilters={showFilters}
         hasPendingChanges={editState.hasPendingChanges}
@@ -449,44 +496,18 @@ export default function DocumentDataGrid({
             onCancel={handleCancelRefetch}
           />
 
-          <div
-            role="rowgroup"
-            className="sticky top-0 z-10 bg-secondary"
-            style={{ minWidth: "max-content" }}
-          >
-            <div
-              role="row"
-              aria-rowindex={1}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "var(--cols)",
-                // Sprint 261 — bg-secondary 가 horizontal scroll 끝까지 그려지도록.
-                minWidth: "max-content",
-              }}
-            >
-              {data.columns.map((col, visualIdx) => (
-                <div
-                  key={col.name}
-                  role="columnheader"
-                  aria-colindex={visualIdx + 1}
-                  className="relative flex flex-col justify-center overflow-hidden border-b border-r border-border px-3 py-1.5 text-left text-xs font-medium text-secondary-foreground"
-                >
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="truncate">{col.name}</span>
-                  </div>
-                  <div className="mt-0.5 truncate text-3xs text-muted-foreground">
-                    {col.data_type}
-                  </div>
-                  <div
-                    className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
-                    onMouseDown={(e) =>
-                      handleResizeStart(e, col.name, visualIdx)
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Sprint 315 — paradigm-shared HeaderRow. order=identity
+              (column reorder 미지원). RDB DataGrid 와 동일한 sort
+              indicator (rank + ▲/▼) 가 column 별로 표시된다. */}
+          <HeaderRow
+            data={data}
+            order={data.columns.map((_, i) => i)}
+            sorts={sorts}
+            editingCell={editState.editingCell}
+            onSort={handleSort}
+            onSaveCurrentEdit={editState.saveCurrentEdit}
+            onResizeStart={handleResizeStart}
+          />
 
           <div role="rowgroup">
             {data.rows.map((row, rowIdx) => {

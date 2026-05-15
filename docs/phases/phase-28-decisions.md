@@ -859,3 +859,85 @@ minimal & accessible.
 `aria-pressed` 단언으로 lock.
 
 ---
+
+## Sprint 315 (Slice C.1) — Mongo DataGrid multi-column sort wire-up
+
+### D-29: sort state 는 local `useState`, workspaceStore 미사용
+
+**문제**: Mongo collection tab 의 sort 를 (a) workspaceStore.tab.sorts
+(RDB 와 동일) 또는 (b) DocumentDataGrid local `useState` 중 어디에
+둘지.
+
+**결정**: (b) local `useState<SortInfo[]>([])`. Slice C.1 단계에선
+collection tab 의 store 모델 확장 없이 sort mechanic 만 lock.
+
+**근거**:
+1. workspaceStore 의 `tab.sorts` 는 RDB table tab 의 `type: "table"`
+   에 결합되어 있음. Mongo collection tab 의 type 정합 작업이
+   필요 — 별 sub-sprint 의 모델 변경 수반.
+2. 사용자가 collection tab 닫고 다시 열면 sort 초기화 — 합리적
+   default. cross-session persist 는 Slice D (hide column) 와 같은
+   per-collection persist 작업 묶음에 흡수 가능.
+3. blast radius 최소화. C.2 (context menu) 까지 끝낸 뒤 store
+   통합 가치 재평가.
+
+**대안**: workspaceStore 직접 확장 — Mongo tab 의 `sorts` 필드 추가
++ updateTabSorts 의 paradigm 분기. 두 paradigm 통합 좋은 시그널이나
+Slice C.1 의 단일 task 범위에 안 들어감.
+
+**영향**: collection tab 닫고 다시 열면 sort 리셋. 단 한 세션 내
+sort 유지 (re-render 영향 없음).
+
+---
+
+### D-30: HeaderRow 컴포넌트 재사용 (Mongo 전용 헤더 신설 안 함)
+
+**문제**: DocumentDataGrid 의 inline header div 를 (a) 직접 sort 로직
+추가 / (b) Mongo 전용 헤더 컴포넌트 신설 / (c) RDB 의 `HeaderRow` 재사용
+중 무엇으로 처리.
+
+**결정**: (c) `HeaderRow` 재사용. `data: TableData`, `order: number[]`,
+`sorts: SortInfo[]`, `editingCell`, `onSort`, `onSaveCurrentEdit`,
+`onResizeStart` 만 prop 으로 받는 paradigm-agnostic shape 임이 확인됨.
+
+**근거**:
+1. 이미 paradigm-agnostic — `TableData` 는 RDB/Mongo 공통 표면이고
+   `SortInfo` 도 그렇다.
+2. RDB↔Mongo 의 sort UX (▲/▼ + rank, drag-threshold 4px) 완벽 일치
+   보장.
+3. 향후 sort 의 polish (rank 표시 변경, accessibility) 가 한 곳에서.
+4. DocumentDataGrid 의 inline 헤더 코드 ~30 line 제거.
+
+**대안**: inline 추가는 RDB 변경과 어긋남 lockstep 불가능. Mongo
+전용 헤더는 paradigm parity 의 핵심을 깨뜨림.
+
+**영향**: `HeaderRow` 미수정. DocumentDataGrid 가 import 추가.
+column reorder 미지원 — `order` 는 identity `[0..n-1]` (RDB 도 동일).
+
+---
+
+### D-31: executed_query history 텍스트가 sort 반영
+
+**문제**: history 의 user-readable string 이 항상
+`db.coll.find({}).skip(...).limit(...)` 였다. sort 가 적용됐는데
+history 는 그걸 모름.
+
+**결정**: `mongoSort` 가 있으면 `.sort({...})` chain 삽입. mongo
+shell syntax (`{ field: 1 }`).
+
+**근거**:
+1. history 행은 사용자 reproducibility 의 핵심 — 실행된 query 를
+   그대로 보여줘야 신뢰.
+2. mongosh chain 형식 (`.sort({...})`) 이 mongosh editor (Slice A)
+   와 일치 — 사용자가 history → editor 로 붙여넣어 재실행 가능.
+3. `JSON.stringify` 는 cell-domain lint 룰이 차단 → 수동 `Object
+   .entries(...).join(", ")` 으로 spell. mongoSort 의 값이 `1 | -1`
+   고정이라 안전.
+
+**대안**: history 미반영 (사용자 가시성 손실), `safeStringifyCell`
+재사용 (BigInt/Decimal 가 아니라 overkill).
+
+**영향**: `useDocumentGridData` 의 `executed_query` template 에 sort
+chain 삽입. 기존 history snapshot 호환 (sort 없으면 빈 chain).
+
+---
