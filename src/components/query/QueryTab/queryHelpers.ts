@@ -8,6 +8,7 @@ import { verifyActiveDb } from "@lib/api/verifyActiveDb";
 import { toast } from "@lib/toast";
 import type { Paradigm } from "@/types/connection";
 import type { QueryTab } from "@stores/workspaceStore";
+import { documentIdFromRow, type DocumentId } from "@/types/documentMutate";
 
 /**
  * `QueryTab` module-top helpers:
@@ -42,6 +43,40 @@ export function isRecordArray(
   value: unknown,
 ): value is Record<string, unknown>[] {
   return Array.isArray(value) && value.every(isRecord);
+}
+
+/**
+ * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — extract a `_id`-only
+ * filter (`{ _id: <value> }` with exactly one key) into a typed
+ * `DocumentId`. Returns `null` when the filter is missing `_id`, has
+ * additional keys, or when the `_id` value isn't promotable to a
+ * `DocumentId` variant. The single-doc `updateDocument` / `deleteDocument`
+ * IPCs only accept a `DocumentId`, so the dispatch table uses this to
+ * choose between the fast single-IPC path and the D-16 bulkWrite
+ * fallback for arbitrary filters.
+ */
+export function idOnlyFilter(
+  filter: Record<string, unknown>,
+): DocumentId | null {
+  const keys = Object.keys(filter);
+  if (keys.length !== 1 || keys[0] !== "_id") return null;
+  return documentIdFromRow(filter);
+}
+
+/**
+ * Sprint 312 — extract the `$set` clause out of an update document.
+ * Returns `null` when the patch is malformed (not an object) or when
+ * `$set` itself isn't a plain object. A6's dispatch table refuses
+ * non-`$set` updates here (rather than at A2) so the editor surface
+ * stays consistent with the existing `useMongoBulkOps` reject path.
+ */
+export function extractDollarSet(
+  update: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const value = update.$set;
+  if (!isRecord(value)) return null;
+  if ("_id" in value) return null;
+  return value;
 }
 
 // After `await executeQuery(...)` we re-scan the SQL for dialect-specific

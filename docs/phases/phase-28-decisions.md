@@ -555,3 +555,97 @@ reason })` / `setPendingMongoWarn({ pipeline })` 시그니처 불변.
 재진입 path 도 동일.
 
 ---
+
+## Phase 28 Slice A6 (Sprint 312 — 2026-05-14)
+
+### D-16: `updateOne` / `deleteOne` 의 non-`_id` filter 는 `bulkWriteDocuments` single-op 으로 변환
+
+**문제**: 기존 `updateDocument` / `deleteDocument` IPC 는 `DocumentId`
+만 받음. mongosh `updateOne(filter, update)` 의 `filter` 가 `_id` 외
+임의 조건일 때 wire 매칭 불가. A6 는 신규 IPC 도입 금지 — frontend
+만으로 처리.
+
+**결정**: (b) bulkWrite single-op 변환 채택.
+- (a) `findOneDocument` 로 `_id` resolve → `updateDocument`
+- (b) `bulkWriteDocuments([{op:"updateOne", filter, update}])` 변환
+- (c) "filter must include `_id`" reject
+
+**근거**:
+1. **Atomicity**: (a) 는 2 round-trip = race condition. (b) 는 단일
+   driver call.
+2. **Latency**: (a) = 2x. (b) = 1x.
+3. **Code reuse**: A2 의 `bulkWriteDocuments` 가 이미 임의 filter / op
+   variant 처리.
+4. **UX 보존**: editor / history 의 mongosh 텍스트 `updateOne(...)` 유지.
+5. **`_id`-only 빠른 경로**: filter 가 `{_id: ...}` 만이면 기존 IPC 직접
+   호출.
+
+**대안**: (a) race + latency 거부. (c) 사용자 부담 거부.
+
+**영향**: `useQueryExecution` 의 `updateOne`/`deleteOne` 분기 두 경로
+보유. A6 backend 변경 zero.
+
+---
+
+### D-17: `bulkWrite` Safe Mode 분류 — 첫 위반 sub-op 으로 short-circuit
+
+**문제**: sub-op 들이 STOP / WARN / INFO 가 섞인 `bulkWrite` 의 severity?
+
+**결정**: STOP > WARN > INFO 우선순위. 첫 STOP 즉시 `danger`, 없으면 첫
+WARN 으로 `warn`, 그것도 없으면 `info`.
+
+**근거**:
+1. **ordered default short-circuit**: driver 가 첫 실패 시 정지 — STOP
+   포함 시 미확인 부분 실행 방지.
+2. **사용자 모델**: STOP sub-op 포함 = "확인 받기 원함" 의도.
+
+**대안**: max severity 일괄 분석 — 결과 동일 verbose.
+
+**영향**: `analyzeMongoOperation` 의 `bulkWrite` variant 가 sub-op 순회
+short-circuit.
+
+---
+
+### D-18: `insertMany` 는 항상 INFO (배치 크기 무관)
+
+**문제**: 매우 큰 N 의 `insertMany` 를 WARN 으로 escalate?
+
+**결정**: 항상 INFO.
+
+**근거**: insert = 신규 doc 추가만, 손실 위험 없음. 사용자 의도 explicit.
+threshold 의 임의성.
+
+**대안**: N>threshold WARN — 임계 임의성 거부.
+
+**영향**: `insertMany` variant 항상 `severity: "info"`.
+
+---
+
+### D-19: `findOne` 빈 결과 — `resultKind: "scalar"` + sentinel
+
+**문제**: `findOne(...)` 매칭 없음 — grid 인가 scalar 인가?
+
+**결정**: `resultKind: "scalar"` + `ScalarOrListPanel mode="findOne-empty"`.
+
+**근거**: 빈 grid 의미 모호. "No matching document" 의도 명확. `findOne`
+자체가 0/1 boolean 의미.
+
+**영향**: A5 의 빈 grid → A6 의 sentinel panel polish.
+
+---
+
+### D-20: KV / Search placeholder 의 `data-query-mode` 속성 제거
+
+**문제**: A3 가 MongoQueryEditor 의 `data-query-mode` 제거했지만 KV /
+Search placeholder 분기에 잔존. Global Slice A AC #1 위반.
+
+**결정**: KV / Search placeholder 에서도 제거.
+
+**근거**:
+1. KV / Search 는 mongosh queryMode 의미 없음.
+2. 속성 사용처 없음.
+3. Global AC #1 만족.
+
+**영향**: `grep queryMode in QueryTab.tsx` 정확히 0.
+
+---

@@ -61,6 +61,15 @@ function isPipelineStage(value: unknown): value is Record<string, unknown> {
  * (was "safe"). 빈 filter `*-all` + dropCollection 은 `severity: "danger"`
  * 그대로.
  */
+// Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `MongoOperation` union
+// widened to cover every mongosh write the parser-driven dispatch table
+// emits. `insertOne` / `insertMany` / `updateOne` / `deleteOne` carry
+// `severity: "info"` because each touches at most a single document —
+// the user's intent + impact match. `bulkWrite` evaluates each sub-op
+// against the same rule set so a hidden empty-filter `*-many` inside a
+// batch still escalates the whole bulk to `"danger"`.
+import type { BulkWriteOp } from "@/types/documentMutate";
+
 export type MongoOperation =
   | { kind: "deleteMany"; filter: Record<string, unknown> }
   | {
@@ -68,7 +77,12 @@ export type MongoOperation =
       filter: Record<string, unknown>;
       patch: Record<string, unknown>;
     }
-  | { kind: "dropCollection" };
+  | { kind: "dropCollection" }
+  | { kind: "insertOne" }
+  | { kind: "insertMany"; count: number }
+  | { kind: "updateOne"; filter: Record<string, unknown> }
+  | { kind: "deleteOne"; filter: Record<string, unknown> }
+  | { kind: "bulkWrite"; ops: readonly BulkWriteOp[] };
 
 export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
   if (op.kind === "dropCollection") {
@@ -89,16 +103,73 @@ export function analyzeMongoOperation(op: MongoOperation): StatementAnalysis {
     // Sprint 254 — bounded *-many = WARN tier.
     return { kind: "mongo-delete-many", severity: "warn", reasons: [] };
   }
-  // updateMany
-  if (isEmptyFilter(op.filter)) {
-    return {
-      kind: "mongo-update-all",
-      severity: "danger",
-      reasons: ["MongoDB updateMany without filter"],
-    };
+  if (op.kind === "updateMany") {
+    if (isEmptyFilter(op.filter)) {
+      return {
+        kind: "mongo-update-all",
+        severity: "danger",
+        reasons: ["MongoDB updateMany without filter"],
+      };
+    }
+    // Sprint 254 — bounded *-many = WARN tier.
+    return { kind: "mongo-update-many", severity: "warn", reasons: [] };
   }
-  // Sprint 254 — bounded *-many = WARN tier.
-  return { kind: "mongo-update-many", severity: "warn", reasons: [] };
+  // Sprint 312 — single-document writes (`insertOne` / `insertMany` /
+  // `updateOne` / `deleteOne`) are INFO. The user types the filter
+  // explicitly; impact ≤ 1 doc per op so no warn-tier preview is needed.
+  if (
+    op.kind === "insertOne" ||
+    op.kind === "insertMany" ||
+    op.kind === "updateOne" ||
+    op.kind === "deleteOne"
+  ) {
+    return { kind: "mongo-other", severity: "info", reasons: [] };
+  }
+  // bulkWrite — fan out and take the worst severity. Empty batch ⇒ INFO.
+  return analyzeBulkWrite(op.ops);
+}
+
+function analyzeBulkWrite(ops: readonly BulkWriteOp[]): StatementAnalysis {
+  let worst: StatementAnalysis = {
+    kind: "mongo-other",
+    severity: "info",
+    reasons: [],
+  };
+  for (const sub of ops) {
+    const subAnalysis = analyzeBulkSubOp(sub);
+    if (severityRank(subAnalysis.severity) > severityRank(worst.severity)) {
+      worst = subAnalysis;
+    }
+  }
+  return worst;
+}
+
+function analyzeBulkSubOp(sub: BulkWriteOp): StatementAnalysis {
+  switch (sub.op) {
+    case "insertOne":
+      return { kind: "mongo-other", severity: "info", reasons: [] };
+    case "updateOne":
+    case "deleteOne":
+    case "replaceOne":
+      return { kind: "mongo-other", severity: "info", reasons: [] };
+    case "updateMany":
+      return analyzeMongoOperation({
+        kind: "updateMany",
+        filter: sub.filter,
+        patch: sub.update,
+      });
+    case "deleteMany":
+      return analyzeMongoOperation({
+        kind: "deleteMany",
+        filter: sub.filter,
+      });
+  }
+}
+
+function severityRank(severity: "info" | "warn" | "danger"): number {
+  if (severity === "danger") return 2;
+  if (severity === "warn") return 1;
+  return 0;
 }
 
 function isEmptyFilter(filter: Record<string, unknown>): boolean {

@@ -28,6 +28,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { ExportButton } from "@components/shared/ExportButton";
 import type { ExportContext, ExportFormat } from "@/lib/tauri";
 import EditableQueryResultGrid from "./EditableQueryResultGrid";
+import ScalarOrListPanel from "./ScalarOrListPanel";
+import WriteSummaryPanel from "./WriteSummaryPanel";
 
 interface QueryResultGridProps {
   queryState: QueryState;
@@ -413,6 +415,57 @@ function CompletedSingleResult({
   sql?: string;
   onAfterCommit?: () => void;
 }) {
+  // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `resultKind` discriminator
+  // router. Mongo paradigms set `"scalar"` / `"list"` / `"writeSummary"`;
+  // RDB + Mongo find / aggregate / findOne(matched) leave it undefined or
+  // `"grid"` and hit the legacy DataGrid path. The dispatch happens at the
+  // top of the function so the status-bar + DataGrid scaffolding stays
+  // unchanged for the grid path (zero RDB regression risk).
+  if (result.resultKind === "writeSummary" && result.writeSummary) {
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
+          <span>Write</span>
+          <span className="text-muted-foreground">
+            {result.execution_time_ms} ms
+          </span>
+        </div>
+        <WriteSummaryPanel summary={result.writeSummary} />
+      </div>
+    );
+  }
+  if (result.resultKind === "scalar" || result.resultKind === "list") {
+    // count   → 1-row 1-col `count` column
+    // distinct → 1-col `value` (or whatever name was projected)
+    // findOne(null) → empty columns + empty rows (D-12)
+    const mode: "count" | "list" | "findOne-empty" =
+      result.resultKind === "list"
+        ? "list"
+        : result.columns[0]?.name === "count"
+          ? "count"
+          : "findOne-empty";
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex items-center justify-between border-b border-border px-3 py-1.5 text-xs text-secondary-foreground">
+          <span>
+            {mode === "count" ? "Count" : mode === "list" ? "List" : "findOne"}
+            {mode === "list" && (
+              <>
+                {" "}
+                &mdash; {result.total_count.toLocaleString()} value
+                {result.total_count !== 1 ? "s" : ""}
+              </>
+            )}
+          </span>
+          <span className="text-muted-foreground">
+            {result.execution_time_ms} ms
+          </span>
+        </div>
+        <ScalarOrListPanel result={result} mode={mode} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Status bar */}

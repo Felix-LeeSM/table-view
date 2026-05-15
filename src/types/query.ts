@@ -1,4 +1,5 @@
 import type { ColumnCategory } from "@/lib/columnCategory";
+import type { BulkWriteResult, DocumentId } from "@/types/documentMutate";
 
 /**
  * Column metadata returned by a query execution.
@@ -42,8 +43,41 @@ export interface QueryResult {
   total_count: number;
   execution_time_ms: number;
   query_type: QueryType;
-  resultKind?: "grid" | "scalar" | "list";
+  /**
+   * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — `"writeSummary"` joins
+   * the discriminator union. The 7 Mongo write methods (`insertOne` /
+   * `insertMany` / `updateOne` / `updateMany` / `deleteOne` /
+   * `deleteMany` / `bulkWrite`) populate `writeSummary` and set this
+   * field so `QueryResultGrid` routes to `WriteSummaryPanel` instead of
+   * the default DataGrid render.
+   */
+  resultKind?: "grid" | "scalar" | "list" | "writeSummary";
+  /**
+   * Sprint 312 — populated when `resultKind === "writeSummary"`. Carries
+   * the per-method counters the panel renders; left undefined for every
+   * non-write result.
+   */
+  writeSummary?: WriteSummaryData;
 }
+
+/**
+ * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — discriminated union of
+ * write-method summaries surfaced by `WriteSummaryPanel`. Each variant
+ * holds the counter fields the user must see:
+ *
+ * - `"insert"`:  `insertedIds[]` (one id per inserted document) — drives
+ *                the "Inserted N document(s)" headline + chevron list.
+ * - `"update"`:  `matchedCount` / `modifiedCount` — drives "Modified N
+ *                document(s) (matched M)".
+ * - `"delete"`:  `deletedCount` — drives "Deleted N document(s)".
+ * - `"bulkWrite"`: the full `BulkWriteResult` shape so the panel can
+ *                render one row per non-zero counter + upserted ids.
+ */
+export type WriteSummaryData =
+  | { kind: "insert"; insertedIds: DocumentId[] }
+  | { kind: "update"; matchedCount: number; modifiedCount: number }
+  | { kind: "delete"; deletedCount: number }
+  | { kind: "bulkWrite"; result: BulkWriteResult };
 
 /**
  * Result of a single statement inside a multi-statement execution.

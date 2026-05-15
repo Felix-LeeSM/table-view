@@ -11,11 +11,21 @@ import {
   countDocuments,
   estimatedDocumentCount,
   distinctDocuments,
+  insertDocument,
+  insertManyDocuments,
+  updateDocument,
+  updateMany,
+  deleteDocument,
+  deleteMany,
+  bulkWriteDocuments,
 } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { splitSqlStatements } from "@lib/sql/sqlUtils";
-import { analyzeMongoPipeline } from "@lib/mongo/mongoSafety";
+import {
+  analyzeMongoPipeline,
+  analyzeMongoOperation,
+} from "@lib/mongo/mongoSafety";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
@@ -23,6 +33,8 @@ import { toast } from "@lib/toast";
 import type { QueryTab, QueryMode } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
 import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
+import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
+import type { WriteSummaryData } from "@/types/query";
 import {
   parseMongoshExpression,
   type ParsedMongoshCall,
@@ -31,6 +43,8 @@ import {
   readDocumentContext,
   isRecord,
   dispatchDbMutationHint,
+  idOnlyFilter,
+  extractDollarSet,
 } from "./queryHelpers";
 
 // Sprint 271a — `syncMismatchedActiveDb` extracted to
@@ -77,9 +91,18 @@ export interface QueryExecution {
    * History is intentionally not recorded for dry-runs.
    */
   handleDryRun: () => Promise<void>;
+  /**
+   * Sprint 312 (Phase 28 Slice A6, 2026-05-14) — STOP-tier confirm payload.
+   * Aggregate variant carries `pipeline` (A5 invariant retained); write
+   * variant carries `previewLines` (already-formatted mongosh) + an
+   * internal `runner` closure the confirm callback invokes verbatim. The
+   * discriminator keeps the JSX dialog mount paradigm-agnostic.
+   */
   pendingMongoConfirm: {
     pipeline: Record<string, unknown>[];
     reason: string;
+    /** Sprint 312 — populated only for write STOP cases (drop-equivalent). */
+    previewLines?: string[];
   } | null;
   confirmMongoDangerous: () => Promise<void>;
   cancelMongoDangerous: () => void;
@@ -121,8 +144,16 @@ export interface QueryExecution {
    * non-INFO 인 aggregate (현재 분류상 거의 없음 — 보존을 위한 발판이며
    * Sprint 254 의 3-tier split 후 확장 예정) 만 본 dialog 발동.
    */
+  /**
+   * Sprint 312 — WARN-tier preview payload. Aggregate variant carries
+   * `pipeline`; write variant carries `previewLines` so MqlPreviewModal
+   * renders the formatted mongosh expression instead of JSON-stringified
+   * pipeline.
+   */
   pendingMongoWarn: {
     pipeline: Record<string, unknown>[];
+    /** Sprint 312 — populated only for write WARN cases. */
+    previewLines?: string[];
   } | null;
   confirmMongoWarn: () => Promise<void>;
   cancelMongoWarn: () => void;
@@ -260,7 +291,16 @@ export function useQueryExecution({
   const [pendingMongoConfirm, setPendingMongoConfirm] = useState<{
     pipeline: Record<string, unknown>[];
     reason: string;
+    previewLines?: string[];
   } | null>(null);
+  // Sprint 312 (Phase 28 Slice A6, 2026-05-14) — write-path STOP/WARN
+  // dispatch closure stored in a ref (not in setState) because the
+  // re-runner captures the parsed write op + parsed filter / update
+  // payload verbatim. Stashing it next to `pendingMongoConfirm` keeps
+  // AC-311-09 stale-editor isolation (the closure is whatever the parser
+  // produced at prompt time; editor mutations between prompt and confirm
+  // click cannot leak into the IPC dispatch).
+  const pendingWriteRunnerRef = useRef<(() => Promise<void>) | null>(null);
   // Sprint 231 — raw RDB warn-tier pending state. Mirrors
   // `pendingMongoConfirm`. `null` until a dangerous statement is detected
   // under `mode === "warn"` on a production connection.
@@ -281,6 +321,7 @@ export function useQueryExecution({
   } | null>(null);
   const [pendingMongoWarn, setPendingMongoWarn] = useState<{
     pipeline: Record<string, unknown>[];
+    previewLines?: string[];
   } | null>(null);
 
   // Aggregate dispatch + book-keeping, extracted so the warn-confirm
@@ -358,11 +399,21 @@ export function useQueryExecution({
     const pending = pendingMongoConfirm;
     if (!pending) return;
     setPendingMongoConfirm(null);
+    // Sprint 312 — when the STOP came from a write op the parser stashed
+    // an op-specific runner closure; aggregate STOP falls through to the
+    // pipeline re-runner. Either path runs the parsed payload verbatim.
+    const writeRunner = pendingWriteRunnerRef.current;
+    pendingWriteRunnerRef.current = null;
+    if (writeRunner) {
+      await writeRunner();
+      return;
+    }
     await runMongoAggregateNow(pending.pipeline);
   }, [pendingMongoConfirm, runMongoAggregateNow]);
 
   const cancelMongoDangerous = useCallback(() => {
     setPendingMongoConfirm(null);
+    pendingWriteRunnerRef.current = null;
   }, []);
 
   // Sprint 269 — refs the Retry closure dereferences when invoked. The
@@ -668,11 +719,19 @@ export function useQueryExecution({
     const pending = pendingMongoWarn;
     if (!pending) return;
     setPendingMongoWarn(null);
+    // Sprint 312 — same write-runner pattern as confirmMongoDangerous.
+    const writeRunner = pendingWriteRunnerRef.current;
+    pendingWriteRunnerRef.current = null;
+    if (writeRunner) {
+      await writeRunner();
+      return;
+    }
     await runMongoAggregateNow(pending.pipeline);
   }, [pendingMongoWarn, runMongoAggregateNow]);
 
   const cancelMongoWarn = useCallback(() => {
     setPendingMongoWarn(null);
+    pendingWriteRunnerRef.current = null;
   }, []);
 
   // Sprint 311 (Phase 28 Slice A5, 2026-05-14) — parser-driven document
@@ -863,9 +922,233 @@ export function useQueryExecution({
       }
 
       // ── write methods (A6 / Sprint 312) ───────────────────────────────
+      // Each branch (1) reifies the parser args into typed payloads,
+      // (2) runs the Safe Mode classifier via `analyzeMongoOperation`,
+      // (3) STOP → `pendingMongoConfirm` + write runner; WARN →
+      // `pendingMongoWarn` + write runner; INFO → direct IPC dispatch.
+      // The runner closure captures the parsed payload verbatim so the
+      // user's editor mutations between prompt and confirm-click cannot
+      // mutate the IPC payload (same AC-311-09 invariant as aggregate).
+      if (parsed.method === "insertOne") {
+        const doc = parsed.args[0];
+        if (!isRecord(doc)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "insertOne() requires a document object.",
+          });
+          return;
+        }
+        await runInsertOne(connectionId, database, collection, doc, rawSql);
+        return;
+      }
+      if (parsed.method === "insertMany") {
+        const docs = parsed.args[0];
+        if (!Array.isArray(docs) || !docs.every(isRecord)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "insertMany() requires an array of documents.",
+          });
+          return;
+        }
+        await runInsertMany(
+          connectionId,
+          database,
+          collection,
+          docs as Record<string, unknown>[],
+          rawSql,
+        );
+        return;
+      }
+      if (parsed.method === "deleteMany") {
+        const filterArg = parsed.args[0];
+        const filter = isRecord(filterArg) ? filterArg : {};
+        if (filterArg !== undefined && !isRecord(filterArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "deleteMany() filter must be an object.",
+          });
+          return;
+        }
+        const analysis = analyzeMongoOperation({ kind: "deleteMany", filter });
+        const decision = safeModeGate.decide(analysis);
+        const runner = () =>
+          runDeleteMany(connectionId, database, collection, filter, rawSql);
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        if (decision.action === "confirm") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoConfirm({
+            pipeline: [],
+            reason: decision.reason,
+            previewLines: [rawSql],
+          });
+          return;
+        }
+        if (analysis.severity === "warn") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
+          return;
+        }
+        await runner();
+        return;
+      }
+      if (parsed.method === "updateMany") {
+        const filterArg = parsed.args[0];
+        const updateArg = parsed.args[1];
+        if (!isRecord(filterArg) || !isRecord(updateArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "updateMany() requires a filter object and an update object.",
+          });
+          return;
+        }
+        const filter = filterArg;
+        const patch = extractDollarSet(updateArg);
+        if (patch === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "updateMany() update document must use `$set` with a non-_id patch.",
+          });
+          return;
+        }
+        const analysis = analyzeMongoOperation({
+          kind: "updateMany",
+          filter,
+          patch,
+        });
+        const decision = safeModeGate.decide(analysis);
+        const runner = () =>
+          runUpdateMany(
+            connectionId,
+            database,
+            collection,
+            filter,
+            patch,
+            rawSql,
+          );
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        if (decision.action === "confirm") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoConfirm({
+            pipeline: [],
+            reason: decision.reason,
+            previewLines: [rawSql],
+          });
+          return;
+        }
+        if (analysis.severity === "warn") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
+          return;
+        }
+        await runner();
+        return;
+      }
+      if (parsed.method === "deleteOne") {
+        const filterArg = parsed.args[0];
+        if (!isRecord(filterArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "deleteOne() filter must be an object.",
+          });
+          return;
+        }
+        await runDeleteOne(
+          connectionId,
+          database,
+          collection,
+          filterArg,
+          rawSql,
+        );
+        return;
+      }
+      if (parsed.method === "updateOne") {
+        const filterArg = parsed.args[0];
+        const updateArg = parsed.args[1];
+        if (!isRecord(filterArg) || !isRecord(updateArg)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "updateOne() requires a filter object and an update object.",
+          });
+          return;
+        }
+        const patch = extractDollarSet(updateArg);
+        if (patch === null) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "updateOne() update document must use `$set` with a non-_id patch.",
+          });
+          return;
+        }
+        await runUpdateOne(
+          connectionId,
+          database,
+          collection,
+          filterArg,
+          patch,
+          rawSql,
+        );
+        return;
+      }
+      if (parsed.method === "bulkWrite") {
+        const opsRaw = parsed.args[0];
+        if (!Array.isArray(opsRaw)) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: "bulkWrite() requires an array of operations.",
+          });
+          return;
+        }
+        const ops = opsRaw as readonly BulkWriteOp[];
+        const analysis = analyzeMongoOperation({ kind: "bulkWrite", ops });
+        const decision = safeModeGate.decide(analysis);
+        const runner = () =>
+          runBulkWrite(connectionId, database, collection, ops, rawSql);
+        if (decision.action === "block") {
+          updateQueryState(tab.id, {
+            status: "error",
+            error: decision.reason,
+          });
+          return;
+        }
+        if (decision.action === "confirm") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoConfirm({
+            pipeline: [],
+            reason: decision.reason,
+            previewLines: [rawSql],
+          });
+          return;
+        }
+        if (analysis.severity === "warn") {
+          pendingWriteRunnerRef.current = runner;
+          setPendingMongoWarn({ pipeline: [], previewLines: [rawSql] });
+          return;
+        }
+        await runner();
+        return;
+      }
+
+      // Exhaustiveness fallback — every `MongoshMethod` should branch
+      // above. If a future spec adds a new method, surface a friendly
+      // error rather than silently no-oping.
       updateQueryState(tab.id, {
         status: "error",
-        error: `Method '${parsed.method}' is not yet wired (Phase 28 Slice A6 will add the write-path dispatch).`,
+        error: `Method '${parsed.method}' is not yet wired.`,
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1093,6 +1376,257 @@ export function useQueryExecution({
       }
     },
     [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  // ── Sprint 312 (Phase 28 Slice A6, 2026-05-14) — write helpers ────────
+  //
+  // Each runner mirrors the read-path helper structure (running-state
+  // → IPC → adapt response → completeQuery + record history) but builds
+  // a `WriteSummaryData` payload from the IPC result so the result panel
+  // routes to `WriteSummaryPanel`.
+  //
+  // D-16 (autonomous decision, 2026-05-14): `updateOne` / `deleteOne` on
+  // a non-`_id` filter are translated to `bulkWriteDocuments` with a
+  // single-op `updateOne` / `deleteOne` sub-op. The user's mongosh text
+  // in the editor + history still reads `updateOne(...)` — only the
+  // wire transport changes. Rationale: avoids a 2-IPC round-trip
+  // (`findOne` → `_id` → `updateDocument`) which would be non-atomic
+  // and slower, and reuses A2's `bulk_write` IPC that already accepts
+  // arbitrary filters. `{ _id: ... }`-only filters go through the
+  // existing `updateDocument` / `deleteDocument` IPC directly (faster
+  // single-doc path, no bulk wrapping).
+
+  /**
+   * Adapt a writer's result + history bookkeeping into the shared shape.
+   * Returns a curried function the runner invokes inside its try/catch.
+   */
+  const runWriteHelper = useCallback(
+    async (
+      queryMode: QueryMode,
+      rawSql: string,
+      writer: () => Promise<WriteSummaryData>,
+    ) => {
+      const queryId = `${tab.id}-${Date.now()}`;
+      const startTime = Date.now();
+      updateQueryState(tab.id, { status: "running", queryId });
+      try {
+        const summary = await writer();
+        const queryResult: import("@/types/query").QueryResult = {
+          columns: [],
+          rows: [],
+          total_count: 0,
+          execution_time_ms: Date.now() - startTime,
+          query_type: "select",
+          resultKind: "writeSummary",
+          writeSummary: summary,
+        };
+        completeQuery(tab.id, queryId, queryResult);
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "success",
+          queryMode,
+        });
+      } catch (err) {
+        failQuery(
+          tab.id,
+          queryId,
+          err instanceof Error ? err.message : String(err),
+        );
+        recordHistory({
+          sql: rawSql,
+          executedAt: Date.now(),
+          duration: Date.now() - startTime,
+          status: "error",
+          queryMode,
+        });
+      }
+    },
+    [tab.id, updateQueryState, completeQuery, failQuery, recordHistory],
+  );
+
+  const runInsertOne = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      doc: Record<string, unknown>,
+      rawSql: string,
+    ) => {
+      await runWriteHelper("insertOne", rawSql, async () => {
+        const id = await insertDocument(
+          connectionId,
+          database,
+          collection,
+          doc,
+        );
+        return { kind: "insert", insertedIds: [id] };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runInsertMany = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      docs: Record<string, unknown>[],
+      rawSql: string,
+    ) => {
+      await runWriteHelper("insertMany", rawSql, async () => {
+        const ids = await insertManyDocuments(
+          connectionId,
+          database,
+          collection,
+          docs,
+        );
+        return { kind: "insert", insertedIds: ids };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runDeleteMany = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      filter: Record<string, unknown>,
+      rawSql: string,
+    ) => {
+      await runWriteHelper("deleteMany", rawSql, async () => {
+        const deletedCount = await deleteMany(
+          connectionId,
+          database,
+          collection,
+          filter,
+        );
+        return { kind: "delete", deletedCount };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runUpdateMany = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      filter: Record<string, unknown>,
+      patch: Record<string, unknown>,
+      rawSql: string,
+    ) => {
+      await runWriteHelper("updateMany", rawSql, async () => {
+        const modifiedCount = await updateMany(
+          connectionId,
+          database,
+          collection,
+          filter,
+          patch,
+        );
+        // The IPC currently surfaces only `modifiedCount`; we expose it
+        // as both matched and modified counts (the lower-bound estimate)
+        // until A2 widens the wire shape. See A2 spec for the upgrade.
+        return {
+          kind: "update",
+          matchedCount: modifiedCount,
+          modifiedCount,
+        };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runDeleteOne = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      filter: Record<string, unknown>,
+      rawSql: string,
+    ) => {
+      await runWriteHelper("deleteOne", rawSql, async () => {
+        const idFilter = idOnlyFilter(filter);
+        if (idFilter !== null) {
+          // Fast path — single-IPC `delete_document` with the parsed `_id`.
+          await deleteDocument(connectionId, database, collection, idFilter);
+          return { kind: "delete", deletedCount: 1 };
+        }
+        // D-16 fallback — translate to bulkWrite single-op for arbitrary
+        // filters so the user's mongosh text stays unchanged.
+        const result = await bulkWriteDocuments(
+          connectionId,
+          database,
+          collection,
+          [{ op: "deleteOne", filter }],
+        );
+        return { kind: "delete", deletedCount: result.deleted_count };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runUpdateOne = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      filter: Record<string, unknown>,
+      patch: Record<string, unknown>,
+      rawSql: string,
+    ) => {
+      await runWriteHelper("updateOne", rawSql, async () => {
+        const idFilter = idOnlyFilter(filter);
+        if (idFilter !== null) {
+          await updateDocument(
+            connectionId,
+            database,
+            collection,
+            idFilter,
+            patch,
+          );
+          // `update_document` IPC returns `void`; one-doc update path
+          // never matches more than one document so matched/modified == 1.
+          return { kind: "update", matchedCount: 1, modifiedCount: 1 };
+        }
+        // D-16 fallback — translate to bulkWrite single-op updateOne.
+        const result = await bulkWriteDocuments(
+          connectionId,
+          database,
+          collection,
+          [{ op: "updateOne", filter, update: { $set: patch } }],
+        );
+        return {
+          kind: "update",
+          matchedCount: result.matched_count,
+          modifiedCount: result.modified_count,
+        };
+      });
+    },
+    [runWriteHelper],
+  );
+
+  const runBulkWrite = useCallback(
+    async (
+      connectionId: string,
+      database: string,
+      collection: string,
+      ops: readonly BulkWriteOp[],
+      rawSql: string,
+    ) => {
+      await runWriteHelper("bulkWrite", rawSql, async () => {
+        const result: BulkWriteResult = await bulkWriteDocuments(
+          connectionId,
+          database,
+          collection,
+          ops as BulkWriteOp[],
+        );
+        return { kind: "bulkWrite", result };
+      });
+    },
+    [runWriteHelper],
   );
 
   // Sprint 311 — distinct → list QueryResult (1col `value`, N rows).

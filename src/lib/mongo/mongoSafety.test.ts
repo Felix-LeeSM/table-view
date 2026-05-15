@@ -137,6 +137,89 @@ describe("analyzeMongoOperation", () => {
     expect(a.severity).toBe("warn");
     expect(a.kind).toBe("mongo-update-many");
   });
+
+  // Sprint 312 (Phase 28 Slice A6) — `MongoOperation` widened with the 5
+  // remaining write methods so the Run-dispatch table can classify every
+  // mongosh write. Single-doc methods are INFO; bulkWrite escalates to
+  // the worst sub-op severity (empty-filter *-many wins).
+
+  it("[AC-312-safe-01] insertOne → info / mongo-other", () => {
+    const a = analyzeMongoOperation({ kind: "insertOne" });
+    expect(a.severity).toBe("info");
+    expect(a.kind).toBe("mongo-other");
+  });
+
+  it("[AC-312-safe-02] insertMany → info / mongo-other", () => {
+    const a = analyzeMongoOperation({ kind: "insertMany", count: 50 });
+    expect(a.severity).toBe("info");
+    expect(a.kind).toBe("mongo-other");
+  });
+
+  it("[AC-312-safe-03] updateOne (any filter) → info / mongo-other", () => {
+    const a = analyzeMongoOperation({
+      kind: "updateOne",
+      filter: { _id: "x" },
+    });
+    expect(a.severity).toBe("info");
+    expect(a.kind).toBe("mongo-other");
+  });
+
+  it("[AC-312-safe-04] deleteOne (any filter) → info / mongo-other", () => {
+    const a = analyzeMongoOperation({
+      kind: "deleteOne",
+      filter: { active: true },
+    });
+    expect(a.severity).toBe("info");
+  });
+
+  it("[AC-312-safe-05] bulkWrite all-info sub-ops → info", () => {
+    const a = analyzeMongoOperation({
+      kind: "bulkWrite",
+      ops: [
+        { op: "insertOne", document: { x: 1 } },
+        { op: "updateOne", filter: { _id: "y" }, update: { $set: { x: 2 } } },
+        { op: "deleteOne", filter: { _id: "z" } },
+      ],
+    });
+    expect(a.severity).toBe("info");
+  });
+
+  it("[AC-312-safe-06] bulkWrite with non-empty deleteMany sub-op → warn", () => {
+    const a = analyzeMongoOperation({
+      kind: "bulkWrite",
+      ops: [
+        { op: "insertOne", document: { x: 1 } },
+        { op: "deleteMany", filter: { archived: true } },
+      ],
+    });
+    expect(a.severity).toBe("warn");
+  });
+
+  it("[AC-312-safe-07] bulkWrite with empty-filter deleteMany → danger (STOP)", () => {
+    const a = analyzeMongoOperation({
+      kind: "bulkWrite",
+      ops: [
+        { op: "insertOne", document: { x: 1 } },
+        { op: "deleteMany", filter: {} },
+      ],
+    });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-delete-all");
+  });
+
+  it("[AC-312-safe-08] bulkWrite with empty-filter updateMany → danger (STOP)", () => {
+    const a = analyzeMongoOperation({
+      kind: "bulkWrite",
+      ops: [{ op: "updateMany", filter: {}, update: { $set: { x: 1 } } }],
+    });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-update-all");
+  });
+
+  it("[AC-312-safe-09] bulkWrite empty ops array → info", () => {
+    const a = analyzeMongoOperation({ kind: "bulkWrite", ops: [] });
+    expect(a.severity).toBe("info");
+  });
 });
 
 // Sprint 255 (2026-05-09) — `isInfoMongoOperation` 휴리스틱은 raw editor 의

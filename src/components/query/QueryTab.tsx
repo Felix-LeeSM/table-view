@@ -37,8 +37,8 @@ import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
  *   동결 — `src/components/layout/MainArea.tsx` 가 직접 import.
  * - default export 위치 동결 (`QueryTab.tsx`).
  * - Editor area (paradigm router) 는 entry inline — sqlDialect /
- *   schemaNamespace / mongoExtensions / editorRef / queryMode 의존도
- *   많아 분리 시 prop drilling 비용이 가독성 이득보다 큼.
+ *   schemaNamespace / mongoExtensions / editorRef 의존도 많아 분리 시
+ *   prop drilling 비용이 가독성 이득보다 큼.
  */
 
 interface QueryTabProps {
@@ -99,11 +99,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
     tab.collection,
     tab.paradigm,
   ]);
-  // Sprint 309 — `useMongoAutocomplete` no longer branches on
-  // `tab.queryMode`. The unified completion source surfaces both the find
+  // Sprint 309 — `useMongoAutocomplete` no longer branches on the legacy
+  // mode toggle. The unified completion source surfaces both the find
   // operator set and aggregate stages / accumulators so the user can type
-  // either flavour without flipping a toggle; A4 will own the snippet
-  // menu that distinguishes intent at insertion time.
+  // either flavour without flipping a toggle; A4 owns the snippet menu
+  // that distinguishes intent at insertion time.
   const mongoExtensions = useMongoAutocomplete({
     fieldNames: mongoFieldNames,
   });
@@ -180,10 +180,10 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "document":
               return (
-                // Sprint 309 — `queryMode` prop removed; the Mongo editor
-                // is a single mongosh-flavoured surface. `tab.queryMode`
-                // remains on the type for backward-compat (deprecated)
-                // but is no longer threaded into the editor.
+                // Sprint 309 — the Mongo editor is a single mongosh-flavoured
+                // surface. The legacy mode field remains on the QueryTab type
+                // for backward-compat (deprecated) but is no longer threaded
+                // into the editor.
                 <MongoQueryEditor
                   ref={editorRef}
                   sql={tab.sql}
@@ -195,13 +195,15 @@ export default function QueryTab({ tab }: QueryTabProps) {
               );
             case "kv":
               return (
+                // Sprint 312 — KV / Search placeholders shed their
+                // `data-query-mode` attribute. They never carried a mongosh
+                // mode and the legacy QueryMode union has been deprecated.
                 <div
                   className="flex h-full w-full items-center justify-center overflow-hidden bg-background p-4 text-center text-sm text-muted-foreground"
                   role="textbox"
                   aria-label="Key-Value Query Editor"
                   aria-multiline="true"
                   data-paradigm="kv"
-                  data-query-mode={tab.queryMode}
                 >
                   Redis query editor is planned but not yet available.
                 </div>
@@ -214,7 +216,6 @@ export default function QueryTab({ tab }: QueryTabProps) {
                   aria-label="Search Query Editor"
                   aria-multiline="true"
                   data-paradigm="search"
-                  data-query-mode={tab.queryMode}
                 >
                   Search query editor is planned but not yet available.
                 </div>
@@ -263,7 +264,14 @@ export default function QueryTab({ tab }: QueryTabProps) {
         <ConfirmDestructiveDialog
           open
           reason={pendingMongoConfirm.reason}
-          sqlPreview={JSON.stringify(pendingMongoConfirm.pipeline, null, 2)}
+          // Sprint 312 — write STOP (drop-equivalent) carries
+          // `previewLines` (formatted mongosh); aggregate STOP keeps the
+          // pipeline-JSON preview from A5. Dialog stays paradigm-agnostic.
+          sqlPreview={
+            pendingMongoConfirm.previewLines
+              ? pendingMongoConfirm.previewLines.join("\n")
+              : JSON.stringify(pendingMongoConfirm.pipeline, null, 2)
+          }
           environment={
             connection?.environment === "production"
               ? "production"
@@ -272,7 +280,11 @@ export default function QueryTab({ tab }: QueryTabProps) {
           connectionId={tab.connectionId}
           // Mongo dry-run is unsupported (paradigm="document" routes to
           // disclaimer); statements are still serialized for symmetry.
-          statements={[JSON.stringify(pendingMongoConfirm.pipeline)]}
+          statements={
+            pendingMongoConfirm.previewLines
+              ? pendingMongoConfirm.previewLines
+              : [JSON.stringify(pendingMongoConfirm.pipeline)]
+          }
           paradigm="document"
           onConfirm={confirmMongoDangerous}
           onCancel={cancelMongoDangerous}
@@ -332,11 +344,13 @@ export default function QueryTab({ tab }: QueryTabProps) {
           ($out / $merge) route to `pendingMongoConfirm` (STOP). */}
       {pendingMongoWarn && (
         <MqlPreviewModal
-          previewLines={JSON.stringify(
-            pendingMongoWarn.pipeline,
-            null,
-            2,
-          ).split("\n")}
+          // Sprint 312 — write WARN cases prefer the parser-formatted
+          // mongosh string; aggregate WARN keeps the pipeline-JSON
+          // preview for backward-compat with sprint 255 tests.
+          previewLines={
+            pendingMongoWarn.previewLines ??
+            JSON.stringify(pendingMongoWarn.pipeline, null, 2).split("\n")
+          }
           errors={[]}
           onExecute={confirmMongoWarn}
           onCancel={cancelMongoWarn}
