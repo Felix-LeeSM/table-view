@@ -242,43 +242,6 @@ describe("DocumentTreePanel", () => {
     expect(screen.getByTestId("tree-delete-name")).toBeInTheDocument();
   });
 
-  // Sprint 342 V2 (2026-05-15) — diff toggle: when enabled, leaves with a
-  // pending edit render `original (strike) → pending (amber)` so the user
-  // can audit the change before pressing Save at the grid level. Without
-  // this lock, a future refactor of the leaf render branch could silently
-  // drop the strike-through and the diff button would become decorative.
-  it("diff toggle renders original → pending for pending leaves", async () => {
-    const user = userEvent.setup();
-    const pending = new Map<string, string>([
-      ["glossary.GlossDiv.GlossList.GlossEntry.ID", "SGML-v2"],
-    ]);
-    render(
-      <DocumentTreePanel
-        value={VALUE}
-        fieldName="profile"
-        pendingByPath={pending}
-      />,
-    );
-    // pre-toggle: no diff row.
-    expect(
-      screen.queryByTestId(
-        "tree-diff-glossary.GlossDiv.GlossList.GlossEntry.ID",
-      ),
-    ).not.toBeInTheDocument();
-    await user.click(screen.getByTestId("document-tree-diff-toggle"));
-    const diff = screen.getByTestId(
-      "tree-diff-glossary.GlossDiv.GlossList.GlossEntry.ID",
-    );
-    expect(diff).toBeInTheDocument();
-    // original (with the rendered quotes) survives, pending is the new value.
-    expect(
-      screen.getByTestId(
-        "tree-diff-original-glossary.GlossDiv.GlossList.GlossEntry.ID",
-      ).textContent,
-    ).toBe('"SGML"');
-    expect(diff.textContent).toContain("SGML-v2");
-  });
-
   // Sprint 342 V2 (2026-05-15) — regex toggle promotes the search box to
   // JS-regex mode. Locking the wire-up so a future refactor of the
   // visiblePaths memo can't silently drop the option.

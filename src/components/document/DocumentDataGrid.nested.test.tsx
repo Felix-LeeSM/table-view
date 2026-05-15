@@ -105,6 +105,50 @@ describe("DocumentDataGrid — nested inline tree (Sprint 341 Option D)", () => 
     expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
   });
 
+  // Sprint 342 V2 feedback (2026-05-15) — sort/filter/refetch must
+  // auto-close the inline tree panel. Without this, the panel either
+  // dangles where the row used to be, or silently re-attaches to a
+  // DIFFERENT doc that has slid into the same rowIdx — both are
+  // confusing edits-go-to-the-wrong-row bugs. We snapshot `_id` at
+  // expand-time and an effect compares it against `rows[rowIdx]._id`
+  // whenever the query result changes.
+  it("auto-closes the inline tree when the underlying row at rowIdx changes (e.g. sort)", async () => {
+    const A = buildResult();
+    const B: DocumentQueryResult = {
+      ...A,
+      rows: [
+        [{ $oid: "b0000000000000000000000a" }, "Bob", "{...}", "[2 items]"],
+      ],
+      raw_documents: [
+        {
+          _id: { $oid: "b0000000000000000000000a" },
+          name: "Bob",
+          meta: { verified: false },
+          tags: [],
+        },
+      ],
+    };
+    // First fetch returns Alice; sort triggers a second fetch that
+    // returns Bob at the same rowIdx.
+    findMock.mockResolvedValueOnce(A).mockResolvedValueOnce(B);
+    renderGrid();
+    await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand meta" }));
+    expect(screen.getByTestId("nested-detail-row-0")).toBeInTheDocument();
+
+    // Click the `name` column header — primary ASC sort. Forces a
+    // refetch that resolves to B (different `_id` at the same rowIdx).
+    const nameHeader = screen
+      .getAllByRole("columnheader")
+      .find((el) => el.textContent?.includes("name"));
+    expect(nameHeader).toBeDefined();
+    fireEvent.click(nameHeader!);
+
+    await waitFor(() => expect(screen.getByText("Bob")).toBeInTheDocument());
+    expect(screen.queryByTestId("nested-detail-row-0")).not.toBeInTheDocument();
+  });
+
   it("array sentinel toggle shows [i] index leaves", async () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());

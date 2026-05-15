@@ -136,9 +136,19 @@ export default function DocumentDataGrid({
   // Sprint 341 (Option D) — inline tree panel coordinate. Only one
   // cell may be expanded at a time per grid; toggling another cell
   // collapses the previous one. `null` = none expanded.
+  //
+  // Sprint 342 V2 feedback (2026-05-15) — `rowIdSnapshot` captures the
+  // `_id` of the expanded row at expand-time. When the page rows
+  // change (sort / filter / refetch / page move), an effect compares
+  // the current `_id` at `rowIdx` against this snapshot and auto-
+  // closes the panel if they differ. Without it, the panel either
+  // (a) dangles where the row used to be after a filter, or
+  // (b) silently re-attaches to the WRONG doc when a sort puts a
+  // different row at the same index.
   const [expandedNested, setExpandedNested] = useState<{
     rowIdx: number;
     colIdx: number;
+    rowIdSnapshot: string;
   } | null>(null);
   const [showQuickLook, setShowQuickLook] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -208,6 +218,33 @@ export default function DocumentDataGrid({
     // queryResult.columns 만 deps 로 충분.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryResult?.columns]);
+
+  // Sprint 342 V2 feedback (2026-05-15) — auto-close the inline tree
+  // panel when the row it points to disappears or gets replaced. We
+  // compare the `_id` captured at expand-time against whatever doc is
+  // currently sitting at `rowIdx`. JSON.stringify is fine for ids
+  // because `_id` shapes are either scalars or shallow EJSON wrappers
+  // (`{ $oid: "..." }`, `{ $date: "..." }`). Without this, sort /
+  // filter / refetch silently re-attaches the panel to a different
+  // doc, or leaves the panel dangling under an empty slot.
+  useEffect(() => {
+    if (!expandedNested) return;
+    const currentDoc = queryResult?.raw_documents[expandedNested.rowIdx];
+    const currentId = safeStringifyCell(currentDoc?._id);
+    if (
+      currentDoc === undefined ||
+      currentId !== expandedNested.rowIdSnapshot
+    ) {
+      setExpandedNested(null);
+    }
+  }, [queryResult, expandedNested]);
+
+  // Sprint 342 V2 feedback — measure the scroll container's visible
+  // width so the inline tree panel can fill the viewport horizontally
+  // (instead of `w-fit` which only covered the tree's intrinsic
+  // width). The panel sits inside a `sticky left-0` wrapper so this
+  // width is exactly the user-visible portion of the grid.
+  const [scrollContainerWidth, setScrollContainerWidth] = useState(0);
 
   // accumulator 가 backend columns 와 다를 수 있어 (a) 누적된 column 만
   // surface 하고 (b) cell lookup 시 backend rows 의 인덱스를 찾는다.
@@ -311,6 +348,27 @@ export default function DocumentDataGrid({
   const hiddenColumns = useHiddenColumns(persistenceKey);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Sprint 342 V2 feedback — keep `scrollContainerWidth` in sync with
+  // the scroll container's `clientWidth` so the sticky inline-tree
+  // panel can fill the viewport horizontally. Reading once on mount
+  // isn't enough — window resize, sidebar collapse, and devtools
+  // open/close all change the visible width.
+  //
+  // The deps include `data` because the scroll container is rendered
+  // behind a `{data && ...}` guard. On first mount the ref is null
+  // (no data yet); without re-running after data arrives, the
+  // observer never attaches and the inline-tree panel stretches to
+  // its parent (full table width) instead of the visible viewport.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const update = () => setScrollContainerWidth(el.clientWidth);
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [data]);
 
   // Sprint 317 D.1 — visible column subset. Hidden columns drop out of
   // the header row, the `--cols` template, and the per-row cell map.
@@ -892,9 +950,22 @@ export default function DocumentDataGrid({
                                     aria-label={`${isOpen ? "Close" : "Expand"} ${col.name}`}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setExpandedNested(
-                                        isOpen ? null : { rowIdx, colIdx },
-                                      );
+                                      if (isOpen) {
+                                        setExpandedNested(null);
+                                        return;
+                                      }
+                                      // Sprint 342 V2 feedback — snapshot
+                                      // the `_id` so a downstream sort /
+                                      // filter that moves rows around
+                                      // can be detected and auto-close
+                                      // the panel.
+                                      const rawId =
+                                        queryResult?.raw_documents[rowIdx]?._id;
+                                      setExpandedNested({
+                                        rowIdx,
+                                        colIdx,
+                                        rowIdSnapshot: safeStringifyCell(rawId),
+                                      });
                                     }}
                                     className={cn(
                                       // Sprint 341 feedback (3) — closed
@@ -936,7 +1007,21 @@ export default function DocumentDataGrid({
                       role="row"
                       data-testid={`nested-detail-row-${rowIdx}`}
                       className="border-b border-border bg-secondary/20"
-                      style={{ minWidth: "max-content" }}
+                      style={{
+                        // Sprint 342 V2 feedback (2026-05-15) — detail
+                        // row must use the same grid template as the
+                        // data rows above. Without this, gridColumn:
+                        // "1 / -1" inside is a no-op (parent isn't a
+                        // grid), the cell width collapses to the
+                        // sticky inner's pixel width, and a horizontal
+                        // scroll past that width pushes the panel off-
+                        // screen to the left — the sticky-left-0
+                        // contract relies on the cell being as wide as
+                        // the scroll container's content (≥ all cols).
+                        display: "grid",
+                        gridTemplateColumns: "var(--cols)",
+                        minWidth: "max-content",
+                      }}
                     >
                       <div
                         role="gridcell"
@@ -949,8 +1034,17 @@ export default function DocumentDataGrid({
                           inner wrapper sticks to viewport's left edge so
                           the panel does not drift off-screen with the
                           first column.
+                          Sprint 342 V2 feedback — fill the visible
+                          width: `w-fit` only covered the tree's
+                          intrinsic width, leaving most of the grid
+                          right-blank. We size the sticky wrapper to
+                          the scroll container's `clientWidth` so the
+                          panel spans the user-visible portion.
                         */}
-                        <div className="sticky left-0 w-fit max-w-full">
+                        <div
+                          className="sticky left-0"
+                          style={{ width: scrollContainerWidth || undefined }}
+                        >
                           <DocumentTreePanel
                             value={expandedRawValue}
                             fieldName={expandedColName}

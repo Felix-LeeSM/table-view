@@ -11,14 +11,7 @@
 // edits (add key on objects, push item on arrays, delete leaf).
 
 import { useMemo, useState, useCallback } from "react";
-import {
-  ChevronRight,
-  ChevronDown,
-  X,
-  Search,
-  GitCompare,
-  Trash2,
-} from "lucide-react";
+import { ChevronRight, ChevronDown, X, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   buildTreeNodes,
@@ -123,7 +116,6 @@ export function DocumentTreePanel({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState("");
   const [searchRegex, setSearchRegex] = useState(false);
-  const [diffMode, setDiffMode] = useState(false);
   const [editingPath, setEditingPath] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
@@ -209,31 +201,17 @@ export function DocumentTreePanel({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        {onClose && (
           <Button
-            variant={diffMode ? "default" : "ghost"}
+            variant="ghost"
             size="sm"
-            data-testid="document-tree-diff-toggle"
-            onClick={() => setDiffMode((v) => !v)}
-            aria-pressed={diffMode}
-            aria-label="Toggle diff view"
-            title="Show original → pending for unsaved edits"
+            data-testid="document-tree-close"
+            onClick={onClose}
+            aria-label="Close tree panel"
           >
-            <GitCompare size={14} aria-hidden />
-            <span className="ml-1 text-3xs uppercase tracking-wider">Diff</span>
+            <X size={14} aria-hidden />
           </Button>
-          {onClose && (
-            <Button
-              variant="ghost"
-              size="sm"
-              data-testid="document-tree-close"
-              onClick={onClose}
-              aria-label="Close tree panel"
-            >
-              <X size={14} aria-hidden />
-            </Button>
-          )}
-        </div>
+        )}
       </header>
 
       <div className="flex items-center gap-3">
@@ -339,42 +317,18 @@ export function DocumentTreePanel({
               {node.kind === "leaf" && !isEditing && (
                 <>
                   <span className="ml-1 text-muted-foreground">:</span>
-                  {/* Sprint 342 V2 — three render branches for leaves
-                      with a pending edit:
+                  {/* Sprint 342 V2 — two render branches for leaves with
+                      a pending edit:
                        1. pending = __op__:unset → strike-through original,
                           "● will delete" badge.
-                       2. diffMode on → original (strike) → pending (amber).
-                       3. otherwise → pending (or original) as the
-                          clickable editor entry-point.
-                      Branch 1 takes precedence over 2 because a delete
-                      shouldn't render an `→` arrow into the unset marker. */}
+                       2. otherwise → pending (or original) as the
+                          clickable editor entry-point. */}
                   {isPendingUnset(pending) ? (
                     <span
                       data-testid={`tree-unset-${node.path}`}
                       className="ml-1 align-middle text-emerald-700/60 line-through decoration-rose-500 dark:text-emerald-300/50"
                     >
                       {renderLeafValue(node)}
-                    </span>
-                  ) : diffMode && pending !== undefined ? (
-                    <span
-                      data-testid={`tree-diff-${node.path}`}
-                      className="ml-1 inline-flex items-center gap-1.5 align-middle"
-                    >
-                      <span
-                        data-testid={`tree-diff-original-${node.path}`}
-                        className="text-emerald-700/60 line-through decoration-emerald-700/40 dark:text-emerald-300/50"
-                      >
-                        {renderLeafValue(node)}
-                      </span>
-                      <span className="text-muted-foreground">→</span>
-                      <button
-                        type="button"
-                        onClick={() => startEdit(node)}
-                        data-testid={`tree-leaf-${node.path}`}
-                        className="rounded bg-amber-400/15 px-1 text-amber-700 hover:underline dark:text-amber-300"
-                      >
-                        {renderPendingText(pending)}
-                      </button>
                     </span>
                   ) : (
                     <button
@@ -394,8 +348,7 @@ export function DocumentTreePanel({
                       ● will delete
                     </span>
                   ) : (
-                    pending !== undefined &&
-                    !diffMode && (
+                    pending !== undefined && (
                       <span className="ml-2 text-3xs text-amber-400">
                         ● edited
                       </span>
