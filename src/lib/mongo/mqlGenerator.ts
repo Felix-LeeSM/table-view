@@ -119,27 +119,40 @@ function formatMqlValue(value: unknown): string {
   return safeStringifyCell(value);
 }
 
-/** Render a flat object as ` { key: <val>, … }` (unquoted keys) for the
- *  preview string. Key order follows insertion order which in turn follows
- *  the generator's iteration order over pending edits / new row fields. */
+/** Render a flat object as ` { key: <val>, … }` for the preview string.
+ *  Keys are unquoted when they are valid JS identifiers; keys containing a
+ *  `.` (dot-notation paths from Sprint 322 F.2 nested edits) or other
+ *  non-identifier chars are double-quoted so the rendered preview is valid
+ *  mongosh syntax. */
+function formatMqlObjectKey(key: string): string {
+  if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)) return key;
+  return `"${key.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
 function formatMqlObject(obj: Record<string, unknown>): string {
   const entries = Object.entries(obj);
   if (entries.length === 0) return "{}";
   const inner = entries
-    .map(([key, value]) => `${key}: ${formatMqlValue(value)}`)
+    .map(
+      ([key, value]) => `${formatMqlObjectKey(key)}: ${formatMqlValue(value)}`,
+    )
     .join(", ");
   return `{ ${inner} }`;
 }
 
-/** `"rowIdx-colIdx"` → `[rowIdx, colIdx]`. Returns `null` for malformed keys
- *  so we never silently splice `NaN` into a preview string. */
-function parseEditKey(key: string): [number, number] | null {
-  const parts = key.split("-");
+/** `"rowIdx-colIdx"` → `[rowIdx, colIdx, null]`, or with a dot-path
+ *  suffix `"rowIdx-colIdx:path.to.field"` → `[rowIdx, colIdx, "path.to.field"]`.
+ *  Returns `null` for malformed keys so we never silently splice `NaN`
+ *  into a preview string. Sprint 322 (Slice F.2) — nested edit support. */
+function parseEditKey(key: string): [number, number, string | null] | null {
+  const [head, ...rest] = key.split(":");
+  const path = rest.length > 0 ? rest.join(":") : null;
+  const parts = head!.split("-");
   if (parts.length !== 2) return null;
   const rowIdx = Number.parseInt(parts[0]!, 10);
   const colIdx = Number.parseInt(parts[1]!, 10);
   if (!Number.isInteger(rowIdx) || !Number.isInteger(colIdx)) return null;
-  return [rowIdx, colIdx];
+  return [rowIdx, colIdx, path];
 }
 
 /** Decode a `"row-{page}-{rowIdx}"` delete key into its `rowIdx`. The
@@ -193,18 +206,25 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
   // (matches MongoDB's "one `$set` per patch" policy). The grouping map
   // preserves insertion order of (row, col) so the patch preview is
   // deterministic across runs with the same pending state.
+  // Sprint 322 — Slice F.2: `column` 은 dot-path 가 포함된 patch
+  // field path (예: `meta.verified`). top-level edit 는 path === null
+  // → bare column name. nested edit (path !== null) 는 sentinel-edit
+  // guard 와 `_id`-in-patch guard 의 대상이 아님 (sentinel column
+  // 자체는 read-only 지만, 그 안의 1-depth scalar 는 dot-notation
+  // `$set` 으로 update 가능).
   const editsByRow = new Map<
     number,
-    Array<{ column: string; value: unknown }>
+    Array<{ column: string; value: unknown; nested: boolean }>
   >();
   pendingEdits.forEach((value, key) => {
     const parsed = parseEditKey(key);
     if (parsed === null) return;
-    const [rowIdx, colIdx] = parsed;
+    const [rowIdx, colIdx, path] = parsed;
     const col = columns[colIdx];
     if (!col) return;
+    const fieldPath = path !== null ? `${col.name}.${path}` : col.name;
     const existing = editsByRow.get(rowIdx);
-    const entry = { column: col.name, value };
+    const entry = { column: fieldPath, value, nested: path !== null };
     if (existing) {
       existing.push(entry);
     } else {
@@ -219,13 +239,14 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
       return;
     }
 
-    // Sentinel-edit guard: any cell whose value is the document/array
-    // sentinel is not editable. Each offending cell reports its own error
-    // and the row is dropped entirely — partial patches aren't emitted,
-    // so the user must discard the sentinel edit first.
+    // Sentinel-edit guard: any *top-level* cell (path === null) whose value
+    // is the document/array sentinel is not editable directly — the user
+    // should use the F.1 expand popover instead. nested edits (path !== null)
+    // are by construction targeting fields inside that sentinel and are
+    // allowed.
     let sentinelBlocked = false;
-    for (const { column, value } of cells) {
-      if (isDocumentSentinel(value)) {
+    for (const { column, value, nested } of cells) {
+      if (!nested && isDocumentSentinel(value)) {
         errors.push({ kind: "sentinel-edit", rowIdx, column });
         sentinelBlocked = true;
       }
@@ -234,9 +255,13 @@ export function generateMqlPreview(input: MqlGenerateInput): MqlPreview {
 
     // `_id`-in-patch guard: the backend rejects patch documents with a
     // top-level `_id`; matching the behaviour here keeps the preview honest.
-    const idInPatch = cells.find((c) => c.column === "_id");
+    // Nested paths under `_id` are exotic but rejected too (you can't $set
+    // into a foreign-shaped _id).
+    const idInPatch = cells.find(
+      (c) => c.column === "_id" || c.column.startsWith("_id."),
+    );
     if (idInPatch) {
-      errors.push({ kind: "id-in-patch", rowIdx, column: "_id" });
+      errors.push({ kind: "id-in-patch", rowIdx, column: idInPatch.column });
       return;
     }
 

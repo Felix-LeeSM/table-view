@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pencil } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -31,6 +31,20 @@ interface NestedExpandPopoverProps {
   value: unknown;
   /** 사용자가 inspect 중인 field name (object key) 또는 column name. */
   fieldName: string;
+  /**
+   * Sprint 322 — Slice F.2: scalar entry 의 인라인 edit commit
+   * callback. 미제공 시 popover 는 read-only (Sprint 321 F.1
+   * 동작). path 는 dot-notation (object → `"key"`, array → `"0"`,
+   * 깊은 entry → `"key.subkey"`). value 는 사용자가 입력한 문자열을
+   * 1차 raw 로 전달 — 캐스팅은 호출자 책임 (Slice G BSON editor 가
+   * 별도 처리).
+   */
+  onCommitEdit?: (path: string, value: string) => void;
+  /**
+   * 현재 path 의 pending value (있다면). 표시 시 시각 cue 와 input
+   * 의 초기값으로 사용.
+   */
+  pendingByPath?: ReadonlyMap<string, string>;
 }
 
 function renderScalar(value: unknown): string {
@@ -70,16 +84,40 @@ function entryTypeLabel(entry: NestedEntry): string {
   return typeof v;
 }
 
+function entryPath(entry: NestedEntry): string {
+  return entry.kind === "object-entry" ? entry.key : String(entry.index);
+}
+
 export default function NestedExpandPopover({
   value,
   fieldName,
+  onCommitEdit,
+  pendingByPath,
 }: NestedExpandPopoverProps) {
   const [open, setOpen] = useState(false);
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string>("");
   const expansion = useMemo(() => getNestedExpansion(value), [value]);
 
   // Suppress trigger entirely when nothing to expand — caller (grid)
   // can still decide to render the bare sentinel without affordance.
   if (!expansion) return null;
+
+  const startEdit = (path: string, initial: string) => {
+    setEditingPath(path);
+    setDraft(initial);
+  };
+  const cancelEdit = () => {
+    setEditingPath(null);
+    setDraft("");
+  };
+  const commitEdit = () => {
+    if (editingPath !== null) {
+      onCommitEdit?.(editingPath, draft);
+    }
+    setEditingPath(null);
+    setDraft("");
+  };
 
   const containerLabel =
     expansion.containerKind === "array"
@@ -123,11 +161,14 @@ export default function NestedExpandPopover({
           ) : (
             <ul className="max-h-72 overflow-auto py-1 text-xs">
               {expansion.entries.map((entry) => {
-                const k =
-                  entry.kind === "object-entry" ? entry.key : `${entry.index}`;
+                const path = entryPath(entry);
+                const pendingValue = pendingByPath?.get(path);
+                const hasPending = pendingValue !== undefined;
+                const isEditing = editingPath === path;
+                const canEdit = !entry.isNested && onCommitEdit !== undefined;
                 return (
                   <li
-                    key={`${entry.kind}:${k}`}
+                    key={`${entry.kind}:${path}`}
                     className="flex items-baseline gap-2 px-2.5 py-1 hover:bg-muted"
                     data-testid="nested-entry"
                   >
@@ -138,9 +179,38 @@ export default function NestedExpandPopover({
                       className="flex-1 truncate"
                       title={entryValueText(entry)}
                     >
-                      {entry.isNested ? (
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          autoFocus
+                          aria-label={`Editing ${fieldName}.${path}`}
+                          className="w-full bg-transparent px-1 py-0 text-xs text-foreground outline-none ring-1 ring-primary"
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              commitEdit();
+                            } else if (e.key === "Escape") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              cancelEdit();
+                            }
+                          }}
+                          onBlur={() => commitEdit()}
+                        />
+                      ) : entry.isNested ? (
                         <span className="italic text-muted-foreground">
                           {entryValueText(entry)}
+                        </span>
+                      ) : hasPending ? (
+                        <span
+                          className="block truncate rounded bg-highlight/20 px-1"
+                          data-testid="nested-pending"
+                        >
+                          {pendingValue}
                         </span>
                       ) : entry.value === null ? (
                         <span className="italic text-muted-foreground">
@@ -153,6 +223,26 @@ export default function NestedExpandPopover({
                     <span className="shrink-0 text-3xs text-muted-foreground">
                       {entryTypeLabel(entry)}
                     </span>
+                    {canEdit && !isEditing && (
+                      <button
+                        type="button"
+                        aria-label={`Edit ${fieldName}.${path}`}
+                        className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEdit(
+                            path,
+                            hasPending
+                              ? pendingValue!
+                              : entry.value === null
+                                ? ""
+                                : String(entry.value),
+                          );
+                        }}
+                      >
+                        <Pencil size={10} />
+                      </button>
+                    )}
                   </li>
                 );
               })}

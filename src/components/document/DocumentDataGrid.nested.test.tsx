@@ -133,4 +133,62 @@ describe("DocumentDataGrid — nested expand (Sprint 321 F.1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
     expect(row).toHaveAttribute("aria-selected", "false");
   });
+
+  // Sprint 322 (2026-05-15) — Slice F.2: dot-notation inline edit.
+  //
+  // 작성 이유: nested edit 가 (a) pendingEdits 에 `row-col:path` 키로
+  // 기록되어 (b) sentinel cell 의 highlight chip 으로 시각화되며
+  // (c) MQL Preview 가 `$set: { "col.path": value }` 를 생성하는지를
+  // 회귀 가드. (mqlGenerator 단위 테스트로 SQL 빌딩은 검증되지만,
+  // 그리드 wire-up 이 dot-notation key 를 올바르게 흘려보내는지 별도
+  // 통합 가드 필요.)
+  describe("Slice F.2 — inline edit through popover", () => {
+    it("pencil → input → Enter records the pendingEdit and renders the highlight chip in-place", async () => {
+      renderGrid();
+      await waitFor(() =>
+        expect(screen.getByText("Alice")).toBeInTheDocument(),
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Expand nested meta" }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Edit meta.role" }));
+      const input = screen.getByLabelText("Editing meta.role");
+      fireEvent.change(input, { target: { value: "owner" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      // After Enter, the input is replaced by the highlight chip in-place
+      // (popover stays open so the user sees the pending mutation
+      // immediately).
+      await waitFor(() => {
+        expect(screen.getByTestId("nested-pending")).toHaveTextContent("owner");
+      });
+    });
+
+    it("MQL preview emits `$set: { 'meta.role': ... }` after a nested edit and Commit", async () => {
+      renderGrid();
+      await waitFor(() =>
+        expect(screen.getByText("Alice")).toBeInTheDocument(),
+      );
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Expand nested meta" }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Edit meta.role" }));
+      const input = screen.getByLabelText("Editing meta.role");
+      fireEvent.change(input, { target: { value: "owner" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+
+      // Open MQL preview via the toolbar's Commit-to-preview affordance.
+      const commitBtn = await screen.findByRole("button", {
+        name: /Commit changes/i,
+      });
+      fireEvent.click(commitBtn);
+
+      const preview = await screen.findByRole("dialog");
+      expect(preview).toHaveTextContent(/updateOne/);
+      expect(preview).toHaveTextContent(/"meta\.role"/);
+      expect(preview).toHaveTextContent(/"owner"/);
+    });
+  });
 });

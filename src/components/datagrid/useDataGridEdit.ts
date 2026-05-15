@@ -283,6 +283,14 @@ export interface DataGridEditState {
 
   // Pending changes
   pendingEdits: Map<string, string | null>;
+  /**
+   * Sprint 322 — Slice F.2: callers (Document grid 의 nested popover
+   * 등) 가 직접 pendingEdits 를 갱신할 수 있도록 노출. 대부분의 인라인
+   * edit 는 `saveCurrentEdit` 경유로 충분하지만, popover 안 nested
+   * edit 는 별도 editingCell 모델 없이 dot-notation key 만 쓰므로
+   * setter 직접 호출이 가장 단순하다.
+   */
+  setPendingEdits: (next: Map<string, string | null>) => void;
   pendingNewRows: unknown[][];
   pendingDeletedRowKeys: Set<string>;
 
@@ -903,6 +911,7 @@ export function useDataGridEdit({
     setEditValue: setEditValueWithErrorClear,
     setEditNull,
     pendingEdits,
+    setPendingEdits,
     pendingEditErrors,
     pendingNewRows,
     pendingDeletedRowKeys,

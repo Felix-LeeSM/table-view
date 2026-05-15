@@ -69,4 +69,84 @@ describe("NestedExpandPopover (Sprint 321 F.1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
     expect(onRowClick).not.toHaveBeenCalled();
   });
+
+  // Sprint 322 — Slice F.2: edit flow.
+  it("shows a Pencil button on scalar entries only when onCommitEdit is provided", () => {
+    const onCommitEdit = vi.fn();
+    render(
+      <NestedExpandPopover
+        value={{ a: 1, b: { deep: 1 } }}
+        fieldName="meta"
+        onCommitEdit={onCommitEdit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    // scalar a → Pencil; nested b → no Pencil
+    expect(
+      screen.getByRole("button", { name: "Edit meta.a" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit meta.b" })).toBeNull();
+  });
+
+  it("clicking the Pencil opens an inline input pre-filled with the current value", () => {
+    render(
+      <NestedExpandPopover
+        value={{ verified: true }}
+        fieldName="meta"
+        onCommitEdit={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit meta.verified" }));
+    const input = screen.getByLabelText("Editing meta.verified");
+    expect(input).toHaveValue("true");
+  });
+
+  it("Enter commits the edit with the dot-notation path", () => {
+    const onCommitEdit = vi.fn();
+    render(
+      <NestedExpandPopover
+        value={{ role: "user" }}
+        fieldName="meta"
+        onCommitEdit={onCommitEdit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit meta.role" }));
+    const input = screen.getByLabelText("Editing meta.role");
+    fireEvent.change(input, { target: { value: "admin" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommitEdit).toHaveBeenCalledWith("role", "admin");
+  });
+
+  it("Escape cancels the edit and does not invoke onCommitEdit", () => {
+    const onCommitEdit = vi.fn();
+    render(
+      <NestedExpandPopover
+        value={{ a: 1 }}
+        fieldName="meta"
+        onCommitEdit={onCommitEdit}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit meta.a" }));
+    const input = screen.getByLabelText("Editing meta.a");
+    fireEvent.change(input, { target: { value: "999" } });
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(onCommitEdit).not.toHaveBeenCalled();
+  });
+
+  it("renders pendingByPath value with the highlight chip in place of the original", () => {
+    render(
+      <NestedExpandPopover
+        value={{ role: "user" }}
+        fieldName="meta"
+        onCommitEdit={vi.fn()}
+        pendingByPath={new Map([["role", "admin"]])}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Expand nested meta" }));
+    const pending = screen.getByTestId("nested-pending");
+    expect(pending).toHaveTextContent("admin");
+  });
 });

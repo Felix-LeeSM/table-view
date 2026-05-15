@@ -17,6 +17,7 @@ function makeEditState(
     setEditValue: vi.fn(),
     setEditNull: vi.fn(),
     pendingEdits: new Map(),
+    setPendingEdits: vi.fn(),
     pendingNewRows: [],
     pendingDeletedRowKeys: new Set(),
     pendingEditErrors: new Map(),

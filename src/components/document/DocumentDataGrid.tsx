@@ -52,6 +52,26 @@ interface DocumentDataGridProps {
 }
 
 /**
+ * Sprint 322 — Slice F.2 helper: pendingEdits 에서 한 (row, col) 의
+ * nested edits 만 추려 `Map<dotPath, value>` 로 변환. NestedExpandPopover
+ * 가 entry 별 pending 표시 + inline input 의 prefill 에 사용한다.
+ * `value` 가 string | null — null 은 popover 가 빈 문자열로 취급.
+ */
+function buildNestedPendingByPath(
+  pendingEdits: ReadonlyMap<string, string | null>,
+  rowIdx: number,
+  colIdx: number,
+): Map<string, string> {
+  const prefix = `${rowIdx}-${colIdx}:`;
+  const out = new Map<string, string>();
+  pendingEdits.forEach((value, key) => {
+    if (!key.startsWith(prefix)) return;
+    out.set(key.slice(prefix.length), value ?? "");
+  });
+  return out;
+}
+
+/**
  * Editable grid for the document paradigm. Same workflow as the SQL
  * grid (double-click → edit → Commit → preview → Execute) backed by the
  * MQL generator + Tauri insert/update/delete commands.
@@ -770,8 +790,23 @@ export default function DocumentDataGrid({
                           // Sprint 321 — Slice F.1: sentinel cell 옆에
                           // expand popover trigger. raw_documents 의
                           // 해당 field 값으로 1-depth inspect.
+                          // Sprint 322 — Slice F.2: 같은 popover 가
+                          // 1-depth scalar entry 의 inline edit 를 수용,
+                          // dot-notation key (`row-col:path`) 로
+                          // pendingEdits 에 등록. mqlGenerator 는
+                          // `$set: { "col.path": value }` 생성.
                           <span className="flex min-w-0 items-center gap-1">
-                            <span className="truncate italic text-muted-foreground">
+                            <span
+                              className={cn(
+                                "truncate italic text-muted-foreground",
+                                buildNestedPendingByPath(
+                                  editState.pendingEdits,
+                                  rowIdx,
+                                  colIdx,
+                                ).size > 0 &&
+                                  "rounded bg-highlight/20 px-1 not-italic text-foreground",
+                              )}
+                            >
                               {String(cell)}
                             </span>
                             <NestedExpandPopover
@@ -779,6 +814,16 @@ export default function DocumentDataGrid({
                                 queryResult?.raw_documents[rowIdx]?.[col.name]
                               }
                               fieldName={col.name}
+                              pendingByPath={buildNestedPendingByPath(
+                                editState.pendingEdits,
+                                rowIdx,
+                                colIdx,
+                              )}
+                              onCommitEdit={(path, value) => {
+                                const next = new Map(editState.pendingEdits);
+                                next.set(`${rowIdx}-${colIdx}:${path}`, value);
+                                editState.setPendingEdits(next);
+                              }}
                             />
                           </span>
                         ) : (

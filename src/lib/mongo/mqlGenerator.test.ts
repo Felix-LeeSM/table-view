@@ -262,6 +262,102 @@ describe("generateMqlPreview — edge cases", () => {
     });
   });
 
+  // Sprint 322 — Slice F.2: dot-notation nested edits.
+  it("emits dot-notation $set for a single nested edit", () => {
+    const { previewLines, commands } = generateMqlPreview(
+      makeInput({
+        // top-level `meta` column is a sentinel ({...}) in the row but the
+        // edit targets `meta.verified`, which is allowed.
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        pendingEdits: new Map<string, unknown>([["0-1:verified", true]]),
+      }),
+    );
+    expect(previewLines).toEqual([
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.verified": true } })`,
+    ]);
+    expect(commands[0]).toMatchObject({
+      patch: { "meta.verified": true },
+    });
+  });
+
+  it("merges a nested edit and a top-level edit into one updateOne", () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "name", data_type: "string", is_primary_key: false },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "Ada", "{...}"]],
+        pendingEdits: new Map<string, unknown>([
+          ["0-1", "Ada L."],
+          ["0-2:role", "admin"],
+        ]),
+      }),
+    );
+    expect(previewLines).toHaveLength(1);
+    expect(previewLines[0]).toBe(
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { name: "Ada L.", "meta.role": "admin" } })`,
+    );
+  });
+
+  it("emits dot-notation for a deep path (path with multiple segments)", () => {
+    const { previewLines } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        pendingEdits: new Map<string, unknown>([
+          ["0-1:profile.avatar", "https://example.com/a.png"],
+        ]),
+      }),
+    );
+    expect(previewLines[0]).toBe(
+      `db.users.updateOne({ _id: ObjectId("${HEX_A}") }, { $set: { "meta.profile.avatar": "https://example.com/a.png" } })`,
+    );
+  });
+
+  it("rejects a nested edit under _id with id-in-patch error", () => {
+    const { previewLines, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "name", data_type: "string", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "Ada"]],
+        // hypothetical: user tries to $set _id.foo — must drop the row.
+        pendingEdits: new Map<string, unknown>([["0-0:foo", "bar"]]),
+      }),
+    );
+    expect(previewLines).toEqual([]);
+    expect(errors).toEqual([
+      { kind: "id-in-patch", rowIdx: 0, column: "_id.foo" },
+    ]);
+  });
+
+  it("allows nested edit when the top-level sentinel cell remains read-only", () => {
+    // The sentinel-edit guard targets *top-level* sentinel edits only.
+    // Nested paths into that sentinel are permitted, by construction.
+    const { previewLines, errors } = generateMqlPreview(
+      makeInput({
+        columns: [
+          { name: "_id", data_type: "objectId", is_primary_key: true },
+          { name: "meta", data_type: "document", is_primary_key: false },
+        ],
+        rows: [[{ $oid: HEX_A }, "{...}"]],
+        pendingEdits: new Map<string, unknown>([["0-1:tag", "hot"]]),
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(previewLines).toHaveLength(1);
+  });
+
   it("escapes double quotes inside string patch values", () => {
     const { previewLines } = generateMqlPreview(
       makeInput({
