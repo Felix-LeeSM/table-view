@@ -1490,3 +1490,111 @@ the current page" 가 NULL chip 의 visible 회귀 가드.
 map 동작 회귀.
 
 ---
+
+## Sprint 321 — Slice F.1 (Nested expand popover, read-only) — 자율 결정 dict
+
+### D-51: 1-depth 만 expose, nested-of-nested 는 sentinel 유지
+
+**문제**: nested cell 의 popover 가 임의 깊이까지 재귀 expand 하면
+popover 가 폭주. 어디까지 보여줄지.
+
+**결정**: 1-depth 만. nested-of-nested 는 popover 안에서도 sentinel
+(`{...}` / `[N items]`) 으로 표시. 깊은 inspect 가 필요하면 Quick
+Look 패널 (BSON tree viewer).
+
+**근거**:
+1. cell-context inspect 의 목표는 "이 cell 안에 뭐 있나" 의 빠른
+   답. 깊은 탐색은 Quick Look 의 책임. 책임 분리.
+2. 재귀 expand 는 popover layout 복잡도 폭증 + 키 처리 (Tab 으로
+   focus 이동) 부담.
+3. Slice F.2 의 edit flow 도 1-depth 만 인라인 edit. 깊은 edit 은
+   raw JSON 편집 (Quick Look 또는 Cell Detail dialog).
+
+**대안**:
+- 전 depth recursive expansion — popover 폭주.
+- "Expand more" 링크로 deeper popover stack — 키 처리 복잡, UX 부담.
+- click 시 Quick Look 강제 open — 사용자 cell-local inspect 차단.
+
+**영향**: `getNestedExpansion` 의 `isNested` flag. test "marks
+nested-of-nested entries with isNested=true" + integration 의 popover
+content "{...}" 표기.
+
+---
+
+### D-52: BSON canonical singleton (`$oid`, `$date`, `$numberLong`) 은 scalar 취급
+
+**문제**: nested object 의 일부 field 는 BSON wrapper (`{ $oid: "..."
+}`, `{ $date: "..." }`). 이것을 nested expansion 으로 펼치면
+사용자에게 `$oid` 라는 의미 없는 key 가 노출되어 혼란.
+
+**결정**: 단일 key 가 `$` 로 시작하는 object 는 scalar 로 취급.
+expansion 의 isNested=false, value 가 그대로 (wrapper 포함) 노출되되
+type subtitle 이 `oid` / `date` / `numberLong` 등.
+
+**근거**:
+1. Quick Look 의 BSON tree viewer 도 canonical wrapper 를 자동
+   unwrap 해 보여줌. UX 일관.
+2. 사용자 멘탈 모델: ObjectId / Date 는 "값 그 자체" — composite
+   아님.
+
+**대안**:
+- raw object 그대로 expand — `$oid` 라벨이 노출, 의미 없음.
+- BSON 형 unwrap 후 string 변환 — 데이터 표현 손실 (raw 가 사라짐).
+
+**영향**: `isComposite()` 의 single-`$key` 분기. test "treats
+canonical BSON singletons ($oid, $date, $numberLong, ...) as scalars"
+가 lock.
+
+---
+
+### D-53: trigger 클릭 stopPropagation — row selection 부작용 차단
+
+**문제**: trigger button 이 row container 안에 있어 click 이 row
+의 onClick 으로 propagate → row selection 토글. 사용자가 inspect 만
+의도해도 selection 변동.
+
+**결정**: trigger button + popover content 모두 `onClick` 에서
+`e.stopPropagation()`. inline `onDoubleClick` 도 stopPropagation
+(편집 흐름과 충돌 차단).
+
+**근거**:
+1. inspect 와 selection 은 독립적 인터랙션. 두 의도가 한 클릭에
+   합쳐지면 UX 혼동.
+2. Radix Popover 자체는 stopPropagation 안 함 — caller 책임.
+3. test 로 회귀 가드 (component 단위 + grid 통합 2 단).
+
+**대안**:
+- 사용자가 Cmd+click 으로만 popover — 발견성 낮음.
+- inspect 가 row selection 까지 같이 → 두 의도 결합, 회귀 표면 증가.
+
+**영향**: component "stops the click event from propagating to the
+row container" + grid integration "trigger click does not toggle
+row selection" 2 case 가 lock.
+
+---
+
+### D-54: sentinel cell 의 표시 = sentinel 문자열 + trigger (옆 mount)
+
+**문제**: cell 의 시각 표현을 어떻게 바꿀지. sentinel 문자열 제거하고
+trigger 만? 둘 다 유지?
+
+**결정**: sentinel 문자열 (`{...}` / `[N items]`) 그대로 + 옆에
+ChevronRight 아이콘 trigger. flex layout 으로 두 child.
+
+**근거**:
+1. sentinel 문자열은 "이 cell 이 composite 임" + "size hint" (배열 N
+   items) 정보 운반. 제거하면 정보 손실.
+2. trigger 만 노출하면 cell content 가 너무 sparse, 빈 cell 처럼 보임.
+3. 두 child 의 layout = `flex items-center gap-1` 로 단일 row 유지,
+   width 폭주 없음.
+
+**대안**:
+- trigger 만 (sentinel 제거) — 정보 손실.
+- sentinel 문자열을 자체 trigger 로 (별도 button 없음) — sentinel 의
+  click 이 기존 selection 동작과 충돌.
+
+**영향**: grid integration test "mounts the expand trigger on
+sentinel cells" + 기존 "renders composite sentinels via
+isDocumentSentinel with muted italic styling" 회귀 0.
+
+---

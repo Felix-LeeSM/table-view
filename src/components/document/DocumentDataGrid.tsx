@@ -32,6 +32,7 @@ import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import AddDocumentModal from "@components/document/AddDocumentModal";
 import CollectionReadOnlyBanner from "@components/document/CollectionReadOnlyBanner";
 import DocumentFilterBar from "@components/document/DocumentFilterBar";
+import NestedExpandPopover from "@components/document/NestedExpandPopover";
 import { Button } from "@components/ui/button";
 import { DOCUMENT_LABELS } from "@/lib/strings/document";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
@@ -766,8 +767,19 @@ export default function DocumentDataGrid({
                             null
                           </span>
                         ) : isSentinel ? (
-                          <span className="italic text-muted-foreground">
-                            {String(cell)}
+                          // Sprint 321 — Slice F.1: sentinel cell 옆에
+                          // expand popover trigger. raw_documents 의
+                          // 해당 field 값으로 1-depth inspect.
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span className="truncate italic text-muted-foreground">
+                              {String(cell)}
+                            </span>
+                            <NestedExpandPopover
+                              value={
+                                queryResult?.raw_documents[rowIdx]?.[col.name]
+                              }
+                              fieldName={col.name}
+                            />
                           </span>
                         ) : (
                           <span
