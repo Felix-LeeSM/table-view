@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { DEFAULT_THEME_ID, isThemeId, type ThemeId } from "./themeCatalog";
 
 export type ThemeMode = "system" | "light" | "dark";
@@ -89,6 +90,53 @@ export function applyMode(mode: ThemeMode): "light" | "dark" {
 export function bootTheme(): void {
   const state = readStoredState();
   applyTheme(state.themeId, state.mode);
+}
+
+/**
+ * Wave 9.5 회귀 7 (2026-05-17) — backend 가 theme 의 authoritative SOT 다.
+ * Tauri 2 의 각 webview 는 별도의 `localStorage` 를 갖기 때문에 launcher 의
+ * LS write 가 새로 열리는 workspace 의 LS 에 보이지 않는다. 그래서 새 창의
+ * 첫 paint 는 자기 LS 값 (대부분 비어있어서 `DEFAULT_THEME_ID = "slate"`) 으로
+ * 떨어지고, snapshot async hydrate 가 뒤늦게 도착해도 사용자가 짧은 slate flash
+ * 를 본다.
+ *
+ * 본 함수는 backend `get_setting("theme")` 으로 SQLite truth 를 읽고
+ * 1차 LS-fast-paint 와 다르면 DOM + LS 를 갱신한다. main.tsx 의 boot 가
+ * `bootTheme()` (LS fast paint) 직후 await 하여 새 webview 의 첫 render
+ * 전에 SQLite 값을 적용. Tauri 가 없는 환경 (vitest jsdom) 에서는 IPC 가
+ * throw → null 로 graceful fallback.
+ */
+export async function reconcileThemeFromBackend(): Promise<void> {
+  let raw: string | null;
+  try {
+    raw = await invoke<string | null>("get_setting", { key: "theme" });
+  } catch {
+    return;
+  }
+  if (raw === null) return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (typeof parsed !== "object" || parsed === null) return;
+  const candidate = parsed as Record<string, unknown>;
+  if (!isThemeId(candidate.themeId)) return;
+  if (!isThemeMode(candidate.mode)) return;
+  const backendState: ThemeState = {
+    themeId: candidate.themeId,
+    mode: candidate.mode,
+  };
+  const lsState = readStoredState();
+  if (
+    backendState.themeId === lsState.themeId &&
+    backendState.mode === lsState.mode
+  ) {
+    return;
+  }
+  applyTheme(backendState.themeId, backendState.mode);
+  writeStoredState(backendState);
 }
 
 /**

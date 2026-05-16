@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import AppRouter from "./AppRouter";
-import { bootTheme } from "@lib/themeBoot";
+import { bootTheme, reconcileThemeFromBackend } from "@lib/themeBoot";
 import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
 import { initSession } from "@lib/session-storage";
 import { getCurrentWindowLabel } from "@lib/window-label";
@@ -41,7 +41,16 @@ async function boot() {
   // work, so every later milestone delta is measured from the same point.
   markT0();
 
+  // Two-step theme boot:
+  // 1) `bootTheme()` 는 LS 만 sync 하게 읽어 첫 paint 의 DOM data-theme/-mode 를
+  //    즉시 적용 — FOUC 회피 fast path.
+  // 2) `reconcileThemeFromBackend()` 는 SQLite truth (`get_setting("theme")`) 을
+  //    await 한 뒤 LS 와 다르면 DOM + LS 를 갱신. Tauri 2 webview 들은 각자
+  //    별도 localStorage 를 가져서, 새로 열린 workspace 의 LS 는 비어있어 slate
+  //    flash 가 발생. 본 reconcile 이 보통 10–50ms 안에 완료되어 첫 React render
+  //    전에 정답값이 들어간다 (Wave 9.5 회귀 7 user 가설 적용).
   bootTheme();
+  await reconcileThemeFromBackend();
   markBootMilestone("theme:applied");
 
   // Session-scoped localStorage: fetch the process UUID from Rust so both
