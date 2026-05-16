@@ -4,6 +4,7 @@ import AppRouter from "./AppRouter";
 import { bootTheme, reconcileThemeFromBackend } from "@lib/themeBoot";
 import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
 import { initSession } from "@lib/session-storage";
+import { importLegacyLocalStorage } from "@lib/tauri/legacyImport";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   markBootMilestone,
@@ -50,6 +51,23 @@ async function boot() {
   //    flash 가 발생. 본 reconcile 이 보통 10–50ms 안에 완료되어 첫 React render
   //    전에 정답값이 들어간다 (Wave 9.5 회귀 7 user 가설 적용).
   bootTheme();
+
+  // Wave 9.5 회귀 7 (2026-05-17) — `meta.legacy_imported` 가 영원히 Pending
+  // 상태였다. sprint-355 의 frontend wrapper 는 만들어졌으나 boot path 어디서도
+  // 호출 안 되어 `guard_legacy_import_done` 이 모든 persist_* IPC 를 silent
+  // reject — SQLite 영원히 empty + 사용자가 클릭한 theme/safeMode/favorites/mru
+  // 가 영속 안 됨. 빈 payload 도 Pending → Done 전이 인정 (sprint-355 design
+  // idempotent). reconcile 보다 먼저 호출해 첫 클릭 race 회피. dev 단계 + 사용자
+  // 명시로 legacy LS scan (favorites/mru/connections) 은 별도 작업.
+  try {
+    await importLegacyLocalStorage({});
+  } catch (e) {
+    logger.warn(
+      "[main] importLegacyLocalStorage failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
   await reconcileThemeFromBackend();
   markBootMilestone("theme:applied");
 
