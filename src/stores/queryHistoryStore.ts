@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { Paradigm } from "@/types/connection";
 import type { QueryMode } from "@stores/workspaceStore";
+import {
+  addHistoryEntry as addHistoryEntryIpc,
+  type AddHistoryEntryRequest,
+  type HistoryListRow,
+} from "@lib/tauri/history";
+import { logger } from "@lib/logger";
 
 /**
  * `"cancelled"` widens the status so a user-aborted query records
@@ -89,8 +95,28 @@ interface QueryHistoryState {
   globalLog: QueryHistoryEntry[];
   searchFilter: string;
   connectionFilter: string | null;
+  /**
+   * sprint-372 (Phase 5 F.5) — thin-wrapper field. Visible history rows
+   * after a backend `list_history` fetch. Populated/managed by the
+   * `useQueryHistory` hook + cross-window `history.create` / `clear`
+   * receivers. The store itself only holds the slot so consumers that
+   * still read off zustand (transient, until sprint-373 retires the
+   * legacy `entries` / `globalLog`) can subscribe to it.
+   */
+  recentVisible: HistoryListRow[];
 
   addHistoryEntry: (entry: AddHistoryEntryPayload) => void;
+  /**
+   * sprint-372 — optimistic prepend after a user-triggered query, then
+   * fire-and-forget the backend `add_history_entry` IPC. Backend emits
+   * `history.create`; sprint-365 dispatcher self-echo-skips the origin
+   * window so we don't double-insert. Errors are best-effort
+   * (logger.warn only); the next backend list refetch is the recovery
+   * path.
+   */
+  addOptimisticEntry: (req: AddHistoryEntryRequest) => Promise<void>;
+  /** sprint-372 — `useQueryHistory` 의 list 결과를 store 에 저장. */
+  setRecentVisible: (rows: HistoryListRow[]) => void;
   clearHistory: () => void;
   clearGlobalLog: () => void;
   setSearchFilter: (filter: string) => void;
@@ -120,6 +146,55 @@ export const useQueryHistoryStore = create<QueryHistoryState>((set, get) => ({
   globalLog: [],
   searchFilter: "",
   connectionFilter: null,
+  recentVisible: [],
+
+  setRecentVisible: (rows) => set({ recentVisible: rows }),
+
+  addOptimisticEntry: async (req) => {
+    // 1. Optimistic prepend — sql_redacted 가 backend 생성이므로 본
+    //    시점에는 `sqlRedacted` 를 `sql` 로 채워둔다. backend 응답이
+    //    오면 정상 redact 본으로 덮어쓴다 (아래 set 호출).
+    const tempId = -Date.now();
+    const tempRow: HistoryListRow = {
+      id: tempId,
+      connectionId: req.connectionId,
+      tabId: req.tabId ?? null,
+      paradigm: req.paradigm,
+      queryMode: req.queryMode,
+      database: req.database ?? null,
+      collection: req.collection ?? null,
+      source: req.source,
+      sqlRedacted: req.sql,
+      status: req.status,
+      errorMessage: req.errorMessage ?? null,
+      rowsAffected: req.rowsAffected ?? null,
+      durationMs: req.durationMs,
+      executedAt: req.executedAt,
+      serverPid: req.serverPid ?? null,
+    };
+    set((state) => ({ recentVisible: [tempRow, ...state.recentVisible] }));
+
+    // 2. Backend IPC — emits `history.create`; origin window self-echoes
+    //    skip via sprint-365 dispatcher.
+    try {
+      const resp = await addHistoryEntryIpc(req);
+      set((state) => ({
+        recentVisible: state.recentVisible.map((r) =>
+          r.id === tempId
+            ? { ...r, id: resp.id, sqlRedacted: resp.sqlRedacted }
+            : r,
+        ),
+      }));
+    } catch (e) {
+      // best-effort — backend 가 reject 하면 다음 refetch 가 truth 를
+      // 다시 잡는다. optimistic row 는 그대로 두고 사용자에게는 보이는
+      // 그대로 — 잠시 후 새 list 에서 빠진다. logger 만 남긴다.
+      logger.warn(
+        "[queryHistoryStore.addOptimisticEntry] backend reject",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  },
 
   addHistoryEntry: (entry) => {
     historyCounter++;

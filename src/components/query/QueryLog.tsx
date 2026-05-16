@@ -1,11 +1,28 @@
+/**
+ * Toggle-driven dock panel that surfaces the user's recent query history
+ * sourced from the backend `list_history` IPC (sprint-372 conversion —
+ * was previously reading `useQueryHistoryStore.entries`).
+ *
+ * Sprint 372 (Phase 5 F.5) — backend single source of truth.
+ *   - `useQueryHistory` hook owns the IPC + cursor pagination + event
+ *     refetch wiring (`history.create` / `history.clear`).
+ *   - List response carries `sqlRedacted` only; the original SQL never
+ *     surfaces in this panel. Detail inspection opens
+ *     `QueryHistoryDetailModal` which fires `get_history_detail` on
+ *     mount (the only escape hatch from the redact-only invariant).
+ *   - The legacy `entries` reads (and the embedded ConfirmDialog clear
+ *     path) move to `ClearHistoryButton` for the IPC-driven clear
+ *     workflow.
+ */
+
 import { useEffect, useState } from "react";
-import { Search, Trash2, X } from "lucide-react";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { Search, X } from "lucide-react";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import ConfirmDialog from "@components/shared/ConfirmDialog";
 import QuerySyntax from "@components/shared/QuerySyntax";
-import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
+import { useQueryHistory } from "@hooks/useQueryHistory";
+import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
+import ClearHistoryButton from "@components/settings/ClearHistoryButton";
 
 function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
@@ -28,9 +45,13 @@ function formatRelativeTime(timestamp: number): string {
 export default function QueryLog() {
   const [isVisible, setIsVisible] = useState(false);
   const [search, setSearch] = useState("");
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const entries = useQueryHistoryStore((s) => s.entries);
-  const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
+  const [detailId, setDetailId] = useState<number | null>(null);
+
+  // No tab filter — QueryLog is the global dock view across all
+  // connections. The hook still keys off a single `list_history` IPC
+  // and uses cursor pagination via Load more.
+  const { rows, loading, hasMore, newEntryAvailable, loadMore, refresh } =
+    useQueryHistory({});
 
   useEffect(() => {
     const handler = () => {
@@ -42,13 +63,12 @@ export default function QueryLog() {
 
   if (!isVisible) return null;
 
-  const filtered = entries.filter((e) =>
-    e.sql.toLowerCase().includes(search.toLowerCase()),
+  // Backend already returns rows in DESC executedAt order; the search
+  // filter only narrows by the redacted text on the client. Switching
+  // to a backend search field is a sprint-373+ refinement.
+  const filtered = rows.filter((row) =>
+    row.sqlRedacted.toLowerCase().includes(search.toLowerCase()),
   );
-
-  const handleEntryClick = (sql: string) => {
-    window.dispatchEvent(new CustomEvent("insert-sql", { detail: { sql } }));
-  };
 
   return (
     <div
@@ -68,21 +88,29 @@ export default function QueryLog() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button
-          variant="ghost"
-          size="xs"
+        {newEntryAvailable && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-primary"
+            onClick={() => {
+              void refresh();
+            }}
+            data-testid="query-log-new-entry"
+          >
+            New entry — refresh
+          </Button>
+        )}
+        <ClearHistoryButton
+          label="Clear"
           className="gap-1 bg-muted text-muted-foreground hover:text-foreground"
-          onClick={() => setShowClearConfirm(true)}
-          aria-label="Clear history"
-        >
-          <Trash2 size={12} />
-          Clear
-        </Button>
+        />
         <Button
           variant="ghost"
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
           onClick={() => setIsVisible(false)}
+          aria-label="Close query log"
         >
           <X size={14} />
         </Button>
@@ -92,69 +120,77 @@ export default function QueryLog() {
       <div className="max-h-scroll-md overflow-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            {entries.length === 0
+            {rows.length === 0
               ? "No queries executed yet"
               : "No matching queries"}
           </div>
         ) : (
-          filtered.map((entry) => (
+          filtered.map((row) => (
             <Button
-              key={entry.id}
+              key={row.id}
               variant="ghost"
               size="xs"
               className="w-full justify-start gap-2 px-3 py-1 text-left font-normal rounded-none h-auto"
-              onClick={() => handleEntryClick(entry.sql)}
+              onClick={() => setDetailId(row.id)}
+              data-testid={`query-log-row-${row.id}`}
             >
               {/* Cancelled queries paint a muted dot, not destructive
                   red, so a self-abort is visually distinct from a real
                   error. */}
               <span
                 className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                  entry.status === "success"
+                  row.status === "success"
                     ? "bg-success"
-                    : entry.status === "cancelled"
+                    : row.status === "cancelled"
                       ? "bg-muted-foreground"
                       : "bg-destructive"
                 }`}
-                title={entry.status}
-                data-status={entry.status}
+                title={row.status}
+                data-status={row.status}
               />
               {/* Truncate first (preserves the 80-char invariant), then
                   route through the paradigm dispatcher so Mongo entries
                   surface MQL operator coloring and RDB entries keep SQL
-                  keyword treatment. */}
+                  keyword treatment. The list IPC sends only
+                  `sqlRedacted` — original SQL never leaves the detail
+                  modal. */}
               <QuerySyntax
                 className="flex-1 truncate text-foreground"
-                sql={truncateSql(entry.sql, 80)}
-                paradigm={entry.paradigm}
-                queryMode={entry.queryMode}
+                sql={truncateSql(row.sqlRedacted, 80)}
+                paradigm={row.paradigm}
               />
-              {/* `raw` source is suppressed inside the badge component. */}
-              <QueryHistorySourceBadge source={entry.source} />
               {/* Timestamp */}
               <span className="shrink-0 text-muted-foreground">
-                {formatRelativeTime(entry.executedAt)}
+                {formatRelativeTime(row.executedAt)}
               </span>
               {/* Duration badge */}
               <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
-                {entry.duration}ms
+                {row.durationMs}ms
               </span>
             </Button>
           ))
         )}
+        {hasMore && (
+          <div className="flex items-center justify-center px-3 py-1.5">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                void loadMore();
+              }}
+              disabled={loading}
+              data-testid="query-log-load-more"
+            >
+              {loading ? "Loading…" : "Load more"}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {showClearConfirm && (
-        <ConfirmDialog
-          title="Clear Query History"
-          message="Are you sure you want to clear all query history? This cannot be undone."
-          confirmLabel="Clear All"
-          danger
-          onConfirm={() => {
-            clearHistory();
-            setShowClearConfirm(false);
-          }}
-          onCancel={() => setShowClearConfirm(false)}
+      {detailId !== null && (
+        <QueryHistoryDetailModal
+          id={detailId}
+          onClose={() => setDetailId(null)}
         />
       )}
     </div>
