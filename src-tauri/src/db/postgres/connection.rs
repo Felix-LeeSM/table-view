@@ -335,6 +335,64 @@ impl PostgresAdapter {
             .map_err(|e| AppError::Connection(e.to_string()))?;
         Ok(())
     }
+
+    /// Sprint 359 (Q5.3 PG) — `SELECT pg_cancel_backend(<pid>)` on a
+    /// **fresh, side connection**. Reusing the active pool is unsafe
+    /// because the pid we are targeting may itself be sitting on a
+    /// connection that the active sub-pool just lent out and is currently
+    /// servicing the slow query. The side connection comes up against the
+    /// stored credentials with a 5-second acquire timeout — cancellation
+    /// should not hang the UI for longer than the user's "Stop" click.
+    ///
+    /// Maps PG outcomes onto `AppError` so the IPC `classify_cancel_error`
+    /// helper can re-classify:
+    /// * `pg_cancel_backend` returns `true`  → `Ok(())`.
+    /// * returns `false`                     → `AppError::Database("permission denied for pg_cancel_backend")` (privilege).
+    /// * driver fault                         → `AppError::Database(<original message>)`.
+    /// * adapter disconnected                 → `AppError::Connection`.
+    pub async fn cancel_query_native(&self, pid: i64) -> Result<(), AppError> {
+        // Clone the stored config out so we never hold the inner mutex
+        // across the side-connection await.
+        let config = {
+            let guard = self.inner.lock().await;
+            guard
+                .config
+                .clone()
+                .ok_or_else(|| AppError::Connection("Not connected — cannot issue cancel".into()))?
+        };
+
+        let options = Self::connect_options(&config);
+        // 5-second hard ceiling — cancel should be sub-second on a healthy
+        // network; longer than that the user's intent is to give up
+        // anyway.
+        let cancel_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect_with(options)
+            .await
+            .map_err(|e| AppError::Database(format!("cancel side-connect failed: {e}")))?;
+
+        // pg_cancel_backend returns a bool. We pull it as i64 → bool via
+        // a CASE — sqlx's scalar inference is rocky around 'bool'.
+        let cancelled: bool = sqlx::query_scalar("SELECT pg_cancel_backend($1)")
+            .bind(pid as i32)
+            .fetch_one(&cancel_pool)
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        cancel_pool.close().await;
+
+        if cancelled {
+            Ok(())
+        } else {
+            // Caller classifies as PermissionDenied via the "permission"
+            // keyword. PG never tells us *why* the cancel returned false
+            // beyond signaling the lack of privilege.
+            Err(AppError::Database(
+                "permission denied for pg_cancel_backend (different user or no privilege)".into(),
+            ))
+        }
+    }
 }
 
 pub(super) fn is_pg_database_permission_denied(err: &sqlx::Error) -> bool {

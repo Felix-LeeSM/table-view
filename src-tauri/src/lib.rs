@@ -5,6 +5,7 @@ pub mod db;
 pub mod error;
 pub mod launcher;
 pub mod models;
+pub mod state;
 pub mod storage;
 
 use commands::connection::AppState;
@@ -142,6 +143,13 @@ pub fn run() {
         commands::persist_mru::persist_mru,
         commands::persist_settings::persist_setting,
         commands::persist_workspace::persist_workspace,
+        // Sprint 359 (Phase 2 Q5.3 / Q5.5) — paradigm-native cancel +
+        // tab affinity release. The legacy cooperative `cancel_query(query_id)`
+        // stays (rdb::query::cancel_query) for short schema-introspection
+        // paths; this new IPC fires `pg_cancel_backend` / `KILL QUERY` /
+        // `killOp` against the server pid stored in `AppState.tab_affinity`.
+        commands::cancel_query::cancel_query_native,
+        commands::release_tab_connection::release_tab_connection,
         commands::connection::crud::list_connections,
         commands::connection::session::get_session_id,
         commands::connection::crud::save_connection,

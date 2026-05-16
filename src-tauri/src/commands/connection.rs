@@ -30,6 +30,7 @@ use crate::db::postgres::PostgresAdapter;
 use crate::db::ActiveAdapter;
 use crate::error::AppError;
 use crate::models::{ConnectionConfigPublic, ConnectionStatus, DatabaseType};
+use crate::state::introspection_pool::IntrospectionPool;
 
 pub mod crud;
 pub mod groups;
@@ -93,6 +94,25 @@ pub struct TestConnectionRequest {
     pub existing_id: Option<String>,
 }
 
+/// Sprint 359 — per-tab connection affinity record.
+///
+/// Lives in `AppState.tab_affinity` under `(connection_id, tab_id)` so the
+/// same `tab_id` opened against two distinct connections never collides
+/// (codex 7차 #4). Stores the **native server-side identifier** used by
+/// `cancel_query_native`:
+///
+/// * PostgreSQL → `pg_backend_pid()` (i32 surfaced as i64).
+/// * MySQL      → `CONNECTION_ID()` thread id (u64 → i64 fits).
+/// * MongoDB    → opid (server-assigned) discovered at execute time.
+///
+/// Boot value is `None` for every tab (Q5.6 lazy) — we materialise the
+/// record only after the first `executeQuery(tab_id, …)` round-trip
+/// records a real server pid.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TabAffinity {
+    pub server_pid: i64,
+}
+
 pub struct AppState {
     /// Active adapter handles keyed by `ConnectionConfig::id`.
     ///
@@ -105,6 +125,27 @@ pub struct AppState {
     pub connection_status: Mutex<HashMap<String, ConnectionStatus>>,
     pub keep_alive_handles: Mutex<HashMap<String, JoinHandle<()>>>,
     pub query_tokens: Mutex<HashMap<String, CancellationToken>>,
+    /// Sprint 359 (Q5.1 / Q5.6) — per-tab native-cancel affinity.
+    ///
+    /// Boot state is an empty map: every tab starts with no record
+    /// (`None`-equivalent), and the first successful `executeQuery(tab_id,
+    /// …)` writes a `TabAffinity { server_pid }`. `release_tab_connection`
+    /// removes the entry and `cancel_query_native` reads the `server_pid`
+    /// for the paradigm-native abort call.
+    ///
+    /// Keyed by `(connection_id, tab_id)` so the same tab id can coexist
+    /// across two different connections (codex 7차 #4 — connection scope).
+    pub tab_affinity: Mutex<HashMap<(String, String), TabAffinity>>,
+    /// Sprint 359 (Q5.4) — per-connection **introspection pool** selector.
+    ///
+    /// Sidebar / autocomplete / prefetch borrow idle slots from this map
+    /// instead of the tab pool, so a long user query in tab affinity
+    /// never starves schema introspection. Lookup is `connection_id`,
+    /// the slot count is `max_K=5` (strategy doc line 465). Real
+    /// `pool.acquire()` rewiring of schema commands is the follow-up
+    /// step — this surface is the structural precursor sidebar callers
+    /// will start consuming in sprint-360+.
+    pub introspection_pools: Mutex<HashMap<String, IntrospectionPool>>,
     /// Session-scoped UUID generated once per app process. Shared by all
     /// windows so they can agree on which localStorage entries are "current
     /// session" vs stale from a previous run.
@@ -118,6 +159,8 @@ impl AppState {
             connection_status: Mutex::new(HashMap::new()),
             keep_alive_handles: Mutex::new(HashMap::new()),
             query_tokens: Mutex::new(HashMap::new()),
+            tab_affinity: Mutex::new(HashMap::new()),
+            introspection_pools: Mutex::new(HashMap::new()),
             session_id: uuid::Uuid::new_v4().to_string(),
         }
     }

@@ -1,3 +1,4 @@
+pub mod cancel_query;
 pub mod connection;
 pub mod document;
 pub mod export;
@@ -12,6 +13,7 @@ pub mod persist_settings;
 pub mod persist_workspace;
 pub mod query;
 pub mod rdb;
+pub mod release_tab_connection;
 pub mod snapshot;
 pub mod sqlite_pool;
 

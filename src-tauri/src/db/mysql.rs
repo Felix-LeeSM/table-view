@@ -62,6 +62,13 @@ impl DbAdapter for MysqlAdapter {
     fn ping<'a>(&'a self) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
         Box::pin(async move { MysqlAdapter::ping(self).await })
     }
+
+    fn cancel_query<'a>(
+        &'a self,
+        server_pid: i64,
+    ) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+        Box::pin(async move { self.cancel_query_native(server_pid).await })
+    }
 }
 
 impl RdbAdapter for MysqlAdapter {

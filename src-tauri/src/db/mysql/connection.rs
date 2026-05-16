@@ -270,6 +270,69 @@ impl MysqlAdapter {
             .map_err(|e| AppError::Connection(e.to_string()))?;
         Ok(())
     }
+
+    /// Sprint 359 (Q5.3 MySQL) — `KILL QUERY <thread_id>` on a **fresh,
+    /// side connection**. The thread we are killing is busy executing
+    /// the slow statement so it cannot accept the cancel itself; we open
+    /// a dedicated 1-connection pool with a 5-second acquire timeout.
+    ///
+    /// MySQL semantics:
+    /// * Success                → server replies OK, statement aborted.
+    /// * Unknown thread id      → ER_NO_SUCH_THREAD (1094) — we surface
+    ///   "unknown thread" so `classify_cancel_error` folds it onto
+    ///   `AlreadyCompleted`.
+    /// * Insufficient privilege → ER_KILL_DENIED_ERROR (1095) — surfaced
+    ///   with "permission" so classification yields `PermissionDenied`.
+    /// * Driver fault           → original sqlx error string forwarded.
+    pub async fn cancel_query_native(&self, thread_id: i64) -> Result<(), AppError> {
+        let config = {
+            let guard = self.inner.lock().await;
+            guard
+                .config
+                .clone()
+                .ok_or_else(|| AppError::Connection("Not connected — cannot issue cancel".into()))?
+        };
+
+        let options = Self::connect_options(&config);
+        let cancel_pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect_with(options)
+            .await
+            .map_err(|e| AppError::Database(format!("cancel side-connect failed: {e}")))?;
+
+        // KILL QUERY accepts no parameter binding — build the SQL with
+        // the integer interpolated directly. Cast `thread_id` to u64 so
+        // negative numbers (impossible in MySQL but possible from
+        // callers) never produce a leading minus.
+        let safe_id = thread_id.max(0) as u64;
+        let sql = format!("KILL QUERY {safe_id}");
+        let result = sqlx::query(&sql).execute(&cancel_pool).await;
+
+        cancel_pool.close().await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let msg = e.to_string();
+                // Re-shape the canonical MySQL strings so classify_cancel_error
+                // routes onto our three buckets deterministically.
+                let normalised = if msg.contains("1094")
+                    || msg.to_ascii_lowercase().contains("unknown thread id")
+                {
+                    format!("unknown thread id: {msg}")
+                } else if msg.contains("1095")
+                    || msg.to_ascii_lowercase().contains("not permitted")
+                    || msg.to_ascii_lowercase().contains("kill denied")
+                {
+                    format!("permission denied: {msg}")
+                } else {
+                    msg
+                };
+                Err(AppError::Database(normalised))
+            }
+        }
+    }
 }
 
 /// LRU front 의 `current` 가 아닌 첫 entry 를 eviction 대상으로 선택. PG

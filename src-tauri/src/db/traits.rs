@@ -36,6 +36,31 @@ pub trait DbAdapter: Send + Sync {
     fn disconnect<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
 
     fn ping<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
+
+    /// Sprint 359 (Phase 2 Q5.3) — paradigm-native cancel for a running
+    /// statement.
+    ///
+    /// `server_pid` is the server-side identifier captured at executeQuery
+    /// time and stored in `AppState.tab_affinity`:
+    ///
+    /// * PostgreSQL → `pg_backend_pid()` (i32 surfaced as i64).
+    /// * MySQL      → `CONNECTION_ID()` thread id (u64 → i64 fits).
+    /// * MongoDB    → opid materialised by the runner mid-query.
+    ///
+    /// Concrete implementations open a **separate, fresh connection**
+    /// before issuing the cancel — re-using the in-flight connection is
+    /// impossible because it is currently consumed by the statement we
+    /// are trying to abort. The default body returns `Unsupported` so
+    /// paradigms that have not wired this yet still type-check; the
+    /// frontend wrapper folds `Unsupported` into the legacy cooperative
+    /// `cancel_query(query_id)` path.
+    fn cancel_query<'a>(&'a self, _server_pid: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async {
+            Err(AppError::Unsupported(
+                "This adapter does not support native cancel".into(),
+            ))
+        })
+    }
 }
 
 // ── RdbAdapter ────────────────────────────────────────────────────────────

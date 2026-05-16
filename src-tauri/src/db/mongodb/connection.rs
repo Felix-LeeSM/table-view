@@ -326,6 +326,15 @@ impl DbAdapter for MongoAdapter {
                 .map_err(|e| AppError::Connection(format!("MongoDB ping failed: {e}")))
         })
     }
+
+    /// Sprint 359 (Q5.3 Mongo) — delegate to `kill_op_impl`, the live
+    /// `adminCommand({killOp: 1, op: <opid>})` from sprint-336. The IPC
+    /// surface stays uniform (`server_pid` field) while the Mongo wire
+    /// uses the opid materialised by the runner. Errors propagate the
+    /// driver message verbatim so `classify_cancel_error` can bucket.
+    fn cancel_query<'a>(&'a self, server_pid: i64) -> BoxFuture<'a, Result<(), AppError>> {
+        Box::pin(async move { self.kill_op_impl(server_pid).await })
+    }
 }
 
 #[cfg(test)]
