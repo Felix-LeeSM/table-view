@@ -77,13 +77,20 @@
   --spacing-execute-label: 16.25rem; /* 260px */
 }
 
-/* Sprint 345 (ADR 0031) + Wave 9.5 (2026-05-16, 회귀 2) — theme-agnostic
+/* Sprint 345 (ADR 0031) + Wave 9.5 (2026-05-16, 회귀 2/3) — theme-agnostic
  * baseline.
  *
  * 새 테마가 토큰 정의를 잊거나 `data-theme` 가 unknown id 일 때 cascade 로
- * slate 값을 발동시킨다. specificity (0,1,1) — `[data-theme="X"][data-mode="Y"]`
- * 테마 블록 (0,2,0) 보다 낮아 정의된 곳은 자동 override 되고, 누락 시
- * 시각 깨짐 (transparent 색) 없이 slate placeholder 가 보인다.
+ * slate 값을 발동시킨다. **specificity (0,0,0)** — `:where()` 로 감싸 모든
+ * `[data-theme="X"][data-mode="Y"]` 테마 블록 (specificity (0,2,0)) 이
+ * cascade 에서 항상 이긴다. 누락 시 시각 깨짐 (transparent 색) 없이 slate
+ * placeholder 가 보인다.
+ *
+ * 회귀 3 (2026-05-16): 이전엔 `:root[data-mode="X"]` 그대로 사용 → 실제
+ * specificity 가 (0,2,0) 으로 테마 블록과 동률이라 cascade order (fallback 이
+ * `@import "./themes.css"` 뒤에 정의됨) 로 fallback 이 모든 테마를 덮어써
+ * "모든 테마가 slate 로 고정" 회귀 발생. `:where()` wrapping 으로 fix.
+ * Regression guard: `index-css.theme-cascade.test.ts`.
  *
  * 범위 — Wave 9.5 이전엔 `--tv-syntax-*` 12 토큰만 fallback 이었다. 사용자
  * SQLite tamper / 첫 부팅 + 빈 LS / 신규 테마 incomplete 정의 등 모든 시각
@@ -96,7 +103,7 @@
  * 둔다. mode 분기는 light/dark 별 적절 톤 보장 (dark bg 에 light syntax
  * 가 들어가 대비가 깨지는 일 방지).
  */
-:root[data-mode="light"] {
+:where(:root[data-mode="light"]) {
   /* UI base (slate light mirror) */
   --tv-background: #ffffff;
   --tv-foreground: #0f172a;
@@ -134,7 +141,7 @@
   --tv-syntax-comment: #64748b;
   --tv-syntax-error: #dc2626;
 }
-:root[data-mode="dark"] {
+:where(:root[data-mode="dark"]) {
   /* UI base (slate dark mirror) */
   --tv-background: #0f172a;
   --tv-foreground: #f1f5f9;
