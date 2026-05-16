@@ -18,12 +18,15 @@ interface ThemeStoreState {
   mode: ThemeMode;
   resolvedMode: "light" | "dark";
 
-  // Sprint 368 (Phase 4 Q12) — actions are backend-first. `setTheme` /
-  // `setMode` / `setState` issue `persist_setting("theme", JSON)` IPC and
-  // only mutate the store + sync LS after the IPC resolves. Reject path
-  // re-throws so callers can surface a toast; the store stays at the last
-  // successfully-persisted value so the next boot's FOUC cache (LS) stays
-  // consistent with SQLite truth.
+  // Wave 9.5 회귀 6 / 7 (2026-05-17) — optimistic UI. sprint-368 의
+  // backend-first contract (IPC 응답 후 store mutate) 는 backend reject /
+  // dev rebuild miss 시 사용자가 click 후 silent stuck — "테마 선택이 안 됨"
+  // 으로 보임. theme/safeMode 같은 user preference 는 강한 일관성 불필요;
+  // 사용자가 보는 즉각적 시각 변화 (DOM data-theme) 가 우선이고 SQLite truth 는
+  // 다음 boot 의 reconcile path 가 회복. 액션은 (1) 먼저 store mutate (즉시
+  // subscriber → DOM/LS/cross-window broadcast), (2) 그 다음 fire-and-forget
+  // 으로 `persist_setting` IPC. IPC reject 는 logger.warn 만 — re-throw 안
+  // 함 (사용자에게는 이미 시각적으로 적용됨).
   setTheme: (themeId: ThemeId) => Promise<void>;
   setMode: (mode: ThemeMode) => Promise<void>;
   setState: (state: ThemeState) => Promise<void>;
@@ -63,56 +66,49 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
 
   setTheme: async (themeId) => {
     const { mode } = get();
-    try {
-      await persistThemeSetting({ themeId, mode });
-    } catch (e) {
-      // Wave 9.5 회귀 6 (2026-05-16) — 이전에는 reject 가 unhandled 로 떨어졌다.
-      // dev console 에 흔적 남기되 sprint-368 backend-first contract 유지:
-      // store 는 mutate 하지 않고 caller 가 toast 띄울 수 있도록 re-throw.
-      logger.warn(
-        "[themeStore] setTheme persist_setting failed:",
-        e instanceof Error ? e.message : e,
-      );
-      throw e;
-    }
     // `resolvedMode` is recomputed here (rather than relying on the
     // subscriber) because `system` mode resolution depends on the
     // process's current `prefers-color-scheme` reading — setting the
     // same `mode` literal can still flip `resolvedMode` if the OS
-    // theme toggled between calls (e.g. day/night switch). The
-    // subscriber short-circuits on `themeId|mode` equality, so a
-    // resolvedMode-only delta would be missed.
+    // theme toggled between calls. The subscriber short-circuits on
+    // `themeId|mode` equality, so a resolvedMode-only delta would be missed.
     const resolved = resolveMode(mode);
     set({ themeId, resolvedMode: resolved });
+    try {
+      await persistThemeSetting({ themeId, mode });
+    } catch (e) {
+      logger.warn(
+        "[themeStore] setTheme persist_setting failed (UI already applied; next-boot reconcile path will recover):",
+        e instanceof Error ? e.message : e,
+      );
+    }
   },
 
   setMode: async (mode) => {
     const { themeId } = get();
+    const resolved = resolveMode(mode);
+    set({ mode, resolvedMode: resolved });
     try {
       await persistThemeSetting({ themeId, mode });
     } catch (e) {
       logger.warn(
-        "[themeStore] setMode persist_setting failed:",
+        "[themeStore] setMode persist_setting failed (UI already applied):",
         e instanceof Error ? e.message : e,
       );
-      throw e;
     }
-    const resolved = resolveMode(mode);
-    set({ mode, resolvedMode: resolved });
   },
 
   setState: async ({ themeId, mode }) => {
+    const resolved = resolveMode(mode);
+    set({ themeId, mode, resolvedMode: resolved });
     try {
       await persistThemeSetting({ themeId, mode });
     } catch (e) {
       logger.warn(
-        "[themeStore] setState persist_setting failed:",
+        "[themeStore] setState persist_setting failed (UI already applied):",
         e instanceof Error ? e.message : e,
       );
-      throw e;
     }
-    const resolved = resolveMode(mode);
-    set({ themeId, mode, resolvedMode: resolved });
   },
 
   hydrate: () => {

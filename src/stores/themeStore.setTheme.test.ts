@@ -1,16 +1,21 @@
 /**
  * 작성 2026-05-16 (Phase 4 sprint-368, AC-368-01)
+ * 2026-05-17 update (Wave 9.5 회귀 6/7) — backend-first contract 를 optimistic
+ * UI 로 전환. 진짜 사용자 보고 "테마 선택이 안 됨" 의 root cause 는 backend
+ * reject / dev rebuild miss 시 store 가 mutate 안 되어 사용자가 silent stuck
+ * 이었다. theme 같은 user preference 는 강한 일관성이 user-perceivable
+ * 응답성보다 중요하지 않다 — 즉시 mutate + fire-and-forget persist, IPC
+ * reject 는 logger.warn 만. SQLite 일관성은 next-boot reconcile path 가 복구.
  *
- * 사유: Q12 Theme/SafeMode SQLite SOT 전환 — `setTheme` / `setMode` 액션은
- * IPC `set_setting("theme", JSON)` (backend-first) 호출 후에만 store 를
- * mutate 하고 LS (`table-view-theme`) 에 sync write 해야 한다.
+ * 새 contract:
+ *   1. 액션 호출 직후 store mutate (sync — subscriber 즉시 fire → DOM/LS/cross-window)
+ *   2. fire-and-forget `persist_setting` IPC 1회 호출
+ *   3. IPC reject 시: logger.warn 만, store 상태 unchanged from mutate
+ *      (사용자 시각에는 이미 적용된 상태)
  *
- *   1. IPC `persist_setting({key:"theme", valueJson: …})` 1회 호출
- *   2. 응답 후 store mutate (themeId / mode)
- *   3. LS sync write 1회 (FOUC cache)
- *
- * 회귀 시: (a) 직접 LS write 만 일어나 SQLite 에 반영 안 됨, (b) IPC reject
- * 시 store 가 stale 값으로 남아 다른 window 와 불일치.
+ * 회귀 시: (a) IPC 누락 → SQLite 갱신 안 됨 + cross-window 알림 누락,
+ * (b) store mutate 가 IPC 응답에 묶여 backend stuck 시 click 후 silent
+ * stuck 회귀 (Wave 9.5 회귀 6).
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -119,21 +124,29 @@ describe("AC-368-01 setTheme backend-first", () => {
     expect(useThemeStore.getState().mode).toBe("dark");
   });
 
-  it("setTheme IPC reject does NOT mutate store nor write LS", async () => {
+  it("setTheme IPC reject still mutates store (optimistic UI) + does NOT re-throw", async () => {
+    // Wave 9.5 회귀 6/7 (2026-05-17) — backend-first contract 를 optimistic
+    // 으로 전환. backend stuck 시 사용자가 silent stuck 회귀하던 path 를 차단.
     invokeMock.mockRejectedValueOnce(new Error("forced fail"));
     const initial = useThemeStore.getState();
     expect(initial.themeId).toBe(DEFAULT_THEME_ID);
 
-    await expect(useThemeStore.getState().setTheme("github")).rejects.toThrow(
-      "forced fail",
-    );
+    // No throw: action 은 fire-and-forget persist, reject 는 logger.warn 만.
+    await expect(
+      useThemeStore.getState().setTheme("github"),
+    ).resolves.toBeUndefined();
 
-    // Store unchanged
-    expect(useThemeStore.getState().themeId).toBe(DEFAULT_THEME_ID);
-    // LS not written for theme key
+    // Store mutated optimistically — 사용자가 보는 invariant.
+    expect(useThemeStore.getState().themeId).toBe("github");
+    // LS written via subscriber — DOM 과 같이 즉시 적용.
     const themeLsCalls = localStorageMock.setItem.mock.calls.filter(
       (call) => call[0] === THEME_STORAGE_KEY,
     );
-    expect(themeLsCalls).toHaveLength(0);
+    expect(themeLsCalls.length).toBeGreaterThanOrEqual(1);
+    const last = themeLsCalls[themeLsCalls.length - 1]!;
+    expect(JSON.parse(last[1])).toEqual({
+      themeId: "github",
+      mode: "system",
+    });
   });
 });
