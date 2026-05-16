@@ -248,7 +248,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
             ws.activeTabId === tabId
               ? (remaining[remaining.length - 1]?.id ?? null)
               : ws.activeTabId;
-          const newHistory = [closingTab, ...ws.closedTabHistory].slice(0, 20);
+          const newHistory = [closingTab, ...ws.closedTabHistory].slice(0, 25);
           const dirtyTabIds = ws.dirtyTabIds.includes(tabId)
             ? ws.dirtyTabIds.filter((id) => id !== tabId)
             : ws.dirtyTabIds;

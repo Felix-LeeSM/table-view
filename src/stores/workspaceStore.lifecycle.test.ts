@@ -262,4 +262,42 @@ describe("workspaceStore — lifecycle", () => {
     expect(ws.tabs[0]!.id).toBe(activeId);
     expect(ws.activeTabId).toBe(activeId);
   });
+
+  // Sprint 353 (AC-353-05, 2026-05-16) — in-memory closedTabHistory cap
+  // was 20; Q19 raises it to 25 so the dehydration cap and the in-memory
+  // cap agree (newest-first, oldest dropped on overflow).
+  it("AC-353-05 — caps in-memory closedTabHistory at 25 entries; the 26th close drops the oldest", () => {
+    const store = useWorkspaceStore.getState();
+    // Add 26 tabs to the same workspace so we can close them one by one.
+    const ids: string[] = [];
+    for (let i = 0; i < 26; i += 1) {
+      // `permanent: true` skips preview-slot replacement so each call
+      // appends a fresh tab; otherwise `addTab` reuses the single
+      // preview slot for the same (connectionId, subView) and we'd end
+      // up with one tab regardless of how many calls were made.
+      store.addTab(
+        "conn1",
+        makeTableInit({
+          table: `t${i}`,
+          title: `t${i}`,
+          permanent: true,
+        }),
+      );
+      const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];
+      ids.push(ws!.tabs[ws!.tabs.length - 1]!.id);
+    }
+
+    // Close in insertion order. After 26 closes the history should have
+    // dropped the very first one (oldest) and kept the most recent 25.
+    for (const id of ids) {
+      useWorkspaceStore.getState().removeTab("conn1", "dbA", id);
+    }
+
+    const ws = useWorkspaceStore.getState().workspaces["conn1"]!["dbA"]!;
+    expect(ws.closedTabHistory).toHaveLength(25);
+    // Newest-first: index 0 is the most recently closed (id[25]).
+    expect(ws.closedTabHistory[0]!.id).toBe(ids[25]);
+    // The oldest survivor is id[1]; id[0] was evicted as the 26th overflow.
+    expect(ws.closedTabHistory[24]!.id).toBe(ids[1]);
+  });
 });

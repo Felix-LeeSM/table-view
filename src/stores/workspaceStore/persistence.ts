@@ -13,14 +13,54 @@ import type { QueryMode, Tab, WorkspaceState } from "./types";
 
 export const STORAGE_KEY = "table-view-workspaces";
 
+/**
+ * Sprint 353 (Phase 0 dehydration, state-management-strategy Q16/M-1).
+ * Strips memory-only fields from a `WorkspaceState` before LS write so
+ * the persisted blob carries no transient invariants.
+ */
+function stripQueryState(tab: Tab): Tab {
+  if (tab.type !== "query") return tab;
+  return { ...tab, queryState: { status: "idle" as const } };
+}
+
+export function dehydrate(state: WorkspaceState): WorkspaceState {
+  return {
+    ...state,
+    dirtyTabIds: [],
+    sidebar: {
+      ...state.sidebar,
+      selectedNode: null,
+      scrollTop: 0,
+    },
+    tabs: state.tabs.map(stripQueryState),
+    closedTabHistory: state.closedTabHistory.slice(0, 25).map(stripQueryState),
+  };
+}
+
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 export type WorkspacesShape = Record<string, Record<string, WorkspaceState>>;
 
+function dehydrateAll(workspaces: WorkspacesShape): WorkspacesShape {
+  const out: WorkspacesShape = {};
+  for (const connId of Object.keys(workspaces)) {
+    const byDb = workspaces[connId];
+    if (!byDb) continue;
+    const conn: Record<string, WorkspaceState> = {};
+    for (const db of Object.keys(byDb)) {
+      const ws = byDb[db];
+      if (!ws) continue;
+      conn[db] = dehydrate(ws);
+    }
+    out[connId] = conn;
+  }
+  return out;
+}
+
 export function persistWorkspaces(workspaces: WorkspacesShape): void {
   if (typeof window === "undefined") return;
   try {
-    const data = JSON.stringify({ workspaces });
+    const data = JSON.stringify({ workspaces: dehydrateAll(workspaces) });
     window.localStorage.setItem(STORAGE_KEY, data);
   } catch {
     // localStorage unavailable (SSR, quota); persistence is best-effort.
