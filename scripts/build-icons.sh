@@ -2,16 +2,25 @@
 # Regenerate every platform icon from the layered source in src-tauri/icons-src/.
 #
 # Layers
-#   background.svg — brown gradient (no inset, fills canvas)
-#   midground.svg  — back card, semi-transparent (inset to 824/1024 safe-area)
-#   foreground.svg — front card + text lines (inset to 824/1024)
+#   composite.svg  — full colored artwork (brown gradient + 2 cards),
+#                    1024 canvas. The single source for the macOS .icon. We
+#                    don't decompose into separate background/midground/
+#                    foreground PNG layers because `actool` then treats them
+#                    as monochrome silhouettes for Liquid Glass tinting,
+#                    bleaching out our brand colors. Single layer + glass:false
+#                    in icon.json preserves the colors while still letting
+#                    Tahoe apply its squircle mask + subtle lighting.
+#   foreground.svg — cards on transparent canvas, used as the Windows ICO
+#                    source and the Android `android_fg` adaptive layer.
+#   background.svg — brown gradient on full canvas, used as Android `android_bg`.
 #
 # Per-platform handling
-#   macOS  — Liquid Glass via .icon → Assets.car (actool), CFBundleIconName=AppIcon
-#   Windows — cards-only transparent ICO (no brown background, no squircle)
-#   Android — adaptive icon: brown gradient as android_bg, cards as android_fg
-#   Other  — `tauri icon` default raster set (PNG/iOS) generated from the
-#            squircle composite in public/logo-mark.svg
+#   macOS  — single-layer .icon → Assets.car (actool), CFBundleIconName=AppIcon.
+#            Tahoe auto-applies squircle + Liquid Glass material highlights.
+#   Windows — cards-only transparent ICO (no brown background, no squircle).
+#   Android — adaptive icon: gradient as android_bg, cards as android_fg.
+#   Other  — `tauri icon` default raster set generated from the squircle
+#            composite in public/logo-mark.svg.
 #
 # Required tools
 #   rsvg-convert  (brew install librsvg)
@@ -33,9 +42,15 @@ command -v actool       >/dev/null || { echo "actool missing — full Xcode + xc
 
 echo "==> rasterizing layers"
 mkdir -p "$ICON_PKG/Assets"
-rsvg-convert -w 1024 -h 1024 "$SRC/background.svg" -o "$ICON_PKG/Assets/background.png"
-rsvg-convert -w 1024 -h 1024 "$SRC/midground.svg"  -o "$ICON_PKG/Assets/midground.png"
-rsvg-convert -w 1024 -h 1024 "$SRC/foreground.svg" -o "$ICON_PKG/Assets/foreground.png"
+# Composite is the only PNG that ends up inside the .icon package (Liquid Glass).
+# The other two are auxiliary rasters used downstream by tauri-icon (Android
+# adaptive layers + Windows ICO source); they live in a tmp dir to avoid
+# leaving stale build artifacts in the tracked tree.
+RASTER_DIR="$(mktemp -d)"
+trap 'rm -rf "$RASTER_DIR"' EXIT
+rsvg-convert -w 1024 -h 1024 "$SRC/composite.svg"  -o "$ICON_PKG/Assets/composite.png"
+rsvg-convert -w 1024 -h 1024 "$SRC/background.svg" -o "$RASTER_DIR/background.png"
+rsvg-convert -w 1024 -h 1024 "$SRC/foreground.svg" -o "$RASTER_DIR/foreground.png"
 
 echo "==> compiling .icon (Liquid Glass)"
 mkdir -p "$COMPILED"
@@ -51,29 +66,26 @@ actool "$ICON_PKG" \
   --platform macosx
 
 echo "==> generating default raster set via tauri icon (manifest = adaptive Android)"
-# Manifest is written to a tmp dir so we don't pollute the source tree. The
-# default raster (icon.icns / icon.png / iOS) is generated from the squircle
-# composite in public/logo-mark.svg; Android adaptive layers come straight from
-# the rasterized 1024 PNGs in AppIcon.icon/Assets/.
-MANIFEST_DIR="$(mktemp -d)"
-trap 'rm -rf "$MANIFEST_DIR"' EXIT
-cat > "$MANIFEST_DIR/manifest.json" <<EOF
+# Default raster (icon.icns / icon.png / iOS) generated from public/logo-mark.svg
+# (the squircle composite used in the React UI too); Android adaptive layers come
+# from the rasterized backg / foreground in the tmp dir above.
+cat > "$RASTER_DIR/manifest.json" <<EOF
 {
   "default": "$ROOT/public/logo-mark.svg",
-  "android_bg": "$ICON_PKG/Assets/background.png",
-  "android_fg": "$ICON_PKG/Assets/foreground.png",
+  "android_bg": "$RASTER_DIR/background.png",
+  "android_fg": "$RASTER_DIR/foreground.png",
   "android_fg_scale": 80,
   "bg_color": "#5b1f0b"
 }
 EOF
 cd "$ROOT/src-tauri"
-npx --no-install @tauri-apps/cli icon "$MANIFEST_DIR/manifest.json" --output "$ICONS"
+npx --no-install @tauri-apps/cli icon "$RASTER_DIR/manifest.json" --output "$ICONS"
 cd "$ROOT"
 
 echo "==> overwriting Windows .ico with cards-only transparent version"
 # foreground.png is cards on transparent background — exactly what we want for
 # Windows taskbar/start-menu icons. Multi-resolution ICO (16/32/48/64/128/256).
-magick "$ICON_PKG/Assets/foreground.png" \
+magick "$RASTER_DIR/foreground.png" \
   -define icon:auto-resize=256,128,64,48,32,16 \
   "$ICONS/icon.ico"
 
