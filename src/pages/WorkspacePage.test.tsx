@@ -109,6 +109,29 @@ describe("WorkspacePage", () => {
     expect(windowControls.closeCurrentWindow).toHaveBeenCalled();
   });
 
+  // Wave 9.5 회귀 4 (2026-05-16) — `close-requested` listener trap.
+  //
+  // 회귀 증상: Back 클릭 시 launcher focus 는 가지만 workspace 창이 닫히지 않음.
+  //
+  // 근본 원인: WorkspacePage 가 `onCurrentWindowCloseRequested` 리스너를
+  // 등록 + 그 안에서 `preventDefault()` + `handleBackToConnections()` 호출
+  // 했다. Back 핸들러가 `closeCurrentWindow()` (= `win.close()`) 를 부르면
+  // Tauri 가 `tauri://close-requested` 이벤트를 다시 발사 → 같은 리스너가
+  // `preventDefault()` → 재호출 → **무한 루프 + window destroy 안 됨**.
+  //
+  // 진짜 fix: 리스너 자체 제거. 이 리스너의 존재 이유는 sprint-154 의
+  // launcher-hide UX (OS close 가 process kill 처럼 보이지 않게 가로채기)
+  // 였는데, Wave 9.5 에서 desired UX 가 "launcher 항상 visible" 로 바뀌면서
+  // OS-level close 는 default destroy 가 자연스럽다 (launcher 가 이미
+  // visible 이므로 자동으로 활성). 리스너 = dead code.
+  //
+  // 본 테스트는 WorkspacePage 가 더 이상 close-requested 리스너를 등록하지
+  // 않음을 lock — 다시 추가하면 같은 trap 이 부활.
+  it("does NOT register a close-requested listener (Wave 9.5 회귀 4 — listener was the infinite loop trap)", () => {
+    render(<WorkspacePage />);
+    expect(windowControls.onCurrentWindowCloseRequested).not.toHaveBeenCalled();
+  });
+
   it("clicking [← Connections] does NOT clear tabStore (tabs persist across screen swaps)", () => {
     useWorkspaceStore.setState(
       seedWorkspace(

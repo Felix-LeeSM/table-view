@@ -350,25 +350,23 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // AC-154-05: Workspace close = Back semantics + preventDefault
+  // AC-154-05 (Wave 9.5 회귀 4, 2026-05-16): workspace 는 close-requested
+  // listener 를 등록하지 않는다.
+  //
+  // 이전 contract — sprint-154 의 launcher-hidden 시대에는 OS-level close 가
+  // process 가 죽은 듯 보였기에 close-requested 를 가로채야 했다. Wave 9.5
+  // 의 "launcher 항상 visible" UX 에서 listener 는 dead code 가 됐고, 게다가
+  // `closeCurrentWindow()` 호출이 close-requested 를 다시 발사 → 같은 listener
+  // 가 preventDefault + 본 핸들러 재호출 → **무한 루프 + 창 안 닫힘** 회귀의
+  // 근본 원인이었다. 본 테스트는 listener 미등록을 lock — 다시 추가하면 같은
+  // trap 부활.
   // ---------------------------------------------------------------------------
-  it("AC-154-05 (revised): closing the workspace window (tauri://close-requested) is treated as Back — focusWindow('launcher') then closeCurrentWindow, NO disconnect", async () => {
-    const { disconnectFromDatabase } = await import("@lib/tauri");
-    const disconnectMock = disconnectFromDatabase as Mock;
-
+  it("AC-154-05 (Wave 9.5 회귀 4): WorkspacePage does NOT register a close-requested listener — listener was the infinite loop trap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
       focusedConnId: "c1",
     });
-
-    let capturedHandler: (() => void | Promise<void>) | null = null;
-    onCurrentWindowCloseRequestedMock.mockImplementation(
-      async (handler: () => void | Promise<void>) => {
-        capturedHandler = handler;
-        return () => {};
-      },
-    );
 
     render(<WorkspacePage />);
 
@@ -376,25 +374,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       await Promise.resolve();
     });
 
-    expect(onCurrentWindowCloseRequestedMock).toHaveBeenCalledWith(
-      expect.any(Function),
-    );
-    expect(capturedHandler).toBeTruthy();
-
-    focusWindowMock.mockClear();
-    closeCurrentWindowMock.mockClear();
-
-    await act(async () => {
-      await capturedHandler!();
-    });
-
-    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
-    expect(closeCurrentWindowMock).toHaveBeenCalled();
-    const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
-    const closeOrder = closeCurrentWindowMock.mock.invocationCallOrder[0]!;
-    expect(focusOrder).toBeLessThan(closeOrder);
-
-    expect(disconnectMock).not.toHaveBeenCalled();
+    expect(onCurrentWindowCloseRequestedMock).not.toHaveBeenCalled();
   });
 
   // ---------------------------------------------------------------------------

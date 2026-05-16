@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { ArrowLeft, Sun, Moon, Monitor } from "lucide-react";
 import Sidebar from "@components/layout/Sidebar";
 import MainArea from "@components/layout/MainArea";
@@ -13,11 +12,7 @@ import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { logger } from "@lib/logger";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
-import {
-  closeCurrentWindow,
-  focusWindow,
-  onCurrentWindowCloseRequested,
-} from "@lib/window-controls";
+import { closeCurrentWindow, focusWindow } from "@lib/window-controls";
 
 /**
  * WorkspacePage — multi-paradigm tab + sidebar work surface.
@@ -36,10 +31,13 @@ import {
  *     별도 lifecycle (Back ≠ Disconnect — pool 은 process 가 살아있는
  *     동안 유지) — `close` 가 disconnect 를 cascade 하지 않는다.
  *
- *   - The `tauri://close-requested` listener treats the OS-level close
- *     identically: focus launcher + close current window. The default
- *     close behaviour is intentionally NOT prevented (window must
- *     actually go away).
+ *   - **No** `tauri://close-requested` listener (Wave 9.5 회귀 4,
+ *     2026-05-16). OS-level close (Cmd+W, traffic light) 는 launcher 가
+ *     항상 visible 이므로 default destroy 만으로 desired UX 가 자연스레
+ *     성립 — workspace 사라지면 launcher 가 자동 활성. 리스너를 두면
+ *     `closeCurrentWindow()` 호출이 다시 `close-requested` 를 발사 →
+ *     리스너가 `preventDefault()` + 본 핸들러 재호출 → **무한 루프**
+ *     trap 이 발생한다 (이전 회귀 증상).
  *
  * Disconnect (which DOES tear down the pool) is owned by the
  * `DisconnectButton` in `WorkspaceToolbar` and is intentionally NOT a
@@ -75,31 +73,6 @@ export default function WorkspacePage() {
       );
     }
   };
-
-  // Register the `tauri://close-requested` listener with Back semantics.
-  // Uses `onCurrentWindowCloseRequested` instead of `onCloseRequested(label)`
-  // because the latter depends on `getByLabel` which proved unreliable — it
-  // could return null and skip registering the handler, leaving the OS free
-  // to actually destroy the workspace with no launcher visible.
-  // `getCurrentWebviewWindow()` is reliable from within the window itself.
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    let cancelled = false;
-    void (async () => {
-      const fn = await onCurrentWindowCloseRequested(() =>
-        handleBackToConnections(),
-      );
-      if (cancelled) {
-        fn();
-        return;
-      }
-      unlisten = fn;
-    })();
-    return () => {
-      cancelled = true;
-      if (unlisten) unlisten();
-    };
-  }, []);
 
   // Re-hydrate from session storage on mount and window focus so the
   // workspace picks up the latest connection state from the launcher.

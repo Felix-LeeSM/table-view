@@ -308,17 +308,11 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
     expect(hideWindowMock).not.toHaveBeenCalledWith("workspace");
 
-    // 2. Workspace close path — registered by WorkspacePage's mount effect
-    //    via `onCurrentWindowCloseRequested` (not `onCloseRequested(label)`)
-    //    to avoid the unreliable `getByLabel` JS API.
-    let workspaceHandler: (() => void | Promise<void>) | null = null;
-    onCurrentWindowCloseRequestedMock.mockImplementation(
-      async (handler: () => void | Promise<void>) => {
-        workspaceHandler = handler;
-        return () => {};
-      },
-    );
-
+    // 2. Workspace close path — Wave 9.5 회귀 4 (2026-05-16): listener 자체
+    //    제거. OS-level close 는 default destroy 만으로 desired UX (launcher
+    //    이미 visible 이라 자동 활성) 가 성립. listener 를 두면
+    //    `closeCurrentWindow()` 가 close-requested 를 다시 발사 → preventDefault
+    //    + handler 재진입 → 무한 루프 trap (실제 회귀 증상).
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
     render(<WorkspacePage />);
@@ -326,19 +320,8 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await Promise.resolve();
     });
 
-    expect(onCurrentWindowCloseRequestedMock).toHaveBeenCalledWith(
-      expect.any(Function),
-    );
-    expect(workspaceHandler).toBeTruthy();
-
-    await act(async () => {
-      await workspaceHandler!();
-    });
-
-    // Wave 9.5 — Same final state as the explicit Back button:
-    // focusWindow('launcher') → closeCurrentWindow; pool is preserved.
-    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
-    expect(closeCurrentWindowMock).toHaveBeenCalled();
+    expect(onCurrentWindowCloseRequestedMock).not.toHaveBeenCalled();
+    // Workspace 마운트 자체가 disconnect 를 트리거하지 않는다.
     expect(disconnectMock).not.toHaveBeenCalled();
   });
 
@@ -423,18 +406,18 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(hideWindowMock).not.toHaveBeenCalled();
   });
 
-  // Reason: workspace close must always show the launcher, even if the close
-  // handler registration fails. This is the user's explicit request — when
-  // the table window closes, the connection list must appear. (2026-04-28)
-  it("AC-141-6 (real): workspace close via onCurrentWindowCloseRequested always shows the launcher", async () => {
-    let workspaceHandler: (() => void | Promise<void>) | null = null;
-    onCurrentWindowCloseRequestedMock.mockImplementation(
-      async (handler: () => void | Promise<void>) => {
-        workspaceHandler = handler;
-        return () => {};
-      },
-    );
-
+  // Wave 9.5 회귀 4 (2026-05-16) — 본 테스트의 이전 contract 는 sprint-154
+  // 의 launcher-hidden 시대 가정 (OS-level close 가 발생하면 process 가
+  // 죽은 듯 보여, close-requested 를 가로채고 launcher 를 show 해야 했음).
+  // Wave 9.5 에서 launcher 가 항상 visible 인 desired UX 로 바뀌면서 그
+  // listener 자체가 dead code 가 됐고, 게다가 `closeCurrentWindow()` 가
+  // 다시 close-requested 를 발사 → 같은 리스너가 preventDefault + 재호출
+  // → 무한 루프 + 창이 안 닫히는 회귀 증상의 root cause 였다.
+  //
+  // 새 contract: WorkspacePage 는 close-requested listener 를 **등록하지
+  // 않는다**. OS-level close 는 default destroy 만으로 desired UX 가 성립
+  // (workspace 사라지면 launcher 가 이미 visible 이라 자동 활성).
+  it("AC-141-6 (Wave 9.5 회귀 4): WorkspacePage does NOT register a close-requested listener — listener was the infinite loop trap", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -446,19 +429,6 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await Promise.resolve();
     });
 
-    // The workspace handler must be registered via onCurrentWindowCloseRequested.
-    expect(onCurrentWindowCloseRequestedMock).toHaveBeenCalledWith(
-      expect.any(Function),
-    );
-    expect(workspaceHandler).toBeTruthy();
-
-    // Wave 9.5 — Firing the handler (simulating OS close) must focus launcher
-    // and close current window — identical to the Back button path.
-    await act(async () => {
-      await workspaceHandler!();
-    });
-
-    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
-    expect(closeCurrentWindowMock).toHaveBeenCalled();
+    expect(onCurrentWindowCloseRequestedMock).not.toHaveBeenCalled();
   });
 });
