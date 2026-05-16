@@ -184,18 +184,39 @@ pub struct ConnectionGroup {
     pub collapsed: bool,
 }
 
-/// Adjacently-tagged enum for clean discriminated union on the frontend.
+/// Internally-tagged enum for a clean discriminated union on the frontend.
+///
+/// Sprint 364 (Phase 3 Q14) — `Connecting` variant 추가 + `Connected` 가
+/// struct variant 로 승격되어 `active_db: Option<String>` 을 운반한다.
+/// `active_db` 는 PG `USE db` 결과 또는 connection string 의 `dbname` 으로,
+/// `connect` IPC 가 pool 을 열 때 결정된다.
+///
 /// Serializes as:
-/// - `{"type": "connected"}`
+/// - `{"type": "connecting"}` — connect IPC 진행 중 (pool acquire 전).
+/// - `{"type": "connected"}` — pool ready, active_db 미지정.
+/// - `{"type": "connected", "activeDb": "foo"}` — pool ready, active_db 지정.
 /// - `{"type": "disconnected"}`
 /// - `{"type": "error", "message": "..."}`
+///
+/// `active_db: None` 일 때 wire 에 `activeDb: null` 이 나타나지 않도록
+/// `skip_serializing_if = "Option::is_none"` 로 필드를 omit (codex 3차 #6).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase", tag = "type", content = "message")]
+#[serde(
+    tag = "type",
+    rename_all = "lowercase",
+    rename_all_fields = "camelCase"
+)]
 pub enum ConnectionStatus {
-    Connected,
+    Connecting,
+    Connected {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        active_db: Option<String>,
+    },
     #[default]
     Disconnected,
-    Error(String),
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -380,7 +401,10 @@ mod tests {
 
     #[test]
     fn connection_status_serializes_as_discriminated_union() {
-        let connected = ConnectionStatus::Connected;
+        // Sprint 364 (2026-05-16) — `Connected { active_db: None }` 평면
+        // 직렬화 + `Error { message: ... }` struct variant 평면 직렬화
+        // 회귀 가드. 4-case 전체 wire shape 는 `tests/connection_status_serde.rs`.
+        let connected = ConnectionStatus::Connected { active_db: None };
         let json = serde_json::to_string(&connected).unwrap();
         assert_eq!(json, "{\"type\":\"connected\"}");
 
@@ -388,7 +412,9 @@ mod tests {
         let json = serde_json::to_string(&disconnected).unwrap();
         assert_eq!(json, "{\"type\":\"disconnected\"}");
 
-        let error = ConnectionStatus::Error("timeout".into());
+        let error = ConnectionStatus::Error {
+            message: "timeout".into(),
+        };
         let json = serde_json::to_string(&error).unwrap();
         assert_eq!(json, "{\"type\":\"error\",\"message\":\"timeout\"}");
     }
@@ -396,12 +422,15 @@ mod tests {
     #[test]
     fn connection_status_deserializes_from_discriminated_union() {
         let status: ConnectionStatus = serde_json::from_str("{\"type\":\"connected\"}").unwrap();
-        assert!(matches!(status, ConnectionStatus::Connected));
+        match status {
+            ConnectionStatus::Connected { active_db } => assert!(active_db.is_none()),
+            other => panic!("Expected Connected variant, got {:?}", other),
+        }
 
         let status: ConnectionStatus =
             serde_json::from_str("{\"type\":\"error\",\"message\":\"lost\"}").unwrap();
         match status {
-            ConnectionStatus::Error(msg) => assert_eq!(msg, "lost"),
+            ConnectionStatus::Error { message } => assert_eq!(message, "lost"),
             _ => panic!("Expected Error variant"),
         }
     }

@@ -126,7 +126,9 @@ pub(super) async fn keep_alive_loop(
         warn!(conn_id = %conn_id, "Keep-alive ping failed");
 
         // Set error status
-        let error_status = ConnectionStatus::Error("Connection lost".into());
+        let error_status = ConnectionStatus::Error {
+            message: "Connection lost".into(),
+        };
         {
             let state = app.state::<AppState>();
             let mut status = state.connection_status.lock().await;
@@ -175,16 +177,26 @@ pub(super) async fn keep_alive_loop(
                     let mut connections = state.active_connections.lock().await;
                     connections.insert(conn_id.clone(), new_adapter);
                 }
+                // Sprint 364 — reconnect 도 connect 와 동일하게 active_db 를
+                // config.database 로 seed. 빈 문자열일 때만 None.
+                let active_db = if config.database.is_empty() {
+                    None
+                } else {
+                    Some(config.database.clone())
+                };
+                let connected = ConnectionStatus::Connected { active_db };
                 {
                     let mut status = state.connection_status.lock().await;
-                    status.insert(conn_id.clone(), ConnectionStatus::Connected);
+                    status.insert(conn_id.clone(), connected.clone());
                 }
-                emit_status_change(&app, &conn_id, ConnectionStatus::Connected);
+                emit_status_change(&app, &conn_id, connected);
                 consecutive_failures = 0;
             }
             Err(e) => {
                 warn!(conn_id = %conn_id, error = %e, "Reconnection failed");
-                let err_status = ConnectionStatus::Error(format!("Reconnection failed: {}", e));
+                let err_status = ConnectionStatus::Error {
+                    message: format!("Reconnection failed: {}", e),
+                };
                 {
                     let state = app.state::<AppState>();
                     let mut status = state.connection_status.lock().await;
@@ -233,9 +245,11 @@ mod tests {
     fn status_change_event_serde_uses_id_and_status_camel_case_keys() {
         // frontend 가 `connection-status-changed` payload 에서 `id`/`status`
         // 두 키만 본다 — variant 가 추가될 때 wire shape 가 깨지지 않도록.
+        // Sprint 364 (2026-05-16) — `Connected` 가 struct variant 로 승격됐으므로
+        // `active_db: None` 으로 생성.
         let evt = StatusChangeEvent {
             id: "abc".into(),
-            status: ConnectionStatus::Connected,
+            status: ConnectionStatus::Connected { active_db: None },
         };
         let json = serde_json::to_string(&evt).unwrap();
         assert!(json.contains("\"id\":\"abc\""));

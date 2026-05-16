@@ -113,8 +113,39 @@ pub async fn connect(
         .find(|c| c.id == id)
         .ok_or_else(|| AppError::NotFound(format!("Connection '{}' not found", id)))?;
 
-    let adapter = make_adapter(&config.db_type)?;
-    adapter.lifecycle().connect(&config).await?;
+    // Sprint 364 (Phase 3 Q14) — `Connecting` 진입은 pool acquire 직전.
+    // long-running connect (5s+) 동안 UI 가 spinner 를 띄울 수 있도록
+    // 상태 map 에 먼저 기록하고, adapter.connect 가 끝나면 Connected /
+    // Error 로 transition. fail path 가 ?  연산자로 일찍 return 하면 Error
+    // 까지 기록해야 frontend listener 가 stuck-in-connecting 을 보지 않음.
+    {
+        let mut status = state.connection_status.lock().await;
+        status.insert(id.clone(), ConnectionStatus::Connecting);
+    }
+
+    let adapter = match make_adapter(&config.db_type) {
+        Ok(a) => a,
+        Err(e) => {
+            let mut status = state.connection_status.lock().await;
+            status.insert(
+                id.clone(),
+                ConnectionStatus::Error {
+                    message: e.to_string(),
+                },
+            );
+            return Err(e);
+        }
+    };
+    if let Err(e) = adapter.lifecycle().connect(&config).await {
+        let mut status = state.connection_status.lock().await;
+        status.insert(
+            id.clone(),
+            ConnectionStatus::Error {
+                message: e.to_string(),
+            },
+        );
+        return Err(e);
+    }
 
     // Abort any previous keep-alive task for this connection
     {
@@ -129,8 +160,16 @@ pub async fn connect(
         connections.insert(id.clone(), adapter);
     }
     {
+        // Sprint 364 — pool ready, transition to Connected. `active_db` is
+        // seeded from the connection's default database; `None` when the
+        // user left `database` empty (e.g. Mongo without a default DB).
+        let active_db = if config.database.is_empty() {
+            None
+        } else {
+            Some(config.database.clone())
+        };
         let mut status = state.connection_status.lock().await;
-        status.insert(id.clone(), ConnectionStatus::Connected);
+        status.insert(id.clone(), ConnectionStatus::Connected { active_db });
     }
 
     // Start keep-alive background task

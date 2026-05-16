@@ -359,7 +359,13 @@ async fn test_snapshot_runtime_active_statuses_reflects_status_map() {
     let (_dir, pool) = setup().await;
 
     let mut statuses = HashMap::new();
-    statuses.insert("conn-1".to_string(), ConnectionStatus::Connected);
+    // Sprint 364 (2026-05-16) — `Connected` 가 struct variant 로 승격됐다.
+    // `active_db: None` 으로 기록해야 snapshot 안의 wire shape 가
+    // `{type:"connected"}` (필드 부재) 그대로 유지된다.
+    statuses.insert(
+        "conn-1".to_string(),
+        ConnectionStatus::Connected { active_db: None },
+    );
     statuses.insert("conn-2".to_string(), ConnectionStatus::Disconnected);
 
     let snap = get_initial_app_state_inner(&pool, "launcher", &statuses)
