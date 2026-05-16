@@ -1,0 +1,130 @@
+name: Release
+
+# Trigger policy:
+# - tag push (`v*.*.*`): the actual release pipeline. Tag SHA's tauri.conf.json
+#   version must match the tag (e.g. tag `v0.2.0` ↔ "version": "0.2.0"). Builds
+#   bundles for macOS arm64+intel, Windows x64, Linux x64 and attaches them to
+#   a *draft* GitHub Release named after the tag — the maintainer reviews and
+#   publishes manually so an accidental tag push doesn't ship to users.
+# - `workflow_dispatch`: manual trigger from the Actions UI for dry-runs. Still
+#   produces a draft release using the dispatched ref's commit SHA as the tag,
+#   so you can rehearse the pipeline without pushing a real version tag.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+# Two release runs on the same tag would race against the same draft release;
+# cancel the older one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Bundle (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS arm64
+            platform: macos-14
+            target: aarch64-apple-darwin
+            args: --target aarch64-apple-darwin
+          - label: macOS intel
+            platform: macos-13
+            target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
+          - label: Windows x64
+            platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ""
+          - label: Linux x64
+            platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Linux Tauri bundles depend on webkit2gtk + librsvg + patchelf. macOS &
+      # Windows runners come with everything Tauri needs preinstalled (libwebview2
+      # on Windows, WKWebView on macOS).
+      - name: Install Linux build deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            build-essential \
+            file
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Rust target dir caches across runs of the same matrix leg. Keyed on
+      # OS+target so macOS arm64 and intel don't share an incompatible target
+      # tree.
+      - name: Cache cargo target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+          shared-key: release
+
+      - name: Install pnpm deps
+        run: pnpm install --frozen-lockfile
+
+      # tauri-action handles: `pnpm tauri build --target …`, parsing the bundle
+      # artifacts, creating/updating a GitHub Release, and uploading every
+      # bundle output as a release asset. We rely on the .icon Liquid Glass
+      # artifacts already committed under src-tauri/icons/Compiled/ so the
+      # macOS runner doesn't need actool at release time.
+      - name: Build + upload to draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
+          releaseName: "Table View ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}"
+          releaseBody: |
+            Multi-platform release bundles produced by `.github/workflows/release.yml`.
+
+            **Install**
+
+            - **macOS**: download the matching `.dmg` (arm64 for Apple Silicon, x64 for Intel).
+              Unsigned — on first launch right-click → Open, or run
+              `xattr -d com.apple.quarantine "/Applications/Table View.app"`.
+            - **Windows**: run the `.msi` installer. Unsigned — SmartScreen may
+              warn; click "More info" → "Run anyway".
+            - **Linux**: `.deb`, `.rpm`, or `.AppImage` — pick the one matching
+              your distro.
+
+            See the commit log for changes.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
