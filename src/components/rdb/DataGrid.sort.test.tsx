@@ -35,6 +35,31 @@ vi.mock("@stores/schemaStore", () => ({
     }),
 }));
 
+// Sprint 354 (L2 fix, 2026-05-16) — `queryTableData` / `executeQuery` /
+// `executeQueryBatch` moved out of `schemaStore` to `@lib/tauri`. Use
+// `importOriginal` so the real exports (cancelQuery, executeQueryDryRun,
+// etc.) stay live and only the three commit-path symbols become spies.
+// The getter-property pattern defers the spy lookup until the call site
+// fires, which sidesteps the
+// `Cannot access '__vi_import_X__'` hoisting race that hits when the
+// factory closes over the helper-exported spy reference directly.
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    get queryTableData() {
+      return mockQueryTableData;
+    },
+    get executeQuery() {
+      return mockExecuteQuery;
+    },
+    get executeQueryBatch() {
+      return mockExecuteQueryBatch;
+    },
+  };
+});
+
 // Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
 // shape. The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
@@ -281,7 +306,10 @@ describe("DataGrid", () => {
     // Find the latest call with orderBy
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[6]).toBe("id ASC");
+    // Sprint 354 (L2 fix) — `db` no longer occupies the 2nd positional
+    // slot (schemaStore wrapper retired); `orderBy` index shifts from 6
+    // to 5.
+    expect(lastCall[5]).toBe("id ASC");
   });
 
   // ── Sprint 76: Per-tab sort state ──
@@ -330,7 +358,7 @@ describe("DataGrid", () => {
 
     // Backend: first call's orderBy reflects the restored sort.
     const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
-    expect(firstCall[6]).toBe("name DESC");
+    expect(firstCall[5]).toBe("name DESC");
   });
 
   // AC-03 — multi-column sort persisted on a tab is restored with
@@ -360,7 +388,7 @@ describe("DataGrid", () => {
 
     // orderBy preserves the order and direction for the backend.
     const firstCall = mockQueryTableData.mock.calls[0] as unknown[];
-    expect(firstCall[6]).toBe("id ASC, name DESC");
+    expect(firstCall[5]).toBe("id ASC, name DESC");
   });
 
   // AC-02 / AC-03 — two tabs, two independent sorts. Simulate the
@@ -388,7 +416,10 @@ describe("DataGrid", () => {
     expect(await screen.findByText("▲")).toBeInTheDocument();
     const aCalls = mockQueryTableData.mock.calls;
     let lastCall = aCalls[aCalls.length - 1] as unknown[];
-    expect(lastCall[6]).toBe("id ASC");
+    // Sprint 354 (L2 fix) — `db` no longer occupies the 2nd positional
+    // slot (schemaStore wrapper retired); `orderBy` index shifts from 6
+    // to 5.
+    expect(lastCall[5]).toBe("id ASC");
 
     // Simulate tab switch by remounting with tab B active.
     unmount();
@@ -401,7 +432,7 @@ describe("DataGrid", () => {
     expect(await screen.findByText("▼")).toBeInTheDocument();
     const bCalls = mockQueryTableData.mock.calls;
     lastCall = bCalls[bCalls.length - 1] as unknown[];
-    expect(lastCall[6]).toBe("name DESC");
+    expect(lastCall[5]).toBe("name DESC");
 
     // Tab A's state object is untouched by tab B's render.
     const tabA = mockTabStoreState.tabs.find((t) => t.id === "tab-A")!;

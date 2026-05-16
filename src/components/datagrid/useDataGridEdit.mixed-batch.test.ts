@@ -42,19 +42,16 @@ const mockBulkWriteDocuments = vi.fn<(...args: unknown[]) => Promise<unknown>>(
     }),
 );
 
+// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` moved out of
+// `schemaStore` to `@lib/tauri`. Merge the spy into the same mock so
+// `useDataGridPreviewCommit`'s direct import lands on the spy.
 vi.mock("@/lib/tauri", () => ({
   insertDocument: (...args: unknown[]) => mockInsertDocument(...args),
   updateDocument: (...args: unknown[]) => mockUpdateDocument(...args),
   deleteDocument: (...args: unknown[]) => mockDeleteDocument(...args),
   bulkWriteDocuments: (...args: unknown[]) => mockBulkWriteDocuments(...args),
-}));
-
-vi.mock("@stores/schemaStore", () => ({
-  useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      executeQuery: mockExecuteQuery,
-      executeQueryBatch: mockExecuteQueryBatch,
-    }),
+  executeQuery: (...args: unknown[]) => mockExecuteQuery(...args),
+  executeQueryBatch: (...args: unknown[]) => mockExecuteQueryBatch(...args),
 }));
 
 vi.mock("@stores/workspaceStore", () => ({

@@ -8,38 +8,45 @@ import type { TableData } from "@/types/schema";
 // per-cell error entry should appear in `pendingEditErrors`. Sibling edits
 // in the same batch are validated independently.
 
-const mockExecuteQuery = vi.fn(() =>
-  Promise.resolve({
-    columns: [],
-    rows: [],
-    total_count: 0,
-    execution_time_ms: 5,
-    query_type: "dml" as const,
-  }),
-);
-// Sprint 183 — RDB commit pipeline now uses executeQueryBatch instead of
-// executeQuery N times. Default to a happy-path resolution with one entry
-// per submitted statement.
-const mockExecuteQueryBatch = vi.fn((_conn: string, stmts: string[]) =>
-  Promise.resolve(
-    stmts.map(() => ({
+// Sprint 354 (L2 fix, 2026-05-16) — `executeQuery` / `executeQueryBatch`
+// moved out of `schemaStore` to `@lib/tauri`. Mocks must be hoisted so
+// `vi.mock("@lib/tauri")` factory body can close over them.
+const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
+  mockExecuteQuery: vi.fn(() =>
+    Promise.resolve({
       columns: [],
       rows: [],
       total_count: 0,
       execution_time_ms: 5,
       query_type: "dml" as const,
-    })),
+    }),
   ),
-);
+  // Sprint 183 — RDB commit pipeline now uses executeQueryBatch instead
+  // of executeQuery N times. Default to a happy-path resolution with one
+  // entry per submitted statement.
+  mockExecuteQueryBatch: vi.fn((_conn: string, stmts: string[]) =>
+    Promise.resolve(
+      stmts.map(() => ({
+        columns: [],
+        rows: [],
+        total_count: 0,
+        execution_time_ms: 5,
+        query_type: "dml" as const,
+      })),
+    ),
+  ),
+}));
 const mockFetchData = vi.fn();
 
-vi.mock("@stores/schemaStore", () => ({
-  useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      executeQuery: mockExecuteQuery,
-      executeQueryBatch: mockExecuteQueryBatch,
-    }),
-}));
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    executeQuery: mockExecuteQuery,
+    executeQueryBatch: mockExecuteQueryBatch,
+  };
+});
 
 vi.mock("@stores/workspaceStore", () => ({
   useActiveTabId: () => "tab-1",

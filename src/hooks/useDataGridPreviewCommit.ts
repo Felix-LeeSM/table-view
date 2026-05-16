@@ -6,10 +6,15 @@
 // boundary so the facade's legacy `sqlPreview` / `mqlPreview` fields
 // stay populated for downstream UI components.
 import { useCallback, useMemo, useState } from "react";
-import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` lives in
+// `@lib/tauri`; use namespace import so a test that stubs `@lib/tauri`
+// with a partial surface doesn't fail at module-load time. The lookup
+// is only reached on the RDB commit path; document commits never read
+// `tauri.executeQueryBatch`.
+import * as tauri from "@lib/tauri";
 import { toast } from "@/lib/toast";
 import {
   buildRdbSession,
@@ -131,7 +136,19 @@ export function useDataGridPreviewCommit(
     beginCommitFlash,
   } = params;
 
-  const executeQueryBatch = useSchemaStore((s) => s.executeQueryBatch);
+  // Sprint 354 (L2 fix) — schemaStore.executeQueryBatch was a thin
+  // pass-through (no cache write); reach for `@lib/tauri` directly. The
+  // namespace `tauri.executeQueryBatch` access is wrapped in a closure
+  // so vitest mocks that stub `@lib/tauri` with a partial surface (e.g.
+  // DocumentDataGrid tests that only need `findDocuments`) don't trip
+  // the "no export defined" guard at hook-mount time — the lookup is
+  // only reached on the RDB commit branch which already requires the
+  // mock to provide `executeQueryBatch`.
+  const executeQueryBatch = useCallback(
+    (...args: Parameters<typeof tauri.executeQueryBatch>) =>
+      tauri.executeQueryBatch(...args),
+    [],
+  );
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);

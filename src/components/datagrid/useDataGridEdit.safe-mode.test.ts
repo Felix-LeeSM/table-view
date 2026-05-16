@@ -24,18 +24,24 @@ import { useDataGridEdit } from "./useDataGridEdit";
 import { useSafeModeStore } from "@stores/safeModeStore";
 import type { TableData } from "@/types/schema";
 
-const mockExecuteQueryBatch = vi.fn();
+const { mockExecuteQueryBatch } = vi.hoisted(() => ({
+  mockExecuteQueryBatch: vi.fn(),
+}));
 const mockToastError = vi.fn();
 const mockToastInfo = vi.fn();
 const mockFetchData = vi.fn();
 
-vi.mock("@stores/schemaStore", () => ({
-  useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      executeQuery: vi.fn(),
-      executeQueryBatch: mockExecuteQueryBatch,
-    }),
-}));
+// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` moved out of
+// `schemaStore` to `@lib/tauri`. Mock the canonical home so
+// `useDataGridPreviewCommit`'s direct import resolves to our spy.
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    executeQueryBatch: mockExecuteQueryBatch,
+  };
+});
 
 vi.mock("@stores/workspaceStore", () => ({
   useActiveTabId: () => "tab-1",

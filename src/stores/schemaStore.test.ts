@@ -334,27 +334,10 @@ describe("schemaStore", () => {
     expect(state.triggers.conn2?.db1?.public?.items).toEqual([]);
   });
 
-  it("delegates queryTableData", async () => {
-    const { queryTableData } = await import("@lib/tauri");
-    const data = await useSchemaStore
-      .getState()
-      .queryTableData("conn1", "db1", "users", "public", 1, 50, "id");
-
-    // Sprint 271b — forwards `db` as the new last-positional expectedDatabase.
-    expect(queryTableData).toHaveBeenCalledWith(
-      "conn1",
-      "users",
-      "public",
-      1,
-      50,
-      "id",
-      undefined,
-      undefined,
-      "db1",
-    );
-    expect(data.total_count).toBe(1);
-    expect(data.rows).toHaveLength(1);
-  });
+  // Sprint 354 (L2 fix) — `queryTableData` removed from schemaStore;
+  // direct tauri.queryTableData calls now live in `DataGrid.tsx`. The
+  // delegate-shape assertions belonged to a thin pass-through that no
+  // longer exists.
 
   it("delegates getTableIndexes", async () => {
     const { getTableIndexes } = await import("@lib/tauri");
@@ -391,74 +374,10 @@ describe("schemaStore", () => {
     expect(constraints[0]!.constraint_type).toBe("PRIMARY KEY");
   });
 
-  it("passes filters to queryTableData", async () => {
-    const { queryTableData } = await import("@lib/tauri");
-    const filters = [
-      {
-        column: "name",
-        operator: "Eq" as const,
-        value: "Alice",
-        id: "f1",
-      },
-    ];
-
-    await useSchemaStore
-      .getState()
-      .queryTableData(
-        "conn1",
-        "db1",
-        "users",
-        "public",
-        1,
-        50,
-        undefined,
-        filters,
-      );
-
-    // Sprint 271b — forwards `db` as expectedDatabase (last positional).
-    expect(queryTableData).toHaveBeenCalledWith(
-      "conn1",
-      "users",
-      "public",
-      1,
-      50,
-      undefined,
-      filters,
-      undefined,
-      "db1",
-    );
-  });
-
-  it("passes rawWhere to queryTableData", async () => {
-    const { queryTableData } = await import("@lib/tauri");
-
-    await useSchemaStore
-      .getState()
-      .queryTableData(
-        "conn1",
-        "db1",
-        "users",
-        "public",
-        1,
-        50,
-        undefined,
-        undefined,
-        "id = 13",
-      );
-
-    // Sprint 271b — forwards `db` as expectedDatabase (last positional).
-    expect(queryTableData).toHaveBeenCalledWith(
-      "conn1",
-      "users",
-      "public",
-      1,
-      50,
-      undefined,
-      undefined,
-      "id = 13",
-      "db1",
-    );
-  });
+  // Sprint 354 (L2 fix) — `queryTableData` filter / rawWhere delegate
+  // tests removed alongside the action; the same arg-passing assertions
+  // now belong to the DataGrid-level integration tests since the store
+  // no longer owns this surface.
 
   it("[AC-191-01] evictSchemaForName drops tables/views/functions for one (conn, schema)", async () => {
     // Sprint 191 (AC-191-01) — single-schema cache eviction action that
@@ -551,24 +470,9 @@ describe("schemaStore", () => {
     expect(state.tables.conn2?.db1?.public).toHaveLength(1);
   });
 
-  it("delegates executeQuery", async () => {
-    const { executeQuery } = await import("@lib/tauri");
-    (executeQuery as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      columns: [{ name: "id", data_type: "integer" }],
-      rows: [[1]],
-      total_count: 1,
-      execution_time_ms: 3,
-      query_type: "select",
-    });
-
-    const result = await useSchemaStore
-      .getState()
-      .executeQuery("conn1", "SELECT 1", "q1");
-
-    expect(executeQuery).toHaveBeenCalledWith("conn1", "SELECT 1", "q1");
-    expect(result.total_count).toBe(1);
-    expect(result.rows).toHaveLength(1);
-  });
+  // Sprint 354 (L2 fix) — `executeQuery` removed from schemaStore;
+  // direct tauri.executeQuery calls already lived in
+  // `useQueryExecution.ts`, so this delegate test no longer fits.
 
   // Sprint 223 (P10 step 2) — 6 drop/rename reload-then-fallback cases
   // moved to `src/hooks/useSchemaTableMutations.test.ts`. The store now

@@ -72,6 +72,52 @@ let tabCounter = 0;
 let queryCounter = 0;
 
 /**
+ * Sprint 354 (M-2 fix) — seed `tabCounter` / `queryCounter` from persisted
+ * tab ids so post-boot `addTab` / `addQueryTab` allocate fresh ids that
+ * cannot collide with the persisted set. Walks every workspace + every
+ * tab; for ids matching the `tab-<N>` / `query-<N>` shape, the counter
+ * is set to `max(persisted N) + 1`. Mirrors the `favoriteCounter` pattern
+ * (`favoritesStore.ts:127-137`).
+ *
+ * Idempotent: re-running the seed only ratchets the counter up.
+ */
+function seedCountersFromWorkspaces(
+  workspaces: Record<string, Record<string, { tabs: { id: string }[] }>>,
+): void {
+  let maxTab = tabCounter;
+  let maxQuery = queryCounter;
+  for (const conn of Object.values(workspaces)) {
+    if (!conn) continue;
+    for (const ws of Object.values(conn)) {
+      if (!ws) continue;
+      for (const tab of ws.tabs) {
+        if (tab.id.startsWith("tab-")) {
+          const n = parseInt(tab.id.slice(4), 10);
+          if (!Number.isNaN(n) && n > maxTab) maxTab = n;
+        } else if (tab.id.startsWith("query-")) {
+          const n = parseInt(tab.id.slice(6), 10);
+          if (!Number.isNaN(n) && n > maxQuery) maxQuery = n;
+        }
+      }
+    }
+  }
+  tabCounter = maxTab;
+  queryCounter = maxQuery;
+}
+
+/**
+ * Sprint 354 — test-only escape hatch. Counters are module-scope (M-9 in
+ * the strategy doc) so `setState({ workspaces: {} })` cannot reset them;
+ * counter-seed tests need an explicit reset to verify the empty-persisted
+ * boot path doesn't carry counter state from a prior test. Not part of
+ * the production action surface — namespaced `__` to flag intent.
+ */
+export function __resetCountersForTests(): void {
+  tabCounter = 0;
+  queryCounter = 0;
+}
+
+/**
  * Resolve the active database for `connectionId`. Prefers the live
  * `activeDb` (set by `switchActiveDb` after a successful pool open) and
  * falls back to the connection's stored default `database`. Returns
@@ -790,7 +836,12 @@ export const useWorkspaceStore = create<WorkspaceStoreState>((set, get) => ({
         workspaces?: Parameters<typeof migrateLoadedWorkspaces>[0];
       };
       if (!data.workspaces) return;
-      set({ workspaces: migrateLoadedWorkspaces(data.workspaces) });
+      const hydrated = migrateLoadedWorkspaces(data.workspaces);
+      // Sprint 354 (M-2 fix) — seed counters from persisted ids BEFORE any
+      // subsequent `addTab` / `addQueryTab` so a fresh add never collides
+      // with a persisted id.
+      seedCountersFromWorkspaces(hydrated);
+      set({ workspaces: hydrated });
     } catch {
       // Corrupted localStorage — start fresh; matches tabStore's policy.
       set({ workspaces: {} });

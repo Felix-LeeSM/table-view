@@ -36,6 +36,31 @@ vi.mock("@stores/schemaStore", () => ({
     }),
 }));
 
+// Sprint 354 (L2 fix, 2026-05-16) — `queryTableData` / `executeQuery` /
+// `executeQueryBatch` moved out of `schemaStore` to `@lib/tauri`. Use
+// `importOriginal` so the real exports (cancelQuery, executeQueryDryRun,
+// etc.) stay live and only the three commit-path symbols become spies.
+// The getter-property pattern defers the spy lookup until the call site
+// fires, which sidesteps the
+// `Cannot access '__vi_import_X__'` hoisting race that hits when the
+// factory closes over the helper-exported spy reference directly.
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    get queryTableData() {
+      return mockQueryTableData;
+    },
+    get executeQuery() {
+      return mockExecuteQuery;
+    },
+    get executeQueryBatch() {
+      return mockExecuteQueryBatch;
+    },
+  };
+});
+
 // Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
 // shape. The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
@@ -162,7 +187,9 @@ describe("DataGrid", () => {
     // Should have been called with page=2
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[4]).toBe(2);
+    // Sprint 354 (L2 fix) — see DataGrid.lifecycle.test for the
+    // index-shift rationale (db moved to last positional slot).
+    expect(lastCall[3]).toBe(2);
   });
 
   // 12. Props change resets page
@@ -184,8 +211,8 @@ describe("DataGrid", () => {
     // The latest call should be with page=1 for the new table
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[2]).toBe("orders");
-    expect(lastCall[4]).toBe(1);
+    expect(lastCall[1]).toBe("orders");
+    expect(lastCall[3]).toBe(1);
   });
 
   // 22. Props change resets column widths
@@ -207,7 +234,7 @@ describe("DataGrid", () => {
     // Should have called with new table name
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[2]).toBe("orders");
+    expect(lastCall[1]).toBe("orders");
   });
 
   // ── Sprint 26: Pagination Enhancement ──
@@ -242,7 +269,7 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[5]).toBe(300);
+    expect(lastCall[4]).toBe(300);
   });
 
   // 31. Renders first/last page buttons
@@ -280,7 +307,7 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[4]).toBe(1);
+    expect(lastCall[3]).toBe(1);
   });
 
   // 33. Last page button goes to last page
@@ -298,7 +325,9 @@ describe("DataGrid", () => {
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
     // totalPages = ceil(500/300) = 2
-    expect(lastCall[4]).toBe(2);
+    // Sprint 354 (L2 fix) — see DataGrid.lifecycle.test for the
+    // index-shift rationale (db moved to last positional slot).
+    expect(lastCall[3]).toBe(2);
   });
 
   // 34. Jump to page input works
@@ -318,6 +347,6 @@ describe("DataGrid", () => {
 
     const calls = mockQueryTableData.mock.calls;
     const lastCall = calls[calls.length - 1] as unknown[];
-    expect(lastCall[4]).toBe(3);
+    expect(lastCall[3]).toBe(3);
   });
 });

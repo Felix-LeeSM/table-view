@@ -45,9 +45,6 @@ export function useSchemaTableMutations(): {
     newName: string,
   ) => Promise<void>;
 } {
-  const storeDrop = useSchemaStore((s) => s.dropTable);
-  const storeRename = useSchemaStore((s) => s.renameTable);
-
   const dropTable = useCallback(
     async (
       connectionId: string,
@@ -55,7 +52,11 @@ export function useSchemaTableMutations(): {
       table: string,
       schema: string,
     ): Promise<void> => {
-      await storeDrop(connectionId, database, table, schema);
+      // Sprint 354 (L2 fix) — schemaStore.dropTable was a thin pass-through
+      // (no cache write); calling tauri.dropTable directly cuts the
+      // detour. Same arg order tauri expects: (connId, table, schema,
+      // expectedDatabase).
+      await tauri.dropTable(connectionId, table, schema, database);
       try {
         // Sprint 271a — forward `database` as `expectedDatabase` so a swapped
         // backend pool fails closed before populating a wrong-db cache.
@@ -87,7 +88,7 @@ export function useSchemaTableMutations(): {
         });
       }
     },
-    [storeDrop],
+    [],
   );
 
   const renameTable = useCallback(
@@ -98,7 +99,10 @@ export function useSchemaTableMutations(): {
       schema: string,
       newName: string,
     ): Promise<void> => {
-      await storeRename(connectionId, database, table, schema, newName);
+      // Sprint 354 (L2 fix) — schemaStore.renameTable was a thin
+      // pass-through. tauri.renameTable arg order:
+      // (connId, table, schema, newName, expectedDatabase).
+      await tauri.renameTable(connectionId, table, schema, newName, database);
       try {
         // Sprint 271a — forward `database` as `expectedDatabase` so a swapped
         // backend pool fails closed before populating a wrong-db cache.
@@ -131,7 +135,7 @@ export function useSchemaTableMutations(): {
         });
       }
     },
-    [storeRename],
+    [],
   );
 
   return { dropTable, renameTable };

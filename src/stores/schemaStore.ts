@@ -2,16 +2,13 @@ import { create } from "zustand";
 import type {
   ColumnInfo,
   ConstraintInfo,
-  FilterCondition,
   FunctionInfo,
   IndexInfo,
   SchemaInfo,
-  TableData,
   TableInfo,
   TriggerInfo,
   ViewInfo,
 } from "@/types/schema";
-import type { QueryResult } from "@/types/query";
 import * as tauri from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
@@ -125,41 +122,6 @@ interface SchemaState {
     schema: string,
     viewName: string,
   ) => Promise<string>;
-  queryTableData: (
-    connId: string,
-    db: string,
-    table: string,
-    schema: string,
-    page?: number,
-    pageSize?: number,
-    orderBy?: string,
-    filters?: FilterCondition[],
-    rawWhere?: string,
-  ) => Promise<TableData>;
-  dropTable: (
-    connId: string,
-    db: string,
-    table: string,
-    schema: string,
-  ) => Promise<void>;
-  executeQuery: (
-    connId: string,
-    sql: string,
-    queryId: string,
-  ) => Promise<QueryResult>;
-  executeQueryBatch: (
-    connId: string,
-    statements: string[],
-    queryId: string,
-  ) => Promise<QueryResult[]>;
-  renameTable: (
-    connId: string,
-    db: string,
-    table: string,
-    schema: string,
-    newName: string,
-  ) => Promise<void>;
-
   /**
    * Drop every cached entry keyed under `connId` (all DBs). Used on
    * connection delete / disconnect. Same body as `clearForConnection`
@@ -479,55 +441,6 @@ export const useSchemaStore = create<SchemaState>((set, get) => ({
       throw e;
     }
   },
-
-  queryTableData: async (
-    connId,
-    db,
-    table,
-    schema,
-    page,
-    pageSize,
-    orderBy,
-    filters,
-    rawWhere,
-  ) => {
-    // Sprint 271b — forward `db` as `expectedDatabase` so the backend
-    // guard rejects a swapped pool BEFORE the SELECT runs. DataGrid is
-    // the only caller and routes mismatches through its own catch path
-    // (user-initiated Retry toast lives there); we deliberately do NOT
-    // call `handleDbMismatch` here so the rejection propagates to the
-    // caller unchanged.
-    return tauri.queryTableData(
-      connId,
-      table,
-      schema,
-      page,
-      pageSize,
-      orderBy,
-      filters,
-      rawWhere,
-      db,
-    );
-  },
-
-  // Sprint 223 — reload+fallback moved to `useSchemaTableMutations`.
-  // Sprint 271c — forward `db` as `expectedDatabase` so the backend
-  // rejects with `AppError::DbMismatch` if the connection pool's active
-  // db has diverged from the workspace.
-  dropTable: (cid, db, table, schema) =>
-    tauri.dropTable(cid, table, schema, db),
-
-  executeQuery: async (connId, sql, queryId) => {
-    return tauri.executeQuery(connId, sql, queryId);
-  },
-
-  executeQueryBatch: async (connId, statements, queryId) => {
-    return tauri.executeQueryBatch(connId, statements, queryId);
-  },
-
-  // Sprint 223 — see `dropTable` comment.
-  // Sprint 271c — forward `db` as `expectedDatabase`.
-  renameTable: (cid, db, t, s, n) => tauri.renameTable(cid, t, s, n, db),
 
   clearSchema: (connId) => {
     set((state) => ({

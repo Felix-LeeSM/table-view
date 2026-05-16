@@ -2,14 +2,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ChevronRight, Loader2, X } from "lucide-react";
 import { useHiddenColumns } from "@/hooks/useHiddenColumns";
 import { Button } from "@components/ui/button";
-import { useSchemaStore } from "@stores/schemaStore";
 import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useMruStore } from "@stores/mruStore";
-import { cancelQuery } from "@lib/tauri";
+// Sprint 354 (L2 fix, 2026-05-16) — `queryTableData` moved out of
+// `schemaStore` to the canonical tauri barrel. `cancelQuery` was
+// previously imported from the same module; keep both as named imports.
+import { cancelQuery, queryTableData } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { toast } from "@lib/toast";
@@ -56,7 +58,6 @@ export default function DataGrid({
   schema,
   initialFilters,
 }: DataGridProps) {
-  const queryTableData = useSchemaStore((s) => s.queryTableData);
   const addTab = useWorkspaceStore((s) => s.addTab);
   const updateTabSorts = useWorkspaceStore((s) => s.updateTabSorts);
   const workspaceKey = useCurrentWorkspaceKey();
@@ -227,9 +228,14 @@ export default function DataGrid({
         sorts.length > 0
           ? sorts.map((s) => `${s.column} ${s.direction}`).join(", ")
           : undefined;
+      // Sprint 354 (L2 fix) — `queryTableData` now lives in `@lib/tauri`
+      // directly; the call signature here is the canonical tauri shape
+      // `(connectionId, table, schema, page, pageSize, orderBy, filters,
+      // rawWhere, expectedDatabase)`. The schemaStore wrapper accepted
+      // `(connId, db, table, schema, ...)` and forwarded `db` as the last
+      // arg; this call inlines that swap.
       const result = await queryTableData(
         connectionId,
-        database,
         table,
         schema,
         page,
@@ -237,6 +243,7 @@ export default function DataGrid({
         orderBy,
         activeRaw ? undefined : activeFilters,
         activeRaw,
+        database,
       );
       if (fetchId === fetchIdRef.current) {
         setData(result);
@@ -274,7 +281,6 @@ export default function DataGrid({
     sorts,
     appliedFilters,
     appliedRawSql,
-    queryTableData,
   ]);
 
   // Cancel handler for the rdb DataGrid. Bumps `fetchIdRef` so the

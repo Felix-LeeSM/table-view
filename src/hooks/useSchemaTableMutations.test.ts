@@ -14,6 +14,13 @@ import type { TableInfo } from "@/types/schema";
 // 2026-05-12 — Sprint 263. `tables` is now nested
 // `Record<connId, Record<db, Record<schema, TableInfo[]>>>`; the hook's
 // `dropTable` / `renameTable` accept `(connId, db, table, schema[, newName])`.
+//
+// 2026-05-16 — Sprint 354 (L2 fix). `schemaStore.dropTable` /
+// `schemaStore.renameTable` were thin pass-throughs and have been
+// removed; the hook now calls `tauri.dropTable` / `tauri.renameTable`
+// directly, forwarding `database` as `expectedDatabase`. The mock
+// assertions in this file now expect the canonical tauri arg shape
+// (`(connId, table, schema, [newName,] expectedDatabase)`).
 
 const {
   mockStoreDrop,
@@ -108,6 +115,10 @@ function getTables(connId: string, db: string, schema: string): TableInfo[] {
 
 describe("useSchemaTableMutations", () => {
   beforeEach(() => {
+    // Sprint 354 (L2 fix) — mockStoreDrop / mockStoreRename remain in the
+    // schemaStore mock surface (the prior contract), but the hook no
+    // longer reads them; assertions land on mockTauriDrop / Rename
+    // directly. Reset all anyway so leaks across tests don't surprise us.
     mockStoreDrop.mockReset();
     mockStoreRename.mockReset();
     mockTauriDrop.mockReset();
@@ -115,18 +126,6 @@ describe("useSchemaTableMutations", () => {
     mockTauriListTables.mockReset();
     mockSetState.mockClear();
     mockGetState.mockClear();
-    // Default: store actions resolve (the thinned schemaStore body just
-    // forwards to tauri.dropTable / tauri.renameTable).
-    mockStoreDrop.mockImplementation(
-      async (cid: string, _db: string, t: string, s: string) => {
-        await mockTauriDrop(cid, t, s);
-      },
-    );
-    mockStoreRename.mockImplementation(
-      async (cid: string, _db: string, t: string, s: string, n: string) => {
-        await mockTauriRename(cid, t, s, n);
-      },
-    );
     mockTauriDrop.mockResolvedValue(undefined);
     mockTauriRename.mockResolvedValue(undefined);
     // Fresh state per test so cache assertions are isolated.
@@ -148,7 +147,15 @@ describe("useSchemaTableMutations", () => {
       await result.current.dropTable("conn1", "db1", "users", "public");
     });
 
-    expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
+    // Sprint 354 (L2 fix) — `database` forwarded as last positional arg
+    // (`expectedDatabase`) since the hook now bypasses the
+    // schemaStore.dropTable pass-through.
+    expect(mockTauriDrop).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "db1",
+    );
     // Sprint 271a (2026-05-13) — `database` forwarded as expectedDatabase
     // so a swapped pool fails closed before populating wrong-db cache.
     expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public", "db1");
@@ -169,7 +176,15 @@ describe("useSchemaTableMutations", () => {
       await result.current.dropTable("conn1", "db1", "users", "public");
     });
 
-    expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
+    // Sprint 354 (L2 fix) — `database` forwarded as last positional arg
+    // (`expectedDatabase`) since the hook now bypasses the
+    // schemaStore.dropTable pass-through.
+    expect(mockTauriDrop).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "db1",
+    );
     // Optimistically removed from cache
     expect(getTables("conn1", "db1", "public")).toHaveLength(1);
     expect(getTables("conn1", "db1", "public")[0]!.name).toBe("orders");
@@ -185,7 +200,15 @@ describe("useSchemaTableMutations", () => {
       await result.current.dropTable("conn1", "db1", "users", "public");
     });
 
-    expect(mockTauriDrop).toHaveBeenCalledWith("conn1", "users", "public");
+    // Sprint 354 (L2 fix) — `database` forwarded as last positional arg
+    // (`expectedDatabase`) since the hook now bypasses the
+    // schemaStore.dropTable pass-through.
+    expect(mockTauriDrop).toHaveBeenCalledWith(
+      "conn1",
+      "users",
+      "public",
+      "db1",
+    );
     // No crash, table list stays empty for this slot
     expect(getTables("conn1", "db1", "public")).toHaveLength(0);
   });
@@ -208,11 +231,15 @@ describe("useSchemaTableMutations", () => {
       );
     });
 
+    // Sprint 354 (L2 fix) — `database` forwarded as last positional arg
+    // (`expectedDatabase`) since the hook now bypasses the
+    // schemaStore.renameTable pass-through.
     expect(mockTauriRename).toHaveBeenCalledWith(
       "conn1",
       "users",
       "public",
       "people",
+      "db1",
     );
     // Sprint 271a (2026-05-13) — `database` forwarded as expectedDatabase.
     expect(mockTauriListTables).toHaveBeenCalledWith("conn1", "public", "db1");
@@ -235,11 +262,15 @@ describe("useSchemaTableMutations", () => {
       );
     });
 
+    // Sprint 354 (L2 fix) — `database` forwarded as last positional arg
+    // (`expectedDatabase`) since the hook now bypasses the
+    // schemaStore.renameTable pass-through.
     expect(mockTauriRename).toHaveBeenCalledWith(
       "conn1",
       "users",
       "public",
       "people",
+      "db1",
     );
     expect(getTables("conn1", "db1", "public")[0]!.name).toBe("people");
   });
@@ -260,11 +291,15 @@ describe("useSchemaTableMutations", () => {
       );
     });
 
+    // Sprint 354 (L2 fix) — `database` forwarded as last positional arg
+    // (`expectedDatabase`) since the hook now bypasses the
+    // schemaStore.renameTable pass-through.
     expect(mockTauriRename).toHaveBeenCalledWith(
       "conn1",
       "users",
       "public",
       "people",
+      "db1",
     );
     // No crash, empty array mapped to empty array
     expect(getTables("conn1", "db1", "public")).toHaveLength(0);

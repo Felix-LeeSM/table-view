@@ -30,17 +30,24 @@ import paradigmEditAdapterSource from "@/lib/datagrid/paradigmEditAdapter.ts?raw
 //   4. Static guard — the SQL branch catch block is non-empty (regression
 //      guard against re-introducing the silent-swallow bug).
 
-const mockExecuteQuery = vi.fn();
-const mockExecuteQueryBatch = vi.fn();
+const { mockExecuteQuery, mockExecuteQueryBatch } = vi.hoisted(() => ({
+  mockExecuteQuery: vi.fn(),
+  mockExecuteQueryBatch: vi.fn(),
+}));
 const mockFetchData = vi.fn();
 
-vi.mock("@stores/schemaStore", () => ({
-  useSchemaStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      executeQuery: mockExecuteQuery,
-      executeQueryBatch: mockExecuteQueryBatch,
-    }),
-}));
+// Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` moved out of
+// `schemaStore` to `@lib/tauri`. Mock the canonical home so
+// `useDataGridPreviewCommit`'s direct import resolves to our spy.
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    executeQuery: mockExecuteQuery,
+    executeQueryBatch: mockExecuteQueryBatch,
+  };
+});
 
 vi.mock("@stores/workspaceStore", () => ({
   useActiveTabId: () => "tab-1",

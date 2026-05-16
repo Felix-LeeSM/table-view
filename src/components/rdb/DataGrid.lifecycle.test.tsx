@@ -37,6 +37,31 @@ vi.mock("@stores/schemaStore", () => ({
     }),
 }));
 
+// Sprint 354 (L2 fix, 2026-05-16) — `queryTableData` / `executeQuery` /
+// `executeQueryBatch` moved out of `schemaStore` to `@lib/tauri`. Use
+// `importOriginal` so the real exports (cancelQuery, executeQueryDryRun,
+// etc.) stay live and only the three commit-path symbols become spies.
+// The getter-property pattern defers the spy lookup until the call site
+// fires, which sidesteps the
+// `Cannot access '__vi_import_X__'` hoisting race that hits when the
+// factory closes over the helper-exported spy reference directly.
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    get queryTableData() {
+      return mockQueryTableData;
+    },
+    get executeQuery() {
+      return mockExecuteQuery;
+    },
+    get executeQueryBatch() {
+      return mockExecuteQueryBatch;
+    },
+  };
+});
+
 // Sprint 76 — a minimal reactive mock that mirrors zustand's hook + getState
 // shape. The component subscribes through the selector; `updateTabSorts`
 // mutates the tab entry and bumps `version` so every selector re-runs on
@@ -119,12 +144,17 @@ describe("DataGrid", () => {
   });
 
   // 1. Initial rendering — queryTableData called with correct args
+  //
+  // Sprint 354 (L2 fix, 2026-05-16) — the schemaStore wrapper accepted
+  // `(connId, db, table, schema, ...)`; the new direct `tauri.queryTableData`
+  // signature is `(connectionId, table, schema, page, pageSize, orderBy,
+  // filters, rawWhere, expectedDatabase)`. `db` moves to the last
+  // positional slot (`expectedDatabase`).
   it("calls queryTableData with correct arguments on mount", async () => {
     renderDataGrid();
     await screen.findByText("3 rows");
     expect(mockQueryTableData).toHaveBeenCalledWith(
       "conn1",
-      "db1",
       "users",
       "public",
       1,
@@ -132,6 +162,7 @@ describe("DataGrid", () => {
       undefined,
       undefined,
       undefined,
+      "db1",
     );
   });
 
@@ -297,18 +328,20 @@ describe("DataGrid", () => {
       fireEvent.click(clearBtn);
     });
 
-    // After clearing, the data refetches with NO filters applied. The 7th
-    // positional arg to queryTableData is `filters` — it must be undefined
-    // (DataGrid passes `undefined` when `appliedFilters.length === 0`).
+    // After clearing, the data refetches with NO filters applied. Sprint
+    // 354 (L2 fix) — the schemaStore wrapper accepted `db` as positional
+    // arg 1 so `filters` was at index 7 and `rawWhere` at index 8. The
+    // new direct tauri signature is `(conn, table, schema, page,
+    // pageSize, orderBy, filters, rawWhere, expectedDatabase)` — filters
+    // is now at index 6 and rawWhere at index 7.
     await waitFor(() => {
       expect(mockQueryTableData.mock.calls.length).toBeGreaterThan(callsBefore);
     });
     const lastCall = mockQueryTableData.mock.calls[
       mockQueryTableData.mock.calls.length - 1
     ] as unknown[];
+    expect(lastCall[6]).toBeUndefined();
     expect(lastCall[7]).toBeUndefined();
-    // raw SQL slot (9th arg, post-Sprint-263 db insertion) must also be cleared.
-    expect(lastCall[8]).toBeUndefined();
 
     // After the unfiltered fetch resolves, the unfiltered rows render.
     await screen.findByText("3 rows");

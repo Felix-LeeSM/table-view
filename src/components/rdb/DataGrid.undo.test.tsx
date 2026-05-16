@@ -17,6 +17,7 @@ import { screen, fireEvent, act } from "@testing-library/react";
 import type { SortInfo } from "@/types/schema";
 import {
   mockQueryTableData,
+  mockExecuteQuery,
   mockExecuteQueryBatch,
   mockPromoteTab,
   mockUpdateTabSorts,
@@ -38,6 +39,31 @@ vi.mock("@stores/schemaStore", () => ({
       executeQueryBatch: mockExecuteQueryBatch,
     }),
 }));
+
+// Sprint 354 (L2 fix, 2026-05-16) — `queryTableData` / `executeQuery` /
+// `executeQueryBatch` moved out of `schemaStore` to `@lib/tauri`. Use
+// `importOriginal` so the real exports (cancelQuery, executeQueryDryRun,
+// etc.) stay live and only the three commit-path symbols become spies.
+// The getter-property pattern defers the spy lookup until the call site
+// fires, which sidesteps the
+// `Cannot access '__vi_import_X__'` hoisting race that hits when the
+// factory closes over the helper-exported spy reference directly.
+vi.mock("@lib/tauri", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/tauri")>("@lib/tauri");
+  return {
+    ...actual,
+    get queryTableData() {
+      return mockQueryTableData;
+    },
+    get executeQuery() {
+      return mockExecuteQuery;
+    },
+    get executeQueryBatch() {
+      return mockExecuteQueryBatch;
+    },
+  };
+});
 
 interface MockTabShape {
   id: string;
