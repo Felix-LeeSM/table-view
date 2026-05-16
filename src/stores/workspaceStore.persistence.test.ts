@@ -1,15 +1,15 @@
 /**
  * `workspaceStore` persistence axis. Sprint 262 (ADR 0027) TDD slice.
  *
- * Behaviors:
- *   - Mutations debounce-persist to `table-view-workspaces`.
- *   - `loadPersistedWorkspaces()` rehydrates the nested map.
- *   - Round-trip preserves (connId, db) keys and tab data; running query
- *     state collapses to idle (in-flight queries can't resume).
+ * Behaviors (updated 2026-05-16, sprint-358):
+ *   - LS write 사이트는 W1 시작 시점부터 0 (codex 6차 #5). 본 store 의 mutation
+ *     은 더 이상 `table-view-workspaces` 키에 write 하지 않는다 — backend
+ *     `persist_workspace` IPC 의 SQLite UPSERT 가 SOT.
+ *   - `loadPersistedWorkspaces()` 는 legacy LS read 만 유지 (boot 시 import
+ *     fallback) — 본 테스트는 그 read path 를 seed 된 LS entry 로부터 검증.
  *
- * Author intent (2026-05-12): vertical-slice persistence smoke. We rely
- * on `vi.useFakeTimers()` to drive the 200ms debounce deterministically,
- * mirroring `tabStore.persistence.test.ts` patterns.
+ * Author intent (2026-05-12): vertical-slice persistence smoke. Sprint 358
+ * 에서 write path 를 read-only-from-legacy 로 좁힘.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWorkspaceStore } from "./workspaceStore";
@@ -43,21 +43,47 @@ describe("workspaceStore — persistence", () => {
     restoreLocalStorage();
   });
 
-  it("debounce-persists workspaces under table-view-workspaces key, restored via loadPersistedWorkspaces", () => {
+  it("sprint-358: mutating the store NO LONGER writes to localStorage (SQLite-only via persist_workspace IPC)", () => {
+    // 작성 2026-05-16 (sprint-358) — codex 6차 #5: workspace write 사이트
+    // 제거. 200ms debounce 가 지나도 LS entry 가 생기지 않음.
     useWorkspaceStore.getState().addTab("conn1", makeInit());
     vi.advanceTimersByTime(250);
+    expect(window.localStorage.getItem("table-view-workspaces")).toBeNull();
+  });
 
-    const raw = window.localStorage.getItem("table-view-workspaces");
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!) as {
-      workspaces: Record<string, Record<string, unknown>>;
+  it("loadPersistedWorkspaces still rehydrates from legacy LS seed (boot import fallback)", () => {
+    // Pre-seed LS as if a previous app version had written it. boot 시점의
+    // import path 가 본 entry 를 read 해서 hydration 한다.
+    const seeded = {
+      workspaces: {
+        conn1: {
+          dbA: {
+            tabs: [
+              {
+                type: "table",
+                id: "t-legacy-1",
+                title: "users",
+                connectionId: "conn1",
+                closable: true,
+                schema: "public",
+                table: "users",
+                subView: "records",
+                database: "dbA",
+              },
+            ],
+            activeTabId: "t-legacy-1",
+            closedTabHistory: [],
+            dirtyTabIds: [],
+            sidebar: { selectedNode: null, expanded: [], scrollTop: 0 },
+          },
+        },
+      },
     };
-    expect(parsed.workspaces).toBeDefined();
-    expect(parsed.workspaces["conn1"]).toBeDefined();
-    expect(parsed.workspaces["conn1"]!["dbA"]).toBeDefined();
-
+    window.localStorage.setItem(
+      "table-view-workspaces",
+      JSON.stringify(seeded),
+    );
     useWorkspaceStore.setState({ workspaces: {} });
-    expect(useWorkspaceStore.getState().workspaces).toEqual({});
 
     useWorkspaceStore.getState().loadPersistedWorkspaces();
     const ws = useWorkspaceStore.getState().workspaces["conn1"]?.["dbA"];

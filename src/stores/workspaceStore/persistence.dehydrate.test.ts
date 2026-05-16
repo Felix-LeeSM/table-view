@@ -56,7 +56,7 @@ function makeWorkspace(
   };
 }
 
-describe("persistWorkspaces — Sprint 353 (writes the dehydrated blob, not the raw memory shape)", () => {
+describe("persistWorkspaces — Sprint 353 (dehydration invariants preserved as `dehydrate()` purity)", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -65,7 +65,11 @@ describe("persistWorkspaces — Sprint 353 (writes the dehydrated blob, not the 
     window.localStorage.clear();
   });
 
-  it("strips dirtyTabIds, idle-forces queryState, and caps closedTabHistory at 25 before writing to localStorage", () => {
+  it("calling persistWorkspaces no longer writes the blob to LS (sprint-358), but `dehydrate()` still strips dirtyTabIds, idle-forces queryState, and caps closedTabHistory at 25", () => {
+    // 작성 2026-05-16 (sprint-358) — Sprint 353 의 strip invariants 는 dehydrate
+    // 함수 자체가 보장하지만, persist 사이트가 LS 에서 SQLite-only 로 이전됨에
+    // 따라 본 테스트는 (1) persistWorkspaces 호출이 더 이상 LS 에 쓰지 않음을
+    // 확인하고 (2) dehydrate 의 strip 의미는 그대로 직접 호출해 검증한다.
     const completed = makeQueryTab({
       sql: "SELECT * FROM users",
       queryState: {
@@ -94,13 +98,11 @@ describe("persistWorkspaces — Sprint 353 (writes the dehydrated blob, not the 
     };
 
     persistWorkspaces({ c1: { d1: memory } });
+    // sprint-358 invariant: LS write 사이트 0.
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
 
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!) as {
-      workspaces: Record<string, Record<string, WorkspaceState>>;
-    };
-    const persistedWs = parsed.workspaces.c1!.d1!;
+    // Sprint 353 strip invariants — `dehydrate()` 단독 호출로 검증.
+    const persistedWs = dehydrate(memory);
     expect(persistedWs.dirtyTabIds).toEqual([]);
     expect((persistedWs.tabs[0] as QueryTab).queryState).toEqual({
       status: "idle",

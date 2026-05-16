@@ -2,7 +2,9 @@ pub mod corrupt_recovery;
 pub mod crypto;
 pub mod key_migration;
 pub mod local;
+pub mod local_files;
 pub mod meta;
+pub mod reconcile;
 
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};

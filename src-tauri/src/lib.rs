@@ -134,6 +134,14 @@ pub fn run() {
         // stores + runtime.activeStatuses 를 단일 `BEGIN IMMEDIATE` 트랜잭션
         // 안에서 read. p95 < 50ms.
         commands::snapshot::get_initial_app_state,
+        // Sprint 358 (Phase 1 W1) — dual-write IPC. 4 도메인 (connections /
+        // favorites / mru / settings) 은 file/LS + SQLite mirror. workspaces 는
+        // SQLite-only (codex 6차 #5). 모두 guard_legacy_import_done 통과 후만 write.
+        commands::persist_connections::persist_connection,
+        commands::persist_favorites::persist_favorites,
+        commands::persist_mru::persist_mru,
+        commands::persist_settings::persist_setting,
+        commands::persist_workspace::persist_workspace,
         commands::connection::crud::list_connections,
         commands::connection::session::get_session_id,
         commands::connection::crud::save_connection,
