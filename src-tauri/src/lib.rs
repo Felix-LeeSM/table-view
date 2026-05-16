@@ -3,6 +3,7 @@
 pub mod commands;
 pub mod db;
 pub mod error;
+pub mod events;
 pub mod launcher;
 pub mod models;
 pub mod state;
