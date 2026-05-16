@@ -332,8 +332,9 @@ export default function DocumentDataGrid({
   );
 
   // Sprint 258 — column widths via shared hook + `--cols` CSS variable.
-  // Sprint 260 (AC-260-02) — drag-resize 도 활성. 결과는 `document:<db>:<coll>`
-  // 단위 localStorage 에 persist (Sprint 259 의 영속 키 유지).
+  // Sprint 260 (AC-260-02) — drag-resize 활성.
+  // Sprint 369 (Phase 4) — `datagrid_column_prefs` SQLite SOT 로 전환.
+  // PK 의 `namespace` 는 Mongo 의 경우 db_name 과 동일 (codex 7차 #2 동의어 통일).
   const widthColumns = useMemo(
     () =>
       (data?.columns ?? []).map((c) => ({
@@ -342,18 +343,26 @@ export default function DocumentDataGrid({
       })),
     [data?.columns],
   );
-  const persistenceKey = `document:${database}:${collection}`;
+  const columnPrefsPk = useMemo(
+    () => ({
+      connectionId,
+      paradigm: "document" as const,
+      dbName: database,
+      namespace: database,
+      tableName: collection,
+    }),
+    [connectionId, database, collection],
+  );
   const {
     widths,
     setWidth,
     reset: resetColumnWidths,
-  } = useColumnWidths(widthColumns, persistenceKey);
+  } = useColumnWidths(widthColumns, columnPrefsPk);
 
   // Sprint 317 — Slice D.1: per-collection hide column.
-  // localStorage key = `hidden-columns:document:<db>:<coll>`. Sharing
-  // the same `document:<db>:<coll>` namespace as widths keeps the
-  // persisted state cohesive (D-35).
-  const hiddenColumns = useHiddenColumns(persistenceKey);
+  // Sprint 369 — 같은 PK 5-tuple 사용. backend partial patch 가 widths /
+  // hiddenColumns 의 독립성 보장 (codex 7차 #1).
+  const hiddenColumns = useHiddenColumns(columnPrefsPk);
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 

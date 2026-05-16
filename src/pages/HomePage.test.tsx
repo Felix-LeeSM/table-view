@@ -386,19 +386,35 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
   });
 
-  it("AC-296-03: collapse 상태는 table-view-recent-collapsed 키로 영속된다", () => {
-    const { unmount } = render(<HomePage />);
+  // Sprint 369 (Phase 4, Q20.1) — `table-view-recent-collapsed` LS 영속 폐기.
+  // 본 토글은 이제 `persist_setting("home_recent_collapsed", bool)` IPC 로
+  // SQLite SOT 에 commit. LS getItem/setItem 0 회.
+  it("Sprint 369: toggle dispatches persistSetting IPC and never touches the legacy LS key", async () => {
+    const getSpy = vi.spyOn(window.localStorage, "getItem");
+    const setSpy = vi.spyOn(window.localStorage, "setItem");
+    render(<HomePage />);
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: /toggle recent/i }));
     });
-    expect(window.localStorage.getItem("table-view-recent-collapsed")).toBe(
-      "1",
+    // IPC 가 미시동기로 fire — `void promise` 패턴이므로 microtask flush.
+    await Promise.resolve();
+    // Snapshot spy calls BEFORE we ourselves call getItem in the assertion
+    // below (which would otherwise contaminate the spy state).
+    const reads = getSpy.mock.calls.filter(
+      (c) => c[0] === "table-view-recent-collapsed",
     );
-    unmount();
-    render(<HomePage />);
+    const writes = setSpy.mock.calls.filter(
+      (c) => c[0] === "table-view-recent-collapsed",
+    );
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+    getSpy.mockRestore();
+    setSpy.mockRestore();
+    // Now safe to read directly — the spies are restored, this call no
+    // longer affects the assertion above.
     expect(
-      screen.getByRole("button", { name: /toggle recent/i }),
-    ).toHaveAttribute("aria-expanded", "false");
+      window.localStorage.getItem("table-view-recent-collapsed"),
+    ).toBeNull();
   });
 
   // Reason: Sprint 157 — showWindow 실패 후에도 가드 해제되어 재시도 가능 (2026-04-28)

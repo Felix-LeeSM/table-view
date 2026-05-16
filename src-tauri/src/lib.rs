@@ -293,6 +293,20 @@ pub fn run() {
         // `open_workspace_window(connection_id)` is idempotent: re-focuses
         // an existing `workspace-{connection_id}` window or builds a new one.
         commands::open_workspace_window::open_workspace_window,
+        // Sprint 369 (Phase 4, Q20) — datagrid_column_prefs SQLite SOT.
+        // partial patch (widths/hiddenColumns) + field-scoped reset + get default.
+        commands::datagrid_prefs::set_datagrid_prefs,
+        commands::datagrid_prefs::get_datagrid_prefs,
+        commands::datagrid_prefs::reset_datagrid_prefs,
+        // Sprint 369 (Phase 4, Q20.3) — group collapse boolean. legacy
+        // `table-view-group-collapsed` LS map → SQLite SOT for cross-window
+        // sync.
+        commands::groups_collapsed::set_group_collapsed,
+        // Sprint 369 (Phase 4) — meta sentinel get/set. Legacy
+        // `column-widths:*` / `hidden-columns:*` LS drop 의 one-shot toast
+        // 가 사용. settings known key 가 아니므로 Q21 reset audit 대상 0.
+        commands::meta_sentinel::get_meta_sentinel,
+        commands::meta_sentinel::set_meta_sentinel,
     ]);
     record_phase(&mut cursor, "invoke-handler-register");
 

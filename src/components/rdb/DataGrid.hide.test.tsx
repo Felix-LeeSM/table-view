@@ -175,7 +175,9 @@ describe("RDB DataGrid — hide column (Sprint 318 D.2)", () => {
     expect(screen.getByTitle("Sort by name")).toBeInTheDocument();
   });
 
-  it("persists hidden columns under hidden-columns:rdb:<schema>:<table>", async () => {
+  it("Sprint 369: Hide column never writes hidden-columns:* localStorage (IPC SOT)", async () => {
+    const getSpy = vi.spyOn(window.localStorage, "getItem");
+    const setSpy = vi.spyOn(window.localStorage, "setItem");
     renderDataGrid();
     await screen.findByText("3 rows");
 
@@ -185,13 +187,24 @@ describe("RDB DataGrid — hide column (Sprint 318 D.2)", () => {
     });
 
     await waitFor(() => {
-      const raw = window.localStorage.getItem(
-        "hidden-columns:rdb:public:users",
+      expect(screen.getByLabelText("Hidden columns badge")).toHaveTextContent(
+        "1 column hidden",
       );
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw!) as string[];
-      expect(parsed).toEqual(["meta"]);
     });
+
+    expect(
+      window.localStorage.getItem("hidden-columns:rdb:public:users"),
+    ).toBeNull();
+    const reads = getSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("hidden-columns:"),
+    );
+    const writes = setSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("hidden-columns:"),
+    );
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+    getSpy.mockRestore();
+    setSpy.mockRestore();
   });
 
   it("Show all restores every column and wipes persisted state", async () => {
@@ -229,7 +242,11 @@ describe("RDB DataGrid — hide column (Sprint 318 D.2)", () => {
     ).toBeNull();
   });
 
-  it("loads persisted hidden columns on mount", async () => {
+  // Sprint 369 — mount 시 hydration 은 IPC `get_datagrid_prefs` 책임.
+  // jsdom 환경에서 invoke mock 없이 호출되면 throw → hook 의 catch 가 silently
+  // empty 로 둠. legacy LS 값은 더 이상 hydrate 경로가 아니므로 mount 시
+  // 보이는 것이 invariant.
+  it("Sprint 369: legacy hidden-columns:* LS 값 무시 (LS 영속 폐기)", async () => {
     window.localStorage.setItem(
       "hidden-columns:rdb:public:users",
       JSON.stringify(["meta"]),
@@ -238,10 +255,8 @@ describe("RDB DataGrid — hide column (Sprint 318 D.2)", () => {
     renderDataGrid();
     await screen.findByText("3 rows");
 
-    // `meta` should be hidden from the start.
-    expect(screen.queryByTitle("Sort by meta")).toBeNull();
-    expect(screen.getByLabelText("Hidden columns badge")).toHaveTextContent(
-      "1 column hidden",
-    );
+    // `meta` should NOT be hidden — LS hydration path is dead.
+    expect(screen.queryByTitle("Sort by meta")).not.toBeNull();
+    expect(screen.queryByLabelText("Hidden columns badge")).toBeNull();
   });
 });

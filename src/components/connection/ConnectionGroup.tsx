@@ -30,29 +30,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@components/ui/alert-dialog";
+import { setGroupCollapsed } from "@lib/tauri/groups";
 import GroupDialog from "./GroupDialog";
 
 // ---------------------------------------------------------------------------
-// Collapse-state persistence (localStorage)
+// Collapse-state persistence (Sprint 369 Phase 4 Q20.3)
 // ---------------------------------------------------------------------------
-
-const COLLAPSE_KEY = "table-view-group-collapsed";
-
-function loadCollapsedState(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(COLLAPSE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    // localStorage unavailable or value corrupted — start with no collapse state.
-    return {};
-  }
-}
-
-function saveCollapsedState(groupId: string, collapsed: boolean) {
-  const state = loadCollapsedState();
-  state[groupId] = collapsed;
-  localStorage.setItem(COLLAPSE_KEY, JSON.stringify(state));
-}
+//
+// 기존 `table-view-group-collapsed` localStorage map 영속 폐기. SQLite
+// `connection_groups.collapsed` 컬럼이 SOT. 본 컴포넌트는 group prop 의
+// `collapsed` 값으로 mount 하고 toggle 시 `set_group_collapsed` IPC + (store
+// 가 hydrate 한 다음 sprint 에서) state-changed 가 cross-window 로 전파.
 
 interface ConnectionGroupProps {
   group: ConnectionGroupType;
@@ -69,10 +57,7 @@ export default function ConnectionGroup({
   onSelect,
   onActivate,
 }: ConnectionGroupProps) {
-  const [collapsed, setCollapsed] = useState(() => {
-    const stored = loadCollapsedState();
-    return stored[group.id] ?? group.collapsed;
-  });
+  const [collapsed, setCollapsed] = useState(() => group.collapsed);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(group.name);
   const renameRef = useRef<HTMLInputElement>(null);
@@ -102,7 +87,11 @@ export default function ConnectionGroup({
     if (renaming) return;
     const next = !collapsed;
     setCollapsed(next);
-    saveCollapsedState(group.id, next);
+    // SQLite SOT. Failure leaves the UI updated — cross-window broadcast 도
+    // 실패한 셈이지만 사용자 mutate 가 다시 들어오면 retry. (best-effort.)
+    void setGroupCollapsed({ groupId: group.id, collapsed: next }).catch(() => {
+      /* best-effort */
+    });
   };
 
   // Group-wide drop target: any drop within the group's padded visual area

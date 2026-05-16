@@ -127,21 +127,36 @@ describe("DocumentDataGrid — hide column (Sprint 317 D.1)", () => {
     expect(badge).toHaveTextContent("1 column hidden");
   });
 
-  it("Hide column persists to localStorage under hidden-columns:document:<db>:<coll>", async () => {
+  it("Sprint 369: Hide column never writes hidden-columns:* localStorage (IPC SOT)", async () => {
+    const getSpy = vi.spyOn(window.localStorage, "getItem");
+    const setSpy = vi.spyOn(window.localStorage, "setItem");
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
     rightClickHeader("email");
     fireEvent.click(screen.getByRole("menuitem", { name: "Hide column" }));
 
-    await waitFor(() => {
-      const raw = window.localStorage.getItem(
+    // Badge appears — UI-level mutation is what users see.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Hidden columns badge")).toHaveTextContent(
+        "1 column hidden",
+      ),
+    );
+    expect(
+      window.localStorage.getItem(
         "hidden-columns:document:table_view_test:users",
-      );
-      expect(raw).not.toBeNull();
-      const parsed = JSON.parse(raw!) as string[];
-      expect(parsed).toEqual(["email"]);
-    });
+      ),
+    ).toBeNull();
+    const reads = getSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("hidden-columns:"),
+    );
+    const writes = setSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("hidden-columns:"),
+    );
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+    getSpy.mockRestore();
+    setSpy.mockRestore();
   });
 
   it("Show all clears every hidden column and removes the badge", async () => {
@@ -184,7 +199,12 @@ describe("DocumentDataGrid — hide column (Sprint 317 D.1)", () => {
     ).toBeNull();
   });
 
-  it("loads persisted hidden columns on mount", async () => {
+  // Sprint 369 — mount 시 hydration 은 `get_datagrid_prefs` IPC 가 담당.
+  // 본 test 는 backend 가 없는 jsdom 환경 (invoke mock 미설치) 에서는 IPC
+  // 응답이 없어 항상 empty 로 hydrate. 자세한 IPC contract 는
+  // `src/hooks/useHiddenColumns.test.ts` 가 lock — 여기서는 legacy LS 의
+  // 부재만 invariant 로 확인한다.
+  it("Sprint 369: legacy hidden-columns:* LS 값 무시 (LS 영속 폐기)", async () => {
     window.localStorage.setItem(
       "hidden-columns:document:table_view_test:users",
       JSON.stringify(["email"]),
@@ -193,11 +213,8 @@ describe("DocumentDataGrid — hide column (Sprint 317 D.1)", () => {
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
 
-    // email is hidden from the start — header absent, badge present.
-    expect(queryHeader("email")).toBeNull();
-    expect(screen.queryByText("alice@example.com")).toBeNull();
-    expect(screen.getByLabelText("Hidden columns badge")).toHaveTextContent(
-      "1 column hidden",
-    );
+    // email 은 더 이상 LS 에서 hydrate 되지 않으므로 header 가 노출되어야 함.
+    expect(queryHeader("email")).not.toBeNull();
+    expect(screen.queryByLabelText("Hidden columns badge")).toBeNull();
   });
 });

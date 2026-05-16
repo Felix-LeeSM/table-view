@@ -1036,10 +1036,16 @@ describe("ConnectionGroup", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Phase 15 AC-15-04 — Collapse state persistence to localStorage
+  // Sprint 369 (Phase 4, Q20.3) — Collapse persistence migrated LS → SQLite.
   // -----------------------------------------------------------------------
-  // Reason: Phase 15 AC-15-04 — collapse 상태가 localStorage에 저장됨 (2026-04-28)
-  it("persists collapse state to localStorage on toggle", () => {
+  // 작성 이유 (2026-05-16): `table-view-group-collapsed` localStorage map 폐기.
+  // `set_group_collapsed(group_id, collapsed)` IPC 가 SQLite SOT 에 commit.
+  // 본 컴포넌트는 group.collapsed prop 으로 mount → 그 값이 SQLite hydrate
+  // 결과를 반영 (snapshot 가 hydrate 하는 후속 sprint 에서 보장). 본 sprint
+  // 의 invariant 는 (1) LS getItem/setItem 0회, (2) toggle 시 IPC 1회.
+  it("Sprint 369: toggle dispatches setGroupCollapsed IPC and never touches the legacy LS key", () => {
+    const getSpy = vi.spyOn(window.localStorage, "getItem");
+    const setSpy = vi.spyOn(window.localStorage, "setItem");
     render(
       <ConnectionGroup
         group={makeGroup({ collapsed: false })}
@@ -1055,33 +1061,21 @@ describe("ConnectionGroup", () => {
     });
     expect(header).toHaveAttribute("aria-expanded", "false");
 
-    const stored = JSON.parse(
-      localStorage.getItem("table-view-group-collapsed")!,
+    // No legacy LS key was ever read or written.
+    const reads = getSpy.mock.calls.filter(
+      (c) => c[0] === "table-view-group-collapsed",
     );
-    expect(stored["g1"]).toBe(true);
+    const writes = setSpy.mock.calls.filter(
+      (c) => c[0] === "table-view-group-collapsed",
+    );
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+    expect(localStorage.getItem("table-view-group-collapsed")).toBeNull();
+    getSpy.mockRestore();
+    setSpy.mockRestore();
   });
 
-  // Reason: Phase 15 AC-15-04 — app 재시작 시 collapse 상태 복원 (2026-04-28)
-  it("restores collapse state from localStorage on mount", () => {
-    localStorage.setItem(
-      "table-view-group-collapsed",
-      JSON.stringify({ g1: true }),
-    );
-
-    render(
-      <ConnectionGroup
-        group={makeGroup({ collapsed: false })}
-        connections={[makeConnection()]}
-      />,
-    );
-
-    const header = screen.getByRole("button");
-    expect(header).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByTestId("connection-item")).not.toBeInTheDocument();
-  });
-
-  // Reason: Phase 15 AC-15-04 — localStorage 없을 시 group.collapsed 기본값 사용 (2026-04-28)
-  it("falls back to group.collapsed when localStorage has no entry", () => {
+  it("Sprint 369: mounts with group.collapsed prop (no LS lookup)", () => {
     render(
       <ConnectionGroup
         group={makeGroup({ collapsed: true })}
@@ -1094,8 +1088,7 @@ describe("ConnectionGroup", () => {
     expect(screen.queryByTestId("connection-item")).not.toBeInTheDocument();
   });
 
-  // Reason: Phase 15 AC-15-04 — toggle collapse multiple times updates localStorage correctly (2026-04-28)
-  it("updates localStorage correctly on multiple toggles", () => {
+  it("Sprint 369: two consecutive toggles flip the local state correctly", () => {
     render(
       <ConnectionGroup
         group={makeGroup({ collapsed: false })}
@@ -1105,21 +1098,15 @@ describe("ConnectionGroup", () => {
 
     const header = screen.getByRole("button");
 
-    // Toggle to collapsed
     act(() => {
       fireEvent.click(header);
     });
-    let stored = JSON.parse(
-      localStorage.getItem("table-view-group-collapsed")!,
-    );
-    expect(stored["g1"]).toBe(true);
+    expect(header).toHaveAttribute("aria-expanded", "false");
 
-    // Toggle back to expanded
     act(() => {
       fireEvent.click(header);
     });
-    stored = JSON.parse(localStorage.getItem("table-view-group-collapsed")!);
-    expect(stored["g1"]).toBe(false);
+    expect(header).toHaveAttribute("aria-expanded", "true");
   });
 
   // -----------------------------------------------------------------------

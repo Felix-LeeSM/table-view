@@ -92,6 +92,18 @@ async function boot() {
       );
     });
 
+  // Sprint 369 (Phase 4) — drop legacy `column-widths:*` / `hidden-columns:*`
+  // localStorage 키 + 사용자 1회 toast. sentinel 이 `meta` 테이블에 set 되어
+  // 이미 보여줬으면 noop. Fire-and-forget — 본 작업이 실패해도 boot 은 계속.
+  void import("@lib/migration/legacyColumnPrefsDrop")
+    .then((m) => m.dropLegacyColumnPrefs())
+    .catch((e) => {
+      logger.warn(
+        "[main] legacy column prefs drop failed:",
+        e instanceof Error ? e.message : e,
+      );
+    });
+
   // Register the launcher's `tauri://close-requested` listener.
   // Fire-and-forget: if it rejects the app still works via system-tray / Cmd+Q.
   void bootWindowLifecycle().catch((e) => {

@@ -134,11 +134,17 @@ export default function DataGrid({
   const [columnOrder, setColumnOrder] = useState<number[]>([]);
   const [showQuickLook, setShowQuickLook] = useState(false);
 
-  // Sprint 318 — Slice D.2: per-table hide column. localStorage key =
-  // `hidden-columns:rdb:<schema>:<table>` (D-39 — `useColumnWidths`
-  // 와 namespace 공유). Hook 자체는 mount 시 자동 load + persistenceKey
-  // swap 시 자동 swap.
-  const hiddenColumns = useHiddenColumns(`rdb:${schema}:${table}`);
+  // Sprint 318 — Slice D.2: per-table hide column.
+  // Sprint 369 (Phase 4) — `hidden-columns:<key>` localStorage 영속 폐기.
+  // Hook 이 ColumnPrefsPk 5-tuple 로 `datagrid_column_prefs` SQLite SOT 와
+  // 통신. mount 시 IPC hydrate + mutate 시 IPC patch (hidden-only).
+  const hiddenColumns = useHiddenColumns({
+    connectionId,
+    paradigm: "rdb",
+    dbName: database,
+    namespace: schema,
+    tableName: table,
+  });
 
   // Sprint 238 — DataGridTable owns column-width state via
   // `useColumnWidths`. Reset is exposed via imperative handle and wired
@@ -676,6 +682,13 @@ export default function DataGrid({
           onClearAllSorts={handleClearAllSorts}
           hiddenColumnNames={hiddenColumns.hidden}
           onHideColumn={hiddenColumns.hide}
+          columnPrefsPk={{
+            connectionId,
+            paradigm: "rdb",
+            dbName: database,
+            namespace: schema,
+            tableName: table,
+          }}
           onDeleteRow={editState.handleDeleteRow}
           onDuplicateRow={editState.handleDuplicateRow}
           onNavigateToFk={handleNavigateToFk}

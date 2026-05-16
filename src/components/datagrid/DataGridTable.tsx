@@ -16,6 +16,7 @@ import { DocumentTreePanel } from "@components/document/DocumentTreePanel";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
 import { useDelayedFlag } from "@/hooks/useDelayedFlag";
+import type { ColumnPrefsPk } from "@/lib/tauri/datagrid_prefs";
 import { getDefaultRem, type ColumnCategory } from "@/lib/columnCategory";
 import type { SortInfo, TableData } from "@/types/schema";
 import { ContextMenu } from "@components/shared/ContextMenu";
@@ -116,6 +117,14 @@ export interface DataGridTableProps {
    * commit anything (read-only fallback).
    */
   setPendingEdits?: (next: Map<string, string | null>) => void;
+  /**
+   * Sprint 369 (Phase 4, Q20) — 5-tuple PK identifying the
+   * `datagrid_column_prefs` row owning this grid's per-table column
+   * widths. Missing → hook stays in-memory only (used by ad-hoc query
+   * grids that have no stable identity). Present → mount-hydrate via
+   * `get_datagrid_prefs` and drag-end via `set_datagrid_prefs`.
+   */
+  columnPrefsPk?: ColumnPrefsPk;
 }
 
 /**
@@ -175,6 +184,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       onDuplicateRow,
       onNavigateToFk,
       setPendingEdits,
+      columnPrefsPk,
     },
     forwardedRef,
   ) {
@@ -320,14 +330,14 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
         })),
       [data.columns],
     );
-    // Sprint 259 — schema.table 단위 localStorage 영속. 다른 테이블로
-    // navigate 시 key 자동 swap (useColumnWidths 내부의 effect).
-    const persistenceKey = `rdb:${schema}:${table}`;
+    // Sprint 369 (Phase 4, Q20) — `datagrid_column_prefs` SQLite SOT.
+    // `columnPrefsPk` 가 들어오면 hook 이 mount 시 IPC hydrate + drag 시 IPC
+    // patch. 미제공 (ad-hoc query result grid) 면 in-memory only.
     const {
       widths,
       setWidth,
       reset: resetColumnWidths,
-    } = useColumnWidths(widthColumns, persistenceKey);
+    } = useColumnWidths(widthColumns, columnPrefsPk);
 
     useImperativeHandle(forwardedRef, () => ({ resetColumnWidths }), [
       resetColumnWidths,

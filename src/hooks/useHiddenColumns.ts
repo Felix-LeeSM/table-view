@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  type ColumnPrefsPk,
+  getDatagridPrefs,
+  setDatagridPrefs,
+} from "@/lib/tauri/datagrid_prefs";
+
 /**
  * Sprint 317 — DataGrid column hide / show 상태 관리 훅.
+ * Sprint 369 (Phase 4) — 영속 매체 localStorage → SQLite SOT 전환.
  *
- * `useColumnWidths` 의 패턴 (per-key localStorage persist + silent
- * fall-back on quota/disabled) 을 복제. 값은 `Set<string>` 으로 노출,
- * 저장은 JSON serializable `string[]`.
+ * - `pk` 가 주어지면 mount 시 `get_datagrid_prefs` IPC 1회로 hydrate,
+ *   hide/show/toggle/clear 호출 시 `set_datagrid_prefs` 의 hiddenColumns
+ *   patch 전송 (widths 는 미포함 → backend 가 보존).
+ * - `pk` 미제공 (ad-hoc / 임시 grid) 은 in-memory only — IPC / LS 접근 모두 0.
  *
- * - `persistenceKey` 가 주어지면 `hidden-columns:<key>` 로 mount 시
- *   load, hide/show/toggle/clear 시 save/clear.
- * - 미제공 시 in-memory only (ad-hoc query grid).
+ * codex 7차 #1 — hidden 변경이 widths 를 건드리지 않는 invariant 는 backend 가
+ * partial patch 로 보장. 본 hook 은 `widths` 필드를 patch 에 미포함시킴으로써
+ * 그 보장을 호출 시점에 갖춘다.
  */
 
 export interface UseHiddenColumnsResult {
@@ -21,65 +29,48 @@ export interface UseHiddenColumnsResult {
   isHidden: (name: string) => boolean;
 }
 
-const STORAGE_PREFIX = "hidden-columns:";
+export function useHiddenColumns(pk?: ColumnPrefsPk): UseHiddenColumnsResult {
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
 
-function loadPersisted(key: string): Set<string> {
-  if (typeof window === "undefined" || !window.localStorage) return new Set();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((v): v is string => typeof v === "string"));
-  } catch {
-    return new Set();
-  }
-}
+  // Stable signature for the IPC effect — JSON identity over the 5-tuple.
+  const pkKey = pk ? JSON.stringify(pk) : null;
 
-function savePersisted(key: string, hidden: ReadonlySet<string>): void {
-  if (typeof window === "undefined" || !window.localStorage) return;
-  try {
-    window.localStorage.setItem(
-      STORAGE_PREFIX + key,
-      JSON.stringify(Array.from(hidden)),
-    );
-  } catch {
-    // quota / disabled → silent no-op. hide UX 우선.
-  }
-}
-
-function clearPersisted(key: string): void {
-  if (typeof window === "undefined" || !window.localStorage) return;
-  try {
-    window.localStorage.removeItem(STORAGE_PREFIX + key);
-  } catch {
-    // no-op.
-  }
-}
-
-export function useHiddenColumns(
-  persistenceKey?: string,
-): UseHiddenColumnsResult {
-  const [hidden, setHidden] = useState<Set<string>>(() =>
-    persistenceKey ? loadPersisted(persistenceKey) : new Set(),
-  );
-
-  // persistenceKey 가 바뀌면 (다른 namespace 진입) 새 key 의 persisted
-  // 값으로 swap.
+  // Mount + pk swap: hydrate from SQLite.
   useEffect(() => {
-    setHidden(persistenceKey ? loadPersisted(persistenceKey) : new Set());
-  }, [persistenceKey]);
+    if (!pk) {
+      // pk 가 사라지면 (in-memory mode 로 전환) hidden 도 초기화.
+      setHidden(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await getDatagridPrefs(pk);
+        if (cancelled) return;
+        setHidden(new Set(resp.hiddenColumns));
+      } catch {
+        // best-effort hydrate. 실패 시 빈 set 유지.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pkKey]);
 
+  // hidden 변경을 backend 로 전송. 인자는 *다음* set — react state 의 stale
+  // closure 위험을 피하기 위해 호출자가 직접 넘긴다.
   const persist = useCallback(
     (next: Set<string>) => {
-      if (!persistenceKey) return;
-      if (next.size === 0) {
-        clearPersisted(persistenceKey);
-      } else {
-        savePersisted(persistenceKey, next);
-      }
+      if (!pk) return;
+      void setDatagridPrefs({
+        ...pk,
+        hiddenColumns: Array.from(next),
+      }).catch(() => {
+        /* best-effort — next mutate will retry */
+      });
     },
-    [persistenceKey],
+    [pk],
   );
 
   const hide = useCallback(

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
@@ -17,25 +17,16 @@ import {
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
 import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
+import { persistSettingValue } from "@lib/tauri/settings";
 
-const WIDTH_KEY = "table-view.sidebar.width";
+// Sprint 369 (Phase 4, Q20.2) — `table-view.sidebar.width` localStorage 영속
+// 폐기. boot snapshot 이 차후 sprint 에서 `settings.sidebar_width` 를 hydrate
+// 하면 그 값을 초기로 사용. 본 sprint 는 default 시작 + drag mouseup 500ms
+// debounce 후 IPC commit 만 책임.
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 540;
 const DEFAULT_WIDTH = 280;
-
-function readWidth(): number {
-  if (typeof window === "undefined") return DEFAULT_WIDTH;
-  try {
-    const v = window.localStorage.getItem(WIDTH_KEY);
-    if (!v) return DEFAULT_WIDTH;
-    const n = parseInt(v, 10);
-    if (!Number.isFinite(n)) return DEFAULT_WIDTH;
-    return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, n));
-  } catch {
-    // localStorage unavailable — fall back to the default sidebar width.
-    return DEFAULT_WIDTH;
-  }
-}
+const PERSIST_DEBOUNCE_MS = 500;
 
 /**
  * Workspace Sidebar — schema/work surface column shown on `WorkspacePage`.
@@ -94,16 +85,38 @@ export default function Sidebar() {
     axis: "horizontal",
     min: MIN_WIDTH,
     max: MAX_WIDTH,
-    initial: readWidth(),
+    initial: DEFAULT_WIDTH,
   });
 
-  // Persist width on every commit (mouseup).
+  // Sprint 369 (Phase 4, Q20.2) — drag mouseup 후 500ms debounce 로
+  // `set_setting("sidebar_width", N)` IPC commit. drag 중 mousemove 는
+  // useResizablePanel 의 hot path 에서 DOM-only 업데이트라 본 effect 는
+  // commit (mouseup → state set) 직후에만 fire — 즉, "drag 종료 후 500ms 안에
+  // 또 다른 drag 가 일어나면 IPC 1회로 합쳐진다" 는 의미. AC-369-12.
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialPersistSkippedRef = useRef(false);
   useEffect(() => {
-    try {
-      window.localStorage.setItem(WIDTH_KEY, String(sidebarWidth));
-    } catch {
-      // ignore
+    // Skip the very first effect run (mount with the default width) — IPC
+    // shouldn't fire just because the component mounted. Subsequent updates
+    // (mouseup commit) trigger the debounced persist.
+    if (!initialPersistSkippedRef.current) {
+      initialPersistSkippedRef.current = true;
+      return;
     }
+    if (persistTimerRef.current !== null) {
+      clearTimeout(persistTimerRef.current);
+    }
+    persistTimerRef.current = setTimeout(() => {
+      void persistSettingValue("sidebar_width", sidebarWidth).catch(() => {
+        /* best-effort — next drag retries */
+      });
+    }, PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (persistTimerRef.current !== null) {
+        clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+    };
   }, [sidebarWidth]);
 
   const activeEntry =

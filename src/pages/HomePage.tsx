@@ -19,6 +19,7 @@ import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { showWindow, hideWindow, focusWindow } from "@lib/window-controls";
 import { logger } from "@lib/logger";
 import { toast } from "@lib/toast";
+import { persistSettingValue } from "@lib/tauri/settings";
 import { Button } from "@components/ui/button";
 import {
   Popover,
@@ -53,28 +54,11 @@ import ThemePicker from "@components/theme/ThemePicker";
  * top header strip alongside the brand wordmark.
  */
 // Sprint 296 — theme picker 를 제외한 footer (현재는 Recent 묶음) 가 한
-// 단위로 접힌다. localStorage 키는 Sprint 290 에서 정해진 이름을 유지해
-// 기존 사용자 환경의 collapse 선호가 그대로 살아남도록 한다. footer 에
-// 추가 섹션이 더 생기면 이 collapse 단위가 그 섹션도 함께 흡수해야 한다.
-const RECENT_COLLAPSE_KEY = "table-view-recent-collapsed";
-
-function loadRecentCollapsed(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(RECENT_COLLAPSE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function persistRecentCollapsed(v: boolean): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(RECENT_COLLAPSE_KEY, v ? "1" : "0");
-  } catch {
-    // localStorage unavailable — collapse stays session-local.
-  }
-}
+// 단위로 접힌다.
+// Sprint 369 (Phase 4, Q20.1) — `table-view-recent-collapsed` localStorage 영속
+// 폐기. `settings.home_recent_collapsed` 의 SQLite SOT 로 전환. 본 컴포넌트는
+// 초기 default = false 로 가벼운 mount 만 하고 (boot snapshot 가 차후 sprint
+// 에서 hydrate 추가), 사용자 토글 시 `persistSetting` IPC 로 즉시 commit.
 
 export default function HomePage() {
   // Re-hydrate from session storage on mount and window focus so the
@@ -86,14 +70,14 @@ export default function HomePage() {
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [recentCollapsed, setRecentCollapsed] = useState<boolean>(false);
 
-  useEffect(() => {
-    setRecentCollapsed(loadRecentCollapsed());
-  }, []);
-
   const toggleRecentCollapsed = useCallback(() => {
     setRecentCollapsed((prev) => {
       const next = !prev;
-      persistRecentCollapsed(next);
+      // Best-effort SQLite write. Failure leaves the in-process state
+      // updated (UX uninterrupted) — next mutate retries.
+      void persistSettingValue("home_recent_collapsed", next).catch(() => {
+        /* best-effort; next toggle retries */
+      });
       return next;
     });
   }, []);

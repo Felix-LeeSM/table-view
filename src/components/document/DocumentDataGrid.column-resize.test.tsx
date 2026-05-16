@@ -135,7 +135,13 @@ describe("DocumentDataGrid — column resize (Sprint 260 AC-260-02)", () => {
     expect(after[1]!).toBe(before[1]!);
   });
 
-  it("drag 결과가 document:<db>:<coll> localStorage 에 persist", async () => {
+  // Sprint 369 (Phase 4) — `column-widths:document:<db>:<coll>` LS 영속 폐기.
+  // drag end 시 `set_datagrid_prefs` IPC 가 widths-only patch 를 보내며 LS 는
+  // 0회 read/write. IPC body 의 자세한 contract (PK / patch shape) 는
+  // `src/hooks/useColumnWidths.test.ts` 가 lock.
+  it("drag end 시 LS 의 column-widths:* key 를 만들지 않는다 (Sprint 369)", async () => {
+    const getSpy = vi.spyOn(window.localStorage, "getItem");
+    const setSpy = vi.spyOn(window.localStorage, "setItem");
     render(
       <DocumentDataGrid
         connectionId="conn-mongo"
@@ -168,10 +174,18 @@ describe("DocumentDataGrid — column resize (Sprint 260 AC-260-02)", () => {
       );
     });
 
-    const raw = window.localStorage.getItem("column-widths:document:t:users");
-    expect(raw).not.toBeNull();
-    const stored = JSON.parse(raw ?? "{}") as Record<string, number>;
-    expect(typeof stored._id).toBe("number");
-    expect(stored._id!).toBeGreaterThan(0);
+    expect(
+      window.localStorage.getItem("column-widths:document:t:users"),
+    ).toBeNull();
+    const reads = getSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("column-widths:"),
+    );
+    const writes = setSpy.mock.calls.filter((c) =>
+      String(c[0]).startsWith("column-widths:"),
+    );
+    expect(reads).toEqual([]);
+    expect(writes).toEqual([]);
+    getSpy.mockRestore();
+    setSpy.mockRestore();
   });
 });

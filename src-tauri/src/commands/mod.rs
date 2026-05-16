@@ -1,11 +1,14 @@
 pub mod cancel_query;
 pub mod connection;
+pub mod datagrid_prefs;
 pub mod document;
 pub mod export;
+pub mod groups_collapsed;
 pub mod guard;
 pub mod import_legacy;
 pub mod keyring;
 pub mod meta;
+pub mod meta_sentinel;
 pub mod open_workspace_window;
 pub mod persist_connections;
 pub mod persist_favorites;
