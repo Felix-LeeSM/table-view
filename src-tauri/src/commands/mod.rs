@@ -3,9 +3,11 @@ pub mod document;
 pub mod export;
 pub mod guard;
 pub mod import_legacy;
+pub mod keyring;
 pub mod meta;
 pub mod query;
 pub mod rdb;
+pub mod snapshot;
 pub mod sqlite_pool;
 
 #[cfg(test)]

@@ -7,11 +7,202 @@ use bip39::{Language, Mnemonic};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use zeroize::Zeroizing;
 
 use crate::error::AppError;
 
 const NONCE_SIZE: usize = 12;
+
+/// Sprint 356 (Q22) — keyring entry name. Fixed across all OS backends so the
+/// same install can read its key after an upgrade.
+pub const KEYRING_ENTRY_NAME: &str = "com.tableview.app.file-key";
+
+/// Sprint 356 (Q22) — abstract OS keyring. We split the trait off the
+/// `keyring` crate so tests can inject an in-memory backend without (a)
+/// touching a developer's real OS keyring, (b) popping a UI prompt on
+/// macOS, (c) requiring D-Bus on Linux CI. Production wires
+/// [`OsKeyringBackend`] which delegates to the real `keyring::Entry`.
+pub trait KeyringBackend {
+    /// True when the OS keyring is reachable (Secret Service alive on Linux,
+    /// Keychain on macOS, Credential Manager on Windows). On a Linux box
+    /// without Secret Service / `kwallet` this returns false and triggers
+    /// the disk-fallback path (AC-356-05).
+    fn is_available(&self) -> bool;
+
+    /// Read the entry; `Ok(Some(bytes))` if present, `Ok(None)` if missing,
+    /// `Err` only on a real backend failure (which the caller treats as
+    /// fatal — see `key_migration::migrate_or_initialize`).
+    fn get(&self, name: &str) -> Result<Option<Vec<u8>>, AppError>;
+
+    /// Write the entry (overwrite-on-set semantics). Caller verifies
+    /// readback equality (AC-356-07).
+    fn set(&self, name: &str, value: &[u8]) -> Result<(), AppError>;
+
+    /// Best-effort delete of an entry. Errors are bubbled so the migration
+    /// path can leave a sentinel rather than silently mismatching state.
+    #[allow(dead_code)] // reserved for future revoke path; AC-356-04 only writes
+    fn delete(&self, name: &str) -> Result<(), AppError>;
+}
+
+/// Sprint 356 (Q22) — production keyring backend. Delegates to the
+/// `keyring` crate's per-OS native backend (macOS Keychain / Windows
+/// Credential Manager / Linux Secret Service via D-Bus).
+pub struct OsKeyringBackend {
+    service: String,
+}
+
+impl OsKeyringBackend {
+    pub fn new() -> Self {
+        Self {
+            service: KEYRING_ENTRY_NAME.to_string(),
+        }
+    }
+
+    fn entry(&self, name: &str) -> Result<keyring::Entry, AppError> {
+        // We use `service = our_constant`, `username = name`. The `keyring`
+        // crate composes them into the OS-specific identifier. Same install
+        // → same pair → idempotent lookup.
+        keyring::Entry::new(&self.service, name)
+            .map_err(|e| AppError::Encryption(format!("Keyring entry init failed: {e}")))
+    }
+}
+
+impl Default for OsKeyringBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeyringBackend for OsKeyringBackend {
+    fn is_available(&self) -> bool {
+        // Cheap probe: ask the backend to construct an Entry for a
+        // sentinel name. If `Entry::new` itself errors (no Secret Service
+        // on Linux, missing Keychain on hardened sandbox) we treat the
+        // backend as unavailable and the migration path falls back to disk.
+        self.entry("__availability_probe__").is_ok()
+    }
+
+    fn get(&self, name: &str) -> Result<Option<Vec<u8>>, AppError> {
+        let entry = self.entry(name)?;
+        match entry.get_secret() {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(AppError::Encryption(format!("Keyring read failed: {e}"))),
+        }
+    }
+
+    fn set(&self, name: &str, value: &[u8]) -> Result<(), AppError> {
+        let entry = self.entry(name)?;
+        entry
+            .set_secret(value)
+            .map_err(|e| AppError::Encryption(format!("Keyring write failed: {e}")))
+    }
+
+    fn delete(&self, name: &str) -> Result<(), AppError> {
+        let entry = self.entry(name)?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(AppError::Encryption(format!("Keyring delete failed: {e}"))),
+        }
+    }
+}
+
+/// Sprint 356 (Q22) — test-only in-memory keyring. Backed by a `Mutex<...>`
+/// so the same instance can be passed by `&` to multiple call sites in one
+/// test (mirrors `OsKeyringBackend` which is also `&self` everywhere).
+///
+/// `available` is a constructor flag — `new_available()` simulates a
+/// healthy Linux desktop / macOS / Windows machine, `new_unavailable()`
+/// simulates the Linux server / minimal-desktop case from AC-356-05 where
+/// `is_available()` returns false and the migration path must fall back
+/// to disk.
+pub struct InMemoryKeyringBackend {
+    inner: Mutex<std::collections::HashMap<String, Vec<u8>>>,
+    available: bool,
+    // Sprint 356 — escape hatch for AC-356-04 simulation: force `set` to
+    // error so the migration path can be exercised through the
+    // sentinel-write branch without needing a write-protected real
+    // keyring backend.
+    set_should_fail: Mutex<bool>,
+}
+
+impl InMemoryKeyringBackend {
+    pub fn new_available() -> Self {
+        Self {
+            inner: Mutex::new(std::collections::HashMap::new()),
+            available: true,
+            set_should_fail: Mutex::new(false),
+        }
+    }
+
+    pub fn new_unavailable() -> Self {
+        Self {
+            inner: Mutex::new(std::collections::HashMap::new()),
+            available: false,
+            set_should_fail: Mutex::new(false),
+        }
+    }
+
+    /// Test helper: force every subsequent `set` to fail. Used by
+    /// AC-356-04 (migration failure → sentinel).
+    pub fn set_set_should_fail(&self, fail: bool) {
+        *self.set_should_fail.lock().expect("mutex poisoned") = fail;
+    }
+
+    /// Test helper: dump current state. Useful for precondition assertions.
+    pub fn dump(&self) -> std::collections::HashMap<String, Vec<u8>> {
+        self.inner.lock().expect("mutex poisoned").clone()
+    }
+}
+
+impl KeyringBackend for InMemoryKeyringBackend {
+    fn is_available(&self) -> bool {
+        self.available
+    }
+
+    fn get(&self, name: &str) -> Result<Option<Vec<u8>>, AppError> {
+        if !self.available {
+            return Err(AppError::Encryption(
+                "Keyring backend unavailable".to_string(),
+            ));
+        }
+        Ok(self
+            .inner
+            .lock()
+            .expect("mutex poisoned")
+            .get(name)
+            .cloned())
+    }
+
+    fn set(&self, name: &str, value: &[u8]) -> Result<(), AppError> {
+        if !self.available {
+            return Err(AppError::Encryption(
+                "Keyring backend unavailable".to_string(),
+            ));
+        }
+        if *self.set_should_fail.lock().expect("mutex poisoned") {
+            return Err(AppError::Encryption(
+                "simulated keyring write failure".into(),
+            ));
+        }
+        self.inner
+            .lock()
+            .expect("mutex poisoned")
+            .insert(name.to_string(), value.to_vec());
+        Ok(())
+    }
+
+    fn delete(&self, name: &str) -> Result<(), AppError> {
+        if !self.available {
+            return Err(AppError::Encryption(
+                "Keyring backend unavailable".to_string(),
+            ));
+        }
+        self.inner.lock().expect("mutex poisoned").remove(name);
+        Ok(())
+    }
+}
 
 // 2026-05-05 — OWASP "first profile" Argon2id params (m=64MiB, t=3, p=4).
 // 이전 spec(m=19MiB/t=2/p=1, OWASP minimum)에서 상향. 사용자 1회 derive만

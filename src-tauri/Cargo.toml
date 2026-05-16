@@ -49,3 +49,19 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 csv = "1"
+# Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
+# Cross-platform abstraction lives in `storage::crypto::KeyringBackend`;
+# the in-memory backend used by tests means we never link against the
+# real OS keyring at test time, keeping the test binary slim. The
+# platform-specific feature is gated below so a single-OS build does
+# not pull in the other two native backends.
+keyring = { version = "3", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }

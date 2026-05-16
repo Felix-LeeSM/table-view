@@ -128,6 +128,12 @@ pub fn run() {
         // Sprint 355 (Phase 1) — legacy LS import IPC. 4-state transition
         // (`meta.legacy_imported`); idempotent; A/C mutate guard 의 토대.
         commands::import_legacy::import_legacy_localstorage,
+        // Sprint 356 (Phase 1, Q22) — Linux fallback dismiss sentinel.
+        commands::keyring::set_keyring_fallback_dismissed,
+        // Sprint 357 (Phase 1, Q9) — atomic boot snapshot IPC. 5 boot-critical
+        // stores + runtime.activeStatuses 를 단일 `BEGIN IMMEDIATE` 트랜잭션
+        // 안에서 read. p95 < 50ms.
+        commands::snapshot::get_initial_app_state,
         commands::connection::crud::list_connections,
         commands::connection::session::get_session_id,
         commands::connection::crud::save_connection,
