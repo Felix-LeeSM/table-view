@@ -63,12 +63,26 @@ export function useSchemaCache(
   // unmount the hook on toggle, so the set survives toggles.
   const autoLoadedRef = useRef<Set<string>>(new Set());
 
+  // Sprint 360 Phase 2 (Q23) — also re-run the auto-load when the
+  // `schemas[connId]?.[db]` slot transitions from populated to undefined.
+  // That transition is the signature of a post-DDL `clearForConnection`
+  // wipe; without this signal the autoLoadedRef short-circuit would
+  // permanently skip refetch even though the cache is empty and the
+  // sidebar is mounted.
+  const schemasSlot = useSchemaStore((s) => s.schemas[connectionId]?.[db]);
   useEffect(() => {
     // Sprint 263 — db === "" 는 transient (focused connection 의 activeDb 가
     // 아직 미해석된 mount 직후) sentinel. fetch 를 건너뛰고, activeDb 가
     // 잡히면 effect 가 재실행되며 정상 load 가 트리거된다.
     if (!db) return;
     const key = `${connectionId}|${db}`;
+    // Sprint 360 Phase 2 — when the slot is undefined (cleared) drop the
+    // marker so the auto-load below fires again. This converts a
+    // clearForConnection wipe into an eager refetch within the same hook
+    // instance (no remount required).
+    if (schemasSlot === undefined && autoLoadedRef.current.has(key)) {
+      autoLoadedRef.current.delete(key);
+    }
     if (autoLoadedRef.current.has(key)) return;
     autoLoadedRef.current.add(key);
     setLoadingSchemas(true);
@@ -91,7 +105,14 @@ export function useSchemaCache(
         logSchemaError("loadSchemas (mount)", err);
       })
       .finally(() => setLoadingSchemas(false));
-  }, [connectionId, db, loadSchemas, loadTables, prefetchSchemaColumns]);
+  }, [
+    connectionId,
+    db,
+    schemasSlot,
+    loadSchemas,
+    loadTables,
+    prefetchSchemaColumns,
+  ]);
 
   const refreshConnection = useCallback(() => {
     setLoadingSchemas(true);

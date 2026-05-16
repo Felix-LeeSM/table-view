@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { useSchemaStore } from "@stores/schemaStore";
 import {
   executeQuery,
   executeQueryDryRun,
@@ -249,6 +250,13 @@ export function useQueryExecution({
   // `queryMode === "aggregate"` keeps working unchanged because aggregate
   // entries still carry `"aggregate"` — only the source of truth flipped
   // from the toggle state to the parser output.
+  // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate. When a
+  // raw RDB dispatch finishes with `query_type === "ddl"` we wipe the
+  // connection's entire schema cache (`schemas` / `tables` / `views` /
+  // `functions` / `tableColumnsCache` / `triggers`) so the sidebar's
+  // `useSchemaCache` re-fetches against the post-DDL backend. Cross-window
+  // broadcast (sprint-365) layers on top of this same store action.
+  const clearSchemaForConnection = useSchemaStore((s) => s.clearForConnection);
   const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const recordHistory = useCallback(
     (payload: {
@@ -472,6 +480,16 @@ export function useQueryExecution({
           workspaceDb ?? undefined,
         );
         completeQuery(tab.id, queryId, result);
+        // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate
+        // on DDL completion. The backend tags every CREATE / ALTER / DROP
+        // statement as `query_type: "ddl"`, so a single boolean check
+        // covers the sidebar refresh trigger without hand-rolling the
+        // statement classifier here. Wide drop only — the sidebar's
+        // `useSchemaCache` mount-effect refetches `loadSchemas` +
+        // `loadTables` for the connection.
+        if (result.query_type === "ddl") {
+          clearSchemaForConnection(tab.connectionId);
+        }
         recordHistory({
           sql: stmt,
           executedAt: Date.now(),
@@ -537,6 +555,7 @@ export function useQueryExecution({
       failQuery,
       recordHistory,
       findLiveIdleTab,
+      clearSchemaForConnection,
     ],
   );
   // Keep the ref in sync with the latest function identity so the Retry
@@ -637,6 +656,17 @@ export function useQueryExecution({
         (s) => s.status === "success",
       ).length;
       const allFailed = successCount === 0;
+      // Sprint 360 Phase 2 (Q23) — self-window schemaCache invalidate. A
+      // batch may mix DDL with DML / SELECT; if ANY successful statement
+      // is DDL, the schema shape may have changed and we drop the
+      // connection cache so the sidebar refetches. Cache drop is
+      // idempotent for non-DDL batches because the guard skips the call.
+      const batchHasDdl = statementResults.some(
+        (s) => s.status === "success" && s.result?.query_type === "ddl",
+      );
+      if (batchHasDdl) {
+        clearSchemaForConnection(tab.connectionId);
+      }
 
       const joinedErrors = statementResults
         .map((s, idx) => `Statement ${idx + 1}: ${s.error ?? ""}`)
@@ -669,6 +699,7 @@ export function useQueryExecution({
       completeMultiStatementQuery,
       recordHistory,
       findLiveIdleTab,
+      clearSchemaForConnection,
     ],
   );
   // Sprint 269 — see `runRdbSingleRef` rationale above. Mirror for batch.
