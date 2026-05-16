@@ -1,14 +1,11 @@
 import { useEffect } from "react";
 import { Sun, Moon, Monitor, Plus } from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
-import {
-  resolveActiveDb,
-  useActiveTab,
-  useWorkspaceStore,
-} from "@stores/workspaceStore";
+import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useResizablePanel } from "@hooks/useResizablePanel";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
 import { Button } from "@components/ui/button";
@@ -52,10 +49,14 @@ function readWidth(): number {
 export default function Sidebar() {
   const connections = useConnectionStore((s) => s.connections);
   const activeStatuses = useConnectionStore((s) => s.activeStatuses);
-  const focusedConnId = useConnectionStore((s) => s.focusedConnId);
-  const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
-  const activeTab = useActiveTab();
-  const activeTabConnId = activeTab?.connectionId ?? null;
+  // sprint-366 (Phase 4, Q15) — Sidebar lives in the workspace window only
+  // (see top-of-file docstring). The window's connection identity is
+  // derived from its Tauri label (`workspace-{connection_id}`) rather than
+  // from the cross-window `focusedConnId` slot, which is now launcher-only.
+  // `useCurrentWindowConnectionId()` returns `null` when the hook runs
+  // outside a workspace window (jsdom tests, or theoretical launcher
+  // mount) — the rest of the component already handles that null case.
+  const focusedConnId = useCurrentWindowConnectionId();
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
   // MRU marking lives on each caller (not inside tabStore.addQueryTab) —
   // the "+ Query" button explicitly marks the focused connection used so
@@ -72,28 +73,18 @@ export default function Sidebar() {
     return subscribeSystemModeChange(handleSystemChange);
   }, [themeMode, handleSystemChange]);
 
-  // Focus the active tab's connection so its schema tree comes into view.
-  useEffect(() => {
-    if (activeTabConnId && activeTabConnId !== focusedConnId) {
-      setFocusedConn(activeTabConnId);
-    }
-  }, [activeTabConnId, focusedConnId, setFocusedConn]);
-
-  // Keep focus pointing at an existing connection: seed on first load, and
-  // heal if the focused connection vanishes (deleted, or store reset).
-  useEffect(() => {
-    const firstConnected = connections.find(
-      (c) => activeStatuses[c.id]?.type === "connected",
-    );
-    if (!focusedConnId) {
-      if (firstConnected) setFocusedConn(firstConnected.id);
-      return;
-    }
-    const stillExists = connections.some((c) => c.id === focusedConnId);
-    if (!stillExists) {
-      setFocusedConn(firstConnected?.id ?? null);
-    }
-  }, [connections, activeStatuses, focusedConnId, setFocusedConn]);
+  // sprint-366 (Phase 4, Q15) — Removed the two `setFocusedConn` effects
+  // ("focus active tab's conn" + "heal vanished focus") that previously
+  // wrote to the cross-window `focusedConnId` slot from a workspace
+  // window. Both are now incoherent: each workspace window is pinned to
+  // one connection via its Tauri label (sprint-361), so (a) the active
+  // tab's conn always matches the window's by construction, and (b) a
+  // vanished connection means the window itself should close — not a
+  // silent reassignment to a sibling connection (which would surprise
+  // the user). Strategy doc line 1656 requires "workspace 에서 set
+  // 호출 0건"; keeping these as dead writes propagates to the launcher
+  // slot via the cross-window IPC bridge and races with the user's own
+  // launcher selection.
 
   const {
     size: sidebarWidth,

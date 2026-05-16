@@ -21,6 +21,10 @@ import {
 } from "@testing-library/react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import {
+  setFakeWindowConnectionId,
+  resetFakeWindowConnectionId,
+} from "@stores/__tests__/fakeWindowConnectionId";
 import TabDbChip from "./TabDbChip";
 
 vi.mock("@/lib/api/listDatabases", () => ({
@@ -48,9 +52,15 @@ describe("TabDbChip — interactive database selector", () => {
       },
     });
     useWorkspaceStore.setState({ workspaces: {} });
+    // sprint-366 (2026-05-16) — TabDbChip uses `useCurrentWorkspaceKey()`
+    // which now resolves `connId` from the Tauri window label. Stub the
+    // label so the chip can write to the (`conn-mongo`, `analytics`)
+    // workspace slot under test.
+    setFakeWindowConnectionId("conn-mongo");
   });
 
   afterEach(() => {
+    resetFakeWindowConnectionId();
     cleanup();
   });
 

@@ -113,9 +113,20 @@ vi.mock("@lib/tauri", () => ({
 // Default the window label to "workspace" so `tabStore`'s attach guard fires
 // at module load. The launcher-only test below re-imports tabStore with the
 // label flipped to "launcher" via `vi.resetModules` + `vi.doMock`.
-vi.mock("@lib/window-label", () => ({
-  getCurrentWindowLabel: vi.fn(() => "workspace"),
-}));
+vi.mock("@lib/window-label", async () => {
+  // sprint-366 (2026-05-16) — keep the real parseWorkspaceLabel /
+  // formatWorkspaceLabel exports (pure string ops) so
+  // `useCurrentWindowConnectionId()` and downstream selectors don't
+  // crash when this file's tests mount workspace-tree components.
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: vi.fn(() => "workspace"),
+  };
+});
 
 // Import AFTER all mocks are registered.
 import { emit } from "@tauri-apps/api/event";

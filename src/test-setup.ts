@@ -1,6 +1,28 @@
 import "@testing-library/jest-dom/vitest";
-import { beforeEach } from "vitest";
+import { beforeEach, vi } from "vitest";
 import { useDataGridEditStore } from "@stores/dataGridEditStore";
+
+// sprint-366 (2026-05-16, Phase 4 Q15) — workspace tree components read
+// their connection identity from `useCurrentWindowConnectionId()` which
+// delegates to `getCurrentWindowLabel()`. The real implementation calls
+// `getCurrentWebviewWindow()` and returns `null` outside Tauri (which
+// would already be safe in jsdom), but tests that need to drive a
+// *specific* connection id via the label must override the mock per
+// test. Hoist the mock to setup so every test file gets a `vi.fn()`
+// that can be re-pointed by `setFakeWindowConnectionId()` without
+// per-file `vi.mock` boilerplate. Tests that need the real helpers
+// (`window-label.test.ts`) declare their own `vi.mock` with
+// `vi.importActual` to opt back in.
+vi.mock("@lib/window-label", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: vi.fn(() => null),
+  };
+});
 
 // Sprint 251 — `dataGridEditStore` is a singleton across the test process.
 // Without a per-test reset, pending state from one test leaks into the

@@ -1,12 +1,33 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   seedWorkspace,
   getTestWorkspace,
 } from "@/stores/__tests__/workspaceStoreTestHelpers";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+
+// sprint-366 (2026-05-16) — Sidebar reads its window's connection identity
+// from `useCurrentWindowConnectionId()` (which delegates to
+// `getCurrentWindowLabel()`). Tests inject the label via this mock so
+// each `setStores({ connections: [...] })` call can pair with
+// `setFakeWindowConnectionId("<id>")` to drive the new derive path.
+vi.mock("@lib/window-label", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: vi.fn(),
+  };
+});
+
 import Sidebar from "./Sidebar";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
+import {
+  setFakeWindowConnectionId,
+  resetFakeWindowConnectionId,
+} from "@/stores/__tests__/fakeWindowConnectionId";
 import type { ConnectionConfig, ConnectionStatus } from "@/types/connection";
 
 // jsdom in this project's setup ships an incomplete localStorage (getItem etc.
@@ -76,6 +97,17 @@ function makeConnection(id: string): ConnectionConfig {
 function setStores(opts: {
   connections?: ConnectionConfig[];
   active?: string[];
+  /**
+   * sprint-366 — Synthetic Tauri window label connection id. Pre-sprint-366
+   * the Sidebar read `focusedConnId` from the store; tests seeded that
+   * slot. After Q15 lock the Sidebar reads from
+   * `useCurrentWindowConnectionId()` (window label derive). Tests that
+   * previously relied on the "seed focus to first-connected" effect now
+   * pass an explicit window connection id here. Default `null` (launcher
+   * / jsdom path) so tests that exercise the "no-connection" branch
+   * still pass.
+   */
+  windowConnId?: string | null;
 }) {
   const conns = opts.connections ?? [];
   const active = new Set(opts.active ?? []);
@@ -95,6 +127,7 @@ function setStores(opts: {
     focusedConnId: null,
   });
   useWorkspaceStore.setState({ workspaces: {} });
+  setFakeWindowConnectionId(opts.windowConnId ?? null);
 }
 
 // Sprint 125 — Sidebar is now Workspace-only (schemas mode). Connection
@@ -105,6 +138,12 @@ describe("Sidebar (schemas-only)", () => {
     vi.clearAllMocks();
     window.localStorage.clear();
     setStores({});
+  });
+
+  afterEach(() => {
+    // sprint-366: ensure each test's window-label mock value doesn't bleed
+    // into the next describe block.
+    resetFakeWindowConnectionId();
   });
 
   it("does NOT render the SidebarModeToggle (sprint 125)", () => {
@@ -120,13 +159,34 @@ describe("Sidebar (schemas-only)", () => {
     expect(screen.getByTestId("schema-panel")).toBeInTheDocument();
   });
 
+  it("AC-366-04: Sidebar's selectedId comes from the window label hook (fake provider)", () => {
+    // 사유 (2026-05-16, sprint-366, Phase 4 Q15): contract AC-366-04 —
+    // verify the connId Sidebar passes to its WorkspaceSidebar slot is
+    // sourced from `useCurrentWindowConnectionId()` (label `workspace-c-fake`
+    // → `"c-fake"`) and *not* from `connectionStore.focusedConnId`.
+    // The connectionStore.focusedConnId is intentionally seeded to a
+    // different value so any regression that resurrects the store read
+    // would surface here.
+    useConnectionStore.setState({
+      connections: [makeConnection("c-fake"), makeConnection("c-bait")],
+      activeStatuses: { "c-fake": { type: "connected", activeDb: "db1" } },
+      focusedConnId: "c-bait", // intentional bait — must NOT win
+    });
+    setFakeWindowConnectionId("c-fake");
+    render(<Sidebar />);
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c-fake");
+  });
+
   it("shows connection name in the header when a connection is focused", () => {
+    // sprint-366: the focused connection comes from the window label
+    // (workspace-c1) — `windowConnId: "c1"` simulates a workspace
+    // window opened for c1.
     setStores({
       connections: [makeConnection("c1")],
       active: ["c1"],
+      windowConnId: "c1",
     });
     render(<Sidebar />);
-    // Sidebar's seed effect focuses the first-connected connection.
     expect(screen.getByText(/c1 DB/)).toBeInTheDocument();
   });
 
@@ -138,17 +198,22 @@ describe("Sidebar (schemas-only)", () => {
     );
   });
 
-  it("auto-syncs focus when active tab's connectionId changes", () => {
+  it("sprint-366: sidebar shows the WINDOW's connection id (label derive), not the active tab's", () => {
+    // 사유 (2026-05-16, sprint-366, Phase 4 Q15): pre-sprint-366 Sidebar
+    // would auto-`setFocusedConn(activeTabConnId)` when a tab from a
+    // different conn became active. Under per-conn windows (sprint-361)
+    // this is by-construction impossible — a workspace window only ever
+    // holds tabs for its own connection. The defensive invariant locked
+    // here: even if a stray cross-conn tab seeds the active workspace,
+    // the sidebar still surfaces the *window's* connection id
+    // (`useCurrentWindowConnectionId()` → label "workspace-c1" → "c1").
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
+      windowConnId: "c1",
     });
     render(<Sidebar />);
 
-    // Seed the active tab in the CURRENTLY focused workspace (c1, db1)
-    // but with `connectionId: "c2"` so the auto-sync effect observes a
-    // mismatch and re-focuses to c2. Mirrors the legacy "active tab
-    // belongs to a different connection" path.
     act(() => {
       useWorkspaceStore.setState(
         seedWorkspace(
@@ -171,13 +236,22 @@ describe("Sidebar (schemas-only)", () => {
       );
     });
 
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
   });
 
-  it("clears selection when the focused connection is removed", () => {
+  it("sprint-366: sidebar reflects window connection id even after the connection list mutates", () => {
+    // 사유 (2026-05-16, sprint-366): pre-sprint-366 the "heal vanished
+    // focused conn" effect re-pointed focus to the first surviving
+    // connected conn. Under per-conn windows, deleting the window's own
+    // conn means the window itself should close (handled elsewhere);
+    // until that lands, the sidebar still surfaces the window's label-
+    // derived conn id rather than silently switching to another conn,
+    // so the user sees an unambiguous "this window's conn vanished"
+    // state.
     setStores({
       connections: [makeConnection("c1"), makeConnection("c2")],
       active: ["c1", "c2"],
+      windowConnId: "c1",
     });
     const { rerender } = render(<Sidebar />);
 
@@ -185,19 +259,22 @@ describe("Sidebar (schemas-only)", () => {
       setStores({
         connections: [makeConnection("c2")],
         active: ["c2"],
+        windowConnId: "c1",
       });
     });
     rerender(<Sidebar />);
 
-    // Falls back to c2 (the surviving connected one).
-    expect(screen.getByTestId("schema-panel").textContent).toBe("c2");
+    expect(screen.getByTestId("schema-panel").textContent).toBe("c1");
   });
 
   describe("New Query Tab button", () => {
     it("opens a new query tab when connected", () => {
+      // sprint-366: button enabled requires the window-derived
+      // `focusedConnId` to be present and connected.
       setStores({
         connections: [makeConnection("c1")],
         active: ["c1"],
+        windowConnId: "c1",
       });
       render(<Sidebar />);
 
@@ -215,9 +292,13 @@ describe("Sidebar (schemas-only)", () => {
     });
 
     it("is disabled when there is no connected connection", () => {
+      // sprint-366: even with `windowConnId: "c1"`, the connection's
+      // status is "disconnected" so `selectedConnected` is false → button
+      // disabled.
       setStores({
         connections: [makeConnection("c1")],
         active: [],
+        windowConnId: "c1",
       });
       render(<Sidebar />);
 

@@ -39,9 +39,19 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
   attachZustandIpcBridge: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("@lib/window-label", () => ({
-  getCurrentWindowLabel: () => "test",
-}));
+vi.mock("@lib/window-label", async () => {
+  // sprint-366 (2026-05-16) — the hook + selector now import
+  // parseWorkspaceLabel/formatWorkspaceLabel from the same module, so the
+  // mock must surface them (use the real ones — they're pure string ops).
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: () => "test",
+  };
+});
 
 // Manual-resolve handle so each test controls the IPC timing precisely.
 const listConnectionsMock = vi.fn();

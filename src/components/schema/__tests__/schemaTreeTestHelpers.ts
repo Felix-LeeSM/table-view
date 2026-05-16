@@ -14,6 +14,7 @@
 // the default db sentinel `"db1"`. New tests can pass the nested shape
 // directly — passthrough leaves it intact.
 import { vi } from "vitest";
+import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
 import { useSchemaStore } from "@stores/schemaStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useWorkspaceStore } from "@stores/workspaceStore";
@@ -24,6 +25,25 @@ import type {
   TableInfo,
   ViewInfo,
 } from "@/types/schema";
+
+/**
+ * sprint-366 (2026-05-16) — best-effort setter for the fake Tauri window
+ * label. `useCurrentWorkspaceKey()` (and therefore `useActiveTab()`) now
+ * resolves `connId` from the window label. SchemaTree tests rely on the
+ * active-tab highlight which goes through that chain. Mirrors the
+ * `trySetWindowLabel` in `workspaceStoreTestHelpers.ts`; both safely
+ * no-op when the importer didn't declare `vi.mock("@lib/window-label",
+ * ...)`.
+ */
+function trySetWindowLabel(connId: string): void {
+  try {
+    const mocked = vi.mocked(getCurrentWindowLabel);
+    if (typeof mocked.mockReturnValue !== "function") return;
+    mocked.mockReturnValue(formatWorkspaceLabel(connId));
+  } catch {
+    // No-op.
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -185,4 +205,7 @@ export function resetStores() {
     focusedConnId: "conn1",
     activeStatuses: { conn1: { type: "connected", activeDb: "db1" } },
   });
+  // sprint-366 — also seed the fake window label so `useActiveTab()` /
+  // `useCurrentWorkspaceKey()` resolve to (`conn1`, `db1`).
+  trySetWindowLabel("conn1");
 }

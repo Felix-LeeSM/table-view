@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { formatWorkspaceLabel, getCurrentWindowLabel } from "@lib/window-label";
 import { useConnectionStore } from "../connectionStore";
 import {
   useWorkspaceStore,
@@ -8,6 +9,34 @@ import {
   type WorkspaceState,
   type WorkspaceStoreState,
 } from "../workspaceStore";
+
+/**
+ * sprint-366 (2026-05-16, Phase 4 Q15) — best-effort setter for the
+ * fake Tauri window label. Tests that mount workspace-tree components
+ * must declare
+ *   vi.mock("@lib/window-label", async () => ({
+ *     ...(await vi.importActual<typeof import("@lib/window-label")>(
+ *       "@lib/window-label",
+ *     )),
+ *     getCurrentWindowLabel: vi.fn(),
+ *   }));
+ * for this to work. If the mock is absent, `vi.mocked()` returns the
+ * real function and calling `.mockReturnValue` throws; we silently
+ * swallow that case so legacy non-RTL tests that only seed
+ * `focusedConnId` (and don't depend on the window label hook) keep
+ * passing without forcing every file to declare the mock.
+ */
+function trySetWindowLabel(connId: string): void {
+  try {
+    const mocked = vi.mocked(getCurrentWindowLabel);
+    if (typeof mocked.mockReturnValue !== "function") return;
+    mocked.mockReturnValue(formatWorkspaceLabel(connId));
+  } catch {
+    // No-op when the file didn't declare `vi.mock("@lib/window-label", ...)`.
+    // Legacy tests that exercise store actions directly (not via RTL
+    // mount) don't need the label seam.
+  }
+}
 
 export const DEFAULT_TEST_CONN = "conn1";
 export const DEFAULT_TEST_DB = "db1";
@@ -62,10 +91,18 @@ export function emptyWorkspacesState(): Pick<
 }
 
 /**
- * Align `connectionStore.focusedConnId` + `activeStatuses` with a
+ * Align `connectionStore.activeStatuses` + the fake window label with a
  * (connId, db) pair so `useCurrentWorkspaceKey()` derives the seeded
  * workspace correctly. Standalone helper for tests that drive
  * `addTab` / `addQueryTab` directly (rather than via `seedWorkspace`).
+ *
+ * sprint-366 (2026-05-16): `useCurrentWorkspaceKey()` now resolves
+ * `connId` from the Tauri window label. Tests that mount workspace-tree
+ * components must declare `vi.mock("@lib/window-label", ...)`; this
+ * helper additionally writes the fake label so the hook returns
+ * `connId`. The `focusedConnId` slot is still seeded for back-compat
+ * with launcher-only test paths (and the few non-migrated workspace
+ * components still reading the slot mid-migration).
  */
 export function seedConnection(
   connId: string = DEFAULT_TEST_CONN,
@@ -78,6 +115,7 @@ export function seedConnection(
       [connId]: { type: "connected", activeDb: db },
     },
   }));
+  trySetWindowLabel(connId);
 }
 
 /**
@@ -133,6 +171,11 @@ export function seedWorkspace(
       },
     };
   });
+  // sprint-366 (2026-05-16) — also seed the fake Tauri window label so
+  // `useCurrentWindowConnectionId()` (and therefore
+  // `useCurrentWorkspaceKey()` and `Sidebar`) resolves to this connId.
+  // No-op for files that didn't `vi.mock("@lib/window-label", ...)`.
+  trySetWindowLabel(connId);
   // Sprint 262 Slice B — preserve prior sidebar/closedTabHistory/dirtyTabIds
   // on re-seed. Without this, tests that call `seedWorkspace(...)` a second
   // time mid-test to update tabs/activeTabId would silently wipe the

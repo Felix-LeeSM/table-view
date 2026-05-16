@@ -116,9 +116,19 @@ vi.mock("@lib/tauri", () => ({
 // null, and individual scenarios can override via `mockReturnValueOnce` on
 // the exported mock if needed. The default returns `"launcher"` so the
 // store's bridge attach uses that as its origin id at module-load time.
-vi.mock("@lib/window-label", () => ({
-  getCurrentWindowLabel: vi.fn(() => "launcher"),
-}));
+vi.mock("@lib/window-label", async () => {
+  // sprint-366 (2026-05-16) — preserve the real parseWorkspaceLabel /
+  // formatWorkspaceLabel exports (pure string ops) for transitive
+  // imports of `useCurrentWindowConnectionId`.
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: vi.fn(() => "launcher"),
+  };
+});
 
 // Import AFTER all mocks are registered.
 import { emit, listen } from "@tauri-apps/api/event";

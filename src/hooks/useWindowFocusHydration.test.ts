@@ -46,9 +46,19 @@ vi.mock("@lib/zustand-ipc-bridge", () => ({
   attachZustandIpcBridge: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("@lib/window-label", () => ({
-  getCurrentWindowLabel: () => "test",
-}));
+vi.mock("@lib/window-label", async () => {
+  // sprint-366 (2026-05-16) — preserve the real parseWorkspaceLabel /
+  // formatWorkspaceLabel exports so transitive imports of
+  // `useCurrentWindowConnectionId` resolve.
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: () => "test",
+  };
+});
 
 // Mock localStorage for tab persistence
 const localStorageStore: Record<string, string> = {};

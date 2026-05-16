@@ -6,9 +6,11 @@
  * position) all live in a cohesive `WorkspaceState` keyed by the
  * `(connId, db)` tuple.
  *
- * Active workspace identity is *not* owned here — `useCurrentWorkspaceKey`
- * derives it from `connectionStore.focusedConnId +
- * activeStatuses[id].activeDb`, keeping a single source of truth.
+ * Active workspace identity is *not* owned here — sprint-366 (Phase 4,
+ * Q15) `useCurrentWorkspaceKey` derives it from the Tauri window label
+ * (`workspace-{connection_id}` → `connId`) via
+ * `useCurrentWindowConnectionId()` plus `activeStatuses[id].activeDb`.
+ * The connection store's `focusedConnId` slot is now launcher-only.
  *
  * Write actions are independent of `connectionStore`; every mutating
  * action takes `(connId, db)` explicitly (Q7 'a' lock from ADR 0027).
@@ -19,6 +21,7 @@ import { paradigmOf, type Paradigm } from "@/types/connection";
 import type { QueryState } from "@/types/query";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { useCurrentWindowConnectionId } from "@hooks/useCurrentWindowConnectionId";
 import type {
   QueryMode,
   QueryTab,
@@ -891,18 +894,27 @@ if (getCurrentWindowLabel() === "workspace") {
 export type WorkspaceKey = { connId: string; db: string };
 
 /**
- * Derive the current `(connId, db)` workspace coordinate from
- * `connectionStore.focusedConnId` + the corresponding
- * `activeStatuses[id].activeDb`. Returns `null` when either is missing.
+ * Derive the current `(connId, db)` workspace coordinate.
+ *
+ * Sprint-366 (Phase 4, Q15 lock): `connId` comes from the Tauri window
+ * label via `useCurrentWindowConnectionId()` — each workspace window is
+ * pinned to one connection. The `db` half still resolves from
+ * `connectionStore.activeStatuses[connId].activeDb` because the active
+ * sub-pool is mutated at runtime (e.g. RDB DB switcher). Returns
+ * `null` when (a) the hook returns null (launcher / jsdom), (b) the
+ * connection has no `connected` status, or (c) the status has no
+ * `activeDb`.
  */
 export function useCurrentWorkspaceKey(): WorkspaceKey | null {
+  const connId = useCurrentWindowConnectionId();
   // `useShallow` keeps the returned `{ connId, db }` object referentially
   // stable across renders when both fields are unchanged — required for
   // React 19 strict mode + zustand v5's `useSyncExternalStore` snapshot
-  // identity check.
+  // identity check. We feed the resolved `connId` (constant per window)
+  // through the selector closure so the subscription is keyed only on
+  // `activeStatuses[connId].activeDb` mutations.
   return useConnectionStore(
     useShallow((state) => {
-      const connId = state.focusedConnId;
       if (!connId) return null;
       const status = state.activeStatuses[connId];
       if (!status || status.type !== "connected") return null;
