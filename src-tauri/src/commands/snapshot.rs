@@ -107,8 +107,14 @@ pub struct ThemeStore {
 
 impl Default for ThemeStore {
     fn default() -> Self {
+        // frontend `DEFAULT_THEME_ID` 와 동일해야 한다. 이전 `"default"` 는
+        // catalog 에 없는 id 라 `data-theme="default"` 셀렉터가 매칭되지
+        // 않아 첫 부팅 시 스타일 깨짐을 일으켰다 (Wave 9.5 회귀 2,
+        // 2026-05-16). Frontend test `loadAll.theme-fallback.test.ts` 가
+        // boundary 단에서도 catalog 검증을 하지만, wire 의 truth 도
+        // 처음부터 valid 한 값이어야 한다.
         Self {
-            theme_id: "default".into(),
+            theme_id: "slate".into(),
             mode: "system".into(),
         }
     }
@@ -474,7 +480,7 @@ mod tests {
     //! 위한 최소 unit smoke.
     //!
     //! 시나리오:
-    //!   - Default values 의 wire shape (theme = `"default"` / `"system"`,
+    //!   - Default values 의 wire shape (theme = `"slate"` / `"system"`,
     //!     safe_mode = `"off"`, runtime/workspaces empty)
     //!   - StoreSlot::Ok / Err 의 `#[serde(untagged)]` round-trip
     //!   - WORKSPACE_LABEL_PREFIX strip 로직 (launcher → None, workspace-X → Some("X"))
@@ -488,12 +494,16 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn theme_store_default_is_default_themeid_system_mode() {
+    fn theme_store_default_is_slate_themeid_system_mode() {
+        // 작성 2026-05-16 — Wave 9.5 회귀 2 (테마 빈 부팅).
+        // backend 의 default 는 반드시 frontend `DEFAULT_THEME_ID` ("slate")
+        // 와 일치해야 한다. 둘이 어긋나면 첫 부팅 시 unknown `data-theme`
+        // 셀렉터가 박혀 themes.css 매칭 실패 → 시각적 스타일 깨짐.
         let t = ThemeStore::default();
-        assert_eq!(t.theme_id, "default");
+        assert_eq!(t.theme_id, "slate");
         assert_eq!(t.mode, "system");
         let json = serde_json::to_value(&t).unwrap();
-        assert_eq!(json["themeId"], "default");
+        assert_eq!(json["themeId"], "slate");
         assert_eq!(json["mode"], "system");
     }
 

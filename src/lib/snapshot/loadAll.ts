@@ -49,7 +49,8 @@ import { useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore, type MruEntry } from "@stores/mruStore";
 import { useThemeStore } from "@stores/themeStore";
 import { useSafeModeStore, type SafeMode } from "@stores/safeModeStore";
-import type { ThemeId, ThemeMode } from "@lib/themeBoot";
+import type { ThemeMode } from "@lib/themeBoot";
+import { DEFAULT_THEME_ID, isThemeId } from "@lib/themeCatalog";
 
 // ---------------------------------------------------------------------------
 // Listener buffer — collects `state-changed` events that arrive while a
@@ -275,18 +276,15 @@ async function hydrateMru(snap: InitialAppState): Promise<void> {
 async function hydrateTheme(snap: InitialAppState): Promise<void> {
   const slot = snap.stores.theme;
   if ("error" in slot) return;
-  // The `mode` field is a string at the wire boundary; narrow to the
-  // store's `ThemeMode` union. Unknown modes fall back to "system" to
-  // preserve the strict store type without crashing boot.
   const mode: ThemeMode =
     slot.mode === "light" || slot.mode === "dark" || slot.mode === "system"
       ? slot.mode
       : "system";
-  // `themeId` is currently a free-form string at the wire boundary;
-  // the store's `ThemeId` union is its source of truth so we cast at
-  // the boundary. Out-of-scope sprints validate `themeId` against the
-  // available theme list (sprint-368 LS retire).
-  const themeId = slot.themeId as ThemeId;
+  // wire 의 `themeId` 가 frontend catalog 에 없는 id (legacy "default", 사용자
+  // SQLite tamper, schema drift 등) 면 DEFAULT_THEME_ID 로 fallback. unsafe
+  // cast 가 themes.css 의 매칭 selector 가 없는 `data-theme` 을 박아 시각적
+  // 깨짐을 일으켰던 회귀를 막는다 (Wave 9.5, 2026-05-16).
+  const themeId = isThemeId(slot.themeId) ? slot.themeId : DEFAULT_THEME_ID;
   useThemeStore.setState({ themeId, mode });
 }
 

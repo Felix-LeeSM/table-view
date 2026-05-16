@@ -77,7 +77,10 @@ function makeSnapshot(): InitialAppState {
         recentConnections: ["c1"],
         lastUsedConnectionId: "c1",
       },
-      theme: { themeId: "default", mode: "dark" },
+      // Wave 9.5 (2026-05-16) — "default" 는 frontend catalog 에 없는 invalid
+      // id. boundary fallback 이 catalog 에 있는 valid id 로 좁히므로 fixture
+      // 도 valid id 로 변경 ("github" — slate 가 아니면서 catalog 안에 있음).
+      theme: { themeId: "github", mode: "dark" },
       safeMode: { mode: "warn" },
     },
     runtime: {
@@ -135,7 +138,7 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
     expect(mru.recentConnections.map((e) => e.connectionId)).toEqual(["c1"]);
 
     const theme = useThemeStore.getState();
-    expect(theme.themeId).toBe("default");
+    expect(theme.themeId).toBe("github");
     expect(theme.mode).toBe("dark");
 
     const safe = useSafeModeStore.getState();

@@ -70,11 +70,19 @@
   --spacing-execute-label: 16.25rem; /* 260px */
 }
 
-/* Sprint 345 (ADR 0031) — theme-agnostic syntax token fallback.
- * 새 테마가 `--tv-syntax-*` 12 토큰 정의를 잊으면 cascade 로 slate 의 값을
- * 발동시킨다. specificity (0,1,1) — `[data-theme="X"][data-mode="Y"]`
+/* Sprint 345 (ADR 0031) + Wave 9.5 (2026-05-16, 회귀 2) — theme-agnostic
+ * baseline.
+ *
+ * 새 테마가 토큰 정의를 잊거나 `data-theme` 가 unknown id 일 때 cascade 로
+ * slate 값을 발동시킨다. specificity (0,1,1) — `[data-theme="X"][data-mode="Y"]`
  * 테마 블록 (0,2,0) 보다 낮아 정의된 곳은 자동 override 되고, 누락 시
  * 시각 깨짐 (transparent 색) 없이 slate placeholder 가 보인다.
+ *
+ * 범위 — Wave 9.5 이전엔 `--tv-syntax-*` 12 토큰만 fallback 이었다. 사용자
+ * SQLite tamper / 첫 부팅 + 빈 LS / 신규 테마 incomplete 정의 등 모든 시각
+ * 깨짐 경로를 막기 위해 일반 UI 토큰까지 확장 (background / foreground /
+ * card / popover / primary / secondary / muted / accent / border / input /
+ * ring / primary-tint / status-*).
  *
  * 위치 — index.css: fallback 은 *theme-agnostic baseline* 이므로
  * themes.css (theme-specific values 단일 책임) 가 아니라 base layer 에
@@ -82,6 +90,30 @@
  * 가 들어가 대비가 깨지는 일 방지).
  */
 :root[data-mode="light"] {
+  /* UI base (slate light mirror) */
+  --tv-background: #ffffff;
+  --tv-foreground: #0f172a;
+  --tv-card: #ffffff;
+  --tv-card-foreground: #0f172a;
+  --tv-popover: #ffffff;
+  --tv-popover-foreground: #0f172a;
+  --tv-primary: #4f46e5;
+  --tv-primary-foreground: #fff;
+  --tv-secondary: #f8fafc;
+  --tv-secondary-foreground: #475569;
+  --tv-muted: #f1f5f9;
+  --tv-muted-foreground: #94a3b8;
+  --tv-accent: #f1f5f9;
+  --tv-accent-foreground: #0f172a;
+  --tv-border: #e2e8f0;
+  --tv-input: #e2e8f0;
+  --tv-ring: #4f46e5;
+  --tv-primary-tint: 79 70 229;
+  --tv-status-connected: #16a34a;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #94a3b8;
+  /* Syntax base (Sprint 345) */
   --tv-syntax-keyword: #7c3aed;
   --tv-syntax-operator: #475569;
   --tv-syntax-punct: #64748b;
@@ -96,6 +128,30 @@
   --tv-syntax-error: #dc2626;
 }
 :root[data-mode="dark"] {
+  /* UI base (slate dark mirror) */
+  --tv-background: #0f172a;
+  --tv-foreground: #f1f5f9;
+  --tv-card: #0f172a;
+  --tv-card-foreground: #f1f5f9;
+  --tv-popover: #141c2f;
+  --tv-popover-foreground: #f1f5f9;
+  --tv-primary: #818cf8;
+  --tv-primary-foreground: #ffffff;
+  --tv-secondary: #141c2f;
+  --tv-secondary-foreground: #cbd5e1;
+  --tv-muted: #171f32;
+  --tv-muted-foreground: #94a3b8;
+  --tv-accent: #171f32;
+  --tv-accent-foreground: #f1f5f9;
+  --tv-border: #1e2639;
+  --tv-input: #1e2639;
+  --tv-ring: #818cf8;
+  --tv-primary-tint: 129 140 248;
+  --tv-status-connected: #22c55e;
+  --tv-status-connecting: #f59e0b;
+  --tv-status-error: #ef4444;
+  --tv-status-idle: #64748b;
+  /* Syntax base (Sprint 345) */
   --tv-syntax-keyword: #c4b5fd;
   --tv-syntax-operator: #cbd5e1;
   --tv-syntax-punct: #94a3b8;

@@ -178,10 +178,12 @@ async fn test_snapshot_empty_db_defaults_partial_false() {
     assert_eq!(mru["recentConnections"], Value::Array(vec![]));
     assert_eq!(mru["lastUsedConnectionId"], Value::Null);
 
-    // theme — default { themeId: "default", mode: "system" }
+    // theme — default { themeId: "slate", mode: "system" }
+    // Wave 9.5 (2026-05-16) — 회귀 2 contract: backend default 의 theme_id 가
+    // frontend `DEFAULT_THEME_ID` ("slate") 와 일치해야 한다.
     let theme = stores["theme"].as_object().unwrap();
-    assert!(theme.contains_key("themeId"));
-    assert!(theme.contains_key("mode"));
+    assert_eq!(theme["themeId"], "slate");
+    assert_eq!(theme["mode"], "system");
 
     // safeMode — default { mode: "off" } (or similar default sentinel)
     let safe = stores["safeMode"].as_object().unwrap();
