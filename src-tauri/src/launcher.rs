@@ -159,6 +159,31 @@ pub async fn workspace_focus<R: Runtime>(app: AppHandle<R>) -> Result<(), AppErr
         .map_err(|e| AppError::Window(format!("workspace.focus failed: {e}")))
 }
 
+/// Wave 9.5 회귀 4 (2026-05-16) — destroy the window that invoked the command.
+///
+/// Tauri injects the caller's `WebviewWindow` automatically when a command
+/// signature includes one as a parameter — that handle resolves to the
+/// per-conn `workspace-{conn_id}` window (or legacy `workspace`) without the
+/// frontend needing to know its own label.
+///
+/// **Why backend 직접 호출**: JS-side `WebviewWindow.destroy()` 가 환경에
+/// 따라 silent no-op 으로 떨어지는 사례가 회귀 보고로 관찰되었다 (Wave 9.5
+/// 회귀 4 의 fix 가 frontend `await win.destroy()` 만으로는 실제 window 가
+/// 사라지지 않는 사용자 환경). backend 의 `Window::destroy()` 직접 호출은
+/// JS↔Rust binding layer 의 모든 quirk 를 우회하며, `tracing::info!` 로
+/// 호출 확인이 가능해 silent failure 도 디버그 가능하다.
+#[tauri::command]
+pub async fn workspace_close<R: Runtime>(window: tauri::WebviewWindow<R>) -> Result<(), AppError> {
+    let label = window.label().to_string();
+    window.destroy().map_err(|e| {
+        AppError::Window(format!(
+            "workspace_close destroy failed (label={label}): {e}"
+        ))
+    })?;
+    tracing::info!(target: "launcher", "workspace_close: destroyed window label={label}");
+    Ok(())
+}
+
 /// Ensure the workspace window exists. If it has not yet been constructed
 /// (Sprint 175 Sprint 2 iteration 2 — workspace is lazy-built; see
 /// `build_workspace_window`) or was destroyed (e.g. OS closed it before the

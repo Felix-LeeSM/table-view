@@ -242,6 +242,12 @@ const SqlQueryEditor = forwardRef<EditorView | null, SqlQueryEditorProps>(
 
       viewRef.current = view;
 
+      // Wave 9.5 회귀 5 (2026-05-16) — 새 raw query tab 이 열리면 텍스트를
+      // 바로 입력할 수 있도록 contenteditable surface (`.cm-content`) 에
+      // 자동 focus. user journey: Cmd+N → tab 새로 mount → editor focus
+      // → 타이핑 즉시 가능.
+      view.focus();
+
       return () => {
         view.destroy();
         viewRef.current = null;

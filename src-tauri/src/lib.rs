@@ -291,6 +291,10 @@ pub fn run() {
         launcher::workspace_hide,
         launcher::workspace_focus,
         launcher::workspace_ensure,
+        // Wave 9.5 회귀 4 (2026-05-16) — backend 가 caller webview 의
+        // `Window::destroy()` 직접 호출. JS `WebviewWindow.destroy()` silent
+        // no-op 회귀의 robust fix (rationale: launcher.rs::workspace_close).
+        launcher::workspace_close,
         launcher::app_exit,
         // Sprint 361 (Phase 3, Q13) — per-conn workspace window launcher.
         // `open_workspace_window(connection_id)` is idempotent: re-focuses
@@ -547,6 +551,16 @@ fn install_macos_menu<R: tauri::Runtime>(
         .accelerator("CmdOrCtrl+N")
         .build(app)?;
 
+    // Wave 9.5 회귀 5 (2026-05-16) — Cmd+W 를 우리 own item 으로 처리.
+    // PredefinedMenuItem::close_window 는 Tauri 의 일반 close 경로 (close-requested
+    // 라이프사이클 + JS bindings 의존) 를 거치는데, 그 path 가 sprint 회귀 4 의
+    // listener trap / silent no-op 경로와 같다. 우리 own dispatcher 는 focused
+    // window 의 라벨을 직접 확인 + workspace 는 destroy / launcher 는 hide 로
+    // 분기 — desired UX 와 정확히 매칭.
+    let close_focused_window = MenuItemBuilder::with_id("close_focused_window", "Close Window")
+        .accelerator("CmdOrCtrl+W")
+        .build(app)?;
+
     let app_submenu = SubmenuBuilder::new(app, "Table View")
         .item(&PredefinedMenuItem::about(
             app,
@@ -566,7 +580,7 @@ fn install_macos_menu<R: tauri::Runtime>(
     let file_submenu = SubmenuBuilder::new(app, "File")
         .item(&new_connection)
         .separator()
-        .item(&PredefinedMenuItem::close_window(app, None)?)
+        .item(&close_focused_window)
         .build()?;
 
     let edit_submenu = SubmenuBuilder::new(app, "Edit")
@@ -583,7 +597,10 @@ fn install_macos_menu<R: tauri::Runtime>(
         .item(&PredefinedMenuItem::minimize(app, None)?)
         .item(&PredefinedMenuItem::maximize(app, None)?)
         .separator()
-        .item(&PredefinedMenuItem::close_window(app, None)?)
+        // Wave 9.5 회귀 5 — File 메뉴와 같은 item 인스턴스를 재사용.
+        // PredefinedMenuItem::close_window 가 회귀 4 의 silent no-op path
+        // 와 같은 close 라이프사이클을 거치는 회피 위함.
+        .item(&close_focused_window)
         .build()?;
 
     let menu = MenuBuilder::new(app)
@@ -596,35 +613,123 @@ fn install_macos_menu<R: tauri::Runtime>(
     app.set_menu(menu)?;
 
     app.on_menu_event(|handle, event| {
-        if event.id().0 == "new_connection" {
-            // Spawn so we can `.await` the launcher_show command without
-            // blocking the menu-event dispatcher.
-            let handle = handle.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = launcher::launcher_show(handle.clone()).await {
-                    tracing::warn!(
-                        target: "menu",
-                        "launcher_show failed before emit: {}",
-                        e
-                    );
-                    return;
-                }
-                if let Some(launcher) = handle.get_webview_window("launcher") {
-                    // set_focus is a UX nicety; the launcher is already
-                    // shown by the call above, and the subsequent emit
-                    // (which IS logged on failure) is the real signal.
-                    let _ = launcher.set_focus();
-                    if let Err(e) = launcher.emit("menu:new-connection", ()) {
-                        tracing::warn!(
-                            target: "menu",
-                            "menu:new-connection emit failed: {}",
-                            e
-                        );
-                    }
-                }
-            });
-        }
+        let id = event.id().0.clone();
+        let handle = handle.clone();
+        tauri::async_runtime::spawn(async move {
+            match id.as_str() {
+                "new_connection" => handle_menu_new_connection(handle).await,
+                "close_focused_window" => handle_menu_close_focused(handle).await,
+                _ => {}
+            }
+        });
     });
 
     Ok(())
+}
+
+/// Find the currently focused window's label, if any. Tauri 2.x exposes
+/// `is_focused()` per webview; we iterate the registered windows looking for
+/// the one the OS considers active. Returns `None` when nothing is focused
+/// (e.g. user clicked away from the app entirely).
+#[cfg(target_os = "macos")]
+fn focused_window_label<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> Option<String> {
+    handle
+        .webview_windows()
+        .iter()
+        .find_map(|(label, w)| match w.is_focused() {
+            Ok(true) => Some(label.clone()),
+            _ => None,
+        })
+}
+
+/// Wave 9.5 회귀 5 (2026-05-16) — Cmd+N dispatch.
+///
+/// User journey:
+///   1. workspace 가 focused → 그 workspace 안에 raw query tab 열기
+///      ("쿼리 새로 작성" 시그널, sprint-291 mental model)
+///   2. launcher 가 focused (visible) → 기존 동작 (new connection modal emit)
+///   3. 모든 창 hidden (사용자: "창 다 닫혀있을 때") → launcher show only,
+///      modal emit 안 함. 사용자가 직접 + 버튼 눌러야 modal.
+#[cfg(target_os = "macos")]
+async fn handle_menu_new_connection<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
+    let focused = focused_window_label(&handle);
+
+    // (1) workspace focused → workspace 자체에 raw query tab signal
+    if let Some(label) = focused.as_ref() {
+        if label.starts_with("workspace-") || label == "workspace" {
+            if let Some(win) = handle.get_webview_window(label) {
+                if let Err(e) = win.emit("menu:new-query-tab", ()) {
+                    tracing::warn!(
+                        target: "menu",
+                        "menu:new-query-tab emit failed (label={label}): {e}"
+                    );
+                }
+            }
+            return;
+        }
+    }
+
+    // (2) + (3) launcher 경로. launcher 의 visibility 로 분기.
+    let launcher_visible = handle
+        .get_webview_window("launcher")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(false);
+
+    if let Err(e) = launcher::launcher_show(handle.clone()).await {
+        tracing::warn!(target: "menu", "launcher_show failed: {e}");
+        return;
+    }
+
+    if launcher_visible {
+        // (2) 사용자가 launcher 를 이미 보고 있는 상태 — modal 자동 emit.
+        if let Some(launcher) = handle.get_webview_window("launcher") {
+            let _ = launcher.set_focus();
+            if let Err(e) = launcher.emit("menu:new-connection", ()) {
+                tracing::warn!(target: "menu", "menu:new-connection emit failed: {e}");
+            }
+        }
+    } else {
+        // (3) 모든 창 hidden → launcher 만 surface. modal 은 사용자 후속
+        // 행동 (+ 버튼) 으로만 열림 — 의도치 않은 modal 자동 노출 회피.
+        tracing::info!(
+            target: "menu",
+            "Cmd+N with no visible window: surfacing launcher without modal emit"
+        );
+        if let Some(launcher) = handle.get_webview_window("launcher") {
+            let _ = launcher.set_focus();
+        }
+    }
+}
+
+/// Wave 9.5 회귀 5 (2026-05-16) — Cmd+W dispatch.
+///
+/// User journey:
+///   1. workspace focused → backend Window::destroy() (회귀 4 의 JS API
+///      silent no-op path 우회).
+///   2. launcher focused → hide (sprint-363 의 launcher-close = hide UX).
+///   3. focused 없음 → no-op (user 가 app 밖 클릭한 상태).
+#[cfg(target_os = "macos")]
+async fn handle_menu_close_focused<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
+    let Some(label) = focused_window_label(&handle) else {
+        tracing::warn!(target: "menu", "Cmd+W with no focused window");
+        return;
+    };
+    let Some(win) = handle.get_webview_window(&label) else {
+        tracing::warn!(target: "menu", "Cmd+W: focused window vanished (label={label})");
+        return;
+    };
+
+    if label.starts_with("workspace-") || label == "workspace" {
+        if let Err(e) = win.destroy() {
+            tracing::warn!(target: "menu", "Cmd+W workspace.destroy failed (label={label}): {e}");
+        } else {
+            tracing::info!(target: "menu", "Cmd+W destroyed workspace label={label}");
+        }
+    } else if label == "launcher" {
+        if let Err(e) = win.hide() {
+            tracing::warn!(target: "menu", "Cmd+W launcher.hide failed: {e}");
+        } else {
+            tracing::info!(target: "menu", "Cmd+W hid launcher");
+        }
+    }
 }

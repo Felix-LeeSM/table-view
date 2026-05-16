@@ -15,7 +15,6 @@ import {
   PopoverTrigger,
 } from "@components/ui/popover";
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
-import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
 import { persistSettingValue } from "@lib/tauri/settings";
 
@@ -138,11 +137,6 @@ export default function Sidebar() {
         className="relative flex h-full shrink-0 select-none flex-col border-r border-border bg-secondary"
         style={{ width: sidebarWidth }}
       >
-        {/* Brand header */}
-        <div className="flex items-center justify-center border-b border-border px-3 py-2">
-          <LogoWordmark className="h-7 w-auto" />
-        </div>
-
         {/* Header strip — connection name + "+ Query" action. data-testid is
             kept stable for e2e tests (`sidebar-connection-header`). */}
         <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">

@@ -19,6 +19,9 @@ import { isEditableTarget } from "./lib/keyboard/isEditableTarget";
 import { useThemeStore } from "./stores/themeStore";
 import { markBootMilestone } from "./lib/perf/bootInstrumentation";
 import { useActiveTabConnection } from "./hooks/useActiveTabConnection";
+import { destroyCurrentWindow } from "./lib/window-controls";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "./lib/window-label";
+import { listen } from "@tauri-apps/api/event";
 
 export default function App() {
   const loadConnections = useConnectionStore((s) => s.loadConnections);
@@ -35,6 +38,10 @@ export default function App() {
   const activeTabId = useActiveTabId();
   const tabs = useCurrentTabs();
   const workspaceKey = useCurrentWorkspaceKey();
+  // Wave 9.5 회귀 5 — Cmd+N + menu:new-query-tab 의 fallback path 에서 사용.
+  // 컴포넌트에서 `store.getState()` 직접 호출은 룰 (no-restricted-syntax) 위반
+  // 이라 selector hook 으로 받는다.
+  const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const removeTab = useWorkspaceStore((s) => s.removeTab);
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
   const setActiveTab = useWorkspaceStore((s) => s.setActiveTab);
@@ -61,20 +68,29 @@ export default function App() {
     loadPersistedMru,
   ]);
 
-  // Cmd+W / Ctrl+W closes the active tab (NOT the app). Unlike every other
-  // global shortcut we intentionally do NOT skip on `isEditableTarget`:
-  // Tauri/wry on macOS falls through to the native Close-Window action
-  // whenever the handler doesn't `preventDefault`, and the editor or grid
-  // (both `contenteditable`) holds focus most of the time. Cmd+W has no
-  // in-editor meaning to preserve, so always intercept.
+  // Cmd+W / Ctrl+W — 활성 탭이 있으면 그 탭을 닫고, 빈 워크스페이스면 창
+  // 자체를 destroy. macOS native NSMenu 의 Cmd+W (lib.rs `close_focused_window`)
+  // 가 우선이지만, webview 가 가로채는 input field focus 같은 경우 fallback
+  // 으로 같은 시맨틱 (workspace → destroy, launcher → hide) 제공.
+  //
+  // Wave 9.5 회귀 5 (2026-05-16): 이전 핸들러는 빈 탭일 때 `preventDefault()`
+  // 만 호출해 OS default close 도 막아 no-op 으로 떨어졌다. 사용자: "탭 없는
+  // 상태에서 Cmd+W = window 꺼져야 해" — destroyCurrentWindow 명시 호출로 fix.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "w") {
-        e.preventDefault();
-        if (activeTabId && workspaceKey) {
-          removeTab(workspaceKey.connId, workspaceKey.db, activeTabId);
-        }
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "w") return;
+      e.preventDefault();
+      if (activeTabId && workspaceKey) {
+        removeTab(workspaceKey.connId, workspaceKey.db, activeTabId);
+        return;
       }
+      // 빈 워크스페이스 — backend `workspace_close` 가 caller webview 의
+      // Window::destroy() 직접 호출. launcher 안에서 fire 되면 backend 는
+      // 노출된 command 의 caller 가 launcher 라는 점만 보고 destroy — launcher
+      // hide 시맨틱은 native menu 가 처리하므로 webview keydown 으로 도달할
+      // 경로는 사실상 workspace 만 (launcher 의 Cmd+W 는 NSMenu 가 먼저
+      // 가로채 hide 분기로 간다).
+      void destroyCurrentWindow();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
@@ -128,10 +144,17 @@ export default function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [activeTabId, tabs]);
 
-  // Sprint 291 — workspace 윈도우에서의 Cmd+N 은 connection-create dialog 가
-  // 아니라 raw query tab 을 연다 (Cmd+T 와 동일 동작). 사용자 요청: workspace
-  // 안에서 새 연결 만들기는 launcher 윈도우 (macOS 메뉴 / 별도 진입점) 의
-  // 책무이고, workspace 의 Cmd+N 은 "쿼리 새로 작성" 시그널이라는 멘탈 모델.
+  // Sprint 291 + Wave 9.5 회귀 5 (2026-05-16) — workspace 윈도우에서의 Cmd+N
+  // 은 connection-create dialog 가 아니라 raw query tab 을 연다 (Cmd+T 와
+  // 동일 동작). 사용자 요청: workspace 안에서 새 연결 만들기는 launcher 윈도우
+  // (macOS 메뉴 / 별도 진입점) 의 책무이고, workspace 의 Cmd+N 은 "쿼리 새로
+  // 작성" 시그널이라는 멘탈 모델.
+  //
+  // 빈 탭 fallback (회귀 5): 이전 핸들러는 activeTab 의 connectionId 가
+  // 비어있으면 no-op 으로 떨어졌다. workspace 마운트 직후엔 tab 이 없을 수
+  // 있으므로 window label (`workspace-{conn_id}`) 에서 conn 을 추출해
+  // addQueryTab. macOS NSMenu Cmd+N 의 dispatch (lib.rs::handle_menu_new_connection)
+  // 가 우선이지만 webview 가 가로채는 input field focus 같은 경우 fallback.
   // Cmd+S / Ctrl+S — commit changes
   // Cmd+P / Ctrl+P — quick open
   useEffect(() => {
@@ -147,7 +170,19 @@ export default function App() {
         const activeTab = activeTabId
           ? tabs.find((t) => t.id === activeTabId)
           : null;
-        const connectionId = activeTab?.connectionId ?? "";
+        let connectionId = activeTab?.connectionId ?? "";
+        if (!connectionId) {
+          // 회귀 5 fallback A — 현재 window 라벨에서 conn 추출 (workspace
+          // window 의 가장 authoritative source). launcher 라벨은
+          // parseWorkspaceLabel 이 null 반환.
+          const label = getCurrentWindowLabel();
+          if (label) connectionId = parseWorkspaceLabel(label) ?? "";
+        }
+        if (!connectionId) {
+          // 회귀 5 fallback B — store 의 focusedConnId. WorkspacePage mount
+          // 직후 `useWindowFocusHydration` 이 set 한 값.
+          connectionId = focusedConnId ?? "";
+        }
         if (connectionId) {
           const db = resolveActiveDb(connectionId);
           addQueryTab(connectionId, db);
@@ -170,7 +205,39 @@ export default function App() {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [activeTabId, tabs, addQueryTab, markConnectionUsed]);
+  }, [activeTabId, tabs, addQueryTab, markConnectionUsed, focusedConnId]);
+
+  // Wave 9.5 회귀 5 (2026-05-16) — backend NSMenu Cmd+N 가 workspace 라벨로
+  // 발사하는 `menu:new-query-tab` 수신. user journey: workspace focused +
+  // Cmd+N → backend dispatcher 가 이 window 에 emit → raw query tab 열림.
+  // 빈 탭 상태에서도 동작 — workspace label 의 conn id 를 추출해 addQueryTab.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    void (async () => {
+      const fn = await listen("menu:new-query-tab", () => {
+        const activeTab = activeTabId
+          ? tabs.find((t) => t.id === activeTabId)
+          : null;
+        let connectionId = activeTab?.connectionId ?? "";
+        if (!connectionId) {
+          const label = getCurrentWindowLabel();
+          if (label) connectionId = parseWorkspaceLabel(label) ?? "";
+        }
+        if (!connectionId) connectionId = focusedConnId ?? "";
+        if (!connectionId) return;
+        const db = resolveActiveDb(connectionId);
+        addQueryTab(connectionId, db);
+        markConnectionUsed(connectionId);
+      });
+      if (cancelled) fn();
+      else unlisten = fn;
+    })();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [activeTabId, tabs, addQueryTab, markConnectionUsed, focusedConnId]);
 
   // Cmd+1..9 / Ctrl+1..9 — switch to the N-th workspace tab (1-indexed).
   // Top-row digits only; `Numpad1`.. are intentionally NOT matched.

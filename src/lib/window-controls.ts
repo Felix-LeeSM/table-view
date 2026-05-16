@@ -103,29 +103,26 @@ export async function closeWindow(label: WindowLabel): Promise<void> {
 }
 
 /**
- * Wave 9.5 (2026-05-16) — destroy the *current* window. WorkspacePage 의
- * `< Connections` 버튼이 호출.
+ * Wave 9.5 (2026-05-16) — destroy the current window via backend IPC.
  *
- * **`close()` 가 아니라 `destroy()`** — Tauri 2.x semantic distinction:
- * - `close()` 는 `tauri://close-requested` event 발사 후 listener 가
- *   `preventDefault()` 안 부르면 destroy 진행. OS-level close (Cmd+W /
- *   traffic light) 의 라이프사이클을 그대로 따른다.
- * - `destroy()` 는 close-requested 우회 + Destroyed event 만 발사. 강제 destroy.
+ * **Why `invoke("workspace_close")` and not `getCurrentWebviewWindow().destroy()`?**
+ * 회귀 보고 후 진단 결과: JS-side `WebviewWindow.destroy()` 가 일부 환경에서
+ * silent no-op 으로 떨어진다 (Tauri 2.10.1 macOS 관찰). frontend test 는
+ * `vi.mock` 으로 binding layer 를 stub 하기 때문에 이 silent failure 를
+ * 잡지 못한다 — jsdom 에는 Tauri webview API 가 없고, mock 은 항상 resolve
+ * 한다.
  *
- * Back 버튼은 React 안 ad-hoc 이벤트 — OS 의 close 라이프사이클과 의미적으로
- * 별개다. close-requested 를 일부러 trigger 할 이유가 없고, 명시적 destroy 가
- * 의미 매칭이다. 또한 Wave 9.5 회귀 4 (close-requested listener trap) 의
- * layered defense — 미래에 다른 곳에서 같은 listener 가 등록되더라도 destroy
- * 경로는 그 trap 을 우회한다. backend `handle_workspace_destroyed_safety_net`
- * 도 destroy 와 close 모두 동일하게 Destroyed event 로 dispatch 한다.
- *
- * `getCurrentWebviewWindow()` 는 windowing runtime 안에서 stable 하지만
- * jsdom 에서는 throw 할 수 있으므로 try/catch + 별도 named export 로 노출한다.
+ * Backend `workspace_close` (launcher.rs) 는 `tauri::WebviewWindow` 매개변수로
+ * 호출 webview 의 핸들을 자동 inject 받아 `Window::destroy()` 를 직접 호출한다.
+ * JS↔Rust binding 의 모든 quirk 가 우회되고, `tracing::info!` 로 호출 흔적이
+ * 남아 silent failure 도 디버그 가능하다. backend 의 `Window::destroy()` 는
+ * close-requested 라이프사이클을 우회 + `WindowEvent::Destroyed` 만 발사 →
+ * `handle_workspace_destroyed_safety_net` 의 launcher show + focus 로직도 정상
+ * dispatch.
  */
 export async function destroyCurrentWindow(): Promise<void> {
   try {
-    const win = getCurrentWebviewWindow();
-    await win.destroy();
+    await invoke("workspace_close");
   } catch (e) {
     logger.warn(
       "[window-controls] destroyCurrentWindow failed:",

@@ -11,6 +11,7 @@ import {
   type TableTab,
   type QueryTab,
 } from "./stores/workspaceStore";
+import { useConnectionStore } from "./stores/connectionStore";
 import { useThemeStore } from "./stores/themeStore";
 
 // Mock page components to isolate shortcut testing — App.tsx now mounts only
@@ -236,6 +237,73 @@ describe("App global shortcuts", () => {
     expect(newTab?.type).toBe("query");
 
     window.removeEventListener("new-connection", handler);
+  });
+
+  // Wave 9.5 회귀 5 (2026-05-16) — 빈 워크스페이스 시나리오들.
+  //
+  // 본 두 테스트는 새 feedback rule (`feedback_test_scenarios_user_journey.md`)
+  // 의 첫 적용 — user 의 행위 시퀀스 끝까지 path 를 따라가 user-facing
+  // invariant (store state / IPC 발사) 를 lock.
+  //
+  // user journey 1: workspace 마운트 (탭 0개) → Cmd+W keydown → window 닫힘
+  //   - 사용자 보고 (2026-05-16): "아무런 탭도 없는 상태의 connection
+  //     window에서 cmd + w를 누르면 connection window가 꺼져야 하고"
+  //   - 이전 핸들러는 `if (activeTabId && workspaceKey)` 체크 후 빈 탭일 때
+  //     `preventDefault()` 만 호출 → OS default close 도 막아 no-op.
+  it("Wave 9.5 회귀 5 — 빈 워크스페이스에서 Cmd+W 는 workspace_close IPC 를 발사한다", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = invoke as ReturnType<typeof vi.fn>;
+    invokeMock.mockClear();
+
+    // user journey 의 시작: workspace 마운트, 탭 0개.
+    useWorkspaceStore.setState({ workspaces: {} });
+    render(<App />);
+
+    // user 행위: Cmd+W.
+    fireShortcut("w");
+
+    // 마지막 outcome (user-facing invariant): backend workspace_close IPC 호출.
+    // 이 IPC 가 Rust 측에서 caller webview 의 Window::destroy() 를 실행 →
+    // user 가 보는 window 가 사라짐. backend 동작은 본 unit 의 cover 범위
+    // 밖이지만 (jsdom 영역 한계), IPC 발사 자체는 우리 own 코드의 의도이고
+    // backend test 가 그 다음 path 를 받는다.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(invokeMock).toHaveBeenCalledWith("workspace_close");
+  });
+
+  // user journey 2: workspace 마운트 (탭 0개) + connectionStore.focusedConnId
+  //   가 set 됨 (useWindowFocusHydration 의 결과) → Cmd+N keydown →
+  //   focusedConnId fallback 으로 conn 결정 → raw query tab 1개 생김
+  //   - 사용자 보고 (2026-05-16): "같은 환경에서 cmd + n을 누르면 raw query
+  //     창이 열려야 해"
+  //   - 이전 핸들러는 activeTab.connectionId 가 비어있으면 no-op. fallback
+  //     없음.
+  //
+  //   본 테스트는 focusedConnId fallback path 만 검증. window label fallback
+  //   (App.tsx 의 1순위) 은 jsdom 에서 mock 복잡 — 같은 store state outcome
+  //   이라 cover 됐다고 본다.
+  it("Wave 9.5 회귀 5 — 빈 워크스페이스에서 Cmd+N 은 focusedConnId fallback 으로 raw query tab 1개 추가", async () => {
+    // user journey 의 시작: 탭 0개 + workspace 마운트 후의 store state.
+    useWorkspaceStore.setState({ workspaces: {} });
+    useConnectionStore.setState({ focusedConnId: "conn1" });
+
+    render(<App />);
+
+    // user 행위: Cmd+N.
+    fireShortcut("n");
+
+    // 마지막 outcome (user-facing invariant): workspace 의 tab 이 1개 생김.
+    // mock 단언 ("addQueryTab 가 호출됨") 이 아니라 store state — user 가
+    // 보는 tab bar 의 실제 상태.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const tabsAfter = getAllTabsForConnection("conn1");
+    expect(tabsAfter.length).toBe(1);
+    expect(tabsAfter[0]?.type).toBe("query");
+    expect(tabsAfter[0]?.connectionId).toBe("conn1");
   });
 
   it("Cmd+S dispatches commit-changes event", () => {

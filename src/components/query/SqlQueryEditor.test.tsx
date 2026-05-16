@@ -67,6 +67,21 @@ describe("SqlQueryEditor (Sprint 139)", () => {
   });
 
   // AC-S139-02 — aria-label and SQL language facet.
+  // Wave 9.5 회귀 5 (2026-05-16) — 새 raw query tab 이 열리면 즉시 타이핑
+  // 가능해야 한다. user journey: Cmd+N → tab open → editor mount → cm-content
+  // 자동 focus → 사용자가 키 누르면 바로 입력. user-facing invariant 는
+  // "document.activeElement === .cm-content" — implementation detail
+  // (view.focus() 호출됨) 이 아니라 OS-level focus 상태 자체.
+  it("auto-focuses the .cm-content surface on mount so the user can type immediately", async () => {
+    const { container } = render(
+      <SqlQueryEditor sql="" onSqlChange={vi.fn()} onExecute={vi.fn()} />,
+    );
+    const cmContent = container.querySelector(".cm-content");
+    expect(cmContent).not.toBeNull();
+    // user 의 마지막 outcome — cm-content 가 활성 element.
+    await waitFor(() => expect(document.activeElement).toBe(cmContent));
+  });
+
   it("renders with role=textbox + aria-label=SQL Query Editor", () => {
     render(
       <SqlQueryEditor sql="" onSqlChange={onSqlChange} onExecute={onExecute} />,
