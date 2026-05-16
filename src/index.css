@@ -1,4 +1,11 @@
-@import "tailwindcss";
+/* Limit Tailwind's source-scanner to ./ (this CSS file's dir = `src/`). Without
+ * an explicit `source(…)`, Tailwind v4 walks the whole project tree honoring
+ * only .gitignore — which means it descends into `.claude/worktrees/<agent>/`
+ * (sub-agent git worktrees) and `src-tauri/icons-src/` (icon build sources)
+ * and indexes filename references it finds in their JSON / shell sources.
+ * When those referenced files are renamed or deleted in the main repo,
+ * vite's css-analysis plugin then ENOENTs on the dangling path. */
+@import "tailwindcss" source("./");
 @import "./themes.css";
 
 /* `dark:` Tailwind prefix now resolves against [data-mode="dark"] on any ancestor. */
