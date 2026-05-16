@@ -51,11 +51,18 @@ describe("bootInstrumentation", () => {
     await new Promise((resolve) => setTimeout(resolve, 1));
     markBootMilestone("theme:applied");
     markBootMilestone("session:initialized");
+    // Sprint 367 (Phase 4) — listener pre-register milestone inserted
+    // between session:initialized and connectionStore:imported.
+    markBootMilestone("snapshot:listener-registered");
     markBootMilestone("connectionStore:imported");
     markBootMilestone("connectionStore:hydrated");
     markBootMilestone("react:render-called");
     markBootMilestone("react:first-paint");
     markBootMilestone("app:effects-fired");
+    // Sprint 367 (Phase 4) — `snapshot:applied` fires from the fire-and-forget
+    // promise in `main.tsx`, AFTER `app:effects-fired`. Order reflects the
+    // arrival pattern; the summary line tolerates absent markers anyway.
+    markBootMilestone("snapshot:applied");
 
     for (const name of BOOT_MILESTONES) {
       const marks = performance.getEntriesByName(name, "mark");
@@ -148,20 +155,24 @@ describe("bootInstrumentation", () => {
   });
 
   // Reason: contract Required Checks #8/#9/#10 grep for milestone literals
-  // in specific files; this test asserts the canonical list IS the eight
+  // in specific files; this test asserts the canonical list IS the
   // milestones the contract pins, in order. A future refactor that adds /
   // removes / reorders milestones would break the baseline report's table
-  // shape and is rejected here. (2026-04-30)
-  it("exports the eight contractual milestone names in order", () => {
+  // shape and is rejected here. (2026-04-30; sprint-367 extended to ten
+  // milestones — added `snapshot:listener-registered` and
+  // `snapshot:applied` for Phase 4 atomic hydration.)
+  it("exports the ten contractual milestone names in order", () => {
     expect(BOOT_MILESTONES).toEqual([
       "T0",
       "theme:applied",
       "session:initialized",
+      "snapshot:listener-registered",
       "connectionStore:imported",
       "connectionStore:hydrated",
       "react:render-called",
       "react:first-paint",
       "app:effects-fired",
+      "snapshot:applied",
     ]);
   });
 });

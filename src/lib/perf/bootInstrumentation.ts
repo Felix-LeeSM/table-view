@@ -22,11 +22,20 @@ export const BOOT_MILESTONES = [
   "T0",
   "theme:applied",
   "session:initialized",
+  // Sprint 367 (Phase 4) — listener pre-register + snapshot hydrate
+  // milestones. Order reflects the boot sequence: listener registered
+  // before any IPC, snapshot applied after the first await Promise.all
+  // hydrate. `snapshot:applied` fires asynchronously inside the
+  // fire-and-forget chain in `main.tsx`, so it can land after later
+  // milestones; the summary line tolerates "missing" markers so this
+  // is logged as best-effort, not load-bearing for boot completion.
+  "snapshot:listener-registered",
   "connectionStore:imported",
   "connectionStore:hydrated",
   "react:render-called",
   "react:first-paint",
   "app:effects-fired",
+  "snapshot:applied",
 ] as const;
 
 export type BootMilestone = (typeof BOOT_MILESTONES)[number];

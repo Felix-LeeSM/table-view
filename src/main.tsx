@@ -11,6 +11,14 @@ import {
   scheduleBootSummary,
 } from "@lib/perf/bootInstrumentation";
 import { logger } from "@lib/logger";
+// CRITICAL (sprint-367 AC-367-03): the listener-register call below MUST
+// precede `loadAllFromSnapshot()` in the boot flow. That ordering is also
+// regression-locked by `src/lib/snapshot/loadAll.listener-order.test.ts`,
+// which scans `loadAll.ts` for the same pattern.
+import {
+  loadAllFromSnapshot,
+  registerSnapshotListener,
+} from "@lib/snapshot/loadAll";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
@@ -40,6 +48,13 @@ async function boot() {
   await initSession();
   markBootMilestone("session:initialized");
 
+  // Sprint 367 (Phase 4) — listener pre-register MUST happen before the
+  // snapshot IPC so race-window `state-changed` events get buffered.
+  // Best-effort: in vitest jsdom or a tauri-less env this becomes a no-op
+  // (`registerSnapshotListener` swallows the import failure).
+  await registerSnapshotListener();
+  markBootMilestone("snapshot:listener-registered");
+
   // Hydrate connection state from session-scoped localStorage so the
   // workspace has correct focusedConnId + activeStatuses on first render.
   // The dynamic import preserves the boot-graph node ordering so the
@@ -52,6 +67,21 @@ async function boot() {
     await import("@hooks/useConnectionSessionHydration");
   hydrateConnectionSession();
   markBootMilestone("connectionStore:hydrated");
+
+  // Sprint 367 (Phase 4) — atomic snapshot hydration for the 5 boot-critical
+  // stores (connections + groups / workspaces / mru / theme / safeMode) +
+  // runtime.activeStatuses mirror. Fire-and-forget: failure surfaces a sticky
+  // error toast with Retry inside `loadAllFromSnapshot` itself, so we keep
+  // the existing session-LS path as the fallback for this sprint. Sprint 368
+  // / 369 retire the LS dependencies; Sprint 370 owns workspaces.
+  void loadAllFromSnapshot()
+    .then(() => markBootMilestone("snapshot:applied"))
+    .catch((e) => {
+      logger.warn(
+        "[main] snapshot hydration failed (LS fallback in effect):",
+        e instanceof Error ? e.message : e,
+      );
+    });
 
   // Register the launcher's `tauri://close-requested` listener.
   // Fire-and-forget: if it rejects the app still works via system-tray / Cmd+Q.
