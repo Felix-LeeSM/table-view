@@ -25,5 +25,6 @@
       "@stores/*": ["./src/stores/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [".claude"]
 }

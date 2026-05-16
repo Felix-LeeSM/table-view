@@ -21,7 +21,11 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
-    exclude: ["e2e/**", "node_modules/**"],
+    // `.claude/**` 는 sub-agent 가 parallel TDD 작업을 진행하는
+    // git worktree 들의 루트. main repo 의 vitest / coverage 측정 범위에서
+    // 항상 제외한다 (worktree 내부 test 는 그 worktree 안 vitest 가 따로
+    // 측정).
+    exclude: ["e2e/**", "node_modules/**", ".claude/**"],
     testTimeout: 10000,
 
     coverage: {
@@ -62,7 +66,13 @@ export default defineConfig(async () => ({
         }
       : undefined,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/.claude/**"],
+    },
+    fs: {
+      // sub-agent worktree 들이 main repo 의 subdirectory 로 배치되지만
+      // vite 의 plugin (css-analysis 등) 이 그 경로 안 자산을 따라가지
+      // 못하도록 명시 차단. main repo 가 root.
+      deny: [".claude/**"],
     },
   },
 }));

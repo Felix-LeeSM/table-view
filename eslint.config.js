@@ -148,7 +148,17 @@ const tvLocal = {
 };
 
 export default tseslint.config(
-  { ignores: ["dist", "src-tauri", "coverage", "cargo-target"] },
+  {
+    ignores: [
+      "dist",
+      "src-tauri",
+      "coverage",
+      "cargo-target",
+      // sub-agent worktree 디렉토리. main repo 의 lint 가 안의 partial
+      // 변경을 collect 하지 않도록 차단.
+      ".claude/**",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
