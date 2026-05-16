@@ -6,6 +6,7 @@ pub mod guard;
 pub mod import_legacy;
 pub mod keyring;
 pub mod meta;
+pub mod open_workspace_window;
 pub mod persist_connections;
 pub mod persist_favorites;
 pub mod persist_mru;

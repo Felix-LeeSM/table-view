@@ -10,7 +10,7 @@ import { Toaster } from "./components/ui/toaster";
 import { useConnectionStore } from "./stores/connectionStore";
 import { useFavoritesStore } from "./stores/favoritesStore";
 import { useMruStore } from "./stores/mruStore";
-import { getCurrentWindowLabel } from "@lib/window-label";
+import { getCurrentWindowLabel, parseWorkspaceLabel } from "@lib/window-label";
 import { markBootMilestone } from "@lib/perf/bootInstrumentation";
 import { logger } from "@lib/logger";
 import App from "./App";
@@ -69,6 +69,14 @@ export default function AppRouter() {
     markBootMilestone("react:first-paint");
   }, []);
 
+  // sprint-361 (Phase 3, Q13) — workspace windows are now per-connection,
+  // labeled `workspace-{connection_id}`. The router recognizes the new
+  // pattern via `parseWorkspaceLabel(label) !== null` and treats the bare
+  // legacy `"workspace"` label as unknown (it should no longer be emitted
+  // by backend after Phase 3 lands). Launcher label is unchanged.
+  const isWorkspaceLabel =
+    typeof label === "string" && parseWorkspaceLabel(label) !== null;
+
   // Keep `document.title` in sync with the Tauri window decoration
   // title. webdriver's `getTitle()` reports `document.title` (the
   // webview's HTML `<title>`), NOT the OS window title from
@@ -77,9 +85,8 @@ export default function AppRouter() {
   // `switchToWorkspaceWindow` couldn't distinguish them. Aligning the two
   // titles also fixes the dock/taskbar/alt-tab labels in prod.
   useEffect(() => {
-    document.title =
-      label === "workspace" ? "Table View — Workspace" : "Table View";
-  }, [label]);
+    document.title = isWorkspaceLabel ? "Table View — Workspace" : "Table View";
+  }, [isWorkspaceLabel]);
 
   // Resolve the route up front so the JSX has a single, exhaustive branch.
   // We intentionally accept `string | null` — `getCurrentWindowLabel()`
@@ -88,7 +95,7 @@ export default function AppRouter() {
   let route: "launcher" | "workspace";
   if (label === "launcher") {
     route = "launcher";
-  } else if (label === "workspace") {
+  } else if (isWorkspaceLabel) {
     route = "workspace";
   } else {
     // Defensive: a missing or unknown label means the Tauri side gave us

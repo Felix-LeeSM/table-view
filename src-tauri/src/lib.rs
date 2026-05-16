@@ -259,6 +259,10 @@ pub fn run() {
         launcher::workspace_focus,
         launcher::workspace_ensure,
         launcher::app_exit,
+        // Sprint 361 (Phase 3, Q13) — per-conn workspace window launcher.
+        // `open_workspace_window(connection_id)` is idempotent: re-focuses
+        // an existing `workspace-{connection_id}` window or builds a new one.
+        commands::open_workspace_window::open_workspace_window,
     ]);
     record_phase(&mut cursor, "invoke-handler-register");
 

@@ -32,9 +32,22 @@ import { render, screen, cleanup } from "@testing-library/react";
 // each case can simulate `getCurrentWebviewWindow().label` returning the
 // launcher / workspace / unknown / missing surfaces without a real Tauri
 // runtime (vitest runs under jsdom).
-vi.mock("@lib/window-label", () => ({
-  getCurrentWindowLabel: vi.fn(),
-}));
+//
+// sprint-361 (2026-05-16) — Tauri seam is mocked, but the helpers
+// `parseWorkspaceLabel` / `formatWorkspaceLabel` are pure string utilities
+// that AppRouter calls inline. Spread the actual module first so those
+// helpers remain available; only override the runtime-dependent
+// `getCurrentWindowLabel`.
+vi.mock("@lib/window-label", async () => {
+  const actual =
+    await vi.importActual<typeof import("@lib/window-label")>(
+      "@lib/window-label",
+    );
+  return {
+    ...actual,
+    getCurrentWindowLabel: vi.fn(),
+  };
+});
 
 // AppRouter's launcher branch boots the connection store via tauri IPC. The
 // router test does NOT exercise that surface — it only asserts the boot
@@ -132,8 +145,11 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(document.title).toBe("Table View");
   });
 
-  it("AC-150-04b: label='workspace' mounts the WorkspacePage shell", () => {
-    mockedGetLabel.mockReturnValue("workspace");
+  // sprint-361 (2026-05-16) — bare `"workspace"` label retired. Workspace
+  // windows are now per-connection (`workspace-{connection_id}`); the
+  // legacy single workspace label is treated as unknown by AppRouter.
+  it("AC-150-04b (sprint-361): per-conn label 'workspace-<id>' mounts the WorkspacePage shell", () => {
+    mockedGetLabel.mockReturnValue("workspace-conn-1");
 
     render(<AppRouter />);
 
@@ -142,8 +158,8 @@ describe("AC-150-*: window-label-driven boot routing", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it("AC-173-02: label='workspace' sets document.title to the workspace title", () => {
-    mockedGetLabel.mockReturnValue("workspace");
+  it("AC-173-02 (sprint-361): per-conn workspace label sets document.title to the workspace title", () => {
+    mockedGetLabel.mockReturnValue("workspace-conn-1");
 
     render(<AppRouter />);
 
