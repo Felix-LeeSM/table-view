@@ -24,6 +24,7 @@
     "test:e2e": "wdio run wdio.smoke.conf.ts",
     "test:e2e:smoke": "wdio run wdio.smoke.conf.ts",
     "tauri": "tauri",
+    "icons:build": "./scripts/build-icons.sh",
     "db:up": "docker compose up -d postgres mongo mysql && ./scripts/db/wait.sh",
     "db:down": "docker compose down",
     "db:seed": "tsx scripts/fixtures/index.ts seed",

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="cardc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#faf6e9"></stop>
+      <stop offset="1" stop-color="#f5efde"></stop>
+    </linearGradient>
+    <linearGradient id="rimc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop>
+      <stop offset=".15" stop-color="#ffffff" stop-opacity="0"></stop>
+    </linearGradient>
+    <filter id="shc" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="22"></feGaussianBlur>
+    </filter>
+  </defs>
+  <g transform="translate(100 100) scale(0.8046875)">
+    <g transform="translate(300 220) rotate(6)" opacity="0.7">
+      <rect x="20" y="30" width="560" height="400" rx="44" fill="rgba(0,0,0,.45)" filter="url(#shc)"></rect>
+      <rect x="0" y="0" width="560" height="400" rx="44" fill="url(#cardc)"></rect>
+      <rect x="0" y="0" width="560" height="400" rx="44" fill="url(#rimc)"></rect>
+    </g>
+  </g>
+</svg>

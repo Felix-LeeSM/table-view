@@ -36,6 +36,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "icons/Compiled/Assets.car": "Assets.car",
+      "icons/Compiled/AppIcon.icns": "AppIcon.icns"
+    }
   }
 }

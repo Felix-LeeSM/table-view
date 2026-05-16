@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="cardc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#faf6e9"></stop>
+      <stop offset="1" stop-color="#f5efde"></stop>
+    </linearGradient>
+    <linearGradient id="rimc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop>
+      <stop offset=".15" stop-color="#ffffff" stop-opacity="0"></stop>
+    </linearGradient>
+    <filter id="shc" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="22"></feGaussianBlur>
+    </filter>
+  </defs>
+  <g transform="translate(100 100) scale(0.8046875)">
+    <g transform="translate(160 380) rotate(-8)" opacity="1">
+      <rect x="20" y="30" width="600" height="400" rx="44" fill="rgba(0,0,0,.45)" filter="url(#shc)"></rect>
+      <rect x="0" y="0" width="600" height="400" rx="44" fill="url(#cardc)"></rect>
+      <rect x="0" y="0" width="600" height="400" rx="44" fill="url(#rimc)"></rect>
+      <rect x="40" y="50" width="180" height="40" rx="20" fill="#7a2a0f"></rect>
+      <line x1="40" y1="150" x2="540" y2="150" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+      <line x1="40" y1="215" x2="420" y2="215" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+      <line x1="40" y1="280" x2="500" y2="280" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+      <line x1="40" y1="345" x2="340" y2="345" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+    </g>
+  </g>
+</svg>
