@@ -174,6 +174,26 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "tv-local/no-tailwind-arbitrary-px": "error",
       "tv-local/no-undefined-css-token": "error",
+      // 2026-05-17 — `console.*` 직접 호출 금지. 진단/임시 log 가 working
+      // tree 에 남거나 commit 으로 새는 path 차단. `@lib/logger` 경유 —
+      // logger 는 `import.meta.env.DEV` gate 라 production silent.
+      // 예외: logger 본체 + bootInstrumentation 의 구조화 boot summary.
+      "no-console": "error",
+    },
+  },
+  {
+    files: [
+      "src/lib/logger.ts",
+      "src/lib/perf/bootInstrumentation.ts",
+      // Test files — `console.*` 은 mock spy 대상 또는 stderr 검증.
+      "**/*.test.{ts,tsx}",
+      // CLI / 빌드 / e2e / wdio — CLI 출력은 console 이 정상.
+      "scripts/**/*.{ts,tsx}",
+      "e2e/**/*.{ts,tsx}",
+      "wdio*.ts",
+    ],
+    rules: {
+      "no-console": "off",
     },
   },
   // Sprint-112: forbid new native <select> JSX. All dropdowns must use the

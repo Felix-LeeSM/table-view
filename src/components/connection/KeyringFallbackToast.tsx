@@ -25,6 +25,7 @@ import { useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 
 import { setKeyringFallbackDismissed } from "@/lib/keyringFallback";
+import { logger } from "@lib/logger";
 import { cn } from "@/lib/utils";
 
 export interface KeyringFallbackToastProps {
@@ -55,7 +56,7 @@ export function KeyringFallbackToast({
       // still hide the UI for this session — the next boot re-evaluates
       // and the user can dismiss again. Log so devs spot persistent
       // failures.
-      console.warn("keyring fallback dismiss IPC failed", err);
+      logger.warn("keyring fallback dismiss IPC failed", err);
     }
   };
 

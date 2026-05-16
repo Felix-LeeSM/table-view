@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@components/ui/button";
+import { logger } from "@lib/logger";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ export default function PreviewCopyButton({
     if (!carrier) {
       // Carrier unavailable (e.g. insecure context, jsdom without polyfill).
       // Surface the failure path so the user is not left wondering.
-      console.error(
+      logger.error(
         "Clipboard API unavailable: navigator.clipboard.writeText is missing",
       );
       if (mountedRef.current) setStatus("failure");
@@ -90,7 +91,7 @@ export default function PreviewCopyButton({
       scheduleRevert(SUCCESS_TIMEOUT_MS);
     } catch (err) {
       // Carrier rejected. Log + surface transient failure label.
-      console.error("Clipboard writeText failed:", err);
+      logger.error("Clipboard writeText failed:", err);
       if (mountedRef.current) setStatus("failure");
       scheduleRevert(FAILURE_TIMEOUT_MS);
     }
