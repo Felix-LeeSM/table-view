@@ -5640,6 +5640,7 @@ dependencies = [
  "futures-util",
  "keyring",
  "mongodb",
+ "regex",
  "serde",
  "serde_json",
  "serial_test",

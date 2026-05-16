@@ -49,6 +49,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 csv = "1"
+# Sprint 371 (Phase 5 F.5) — query_history `sql_redacted` regex masking
+# (quoted/numeric literal → `?`). 같은 crate 가 `tracing-subscriber` /
+# `globset` / `mongodb` 의 transitive 로 이미 잠겨 있어 build cost 추가 0.
+regex = "1"
 # Sprint 356 (2026-05-16) — Q22 keyring file-key migration.
 # Cross-platform abstraction lives in `storage::crypto::KeyringBackend`;
 # the in-memory backend used by tests means we never link against the

@@ -318,6 +318,15 @@ pub fn run() {
         // 가 사용. settings known key 가 아니므로 Q21 reset audit 대상 0.
         commands::meta_sentinel::get_meta_sentinel,
         commands::meta_sentinel::set_meta_sentinel,
+        // Sprint 371 (Phase 5 F.5) — query_history privacy IPC surface.
+        // add/list/detail/clear. `sql` 원문은 detail 한 곳만 노출, list 응답
+        // 어디에도 부재. `sql_redacted` regex masking + panic 시 원문
+        // fallback (column NOT NULL 보장). clear 는 VACUUM 분리 트랜잭션 +
+        // history.clear emit.
+        commands::history::add_history_entry,
+        commands::history::list_history,
+        commands::history::get_history_detail,
+        commands::history::clear_history,
     ]);
     record_phase(&mut cursor, "invoke-handler-register");
 

@@ -5,6 +5,7 @@ pub mod document;
 pub mod export;
 pub mod groups_collapsed;
 pub mod guard;
+pub mod history;
 pub mod import_legacy;
 pub mod keyring;
 pub mod meta;

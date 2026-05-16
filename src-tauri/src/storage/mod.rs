@@ -6,6 +6,7 @@ pub mod local_files;
 pub mod meta;
 pub mod mismatch_metric;
 pub mod reconcile;
+pub mod sql_redact;
 
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
