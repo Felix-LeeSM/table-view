@@ -1,7 +1,7 @@
 ---
 title: Roadmap
 type: memory
-updated: 2026-05-14
+updated: 2026-05-16
 ---
 
 # 로드맵
@@ -32,6 +32,12 @@ updated: 2026-05-14
   코드 wired. 13/16 은 sprint-160/168 에서 closure 완료, 14/15 는
   contract 만 디렉토리에 잔존해 묻혀 있던 phase 로 retroactive handoff
   추가.
+- **State-management 이주 sprint 분할 (2026-05-16, Sprint 353–376)** —
+  `docs/state-management-strategy-2026-05-15.md` (11회 codex 외부 검토 0
+  findings 수렴) 의 Phase 0~6 AC + Part F.1~F.6 wire contract 를 24
+  sprint 단위로 split. contract.md 24개 작성 + 4회 codex 5.5 medium
+  consistency review. 상세는 본 문서 아래 [State-management 이주
+  sequencing] 섹션.
 
 ## 작업 순서 (Impact 큰 순) — Phase 21–27
 
@@ -59,6 +65,27 @@ Sprint 198 종료로 sequencing 완료.
 각 sprint 의 결정 / AC / handoff 는 `docs/sprints/sprint-189` ~
 `sprint-198` 의 `contract.md` / `findings.md` / `handoff.md`. 코드 표준은
 [conventions/refactoring](../conventions/refactoring/memory.md).
+
+## State-management 이주 sequencing (Sprint 353–376, 24 sprint, 2026-05-16)
+
+기준 문서: [`docs/state-management-strategy-2026-05-15.md`](../../docs/state-management-strategy-2026-05-15.md)
+(11회 codex 외부 검토 0 findings 수렴) + [`docs/code-smell-audit-2026-05-15.md`](../../docs/code-smell-audit-2026-05-15.md).
+contract.md 24개 작성 + 4회 codex 5.5 medium consistency review.
+
+| Phase | Sprints | 핵심 |
+|-------|---------|------|
+| 0 | 353, 354 | dehydration (Q16~Q19, Q19 cap 25) + counter seed + L2 schemaStore retire |
+| 1 | 355–358 | SQLite 9 table + Q22 keyring file-key 3 path + F.2 snapshot + dual-write |
+| 2 | 359, 360 | 탭 affinity (Q5.1–Q5.6) + introspection_pool + Q23 self-window invalidate |
+| 3 | 361–365 | window label per-conn + single-instance + Q13 same-conn focus + ConnectionStatus 확장 + cross-window `state-changed` 9 domain |
+| 4 | 366–370 | hook + snapshot hydration + Q12 theme/safeMode + Q20 datagrid prefs (non-store LS 5 site retire) + W2→W3 gate |
+| 5 | 371–373 | query history backend (Q5 privacy + VACUUM 분리 + discriminated union) + frontend + queryHistoryStore retire |
+| 6 | 374–376 | ADR 0032–0042 commit + cleanup (session-storage rename / `.legacy.json` cron) + Q21 reset-to-default UI 9 affordance |
+
+의존성 그래프 (병렬 가능 묶음) 와 sprint 단위 목적은
+[`docs/PLAN.md`](../../docs/PLAN.md) "State management 이주" 섹션이
+authoritative. 각 contract.md 는 In Scope ≤ 5 파일군, AC ≤ 12, TDD
+red→green 명시.
 
 ## 진행 중 / 대기 / 보류
 

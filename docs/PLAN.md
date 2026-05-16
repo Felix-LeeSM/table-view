@@ -162,6 +162,49 @@ e2e dead 제약 (cross-window invariant 변경 회피) 으로 phase 선정. Phas
 | 11 | **236** ✓ | feature | Phase 27 sprint 11 | Column add / drop 폴리시 promote — Sprint 235 `rename_table` / `drop_table` precedent 답습. (1) Backend `add_column` / `drop_column` Tauri command 신설 — `AddColumnRequest` / `DropColumnRequest` (`#[serde(rename_all = "camelCase")]` + `#[serde(default)] preview_only: bool`) 도입; trait + impl signature 가 request struct 받아 `SchemaChangeResult { sql }` 반환; PG impl 가 SQL emission order lock (`ADD COLUMN "name" <type> [NOT NULL] [DEFAULT <expr>] [CHECK (<expr>)]` / `DROP COLUMN "name" [CASCADE]`, no RESTRICT keyword); `BEGIN/COMMIT` transactional execute branch; identifier validation (`validate_identifier` 공유 helper, PG NAMEDATALEN 63 byte). (2) `AddColumnDialog` (`+432 LOC NEW`) — column name input + type combobox (`CreateTableTypeCombobox` reused with `usePostgresTypes`) + NOT NULL toggle (default OFF) + DEFAULT free-text + CHECK free-text + collapsible Show DDL pane; identifier regex `^[a-zA-Z_][a-zA-Z0-9_]*$`, byte-length ≤ 63; collision pre-check disables Apply with inline hint. (3) `DropColumnDialog` (`+300 LOC NEW`) — typing-confirm input (case-sensitive byte-for-byte, NO trim, NO debounce) + CASCADE checkbox (label `"Drop dependent objects (CASCADE)"` Sprint 236 user spec) + default off + toggle invalidates preview + Apply variant=destructive + Safe Mode dispatch (`ALTER TABLE … DROP COLUMN` → `ddl-drop` / danger; production×strict block / production×warn → `pendingConfirm` `<ConfirmDangerousDialog>` mount / non-prod safe). (4) `ColumnsEditor` rerouting — `+ Column` toolbar button now opens `<AddColumnDialog>` (inline `NewColumnRow` REMOVED); per-row trash icon now opens `<DropColumnDialog>` (no pendingChanges drop push); inline-batched MODIFY path (Edit pencil → save → Review SQL → Execute) UNCHANGED — Sprint 237 polish target. (5) DEFAULT/CHECK passthrough verbatim — no escaping, no syntax check, embedded `'` preserved (PG surfaces verbatim errors via `previewError`). (6) `src/lib/tauri/ddl.ts` request-shaped only (`addColumnRequest` / `dropColumnRequest`) — no positional alias layer per OQ-1 (zero callers). (7) `ColumnsEditor.test.tsx` / `StructurePanel.columns.test.tsx` mechanical migration — Sprint 187 Safe Mode gate regressions 6 케이스가 inline-trash trigger → inline-MODIFY trigger 으로 이동 (alterTable mock 이 DROP COLUMN preview 반환 → analyzer classification 보존); 인라인-add `Confirm add column` 케이스는 modal-mount assertion 으로 교체. 16 신규 cargo fixture (10 `add_column` + 6 `drop_column`, 2 serde-roundtrip 포함) + 13 AddColumnDialog 테스트 + 12 DropColumnDialog 테스트 + 2 신규 ColumnsEditor.test.tsx modal-mount 케이스 + 1 신규 StructurePanel.columns.test.tsx AC-236-08 케이스. vitest 226 files / 2912 tests / cargo test 410/0 (was 395/0; +15) / 4-set + clippy + fmt + build 통과. |
 | 12 | **276** ✓ | feature | Phase 17 sprint 0 (Generator-free) | Unsupported adapter UI hide — connection 생성 dialog 의 DBMS dropdown 에 백엔드 `make_adapter` 가 실제 어댑터를 반환하는 DBMS (PostgreSQL / MongoDB) 만 노출. MySQL / SQLite / Redis 는 사용자가 새 connection 을 만들 때 선택 불가능. `types/connection.ts` 에 `SUPPORTED_DATABASE_TYPES: readonly DatabaseType[] = ["postgresql", "mongodb"]` + `isSupportedDatabaseType()` helper + `DATABASE_TYPE_LABELS` 단일 source 추가. `ConnectionDialogBody.tsx` SelectItem 5 → SUPPORTED 기반 map (편집 모드에서 기존 unsupported db_type 도 예외적으로 추가해 select 가 빈값으로 보이지 않도록 보호). `useConnectionUrlImport.ts` `parseAndApply` 가 unsupported scheme 검출 시 `urlError` 노출 (`"<Label> is not yet supported. Currently only PostgreSQL / MongoDB can be added."`); form-mode `handleHostPaste` 는 AC-178-04 silent 룰 그대로 적용 — unsupported scheme paste 는 form 변경 없이 silent return. Sprint 108 port-guard 7 케이스 + Sprint 138 unsupported 3 케이스 + 단독 MySQL select 케이스 = 11개 `it.skip` (Phase 17 어댑터 합류 시 unskip). 새 회귀 가드: PG↔Mongo port-guard 2개 + dropdown supported-only 1개 + edit-mode unsupported 보존 1개 + Sprint 276 SUPPORTED 상수/helper/labels 3개 + URL-mode reject 3개 (mysql/sqlite/redis 각각) + form-paste silent 4개 (mysql/mariadb/redis/sqlite). vitest 269 files / 3286 tests / 10 skipped / tsc clean / lint clean. |
 
+### State management 이주 (Sprint 353–376, 24 sprint)
+
+`docs/state-management-strategy-2026-05-15.md` 의 Phase 0~6 AC + Part F.1~F.6 wire contract 를 TDD sprint 단위로 분할. 24 sprint 일련번호 353~376 (정수 번호 룰 `feedback_sprint_naming.md` 준수). Phase 의존성 그래프 위에 의존 ASC 정렬. 각 contract.md 는 In Scope ≤ 5 파일군, AC ≤ 12, TDD red→green 명시.
+
+| # | Sprint | Phase | 목적 |
+|---|--------|-------|------|
+| 1 | **353** | 0 | dehydration pipeline (M-1/Q16–Q19 strip + LS byte < 50KB + Q19 cap 25) |
+| 2 | **354** | 0 | counter seed (M-2) + L2 schemaStore 비-schema 메서드 retire |
+| 3 | **355** | 1 | SQLite skeleton + 9 table migration + Q2 corrupt recovery + legacy import IPC + guard |
+| 4 | **356** | 1 | keyring file-key (Q22) — 신규 / 기존 / Linux fallback 3 path + readback/decrypt/fatal |
+| 5 | **357** | 1 | snapshot IPC `get_initial_app_state` (F.2 shape) + Q9 p95 < 50ms |
+| 6 | **358** | 1 | dual-write (connections/favorites/mru/settings) + workspaces SQLite-only + W1 reconcile |
+| 7 | **359** | 2 | tab affinity (Q5.1/2/3/4/5/6) + `cancel_query(connection_id, server_pid \| opid)` + `release_tab_connection(connection_id, tab_id)` + introspection_pool |
+| 8 | **360** | 2 | schemaCache self-window invalidate (Q23 self) |
+| 9 | **361** | 3 | window label per-conn (`workspace-{conn_id}`) + `open_workspace_window` idempotent |
+| 10 | **362** | 3 | single-instance plugin + 2nd launch focus + cold-boot < 50ms |
+| 11 | **363** | 3 | Q13 same-conn focus + launcher hide/show lifecycle |
+| 12 | **364** | 3 | ConnectionStatus enum 확장 (Connecting + active_db) + 4-case serde regression |
+| 13 | **365** | 3 | cross-window `state-changed` infra + 9 domain routing + dedup/self-echo/gap/reset |
+| 14 | **366** | 4 | `useCurrentWindowConnectionId()` hook + workspace path `focusedConnId` read 0 |
+| 15 | **367** | 4 | snapshot hydration (5 boot critical stores + runtime) + listener pre-register |
+| 16 | **368** | 4 | theme/safeMode SOT 전환 (Q12) + cross-window 50ms + FOUC 0 |
+| 17 | **369** | 4 | datagrid prefs + non-store LS 5 site retire (Q20) + partial patch / field-scoped reset |
+| 18 | **370** | 4 | W2→W3 dogfood gate (4 도메인 mismatch 1주일 0) |
+| 19 | **371** | 5 | query_history backend (add/list/detail/clear + privacy + VACUUM 분리 + discriminated union) |
+| 20 | **372** | 5 | query history frontend integration (panel filter + event refetch + clear) |
+| 21 | **373** | 5 | queryHistoryStore retire + source 5종 e2e + retention boot wiring + disable 토글 |
+| 22 | **374** | 6 | ADR-0032 ~ ADR-0042 final commit (11 ADR, strategy line 798–808 매핑) |
+| 23 | **375** | 6 | cleanup (session-storage rename + 모듈 변수 + tab_id null audit + W4 `.legacy.json` cron) |
+| 24 | **376** | 6 | Reset-to-default UI 9 affordance 구현 + Q21 audit |
+
+**기준 문서**: [`docs/state-management-strategy-2026-05-15.md`](state-management-strategy-2026-05-15.md), [`docs/code-smell-audit-2026-05-15.md`](code-smell-audit-2026-05-15.md). 11회 codex 외부 검토 (1차–11차) 로 wire-shape 일관성 0 findings 도달, sprint contract 4회 codex 5.5 medium 검토 로 cross-doc 정합성 정정.
+
+**의존성 그래프 (병렬 가능 묶음)**:
+- Phase 0 (353, 354) — 의존 0, 병렬 가능.
+- Phase 1 (355 → 356 / 357) — 355 후 356·357 병렬.
+- Phase 1 (358 ← 355, 356) — 357 무관 (snapshot IPC 와 dual-write 독립).
+- Phase 2 (359, 360) — 355 후 359, 359 후 360. dual-write (358) 무관.
+- Phase 3 (361, 362, 363, 364, 365) — 361 / 364 무관 (label vs serde), 362 ← 361, 363 ← 361+362, 365 ← 361+362+363+364.
+- Phase 4 (366, 367, 368, 369, 370) — 366 / 365 무관 (hook 미사용 — label parser 직접), 367 ← 357+361+364+365+366, 368 ← 358+365+367, 369 ← 355+358+365+367, 370 ← 358+365+367+368+369.
+- Phase 5 (371, 372, 373) — 371 ← 355+365+370, 372 ← 370+371, 373 ← 371+372.
+- Phase 6 (374, 375, 376) — 374 ← all, 375 ← 367+368+369+370+371+372+373, 376 ← 368+371+373+375.
+
 ## 문서 목차
 
 | 문서 | 설명 |
