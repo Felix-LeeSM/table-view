@@ -33,6 +33,10 @@ Thumbs.db
 # Claude Code (local-only)
 .claude/settings.local.json
 .claude/org.settings.local.json
+# Sub-agent git worktrees. Untracked by design — also gitignored so Tailwind v4's
+# `@tailwindcss/vite` source-scanner (which respects .gitignore) doesn't walk into
+# them and resolve sibling `<img src="...">` paths against stale worktree roots.
+.claude/worktrees/
 
 # Test
 coverage/
