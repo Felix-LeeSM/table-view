@@ -249,10 +249,16 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-4 (real): launcher close → `app_exit`; workspace close behaves
-  // like Back (preventDefault + hide+show, no disconnect).
+  // AC-141-4 (sprint-363 update): launcher close → hide (NOT exit);
+  // workspace close behaves like Back (preventDefault + hide+show,
+  // no disconnect).
+  //
+  // Sprint 363 (Phase 3, Q13 / strategy line 773) replaced the launcher's
+  // close-exits-app behavior with close-hides-launcher. Open workspaces
+  // (`workspace-{conn_id}`) stay alive; the launcher can be resurfaced
+  // via the macOS dock icon or 2nd-launch single-instance callback.
   // ---------------------------------------------------------------------------
-  it("AC-141-4 (real): launcher.close → exitApp(); workspace.close = Back semantics (no disconnect)", async () => {
+  it("AC-141-4 (sprint-363): launcher.close → hideWindow('launcher'); workspace.close = Back semantics (no disconnect)", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
     const disconnectMock = disconnectFromDatabase as Mock;
 
@@ -292,9 +298,12 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await handlers["launcher"]!();
     });
 
-    expect(exitAppMock).toHaveBeenCalledTimes(1);
-    // Launcher-close path must NOT try to show the workspace mid-exit.
+    // Sprint 363: launcher is hidden, not exited.
+    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
+    expect(exitAppMock).not.toHaveBeenCalled();
+    // Workspace must NOT be touched by the launcher-close path.
     expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
+    expect(hideWindowMock).not.toHaveBeenCalledWith("workspace");
 
     // 2. Workspace close path — registered by WorkspacePage's mount effect
     //    via `onCurrentWindowCloseRequested` (not `onCloseRequested(label)`)

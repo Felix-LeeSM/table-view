@@ -1,8 +1,18 @@
 /**
- * Boot-time launcher close handler. Only the launcher window owns "close
- * = exit the whole app" — closing the workspace is a `Back to
- * connections` recovery handled in `WorkspacePage`'s effect. Living
- * here keeps `main.tsx` thin and gives the unit test a stable import.
+ * Boot-time launcher close handler. Sprint 363 (Q13 / strategy line 773)
+ * changed the close semantics: the launcher's X button now HIDES the
+ * launcher window instead of exiting the app — open workspace windows
+ * stay alive, the process stays alive, and the launcher can be
+ * resurfaced via the macOS dock icon or system tray.
+ *
+ * The backend (`src-tauri/src/lib.rs` `on_window_event`) intercepts the
+ * `CloseRequested` event with `api.prevent_close()` + a call to
+ * `handle_launcher_close_request` (which performs the hide). The JS
+ * handler we register here is the **frontend echo**: it issues an extra
+ * `hideWindow('launcher')` so jsdom/tauri runtime parity stays in lockstep
+ * (the JS-side `onCloseRequested` listener still fires after the backend
+ * prevents the close, and a frontend caller may want to react with
+ * additional cleanup later).
  *
  * Returns the `UnlistenFn` so callers can opt into teardown later (HMR
  * etc.); not currently used.
@@ -11,7 +21,6 @@
  * real, asserting the seam call shape.
  */
 import {
-  exitApp,
   hideWindow,
   onCloseRequested,
   showWindow,
@@ -19,36 +28,29 @@ import {
 } from "@lib/window-controls";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import { logger } from "./logger";
 
 /**
- * Register the launcher's `tauri://close-requested` listener so closing the
- * launcher tears down the whole app (workspace included). The handler:
+ * Register the launcher's `tauri://close-requested` listener so closing
+ * the launcher hides (NOT exits) — sprint-363 semantics:
  *
- *   1. Hides the workspace first so it can't flash visible during exit.
- *      `hideWindow` swallows the failure if the workspace was already
- *      hidden — Tauri's `hide()` is idempotent on already-hidden windows.
- *   2. Calls `app_exit` via the seam so the entire process tears down.
+ *   1. The backend's `on_window_event` matcher already intercepts the
+ *      OS-level close with `api.prevent_close()` and hides the launcher.
+ *      That is the authoritative path.
+ *   2. The JS handler issues a complementary `hideWindow('launcher')`
+ *      so renderer-driven cleanups (focus restoration, ARIA, etc.) can
+ *      observe the same lifecycle hook in unit tests under jsdom
+ *      where the backend matcher doesn't run.
+ *   3. Workspace windows are explicitly NOT touched — the user may
+ *      still be working in a `workspace-{conn_id}` window.
  *
- * Hide-then-exit ordering is required: the workspace must not be
- * visible during exit. The unit test asserts this via
- * `showWindowMock.not.toHaveBeenCalledWith('workspace')` plus the fact
- * that `hideWindow` is the only window seam the handler touches.
+ * Pre-sprint-363 the handler called `exitApp()`; that path is retired.
  */
 export async function registerLauncherCloseHandler(): Promise<UnlistenFn> {
   return onCloseRequested("launcher" as WindowLabel, async () => {
-    try {
-      await hideWindow("workspace");
-    } catch (e) {
-      // Best-effort: even if hide rejects (e.g. workspace was already
-      // closed by an earlier failure), we still want the exit to land.
-      // The catch is intentionally narrow — log + continue.
-      logger.warn(
-        "[launcher-close] workspace.hide() failed before exit:",
-        e instanceof Error ? e.message : e,
-      );
-    }
-    await exitApp();
+    // Mirror the backend's hide. `hideWindow` swallows errors as
+    // best-effort — the backend has already prevented the close, so a
+    // missing JS hide does not produce a user-visible regression.
+    await hideWindow("launcher");
   });
 }
 

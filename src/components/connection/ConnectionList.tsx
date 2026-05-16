@@ -1,4 +1,7 @@
+import { useCallback } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
+import { openWorkspaceWindow } from "@lib/tauri/window";
+import { logger } from "@lib/logger";
 import ConnectionItem, { draggedConnectionId } from "./ConnectionItem";
 import ConnectionGroup from "./ConnectionGroup";
 import { Database, GripVertical } from "lucide-react";
@@ -23,6 +26,29 @@ export default function ConnectionList({
   const groups = useConnectionStore((s) => s.groups);
   const moveConnectionToGroup = useConnectionStore(
     (s) => s.moveConnectionToGroup,
+  );
+
+  // Sprint 363 (Phase 3, Q13) — connection double-click 시 per-conn
+  // workspace window 를 open/focus 한다. 같은 conn 두 번째 클릭은
+  // backend (`open_workspace_window_inner`) 가 idempotent 하게 처리해서
+  // 기존 `workspace-{conn_id}` 윈도우만 focus 한다 (sprint-361 잠금).
+  // IPC 실패 시 toast 가 아닌 console.warn — 상위 onActivate 가 별도로
+  // store/UI 처리를 수행한다.
+  const handleActivate = useCallback(
+    (id: string) => {
+      // Fire-and-forget: window open IPC. The parent's `onActivate` is
+      // invoked synchronously so store-side state (focused conn, stale
+      // tab cleanup) lands without waiting for the OS-level window
+      // creation.
+      void openWorkspaceWindow(id).catch((e) => {
+        logger.warn(
+          `[connection-list] openWorkspaceWindow(${id}) failed:`,
+          e instanceof Error ? e.message : e,
+        );
+      });
+      onActivate?.(id);
+    },
+    [onActivate],
   );
 
   const connections = environmentFilter
@@ -61,7 +87,7 @@ export default function ConnectionList({
           connection={conn}
           selected={selectedId === conn.id}
           onSelect={onSelect}
-          onActivate={onActivate}
+          onActivate={handleActivate}
         />
       ))}
 
@@ -73,7 +99,7 @@ export default function ConnectionList({
           connections={groupConns}
           selectedId={selectedId}
           onSelect={onSelect}
-          onActivate={onActivate}
+          onActivate={handleActivate}
         />
       ))}
 

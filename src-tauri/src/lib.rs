@@ -292,20 +292,45 @@ pub fn run() {
     ]);
     record_phase(&mut cursor, "invoke-handler-register");
 
-    // Safety net: if the workspace window is destroyed (OS closed it
-    // before the JS close-requested handler could prevent it), ensure
-    // the launcher is visible so the user isn't left with no window.
+    // Safety net + sprint-363 launcher-close intercept.
+    //
+    // 1. Workspace destroyed: if the OS closes a workspace window before
+    //    the JS close-requested handler could prevent it, ensure the
+    //    launcher is visible so the user isn't left without any window.
+    //
+    // 2. Sprint 363 (Q13, strategy line 773) — Launcher CloseRequested:
+    //    when the user clicks the launcher's close button (X), intercept
+    //    the OS-level close, `prevent_close()` the event, and hide the
+    //    launcher via `handle_launcher_close_request`. This keeps the
+    //    process alive (and any open `workspace-{conn_id}` windows
+    //    untouched) so the launcher can be resurfaced via the macOS dock
+    //    icon (RunEvent::Reopen) or a 2nd-launch single-instance
+    //    callback. Without this intercept, launcher X would destroy the
+    //    launcher window — Tauri's default — and the JS-side
+    //    `registerLauncherCloseHandler` would race the destroy event,
+    //    sometimes triggering exit before the hide could land.
     let builder = builder.on_window_event(|window, event| {
-        if matches!(event, tauri::WindowEvent::Destroyed) && window.label() == "workspace" {
-            if let Some(launcher) = window.app_handle().get_webview_window("launcher") {
-                if let Err(e) = launcher.show() {
-                    // The whole point of this branch is to recover from
-                    // "no visible window" — log loudly if even the
-                    // recovery failed so the user-facing symptom isn't
-                    // silent.
-                    tracing::warn!(target: "boot", error = %e, "safety-net launcher.show() failed");
+        match event {
+            tauri::WindowEvent::Destroyed if window.label() == "workspace" => {
+                if let Some(launcher) = window.app_handle().get_webview_window("launcher") {
+                    if let Err(e) = launcher.show() {
+                        tracing::warn!(target: "boot", error = %e, "safety-net launcher.show() failed");
+                    }
                 }
             }
+            tauri::WindowEvent::CloseRequested { api, .. } if window.label() == "launcher" => {
+                // Prevent the OS-level close — we want the launcher to
+                // hide, not destroy. The helper handles the hide call
+                // and tolerates the rare "launcher already gone" race.
+                api.prevent_close();
+                if let Err(e) = launcher::handle_launcher_close_request(window.app_handle()) {
+                    tracing::warn!(
+                        target: "launcher",
+                        "launcher close-request handler returned error: {e}"
+                    );
+                }
+            }
+            _ => {}
         }
     });
     record_phase(&mut cursor, "window-event-register");

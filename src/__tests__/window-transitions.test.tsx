@@ -283,9 +283,20 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // AC-154-04: Launcher close → app exit
+  // AC-154-04 (sprint-363 update): Launcher close → hide (NOT exit)
+  //
+  // Sprint 363 (Phase 3, Q13 / strategy line 773) changed launcher close
+  // semantics: the X button hides the launcher without exiting the app so
+  // open `workspace-{conn_id}` windows stay alive (multi-conn TablePlus
+  // pattern). The backend's `on_window_event` matcher in `src-tauri/src/lib.rs`
+  // calls `api.prevent_close()` + `handle_launcher_close_request` (which hides
+  // the launcher). The JS handler echoes with `hideWindow('launcher')` so
+  // jsdom unit tests see the same lifecycle hook.
+  //
+  // Pre-sprint-363 this test asserted `exitAppMock` was called. That path
+  // is retired — the launcher is no longer the single-window dock-killer.
   // ---------------------------------------------------------------------------
-  it("AC-154-04: closing the launcher window (tauri://close-requested) invokes exitApp()", async () => {
+  it("AC-154-04 (sprint-363): closing the launcher window (tauri://close-requested) hides launcher, does NOT exit the app", async () => {
     // Capture the close-requested handler the LauncherShell registers via
     // the seam, then invoke it manually to simulate the OS close gesture.
     let capturedHandler: (() => void | Promise<void>) | null = null;
@@ -298,10 +309,6 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       },
     );
 
-    // Mount the launcher chrome via main entry path. We render LauncherPage
-    // alone — the close-requested registration must live in a module that
-    // owns the launcher window's mount lifecycle. Sprint 154 puts it in
-    // `main.tsx` boot, so we exercise that by importing the boot helper.
     const { registerLauncherCloseHandler } =
       await import("@lib/window-lifecycle-boot");
     await registerLauncherCloseHandler();
@@ -316,11 +323,14 @@ describe("AC-154-*: Window lifecycle wiring", () => {
       await capturedHandler!();
     });
 
-    expect(exitAppMock).toHaveBeenCalledTimes(1);
+    // Sprint 363: the launcher is hidden, not exited.
+    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
+    expect(exitAppMock).not.toHaveBeenCalled();
 
-    // The contract demands the workspace must NOT be visible during exit —
-    // i.e. nothing on the launcher-close path tries to show the workspace.
+    // Workspace windows (per-conn) must NOT be touched by the launcher
+    // close path — they own their own lifecycle.
     expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
+    expect(hideWindowMock).not.toHaveBeenCalledWith("workspace");
   });
 
   // ---------------------------------------------------------------------------

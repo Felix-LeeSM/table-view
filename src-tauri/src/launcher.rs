@@ -188,6 +188,44 @@ pub async fn app_exit<R: Runtime>(app: AppHandle<R>) -> Result<(), AppError> {
     Ok(())
 }
 
+/// Sprint 363 (Phase 3, Q13 / strategy line 773) — launcher close-request
+/// handler. The launcher window's `tauri://close-requested` event is wired
+/// in `lib.rs` `on_window_event` to call this function and `prevent_close()`
+/// the event. The strategy doc requires that the launcher's close button
+/// hides the window (process stays alive, workspace windows stay alive)
+/// instead of exiting the app — the user can resurface the launcher via
+/// the macOS dock icon (RunEvent::Reopen) or system tray.
+///
+/// Idempotent + tolerant by design:
+///   - If the launcher is missing (rare — single-instance plugin keeps the
+///     process alive even when the user destroyed the launcher), return
+///     Ok(()) so the close-request handler doesn't poison the call site.
+///   - If `hide()` fails (e.g. OS rejected the hide call), log and return
+///     Ok(()) — destroying or letting the OS close the window after a
+///     failed hide is strictly worse than the launcher staying visible
+///     for the user to retry.
+///
+/// Workspace windows (`workspace-{conn_id}`) are explicitly NOT touched.
+/// Their lifecycle is owned by their own `close-requested` handlers (out
+/// of scope for this sprint; tracked separately by the contract's "Out
+/// of Scope: Workspace window 의 close 정책").
+pub fn handle_launcher_close_request<R: Runtime>(app: &AppHandle<R>) -> Result<(), AppError> {
+    let Some(launcher) = app.get_webview_window("launcher") else {
+        // Silent no-op: launcher already gone, nothing to hide.
+        return Ok(());
+    };
+    if let Err(e) = launcher.hide() {
+        // Log but don't fail — the alternative (letting the OS close the
+        // window) is worse than a stuck-visible launcher the user can
+        // retry.
+        tracing::warn!(
+            target: "launcher",
+            "handle_launcher_close_request: hide() failed: {e}"
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +256,139 @@ mod tests {
         .expect("workspace window build");
 
         app
+    }
+
+    /// Reason 2026-05-16 (Phase 3 sprint-363) — AC-363-04 + AC-363-05.
+    ///
+    /// Q13 / strategy line 773 의 launcher lifecycle: 사용자가 launcher 의
+    /// close 버튼을 눌러도 process 가 종료되지 않고 launcher 만 hide 된다.
+    /// workspace-{conn} 윈도우들은 그대로 살아있어야 한다 (multi-conn 사용
+    /// 도중에 사용자가 launcher 만 정리하는 경우). 본 unit 테스트는
+    /// `handle_launcher_close_request` helper 가:
+    ///
+    ///   - launcher 윈도우를 destroy 하지 않고
+    ///   - workspace-{conn} 윈도우들에 부수효과 0
+    ///   - Ok 반환 (hide 자체가 실패해도 destroy 보다는 silent recoverable)
+    ///
+    /// 임을 잠근다. 실제 `tauri://close-requested` event prevent_default +
+    /// hide 분기는 `lib.rs` 의 `on_window_event` 가 wrap 한다.
+    fn make_app_with_launcher_and_two_workspaces() -> tauri::App<tauri::test::MockRuntime> {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "launcher",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("launcher build");
+
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "workspace-conn-1",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("workspace-conn-1 build");
+
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "workspace-conn-2",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("workspace-conn-2 build");
+
+        app
+    }
+
+    #[test]
+    fn ac_363_04_handle_launcher_close_hides_without_destroying() {
+        let app = make_app_with_launcher_and_two_workspaces();
+        let labels_before: Vec<String> = app.webview_windows().keys().cloned().collect();
+        assert_eq!(labels_before.len(), 3, "pre: 3 windows");
+
+        let result = handle_launcher_close_request(app.handle());
+        assert!(
+            result.is_ok(),
+            "handle_launcher_close_request must return Ok, got {:?}",
+            result.err()
+        );
+
+        // Window count invariant — launcher and both workspaces still alive.
+        let labels_after: Vec<String> = app.webview_windows().keys().cloned().collect();
+        assert_eq!(
+            labels_after.len(),
+            3,
+            "post: 3 windows unchanged (launcher hidden, NOT destroyed), got {:?}",
+            labels_after
+        );
+        assert!(
+            app.get_webview_window("launcher").is_some(),
+            "launcher must still exist after close-request (hide, not destroy)"
+        );
+        assert!(
+            app.get_webview_window("workspace-conn-1").is_some(),
+            "workspace-conn-1 must be untouched"
+        );
+        assert!(
+            app.get_webview_window("workspace-conn-2").is_some(),
+            "workspace-conn-2 must be untouched"
+        );
+    }
+
+    /// Reason 2026-05-16 (Phase 3 sprint-363) — AC-363-04 boundary: even
+    /// without any workspace open, the launcher-close helper must still
+    /// succeed and keep the launcher addressable so a later dock-icon
+    /// re-open path (or `launcher_show`) can resurface it without
+    /// rebuilding. This is the "lonely launcher" baseline.
+    #[test]
+    fn handle_launcher_close_returns_ok_when_only_launcher_exists() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "launcher",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("launcher build");
+
+        let result = handle_launcher_close_request(app.handle());
+        assert!(
+            result.is_ok(),
+            "handle_launcher_close_request must succeed even without workspaces, got {:?}",
+            result.err()
+        );
+        assert!(
+            app.get_webview_window("launcher").is_some(),
+            "launcher must remain alive after close-request"
+        );
+    }
+
+    /// Reason 2026-05-16 (Phase 3 sprint-363) — launcher missing edge case.
+    /// If a future code path destroys the launcher (today: nothing does
+    /// — `app_exit` is the only teardown), the helper still returns
+    /// `Ok(())` rather than poisoning the close path. The behaviour
+    /// is: the OS-level close prevent_default is moot because there's
+    /// no window to prevent on, and the user's app process stays alive
+    /// to be revived via the macOS dock-icon-reopen handler.
+    #[test]
+    fn handle_launcher_close_is_silent_noop_when_launcher_missing() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+        // No launcher.
+
+        let result = handle_launcher_close_request(app.handle());
+        assert!(
+            result.is_ok(),
+            "missing launcher must not propagate as error (silent no-op), got {:?}",
+            result.err()
+        );
     }
 
     #[test]

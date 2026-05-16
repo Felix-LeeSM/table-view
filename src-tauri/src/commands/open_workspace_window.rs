@@ -13,6 +13,11 @@
 //!     is `.set_focus()`-ed; no new window is built.
 //!   - Validates `connection_id` is non-empty so a degenerate "workspace-"
 //!     label can never reach the OS.
+//!   - Sprint 363 addition: emits a `workspace:focused` event on both
+//!     branches (create + idempotent focus) so frontend can react with
+//!     toast / mru update / analytics independently of whether the call
+//!     spawned a fresh window. Payload distinguishes the branches via
+//!     `is_new`.
 //!
 //! The hardcoded geometry / title mirror `launcher::build_workspace_window`
 //! (the legacy single-workspace builder) byte-for-byte so the runtime shape
@@ -24,7 +29,24 @@
 //! Mock runtime directly without going through invoke / serialization.
 
 use crate::error::AppError;
-use tauri::{AppHandle, Manager, Runtime};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
+
+/// Sprint 363 — payload of the `workspace:focused` event. Mirrored on
+/// the frontend (`src/lib/tauri/window.ts` consumes the same shape).
+/// `is_new` distinguishes the build path (true) from the idempotent
+/// re-focus path (false) so the renderer can decide between "first time
+/// we see this conn" actions (e.g. mru bump) and "user is just bringing
+/// the existing window back into focus".
+#[derive(Serialize, Clone, Debug)]
+struct WorkspaceFocusedPayload {
+    connection_id: String,
+    label: String,
+    is_new: bool,
+}
+
+/// Event name. Centralized so a future rename touches one site.
+const WORKSPACE_FOCUSED_EVENT: &str = "workspace:focused";
 
 /// Build the per-conn workspace window. Mirrors the geometry / chrome of
 /// `launcher::build_workspace_window` so the user-visible window is
@@ -55,6 +77,12 @@ fn build_per_conn_workspace_window<R: Runtime>(
 /// exists (either pre-existed and was focused, or just got built).
 /// Returns `AppError::Validation` for empty `connection_id` so frontend
 /// programmer errors surface loudly instead of leaking a degenerate label.
+///
+/// Sprint 363: both branches emit a `workspace:focused` event whose
+/// `is_new` flag distinguishes the build path (true) from the idempotent
+/// re-focus path (false). Emission is best-effort — a failure to emit
+/// does not abort the call, because the window-effecting side already
+/// landed. A warn-log captures the rare emit failure.
 pub async fn open_workspace_window_inner<R: Runtime>(
     app: AppHandle<R>,
     connection_id: String,
@@ -65,14 +93,42 @@ pub async fn open_workspace_window_inner<R: Runtime>(
         ));
     }
     let label = format!("workspace-{connection_id}");
-    if let Some(existing) = app.get_webview_window(&label) {
+    let is_new = if let Some(existing) = app.get_webview_window(&label) {
         // Idempotent path — same conn, refocus the live window.
         existing
             .set_focus()
             .map_err(|e| AppError::Window(format!("set_focus failed for {label}: {e}")))?;
-        return Ok(());
+        false
+    } else {
+        build_per_conn_workspace_window(&app, &label)?;
+        true
+    };
+    emit_workspace_focused(&app, &connection_id, &label, is_new);
+    Ok(())
+}
+
+/// Best-effort emit of the `workspace:focused` event. Logs and continues
+/// on failure: the window-effecting side already succeeded, so silently
+/// dropping a notification event is the lesser evil compared to
+/// surfacing a window-focus error to the user from a successful click.
+fn emit_workspace_focused<R: Runtime>(
+    app: &AppHandle<R>,
+    conn_id: &str,
+    label: &str,
+    is_new: bool,
+) {
+    let payload = WorkspaceFocusedPayload {
+        connection_id: conn_id.to_string(),
+        label: label.to_string(),
+        is_new,
+    };
+    if let Err(e) = app.emit(WORKSPACE_FOCUSED_EVENT, payload) {
+        tracing::warn!(
+            target: "workspace",
+            label = %label,
+            "failed to emit {WORKSPACE_FOCUSED_EVENT}: {e}"
+        );
     }
-    build_per_conn_workspace_window(&app, &label)
 }
 
 /// Tauri command surface — registered in `lib.rs` `invoke_handler!`.

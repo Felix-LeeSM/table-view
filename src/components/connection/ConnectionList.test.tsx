@@ -1,8 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import ConnectionList from "./ConnectionList";
 import { useConnectionStore } from "@stores/connectionStore";
 import type { ConnectionConfig } from "@/types/connection";
+
+// ---------------------------------------------------------------------------
+// Mock @lib/tauri/window — sprint-363 (Phase 3, Q13) wires ConnectionList
+// double-click into `openWorkspaceWindow(connId)` so the per-conn label
+// `workspace-{id}` is build/focused by backend. Mocked at module scope so
+// every test in this file can spy on the IPC call shape without hitting
+// the Tauri runtime (vitest jsdom env).
+// ---------------------------------------------------------------------------
+const openWorkspaceWindowMock = vi.fn((connId: string) => {
+  void connId;
+  return Promise.resolve();
+});
+
+vi.mock("@lib/tauri/window", () => ({
+  openWorkspaceWindow: (connId: string) => openWorkspaceWindowMock(connId),
+}));
+
+// Now safe to import the SUT — the mock is registered before module evaluation.
+import ConnectionList from "./ConnectionList";
 
 // ---------------------------------------------------------------------------
 // Mutable drag state — tests can set this to simulate active drag
@@ -487,6 +505,142 @@ describe("ConnectionList", () => {
       expect(group.getAttribute("data-selected")).toBe("g-1");
       expect(group.getAttribute("data-has-onselect")).toBe("true");
       expect(group.getAttribute("data-has-onactivate")).toBe("true");
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 작성 2026-05-16 (Phase 3 sprint-363) — Q13 같은 conn focus + per-conn
+  // workspace window IPC 호출 규약.
+  //
+  // 사유: sprint-361 의 `openWorkspaceWindow(connId)` wrapper 는 backend
+  // 의 idempotent `workspace-{conn_id}` 라벨 build/focus 분기를 호출하는
+  // 유일한 frontend 경로. sprint-363 의 contract 는 connection
+  // double-click 시 이 wrapper 가 invoke 되어야 한다. 본 테스트는
+  // ConnectionList 가 onActivate 콜백을 wrap 해서 IPC 와 store-side
+  // 처리를 둘 다 발사함을 잠근다.
+  //
+  // 시나리오 매트릭스:
+  //   - AC-363-FE-01 single double-click → openWorkspaceWindow(id) 1회
+  //   - AC-363-FE-02 같은 conn 두 번 double-click → openWorkspaceWindow 2회
+  //     (backend idempotent 분기는 별 cargo test 에서 잠금됨)
+  //   - AC-363-FE-03 IPC reject 시 onActivate 는 여전히 호출됨 (store
+  //     side 가 IPC 결과와 독립적으로 user signal 을 받아야 함)
+  //   - AC-363-FE-04 onActivate 없이도 IPC 는 fire 된다 (정말로 window
+  //     open 만 원하는 caller 도 working flow)
+  // ---------------------------------------------------------------------------
+  describe("AC-363-FE-*: openWorkspaceWindow on double-click", () => {
+    beforeEach(() => {
+      openWorkspaceWindowMock.mockClear();
+      openWorkspaceWindowMock.mockResolvedValue(undefined);
+    });
+
+    it("AC-363-FE-01: double-click fires openWorkspaceWindow(connId) exactly once", () => {
+      const onActivate = vi.fn();
+      setStoreState({
+        connections: [
+          makeConnection({ id: "conn-a", name: "Conn A", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList onActivate={onActivate} />);
+
+      act(() => {
+        fireEvent.doubleClick(screen.getByTestId("connection-item"));
+      });
+
+      expect(openWorkspaceWindowMock).toHaveBeenCalledTimes(1);
+      expect(openWorkspaceWindowMock).toHaveBeenCalledWith("conn-a");
+      expect(onActivate).toHaveBeenCalledWith("conn-a");
+    });
+
+    it("AC-363-FE-02: same connection clicked twice → IPC fired twice (backend dedups)", () => {
+      setStoreState({
+        connections: [
+          makeConnection({ id: "conn-a", name: "Conn A", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList />);
+
+      const item = screen.getByTestId("connection-item");
+      act(() => {
+        fireEvent.doubleClick(item);
+        fireEvent.doubleClick(item);
+      });
+
+      // Frontend fires every double-click; the backend `open_workspace_window`
+      // implementation collapses the second call to a `set_focus` on the
+      // existing window (covered by cargo test
+      // `ac_363_02_same_conn_second_call_emits_focus_event_with_is_new_false`).
+      expect(openWorkspaceWindowMock).toHaveBeenCalledTimes(2);
+      expect(openWorkspaceWindowMock).toHaveBeenNthCalledWith(1, "conn-a");
+      expect(openWorkspaceWindowMock).toHaveBeenNthCalledWith(2, "conn-a");
+    });
+
+    it("AC-363-FE-03: IPC rejection still calls onActivate (store-side updates decoupled)", async () => {
+      const onActivate = vi.fn();
+      openWorkspaceWindowMock.mockRejectedValueOnce(new Error("ipc down"));
+
+      setStoreState({
+        connections: [
+          makeConnection({ id: "conn-x", name: "X", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList onActivate={onActivate} />);
+
+      await act(async () => {
+        fireEvent.doubleClick(screen.getByTestId("connection-item"));
+        // Allow microtask of the .catch() to settle.
+        await Promise.resolve();
+      });
+
+      // The store-side hook MUST fire regardless of IPC outcome — the
+      // user's intent ("activate conn-x") is decoupled from the window
+      // IPC; the rejection is logged.
+      expect(onActivate).toHaveBeenCalledWith("conn-x");
+      expect(openWorkspaceWindowMock).toHaveBeenCalledWith("conn-x");
+    });
+
+    it("AC-363-FE-04: IPC fires even when caller did not pass onActivate", () => {
+      setStoreState({
+        connections: [
+          makeConnection({ id: "conn-z", name: "Z", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      // No onActivate prop — pure window-open caller.
+      render(<ConnectionList />);
+
+      act(() => {
+        fireEvent.doubleClick(screen.getByTestId("connection-item"));
+      });
+
+      expect(openWorkspaceWindowMock).toHaveBeenCalledWith("conn-z");
+    });
+
+    it("AC-363-FE-05: single-click (onSelect) does NOT fire openWorkspaceWindow", () => {
+      const onSelect = vi.fn();
+      setStoreState({
+        connections: [
+          makeConnection({ id: "conn-q", name: "Q", group_id: null }),
+        ],
+        groups: [],
+      });
+
+      render(<ConnectionList onSelect={onSelect} />);
+
+      act(() => {
+        fireEvent.click(screen.getByTestId("connection-item"));
+      });
+
+      expect(onSelect).toHaveBeenCalledWith("conn-q");
+      // Single-click is select-only; window open is reserved for double-click.
+      expect(openWorkspaceWindowMock).not.toHaveBeenCalled();
     });
   });
 });
