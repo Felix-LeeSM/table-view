@@ -1,32 +1,30 @@
 
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c97c5f"></stop><stop offset="1" stop-color="#5b1f0b"></stop></linearGradient>
-    <linearGradient id="carde" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#faf6e9"></stop><stop offset="1" stop-color="#f5efde"></stop></linearGradient>
-    <linearGradient id="rime" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset=".15" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient>
-    <filter id="she" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="22"></feGaussianBlur></filter>
-    <clipPath id="squircle"><rect x="0" y="0" width="1024" height="1024" rx="225" ry="225"></rect></clipPath>
+    <linearGradient id="bgc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c97c5f"></stop><stop offset="1" stop-color="#5b1f0b"></stop></linearGradient>
+    <linearGradient id="cardc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#faf6e9"></stop><stop offset="1" stop-color="#f5efde"></stop></linearGradient>
+    <linearGradient id="rimc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset=".15" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient>
+    <filter id="shc" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="22"></feGaussianBlur></filter>
+    <clipPath id="squircle"><rect x="100" y="100" width="824" height="824" rx="185" ry="185"></rect></clipPath>
   </defs>
   <g clip-path="url(#squircle)">
-    <rect width="1024" height="1024" fill="url(#bge)"></rect>
-    <g transform="translate(320 130) rotate(10)" opacity="0.55">
-      <rect x="0" y="0" width="580" height="400" rx="44" fill="url(#carde)"></rect>
-      <rect x="0" y="0" width="580" height="400" rx="44" fill="url(#rime)"></rect>
-    </g>
-    <g transform="translate(240 250) rotate(3)" opacity="0.85">
-      <rect x="20" y="30" width="620" height="440" rx="44" fill="rgba(0,0,0,.45)" filter="url(#she)"></rect>
-      <rect x="0" y="0" width="620" height="440" rx="44" fill="url(#carde)"></rect>
-      <rect x="0" y="0" width="620" height="440" rx="44" fill="url(#rime)"></rect>
-    </g>
-    <g transform="translate(120 390) rotate(-7)" opacity="1">
-      <rect x="20" y="30" width="680" height="440" rx="44" fill="rgba(0,0,0,.45)" filter="url(#she)"></rect>
-      <rect x="0" y="0" width="680" height="440" rx="44" fill="url(#carde)"></rect>
-      <rect x="0" y="0" width="680" height="440" rx="44" fill="url(#rime)"></rect>
-      <rect x="40" y="50" width="220" height="44" rx="22" fill="#7a2a0f"></rect>
-      <line x1="40" y1="160" x2="620" y2="160" stroke="#c97c5f" stroke-width="11" stroke-linecap="round"></line>
-      <line x1="40" y1="230" x2="500" y2="230" stroke="#c97c5f" stroke-width="11" stroke-linecap="round"></line>
-      <line x1="40" y1="300" x2="580" y2="300" stroke="#c97c5f" stroke-width="11" stroke-linecap="round"></line>
-      <line x1="40" y1="370" x2="420" y2="370" stroke="#c97c5f" stroke-width="11" stroke-linecap="round"></line>
+    <g transform="translate(100 100) scale(0.8046875)">
+      <rect width="1024" height="1024" fill="url(#bgc)"></rect>
+      <g transform="translate(300 220) rotate(6)" opacity="0.7">
+        <rect x="20" y="30" width="560" height="400" rx="44" fill="rgba(0,0,0,.45)" filter="url(#shc)"></rect>
+        <rect x="0" y="0" width="560" height="400" rx="44" fill="url(#cardc)"></rect>
+        <rect x="0" y="0" width="560" height="400" rx="44" fill="url(#rimc)"></rect>
+      </g>
+      <g transform="translate(160 380) rotate(-8)" opacity="1">
+        <rect x="20" y="30" width="600" height="400" rx="44" fill="rgba(0,0,0,.45)" filter="url(#shc)"></rect>
+        <rect x="0" y="0" width="600" height="400" rx="44" fill="url(#cardc)"></rect>
+        <rect x="0" y="0" width="600" height="400" rx="44" fill="url(#rimc)"></rect>
+        <rect x="40" y="50" width="180" height="40" rx="20" fill="#7a2a0f"></rect>
+        <line x1="40" y1="150" x2="540" y2="150" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+        <line x1="40" y1="215" x2="420" y2="215" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+        <line x1="40" y1="280" x2="500" y2="280" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+        <line x1="40" y1="345" x2="340" y2="345" stroke="#c97c5f" stroke-width="10" stroke-linecap="round"></line>
+      </g>
     </g>
   </g>
 </svg>
