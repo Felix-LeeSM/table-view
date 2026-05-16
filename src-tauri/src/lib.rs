@@ -125,6 +125,9 @@ pub fn run() {
     record_phase(&mut cursor, "app-state-new");
 
     let builder = builder.invoke_handler(tauri::generate_handler![
+        // Sprint 355 (Phase 1) — legacy LS import IPC. 4-state transition
+        // (`meta.legacy_imported`); idempotent; A/C mutate guard 의 토대.
+        commands::import_legacy::import_legacy_localstorage,
         commands::connection::crud::list_connections,
         commands::connection::session::get_session_id,
         commands::connection::crud::save_connection,

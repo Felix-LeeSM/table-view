@@ -33,6 +33,14 @@ pub enum AppError {
     #[error("Window error: {0}")]
     Window(String),
 
+    /// Sprint 355 — A/C 도메인 mutate IPC 는 boot 시 frontend → backend 의
+    /// legacy localStorage import 가 완료된 후에만 진행할 수 있다. import 가
+    /// `pending` / `importing` / `failed` 상태일 때 mutate 가 들어오면 본
+    /// variant 로 reject. Frontend 는 retry path 로 import 를 재시도하거나
+    /// 사용자에게 safe-mode 진입을 알린다. Strategy line 1189.
+    #[error("Legacy import in progress — write blocked")]
+    LegacyImportInProgress,
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 

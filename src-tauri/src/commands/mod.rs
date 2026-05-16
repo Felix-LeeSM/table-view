@@ -1,9 +1,12 @@
 pub mod connection;
 pub mod document;
 pub mod export;
+pub mod guard;
+pub mod import_legacy;
 pub mod meta;
 pub mod query;
 pub mod rdb;
+pub mod sqlite_pool;
 
 #[cfg(test)]
 pub(crate) mod test_util;

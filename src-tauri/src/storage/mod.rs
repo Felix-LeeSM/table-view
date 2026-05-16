@@ -1,4 +1,7 @@
+pub mod corrupt_recovery;
 pub mod crypto;
+pub mod local;
+pub mod meta;
 
 use crate::error::AppError;
 use crate::models::{ConnectionConfig, ConnectionGroup, StorageData};
