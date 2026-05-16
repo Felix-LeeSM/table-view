@@ -73,6 +73,7 @@ vi.mock("@lib/window-controls", () => ({
   hideWindow: vi.fn(() => Promise.resolve()),
   focusWindow: vi.fn(() => Promise.resolve()),
   closeWindow: vi.fn(() => Promise.resolve()),
+  closeCurrentWindow: vi.fn(() => Promise.resolve()),
   exitApp: vi.fn(() => Promise.resolve()),
   onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
@@ -91,6 +92,7 @@ vi.mock("@components/layout/MainArea", () => ({
 const showWindowMock = windowControls.showWindow as Mock;
 const hideWindowMock = windowControls.hideWindow as Mock;
 const focusWindowMock = windowControls.focusWindow as Mock;
+const closeCurrentWindowMock = windowControls.closeCurrentWindow as Mock;
 const exitAppMock = windowControls.exitApp as Mock;
 const onCloseRequestedMock = windowControls.onCloseRequested as Mock;
 const onCurrentWindowCloseRequestedMock =
@@ -179,11 +181,20 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-2 (real): Activate → workspace.show() then focus then launcher.hide()
-  // in strict order. The user must see the workspace take input focus before
-  // the launcher disappears so the visible-window count never hits zero.
+  // AC-141-2 (revised for sprint-361/363 + Wave 9.5 회귀 1, 2026-05-16)
+  //
+  // 이전 contract: HomePage 가 직접 `showWindow("workspace")` →
+  // `focusWindow("workspace")` → `hideWindow("launcher")` 호출. 이는
+  // sprint-175 의 single-workspace label `"workspace"` 모델.
+  //
+  // sprint-361 이후 workspace 윈도우는 `workspace-{conn_id}` per-conn.
+  // ConnectionList 의 `openWorkspaceWindow(id)` 가 build/focus 책임.
+  // HomePage 의 handleActivate 는 store side (focusedConn / stale cleanup)
+  // + `hideWindow("launcher")` 만. `showWindow("workspace")` 가 호출되면
+  // sprint-175 의 옛 single-workspace 윈도우가 추가 생성되어 사용자가 본
+  // 두 창 visible 회귀 발생.
   // ---------------------------------------------------------------------------
-  it("AC-141-2 (real): activating from the launcher emits workspace.show() → focusWindow('workspace') → hideWindow('launcher') in order", async () => {
+  it("AC-141-2 (revised): activating from the launcher 는 window seam 호출 0 — launcher 항상 visible (Wave 9.5)", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -195,27 +206,19 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
 
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
-    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
-
-    // Strict ordering — show before focus, focus before hide. This is the
-    // user-visible invariant ("workspace becomes the active window before
-    // the launcher disappears").
-    const showOrder = showWindowMock.mock.invocationCallOrder[0]!;
-    const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
-    const hideOrder = hideWindowMock.mock.invocationCallOrder[0]!;
-    expect(showOrder).toBeLessThan(focusOrder);
-    expect(focusOrder).toBeLessThan(hideOrder);
-
+    // 사용자 desired UX (2026-05-16): launcher 는 항상 visible.
+    // HomePage handleActivate 책임은 store side (focusedConn) 만.
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(focusWindowMock).not.toHaveBeenCalled();
+    expect(hideWindowMock).not.toHaveBeenCalled();
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
   // ---------------------------------------------------------------------------
-  // AC-141-3 (real): Back → workspace.hide() then launcher.show(); the
-  // connection pool stays alive so re-entry is instant.
+  // AC-141-3 (revised for Wave 9.5, 2026-05-16): Back → focusWindow('launcher')
+  // → closeCurrentWindow; pool stays alive.
   // ---------------------------------------------------------------------------
-  it("AC-141-3 (real): 'Back to connections' emits workspace.hide() → launcher.show() and does NOT call disconnectFromDatabase", async () => {
+  it("AC-141-3 (revised): 'Back to connections' emits focusWindow('launcher') → closeCurrentWindow and does NOT call disconnectFromDatabase", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
     const disconnectMock = disconnectFromDatabase as Mock;
 
@@ -232,14 +235,14 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       );
     });
 
-    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
-    expect(showWindowMock).toHaveBeenCalledWith("launcher");
+    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
+    expect(closeCurrentWindowMock).toHaveBeenCalled();
 
-    // Strict ordering: workspace hides BEFORE launcher shows so the user
-    // never sees both windows at once during the swap.
-    const hideOrder = hideWindowMock.mock.invocationCallOrder[0]!;
-    const showOrder = showWindowMock.mock.invocationCallOrder[0]!;
-    expect(hideOrder).toBeLessThan(showOrder);
+    // focus before close — focus IPC 가 close 후 destroyed process 와 race
+    // 하지 않게.
+    const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
+    const closeOrder = closeCurrentWindowMock.mock.invocationCallOrder[0]!;
+    expect(focusOrder).toBeLessThan(closeOrder);
 
     // Pool MUST be preserved — Back is not Disconnect.
     expect(disconnectMock).not.toHaveBeenCalled();
@@ -332,10 +335,10 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       await workspaceHandler!();
     });
 
-    // Same final state as the explicit Back button: workspace hides then
-    // launcher shows; pool is preserved.
-    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
-    expect(showWindowMock).toHaveBeenCalledWith("launcher");
+    // Wave 9.5 — Same final state as the explicit Back button:
+    // focusWindow('launcher') → closeCurrentWindow; pool is preserved.
+    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
+    expect(closeCurrentWindowMock).toHaveBeenCalled();
     expect(disconnectMock).not.toHaveBeenCalled();
   });
 
@@ -365,36 +368,35 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       focusedConnId: "c1",
     });
 
-    // Stage 2: activate — double-click moves to workspace.
+    // Stage 2: activate — double-click. Wave 9.5 (2026-05-16): launcher 는
+    // 항상 visible — handleActivate 는 store side 만 책임. per-conn workspace
+    // 윈도우 build 는 ConnectionList 의 `openWorkspaceWindow(id)` 책임.
     const { unmount } = render(<HomePage />);
     await act(async () => {
       fireEvent.doubleClick(screen.getByText(/^c1 DB$/));
     });
 
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
-    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
-    const activateShow = showWindowMock.mock.invocationCallOrder[0]!;
-    const activateFocus = focusWindowMock.mock.invocationCallOrder[0]!;
-    const activateHide = hideWindowMock.mock.invocationCallOrder[0]!;
-    expect(activateShow).toBeLessThan(activateFocus);
-    expect(activateFocus).toBeLessThan(activateHide);
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(focusWindowMock).not.toHaveBeenCalled();
+    expect(hideWindowMock).not.toHaveBeenCalled();
     unmount();
 
-    // Stage 3: back — pool kept; workspace hides then launcher shows.
+    // Stage 3 (Wave 9.5): back — pool kept; focusWindow('launcher') → closeCurrentWindow.
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
+    focusWindowMock.mockClear();
+    closeCurrentWindowMock.mockClear();
     render(<WorkspacePage />);
     await act(async () => {
       fireEvent.click(
         screen.getByRole("button", { name: /^back to connections$/i }),
       );
     });
-    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
-    expect(showWindowMock).toHaveBeenCalledWith("launcher");
-    const backHide = hideWindowMock.mock.invocationCallOrder[0]!;
-    const backShow = showWindowMock.mock.invocationCallOrder[0]!;
-    expect(backHide).toBeLessThan(backShow);
+    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
+    expect(closeCurrentWindowMock).toHaveBeenCalled();
+    const backFocus = focusWindowMock.mock.invocationCallOrder[0]!;
+    const backClose = closeCurrentWindowMock.mock.invocationCallOrder[0]!;
+    expect(backFocus).toBeLessThan(backClose);
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
     });
@@ -450,13 +452,13 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     );
     expect(workspaceHandler).toBeTruthy();
 
-    // Firing the handler (simulating OS close) must hide workspace and
-    // show launcher — identical to the Back button path.
+    // Wave 9.5 — Firing the handler (simulating OS close) must focus launcher
+    // and close current window — identical to the Back button path.
     await act(async () => {
       await workspaceHandler!();
     });
 
-    expect(hideWindowMock).toHaveBeenCalledWith("workspace");
-    expect(showWindowMock).toHaveBeenCalledWith("launcher");
+    expect(focusWindowMock).toHaveBeenCalledWith("launcher");
+    expect(closeCurrentWindowMock).toHaveBeenCalled();
   });
 });

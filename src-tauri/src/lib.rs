@@ -329,12 +329,17 @@ pub fn run() {
     //    sometimes triggering exit before the hide could land.
     let builder = builder.on_window_event(|window, event| {
         match event {
-            tauri::WindowEvent::Destroyed if window.label() == "workspace" => {
-                if let Some(launcher) = window.app_handle().get_webview_window("launcher") {
-                    if let Err(e) = launcher.show() {
-                        tracing::warn!(target: "boot", error = %e, "safety-net launcher.show() failed");
-                    }
-                }
+            tauri::WindowEvent::Destroyed
+                if window.label().starts_with("workspace-") || window.label() == "workspace" =>
+            {
+                // Wave 9.5 회귀 1 (2026-05-16) — sprint-361 의 per-conn label
+                // `workspace-{conn_id}` 도 매칭. 사용자 desired UX:
+                // "모든 connection 창이 다 꺼지면 connections 창에 포커스가 몰리고".
+                // 다른 workspace 가 살아있으면 launcher 는 hide 그대로 유지.
+                launcher::handle_workspace_destroyed_safety_net(
+                    window.app_handle(),
+                    window.label(),
+                );
             }
             tauri::WindowEvent::CloseRequested { api, .. } if window.label() == "launcher" => {
                 // Prevent the OS-level close — we want the launcher to

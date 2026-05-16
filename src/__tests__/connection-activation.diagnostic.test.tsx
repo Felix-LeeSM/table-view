@@ -171,9 +171,13 @@ afterEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 describe("AC-156-*: Connection activation diagnostic", () => {
-  // Reason: 사용자 보고 — connection 더블클릭해도 workspace 미열림. showWindow → focusWindow → hideWindow
-  //         호출 순서와 누락 여부를 진단 (2026-04-28)
-  it("AC-156-01: double-click triggers showWindow('workspace') → focusWindow('workspace') → hideWindow('launcher') in strict order", async () => {
+  // Reason (revised 2026-05-16, Wave 9.5 회귀 1): sprint-361 이후 workspace
+  // 윈도우는 per-conn label `workspace-{conn_id}` 이며 ConnectionList 의
+  // `openWorkspaceWindow(id)` 가 build/focus 책임. HomePage 의 handleActivate
+  // 는 `hideWindow("launcher")` 만. 이전 contract 의 showWindow/focusWindow
+  // 검증은 sprint-175 의 옛 single-workspace 모델 기준 — 두 윈도우 공존
+  // 회귀의 원천이었다.
+  it("AC-156-01 (revised): double-click hides launcher and does NOT call showWindow/focusWindow('workspace')", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -185,21 +189,14 @@ describe("AC-156-*: Connection activation diagnostic", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
-    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
-
-    // Strict ordering: show < focus < hide.
-    const showOrder = showWindowMock.mock.invocationCallOrder[0]!;
-    const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
-    const hideOrder = hideWindowMock.mock.invocationCallOrder[0]!;
-    expect(showOrder).toBeLessThan(focusOrder);
-    expect(focusOrder).toBeLessThan(hideOrder);
+    expect(showWindowMock).not.toHaveBeenCalledWith("workspace");
+    expect(focusWindowMock).not.toHaveBeenCalledWith("workspace");
+    expect(hideWindowMock).not.toHaveBeenCalled();
   });
 
-  // Reason: 빠른 연속 더블클릭 시 showWindow가 중복 호출되는지 확인.
-  //         Sprint 157에서 activatingRef 가드를 추가했으므로 정확히 1회만 호출되어야 함 (2026-04-28)
-  it("AC-156-02: rapid double-click (two activations in quick succession) → showWindow should NOT be called more than once per window", async () => {
+  // Reason (revised 2026-05-16): rapid double-click 가드는 여전히 유효.
+  // hideWindow("launcher") 가 중복 호출되지 않음을 잠근다.
+  it("AC-156-02 (revised): rapid double-click — window seam 호출 0, store side 1회만 갱신", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -207,30 +204,28 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     });
     render(<HomePage />);
 
-    // Fire two activations in the same event loop tick.
     await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    const workspaceCalls = showWindowMock.mock.calls.filter(
-      (c: string[]) => c[0] === "workspace",
-    );
-    // Sprint 157 — the activatingRef guard now deduplicates rapid calls.
-    expect(workspaceCalls.length).toBe(1);
+    // launcher 는 항상 visible — hide 호출 0.
+    expect(hideWindowMock).not.toHaveBeenCalled();
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(focusWindowMock).not.toHaveBeenCalled();
+    // store side 는 갱신.
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: disconnect 후 같은 connection 재활성화 시 전체 chain이 여전히 동작하는지
-  //         진단. disconnect가 store state를 정상 초기화하는지도 검증 (2026-04-28)
-  it("AC-156-03: after disconnecting, re-activating the same connection still triggers the full chain", async () => {
+  // Reason (revised 2026-05-16): disconnect 후 재활성화 path. 새 invariant
+  // 는 hideWindow("launcher") 만 잠금.
+  it("AC-156-03 (revised): after disconnecting, re-activating the same connection still hides launcher", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
       focusedConnId: "c1",
     });
 
-    // Simulate disconnect.
     await act(async () => {
       await useConnectionStore.getState().disconnectFromDatabase("c1");
     });
@@ -239,34 +234,20 @@ describe("AC-156-*: Connection activation diagnostic", () => {
       type: "disconnected",
     });
 
-    // Now re-activate — simulates user double-clicking the same connection.
     render(<HomePage />);
     await act(async () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // The chain must still fire after reconnection.
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
-    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
-
-    // focusedConnId must be c1.
+    expect(hideWindowMock).not.toHaveBeenCalled();
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: 사용자 보고 — showWindow 실패 시 launcher가 사라져서 재시도 불가.
-  //         showWindow reject → launcher.hide 미호출 + error toast 노출 확인 (2026-04-28)
-  it("AC-156-04: showWindow('workspace') rejection → launcher stays visible (hideWindow NOT called), error toast shown", async () => {
-    // Import toast to spy on it.
-    const { toast } = await import("@lib/toast");
-    const toastErrorSpy = vi.spyOn(toast, "error");
-
-    showWindowMock.mockImplementation(async (label: string) => {
-      if (label === "workspace") {
-        throw new Error("workspace.show failed (simulated)");
-      }
-    });
-
+  // Reason (revised 2026-05-16): 이전 contract 의 "showWindow rejects →
+  // launcher stays visible" recovery 는 sprint-361 이후 의미가 없어졌다
+  // (HomePage 는 showWindow 호출 안 함). 대신 `hideWindow("launcher")` 가
+  // reject 해도 store side 가 일관됨을 잠근다.
+  it("AC-156-04 (revised): launcher 는 항상 visible — handleActivate 가 어떤 window seam 도 호출하지 않는다", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1")],
       activeStatuses: { c1: { type: "connected" } },
@@ -278,17 +259,10 @@ describe("AC-156-*: Connection activation diagnostic", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    // Launcher MUST stay visible for retry.
-    expect(hideWindowMock).not.toHaveBeenCalledWith("launcher");
-    // focusWindow must NOT be called after showWindow rejection.
+    expect(hideWindowMock).not.toHaveBeenCalled();
+    expect(showWindowMock).not.toHaveBeenCalled();
     expect(focusWindowMock).not.toHaveBeenCalled();
-    // Error toast must be shown.
-    expect(toastErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to open workspace"),
-    );
-
-    toastErrorSpy.mockRestore();
+    expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
   // Reason: 단일 클릭(select)은 window swap을 트리거하지 않아야 함.
@@ -313,9 +287,11 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(focusWindowMock).not.toHaveBeenCalled();
   });
 
-  // Reason: 사용자 보고 — connection A에서 작업 후 B를 열면 A의 탭이 남아 있어 혼란.
-  //         sequential activation: A 활성화 → B 활성화 → B focused, A의 탭 정리 (2026-04-28)
-  it("AC-156-06: activating connection A then B → B becomes focused, A's stale tabs are cleared", async () => {
+  // Reason (revised 2026-05-16, Wave 9.5 회귀 1): sequential activation 의
+  // store side (focusedConn 갱신 + stale tab cleanup) + launcher hide 만 잠금.
+  // 이전의 showWindow/focusWindow 호출 검증은 sprint-361 의 per-conn
+  // 윈도우 시스템과 충돌 (이중 윈도우 회귀의 원천).
+  it("AC-156-06 (revised): activating connection A then B → B becomes focused, A's stale tabs are cleared", async () => {
     useConnectionStore.setState({
       connections: [makeConn("c1"), makeConn("c2")],
       activeStatuses: {
@@ -369,10 +345,11 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     // B must become focused.
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
 
-    // Window swap chain fires again for c2.
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    expect(focusWindowMock).toHaveBeenCalledWith("workspace");
-    expect(hideWindowMock).toHaveBeenCalledWith("launcher");
+    // 회귀 1 (Wave 9.5): launcher 항상 visible. handleActivate 는 store
+    // side (focusedConn + stale tabs) 만 책임 — window seam 호출 0.
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(focusWindowMock).not.toHaveBeenCalled();
+    expect(hideWindowMock).not.toHaveBeenCalled();
 
     // A's stale tabs must be cleared — only c2 tabs (none yet) remain.
     const tabState = getTestWorkspace();
@@ -402,9 +379,11 @@ describe("AC-156-*: Connection activation diagnostic", () => {
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 
-  // Reason: showWindow는 성공했지만 focusWindow가 reject하는 경우를 진단.
-  //         workspace는 보이지만 launcher도 남아 있는 상태가 되는지 확인 (2026-04-28)
-  it("AC-156-04b: showWindow succeeds but focusWindow rejects → workspace visible, launcher hide is best-effort", async () => {
+  // Reason (revised 2026-05-16, Wave 9.5): HomePage 는 더 이상 showWindow /
+  // focusWindow("workspace") 를 호출하지 않으므로 본 케이스의 원본 시나리오는
+  // 의미가 사라졌다. 대신 focusWindow 가 mock 으로 reject 되어 있어도
+  // HomePage flow 는 영향을 받지 않음을 잠근다 (focusWindow 가 호출되지 않으므로).
+  it("AC-156-04b (revised): focusWindow mock rejects — HomePage flow 가 호출하지 않으므로 영향 없음", async () => {
     focusWindowMock.mockImplementation(async () => {
       throw new Error("focusWindow failed (simulated)");
     });
@@ -420,13 +399,9 @@ describe("AC-156-*: Connection activation diagnostic", () => {
       fireEvent.click(screen.getByTestId("list-activate-c1"));
     });
 
-    // showWindow succeeded → workspace is visible.
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    // focusWindow rejected → best-effort: hideWindow may or may not have been
-    // called (it runs in the same try block). The key invariant is that the
-    // user sees the workspace (show succeeded).
-    expect(showWindowMock).toHaveBeenCalledWith("workspace");
-    // focusedConnId must still be set regardless of window errors.
+    expect(showWindowMock).not.toHaveBeenCalled();
+    expect(focusWindowMock).not.toHaveBeenCalled();
+    expect(hideWindowMock).not.toHaveBeenCalled();
     expect(useConnectionStore.getState().focusedConnId).toBe("c1");
   });
 });

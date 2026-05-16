@@ -103,6 +103,24 @@ export async function closeWindow(label: WindowLabel): Promise<void> {
 }
 
 /**
+ * Wave 9.5 (2026-05-16) — close the *current* window. WorkspacePage 의
+ * `< Connections` 버튼이 호출. `getCurrentWebviewWindow()` 는 windowing
+ * runtime 안에서 stable 하지만 jsdom 에서는 throw 할 수 있으므로 시드 직접
+ * mock 가능한 named export 로 노출한다.
+ */
+export async function closeCurrentWindow(): Promise<void> {
+  try {
+    const win = getCurrentWebviewWindow();
+    await win.close();
+  } catch (e) {
+    logger.warn(
+      "[window-controls] closeCurrentWindow failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+}
+
+/**
  * Exit the entire process. Routed through the `app_exit` Tauri command
  * (defined in `src-tauri/src/launcher.rs`) instead of `window.close()` so
  * closing the launcher window tears down the whole app — `window.close()`

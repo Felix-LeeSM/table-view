@@ -16,9 +16,6 @@ import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import { subscribeSystemModeChange } from "@lib/themeBoot";
-import { showWindow, hideWindow, focusWindow } from "@lib/window-controls";
-import { logger } from "@lib/logger";
-import { toast } from "@lib/toast";
 import { persistSettingValue } from "@lib/tauri/settings";
 import { Button } from "@components/ui/button";
 import {
@@ -31,7 +28,6 @@ import ConnectionList from "@components/connection/ConnectionList";
 import GroupDialog from "@components/connection/GroupDialog";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
 import RecentConnections from "@components/connection/RecentConnections";
-import { LogoWordmark } from "@components/shared/Logo";
 import ThemePicker from "@components/theme/ThemePicker";
 
 /**
@@ -51,7 +47,7 @@ import ThemePicker from "@components/theme/ThemePicker";
  * Reaching here when nothing is connected: the user gets the empty-state
  * card from `ConnectionList` directing them to add a connection. The
  * `[+ Connection]` / `[+ Group]` / `[Import / Export]` buttons live in the
- * top header strip alongside the brand wordmark.
+ * top header strip.
  */
 // Sprint 296 — theme picker 를 제외한 footer (현재는 Recent 묶음) 가 한
 // 단위로 접힌다.
@@ -131,46 +127,25 @@ export default function HomePage() {
     (id: string) => {
       if (activatingRef.current) return; // guard against rapid re-entry
 
-      // When the user activates a connection that differs from any open
-      // workspace tab's owner, close those stale tabs so the new workspace
-      // doesn't inherit cross-connection state. Same-connection
-      // reactivation keeps existing tabs untouched.
+      // Stale-tab cleanup for connections different from the activated one.
       const staleConnIds = Object.keys(workspaces).filter((cid) => cid !== id);
       for (const cid of staleConnIds) {
         clearForConnection(cid);
       }
       setFocusedConn(id);
       activatingRef.current = true;
-      // Activation order: workspace.show() → workspace.setFocus() →
-      // launcher.hide(). The order matters: `show` then `setFocus` ensures
-      // the workspace takes input focus the moment it becomes visible;
-      // `launcher.hide()` happens last so a `workspace.show()` rejection
-      // leaves the launcher on screen for retry.
-      void (async () => {
-        try {
-          await showWindow("workspace");
-        } catch (e) {
-          toast.error(
-            `Failed to open workspace: ${e instanceof Error ? e.message : String(e)}`,
-          );
-          return;
-        } finally {
-          activatingRef.current = false;
-        }
-        try {
-          await focusWindow("workspace");
-          await hideWindow("launcher");
-        } catch (e) {
-          // Best-effort post-show cleanup. The user already sees the
-          // workspace at this point, so a focus/hide failure is logged
-          // but does not surface a toast (would be misleading — the
-          // primary action succeeded).
-          logger.warn(
-            "[home-activate] post-show cleanup failed:",
-            e instanceof Error ? e.message : e,
-          );
-        }
-      })();
+      // Wave 9.5 회귀 1 (2026-05-16) — 사용자 desired UX 정정:
+      // "connection 을 열어도 connections 창이 안 닫혀야 해". launcher 는
+      // 항상 visible 로 유지. workspace 윈도우 build/focus 는 ConnectionList
+      // 의 `openWorkspaceWindow(id)` 책임. HomePage 의 handleActivate 는
+      // store side (focusedConn / stale cleanup) 만 책임.
+      // (이전 sprint-175 single-workspace 모델의 showWindow / focusWindow /
+      // hideWindow 호출은 모두 제거 — 두 창 공존 회귀의 원천.)
+      // microtask 한 번 양보해 activatingRef 의 lifecycle 을 일관되게 유지
+      // (rapid double-click guard 의 비동기 release 시점).
+      void Promise.resolve().finally(() => {
+        activatingRef.current = false;
+      });
     },
     [setFocusedConn, workspaces, clearForConnection],
   );
@@ -185,11 +160,6 @@ export default function HomePage() {
       className="flex h-full w-full flex-col bg-secondary"
       data-testid="home-page"
     >
-      {/* Brand header */}
-      <div className="flex items-center justify-center border-b border-border px-3 py-2">
-        <LogoWordmark className="h-7 w-auto" />
-      </div>
-
       {/* Action bar — connection-management buttons only. The legacy
           SidebarModeToggle ToggleGroup is intentionally absent here; Home is
           a single-mode screen. */}

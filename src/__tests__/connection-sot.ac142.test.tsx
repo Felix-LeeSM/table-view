@@ -187,13 +187,13 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     const tabs = getTestWorkspace().tabs;
     expect(tabs).toHaveLength(0);
     expect(getTestWorkspace().activeTabId).toBeNull();
-    // Workspace becomes the active surface (focused on c2). Sprint 154
-    // moved the surface activation to the `@lib/window-controls` seam —
-    // the user-observable invariant ("the workspace shows up after
-    // activation") is now expressed as the `showWindow("workspace")` seam
-    // call.
+    // Wave 9.5 (2026-05-16) — 사용자 desired UX: launcher 항상 visible.
+    // HomePage 의 handleActivate 는 store side (focused conn / stale tabs)
+    // 만 책임 — window seam 호출 0. workspace 윈도우는 ConnectionList 의
+    // `openWorkspaceWindow(id)` 가 per-conn label 로 build.
     expect(useConnectionStore.getState().focusedConnId).toBe("c2");
-    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
+    expect(windowControls.showWindow).not.toHaveBeenCalled();
+    expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
 
   it("AC-142-2: re-activating the same connection preserves its tabs (idempotent reactivation)", async () => {
@@ -238,8 +238,10 @@ describe("AC-142-*: Connection SoT + Disconnect regression locks", () => {
     const ws = getTestWorkspace("c1", "db1");
     expect(ws.tabs).toHaveLength(1);
     expect(ws.activeTabId).toBe("query-1");
-    // Sprint 154 — workspace surface activation expressed via seam call.
-    expect(windowControls.showWindow).toHaveBeenCalledWith("workspace");
+    // Wave 9.5 (2026-05-16) — launcher 는 항상 visible. handleActivate 의
+    // 책임은 store side 만 — window seam 호출 0.
+    expect(windowControls.showWindow).not.toHaveBeenCalled();
+    expect(windowControls.hideWindow).not.toHaveBeenCalled();
   });
 
   it("AC-142-3: DisconnectButton has [aria-label='Disconnect'] and clicking it invokes disconnectFromDatabase for the focused connection", async () => {

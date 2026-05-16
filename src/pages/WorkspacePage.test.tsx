@@ -49,6 +49,7 @@ vi.mock("@lib/window-controls", () => ({
   hideWindow: vi.fn(() => Promise.resolve()),
   focusWindow: vi.fn(() => Promise.resolve()),
   closeWindow: vi.fn(() => Promise.resolve()),
+  closeCurrentWindow: vi.fn(() => Promise.resolve()),
   exitApp: vi.fn(() => Promise.resolve()),
   onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
@@ -93,7 +94,7 @@ describe("WorkspacePage", () => {
     expect(screen.queryByRole("radio", { name: /schemas mode/i })).toBeNull();
   });
 
-  it("clicking [← Connections] hides the workspace window and shows the launcher (Sprint 154)", async () => {
+  it("clicking [← Connections] focuses launcher then closes the current workspace window (Wave 9.5, 2026-05-16)", async () => {
     render(<WorkspacePage />);
 
     await act(async () => {
@@ -102,8 +103,10 @@ describe("WorkspacePage", () => {
       );
     });
 
-    expect(windowControls.hideWindow).toHaveBeenCalledWith("workspace");
-    expect(windowControls.showWindow).toHaveBeenCalledWith("launcher");
+    // 사용자 desired UX: launcher 는 항상 visible — focus 만 주고 현재
+    // workspace 윈도우는 close.
+    expect(windowControls.focusWindow).toHaveBeenCalledWith("launcher");
+    expect(windowControls.closeCurrentWindow).toHaveBeenCalled();
   });
 
   it("clicking [← Connections] does NOT clear tabStore (tabs persist across screen swaps)", () => {

@@ -14,8 +14,8 @@ import { THEME_CATALOG } from "@lib/themeCatalog";
 import { logger } from "@lib/logger";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
 import {
-  hideWindow,
-  showWindow,
+  closeCurrentWindow,
+  focusWindow,
   onCurrentWindowCloseRequested,
 } from "@lib/window-controls";
 
@@ -28,15 +28,18 @@ import {
  *
  * Lifecycle:
  *
- *   - `handleBackToConnections` (toolbar back button) hides the workspace
- *     window then shows the launcher window. The connection pool is
- *     deliberately NOT torn down — Back ≠ Disconnect. Re-entry from the
- *     launcher must be instant.
+ *   - `handleBackToConnections` (toolbar back button, Wave 9.5 revision
+ *     2026-05-16) — 사용자 desired UX:
+ *     "< connections 누르면 connection 창이 닫히고 connections 창에
+ *     focus 가 가야해". 따라서 launcher 에 focus 를 먼저 주고 현재
+ *     workspace 윈도우를 close (destroy). connection pool 은 destroy 시
+ *     별도 lifecycle (Back ≠ Disconnect — pool 은 process 가 살아있는
+ *     동안 유지) — `close` 가 disconnect 를 cascade 하지 않는다.
  *
  *   - The `tauri://close-requested` listener treats the OS-level close
- *     as identical to Back: hide workspace + show launcher, no disconnect.
- *     The default close behaviour (which would actually close the window)
- *     is prevented by the `onCloseRequested` seam.
+ *     identically: focus launcher + close current window. The default
+ *     close behaviour is intentionally NOT prevented (window must
+ *     actually go away).
  *
  * Disconnect (which DOES tear down the pool) is owned by the
  * `DisconnectButton` in `WorkspaceToolbar` and is intentionally NOT a
@@ -56,12 +59,15 @@ export default function WorkspacePage() {
   const ThemeIcon =
     themeMode === "dark" ? Moon : themeMode === "light" ? Sun : Monitor;
 
-  // Back-to-connections — separate handler from disconnect. Calling order
-  // is asserted in window-transitions.test.tsx (AC-154-02).
+  // Back-to-connections — separate handler from disconnect. Wave 9.5
+  // (2026-05-16) — focus launcher 먼저 (사용자 expected: connections 창에
+  // focus 가 가야해) → 현재 workspace 윈도우 close (destroy). backend 의
+  // `WindowEvent::Destroyed` safety net (마지막 workspace 일 때 launcher
+  // show + focus) 도 redundant 하게 처리.
   const handleBackToConnections = async () => {
     try {
-      await hideWindow("workspace");
-      await showWindow("launcher");
+      await focusWindow("launcher");
+      await closeCurrentWindow();
     } catch (e) {
       logger.warn(
         "[workspace-back] window transition failed:",

@@ -226,6 +226,57 @@ pub fn handle_launcher_close_request<R: Runtime>(app: &AppHandle<R>) -> Result<(
     Ok(())
 }
 
+/// Wave 9.5 회귀 1 (2026-05-16) — workspace 윈도우 destroyed safety net.
+///
+/// sprint-361 이전엔 workspace label 이 `"workspace"` literal 하나뿐이라
+/// `lib.rs` 의 `on_window_event` 핸들러도 그 literal 만 매칭했다. sprint-361
+/// 의 per-conn label (`workspace-{conn_id}`) 도입 후 그 매칭이 빠져, 사용자가
+/// workspace 윈도우를 close 해도 safety net 이 작동하지 않아 launcher 가
+/// hide 된 채로 남는 회귀가 발생.
+///
+/// 사용자 desired UX (2026-05-16):
+/// - "connections 창은 아예 안 꺼졌으면 좋겠어" — launcher close 금지 (이미
+///   `handle_launcher_close_request` 가 잠금).
+/// - "모든 connection 창이 다 꺼지면 connections 창에 포커스가 몰리고" —
+///   마지막 workspace 가 destroyed 되면 launcher show + set_focus.
+///
+/// 다른 workspace (`workspace-` prefix 또는 legacy `"workspace"`) 가
+/// 살아있으면 launcher 를 surfaceless 로 유지 (hide 그대로) — 그렇지 않으면
+/// 사용자가 작업 중인 workspace 위로 launcher 가 튀어나옴.
+pub fn handle_workspace_destroyed_safety_net<R: Runtime>(
+    app: &AppHandle<R>,
+    destroyed_label: &str,
+) {
+    let other_workspace_count = app
+        .webview_windows()
+        .iter()
+        .filter(|(label, _)| {
+            label.as_str() != destroyed_label
+                && (label.starts_with("workspace-") || label.as_str() == "workspace")
+        })
+        .count();
+    if other_workspace_count > 0 {
+        // 다른 workspace 살아있음 — launcher 그대로 hide 유지.
+        return;
+    }
+    let Some(launcher) = app.get_webview_window("launcher") else {
+        // Silent no-op: launcher 가 process 내 아예 존재하지 않음.
+        return;
+    };
+    if let Err(e) = launcher.show() {
+        tracing::warn!(
+            target: "launcher",
+            "handle_workspace_destroyed_safety_net: launcher.show() failed: {e}"
+        );
+    }
+    if let Err(e) = launcher.set_focus() {
+        tracing::warn!(
+            target: "launcher",
+            "handle_workspace_destroyed_safety_net: launcher.set_focus() failed: {e}"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,6 +537,108 @@ mod tests {
             app.get_webview_window("workspace").is_some(),
             "workspace window should exist after lazy ensure"
         );
+    }
+
+    /// Wave 9.5 회귀 1 (2026-05-16) — workspace-{conn_id} per-conn label
+    /// 도 safety net 의 매칭 대상이어야 한다. 사용자 보고: workspace 윈도우
+    /// close 시 launcher 가 안 뜨고 hide 된 채로 남는 회귀. 본 test 는
+    /// 마지막 workspace 가 destroyed 됐을 때 launcher 가 show + set_focus
+    /// 호출 받음을 잠근다.
+    #[test]
+    fn wave_9_5_safety_net_shows_launcher_after_last_per_conn_workspace_destroyed() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "launcher",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("launcher build");
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "workspace-conn-1",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("workspace-conn-1 build");
+
+        let launcher = app.get_webview_window("launcher").expect("launcher exists");
+        // 명시적으로 hidden 상태 시뮬 — `.visible(false)` 빌더 인자는 MockRuntime
+        // 에서 무시되는 경우가 있으므로 `.hide()` 호출로 확정.
+        launcher.hide().expect("hide launcher");
+        // `webview_windows()` 가 hidden launcher 도 enumerate 한다는 sanity:
+        assert!(
+            app.get_webview_window("launcher").is_some(),
+            "hidden launcher still addressable via get_webview_window"
+        );
+
+        handle_workspace_destroyed_safety_net(app.handle(), "workspace-conn-1");
+
+        assert!(
+            launcher.is_visible().unwrap_or(false),
+            "launcher must be visible after the last per-conn workspace destroyed (회귀 1 잠금)"
+        );
+    }
+
+    /// Wave 9.5 회귀 1 (2026-05-16) — 다른 workspace 가 살아있는 경우의
+    /// invariant. 사용자가 multi-conn 환경에서 한 workspace 만 닫았을 때
+    /// launcher 가 튀어나오면 작업 중 workspace 위로 올라와 방해된다.
+    /// 따라서 safety net 은 마지막 workspace 만 처리하고 그 외엔 noop.
+    #[test]
+    fn wave_9_5_safety_net_noop_when_other_workspaces_still_alive() {
+        let app = make_app_with_launcher_and_two_workspaces();
+        let launcher = app.get_webview_window("launcher").expect("launcher exists");
+        // make_app_with_launcher_and_two_workspaces 는 visible(false) 안 박지만
+        // helper 가 호출되지 않아야 함을 launcher 의 호출 부재로 검증할 수
+        // 없으므로 windows 갯수 보존만 invariant 로 둔다.
+        let labels_before: Vec<String> = app.webview_windows().keys().cloned().collect();
+        assert_eq!(labels_before.len(), 3, "pre: launcher + 2 workspaces");
+
+        handle_workspace_destroyed_safety_net(app.handle(), "workspace-conn-1");
+
+        // 다른 workspace (workspace-conn-2) 가 살아있으므로 helper 는 early
+        // return. launcher 의 destroy 안 됨, 다른 workspace 도 그대로.
+        assert!(
+            app.get_webview_window("launcher").is_some(),
+            "launcher remains addressable"
+        );
+        assert!(
+            app.get_webview_window("workspace-conn-2").is_some(),
+            "workspace-conn-2 untouched by safety net"
+        );
+        // launcher 의 visible state 가 변경 안 됐는지는 MockRuntime 한계로
+        // 직접 단언하지 않는다 — 정확한 lock 은 위 wave_9_5_*_after_last_
+        // per_conn_workspace_destroyed 테스트에서 last-destroyed case 의
+        // visibility 변경을 검증하므로, 본 테스트는 destruction 부재만
+        // 검증한다.
+        let _ = launcher;
+    }
+
+    /// Wave 9.5 회귀 1 (2026-05-16) — launcher 가 process 에 없는
+    /// edge case. helper 는 panic 없이 noop. (rare — single-instance plugin
+    /// 가 launcher 를 유지하지만 dock-reopen 전 잠시 destroyed 됐을 가능성)
+    #[test]
+    fn wave_9_5_safety_net_noop_when_launcher_missing() {
+        let app = mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build");
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "workspace-conn-1",
+            tauri::WebviewUrl::App("index.html".into()),
+        )
+        .build()
+        .expect("workspace-conn-1 build");
+
+        assert!(app.get_webview_window("launcher").is_none());
+
+        // panic 없이 silent.
+        handle_workspace_destroyed_safety_net(app.handle(), "workspace-conn-1");
+
+        // workspace-conn-1 은 destroyed 시뮬했지만 helper 가 다른 윈도우 건드리지 않음.
+        assert!(app.get_webview_window("workspace-conn-1").is_some());
     }
 
     /// Reason: macOS native File > New Connection menu (Cmd+N) and the
