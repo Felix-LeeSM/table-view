@@ -150,6 +150,10 @@ pub fn run() {
     record_phase(&mut cursor, "plugin-single-instance-init");
 
     let builder = builder.manage(AppState::new());
+    // Wave 9.5 회귀 7 (2026-05-17) — sprint-365 의 cross-window 이벤트 dispatcher
+    // 가 commands 에서 inject 받을 수 있도록 `EventVersionRegistry` 도 process
+    // singleton 으로 manage. 호출 site (`persist_setting` 등) 가 `State` 로 받음.
+    let builder = builder.manage(events::EventVersionRegistry::default());
     record_phase(&mut cursor, "app-state-new");
 
     let builder = builder.invoke_handler(tauri::generate_handler![

@@ -14,6 +14,7 @@ updated: 2026-05-13
 - [2026-04-30 · Cold-boot 측정은 tracing::info! phase markers + Tauri 2 setup/on_page_load hooks가 가장 가벼운 instrumentation](boot-windows/2026-04-30-cold-boot-tracing-instrumentation/memory.md)
 - [2026-04-30 · Tauri 2 다중 WKWebView spawn은 OS-level parallel — 한 윈도우 lazy화로는 wall-clock을 크게 못 줄인다](boot-windows/2026-04-30-wkwebview-spawn-os-parallel/memory.md)
 - [2026-05-06 · webview-distributed state 의 broadcast/persist 비대칭 — store side-effect 추출은 origin ownership 분류 후 진입; e2e dead 시 invariant 변동 sprint deferred](boot-windows/2026-05-06-broadcast-persist-asymmetry-store-extraction-limit/memory.md)
+- [2026-05-17 · sprint-365 emit_state_changed 함수는 만들었으나 sprint-368 persist_setting 이 호출 안 해 cross-window 테마 sync silent fail — caller wiring 이 두 sprint 사이 dark zone 으로 떨어짐](boot-windows/2026-05-17-state-changed-emit-missing-from-persist-setting/memory.md)
 
 ## workspace-shell — toolbar / sidebar / tree 연결
 
@@ -25,6 +26,7 @@ updated: 2026-05-13
 
 - [2026-04-24 · React `autoFocus`는 form control에만 동작 — 비-form 요소는 ref + useEffect 필요](ui-patterns/2026-04-24-react-autofocus-form-control-only/memory.md)
 - [2026-05-05 · Tauri 2 drag-drop은 두 게이트를 동시에 통과해야 — OS handler 비활성 + 이벤트 버블링 차단](ui-patterns/2026-05-05-tauri-drag-drop-os-intercept-and-bubble/memory.md)
+- [2026-05-16 · ThemePicker preview 동작하지만 click 선택은 silent fail — mock 광역 stub 이 click → IPC → store → DOM 의 끝-끝 invariant 를 못 잡았다](ui-patterns/2026-05-16-theme-selection-silent-fail/memory.md)
 
 ## data-and-query — SQL / query / edit 정합성
 

@@ -11,6 +11,7 @@ import {
 } from "@lib/themeBoot";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { logger } from "@lib/logger";
 
 interface ThemeStoreState {
   themeId: ThemeId;
@@ -62,7 +63,18 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
 
   setTheme: async (themeId) => {
     const { mode } = get();
-    await persistThemeSetting({ themeId, mode });
+    try {
+      await persistThemeSetting({ themeId, mode });
+    } catch (e) {
+      // Wave 9.5 회귀 6 (2026-05-16) — 이전에는 reject 가 unhandled 로 떨어졌다.
+      // dev console 에 흔적 남기되 sprint-368 backend-first contract 유지:
+      // store 는 mutate 하지 않고 caller 가 toast 띄울 수 있도록 re-throw.
+      logger.warn(
+        "[themeStore] setTheme persist_setting failed:",
+        e instanceof Error ? e.message : e,
+      );
+      throw e;
+    }
     // `resolvedMode` is recomputed here (rather than relying on the
     // subscriber) because `system` mode resolution depends on the
     // process's current `prefers-color-scheme` reading — setting the
@@ -76,13 +88,29 @@ export const useThemeStore = create<ThemeStoreState>((set, get) => ({
 
   setMode: async (mode) => {
     const { themeId } = get();
-    await persistThemeSetting({ themeId, mode });
+    try {
+      await persistThemeSetting({ themeId, mode });
+    } catch (e) {
+      logger.warn(
+        "[themeStore] setMode persist_setting failed:",
+        e instanceof Error ? e.message : e,
+      );
+      throw e;
+    }
     const resolved = resolveMode(mode);
     set({ mode, resolvedMode: resolved });
   },
 
   setState: async ({ themeId, mode }) => {
-    await persistThemeSetting({ themeId, mode });
+    try {
+      await persistThemeSetting({ themeId, mode });
+    } catch (e) {
+      logger.warn(
+        "[themeStore] setState persist_setting failed:",
+        e instanceof Error ? e.message : e,
+      );
+      throw e;
+    }
     const resolved = resolveMode(mode);
     set({ themeId, mode, resolvedMode: resolved });
   },

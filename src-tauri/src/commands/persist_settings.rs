@@ -13,10 +13,11 @@
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
+use crate::events::{emit_state_changed, EmitArgs, EventDomain, EventOp, EventVersionRegistry};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tauri::State;
+use tauri::{AppHandle, Runtime, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +45,42 @@ pub async fn persist_setting_inner(
     Ok(())
 }
 
+/// Wave 9.5 회귀 7 (2026-05-17) — cross-window 테마/safe_mode broadcast 가
+/// 누락되어 사용자가 "테마가 창 단위로 적용된다" 보고. sprint-365 가 만든
+/// `emit_state_changed` 를 호출하는 site 가 0개였음 — sprint-368 의
+/// backend-first contract 의 마지막 piece. SQLite write 후 항상
+/// `setting.update` 이벤트를 발사.
+///
+/// `origin_window` 은 frontend 의 dispatcher self-echo skip 의 핵심
+/// discriminator (sprint-365 line 1389) — 호출 측 window label 을 그대로
+/// 전달. emit 이 SQLite write 보다 앞서면 receiver 의 `get_setting` refetch
+/// 가 stale 값을 봐서 idempotent 한 update 가 nothing-update 로 떨어진다 →
+/// 순서 invariant 유지.
+pub async fn persist_setting_with_emit<R: Runtime>(
+    pool: &SqlitePool,
+    registry: &EventVersionRegistry,
+    app: &AppHandle<R>,
+    origin_window: Option<String>,
+    req: PersistSettingRequest,
+) -> Result<(), AppError> {
+    let key = req.key.clone();
+    persist_setting_inner(pool, req).await?;
+
+    emit_state_changed(
+        app,
+        registry,
+        EmitArgs {
+            domain: EventDomain::Setting,
+            op: EventOp::Update,
+            entity_id: Some(key),
+            origin_window,
+            snapshot_version: 0,
+            field: None,
+        },
+    )?;
+    Ok(())
+}
+
 async fn write_sqlite_mirror(
     pool: &SqlitePool,
     req: &PersistSettingRequest,
@@ -66,12 +103,16 @@ async fn write_sqlite_mirror(
 }
 
 #[tauri::command]
-pub async fn persist_setting(
+pub async fn persist_setting<R: Runtime>(
     req: PersistSettingRequest,
     _state: State<'_, AppState>,
+    app: AppHandle<R>,
+    registry: State<'_, EventVersionRegistry>,
+    window: tauri::Window<R>,
 ) -> Result<(), AppError> {
     let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
-    persist_setting_inner(&pool, req).await
+    let origin = Some(window.label().to_string());
+    persist_setting_with_emit(&pool, registry.inner(), &app, origin, req).await
 }
 
 /// Sprint 368 (Phase 4 Q12) — read a single settings key. Frontend

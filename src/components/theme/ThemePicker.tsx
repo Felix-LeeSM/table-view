@@ -21,12 +21,17 @@ export default function ThemePicker() {
   const setTheme = useThemeStore((s) => s.setTheme);
   const setMode = useThemeStore((s) => s.setMode);
   const [previewId, setPreviewId] = useState<ThemeId | null>(null);
+  // 2026-05-16 — light/dark/system 토글 hover 시 DOM 의 `data-mode` 만
+  // 일시 변경 (store 는 그대로). 카드 hover preview 와 동일 패턴이지만
+  // mode 축으로 분리된 state — preview 두 축 (theme/mode) 이 독립적으로
+  // overlay 될 수 있도록.
+  const [previewMode, setPreviewMode] = useState<ThemeMode | null>(null);
 
   // Preview wins over the stored theme — applyTheme only touches DOM attrs,
   // so hovering never pollutes the store or localStorage.
   useEffect(() => {
-    applyTheme(previewId ?? themeId, mode);
-  }, [previewId, themeId, mode]);
+    applyTheme(previewId ?? themeId, previewMode ?? mode);
+  }, [previewId, themeId, previewMode, mode]);
 
   // If the picker unmounts mid-preview (e.g. dropdown closes while hovering),
   // snap the DOM back to the persisted theme. Ref mirrors the latest selector
@@ -52,6 +57,7 @@ export default function ThemePicker() {
           onValueChange={(next) => {
             if (next) setMode(next as ThemeMode);
           }}
+          onMouseLeave={() => setPreviewMode(null)}
           aria-label="Appearance mode"
           className="w-full justify-between"
         >
@@ -59,6 +65,7 @@ export default function ThemePicker() {
             value="light"
             aria-label="Light mode"
             className="flex-1"
+            onMouseEnter={() => setPreviewMode("light")}
           >
             <Sun size={12} />
             Light
@@ -67,6 +74,7 @@ export default function ThemePicker() {
             value="dark"
             aria-label="Dark mode"
             className="flex-1"
+            onMouseEnter={() => setPreviewMode("dark")}
           >
             <Moon size={12} />
             Dark
@@ -75,6 +83,7 @@ export default function ThemePicker() {
             value="system"
             aria-label="System mode"
             className="flex-1"
+            onMouseEnter={() => setPreviewMode("system")}
           >
             <Monitor size={12} />
             System

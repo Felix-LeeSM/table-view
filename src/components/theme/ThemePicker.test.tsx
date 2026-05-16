@@ -84,6 +84,31 @@ describe("ThemePicker", () => {
     expect(screen.getByTestId("theme-picker-grid")).toBeInTheDocument();
   });
 
+  // Wave 9.5 회귀 6 (2026-05-16) — 사용자 보고: "테마가 선택이 안돼.
+  // 미리보기는 되는데, 선택이 안돼". 이전 click test 는 `useThemeStore.getState()
+  // .themeId` (store state) 만 lock 했고, user-facing invariant — DOM 의
+  // `data-theme` attribute 가 클릭한 id 로 실제 변경됨 — 은 검증 안 했다.
+  // 새 feedback rule (feedback_test_scenarios_user_journey) 의 첫 적용:
+  // mock 단언이 아니라 user 가 보는 사실 (CSS variable 을 발동시키는 DOM
+  // attribute) 까지 path 를 따라가 lock.
+  it("Wave 9.5 회귀 6 — 카드 클릭 후 document.documentElement[data-theme] 가 클릭한 id 로 변경된다", async () => {
+    render(<ThemePicker />);
+    expect(document.documentElement.getAttribute("data-theme")).toBe(
+      DEFAULT_THEME_ID,
+    );
+
+    const card = screen.getByRole("button", { name: /theme github primer/i });
+    await act(async () => {
+      fireEvent.click(card);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // user-facing invariant: DOM attribute 가 변경 → CSS [data-theme="github"]
+    // 셀렉터가 cascade 에서 적용됨 → user 가 보는 색깔이 github 테마.
+    expect(document.documentElement.getAttribute("data-theme")).toBe("github");
+  });
+
   it("mode toggle buttons change the store mode", async () => {
     render(<ThemePicker />);
     expect(useThemeStore.getState().mode).toBe("system");
@@ -137,5 +162,55 @@ describe("ThemePicker", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe(
       DEFAULT_THEME_ID,
     );
+  });
+
+  // 2026-05-16 사용자 요구: "light, dark 도 마우스 호버링하면 미리보기
+  // 해줬으면 좋겠어". 모드 toggle 의 hover 가 mode 만 일시 적용 → DOM 의
+  // `data-mode` 가 hover 된 mode 로 변경 (store 는 그대로). 카드 hover 와
+  // 동일한 preview pattern.
+  it("hovering the light mode toggle previews data-mode='light' without touching the store", () => {
+    // 초기: system mode (테스트 환경의 prefers-color-scheme 기본).
+    render(<ThemePicker />);
+    const initialStoreMode = useThemeStore.getState().mode;
+
+    const lightBtn = screen.getByRole("radio", { name: /light mode/i });
+    act(() => {
+      fireEvent.mouseEnter(lightBtn);
+    });
+
+    expect(document.documentElement.getAttribute("data-mode")).toBe("light");
+    // Store 는 그대로 — preview 는 DOM-only.
+    expect(useThemeStore.getState().mode).toBe(initialStoreMode);
+  });
+
+  it("hovering the dark mode toggle previews data-mode='dark' without touching the store", () => {
+    render(<ThemePicker />);
+    const initialStoreMode = useThemeStore.getState().mode;
+
+    const darkBtn = screen.getByRole("radio", { name: /dark mode/i });
+    act(() => {
+      fireEvent.mouseEnter(darkBtn);
+    });
+
+    expect(document.documentElement.getAttribute("data-mode")).toBe("dark");
+    expect(useThemeStore.getState().mode).toBe(initialStoreMode);
+  });
+
+  it("leaving the appearance toggle group restores the stored mode", () => {
+    render(<ThemePicker />);
+    const lightBtn = screen.getByRole("radio", { name: /light mode/i });
+    const toggleGroup = lightBtn.closest('[role="group"]')!;
+
+    act(() => {
+      fireEvent.mouseEnter(lightBtn);
+    });
+    expect(document.documentElement.getAttribute("data-mode")).toBe("light");
+
+    act(() => {
+      fireEvent.mouseLeave(toggleGroup);
+    });
+    // 초기 store mode 로 복귀 — system 의 resolved mode (jsdom prefers-color-scheme).
+    const resolved = useThemeStore.getState().resolvedMode;
+    expect(document.documentElement.getAttribute("data-mode")).toBe(resolved);
   });
 });
