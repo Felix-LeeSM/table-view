@@ -15,6 +15,7 @@ updated: 2026-05-13
 - [2026-04-30 · Tauri 2 다중 WKWebView spawn은 OS-level parallel — 한 윈도우 lazy화로는 wall-clock을 크게 못 줄인다](boot-windows/2026-04-30-wkwebview-spawn-os-parallel/memory.md)
 - [2026-05-06 · webview-distributed state 의 broadcast/persist 비대칭 — store side-effect 추출은 origin ownership 분류 후 진입; e2e dead 시 invariant 변동 sprint deferred](boot-windows/2026-05-06-broadcast-persist-asymmetry-store-extraction-limit/memory.md)
 - [2026-05-17 · sprint-365 emit_state_changed 함수는 만들었으나 sprint-368 persist_setting 이 호출 안 해 cross-window 테마 sync silent fail — caller wiring 이 두 sprint 사이 dark zone 으로 떨어짐](boot-windows/2026-05-17-state-changed-emit-missing-from-persist-setting/memory.md)
+- [2026-05-17 · Tauri 2 capability allowlist 가 sprint-361 의 per-conn workspace 라벨 (`workspace-{conn_id}`) 을 미반영해 cross-window event 가 silent deny — 한 layer 더 깊은 silent fail](boot-windows/2026-05-17-capability-allowlist-misses-per-conn-workspace/memory.md)
 
 ## workspace-shell — toolbar / sidebar / tree 연결
 
