@@ -1,6 +1,8 @@
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { logger } from "@lib/logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,29 +21,57 @@ export interface FavoriteQuery {
 export type FavoriteScope = "all" | "global" | "connection";
 
 // ---------------------------------------------------------------------------
-// Persistence helpers
+// IPC persistence
 // ---------------------------------------------------------------------------
+//
+// Sprint 370 (Phase 4 W2→W3) — backend SQLite is the single SOT. The
+// hand-rolled `table-view-favorites` localStorage persistence is retired
+// (sprint-370 AC-370-04). Every mutate path now serializes the full list
+// and ships it through `persist_favorites` IPC; boot hydration reads the
+// canonical list back via `list_favorites`.
+//
+// The IPC fire-and-forget mirrors the previous LS write semantics — the
+// store mutates synchronously so the UI surface stays optimistic; the
+// IPC log surfaces failures. A reject does NOT roll the store back today
+// because the legacy LS path also could not roll back a write — the
+// invariant the contract preserves is "no user-visible regression vs
+// W2", not "stricter consistency than W2 had". A future sprint may add
+// per-action rollback once event/state-changed lands for favorites.
 
-const STORAGE_KEY = "table-view-favorites";
-
-function persistFavorites(favorites: FavoriteQuery[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(favorites));
-  } catch {
-    // localStorage may be unavailable (SSR, quota exceeded, etc.)
-  }
+interface PersistFavoritePayload {
+  id: string;
+  name: string;
+  sql: string;
+  connectionId: string | null;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
-function loadPersistedFavorites(): FavoriteQuery[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as FavoriteQuery[];
-  } catch {
-    // localStorage entry corrupted or unavailable — start fresh.
-    return [];
-  }
+function toPersistPayload(
+  favorites: FavoriteQuery[],
+): PersistFavoritePayload[] {
+  return favorites.map((f, idx) => ({
+    id: f.id,
+    name: f.name,
+    sql: f.sql,
+    connectionId: f.connectionId,
+    sortOrder: idx,
+    createdAt: f.createdAt,
+    updatedAt: f.updatedAt,
+  }));
+}
+
+function persistFavorites(favorites: FavoriteQuery[]): void {
+  // Fire-and-forget — see module doc for why we keep this pattern. We log
+  // failures so dev console shows the SQLite write error, but the store
+  // mutate has already happened by the time we're here.
+  void invoke("persist_favorites", {
+    favorites: toPersistPayload(favorites),
+  }).catch((e: unknown) => {
+    const message = e instanceof Error ? e.message : String(e ?? "");
+    logger.warn(`[favoritesStore] persist_favorites failed: ${message}`);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +89,14 @@ interface FavoritesState {
     updates: Partial<Pick<FavoriteQuery, "name" | "sql">>,
   ) => void;
   getFavorites: (connectionId: string | null) => FavoriteQuery[];
-  loadPersistedFavorites: () => void;
+  /**
+   * Sprint 370 — hydrate from SQLite via `list_favorites` IPC. Previously
+   * read from `table-view-favorites` localStorage; the LS path is now
+   * retired and the snapshot IPC (`get_initial_app_state`) does not carry
+   * favorites (lazy mount-time IPC by contract), so this entrypoint is the
+   * sole hydrate path.
+   */
+  loadPersistedFavorites: () => Promise<void>;
 }
 
 /**
@@ -72,6 +109,15 @@ export const SYNCED_KEYS: ReadonlyArray<keyof FavoritesState> = [
 ] as const;
 
 let favoriteCounter = 0;
+
+interface FavoriteRow {
+  id: string;
+  name: string;
+  sql: string;
+  connectionId: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
 
 export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   favorites: [],
@@ -124,24 +170,45 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
     );
   },
 
-  loadPersistedFavorites: () => {
-    const favorites = loadPersistedFavorites();
-    // Update counter to avoid ID collisions with persisted items
-    for (const f of favorites) {
-      const numPart = f.id.replace("fav-", "");
-      const num = parseInt(numPart, 10);
-      if (!isNaN(num) && num > favoriteCounter) {
-        favoriteCounter = num;
+  loadPersistedFavorites: async () => {
+    try {
+      const rows = await invoke<FavoriteRow[]>("list_favorites");
+      const favorites: FavoriteQuery[] = Array.isArray(rows)
+        ? rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            sql: r.sql,
+            connectionId: r.connectionId,
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
+          }))
+        : [];
+
+      // Update counter to avoid ID collisions with persisted items.
+      for (const f of favorites) {
+        const numPart = f.id.replace("fav-", "");
+        const num = parseInt(numPart, 10);
+        if (!isNaN(num) && num > favoriteCounter) {
+          favoriteCounter = num;
+        }
       }
+
+      set({ favorites });
+    } catch (e) {
+      // Best-effort: backend may be unavailable in tests where the Tauri
+      // runtime mock is missing. Surface a debug log so regressions in IPC
+      // wiring still leave a breadcrumb, but keep the store at its default
+      // so callers can't observe a partial hydrate.
+      const message = e instanceof Error ? e.message : String(e ?? "");
+      logger.warn(`[favoritesStore] list_favorites failed: ${message}`);
     }
-    set({ favorites });
   },
 }));
 
 /**
- * Symmetric attach. Persistence to localStorage is window-local (each
- * window writes its own entry on every change) — both copies converge
- * to the same content via the bridge.
+ * Symmetric attach. Both windows still listen so a favorite added in one
+ * converges the other through the bridge; backend SQLite is the durable
+ * source on the next boot.
  */
 void attachZustandIpcBridge<FavoritesState>(useFavoritesStore, {
   channel: "favorites-sync",

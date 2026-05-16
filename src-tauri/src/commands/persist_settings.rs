@@ -1,20 +1,18 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — `persist_setting` IPC.
+//! Sprint 358 (Phase 1 W1 dual-write) → Sprint 370 (Phase 4 W3 SQLite SOT)
 //!
-//! key-value settings 의 backend mirror. file SOT (settings.json) + SQLite
-//! mirror. 6 known keys (`theme`, `safe_mode`, `home_recent_collapsed`,
-//! `sidebar_width`, `query_history_retention_days`, `query_history_enabled`)
-//! 외에도 임의 key/JSON value 를 받아 dual-write — Phase 1 시점에서는
-//! validation 을 strategic 하게 frontend 에 위임.
+//! key-value settings 의 backend mirror.
 //!
 //! Sprint 368 (Phase 4 Q12) — `get_setting` IPC 추가. `state-changed`
 //! 수신자가 key 별 단일 refetch 로 store 를 갱신 (strategy F.4 line 1388).
-//! file SOT 가 진실 — `settings.json` 의 key 가 있으면 value_json 그대로
-//! 반환, 없으면 `None` 반환 (frontend 에서 default 적용).
+//! Sprint 370 부터 SQLite 가 read SOT — `settings` table 에서 직접 조회.
+//!
+//! Sprint 370 (Phase 4 W3): `persist_setting` 는 file (`settings.json`)
+//! write 분기를 제거하고 SQLite-only. `get_setting` 도 file 대신 SQLite
+//! row 를 직접 읽는다.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
-use crate::storage::local_files::{load_settings_file, save_settings_file};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -35,11 +33,7 @@ pub async fn persist_setting_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    // file SOT — merge into the existing map.
-    let mut current = load_settings_file()?;
-    current.insert(req.key.clone(), req.value_json.clone());
-    save_settings_file(&current)?;
-
+    // Sprint 370 (Phase 4 W3) — file SOT 분기 제거. SQLite-only.
     let sqlite_result = if is_force_failure_for_tests() {
         Err(AppError::Storage("forced failure for tests".into()))
     } else {
@@ -84,11 +78,14 @@ pub async fn persist_setting(
 /// `state-changed` receiver calls this after a `setting:update` event to
 /// refetch the canonical value (strategy F.4 line 1388).
 ///
-/// Returns `Some(value_json)` if the key exists in `settings.json`, else
-/// `None`. The frontend applies a per-key default constant when `None`.
-pub fn get_setting_inner(key: &str) -> Result<Option<String>, AppError> {
-    let map = load_settings_file()?;
-    Ok(map.get(key).cloned())
+/// Sprint 370 (Phase 4 W3) — file SOT 폐기. SQLite 의 `settings` table 을
+/// 직접 read. Returns `Some(value_json)` if the row exists, else `None`.
+pub async fn get_setting_inner(pool: &SqlitePool, key: &str) -> Result<Option<String>, AppError> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT value_json FROM settings WHERE key = ?")
+        .bind(key)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(v,)| v))
 }
 
 #[tauri::command]
@@ -96,7 +93,8 @@ pub async fn get_setting(
     key: String,
     _state: State<'_, AppState>,
 ) -> Result<Option<String>, AppError> {
-    get_setting_inner(&key)
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    get_setting_inner(&pool, &key).await
 }
 
 #[cfg(test)]
@@ -128,9 +126,9 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn happy_path_writes_one_key_to_file_and_sqlite() {
+    async fn happy_path_writes_one_key_to_sqlite_only() {
         cleanup();
-        let (_dir, pool) = setup().await;
+        let (dir, pool) = setup().await;
         persist_setting_inner(
             &pool,
             PersistSettingRequest {
@@ -145,6 +143,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
+        // Sprint 370 invariant — file SOT 분기 retired.
+        assert!(
+            !dir.path().join("settings.json").exists(),
+            "settings.json must not exist after W3 cut"
+        );
         cleanup();
     }
 
@@ -173,14 +176,14 @@ mod tests {
     }
 
     // 작성 2026-05-16 (Phase 4 sprint-368) — `get_setting` 의 happy
-    // path + missing-key 시나리오. 통합 round-trip 은
-    // `tests/dual_write_*` 가 담당.
+    // path + missing-key 시나리오.
+    // Sprint 370 (Phase 4 W3) — SQLite SOT 가 read source. file 미사용.
     #[tokio::test]
     #[serial]
     async fn get_setting_returns_none_for_missing_key() {
         cleanup();
-        let (_dir, _pool) = setup().await;
-        let value = get_setting_inner("theme").unwrap();
+        let (_dir, pool) = setup().await;
+        let value = get_setting_inner(&pool, "theme").await.unwrap();
         assert_eq!(value, None);
         cleanup();
     }
@@ -199,7 +202,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let value = get_setting_inner("theme").unwrap();
+        let value = get_setting_inner(&pool, "theme").await.unwrap();
         assert_eq!(
             value.as_deref(),
             Some(r#"{"themeId":"github","mode":"dark"}"#)

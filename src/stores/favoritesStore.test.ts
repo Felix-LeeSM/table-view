@@ -1,32 +1,30 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
+//
+// 사유: favoritesStore 의 LS retire 후 영속 채널이 SQLite IPC 로 이동했다.
+// 본 파일은 Sprint 119 / 153 / 290 시점의 행동 contract — CRUD / scope
+// 필터링 / SYNCED_KEYS 노출 — 을 보존하면서 영속 단언만 IPC 로 옮긴다.
+// LS 단언은 `favoritesStore.no-file-read.test.ts` 가 별도로 잠근다.
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
 import { useFavoritesStore, SYNCED_KEYS } from "./favoritesStore";
 
-describe("favoritesStore", () => {
-  let storage: Record<string, string>;
+const invokeMock = vi.mocked(invoke);
 
+describe("favoritesStore", () => {
   beforeEach(() => {
     useFavoritesStore.setState({ favorites: [] });
-    storage = {};
-    vi.stubGlobal("localStorage", {
-      getItem: vi.fn((key: string) => storage[key] ?? null),
-      setItem: vi.fn((key: string, value: string) => {
-        storage[key] = value;
-      }),
-      removeItem: vi.fn((key: string) => {
-        delete storage[key];
-      }),
-      clear: vi.fn(() => {
-        storage = {};
-      }),
-      get length() {
-        return Object.keys(storage).length;
-      },
-      key: vi.fn(() => null),
-    });
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   // -- CRUD --
@@ -168,44 +166,66 @@ describe("favoritesStore", () => {
     });
   });
 
-  // -- Persistence --
+  // -- Persistence (Sprint 370 — SQLite via persist_favorites IPC) --
 
-  describe("persistence", () => {
-    it("persists to localStorage on add", () => {
+  describe("persistence (sprint-370 SQLite SOT)", () => {
+    it("ships every mutate to persist_favorites IPC", async () => {
       useFavoritesStore.getState().addFavorite("Q1", "SELECT 1", null);
+      await Promise.resolve();
 
-      expect(storage["table-view-favorites"]).toBeDefined();
-      const parsed = JSON.parse(storage["table-view-favorites"]!);
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].name).toBe("Q1");
+      const calls = invokeMock.mock.calls.filter(
+        (c) => c[0] === "persist_favorites",
+      );
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      const payload = calls[0]![1] as {
+        favorites: Array<{ name: string; sql: string }>;
+      };
+      expect(payload.favorites).toHaveLength(1);
+      expect(payload.favorites[0]!.name).toBe("Q1");
     });
 
-    it("persists to localStorage on remove", () => {
+    it("removeFavorite re-ships the trimmed list to persist_favorites", async () => {
       useFavoritesStore.getState().addFavorite("Q1", "SELECT 1", null);
       useFavoritesStore.getState().addFavorite("Q2", "SELECT 2", null);
-
       const id = useFavoritesStore.getState().favorites[0]!.id;
-      useFavoritesStore.getState().removeFavorite(id);
+      invokeMock.mockClear();
 
-      const parsed = JSON.parse(storage["table-view-favorites"]!);
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].name).toBe("Q2");
+      useFavoritesStore.getState().removeFavorite(id);
+      await Promise.resolve();
+
+      const calls = invokeMock.mock.calls.filter(
+        (c) => c[0] === "persist_favorites",
+      );
+      expect(calls.length).toBe(1);
+      const payload = calls[0]![1] as {
+        favorites: Array<{ name: string }>;
+      };
+      expect(payload.favorites).toHaveLength(1);
+      expect(payload.favorites[0]!.name).toBe("Q2");
     });
 
-    it("persists to localStorage on update", () => {
+    it("updateFavorite re-ships the updated list", async () => {
       useFavoritesStore.getState().addFavorite("Q1", "SELECT 1", null);
       const id = useFavoritesStore.getState().favorites[0]!.id;
+      invokeMock.mockClear();
 
       useFavoritesStore.getState().updateFavorite(id, { name: "Updated" });
+      await Promise.resolve();
 
-      const parsed = JSON.parse(storage["table-view-favorites"]!);
-      expect(parsed[0].name).toBe("Updated");
+      const calls = invokeMock.mock.calls.filter(
+        (c) => c[0] === "persist_favorites",
+      );
+      expect(calls.length).toBe(1);
+      const payload = calls[0]![1] as {
+        favorites: Array<{ name: string }>;
+      };
+      expect(payload.favorites[0]!.name).toBe("Updated");
     });
 
-    it("loads persisted favorites", () => {
-      storage["table-view-favorites"] = JSON.stringify([
+    it("loadPersistedFavorites hydrates from list_favorites IPC", async () => {
+      invokeMock.mockResolvedValueOnce([
         {
-          id: "fav-99",
+          id: "fav-500",
           name: "Persisted",
           sql: "SELECT 1",
           connectionId: null,
@@ -214,15 +234,15 @@ describe("favoritesStore", () => {
         },
       ]);
 
-      useFavoritesStore.getState().loadPersistedFavorites();
+      await useFavoritesStore.getState().loadPersistedFavorites();
 
       const state = useFavoritesStore.getState();
       expect(state.favorites).toHaveLength(1);
       expect(state.favorites[0]!.name).toBe("Persisted");
     });
 
-    it("updates counter to avoid ID collisions after loading", () => {
-      storage["table-view-favorites"] = JSON.stringify([
+    it("updates counter to avoid ID collisions after loading", async () => {
+      invokeMock.mockResolvedValueOnce([
         {
           id: "fav-500",
           name: "Old",
@@ -233,7 +253,7 @@ describe("favoritesStore", () => {
         },
       ]);
 
-      useFavoritesStore.getState().loadPersistedFavorites();
+      await useFavoritesStore.getState().loadPersistedFavorites();
 
       useFavoritesStore.getState().addFavorite("New", "SELECT 2", null);
 
@@ -244,19 +264,21 @@ describe("favoritesStore", () => {
       expect(numPart).toBeGreaterThan(500);
     });
 
-    it("handles corrupted localStorage gracefully", () => {
-      storage["table-view-favorites"] = "not valid json{{{";
+    it("handles IPC reject gracefully (store stays at default)", async () => {
+      invokeMock.mockRejectedValueOnce(new Error("forced fail"));
 
-      expect(() =>
+      await expect(
         useFavoritesStore.getState().loadPersistedFavorites(),
-      ).not.toThrow();
+      ).resolves.toBeUndefined();
 
       const state = useFavoritesStore.getState();
       expect(state.favorites).toEqual([]);
     });
 
-    it("handles empty localStorage", () => {
-      useFavoritesStore.getState().loadPersistedFavorites();
+    it("handles empty IPC response", async () => {
+      invokeMock.mockResolvedValueOnce([]);
+
+      await useFavoritesStore.getState().loadPersistedFavorites();
 
       const state = useFavoritesStore.getState();
       expect(state.favorites).toEqual([]);

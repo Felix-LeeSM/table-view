@@ -1,6 +1,8 @@
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import { attachZustandIpcBridge } from "@lib/zustand-ipc-bridge";
 import { getCurrentWindowLabel } from "@lib/window-label";
+import { logger } from "@lib/logger";
 
 /**
  * MRU entry. `lastUsed` is a `Date.now()` epoch ms so the launcher's
@@ -21,59 +23,39 @@ export interface MruEntry {
  * Holds an ordered list of up to 5 entries. `lastUsedConnectionId` is a
  * derived view of `recentConnections[0]` kept for backward compat.
  *
- * Hand-rolled localStorage persistence (no zustand persist middleware) so
- * the codebase shares a single predictable persistence shape with
- * `favoritesStore`.
+ * Sprint 370 (Phase 4 W2→W3) — `table-view-mru` LS read/write retired.
+ * Boot hydration arrives via the snapshot IPC (`get_initial_app_state`)
+ * and every mutate ships through `persist_mru` to keep SQLite truth in
+ * sync. `loadPersistedMru` is now a no-op so existing call sites in
+ * `App.tsx` / `AppRouter.tsx` keep compiling but emit zero IPC + LS work;
+ * sprint-375 removes the call sites entirely.
  */
 
-const STORAGE_KEY = "table-view-mru";
 const MAX_ENTRIES = 5;
 
-function persistMruList(entries: MruEntry[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-  } catch {
-    // localStorage may be unavailable (SSR, quota exceeded, private mode).
-  }
+interface PersistMruPayload {
+  connectionId: string;
+  lastUsed: number;
 }
 
-/**
- * Load persisted MRU entries. Handles two formats:
- *  1. New: JSON array of `MruEntry` objects.
- *  2. Legacy: a plain connection-id string written via `setItem(key, id)`.
- *
- * Migration is transparent — a plain string becomes a single-entry list
- * with `lastUsed: Date.now()`, and the next write persists the new shape.
- */
-function loadPersistedMruList(): MruEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.slice(0, MAX_ENTRIES);
-      }
-      // Legacy format: JSON-quoted string (e.g. `"c1"`).
-      if (typeof parsed === "string" && parsed.length > 0) {
-        return [{ connectionId: parsed, lastUsed: Date.now() }];
-      }
-      return [];
-    } catch {
-      // Legacy format: unquoted plain string. `JSON.parse("c1")` throws
-      // because bare identifiers aren't valid JSON — the old store wrote
-      // the id verbatim via `setItem(key, id)`.
-      if (raw.length > 0) {
-        return [{ connectionId: raw, lastUsed: Date.now() }];
-      }
-      return [];
-    }
-  } catch {
-    // localStorage unavailable (SSR / private mode) — start with empty list.
-    return [];
-  }
+function toPersistPayload(entries: MruEntry[]): PersistMruPayload[] {
+  return entries.map((e) => ({
+    connectionId: e.connectionId,
+    lastUsed: e.lastUsed,
+  }));
+}
+
+function persistMruList(entries: MruEntry[]): void {
+  // Sprint 370 — fire-and-forget IPC mirror. Same optimistic semantics as
+  // the legacy LS path: store mutates synchronously, IPC failures only
+  // surface in the dev log so the next persist (or next boot's
+  // mismatch metric) heals SQLite truth.
+  void invoke("persist_mru", { entries: toPersistPayload(entries) }).catch(
+    (e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e ?? "");
+      logger.warn(`[mruStore] persist_mru failed: ${message}`);
+    },
+  );
 }
 
 interface MruState {
@@ -88,6 +70,12 @@ interface MruState {
    * pointer stays consistent.
    */
   removeRecentConnection: (id: string) => void;
+  /**
+   * Sprint 370 — no-op. Snapshot IPC (`loadAllFromSnapshot`) is the sole
+   * hydration path; this function survives only so existing call sites
+   * in `App.tsx` / `AppRouter.tsx` keep compiling. Sprint-375 removes
+   * the call sites and the function alongside.
+   */
   loadPersistedMru: () => void;
 }
 
@@ -116,7 +104,7 @@ export const useMruStore = create<MruState>((set) => ({
         { connectionId: id, lastUsed: now },
         ...filtered,
       ].slice(0, MAX_ENTRIES);
-      // Persist
+      // Persist via IPC — SQLite is the SOT after W3 cut.
       persistMruList(updated);
       return {
         recentConnections: updated,
@@ -140,11 +128,10 @@ export const useMruStore = create<MruState>((set) => ({
   },
 
   loadPersistedMru: () => {
-    const entries = loadPersistedMruList();
-    set({
-      recentConnections: entries,
-      lastUsedConnectionId: entries[0]?.connectionId ?? null,
-    });
+    // Snapshot IPC hydrates `recentConnections` + `lastUsedConnectionId`
+    // before any consumer mounts. This function is a no-op kept for
+    // backward compatibility with the boot effect call sites; the LS
+    // `table-view-mru` read is retired (sprint-370 AC-370-05).
   },
 }));
 
@@ -164,14 +151,10 @@ void attachZustandIpcBridge<MruState>(useMruStore, {
 });
 
 /**
- * Reset hook for tests. Wipes both the in-memory state and the
- * persisted entry so a single test cannot leak MRU into the next.
+ * Reset hook for tests. Wipes the in-memory state so a single test cannot
+ * leak MRU into the next. Sprint 370 — LS removal means the only state
+ * worth resetting lives in the zustand store.
  */
 export function __resetMruStoreForTests(): void {
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
   useMruStore.setState({ lastUsedConnectionId: null, recentConnections: [] });
 }

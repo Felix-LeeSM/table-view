@@ -1,15 +1,21 @@
 //! 작성 2026-05-16 (Phase 1 sprint-358) — Phase 1 W1 dual-write 4 domains:
 //! connections / favorites / mru / settings.
 //!
-//! Pattern: file/LS write 후 SQLite mirror INSERT/UPDATE. legacy_imported
-//! guard 통과 후만 SQLite write — guard 미통과 시 AppError::LegacyImportInProgress
-//! 로 reject (strategy F.2 line 1189 — durable write block).
+//! Sprint 358 (Phase 1 W1) 시점에는 file/LS write 후 SQLite mirror INSERT/UPDATE.
+//! Sprint 370 (Phase 4 W3 cut) 이후 favorites / mru / settings 의 file 분기는
+//! retire 되었고 SQLite-only 가 된다. 본 통합 파일의 단언도 sprint-370 의
+//! 회귀를 함께 잠근다 — file 미생성 + SQLite row 만 존재.
+//!
+//! `connections` 도메인은 별 트리거 (storage::save_connection — 기존
+//! connections.json file SOT). sprint-370 의 In Scope 는 favorites / mru /
+//! settings 의 W3 cut 만 다루고 connections file SOT 는 sprint-375 의 W4
+//! file cleanup 까지 유지된다.
 //!
 //! AC mapping:
 //!   - AC-358-01 connections dual-write   (file connections.json + SQLite connections row)
-//!   - AC-358-02 favorites dual-write     (LS table-view-favorites + SQLite favorites row)
-//!   - AC-358-03 mru dual-write           (LS table-view-mru + SQLite mru row)
-//!   - AC-358-04 settings dual-write      (6 settings keys + SQLite settings row)
+//!   - AC-358-02 favorites SQLite-only    (sprint-370 W3 cut — file retired)
+//!   - AC-358-03 mru SQLite-only          (sprint-370 W3 cut — file retired)
+//!   - AC-358-04 settings SQLite-only     (sprint-370 W3 cut — file retired)
 //!   - AC-358-08 guard 4-state            (pending/importing/failed reject; done accept)
 //!   - AC-358-09 mismatch counter == 0    (100-call stress, normal path)
 
@@ -155,7 +161,9 @@ fn sample_favorite_req(id: &str, name: &str, sql: &str) -> PersistFavoriteReques
 
 #[tokio::test]
 #[serial]
-async fn ac_358_02_persist_favorite_writes_to_file_and_sqlite() {
+async fn ac_358_02_persist_favorite_writes_to_sqlite_only() {
+    // Sprint 358 → Sprint 370 — file (`favorites.json`) write 분기 retire.
+    // 본 테스트는 W3 cut 이후의 invariant 를 잠근다: SQLite row 1, file 0.
     mismatch_counter::reset();
     let (dir, pool) = setup().await;
 
@@ -170,16 +178,14 @@ async fn ac_358_02_persist_favorite_writes_to_file_and_sqlite() {
     .await
     .unwrap();
 
-    // file write (table-view-favorites.json under app data dir).
+    // Sprint 370 invariant — favorites.json 미생성.
     let path = dir.path().join("favorites.json");
-    let raw = std::fs::read_to_string(&path).expect("favorites.json file missing");
     assert!(
-        raw.contains("Find Users"),
-        "file content missing favorite: {}",
-        raw
+        !path.exists(),
+        "favorites.json must not exist after W3 cut (file write retired)"
     );
 
-    // SQLite mirror.
+    // SQLite mirror — single canonical source.
     let row: (String, String, String) =
         sqlx::query_as("SELECT id, name, sql FROM favorites WHERE id = ?")
             .bind("fav-1")
@@ -200,7 +206,8 @@ async fn ac_358_02_persist_favorite_writes_to_file_and_sqlite() {
 
 #[tokio::test]
 #[serial]
-async fn ac_358_03_persist_mru_writes_to_file_and_sqlite() {
+async fn ac_358_03_persist_mru_writes_to_sqlite_only() {
+    // Sprint 358 → Sprint 370 — file (`mru.json`) write 분기 retire.
     mismatch_counter::reset();
     let (dir, pool) = setup().await;
 
@@ -214,12 +221,14 @@ async fn ac_358_03_persist_mru_writes_to_file_and_sqlite() {
     .await
     .unwrap();
 
-    // file write (mru.json).
+    // Sprint 370 invariant — mru.json 미생성.
     let path = dir.path().join("mru.json");
-    let raw = std::fs::read_to_string(&path).expect("mru.json file missing");
-    assert!(raw.contains("conn-A"), "file write missing");
+    assert!(
+        !path.exists(),
+        "mru.json must not exist after W3 cut (file write retired)"
+    );
 
-    // SQLite mirror.
+    // SQLite mirror — single canonical source.
     let row: (String, i64) =
         sqlx::query_as("SELECT connection_id, last_used FROM mru WHERE connection_id = ?")
             .bind("conn-A")
@@ -240,6 +249,7 @@ async fn ac_358_03_persist_mru_writes_to_file_and_sqlite() {
 #[tokio::test]
 #[serial]
 async fn ac_358_04_persist_settings_all_six_known_keys_round_trip() {
+    // Sprint 358 → Sprint 370 — file (`settings.json`) write 분기 retire.
     mismatch_counter::reset();
     let (dir, pool) = setup().await;
 
@@ -266,12 +276,12 @@ async fn ac_358_04_persist_settings_all_six_known_keys_round_trip() {
         .unwrap();
     }
 
-    // file write (settings.json) — must contain all 6 keys.
+    // Sprint 370 invariant — settings.json 미생성.
     let path = dir.path().join("settings.json");
-    let raw = std::fs::read_to_string(&path).expect("settings.json file missing");
-    for (key, _) in &cases {
-        assert!(raw.contains(key), "settings.json missing key {}", key);
-    }
+    assert!(
+        !path.exists(),
+        "settings.json must not exist after W3 cut (file write retired)"
+    );
 
     // SQLite mirror — 6 rows.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")

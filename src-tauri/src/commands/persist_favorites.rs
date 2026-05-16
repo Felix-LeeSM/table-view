@@ -1,15 +1,19 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — `persist_favorites` IPC.
+//! Sprint 358 (Phase 1 W1 dual-write) → Sprint 370 (Phase 4 W3 SQLite SOT)
 //!
-//! `favoritesStore` 의 every change 가 IPC 로 backend 에 mirror 된다. 호출 흐름:
+//! Sprint 358 시점에는 `favoritesStore` 의 every change 가 file SOT
+//! (favorites.json) + SQLite mirror 의 dual-write 였다. Sprint 370 의 W3
+//! cut 이후 file 분기는 제거되고 SQLite-only path 가 된다:
+//!
 //!   1. guard_legacy_import_done — pending/importing/failed reject.
-//!   2. file SOT (favorites.json) write — atomic.
-//!   3. SQLite mirror — INSERT OR REPLACE 로 본 호출의 모든 entry 를 덮어쓰기.
-//!      실패 시 dev 로그 + counter (silent).
+//!   2. SQLite write — INSERT OR REPLACE 로 본 호출의 모든 entry 를 덮어쓰기.
+//!      실패 시 reconcile counter 증가 (silent — 외부 시그니처는 Ok).
+//!
+//! W3 진입의 invariant: file SOT 와 LS write 사이트 0. `list_favorites` 가
+//! 추가되어 frontend 는 boot 시점에 SQLite 에서 직접 hydrate.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
-use crate::storage::local_files::{save_favorites_file, FavoriteRecord};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -37,19 +41,12 @@ pub async fn persist_favorite_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    let records: Vec<FavoriteRecord> = favorites
-        .iter()
-        .map(|f| FavoriteRecord {
-            id: f.id.clone(),
-            name: f.name.clone(),
-            sql: f.sql.clone(),
-            connection_id: f.connection_id.clone(),
-            created_at: f.created_at,
-            updated_at: f.updated_at,
-        })
-        .collect();
-    save_favorites_file(&records)?;
-
+    // Sprint 370 (Phase 4 W3) — file/LS write 분기 제거. SQLite-only.
+    // 외부 시그니처는 file write 시절의 silent-on-mirror-failure 패턴을
+    // 유지한다 — record_sqlite_result 가 Err 일 때 reconcile 카운터만 증가
+    // 시키고 caller 에는 Ok(()) 를 반환. SQLite 가 SOT 가 된 W3 이후에도
+    // 같은 시그니처를 유지하는 이유: reconcile path 의 호환성 + 호출자
+    // (frontend store) 의 optimistic 업데이트 mental model 보존.
     let sqlite_result = if is_force_failure_for_tests() {
         Err(AppError::Storage("forced failure for tests".into()))
     } else {
@@ -58,6 +55,54 @@ pub async fn persist_favorite_inner(
     record_sqlite_result("favorites", sqlite_result);
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// `list_favorites` — Sprint 370 (Phase 4 W3 read SOT).
+//
+// frontend `favoritesStore.loadPersistedFavorites` 가 호출. `favorites.json`
+// 의 LS read 사이트를 0 으로 만든다. Returned shape 는 camelCase
+// frontend 타입에 맞춤 (serde rename_all).
+// ---------------------------------------------------------------------------
+
+/// SQLite favorites row → frontend wire shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FavoritePublic {
+    pub id: String,
+    pub name: String,
+    pub sql: String,
+    pub connection_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+pub async fn list_favorites_inner(pool: &SqlitePool) -> Result<Vec<FavoritePublic>, AppError> {
+    let rows: Vec<(String, String, String, Option<String>, i64, i64)> = sqlx::query_as(
+        "SELECT id, name, sql, connection_id, created_at, updated_at \
+         FROM favorites ORDER BY sort_order ASC, id ASC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, name, sql, connection_id, created_at, updated_at)| FavoritePublic {
+                id,
+                name,
+                sql,
+                connection_id,
+                created_at,
+                updated_at,
+            },
+        )
+        .collect())
+}
+
+#[tauri::command]
+pub async fn list_favorites(_state: State<'_, AppState>) -> Result<Vec<FavoritePublic>, AppError> {
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    list_favorites_inner(&pool).await
 }
 
 async fn write_sqlite_mirror(
@@ -102,6 +147,10 @@ pub async fn persist_favorites(
 mod tests {
     //! 작성 2026-05-16 (Phase 1 sprint-358) — inline lib smoke for `--lib`
     //! coverage gate. 통합 시나리오는 `tests/dual_write_connections.rs`.
+    //!
+    //! Sprint 370 (Phase 4 W3 SQLite SOT) — file write 분기 retire 이후의
+    //! invariant 추가: `persist_favorite_inner` 호출 후 file (favorites.json)
+    //! 미생성, SQLite row 만. `list_favorites_inner` 가 SQLite 만 read.
 
     use super::*;
     use crate::storage::local;
@@ -127,9 +176,9 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn happy_path_persists_two_favorites_to_file_and_sqlite() {
+    async fn happy_path_persists_two_favorites_to_sqlite_only() {
         cleanup();
-        let (_dir, pool) = setup().await;
+        let (dir, pool) = setup().await;
         persist_favorite_inner(
             &pool,
             vec![
@@ -160,6 +209,14 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 2);
+
+        // Sprint 370 invariant — file SOT 분기 제거. favorites.json 이 디렉토리
+        // 에 생성되지 않아야 한다.
+        let file = dir.path().join("favorites.json");
+        assert!(
+            !file.exists(),
+            "favorites.json must not exist after W3 cut (file write retired)"
+        );
         cleanup();
     }
 
@@ -173,6 +230,70 @@ mod tests {
             .unwrap();
         let err = persist_favorite_inner(&pool, vec![]).await.unwrap_err();
         assert!(matches!(err, AppError::LegacyImportInProgress));
+        cleanup();
+    }
+
+    // 작성 2026-05-16 (Phase 4 sprint-370 AC-370-04) — `list_favorites_inner`
+    // 가 SQLite 의 favorites 를 sort_order 순으로 반환.
+    #[tokio::test]
+    #[serial]
+    async fn list_favorites_returns_rows_in_sort_order() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        persist_favorite_inner(
+            &pool,
+            vec![
+                PersistFavoriteRequest {
+                    id: "fav-second".into(),
+                    name: "Second".into(),
+                    sql: "SELECT 2".into(),
+                    connection_id: None,
+                    sort_order: 1,
+                    created_at: 2,
+                    updated_at: 2,
+                },
+                PersistFavoriteRequest {
+                    id: "fav-first".into(),
+                    name: "First".into(),
+                    sql: "SELECT 1".into(),
+                    connection_id: None,
+                    sort_order: 2,
+                    created_at: 1,
+                    updated_at: 1,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+        // The second batch entry overwrites sort_order so we explicitly
+        // re-write to verify retrieval ordering.
+        sqlx::query("UPDATE favorites SET sort_order = ? WHERE id = ?")
+            .bind(0i64)
+            .bind("fav-first")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE favorites SET sort_order = ? WHERE id = ?")
+            .bind(1i64)
+            .bind("fav-second")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let rows = list_favorites_inner(&pool).await.unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, "fav-first");
+        assert_eq!(rows[1].id, "fav-second");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_favorites_empty_when_table_empty() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        let rows = list_favorites_inner(&pool).await.unwrap();
+        assert!(rows.is_empty());
         cleanup();
     }
 }

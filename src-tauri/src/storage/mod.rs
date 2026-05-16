@@ -4,6 +4,7 @@ pub mod key_migration;
 pub mod local;
 pub mod local_files;
 pub mod meta;
+pub mod mismatch_metric;
 pub mod reconcile;
 
 use crate::error::AppError;

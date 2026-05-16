@@ -1,13 +1,16 @@
 //! 작성 2026-05-16 (Phase 1 sprint-358) — AC-358-07 reconcile path.
+//! 갱신 2026-05-16 (Phase 4 sprint-370) — favorites/mru/settings 의 file
+//! 분기 retire 후의 reconcile 의미 변화 반영.
 //!
-//! Dual-write 는 file/LS write 가 성공 path. SQLite write 실패는 silent +
-//! mismatch counter 증가. 다음 boot 직후 `reconcile_pending_domains` 가
-//! file/LS SOT 를 SQLite 로 재투영 — 3회까지 retry, 그 후 stop + dev console
-//! error.
+//! Sprint 358 (Phase 1 W1): Dual-write 는 file/LS write 가 성공 path. SQLite
+//! write 실패는 silent + mismatch counter 증가. 다음 boot 직후
+//! `reconcile_pending_domains` 가 file/LS SOT 를 SQLite 로 재투영.
 //!
-//! 본 테스트는 mismatch 누적 → reconcile 호출 → counter 0 으로 회복하는
-//! E2E flow 검증. SQLite write 실패 시뮬레이션은 `simulate_sqlite_failure`
-//! flag 로 강제.
+//! Sprint 370 (Phase 4 W3): favorites / mru / settings 의 file write 가
+//! 제거되어 reconcile-from-file path 도 의미를 잃는다 (file 이 empty).
+//! `connections` 도메인은 여전히 file SOT (storage::save_connection — sprint-375
+//! 의 W4 cleanup 까지 유지) 라 reconcile 가능. 본 테스트는 두 시나리오를
+//! 분리해 sprint-370 회귀를 함께 잠근다.
 
 use serial_test::serial;
 use sqlx::SqlitePool;
@@ -35,18 +38,26 @@ fn cleanup() {
     mismatch_counter::reset();
 }
 
-// AC-358-07: SQLite write 실패 → mismatch += 1; reconcile 호출 → SQLite mirror
-// 가 file/LS SOT 로 회복.
+// AC-358-07 (sprint-358 origin) — SQLite write 실패 → mismatch += 1.
+//
+// Sprint 370 (Phase 4 W3 SQLite SOT): mru 의 file SOT path 가 제거되어
+// reconcile-from-file 의 회복 시나리오는 더 이상 적용되지 않는다 (file 이 빈
+// 상태). 본 테스트는 W3 cut 의 invariant 를 잠근다: SQLite write 실패는 여전히
+// counter 를 증가시키지만, file SOT 가 없으므로 reconcile 가 호출되어도 mru row
+// 는 0 으로 유지된다 (no recovery source). Recovery 는 future sprint 의 별
+// rollback path 가 책임진다.
 #[tokio::test]
 #[serial]
-async fn ac_358_07_simulated_sqlite_failure_increments_mismatch_then_reconcile_clears_it() {
+async fn ac_370_07_sqlite_failure_increments_counter_no_file_fallback() {
     cleanup(); // 다른 테스트 누적분 reset
     let (_dir, pool) = setup().await;
 
-    // Force SQLite failure path for mru dual-write.
+    // Force SQLite failure path for mru persist.
     set_force_failure_for_tests(true);
 
-    // mru dual-write: file write 성공 → SQLite write 실패 simulated → counter += 1.
+    // mru persist: SQLite write 실패 simulated → counter += 1. file 분기가
+    // 제거되어 외부 시그니처는 그대로 Ok (record_sqlite_result 의 silent
+    // semantic 보존).
     persist_mru_inner(
         &pool,
         vec![PersistMruRequest {
@@ -55,7 +66,7 @@ async fn ac_358_07_simulated_sqlite_failure_increments_mismatch_then_reconcile_c
         }],
     )
     .await
-    .unwrap(); // dual-write 자체는 file write 성공이므로 Ok.
+    .unwrap();
     assert_eq!(
         mismatch_counter::current(),
         1,
@@ -69,28 +80,20 @@ async fn ac_358_07_simulated_sqlite_failure_increments_mismatch_then_reconcile_c
         .unwrap();
     assert_eq!(count, 0, "SQLite row must NOT exist (simulated failure)");
 
-    // Disable failure simulation — 정상 path 로 reconcile 호출.
+    // Disable failure simulation — reconcile 호출. mru 도메인의 file 은 empty,
+    // 그러므로 reconcile_mru 는 no-op (load_mru_file 가 empty Vec 반환).
     set_force_failure_for_tests(false);
-
-    // reconcile: file/LS SOT 를 SQLite 에 반영.
     reconcile_pending_domains(&pool).await.unwrap();
 
-    // 이제 SQLite mru row 1 — file SOT 로부터 복원.
+    // W3 cut 이후 invariant: file SOT 가 없으므로 mru row 0 유지.
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, 1, "reconcile must restore SQLite from file SOT");
-
-    let row: (String, i64) = sqlx::query_as("SELECT connection_id, last_used FROM mru")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    assert_eq!(row.0, "conn-A");
-    assert_eq!(row.1, 1_700_000_500_000);
-
-    // counter reset.
-    assert_eq!(mismatch_counter::current(), 0);
+    assert_eq!(
+        count, 0,
+        "After sprint-370 W3 cut, file SOT is empty so reconcile cannot recover mru"
+    );
     cleanup();
 }
 

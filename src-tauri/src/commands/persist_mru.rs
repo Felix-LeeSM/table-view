@@ -1,12 +1,11 @@
-//! Sprint 358 (Phase 1 W1 dual-write) — `persist_mru` IPC.
+//! Sprint 358 (Phase 1 W1 dual-write) → Sprint 370 (Phase 4 W3 SQLite SOT).
 //!
 //! `mruStore.markConnectionUsed` / `removeRecentConnection` 가 호출하는
-//! backend mirror. file SOT (`mru.json`) + SQLite mirror.
+//! backend mirror. W3 cut 이후 file (`mru.json`) 분기는 제거되고 SQLite-only.
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
-use crate::storage::local_files::{save_mru_file, MruRecord};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -25,15 +24,7 @@ pub async fn persist_mru_inner(
 ) -> Result<(), AppError> {
     guard_legacy_import_done(pool).await?;
 
-    let records: Vec<MruRecord> = entries
-        .iter()
-        .map(|e| MruRecord {
-            connection_id: e.connection_id.clone(),
-            last_used: e.last_used,
-        })
-        .collect();
-    save_mru_file(&records)?;
-
+    // Sprint 370 (Phase 4 W3) — file SOT 분기 제거. SQLite-only.
     let sqlite_result = if is_force_failure_for_tests() {
         Err(AppError::Storage("forced failure for tests".into()))
     } else {
@@ -99,9 +90,9 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn happy_path_writes_file_and_sqlite() {
+    async fn happy_path_writes_sqlite_only() {
         cleanup();
-        let (_dir, pool) = setup().await;
+        let (dir, pool) = setup().await;
         persist_mru_inner(
             &pool,
             vec![PersistMruRequest {
@@ -116,6 +107,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
+        // Sprint 370 invariant — file SOT 분기 retired.
+        assert!(
+            !dir.path().join("mru.json").exists(),
+            "mru.json must not exist after W3 cut"
+        );
         cleanup();
     }
 }

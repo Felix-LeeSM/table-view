@@ -172,6 +172,9 @@ pub fn run() {
         // Sprint 368 (Phase 4 Q12) — single-key settings refetch for the
         // `state-changed` setting domain receiver (strategy F.4 line 1388).
         commands::persist_settings::get_setting,
+        // Sprint 370 (Phase 4 W3) — favorites read SOT from SQLite. Replaces
+        // the `loadPersistedFavorites` LS read in `favoritesStore`.
+        commands::persist_favorites::list_favorites,
         commands::persist_workspace::persist_workspace,
         // Sprint 359 (Phase 2 Q5.3 / Q5.5) — paradigm-native cancel +
         // tab affinity release. The legacy cooperative `cancel_query(query_id)`
@@ -389,6 +392,38 @@ pub fn run() {
             let delta_ms = t0.elapsed().as_secs_f64() * 1000.0;
             info!(target: "boot", "rust:setup-done delta_ms={:.3}", delta_ms);
         }
+
+        // Sprint 370 (Phase 4 W2→W3) — boot mismatch metric. Compares the
+        // 4 dual-write domains (connections / favorites / mru / settings)
+        // between file/LS SOT and SQLite mirror. The result is logged
+        // (info on match, warn on drift) and the `mismatch_metric::counter`
+        // atomic is bumped on drift. User-visible impact is zero — the
+        // metric is observation-only, and the reconcile path
+        // (`storage::reconcile`) handles recovery on the next boot.
+        //
+        // Spawned as a detached task so a slow metric computation cannot
+        // block the launcher's first paint. Best-effort: pool init failure
+        // logs and bails.
+        tauri::async_runtime::spawn(async {
+            match commands::sqlite_pool::get_or_init_pool().await {
+                Ok(pool) => {
+                    if let Err(e) = storage::mismatch_metric::measure_all(&pool).await {
+                        tracing::warn!(
+                            target: "mismatch_metric",
+                            "boot mismatch metric returned an error: {}",
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "mismatch_metric",
+                        "skipped boot mismatch metric — pool init failed: {}",
+                        e
+                    );
+                }
+            }
+        });
 
         // macOS-only native application menu (2026-05-01).
         //

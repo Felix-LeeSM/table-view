@@ -1,13 +1,29 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// 작성 2026-05-16 (Phase 4 W2→W3 sprint-370)
+//
+// 사유: mruStore 의 LS retire 이후 store 의 행동 contract 가
+// "localStorage round-trip" 에서 "snapshot hydrate + IPC persist" 로 옮겨갔다.
+// 본 파일은 Sprint 119/166/290 의 시나리오 의도 (recentConnections 의 head
+// 이동 / cap 5 / removeRecentConnection / lastUsedConnectionId 재계산) 를
+// 그대로 보존하면서, 영속 채널을 LS 가 아닌 `persist_mru` IPC 로 검사한다.
+//
+// loadPersistedMru 는 sprint-370 의 결정에 따라 no-op 으로 격하되었으므로
+// 본 파일은 그 형태도 잠근다 — 호출 시 store 가 LS 를 만지지 않고 (legacy
+// 인터페이스 호환만 유지).
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
 import { useMruStore, __resetMruStoreForTests, SYNCED_KEYS } from "./mruStore";
 
-// Sprint 119 (#SHELL-1) — MRU connection store unit tests. Covers initial
-// state, action side-effect (state + localStorage), and boot-time restore.
-// Sprint 166 — expanded to cover list-based MRU tracking (up to 5 entries).
-
-const STORAGE_KEY = "table-view-mru";
+const invokeMock = vi.mocked(invoke);
 
 beforeEach(() => {
+  invokeMock.mockReset();
+  invokeMock.mockResolvedValue(undefined);
   __resetMruStoreForTests();
 });
 
@@ -16,71 +32,54 @@ describe("mruStore", () => {
     expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
   });
 
-  // Reason: backward compat — markConnectionUsed still updates lastUsedConnectionId (2026-04-28)
-  it("markConnectionUsed updates state and writes to localStorage", () => {
+  it("markConnectionUsed updates state and persists via persist_mru IPC", async () => {
     useMruStore.getState().markConnectionUsed("c1");
 
     expect(useMruStore.getState().lastUsedConnectionId).toBe("c1");
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!);
-    expect(parsed).toEqual([
-      { connectionId: "c1", lastUsed: expect.any(Number) },
-    ]);
+
+    // IPC fire-and-forget — flush microtasks.
+    await Promise.resolve();
+    const calls = invokeMock.mock.calls.filter((c) => c[0] === "persist_mru");
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    const payload = calls[0]![1] as {
+      entries: Array<{ connectionId: string; lastUsed: number }>;
+    };
+    expect(payload.entries).toHaveLength(1);
+    expect(payload.entries[0]!.connectionId).toBe("c1");
+    expect(typeof payload.entries[0]!.lastUsed).toBe("number");
   });
 
-  // Reason: backward compat — newer id overwrites older, list has single entry (2026-04-28)
   it("markConnectionUsed overwrites previous value (most-recent wins)", () => {
     useMruStore.getState().markConnectionUsed("c1");
     useMruStore.getState().markConnectionUsed("c2");
 
     expect(useMruStore.getState().lastUsedConnectionId).toBe("c2");
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = JSON.parse(raw!);
-    // Most recent first
-    expect(parsed[0].connectionId).toBe("c2");
-    expect(parsed[1].connectionId).toBe("c1");
+    const { recentConnections } = useMruStore.getState();
+    expect(recentConnections[0]!.connectionId).toBe("c2");
+    expect(recentConnections[1]!.connectionId).toBe("c1");
   });
 
-  // Reason: backward compat — restore from new JSON array format (2026-04-28)
-  it("loadPersistedMru restores the persisted id on boot", () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify([{ connectionId: "c-restored", lastUsed: 1000 }]),
-    );
+  it("loadPersistedMru is a no-op after sprint-370 (snapshot SOT)", () => {
+    // Sprint 370 — snapshot IPC is the sole hydration path. The function
+    // survives as a no-op so existing boot effect call sites compile.
+    const setItemSpy = vi.spyOn(window.localStorage, "setItem");
+    const getItemSpy = vi.spyOn(window.localStorage, "getItem");
 
     useMruStore.getState().loadPersistedMru();
 
-    expect(useMruStore.getState().lastUsedConnectionId).toBe("c-restored");
-  });
-
-  it("loadPersistedMru yields null when storage is empty", () => {
-    // Storage already cleared by beforeEach.
-    useMruStore.getState().loadPersistedMru();
-
+    expect(setItemSpy).not.toHaveBeenCalled();
+    expect(getItemSpy).not.toHaveBeenCalled();
+    expect(useMruStore.getState().recentConnections).toEqual([]);
     expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
   });
 
-  // Reason: backward compat — empty string in old format treated as no MRU (2026-04-28)
-  it("loadPersistedMru yields null when storage holds an empty string", () => {
-    // Defensive: an explicit empty value should be treated as "no MRU"
-    // rather than a valid id, so the EmptyState fallback kicks in.
-    window.localStorage.setItem(STORAGE_KEY, "");
-
-    useMruStore.getState().loadPersistedMru();
-
-    expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
-  });
-
-  it("__resetMruStoreForTests clears both state and localStorage", () => {
+  it("__resetMruStoreForTests clears in-memory state", () => {
     useMruStore.getState().markConnectionUsed("c-leak");
-    expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull();
 
     __resetMruStoreForTests();
 
     expect(useMruStore.getState().lastUsedConnectionId).toBeNull();
     expect(useMruStore.getState().recentConnections).toEqual([]);
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   // -- Sprint 153 (AC-153-06) — cross-window broadcast allowlist regression --
@@ -152,69 +151,45 @@ describe("MRU list (Sprint 166)", () => {
     expect(ids).not.toContain("c2");
   });
 
-  // Reason: Phase 16 AC-16-04 — recentConnections persisted as JSON array to localStorage (2026-04-28)
-  it("persists recentConnections as JSON array to localStorage", () => {
+  // Sprint 370 — IPC mirror replaces the old localStorage JSON.
+  it("ships recentConnections to persist_mru IPC", async () => {
     useMruStore.getState().markConnectionUsed("c1");
     useMruStore.getState().markConnectionUsed("c2");
+    await Promise.resolve();
 
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!);
-    expect(parsed).toEqual([
-      { connectionId: "c2", lastUsed: expect.any(Number) },
-      { connectionId: "c1", lastUsed: expect.any(Number) },
+    const calls = invokeMock.mock.calls.filter((c) => c[0] === "persist_mru");
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    const lastPayload = calls[calls.length - 1]![1] as {
+      entries: Array<{ connectionId: string; lastUsed: number }>;
+    };
+    expect(lastPayload.entries.map((e) => e.connectionId)).toEqual([
+      "c2",
+      "c1",
     ]);
-  });
-
-  // Reason: Phase 16 AC-16-04 — app restart restores recentConnections from localStorage (2026-04-28)
-  it("restores recentConnections from localStorage on loadPersistedMru", () => {
-    const entries = [
-      { connectionId: "c3", lastUsed: 3000 },
-      { connectionId: "c2", lastUsed: 2000 },
-      { connectionId: "c1", lastUsed: 1000 },
-    ];
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-
-    useMruStore.getState().loadPersistedMru();
-
-    const { recentConnections, lastUsedConnectionId } = useMruStore.getState();
-    expect(recentConnections).toEqual(entries);
-    // lastUsedConnectionId derived from first entry
-    expect(lastUsedConnectionId).toBe("c3");
-  });
-
-  // Reason: Phase 16 AC-16-06 — migration from old single-string format to list (2026-04-28)
-  it("migrates old single-string format to list", () => {
-    // Simulate legacy format: just a plain string, not JSON array
-    window.localStorage.setItem(STORAGE_KEY, "legacy-conn-id");
-
-    useMruStore.getState().loadPersistedMru();
-
-    const { recentConnections, lastUsedConnectionId } = useMruStore.getState();
-    expect(recentConnections).toHaveLength(1);
-    expect(recentConnections[0]!.connectionId).toBe("legacy-conn-id");
-    expect(recentConnections[0]!.lastUsed).toBeGreaterThan(0);
-    expect(lastUsedConnectionId).toBe("legacy-conn-id");
   });
 
   // 작성 이유 (2026-05-13, Sprint 290): 사용자 요구 — recent 항목을 개별
   // 삭제할 수 있어야 함. mruStore.removeRecentConnection 액션을 추가했고,
-  // 본 회귀 가드는 (a) 정상 제거 + 영속 (b) 미존재 id 무변경 (c)
-  // lastUsedConnectionId 재계산 (d) 빈 리스트 → null 을 단언한다.
+  // 본 회귀 가드는 (a) 정상 제거 + 영속 IPC (b) 미존재 id 무변경
+  // (c) lastUsedConnectionId 재계산 (d) 빈 리스트 → null 을 단언한다.
   describe("removeRecentConnection (Sprint 290)", () => {
-    it("기존 항목을 제거하고 localStorage 에 반영한다", () => {
+    it("기존 항목을 제거하고 persist_mru IPC 에 반영한다", async () => {
       const store = useMruStore.getState();
       store.markConnectionUsed("c1");
       store.markConnectionUsed("c2");
+      invokeMock.mockClear();
+
       useMruStore.getState().removeRecentConnection("c1");
+      await Promise.resolve();
 
       const { recentConnections } = useMruStore.getState();
       expect(recentConnections.map((e) => e.connectionId)).toEqual(["c2"]);
-      const persisted = JSON.parse(
-        window.localStorage.getItem(STORAGE_KEY) ?? "[]",
-      );
-      expect(persisted).toHaveLength(1);
-      expect(persisted[0].connectionId).toBe("c2");
+      const calls = invokeMock.mock.calls.filter((c) => c[0] === "persist_mru");
+      expect(calls.length).toBe(1);
+      const payload = calls[0]![1] as {
+        entries: Array<{ connectionId: string }>;
+      };
+      expect(payload.entries.map((e) => e.connectionId)).toEqual(["c2"]);
     });
 
     it("미존재 id 호출은 state 를 변경하지 않는다", () => {
