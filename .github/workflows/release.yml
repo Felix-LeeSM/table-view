@@ -105,6 +105,7 @@ jobs:
       # artifacts already committed under src-tauri/icons/Compiled/ so the
       # macOS runner doesn't need actool at release time.
       - name: Build + upload to draft release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -124,7 +125,38 @@ jobs:
             - **Linux**: `.deb`, `.rpm`, or `.AppImage` — pick the one matching
               your distro.
 
+            **Verify**
+
+            Each bundle has a sibling `.sha256` file. After downloading both:
+
+            ```sh
+            # macOS / Linux
+            shasum -a 256 -c <file>.dmg.sha256
+            # Windows (PowerShell)
+            (Get-FileHash <file>.msi -Algorithm SHA256).Hash -eq (Get-Content <file>.msi.sha256).Split()[0]
+            ```
+
             See the commit log for changes.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # tauri-action exposes `artifactPaths` — the JSON array of bundles it just
+      # uploaded as release assets. We hash each one with sha256 and upload the
+      # sidecar `.sha256` file (single-line `<hash>  <filename>` so the standard
+      # `shasum -a 256 -c …` checksum verifier works). `shell: bash` on Windows
+      # uses Git Bash, which ships `shasum` and `jq`, so this is portable.
+      - name: Upload SHA256 checksums
+        if: steps.tauri.outputs.artifactPaths != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.sha) }}
+        run: |
+          set -e
+          echo '${{ steps.tauri.outputs.artifactPaths }}' | jq -r '.[]' | while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            base="$(basename "$f")"
+            (cd "$(dirname "$f")" && shasum -a 256 "$base") > "${f}.sha256"
+            gh release upload "$TAG" "${f}.sha256" --clobber
+          done
