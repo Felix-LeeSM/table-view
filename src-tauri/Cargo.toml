@@ -56,6 +56,7 @@ csv = "1"
 # platform-specific feature is gated below so a single-OS build does
 # not pull in the other two native backends.
 keyring = { version = "3", default-features = false }
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }

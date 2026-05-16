@@ -122,6 +122,32 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_dialog::init());
     record_phase(&mut cursor, "plugin-dialog-init");
 
+    // Sprint 362 (Phase 3, Q3) — single-instance plugin. The plugin's
+    // `setup` (see tauri-plugin-single-instance 2.4.2) runs on every
+    // launch: if a sibling process already owns the Unix socket / named
+    // pipe, the 2nd process exits immediately and the live process's
+    // callback fires with the 2nd process's args + cwd. Our callback
+    // forwards to `commands::single_instance::handle_second_instance_inner`,
+    // which re-foregrounds the launcher window (unminimize + show +
+    // set_focus). The inner function is exercised under MockRuntime in
+    // `tests/single_instance_2nd_launch.rs` — real-process spawn is
+    // covered by the e2e scenario (AC-362-02 live).
+    //
+    // Cost: the plugin's setup performs one socket-connect attempt
+    // (sub-millisecond on a clean boot when no sibling exists, then
+    // bind+listen), well under the AC-362-03 50ms cold-boot regression
+    // budget. Trace markers `phase=plugin-single-instance-init` lock the
+    // measurement in.
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Err(e) = commands::single_instance::handle_second_instance_inner(app) {
+            tracing::warn!(
+                target: "boot",
+                "single-instance 2nd-launch callback failed: {e}"
+            );
+        }
+    }));
+    record_phase(&mut cursor, "plugin-single-instance-init");
+
     let builder = builder.manage(AppState::new());
     record_phase(&mut cursor, "app-state-new");
 
