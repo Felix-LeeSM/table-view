@@ -148,7 +148,9 @@ export function makeDocTab(
 
 export function resetQueryTabStores(): void {
   useWorkspaceStore.setState({ workspaces: {} });
-  useQueryHistoryStore.setState({ entries: [] });
+  // sprint-373 (2026-05-17) — entries/globalLog retired. `recentVisible` 가
+  // 유일한 store slot.
+  useQueryHistoryStore.setState({ recentVisible: [] });
   useConnectionStore.setState({ connections: [] });
   // Sprint 231 — reset Safe Mode mode so the persisted localStorage state
   // (or a previous case's `setMode` mutation) cannot leak between tests.

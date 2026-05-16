@@ -10,7 +10,7 @@ import {
 import Decimal from "decimal.js";
 import { Loader2, Trash2, FileEdit, Filter } from "lucide-react";
 import { useDocumentStore } from "@stores/documentStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import { isDocumentSentinel } from "@/types/document";
 import { safeStringifyCell } from "@lib/jsonCell";
 import { useColumnWidths } from "@/hooks/useColumnWidths";
@@ -132,7 +132,7 @@ export default function DocumentDataGrid({
   database,
   collection,
 }: DocumentDataGridProps) {
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  // sprint-373 — `recordHistoryEntry` 가 disable gate + wire shape normalise.
   const fieldsCacheEntry = useDocumentStore(
     (s) => s.fieldsCache[connectionId]?.[database]?.[collection],
   );
@@ -550,28 +550,28 @@ export default function DocumentDataGrid({
         await insertDocument(connectionId, database, collection, record);
         setAddModalOpen(false);
         await fetchData();
-        addHistoryEntry({
+        recordHistoryEntry({
           sql: recordedSql,
           executedAt: startedAt,
           duration: Date.now() - startedAt,
           status: "success",
           connectionId,
           paradigm: "document",
-          queryMode: "find",
+          queryMode: "insertOne",
           database,
           collection,
           source: "mongo-op",
         });
       } catch (e) {
         setAddError(e instanceof Error ? e.message : String(e));
-        addHistoryEntry({
+        recordHistoryEntry({
           sql: recordedSql,
           executedAt: startedAt,
           duration: Date.now() - startedAt,
           status: "error",
           connectionId,
           paradigm: "document",
-          queryMode: "find",
+          queryMode: "insertOne",
           database,
           collection,
           source: "mongo-op",
@@ -580,7 +580,7 @@ export default function DocumentDataGrid({
         setAddLoading(false);
       }
     },
-    [connectionId, database, collection, fetchData, addHistoryEntry],
+    [connectionId, database, collection, fetchData],
   );
 
   const handleExecuteMql = useCallback(async () => {

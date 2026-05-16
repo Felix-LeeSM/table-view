@@ -31,6 +31,14 @@ const META: Record<Exclude<QueryHistorySource, "raw">, SourceMeta> = {
     className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
     title: "Recorded from a Mongo single-document op (insert)",
   },
+  // sprint-373 (2026-05-17) — sidebar 의 collection / table 클릭이 trigger
+  // 한 preview-row SELECT 가 본 source 로 기록. user-initiated 지만 dialog
+  // 가 없는 background-ish 경로라 muted gray 패턴.
+  "sidebar-prefetch": {
+    label: "PREV",
+    className: "bg-muted text-muted-foreground",
+    title: "Recorded from a sidebar table/collection preview (DataGrid open)",
+  },
 };
 
 interface QueryHistorySourceBadgeProps {

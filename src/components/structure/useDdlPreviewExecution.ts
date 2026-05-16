@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { analyzeStatement } from "@/lib/sql/sqlSafety";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { toast } from "@lib/toast";
@@ -114,7 +114,6 @@ export function useDdlPreviewExecution({
   const pendingExecuteRef = useRef<(() => Promise<void>) | null>(null);
 
   const safeModeGate = useSafeModeGate(connectionId);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
 
   // Sprint 271c (2026-05-13) — DbMismatch recovery. DDL dispatches are
   // user-initiated (dialog Apply / editor Execute), so on a mismatch the
@@ -152,7 +151,7 @@ export function useDdlPreviewExecution({
       // onRefresh is awaited so a refresh failure surfaces as a commit
       // error (history entry status: "error") — sprint-187/196 parity.
       await onRefresh();
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
@@ -169,7 +168,7 @@ export function useDdlPreviewExecution({
       const message = e instanceof Error ? e.message : String(e);
       setPreviewError(message);
       surfaceDbMismatchIfMatched(message);
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
@@ -181,13 +180,7 @@ export function useDdlPreviewExecution({
       });
     }
     setPreviewLoading(false);
-  }, [
-    addHistoryEntry,
-    connectionId,
-    onRefresh,
-    previewSql,
-    surfaceDbMismatchIfMatched,
-  ]);
+  }, [connectionId, onRefresh, previewSql, surfaceDbMismatchIfMatched]);
 
   const loadPreview = useCallback(
     async (

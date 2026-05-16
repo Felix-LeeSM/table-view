@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
 import { useSchemaStore } from "@stores/schemaStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import {
   executeQuery,
   executeQueryDryRun,
@@ -33,7 +33,6 @@ import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
 import type { QueryTab, QueryMode } from "@stores/workspaceStore";
 import type { FindBody } from "@/types/document";
-import type { QueryHistoryStatus } from "@stores/queryHistoryStore";
 import type { BulkWriteOp, BulkWriteResult } from "@/types/documentMutate";
 import type { WriteSummaryData } from "@/types/query";
 import {
@@ -257,16 +256,20 @@ export function useQueryExecution({
   // `useSchemaCache` re-fetches against the post-DDL backend. Cross-window
   // broadcast (sprint-365) layers on top of this same store action.
   const clearSchemaForConnection = useSchemaStore((s) => s.clearForConnection);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  // sprint-373 (2026-05-17) — `addHistoryEntry` (in-memory) retired.
+  // `recordHistoryEntry` 가 (1) `query_history_enabled` 검사 + (2) wire
+  // shape normalise + (3) `addOptimisticEntry` 호출을 한 번에 처리한다.
+  // tab paradigm 이 `"kv"` / `"search"` 면 helper 내부에서 silent skip
+  // (해당 paradigm 의 backend wire 가 미정).
   const recordHistory = useCallback(
     (payload: {
       sql: string;
       executedAt: number;
       duration: number;
-      status: QueryHistoryStatus;
+      status: "success" | "error" | "cancelled";
       queryMode?: QueryMode;
     }) => {
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: payload.sql,
         executedAt: payload.executedAt,
         duration: payload.duration,
@@ -277,15 +280,16 @@ export function useQueryExecution({
         queryMode: payload.queryMode ?? tab.queryMode,
         database: tab.database,
         collection: tab.collection,
+        tabId: tab.id,
       });
     },
     [
-      addHistoryEntry,
       tab.connectionId,
       tab.paradigm,
       tab.queryMode,
       tab.database,
       tab.collection,
+      tab.id,
     ],
   );
 

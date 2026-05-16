@@ -200,7 +200,7 @@ describe("QueryTab — Sprint 231 raw RDB Safe Mode gate", () => {
     }
     // History entry NOT recorded on confirm (only on actual execute /
     // cancel). Mirrors warn-tier behaviour from Sprint 231.
-    const history = useQueryHistoryStore.getState().entries;
+    const history = useQueryHistoryStore.getState().recentVisible;
     expect(history).toHaveLength(0);
   });
 

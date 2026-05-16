@@ -443,10 +443,10 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const history = useQueryHistoryStore.getState().entries;
+      const history = useQueryHistoryStore.getState().recentVisible;
       expect(history).toHaveLength(1);
       expect(history[0]!.status).toBe("error");
-      expect(history[0]!.sql).toBe("SELECT 1; DROP TABLE nope");
+      expect(history[0]!.sqlRedacted).toBe("SELECT 1; DROP TABLE nope");
     });
   });
 
@@ -472,10 +472,10 @@ describe("QueryTab — execution", () => {
     });
 
     await waitFor(() => {
-      const history = useQueryHistoryStore.getState().entries;
+      const history = useQueryHistoryStore.getState().recentVisible;
       expect(history).toHaveLength(1);
       expect(history[0]!.status).toBe("success");
-      expect(history[0]!.sql).toBe("SELECT 1; SELECT 2");
+      expect(history[0]!.sqlRedacted).toBe("SELECT 1; SELECT 2");
     });
   });
 

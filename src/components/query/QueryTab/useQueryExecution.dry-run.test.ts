@@ -108,7 +108,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     findDocumentsMock.mockReset();
     aggregateDocumentsMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     useToastStore.setState({ toasts: [] });
   });
 
@@ -127,7 +127,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(toasts[0]!.variant).toBe("info");
     expect(toasts[0]!.message).toBe("Dry-run is not supported for MongoDB.");
     // History stays empty — dry-runs never record history.
-    expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
   });
 
   // [AC-248-E2] running tab → no-op, IPC NOT called.
@@ -160,7 +160,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     });
 
     expect(executeQueryDryRunMock).not.toHaveBeenCalled();
-    expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
   });
 
   // [AC-248-E4] rdb + single statement + IPC success →
@@ -202,7 +202,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(updated.queryState.result).toEqual(DML_RESULT);
     expect(updated.queryState.statements).toBeUndefined();
     // History MUST stay empty — dry-runs are ephemeral.
-    expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
     // Real-execute IPC never fired.
     expect(executeQueryMock).not.toHaveBeenCalled();
   });
@@ -231,7 +231,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     expect(updated.queryState.error).toContain(
       "statement 1 of 1 failed: syntax error",
     );
-    expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
   });
 
   // [AC-248-E6] rdb + multi-statement → IPC called once with full
@@ -278,7 +278,7 @@ describe("useQueryExecution — handleDryRun (Sprint 248)", () => {
     );
     // last result mirrors statements[last]
     expect(updated.queryState.result).toEqual(DML_RESULT);
-    expect(useQueryHistoryStore.getState().entries).toHaveLength(0);
+    expect(useQueryHistoryStore.getState().recentVisible).toHaveLength(0);
   });
 
   // [AC-248-E7] queryId 가 `"dry:"` 로 시작.

@@ -25,6 +25,7 @@
 import { setStateChangedHandlers } from "@lib/events/stateChanged";
 import { applyThemeSettingFromBackend } from "@stores/themeStore";
 import { applySafeModeSettingFromBackend } from "@stores/safeModeStore";
+import { applyHistorySettingsFromBackend } from "@stores/historySettingsStore";
 
 let registered = false;
 
@@ -60,6 +61,14 @@ async function dispatchSettingUpdate(entityId: string): Promise<void> {
       await applyThemeSettingFromBackend();
     } else if (entityId === "safe_mode") {
       await applySafeModeSettingFromBackend();
+    } else if (
+      entityId === "query_history_enabled" ||
+      entityId === "query_history_retention_days"
+    ) {
+      // sprint-373 (2026-05-17) — query history toggle + retention select.
+      // Both keys route through the same dispatcher so cross-window state
+      // (HistorySettings switch / HistoryRetentionSelect) stays coherent.
+      await applyHistorySettingsFromBackend(entityId);
     }
     // Other keys (sidebar_width, home_recent_collapsed, …) are handled
     // by other sprints' receivers. The dispatcher route arrives here

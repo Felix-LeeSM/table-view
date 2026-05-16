@@ -457,7 +457,7 @@ describe("DocumentDataGrid", () => {
   // 2026-05-02.
   it("[AC-196-05-1] Add Document submit records a mongo-op history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
-    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
 
     renderGrid();
     await waitFor(() => expect(screen.getByText("Alice")).toBeInTheDocument());
@@ -481,7 +481,7 @@ describe("DocumentDataGrid", () => {
     );
 
     await waitFor(() => {
-      const entries = useQueryHistoryStore.getState().entries;
+      const entries = useQueryHistoryStore.getState().recentVisible;
       expect(entries).toHaveLength(1);
       expect(entries[0]!.source).toBe("mongo-op");
       expect(entries[0]!.status).toBe("success");

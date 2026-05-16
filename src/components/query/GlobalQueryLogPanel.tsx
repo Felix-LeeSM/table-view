@@ -1,33 +1,37 @@
-import { useState, useEffect } from "react";
-import {
-  Search,
-  Trash2,
-  X,
-  Copy,
-  CheckCircle2,
-  XCircle,
-  CircleSlash,
-} from "lucide-react";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useConnectionStore } from "@stores/connectionStore";
+/**
+ * 사프린트-373 (2026-05-17) — Sprint 5 phase. `useQueryHistoryStore.globalLog`
+ * + `clearGlobalLog` + `copyEntry` 의 in-memory mirror 가 retire 됨에 따라
+ * 본 컴포넌트는 sprint-372 `useQueryHistory` hook 기반 backend list IPC
+ * 로 전환. 외부 API (`visible` / `onClose` props) 는 byte-equivalent —
+ * MainArea + WorkspaceToolbar 의 mount 경로는 동결.
+ *
+ * 동작 변경 요약:
+ *   - rows source: `globalLog` (in-memory) → `useQueryHistory({}).rows`.
+ *   - SQL preview: `sql` 원문 → `sqlRedacted` only. detail dialog 진입은
+ *     sprint-372 의 `QueryHistoryDetailModal` 이 책임.
+ *   - search: client-side 필터 (`sqlRedacted` substring) 그대로 — backend
+ *     검색 wire 는 sprint-374+ 의 future ADR.
+ *   - clear: `ClearHistoryButton` (sprint-372) 가 IPC + emit 책임.
+ *   - copy: sprint-373 retire — original SQL 은 detail modal 안에서만
+ *     redact-only invariant 의 단일 escape hatch 로 노출. (사용자가 detail
+ *     dialog 안에서 복사하는 경로는 sprint-376 / UI audit 의 followup.)
+ *   - connection filter: 본 sprint 에서는 backend connection scope 가 sprint-372
+ *     의 `useQueryHistory({ connectionId })` 인자로 흘러갈 수 있으나, panel
+ *     이 "global" 이므로 모든 connection 의 rows 를 보여주는 게 더 자연스러움.
+ *     기존 dropdown 의 UX 가 필요해지면 sprint-374 ADR 에서 처리.
+ */
+
+import { useEffect, useState } from "react";
+import { Search, X, CheckCircle2, XCircle, CircleSlash } from "lucide-react";
+import { useQueryHistory } from "@hooks/useQueryHistory";
 import { Button } from "@components/ui/button";
 import { Input } from "@components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@components/ui/select";
-import ConfirmDialog from "@components/shared/ConfirmDialog";
 import QuerySyntax from "@components/shared/QuerySyntax";
 import QueryHistorySourceBadge from "@components/shared/QueryHistorySourceBadge";
+import type { QueryHistorySource } from "@stores/queryHistoryStore";
+import ClearHistoryButton from "@components/settings/ClearHistoryButton";
+import QueryHistoryDetailModal from "./QueryHistoryDetailModal";
 import { cn } from "@lib/utils";
-
-// Radix `<SelectItem>` rejects an empty value, so we use a sentinel for
-// the "All connections" option. The component state still treats `null`
-// as canonical "no filter".
-const CONN_FILTER_ALL_SENTINEL = "__all__";
 
 function truncateSql(sql: string, maxLen: number): string {
   if (sql.length <= maxLen) return sql;
@@ -57,52 +61,25 @@ export default function GlobalQueryLogPanel({
   onClose,
 }: GlobalQueryLogPanelProps) {
   const [search, setSearch] = useState("");
-  const [connectionFilter, setConnectionFilter] = useState<string | null>(null);
-  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const { rows, loading, hasMore, newEntryAvailable, loadMore, refresh } =
+    useQueryHistory({});
 
-  const globalLog = useQueryHistoryStore((s) => s.globalLog);
-  const clearGlobalLog = useQueryHistoryStore((s) => s.clearGlobalLog);
-  const copyEntry = useQueryHistoryStore((s) => s.copyEntry);
-  const connections = useConnectionStore((s) => s.connections);
-
-  // Reset local state when panel closes
+  // Reset client-side filter when panel closes.
   useEffect(() => {
     if (!visible) {
       setSearch("");
-      setConnectionFilter(null);
-      setExpandedEntry(null);
+      setDetailId(null);
     }
   }, [visible]);
 
   if (!visible) return null;
 
-  const filtered = globalLog.filter((entry) => {
-    const matchesSearch =
-      !search || entry.sql.toLowerCase().includes(search.toLowerCase());
-    const matchesConnection =
-      !connectionFilter || entry.connectionId === connectionFilter;
-    return matchesSearch && matchesConnection;
-  });
-
-  // Derive unique connection IDs that appear in the log
-  const connectionIds = [
-    ...new Set(globalLog.map((e) => e.connectionId)),
-  ].filter(Boolean);
-
-  const getConnectionName = (id: string): string => {
-    const conn = connections.find((c) => c.id === id);
-    return conn?.name ?? id;
-  };
-
-  const handleCopy = async (entryId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    await copyEntry(entryId);
-  };
-
-  const handleEntryClick = (entryId: string) => {
-    setExpandedEntry((prev) => (prev === entryId ? null : entryId));
-  };
+  // Client-side substring filter against `sqlRedacted` — backend rows
+  // already in DESC executedAt order.
+  const filtered = rows.filter((row) =>
+    row.sqlRedacted.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <div
@@ -113,7 +90,7 @@ export default function GlobalQueryLogPanel({
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
         <span className="text-xs font-medium text-foreground">Query Log</span>
         <span className="rounded bg-muted px-1.5 py-0.5 text-3xs font-medium text-muted-foreground">
-          {globalLog.length}
+          {rows.length}
         </span>
         <div className="flex flex-1 items-center gap-1.5">
           <Search size={12} className="shrink-0 text-muted-foreground" />
@@ -126,45 +103,23 @@ export default function GlobalQueryLogPanel({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-
-        {/* Connection filter dropdown */}
-        <div className="relative">
-          <Select
-            value={connectionFilter ?? CONN_FILTER_ALL_SENTINEL}
-            onValueChange={(v) =>
-              setConnectionFilter(v === CONN_FILTER_ALL_SENTINEL ? null : v)
-            }
+        {newEntryAvailable && (
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-primary"
+            onClick={() => {
+              void refresh();
+            }}
+            data-testid="global-log-new-entry"
           >
-            <SelectTrigger
-              data-testid="global-log-connection-filter"
-              className="h-5 rounded border border-border bg-transparent px-1 text-3xs text-foreground"
-              aria-label="Connection filter"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={CONN_FILTER_ALL_SENTINEL}>
-                All connections
-              </SelectItem>
-              {connectionIds.map((id) => (
-                <SelectItem key={id} value={id}>
-                  {getConnectionName(id)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="xs"
+            New entry — refresh
+          </Button>
+        )}
+        <ClearHistoryButton
+          label="Clear"
           className="gap-1 bg-muted text-muted-foreground hover:text-foreground"
-          onClick={() => setShowClearConfirm(true)}
-          aria-label="Clear global log"
-        >
-          <Trash2 size={12} />
-          Clear
-        </Button>
+        />
         <Button
           variant="ghost"
           size="icon-xs"
@@ -180,133 +135,97 @@ export default function GlobalQueryLogPanel({
       <div className="max-h-scroll-lg overflow-auto">
         {filtered.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            {globalLog.length === 0
+            {rows.length === 0
               ? "No queries executed yet"
               : "No matching queries"}
           </div>
         ) : (
-          filtered.map((entry) => (
+          filtered.map((row) => (
             <div
-              key={entry.id}
+              key={row.id}
               role="button"
               tabIndex={0}
-              data-testid={`global-log-entry-${entry.id}`}
+              data-testid={`global-log-entry-${row.id}`}
               className={cn(
                 "flex flex-col px-3 py-1 text-xs hover:bg-muted cursor-pointer",
-                // Cancelled gets a muted bg (not destructive) so the
-                // user can still pick the entry out without it reading
-                // as a failure.
-                entry.status === "error" && "bg-destructive/10",
-                entry.status === "cancelled" && "bg-muted/40",
+                row.status === "error" && "bg-destructive/10",
+                row.status === "cancelled" && "bg-muted/40",
               )}
-              onClick={() => handleEntryClick(entry.id)}
+              onClick={() => setDetailId(row.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  handleEntryClick(entry.id);
+                  setDetailId(row.id);
                 }
               }}
             >
               <div className="flex items-center gap-2">
-                {/* Status icon */}
                 <span
                   className="shrink-0"
-                  title={entry.status}
-                  data-status={entry.status}
+                  title={row.status}
+                  data-status={row.status}
                 >
-                  {/* Cancelled entries paint a muted CircleSlash so
-                      they read as self-aborted, not failed. */}
-                  {entry.status === "success" ? (
+                  {row.status === "success" ? (
                     <CheckCircle2 size={12} className="text-success" />
-                  ) : entry.status === "cancelled" ? (
+                  ) : row.status === "cancelled" ? (
                     <CircleSlash size={12} className="text-muted-foreground" />
                   ) : (
                     <XCircle size={12} className="text-destructive" />
                   )}
                 </span>
-                {/* SQL text */}
                 <QuerySyntax
                   className="flex-1 truncate text-foreground"
-                  sql={
-                    expandedEntry === entry.id
-                      ? entry.sql
-                      : truncateSql(entry.sql, 80)
-                  }
-                  paradigm={entry.paradigm}
-                  queryMode={entry.queryMode}
+                  sql={truncateSql(row.sqlRedacted, 80)}
+                  paradigm={row.paradigm}
                 />
-                {/* Copy button */}
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  className="shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={(e) => handleCopy(entry.id, e)}
-                  aria-label="Copy SQL"
-                >
-                  <Copy size={10} />
-                </Button>
-                {/* Timestamp */}
                 <span className="shrink-0 text-muted-foreground">
-                  {formatRelativeTime(entry.executedAt)}
+                  {formatRelativeTime(row.executedAt)}
                 </span>
-                {/* Duration badge */}
                 <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
-                  {entry.duration}ms
+                  {row.durationMs}ms
                 </span>
-                {/* Connection badge */}
-                <span className="shrink-0 rounded bg-muted px-2 py-0.5 text-muted-foreground">
-                  {getConnectionName(entry.connectionId)}
-                </span>
-                {/* Paradigm badge — SQL for relational, MQL for
-                    document — so a mixed log is scannable without
-                    reading the truncated query text. */}
                 <span
                   className="shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-secondary-foreground"
-                  data-paradigm={entry.paradigm}
+                  data-paradigm={row.paradigm}
                 >
-                  {entry.paradigm === "document" ? "MQL" : "SQL"}
+                  {row.paradigm === "document" ? "MQL" : "SQL"}
                 </span>
-                {/* Secondary queryMode tag — only meaningful for document
-                    entries (find / aggregate). RDB entries are always
-                    queryMode === "sql", which is redundant with the
-                    paradigm badge, so suppress it there. */}
-                {entry.paradigm === "document" && entry.queryMode && (
+                {row.paradigm === "document" && row.queryMode && (
                   <span
                     className="shrink-0 rounded bg-secondary px-2 py-0.5 text-secondary-foreground"
-                    data-query-mode={entry.queryMode}
+                    data-query-mode={row.queryMode}
                   >
-                    {entry.queryMode}
+                    {row.queryMode}
                   </span>
                 )}
-                {/* `raw` source is suppressed inside the badge. */}
-                <QueryHistorySourceBadge source={entry.source} />
+                <QueryHistorySourceBadge
+                  source={row.source as QueryHistorySource}
+                />
               </div>
-              {/* Expanded SQL view */}
-              {expandedEntry === entry.id && entry.sql.length > 80 && (
-                <pre className="mt-1 whitespace-pre-wrap break-all border-t border-border pl-7 pt-1 font-mono text-2xs text-foreground">
-                  <QuerySyntax
-                    sql={entry.sql}
-                    paradigm={entry.paradigm}
-                    queryMode={entry.queryMode}
-                  />
-                </pre>
-              )}
             </div>
           ))
         )}
+        {hasMore && (
+          <div className="flex items-center justify-center px-3 py-1.5">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                void loadMore();
+              }}
+              disabled={loading}
+              data-testid="global-log-load-more"
+            >
+              {loading ? "Loading…" : "Load more"}
+            </Button>
+          </div>
+        )}
       </div>
 
-      {showClearConfirm && (
-        <ConfirmDialog
-          title="Clear Global Query Log"
-          message="Are you sure you want to clear the global query log? This cannot be undone."
-          confirmLabel="Clear All"
-          danger
-          onConfirm={() => {
-            clearGlobalLog();
-            setShowClearConfirm(false);
-          }}
-          onCancel={() => setShowClearConfirm(false)}
+      {detailId !== null && (
+        <QueryHistoryDetailModal
+          id={detailId}
+          onClose={() => setDetailId(null)}
         />
       )}
     </div>

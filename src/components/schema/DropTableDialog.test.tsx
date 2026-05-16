@@ -118,7 +118,7 @@ describe("DropTableDialog (Sprint 235)", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     useSchemaStore.setState({ tables: {} });
     setDevConnection();
     mockDropTableRequest.mockResolvedValue({

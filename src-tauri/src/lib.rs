@@ -442,6 +442,16 @@ pub fn run() {
             }
         });
 
+        // Sprint 373 (Phase 5 F.5) — boot-time history retention vacuum.
+        // `settings.query_history_retention_days` row 를 read 해 sprint-371
+        // 의 `boot_vacuum_old_history(pool, days)` 를 호출. detached task —
+        // 사용자 first paint 블록 0. 실패 시 `tracing::warn` 만, toast 0.
+        // 본 wiring 의 e2e 검증은 `tests/history_retention_31d.rs` 가
+        // 30일 + 1초 row 시드 → vacuum 후 row 0 / 29일 row 유지로 책임.
+        tauri::async_runtime::spawn(async {
+            storage::history_retention_boot::boot_history_retention_vacuum().await;
+        });
+
         // macOS-only native application menu (2026-05-01).
         //
         // macOS keeps the app process alive after every window has been

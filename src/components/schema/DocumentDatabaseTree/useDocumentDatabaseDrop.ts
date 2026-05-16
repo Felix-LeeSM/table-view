@@ -5,7 +5,7 @@ import { dropCollection } from "@lib/tauri";
 import { analyzeMongoOperation } from "@lib/mongo/mongoSafety";
 import { useSafeModeGate } from "@hooks/useSafeModeGate";
 import { useDocumentStore } from "@stores/documentStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 
 interface DropDialogState {
   database: string;
@@ -18,7 +18,6 @@ interface DropDialogState {
  */
 export function useDocumentDatabaseDrop(connectionId: string) {
   const loadCollections = useDocumentStore((s) => s.loadCollections);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
   const safeModeGate = useSafeModeGate(connectionId);
 
   const [dropDialog, setDropDialog] = useState<DropDialogState | null>(null);
@@ -48,14 +47,16 @@ export function useDocumentDatabaseDrop(connectionId: string) {
     const startedAt = Date.now();
     try {
       await dropCollection(connectionId, database, collection);
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
         status: "success",
         connectionId,
         paradigm: "document",
-        queryMode: "find",
+        queryMode: "deleteMany",
+        database,
+        collection,
         source: "mongo-op",
       });
       await loadCollections(connectionId, database);
@@ -63,21 +64,23 @@ export function useDocumentDatabaseDrop(connectionId: string) {
       const detail = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to drop ${database}.${collection}: ${detail}`);
       logger.error("[DocumentDatabaseTree] dropCollection:", err);
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
         status: "error",
         connectionId,
         paradigm: "document",
-        queryMode: "find",
+        queryMode: "deleteMany",
+        database,
+        collection,
         source: "mongo-op",
       });
     } finally {
       setIsDropping(false);
       setDropDialog(null);
     }
-  }, [dropDialog, connectionId, addHistoryEntry, loadCollections]);
+  }, [dropDialog, connectionId, loadCollections]);
 
   const cancelDrop = useCallback(() => setDropDialog(null), []);
 

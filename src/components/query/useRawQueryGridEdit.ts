@@ -6,7 +6,7 @@ import {
 import { buildRawEditSql, type RawEditPlan } from "@lib/sql/rawQuerySqlBuilder";
 import { executeQueryBatch } from "@lib/tauri";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
 import { toast } from "@lib/toast";
 import type { QueryResult } from "@/types/query";
@@ -110,7 +110,6 @@ export function useRawQueryGridEdit({
   // intentionally *not* owned by the hook — that stripe is UI-only and
   // remains in the component.
   const safeModeGate = useSafeModeGate(connectionId);
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
 
   // Defense-in-depth: `analyzeResultEditability` already routes PK-less
   // results to the read-only `<ResultTable>`, so this guard only fires
@@ -242,7 +241,7 @@ export function useRawQueryGridEdit({
         setPendingEdits(new Map());
         setPendingDeletedRowKeys(new Set());
         onAfterCommit?.();
-        addHistoryEntry({
+        recordHistoryEntry({
           sql: joinedSql,
           executedAt: startedAt,
           duration: Date.now() - startedAt,
@@ -255,7 +254,7 @@ export function useRawQueryGridEdit({
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setExecuteError(`Commit failed — all changes rolled back: ${message}`);
-        addHistoryEntry({
+        recordHistoryEntry({
           sql: joinedSql,
           executedAt: startedAt,
           duration: Date.now() - startedAt,
@@ -269,7 +268,7 @@ export function useRawQueryGridEdit({
         setExecuting(false);
       }
     },
-    [connectionId, onAfterCommit, addHistoryEntry],
+    [connectionId, onAfterCommit],
   );
 
   const handleExecute = useCallback(async () => {

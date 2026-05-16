@@ -196,7 +196,7 @@ describe("useQueryExecution — sprint-360 Phase 2 Q23 self-invalidate", () => {
     listSchemaColumnsMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
-    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     // `warn` mode keeps the SafeMode gate at `allow` for `severity: danger`
     // statements on non-production (DROP TABLE goes direct to runRdbSingleNow).
     useSafeModeStore.setState({ mode: "warn" });

@@ -107,7 +107,7 @@ function freshStoresForTest(): void {
   useMruStore.setState({ recentConnections: [], lastUsedConnectionId: null });
   // theme/safeMode 는 도메인 default 가 있음 — 검증 시점 비교만 한다.
   useFavoritesStore.setState({ favorites: [] });
-  useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+  useQueryHistoryStore.setState({ recentVisible: [] });
 }
 
 describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
@@ -153,8 +153,8 @@ describe("AC-367-01 boot-critical 5 store hydrate shape", () => {
     // favorites / queryHistory 는 snapshot 응답에 없고 store 도 default 그대로.
     // dataGrid prefs 는 본 sprint 범위 밖.
     expect(useFavoritesStore.getState().favorites).toEqual([]);
-    expect(useQueryHistoryStore.getState().entries).toEqual([]);
-    expect(useQueryHistoryStore.getState().globalLog).toEqual([]);
+    expect(useQueryHistoryStore.getState().recentVisible).toEqual([]);
+    expect(useQueryHistoryStore.getState().recentVisible).toEqual([]);
   });
 
   it("returns the resolved snapshot to the caller", async () => {

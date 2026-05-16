@@ -370,7 +370,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
   // to runAlter without a confirm-dialog detour. 2026-05-02 / 2026-05-07.
   it("[AC-196-04-1] runAlter records a ddl-structure history entry on success", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
-    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     useConnectionStore.setState({
       connections: [
         {
@@ -398,7 +398,7 @@ describe("ColumnsEditor — Sprint 187 Safe Mode gate (inline MODIFY path)", () 
     });
 
     await waitFor(() => {
-      const entries = useQueryHistoryStore.getState().entries;
+      const entries = useQueryHistoryStore.getState().recentVisible;
       expect(entries).toHaveLength(1);
       expect(entries[0]!.source).toBe("ddl-structure");
       expect(entries[0]!.status).toBe("success");

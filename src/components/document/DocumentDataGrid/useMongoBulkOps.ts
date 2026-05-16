@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { toast } from "@/lib/toast";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import {
   deleteMany as invokeDeleteMany,
   updateMany as invokeUpdateMany,
@@ -58,8 +58,7 @@ export function useMongoBulkOps({
   safeModeGate,
   fetchData,
 }: UseMongoBulkOpsParams): UseMongoBulkOpsResult {
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
-
+  // sprint-373 — `recordHistoryEntry` 가 disable gate + wire shape normalise.
   // Both dialogs share the current `activeFilter` as their predicate; an
   // empty filter ⇒ "whole collection", which the Safe Mode gate classifies
   // as `danger`.
@@ -98,14 +97,14 @@ export function useMongoBulkOps({
       toast.success(`Deleted ${deletedCount} document(s)`);
       setDeleteManyDialogOpen(false);
       await fetchData();
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
         status: "success",
         connectionId,
         paradigm: "document",
-        queryMode: "find",
+        queryMode: "deleteMany",
         database,
         collection,
         source: "mongo-op",
@@ -113,14 +112,14 @@ export function useMongoBulkOps({
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       toast.error(`Failed to delete: ${detail}`);
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
         status: "error",
         connectionId,
         paradigm: "document",
-        queryMode: "find",
+        queryMode: "deleteMany",
         database,
         collection,
         source: "mongo-op",
@@ -128,14 +127,7 @@ export function useMongoBulkOps({
     } finally {
       setDeleteManyLoading(false);
     }
-  }, [
-    activeFilter,
-    connectionId,
-    database,
-    collection,
-    fetchData,
-    addHistoryEntry,
-  ]);
+  }, [activeFilter, connectionId, database, collection, fetchData]);
 
   // Re-runs the Safe Mode gate on submit too — filter state can change
   // between dialog open and submit.
@@ -195,14 +187,14 @@ export function useMongoBulkOps({
       toast.success(`Updated ${modifiedCount} document(s)`);
       setUpdateManyDialogOpen(false);
       await fetchData();
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
         status: "success",
         connectionId,
         paradigm: "document",
-        queryMode: "find",
+        queryMode: "updateMany",
         database,
         collection,
         source: "mongo-op",
@@ -210,14 +202,14 @@ export function useMongoBulkOps({
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       setUpdateManyError(detail);
-      addHistoryEntry({
+      recordHistoryEntry({
         sql: recordedSql,
         executedAt: startedAt,
         duration: Date.now() - startedAt,
         status: "error",
         connectionId,
         paradigm: "document",
-        queryMode: "find",
+        queryMode: "updateMany",
         database,
         collection,
         source: "mongo-op",
@@ -232,7 +224,6 @@ export function useMongoBulkOps({
     database,
     collection,
     fetchData,
-    addHistoryEntry,
   ]);
 
   return {

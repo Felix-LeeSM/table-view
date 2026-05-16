@@ -15,6 +15,7 @@ import { cancelQuery, queryTableData } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
 import { toast } from "@lib/toast";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 import FilterBar from "@components/rdb/FilterBar";
 import {
   Dialog,
@@ -225,6 +226,12 @@ export default function DataGrid({
     const fetchId = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
+    // sprint-373 (2026-05-17) — sidebar-prefetch source 기록. 사용자가 sidebar
+    // tree 에서 table 을 클릭하면 본 fetch 가 trigger 되어 SQL SELECT 가
+    // 실행됨 — query history 에는 "preview rows" 의 trace 가 sidebar-prefetch
+    // 라벨로 기록된다 (handle row 의 actual SQL 은 backend 가 redact).
+    const startedAt = Date.now();
+    const previewSql = `SELECT * FROM ${schema ? `${schema}.` : ""}${table}`;
     try {
       const activeRaw =
         appliedRawSql.trim().length > 0 ? appliedRawSql.trim() : undefined;
@@ -253,10 +260,34 @@ export default function DataGrid({
       );
       if (fetchId === fetchIdRef.current) {
         setData(result);
+        recordHistoryEntry({
+          sql: previewSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "success",
+          connectionId,
+          paradigm: "rdb",
+          queryMode: "sql",
+          database,
+          source: "sidebar-prefetch",
+          rowsAffected: result?.rows?.length,
+        });
       }
     } catch (e) {
       if (fetchId === fetchIdRef.current) {
         setError(String(e));
+        recordHistoryEntry({
+          sql: previewSql,
+          executedAt: startedAt,
+          duration: Date.now() - startedAt,
+          status: "error",
+          connectionId,
+          paradigm: "rdb",
+          queryMode: "sql",
+          database,
+          source: "sidebar-prefetch",
+          errorMessage: e instanceof Error ? e.message : String(e),
+        });
       }
       // Sprint 271b — when the Sprint 266 backend guard rejects the
       // fetch with DbMismatch, sync the frontend stores so the next

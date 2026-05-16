@@ -120,7 +120,7 @@ describe("DropColumnDialog (Sprint 236)", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     setDevConnection();
     mockDropColumnRequest.mockResolvedValue({
       sql: 'ALTER TABLE "public"."users" DROP COLUMN "email"',

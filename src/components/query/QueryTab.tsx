@@ -4,8 +4,6 @@ import {
   useCurrentWorkspaceKey,
   useWorkspaceStore,
 } from "@stores/workspaceStore";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
-import { useMruStore } from "@stores/mruStore";
 import { useConnectionStore } from "@stores/connectionStore";
 import { databaseTypeToSqlDialect } from "@lib/sql/sqlDialect";
 import { useSqlAutocomplete } from "@hooks/useSqlAutocomplete";
@@ -20,7 +18,10 @@ import ConfirmDestructiveDialog from "@components/workspace/ConfirmDestructiveDi
 import SqlPreviewDialog from "@components/structure/SqlPreviewDialog";
 import MqlPreviewModal from "@components/document/MqlPreviewModal";
 import QueryTabToolbar from "./QueryTab/Toolbar";
-import QueryHistoryPanel from "./QueryTab/HistoryPanel";
+// sprint-373 (2026-05-17) — legacy in-memory HistoryPanel retired. The
+// sprint-372 backend-driven `QueryHistoryPanel` consumes `list_history`
+// IPC via `useQueryHistory` hook + cross-window events.
+import QueryHistoryPanel from "./QueryHistoryPanel";
 import { useQueryExecution } from "./QueryTab/useQueryExecution";
 import { useQueryEvents } from "./QueryTab/useQueryEvents";
 import { useQueryFavorites } from "./QueryTab/useQueryFavorites";
@@ -48,14 +49,17 @@ interface QueryTabProps {
 export default function QueryTab({ tab }: QueryTabProps) {
   const workspaceKey = useCurrentWorkspaceKey();
   const updateQuerySqlAction = useWorkspaceStore((s) => s.updateQuerySql);
-  const loadQueryIntoTab = useWorkspaceStore((s) => s.loadQueryIntoTab);
   const updateQuerySql = (tabId: string, sql: string) => {
     if (!workspaceKey) return;
     updateQuerySqlAction(workspaceKey.connId, workspaceKey.db, tabId, sql);
   };
-  const markConnectionUsed = useMruStore((s) => s.markConnectionUsed);
-  const clearHistory = useQueryHistoryStore((s) => s.clearHistory);
-  const historyEntries = useQueryHistoryStore((s) => s.entries);
+  // sprint-373 — `clearHistory` (in-memory) + `entries` retired. The
+  // backend-driven `QueryHistoryPanel` (sprint-372) owns clear via the
+  // `ClearHistoryButton` it composes (or the global QueryLog dock).
+  // `loadQueryIntoTab` + `markConnectionUsed` were only used by the
+  // legacy panel's per-entry "Load" button — the new panel routes detail
+  // inspection through `QueryHistoryDetailModal` and load-into-tab is
+  // deferred to sprint-376 (UI audit).
   // Active connection's dialect for editor keywords + identifier quoting.
   // Missing connection (e.g. deleted mid-session) falls back to
   // StandardSQL; document tabs receive the dialect but ignore it.
@@ -273,14 +277,7 @@ export default function QueryTab({ tab }: QueryTabProps) {
         />
       </div>
 
-      <QueryHistoryPanel
-        entries={historyEntries}
-        onLoad={(args) => {
-          loadQueryIntoTab(args);
-          markConnectionUsed(args.connectionId);
-        }}
-        onClear={clearHistory}
-      />
+      <QueryHistoryPanel connectionId={tab.connectionId} tabId={tab.id} />
 
       {pendingMongoConfirm && (
         <ConfirmDestructiveDialog

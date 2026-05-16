@@ -110,7 +110,7 @@ describe("AddColumnDialog (Sprint 236)", () => {
     invalidatePostgresTypesCache("conn-1");
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     setDevConnection();
     mockAddColumnRequest.mockResolvedValue({
       sql: 'ALTER TABLE "public"."users" ADD COLUMN "email" varchar(255)',

@@ -8,7 +8,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { useSafeModeGate } from "@/hooks/useSafeModeGate";
-import { useQueryHistoryStore } from "@stores/queryHistoryStore";
+import { recordHistoryEntry } from "@lib/history/recordHistoryEntry";
 // Sprint 354 (L2 fix, 2026-05-16) — `executeQueryBatch` lives in
 // `@lib/tauri`; use namespace import so a test that stubs `@lib/tauri`
 // with a partial surface doesn't fail at module-load time. The lookup
@@ -149,7 +149,8 @@ export function useDataGridPreviewCommit(
       tauri.executeQueryBatch(...args),
     [],
   );
-  const addHistoryEntry = useQueryHistoryStore((s) => s.addHistoryEntry);
+  // sprint-373 (2026-05-17) — `addHistoryEntry` (in-memory) retired.
+  // `recordHistoryEntry` 가 backend wire shape + disable gate 를 책임.
   // RDB / Mongo / DDL editors share one decision matrix via `useSafeModeGate`.
   const safeModeGate = useSafeModeGate(connectionId);
   // Sprint 347 — derive SQL dialect from the connection's db_type so the
@@ -167,7 +168,7 @@ export function useDataGridPreviewCommit(
         connectionId,
         history: {
           recordSuccess: ({ sql, startedAt, duration }) =>
-            addHistoryEntry({
+            recordHistoryEntry({
               sql,
               executedAt: startedAt,
               duration,
@@ -180,7 +181,7 @@ export function useDataGridPreviewCommit(
               source: "grid-edit",
             }),
           recordError: ({ sql, startedAt, duration }) =>
-            addHistoryEntry({
+            recordHistoryEntry({
               sql,
               executedAt: startedAt,
               duration,
@@ -203,7 +204,7 @@ export function useDataGridPreviewCommit(
       dialect,
       history: {
         recordSuccess: ({ sql, startedAt, duration }) =>
-          addHistoryEntry({
+          recordHistoryEntry({
             sql,
             executedAt: startedAt,
             duration,
@@ -214,7 +215,7 @@ export function useDataGridPreviewCommit(
             source: "grid-edit",
           }),
         recordError: ({ sql, startedAt, duration }) =>
-          addHistoryEntry({
+          recordHistoryEntry({
             sql,
             executedAt: startedAt,
             duration,
@@ -234,7 +235,6 @@ export function useDataGridPreviewCommit(
     table,
     safeModeGate,
     executeQueryBatch,
-    addHistoryEntry,
     dialect,
   ]);
 
@@ -265,7 +265,7 @@ export function useDataGridPreviewCommit(
         dialect,
         history: {
           recordSuccess: ({ sql, startedAt, duration }) =>
-            addHistoryEntry({
+            recordHistoryEntry({
               sql,
               executedAt: startedAt,
               duration,
@@ -276,7 +276,7 @@ export function useDataGridPreviewCommit(
               source: "grid-edit",
             }),
           recordError: ({ sql, startedAt, duration }) =>
-            addHistoryEntry({
+            recordHistoryEntry({
               sql,
               executedAt: startedAt,
               duration,
@@ -296,7 +296,7 @@ export function useDataGridPreviewCommit(
       setSession(synth);
       setCommitError(null);
     },
-    [connectionId, safeModeGate, executeQueryBatch, addHistoryEntry, dialect],
+    [connectionId, safeModeGate, executeQueryBatch, dialect],
   );
 
   // `setMqlPreview(null)` dismisses the preview dialog. Non-null sets

@@ -292,7 +292,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
   });
 
   // ── AC-226-03 form behaviour (Sprint 226 carry-over, tab-aware) ────
@@ -436,7 +436,7 @@ describe("CreateTableDialog (Sprint 226 carry-over → Sprint 227 tab migration)
     fireEvent.click(screen.getByRole("button", { name: "Execute" }));
 
     await waitFor(() => {
-      const entries = useQueryHistoryStore.getState().entries;
+      const entries = useQueryHistoryStore.getState().recentVisible;
       expect(
         entries.some(
           (e) => e.source === "ddl-structure" && e.status === "success",
@@ -881,7 +881,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
   });
 
   function getIndexesPanel(): HTMLElement {
@@ -1127,7 +1127,7 @@ describe("Sprint 228 — Indexes tab functional", () => {
     expect(maxConcurrent).toBeLessThanOrEqual(1);
 
     // 1 history entry, regardless of M.
-    const entries = useQueryHistoryStore.getState().entries;
+    const entries = useQueryHistoryStore.getState().recentVisible;
     expect(entries.filter((e) => e.source === "ddl-structure")).toHaveLength(1);
 
     // Sequence: preview-only first, then commit.
@@ -1539,7 +1539,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     // Reset the schema store cache between tests — AC-229-09's reference
     // table picker reads `useSchemaStore.tables[<conn>:<refSchema>]`.
     useSchemaStore.setState({
@@ -2166,7 +2166,7 @@ describe("Sprint 229 — Foreign Keys + CHECK + UNIQUE tab functional", () => {
     expect(maxConcurrent).toBeLessThanOrEqual(1);
 
     // 1 history entry.
-    const entries = useQueryHistoryStore.getState().entries;
+    const entries = useQueryHistoryStore.getState().recentVisible;
     expect(entries.filter((e) => e.source === "ddl-structure")).toHaveLength(1);
 
     // Commit-only addConstraint × 3 (preview_only:false).
@@ -2486,7 +2486,7 @@ describe("Sprint 230 — CreateTableDialog wires dynamic PG type list", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     // Punch the module memo so each Sprint 230 case sees a fresh
     // fetch sequence — `usePostgresTypes` shares one Promise per
     // connectionId across cases otherwise.
@@ -2595,7 +2595,7 @@ describe("Sprint 234 — CreateTableDialog UX polish", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     invalidatePostgresTypesCache("conn-1");
     mockListPostgresTypes.mockReset();
     mockListPostgresTypes.mockResolvedValue([]);
@@ -2886,7 +2886,7 @@ describe("Sprint 241 — inline FK + CHECK on column row", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     mockCreateTable.mockResolvedValue({
       sql: 'CREATE TABLE "public"."t" ()',
     });
@@ -3014,7 +3014,7 @@ describe("Sprint 242 — IDENTITY toggle on column row", () => {
     vi.clearAllMocks();
     useConnectionStore.setState({ connections: [] });
     useSafeModeStore.setState({ mode: "off" });
-    useQueryHistoryStore.setState({ entries: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     mockCreateTable.mockResolvedValue({
       sql: 'CREATE TABLE "public"."t" ()',
     });

@@ -245,7 +245,7 @@ describe("EditableQueryResultGrid", () => {
   // 2026-05-02.
   it("[AC-196-03-3] raw-edit commit records a grid-edit history entry", async () => {
     const { useQueryHistoryStore } = await import("@stores/queryHistoryStore");
-    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
 
     renderGrid();
     const tds = document.querySelectorAll(
@@ -270,7 +270,7 @@ describe("EditableQueryResultGrid", () => {
     });
 
     await waitFor(() => {
-      const entries = useQueryHistoryStore.getState().entries;
+      const entries = useQueryHistoryStore.getState().recentVisible;
       expect(entries).toHaveLength(1);
       expect(entries[0]!.source).toBe("grid-edit");
       expect(entries[0]!.status).toBe("success");

@@ -122,7 +122,7 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     distinctDocumentsMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
-    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     useSafeModeStore.setState({ mode: "warn" });
   });
 
@@ -555,10 +555,10 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     });
 
     await waitFor(() => {
-      expect(useQueryHistoryStore.getState().entries.length).toBe(1);
+      expect(useQueryHistoryStore.getState().recentVisible.length).toBe(1);
     });
-    const entry = useQueryHistoryStore.getState().entries[0]!;
-    expect(entry.sql).toBe(raw);
+    const entry = useQueryHistoryStore.getState().recentVisible[0]!;
+    expect(entry.sqlRedacted).toBe(raw);
     expect(entry.queryMode).toBe("find");
     expect(entry.paradigm).toBe("document");
   });
@@ -575,10 +575,10 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     });
 
     await waitFor(() => {
-      expect(useQueryHistoryStore.getState().entries.length).toBe(1);
+      expect(useQueryHistoryStore.getState().recentVisible.length).toBe(1);
     });
-    const entry = useQueryHistoryStore.getState().entries[0]!;
-    expect(entry.sql).toBe(raw);
+    const entry = useQueryHistoryStore.getState().recentVisible[0]!;
+    expect(entry.sqlRedacted).toBe(raw);
     expect(entry.queryMode).toBe("aggregate");
   });
 
@@ -595,10 +595,14 @@ describe("useQueryExecution — Sprint 311 parser-driven document dispatch", () 
     });
 
     await waitFor(() => {
-      expect(useQueryHistoryStore.getState().entries.length).toBe(1);
+      expect(useQueryHistoryStore.getState().recentVisible.length).toBe(1);
     });
-    expect(useQueryHistoryStore.getState().entries[0]!.queryMode).toBe(
-      "countDocuments",
+    // sprint-373 (2026-05-17) — backend wire `DocumentQueryMode` 는
+    // `"count"` 만 허용 (legacy `"countDocuments"` 는 frontend `QueryMode`
+    // 타입에는 살아있지만 `recordHistoryEntry` 의 매핑이 backend wire 로
+    // narrow 함). 사용자가 history panel 에서 보는 표기도 `"count"`.
+    expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
+      "count",
     );
   });
 });

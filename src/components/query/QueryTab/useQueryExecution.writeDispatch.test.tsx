@@ -114,7 +114,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
     bulkWriteDocumentsMock.mockReset();
     useWorkspaceStore.setState({ workspaces: {} });
     useConnectionStore.setState({ connections: [] });
-    useQueryHistoryStore.setState({ entries: [], globalLog: [] });
+    useQueryHistoryStore.setState({ recentVisible: [] });
     // Default = `warn` so non-empty `deleteMany` triggers the WARN dialog
     // but doesn't STOP. Individual tests flip to `strict` for STOP cases.
     useSafeModeStore.setState({ mode: "warn" });
@@ -151,7 +151,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       });
     });
 
-    const entry = useQueryHistoryStore.getState().entries[0]!;
+    const entry = useQueryHistoryStore.getState().recentVisible[0]!;
     expect(entry.queryMode).toBe("insertOne");
   });
 
@@ -184,7 +184,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
         insertedIds: [{ Number: 1 }, { Number: 2 }],
       });
     });
-    expect(useQueryHistoryStore.getState().entries[0]!.queryMode).toBe(
+    expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
       "insertMany",
     );
   });
@@ -454,7 +454,7 @@ describe("useQueryExecution — Sprint 312 write dispatch", () => {
       const r = getCompletedResult(tab.id);
       expect(r.writeSummary).toEqual({ kind: "bulkWrite", result: bulkResult });
     });
-    expect(useQueryHistoryStore.getState().entries[0]!.queryMode).toBe(
+    expect(useQueryHistoryStore.getState().recentVisible[0]!.queryMode).toBe(
       "bulkWrite",
     );
   });
