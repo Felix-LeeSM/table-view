@@ -103,18 +103,32 @@ export async function closeWindow(label: WindowLabel): Promise<void> {
 }
 
 /**
- * Wave 9.5 (2026-05-16) — close the *current* window. WorkspacePage 의
- * `< Connections` 버튼이 호출. `getCurrentWebviewWindow()` 는 windowing
- * runtime 안에서 stable 하지만 jsdom 에서는 throw 할 수 있으므로 시드 직접
- * mock 가능한 named export 로 노출한다.
+ * Wave 9.5 (2026-05-16) — destroy the *current* window. WorkspacePage 의
+ * `< Connections` 버튼이 호출.
+ *
+ * **`close()` 가 아니라 `destroy()`** — Tauri 2.x semantic distinction:
+ * - `close()` 는 `tauri://close-requested` event 발사 후 listener 가
+ *   `preventDefault()` 안 부르면 destroy 진행. OS-level close (Cmd+W /
+ *   traffic light) 의 라이프사이클을 그대로 따른다.
+ * - `destroy()` 는 close-requested 우회 + Destroyed event 만 발사. 강제 destroy.
+ *
+ * Back 버튼은 React 안 ad-hoc 이벤트 — OS 의 close 라이프사이클과 의미적으로
+ * 별개다. close-requested 를 일부러 trigger 할 이유가 없고, 명시적 destroy 가
+ * 의미 매칭이다. 또한 Wave 9.5 회귀 4 (close-requested listener trap) 의
+ * layered defense — 미래에 다른 곳에서 같은 listener 가 등록되더라도 destroy
+ * 경로는 그 trap 을 우회한다. backend `handle_workspace_destroyed_safety_net`
+ * 도 destroy 와 close 모두 동일하게 Destroyed event 로 dispatch 한다.
+ *
+ * `getCurrentWebviewWindow()` 는 windowing runtime 안에서 stable 하지만
+ * jsdom 에서는 throw 할 수 있으므로 try/catch + 별도 named export 로 노출한다.
  */
-export async function closeCurrentWindow(): Promise<void> {
+export async function destroyCurrentWindow(): Promise<void> {
   try {
     const win = getCurrentWebviewWindow();
-    await win.close();
+    await win.destroy();
   } catch (e) {
     logger.warn(
-      "[window-controls] closeCurrentWindow failed:",
+      "[window-controls] destroyCurrentWindow failed:",
       e instanceof Error ? e.message : e,
     );
   }

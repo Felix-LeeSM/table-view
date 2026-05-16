@@ -73,7 +73,7 @@ vi.mock("@lib/window-controls", () => ({
   hideWindow: vi.fn(() => Promise.resolve()),
   focusWindow: vi.fn(() => Promise.resolve()),
   closeWindow: vi.fn(() => Promise.resolve()),
-  closeCurrentWindow: vi.fn(() => Promise.resolve()),
+  destroyCurrentWindow: vi.fn(() => Promise.resolve()),
   exitApp: vi.fn(() => Promise.resolve()),
   onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
@@ -92,7 +92,7 @@ vi.mock("@components/layout/MainArea", () => ({
 const showWindowMock = windowControls.showWindow as Mock;
 const hideWindowMock = windowControls.hideWindow as Mock;
 const focusWindowMock = windowControls.focusWindow as Mock;
-const closeCurrentWindowMock = windowControls.closeCurrentWindow as Mock;
+const destroyCurrentWindowMock = windowControls.destroyCurrentWindow as Mock;
 const exitAppMock = windowControls.exitApp as Mock;
 const onCloseRequestedMock = windowControls.onCloseRequested as Mock;
 const onCurrentWindowCloseRequestedMock =
@@ -216,9 +216,9 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
 
   // ---------------------------------------------------------------------------
   // AC-141-3 (revised for Wave 9.5, 2026-05-16): Back → focusWindow('launcher')
-  // → closeCurrentWindow; pool stays alive.
+  // → destroyCurrentWindow; pool stays alive.
   // ---------------------------------------------------------------------------
-  it("AC-141-3 (revised): 'Back to connections' emits focusWindow('launcher') → closeCurrentWindow and does NOT call disconnectFromDatabase", async () => {
+  it("AC-141-3 (revised): 'Back to connections' emits focusWindow('launcher') → destroyCurrentWindow and does NOT call disconnectFromDatabase", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
     const disconnectMock = disconnectFromDatabase as Mock;
 
@@ -236,12 +236,12 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     });
 
     expect(focusWindowMock).toHaveBeenCalledWith("launcher");
-    expect(closeCurrentWindowMock).toHaveBeenCalled();
+    expect(destroyCurrentWindowMock).toHaveBeenCalled();
 
     // focus before close — focus IPC 가 close 후 destroyed process 와 race
     // 하지 않게.
     const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
-    const closeOrder = closeCurrentWindowMock.mock.invocationCallOrder[0]!;
+    const closeOrder = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(focusOrder).toBeLessThan(closeOrder);
 
     // Pool MUST be preserved — Back is not Disconnect.
@@ -311,7 +311,8 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     // 2. Workspace close path — Wave 9.5 회귀 4 (2026-05-16): listener 자체
     //    제거. OS-level close 는 default destroy 만으로 desired UX (launcher
     //    이미 visible 이라 자동 활성) 가 성립. listener 를 두면
-    //    `closeCurrentWindow()` 가 close-requested 를 다시 발사 → preventDefault
+    //    회귀 history: 이전 `closeCurrentWindow()` (= `win.close()`) 가
+    //    close-requested 발사 → preventDefault
     //    + handler 재진입 → 무한 루프 trap (실제 회귀 증상).
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
@@ -364,11 +365,11 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
     expect(hideWindowMock).not.toHaveBeenCalled();
     unmount();
 
-    // Stage 3 (Wave 9.5): back — pool kept; focusWindow('launcher') → closeCurrentWindow.
+    // Stage 3 (Wave 9.5): back — pool kept; focusWindow('launcher') → destroyCurrentWindow.
     showWindowMock.mockClear();
     hideWindowMock.mockClear();
     focusWindowMock.mockClear();
-    closeCurrentWindowMock.mockClear();
+    destroyCurrentWindowMock.mockClear();
     render(<WorkspacePage />);
     await act(async () => {
       fireEvent.click(
@@ -376,9 +377,9 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
       );
     });
     expect(focusWindowMock).toHaveBeenCalledWith("launcher");
-    expect(closeCurrentWindowMock).toHaveBeenCalled();
+    expect(destroyCurrentWindowMock).toHaveBeenCalled();
     const backFocus = focusWindowMock.mock.invocationCallOrder[0]!;
-    const backClose = closeCurrentWindowMock.mock.invocationCallOrder[0]!;
+    const backClose = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(backFocus).toBeLessThan(backClose);
     expect(useConnectionStore.getState().activeStatuses["c1"]).toEqual({
       type: "connected",
@@ -410,7 +411,7 @@ describe("AC-141-*: Launcher/Workspace lifecycle (real-window, post-Phase 12)", 
   // 의 launcher-hidden 시대 가정 (OS-level close 가 발생하면 process 가
   // 죽은 듯 보여, close-requested 를 가로채고 launcher 를 show 해야 했음).
   // Wave 9.5 에서 launcher 가 항상 visible 인 desired UX 로 바뀌면서 그
-  // listener 자체가 dead code 가 됐고, 게다가 `closeCurrentWindow()` 가
+  // listener 자체가 dead code 가 됐고, 게다가 `destroyCurrentWindow()` 가
   // 다시 close-requested 를 발사 → 같은 리스너가 preventDefault + 재호출
   // → 무한 루프 + 창이 안 닫히는 회귀 증상의 root cause 였다.
   //

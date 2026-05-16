@@ -47,7 +47,7 @@ vi.mock("@lib/window-controls", () => ({
   hideWindow: vi.fn(() => Promise.resolve()),
   focusWindow: vi.fn(() => Promise.resolve()),
   closeWindow: vi.fn(() => Promise.resolve()),
-  closeCurrentWindow: vi.fn(() => Promise.resolve()),
+  destroyCurrentWindow: vi.fn(() => Promise.resolve()),
   exitApp: vi.fn(() => Promise.resolve()),
   onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
@@ -138,7 +138,7 @@ import * as windowControls from "@lib/window-controls";
 const showWindowMock = windowControls.showWindow as Mock;
 const hideWindowMock = windowControls.hideWindow as Mock;
 const focusWindowMock = windowControls.focusWindow as Mock;
-const closeCurrentWindowMock = windowControls.closeCurrentWindow as Mock;
+const destroyCurrentWindowMock = windowControls.destroyCurrentWindow as Mock;
 const exitAppMock = windowControls.exitApp as Mock;
 const onCloseRequestedMock = windowControls.onCloseRequested as Mock;
 const onCurrentWindowCloseRequestedMock =
@@ -166,7 +166,7 @@ beforeEach(() => {
   showWindowMock.mockResolvedValue(undefined);
   hideWindowMock.mockResolvedValue(undefined);
   focusWindowMock.mockResolvedValue(undefined);
-  closeCurrentWindowMock.mockResolvedValue(undefined);
+  destroyCurrentWindowMock.mockResolvedValue(undefined);
   exitAppMock.mockResolvedValue(undefined);
   onCloseRequestedMock.mockResolvedValue(() => {});
   onCurrentWindowCloseRequestedMock.mockResolvedValue(() => {});
@@ -228,7 +228,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   // ---------------------------------------------------------------------------
   // AC-154-02: Back to connections (workspace → launcher) preserves pool
   // ---------------------------------------------------------------------------
-  it("AC-154-02 (revised): 'Back to connections' calls focusWindow('launcher') then closeCurrentWindow — pool preserved", async () => {
+  it("AC-154-02 (revised): 'Back to connections' calls focusWindow('launcher') then destroyCurrentWindow — pool preserved", async () => {
     const { disconnectFromDatabase } = await import("@lib/tauri");
     const disconnectMock = disconnectFromDatabase as Mock;
 
@@ -249,12 +249,12 @@ describe("AC-154-*: Window lifecycle wiring", () => {
     // 창이 닫히고 connections 창에 focus 가 가야해". launcher 는 항상 visible
     // 이므로 hide/show 가 아닌 focus + close 패턴.
     expect(focusWindowMock).toHaveBeenCalledWith("launcher");
-    expect(closeCurrentWindowMock).toHaveBeenCalled();
+    expect(destroyCurrentWindowMock).toHaveBeenCalled();
 
     // Strict ordering: launcher focus BEFORE workspace close 이어야 close 후
     // process 가 destroy 되었을 때 focus IPC 가 race 하지 않는다.
     const focusOrder = focusWindowMock.mock.invocationCallOrder[0]!;
-    const closeOrder = closeCurrentWindowMock.mock.invocationCallOrder[0]!;
+    const closeOrder = destroyCurrentWindowMock.mock.invocationCallOrder[0]!;
     expect(focusOrder).toBeLessThan(closeOrder);
 
     // The pool MUST be preserved — Back is not Disconnect.
@@ -356,7 +356,7 @@ describe("AC-154-*: Window lifecycle wiring", () => {
   // 이전 contract — sprint-154 의 launcher-hidden 시대에는 OS-level close 가
   // process 가 죽은 듯 보였기에 close-requested 를 가로채야 했다. Wave 9.5
   // 의 "launcher 항상 visible" UX 에서 listener 는 dead code 가 됐고, 게다가
-  // `closeCurrentWindow()` 호출이 close-requested 를 다시 발사 → 같은 listener
+  // 이전 `closeCurrentWindow()` (= `win.close()`) 가 close-requested 를 발사 → 같은 listener
   // 가 preventDefault + 본 핸들러 재호출 → **무한 루프 + 창 안 닫힘** 회귀의
   // 근본 원인이었다. 본 테스트는 listener 미등록을 lock — 다시 추가하면 같은
   // trap 부활.

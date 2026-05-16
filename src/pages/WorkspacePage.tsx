@@ -12,7 +12,7 @@ import { useThemeStore } from "@stores/themeStore";
 import { THEME_CATALOG } from "@lib/themeCatalog";
 import { logger } from "@lib/logger";
 import { useWindowFocusHydration } from "@hooks/useWindowFocusHydration";
-import { closeCurrentWindow, focusWindow } from "@lib/window-controls";
+import { destroyCurrentWindow, focusWindow } from "@lib/window-controls";
 
 /**
  * WorkspacePage — multi-paradigm tab + sidebar work surface.
@@ -34,10 +34,12 @@ import { closeCurrentWindow, focusWindow } from "@lib/window-controls";
  *   - **No** `tauri://close-requested` listener (Wave 9.5 회귀 4,
  *     2026-05-16). OS-level close (Cmd+W, traffic light) 는 launcher 가
  *     항상 visible 이므로 default destroy 만으로 desired UX 가 자연스레
- *     성립 — workspace 사라지면 launcher 가 자동 활성. 리스너를 두면
- *     `closeCurrentWindow()` 호출이 다시 `close-requested` 를 발사 →
- *     리스너가 `preventDefault()` + 본 핸들러 재호출 → **무한 루프**
- *     trap 이 발생한다 (이전 회귀 증상).
+ *     성립 — workspace 사라지면 launcher 가 자동 활성. 회귀 4 의 history:
+ *     이전에는 `closeCurrentWindow()` (= `win.close()`) 가 close-requested
+ *     를 발사 → 리스너가 `preventDefault()` + 본 핸들러 재호출 → **무한 루프**.
+ *     현재는 listener 자체 제거 + `destroyCurrentWindow()` (= `win.destroy()`)
+ *     로 close-requested 라이프사이클 자체를 우회한다 (두 layer 의 layered
+ *     defense).
  *
  * Disconnect (which DOES tear down the pool) is owned by the
  * `DisconnectButton` in `WorkspaceToolbar` and is intentionally NOT a
@@ -59,13 +61,16 @@ export default function WorkspacePage() {
 
   // Back-to-connections — separate handler from disconnect. Wave 9.5
   // (2026-05-16) — focus launcher 먼저 (사용자 expected: connections 창에
-  // focus 가 가야해) → 현재 workspace 윈도우 close (destroy). backend 의
-  // `WindowEvent::Destroyed` safety net (마지막 workspace 일 때 launcher
-  // show + focus) 도 redundant 하게 처리.
+  // focus 가 가야해) → 현재 workspace 윈도우 destroy. `destroyCurrentWindow`
+  // 가 `close()` 가 아닌 `destroy()` 를 호출하는 이유는
+  // `src/lib/window-controls.ts` 의 doc 참조 (close-requested 라이프사이클
+  // 우회 + 회귀 4 layered defense). backend 의 `WindowEvent::Destroyed`
+  // safety net (마지막 workspace 일 때 launcher show + focus) 도 redundant
+  // 하게 처리.
   const handleBackToConnections = async () => {
     try {
       await focusWindow("launcher");
-      await closeCurrentWindow();
+      await destroyCurrentWindow();
     } catch (e) {
       logger.warn(
         "[workspace-back] window transition failed:",

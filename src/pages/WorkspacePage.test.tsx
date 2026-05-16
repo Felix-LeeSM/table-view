@@ -49,7 +49,7 @@ vi.mock("@lib/window-controls", () => ({
   hideWindow: vi.fn(() => Promise.resolve()),
   focusWindow: vi.fn(() => Promise.resolve()),
   closeWindow: vi.fn(() => Promise.resolve()),
-  closeCurrentWindow: vi.fn(() => Promise.resolve()),
+  destroyCurrentWindow: vi.fn(() => Promise.resolve()),
   exitApp: vi.fn(() => Promise.resolve()),
   onCloseRequested: vi.fn(() => Promise.resolve(() => {})),
   onCurrentWindowCloseRequested: vi.fn(() => Promise.resolve(() => {})),
@@ -106,7 +106,7 @@ describe("WorkspacePage", () => {
     // 사용자 desired UX: launcher 는 항상 visible — focus 만 주고 현재
     // workspace 윈도우는 close.
     expect(windowControls.focusWindow).toHaveBeenCalledWith("launcher");
-    expect(windowControls.closeCurrentWindow).toHaveBeenCalled();
+    expect(windowControls.destroyCurrentWindow).toHaveBeenCalled();
   });
 
   // Wave 9.5 회귀 4 (2026-05-16) — `close-requested` listener trap.
@@ -115,9 +115,11 @@ describe("WorkspacePage", () => {
   //
   // 근본 원인: WorkspacePage 가 `onCurrentWindowCloseRequested` 리스너를
   // 등록 + 그 안에서 `preventDefault()` + `handleBackToConnections()` 호출
-  // 했다. Back 핸들러가 `closeCurrentWindow()` (= `win.close()`) 를 부르면
-  // Tauri 가 `tauri://close-requested` 이벤트를 다시 발사 → 같은 리스너가
-  // `preventDefault()` → 재호출 → **무한 루프 + window destroy 안 됨**.
+  // 했다. 회귀 시점의 Back 핸들러가 `closeCurrentWindow()` (= `win.close()`)
+  // 를 부르면 Tauri 가 `tauri://close-requested` 이벤트를 다시 발사 → 같은
+  // 리스너가 `preventDefault()` → 재호출 → **무한 루프 + window destroy 안 됨**.
+  // 현재 fix 는 (1) listener 제거 + (2) `destroyCurrentWindow()` 사용으로
+  // close-requested 라이프사이클 자체 우회.
   //
   // 진짜 fix: 리스너 자체 제거. 이 리스너의 존재 이유는 sprint-154 의
   // launcher-hide UX (OS close 가 process kill 처럼 보이지 않게 가로채기)
