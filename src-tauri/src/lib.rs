@@ -169,6 +169,9 @@ pub fn run() {
         commands::persist_favorites::persist_favorites,
         commands::persist_mru::persist_mru,
         commands::persist_settings::persist_setting,
+        // Sprint 368 (Phase 4 Q12) — single-key settings refetch for the
+        // `state-changed` setting domain receiver (strategy F.4 line 1388).
+        commands::persist_settings::get_setting,
         commands::persist_workspace::persist_workspace,
         // Sprint 359 (Phase 2 Q5.3 / Q5.5) — paradigm-native cancel +
         // tab affinity release. The legacy cooperative `cancel_query(query_id)`

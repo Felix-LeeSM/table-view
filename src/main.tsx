@@ -19,6 +19,7 @@ import {
   loadAllFromSnapshot,
   registerSnapshotListener,
 } from "@lib/snapshot/loadAll";
+import { registerSettingReceiver } from "@lib/events/settingsReceiver";
 import "./index.css";
 
 // Boot sequence: theme → session → hydrate stores → render.
@@ -54,6 +55,14 @@ async function boot() {
   // (`registerSnapshotListener` swallows the import failure).
   await registerSnapshotListener();
   markBootMilestone("snapshot:listener-registered");
+
+  // Sprint 368 (Phase 4 Q12) — wire the singleton `setting.onUpdated`
+  // receiver so cross-window theme / safe-mode updates dispatch to their
+  // respective store apply paths. Must precede the snapshot drain (the
+  // buffered events fire through the same dispatcher) but can come after
+  // `registerSnapshotListener` because the receiver only adds handlers
+  // — it does not touch the Tauri listener registration.
+  registerSettingReceiver();
 
   // Hydrate connection state from session-scoped localStorage so the
   // workspace has correct focusedConnId + activeStatuses on first render.

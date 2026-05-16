@@ -1,5 +1,15 @@
-import { describe, it, expect, beforeEach } from "vitest";
+// 작성 (legacy) — ThemePicker 컴포넌트의 click / hover / mode-toggle 검증.
+// 2026-05-16 update (Phase 4 sprint-368) — `setTheme` / `setMode` 가 IPC 를
+// 호출하는 async 액션이 된 뒤, 클릭 핸들러는 promise 를 await 하지 않으므로
+// 테스트는 `Promise.resolve()` flush 로 microtask 를 비운 뒤 단언한다.
+// `@tauri-apps/api/core` 는 mock 으로 즉시 resolve.
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+}));
+
 import ThemePicker from "./ThemePicker";
 import { useThemeStore } from "@stores/themeStore";
 import { DEFAULT_THEME_ID, FEATURED_THEME_IDS } from "@lib/themeCatalog";
@@ -58,13 +68,15 @@ describe("ThemePicker", () => {
     expect(active?.getAttribute("data-theme-id")).toBe("github");
   });
 
-  it("clicking a card calls setTheme without closing (store themeId updates)", () => {
+  it("clicking a card calls setTheme without closing (store themeId updates)", async () => {
     render(<ThemePicker />);
     expect(useThemeStore.getState().themeId).toBe(DEFAULT_THEME_ID);
 
     const card = screen.getByRole("button", { name: /theme github primer/i });
-    act(() => {
+    await act(async () => {
       fireEvent.click(card);
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(useThemeStore.getState().themeId).toBe("github");
@@ -72,19 +84,23 @@ describe("ThemePicker", () => {
     expect(screen.getByTestId("theme-picker-grid")).toBeInTheDocument();
   });
 
-  it("mode toggle buttons change the store mode", () => {
+  it("mode toggle buttons change the store mode", async () => {
     render(<ThemePicker />);
     expect(useThemeStore.getState().mode).toBe("system");
 
     const lightBtn = screen.getByRole("radio", { name: /light mode/i });
-    act(() => {
+    await act(async () => {
       fireEvent.click(lightBtn);
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(useThemeStore.getState().mode).toBe("light");
 
     const darkBtn = screen.getByRole("radio", { name: /dark mode/i });
-    act(() => {
+    await act(async () => {
       fireEvent.click(darkBtn);
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(useThemeStore.getState().mode).toBe("dark");
   });

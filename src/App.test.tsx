@@ -51,6 +51,14 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: vi.fn(() => Promise.resolve()),
 }));
 
+// Sprint 368 (Phase 4 Q12) — theme / safe-mode actions issue
+// `persist_setting` IPC. The App keyboard cycle (`Cmd+Shift+L`) calls
+// `setMode` and intentionally does not await the promise. Mock invoke
+// so the unawaited promise resolves silently.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+}));
+
 function makeTableTab(overrides: Partial<TableTab> = {}): TableTab {
   return {
     type: "table",
@@ -580,12 +588,13 @@ describe("App global shortcuts", () => {
   // ── Sprint 162: Cmd+Shift+L / Ctrl+Shift+L — cycle theme mode ──
 
   // Reason: Phase 14 AC-14-03 — Cmd+Shift+L 키보드 단축키로 theme mode 순환 (2026-04-28)
-  it("Cmd+Shift+L cycles theme mode dark → light → system → dark", () => {
-    useThemeStore.getState().setMode("dark");
+  // 2026-05-16: setMode 가 async IPC 가 된 후 await + microtask flush 추가.
+  it("Cmd+Shift+L cycles theme mode dark → light → system → dark", async () => {
+    await useThemeStore.getState().setMode("dark");
     render(<App />);
 
     // dark → light
-    act(() => {
+    await act(async () => {
       fireEvent(
         document,
         new KeyboardEvent("keydown", {
@@ -596,11 +605,13 @@ describe("App global shortcuts", () => {
           cancelable: true,
         }),
       );
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(useThemeStore.getState().mode).toBe("light");
 
     // light → system
-    act(() => {
+    await act(async () => {
       fireEvent(
         document,
         new KeyboardEvent("keydown", {
@@ -611,11 +622,13 @@ describe("App global shortcuts", () => {
           cancelable: true,
         }),
       );
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(useThemeStore.getState().mode).toBe("system");
 
     // system → dark
-    act(() => {
+    await act(async () => {
       fireEvent(
         document,
         new KeyboardEvent("keydown", {
@@ -626,16 +639,18 @@ describe("App global shortcuts", () => {
           cancelable: true,
         }),
       );
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(useThemeStore.getState().mode).toBe("dark");
   });
 
   // Reason: Phase 14 AC-14-03 — Ctrl+Shift+L 단축키 호환성 (Windows/Linux) (2026-04-28)
-  it("Ctrl+Shift+L cycles theme mode", () => {
-    useThemeStore.getState().setMode("dark");
+  it("Ctrl+Shift+L cycles theme mode", async () => {
+    await useThemeStore.getState().setMode("dark");
     render(<App />);
 
-    act(() => {
+    await act(async () => {
       fireEvent(
         document,
         new KeyboardEvent("keydown", {
@@ -646,13 +661,15 @@ describe("App global shortcuts", () => {
           cancelable: true,
         }),
       );
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(useThemeStore.getState().mode).toBe("light");
   });
 
   // Reason: Phase 14 AC-14-03 — theme toggle 단축키가 기존 단축키를 방해하지 않는지 회귀 테스트 (2026-04-28)
-  it("Cmd+Shift+L does not interfere with existing Cmd+S shortcut", () => {
-    useThemeStore.getState().setMode("dark");
+  it("Cmd+Shift+L does not interfere with existing Cmd+S shortcut", async () => {
+    await useThemeStore.getState().setMode("dark");
     const handler = vi.fn();
     window.addEventListener("commit-changes", handler);
     render(<App />);

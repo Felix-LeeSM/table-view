@@ -1,6 +1,24 @@
+// themeStore unit tests — covers hydrate, setTheme, setMode, setState,
+// system-mode resolution, and the cross-window broadcast allowlist.
+//
+// 2026-05-16 update (Phase 4 sprint-368, Q12) — actions became
+// backend-first (`persist_setting("theme", JSON)` IPC). Tests now mock
+// `@tauri-apps/api/core` so the IPC resolves immediately in jsdom and
+// await each action. The single-LS-write invariant locked here (AC-368
+// receiver path) is byte-equivalent to the pre-368 behavior because the
+// subscriber still owns the write — the action just no longer double-
+// writes.
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+
+import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore, SYNCED_KEYS } from "./themeStore";
 import { DEFAULT_THEME_ID, THEME_STORAGE_KEY } from "@lib/themeBoot";
+
+const invokeMock = vi.mocked(invoke);
 
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -34,6 +52,8 @@ function stubSystemDark(matches: boolean) {
 
 describe("themeStore", () => {
   beforeEach(() => {
+    invokeMock.mockReset();
+    invokeMock.mockResolvedValue(undefined);
     localStorageMock.clear();
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-mode");
@@ -59,8 +79,8 @@ describe("themeStore", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe("github");
   });
 
-  it("setTheme updates themeId, data-theme, and persists JSON", () => {
-    useThemeStore.getState().setTheme("github");
+  it("setTheme updates themeId, data-theme, and persists JSON", async () => {
+    await useThemeStore.getState().setTheme("github");
     expect(useThemeStore.getState().themeId).toBe("github");
     expect(document.documentElement.getAttribute("data-theme")).toBe("github");
     const raw = localStorageMock.getItem(THEME_STORAGE_KEY);
@@ -71,9 +91,9 @@ describe("themeStore", () => {
     });
   });
 
-  it("setMode updates mode, data-mode, and persists JSON", () => {
+  it("setMode updates mode, data-mode, and persists JSON", async () => {
     const restore = stubSystemDark(false);
-    useThemeStore.getState().setMode("dark");
+    await useThemeStore.getState().setMode("dark");
     expect(useThemeStore.getState().mode).toBe("dark");
     expect(useThemeStore.getState().resolvedMode).toBe("dark");
     expect(document.documentElement.getAttribute("data-mode")).toBe("dark");
@@ -85,8 +105,10 @@ describe("themeStore", () => {
     restore();
   });
 
-  it("setState updates both themeId and mode together", () => {
-    useThemeStore.getState().setState({ themeId: "linear", mode: "light" });
+  it("setState updates both themeId and mode together", async () => {
+    await useThemeStore
+      .getState()
+      .setState({ themeId: "linear", mode: "light" });
     const state = useThemeStore.getState();
     expect(state.themeId).toBe("linear");
     expect(state.mode).toBe("light");
@@ -95,9 +117,9 @@ describe("themeStore", () => {
     expect(document.documentElement.getAttribute("data-mode")).toBe("light");
   });
 
-  it("resolvedMode reflects prefers-color-scheme when mode is 'system'", () => {
+  it("resolvedMode reflects prefers-color-scheme when mode is 'system'", async () => {
     const restoreDark = stubSystemDark(true);
-    useThemeStore.getState().setMode("system");
+    await useThemeStore.getState().setMode("system");
     expect(useThemeStore.getState().resolvedMode).toBe("dark");
     restoreDark();
 
@@ -107,9 +129,9 @@ describe("themeStore", () => {
     restoreLight();
   });
 
-  it("handleSystemChange is a no-op when mode is not 'system'", () => {
+  it("handleSystemChange is a no-op when mode is not 'system'", async () => {
     const restoreDark = stubSystemDark(false);
-    useThemeStore.getState().setMode("dark");
+    await useThemeStore.getState().setMode("dark");
     expect(useThemeStore.getState().resolvedMode).toBe("dark");
     // System flips to prefers-light, but mode is explicit dark — no change expected.
     const restoreLight = stubSystemDark(false);
@@ -119,17 +141,17 @@ describe("themeStore", () => {
     restoreDark();
   });
 
-  it("preserves themeId when only mode changes", () => {
-    useThemeStore.getState().setTheme("vercel");
-    useThemeStore.getState().setMode("light");
+  it("preserves themeId when only mode changes", async () => {
+    await useThemeStore.getState().setTheme("vercel");
+    await useThemeStore.getState().setMode("light");
     expect(useThemeStore.getState().themeId).toBe("vercel");
     expect(document.documentElement.getAttribute("data-theme")).toBe("vercel");
   });
 
-  it("preserves mode when only theme changes", () => {
+  it("preserves mode when only theme changes", async () => {
     const restore = stubSystemDark(false);
-    useThemeStore.getState().setMode("dark");
-    useThemeStore.getState().setTheme("linear");
+    await useThemeStore.getState().setMode("dark");
+    await useThemeStore.getState().setTheme("linear");
     expect(useThemeStore.getState().mode).toBe("dark");
     expect(document.documentElement.getAttribute("data-mode")).toBe("dark");
     restore();

@@ -5,6 +5,11 @@
 //! `sidebar_width`, `query_history_retention_days`, `query_history_enabled`)
 //! 외에도 임의 key/JSON value 를 받아 dual-write — Phase 1 시점에서는
 //! validation 을 strategic 하게 frontend 에 위임.
+//!
+//! Sprint 368 (Phase 4 Q12) — `get_setting` IPC 추가. `state-changed`
+//! 수신자가 key 별 단일 refetch 로 store 를 갱신 (strategy F.4 line 1388).
+//! file SOT 가 진실 — `settings.json` 의 key 가 있으면 value_json 그대로
+//! 반환, 없으면 `None` 반환 (frontend 에서 default 적용).
 
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
@@ -73,6 +78,25 @@ pub async fn persist_setting(
 ) -> Result<(), AppError> {
     let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
     persist_setting_inner(&pool, req).await
+}
+
+/// Sprint 368 (Phase 4 Q12) — read a single settings key. Frontend
+/// `state-changed` receiver calls this after a `setting:update` event to
+/// refetch the canonical value (strategy F.4 line 1388).
+///
+/// Returns `Some(value_json)` if the key exists in `settings.json`, else
+/// `None`. The frontend applies a per-key default constant when `None`.
+pub fn get_setting_inner(key: &str) -> Result<Option<String>, AppError> {
+    let map = load_settings_file()?;
+    Ok(map.get(key).cloned())
+}
+
+#[tauri::command]
+pub async fn get_setting(
+    key: String,
+    _state: State<'_, AppState>,
+) -> Result<Option<String>, AppError> {
+    get_setting_inner(&key)
 }
 
 #[cfg(test)]
@@ -145,6 +169,41 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(value, "\"c\"");
+        cleanup();
+    }
+
+    // 작성 2026-05-16 (Phase 4 sprint-368) — `get_setting` 의 happy
+    // path + missing-key 시나리오. 통합 round-trip 은
+    // `tests/dual_write_*` 가 담당.
+    #[tokio::test]
+    #[serial]
+    async fn get_setting_returns_none_for_missing_key() {
+        cleanup();
+        let (_dir, _pool) = setup().await;
+        let value = get_setting_inner("theme").unwrap();
+        assert_eq!(value, None);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_setting_returns_value_after_persist() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        persist_setting_inner(
+            &pool,
+            PersistSettingRequest {
+                key: "theme".into(),
+                value_json: r#"{"themeId":"github","mode":"dark"}"#.into(),
+            },
+        )
+        .await
+        .unwrap();
+        let value = get_setting_inner("theme").unwrap();
+        assert_eq!(
+            value.as_deref(),
+            Some(r#"{"themeId":"github","mode":"dark"}"#)
+        );
         cleanup();
     }
 }

@@ -95,6 +95,14 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: busModule.listen,
 }));
 
+// Sprint 368 (Phase 4 Q12) — theme / safe-mode actions invoke
+// `persist_setting`. Mock to immediate-resolve so the unawaited promise in
+// the legacy bridge regression below doesn't surface as an unhandled
+// rejection.
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(() => Promise.resolve()),
+}));
+
 // Mock the Tauri invoke wrapper so connectionStore (transitively imported by
 // tabStore) doesn't crash on module load.
 vi.mock("@lib/tauri", () => ({
@@ -467,7 +475,11 @@ describe("cross-window store sync (Sprint 153)", () => {
   describe("themeStore (symmetric)", () => {
     it("AC-153-03a: setMode emits on `theme-sync` carrying themeId + mode", async () => {
       mockedEmit.mockClear();
-      useThemeStore.getState().setMode("dark");
+      // Sprint 368: setMode is now async (await IPC). Await before the
+      // assertion so the bridge has a chance to emit on the post-IPC
+      // store mutate.
+      await useThemeStore.getState().setMode("dark");
+      await Promise.resolve();
       await Promise.resolve();
 
       const syncCall = mockedEmit.mock.calls.find(
