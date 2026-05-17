@@ -1,7 +1,7 @@
 ---
 title: ADR 인덱스
 type: index
-updated: 2026-05-15
+updated: 2026-05-17
 ---
 
 # ADR 인덱스
@@ -38,6 +38,17 @@ updated: 2026-05-15
 | [0029](./0029-mongosh-parser-strategy/memory.md) | mongosh expression parser — handwritten whitelist (WASM sidecar 미채택) | Accepted | 2026-05-14 | — |
 | [0030](./0030-mongo-db-scope-tab-local/memory.md) | Mongo DB-scope — toolbar chip 제거, tab-local chip + sidebar 우클릭 entry-point | Accepted | 2026-05-15 | — |
 | [0031](./0031-syntax-palette-manual-and-token-integrity/memory.md) | Syntax palette — manual themes.css + theme-agnostic fallback + token integrity 강제 | Accepted | 2026-05-15 | — |
+| [0032](./0032-sqlite-infrastructure-and-atomic-snapshot/memory.md) | SQLite 인프라 + atomic snapshot bootstrap (Q1/Q9 + SQLite 도입) | Accepted | 2026-05-17 | — |
+| [0033](./0033-single-instance-and-cross-window-sync/memory.md) | Single-instance + in-process cross-window sync (Q3/Q4) | Accepted | 2026-05-17 | — |
+| [0034](./0034-per-tab-connection-affinity-and-native-cancel/memory.md) | Per-tab connection affinity + native cancel (Q5.x 통합) | Accepted | 2026-05-17 | — |
+| [0035](./0035-corrupt-recovery-silent-quarantine/memory.md) | Corrupt 영속 recovery — silent quarantine + fresh start | Accepted | 2026-05-17 | — |
+| [0036](./0036-telemetry-zero-collection/memory.md) | Telemetry — 수집 0 명문화 (privacy contract) | Accepted | 2026-05-17 | — |
+| [0037](./0037-auto-update-notification-only/memory.md) | Auto-update — notification only, no in-app download/install | Accepted | 2026-05-17 | — |
+| [0038](./0038-theme-safemode-sqlite-sot-ls-fouc-cache/memory.md) | Theme/SafeMode SOT — SQLite truth + theme-only LS FOUC cache | Accepted | 2026-05-17 | — |
+| [0039](./0039-workspace-window-per-connection/memory.md) | Workspace window per-connection — TablePlus 패턴 + idempotent open | Accepted | 2026-05-17 | — |
+| [0040](./0040-file-key-os-keyring/memory.md) | File-key OS keyring + 2-phase migration with Linux fallback | Accepted | 2026-05-17 | — |
+| [0041](./0041-schema-cache-eager-wide-invalidate/memory.md) | SchemaCache cross-window invalidation — in-process event + wide + eager | Accepted | 2026-05-17 | — |
+| [0042](./0042-query-history-privacy/memory.md) | Query history retention / privacy / export — local at-rest 정책 | Accepted | 2026-05-17 | — |
 
 ## 역사 (Superseded / Deprecated)
 
