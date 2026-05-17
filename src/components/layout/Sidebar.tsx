@@ -1,5 +1,12 @@
-import { useEffect, useRef } from "react";
-import { Sun, Moon, Monitor, Plus } from "lucide-react";
+import { useCallback, useEffect, useRef } from "react";
+import {
+  Sun,
+  Moon,
+  Monitor,
+  Plus,
+  RotateCcw,
+  FoldVertical,
+} from "lucide-react";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
@@ -16,7 +23,8 @@ import {
 } from "@components/ui/popover";
 import WorkspaceSidebar from "@components/workspace/WorkspaceSidebar";
 import ThemePicker from "@components/theme/ThemePicker";
-import { persistSettingValue } from "@lib/tauri/settings";
+import { persistSettingValue, resetSetting } from "@lib/tauri/settings";
+import { logger } from "@lib/logger";
 
 // Sprint 369 (Phase 4, Q20.2) — `table-view.sidebar.width` localStorage 영속
 // 폐기. boot snapshot 이 차후 sprint 에서 `settings.sidebar_width` 를 hydrate
@@ -48,6 +56,7 @@ export default function Sidebar() {
   // mount) — the rest of the component already handles that null case.
   const focusedConnId = useCurrentWindowConnectionId();
   const addQueryTab = useWorkspaceStore((s) => s.addQueryTab);
+  const setExpanded = useWorkspaceStore((s) => s.setExpanded);
   // MRU marking lives on each caller (not inside tabStore.addQueryTab) —
   // the "+ Query" button explicitly marks the focused connection used so
   // the launcher Recent rail / EmptyState CTA reflect the user's continued
@@ -118,6 +127,33 @@ export default function Sidebar() {
     };
   }, [sidebarWidth]);
 
+  // Sprint 376 (Phase 6 Q21 #3-a) — Sidebar handle "Reset width". Same
+  // backend IPC as the Settings panel's "Reset sidebar width" (Q21
+  // #3-b) — receiver applies the frontend default. Local window's
+  // useResizablePanel is not reset here; the next setting.reset event
+  // arriving at this same window (self-echo) is intentionally ignored
+  // because the dispatcher's self-echo skip path means the local
+  // panel's width stays at the user's last drag value until they
+  // explicitly drag again. Acceptable for #3-a (the cross-window
+  // listeners still get the row-delete event); a future sprint can
+  // wire a local "apply default width" path if user feedback demands.
+  const handleResetSidebarWidth = useCallback(() => {
+    void resetSetting("sidebar_width").catch((e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e ?? "");
+      logger.warn(`[Sidebar] reset_setting(sidebar_width) failed: ${message}`);
+    });
+  }, []);
+
+  // Sprint 376 (Phase 6 Q21 #7) — header "Collapse all". Empties the
+  // active workspace's sidebar.expanded list. The workspace persist
+  // pipeline (sprint-360 SQLite write) carries the change to other
+  // windows on the same connection_id.
+  const handleCollapseAll = useCallback(() => {
+    if (!focusedConnId) return;
+    const db = resolveActiveDb(focusedConnId);
+    setExpanded(focusedConnId, db, []);
+  }, [focusedConnId, setExpanded]);
+
   const activeEntry =
     THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
   const ThemeIcon =
@@ -138,7 +174,11 @@ export default function Sidebar() {
         style={{ width: sidebarWidth }}
       >
         {/* Header strip — connection name + "+ Query" action. data-testid is
-            kept stable for e2e tests (`sidebar-connection-header`). */}
+            kept stable for e2e tests (`sidebar-connection-header`).
+
+            Sprint 376 (Phase 6 Q21 #7) — header "Collapse all" 가시
+            버튼이 추가됨. Q21 직관적 위치 contract — 우클릭 메뉴 대신
+            가시 버튼 (키보드 사용자 발견 가능). */}
         <div className="flex items-center justify-between border-b border-border py-1 pl-3 pr-1">
           <span
             data-testid="sidebar-connection-header"
@@ -150,6 +190,18 @@ export default function Sidebar() {
               : "Schemas"}
           </span>
           <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+              aria-label="Collapse all"
+              title="Collapse all schema tree nodes"
+              disabled={!focusedConnId}
+              onClick={handleCollapseAll}
+              data-testid="sidebar-collapse-all"
+            >
+              <FoldVertical />
+            </Button>
             <Button
               variant="ghost"
               size="xs"
@@ -207,6 +259,22 @@ export default function Sidebar() {
               <ThemePicker />
             </PopoverContent>
           </Popover>
+          {/* Sprint 376 (Phase 6 Q21 #3-a) — "Reset sidebar width" 가시
+              버튼. 우클릭 컨텍스트 메뉴 대신 직관적 위치 (sidebar
+              하단, drag handle 과 시각 근접) 에 노출. */}
+          <Button
+            variant="ghost"
+            size="xs"
+            type="button"
+            className="mt-1 w-full justify-start text-muted-foreground"
+            aria-label="Reset sidebar width"
+            title="Reset sidebar width to default"
+            onClick={handleResetSidebarWidth}
+            data-testid="sidebar-reset-width"
+          >
+            <RotateCcw className="h-3 w-3" aria-hidden="true" />
+            <span className="ml-1 text-3xs">Reset width</span>
+          </Button>
         </div>
 
         {/* Resize handle */}

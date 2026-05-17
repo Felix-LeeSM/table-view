@@ -58,6 +58,21 @@ function persistMruList(entries: MruEntry[]): void {
   );
 }
 
+/**
+ * Sprint 376 (Phase 6 Q21 #8) — backend `clear_mru` IPC dispatch.
+ * Truncates the SQLite `mru` table and emits `state-changed
+ * { domain:"mru", op:"bulk", entityId:null }` so every window's
+ * `RecentConnections` panel converges to empty. Fire-and-forget — store
+ * mutation has already happened; an IPC failure surfaces in dev log and
+ * is healed by the next mutate or boot reconcile.
+ */
+function clearMruRemote(): void {
+  void invoke("clear_mru").catch((e: unknown) => {
+    const message = e instanceof Error ? e.message : String(e ?? "");
+    logger.warn(`[mruStore] clear_mru failed: ${message}`);
+  });
+}
+
 interface MruState {
   lastUsedConnectionId: string | null; // derived: recentConnections[0]?.connectionId ?? null (backward compat)
   recentConnections: MruEntry[]; // ordered list, most recent first
@@ -70,6 +85,13 @@ interface MruState {
    * pointer stays consistent.
    */
   removeRecentConnection: (id: string) => void;
+  /**
+   * Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance. Drops every
+   * entry locally + dispatches `clear_mru` IPC so the SQLite `mru` table
+   * is truncated and every other window receives `state-changed
+   * mru.bulk` (frontend dispatcher applies the empty array on receive).
+   */
+  clearRecentConnections: () => void;
   /**
    * Sprint 370 — no-op. Snapshot IPC (`loadAllFromSnapshot`) is the sole
    * hydration path; this function survives only so existing call sites
@@ -123,6 +145,22 @@ export const useMruStore = create<MruState>((set) => ({
       return {
         recentConnections: updated,
         lastUsedConnectionId: updated[0]?.connectionId ?? null,
+      };
+    });
+  },
+
+  clearRecentConnections: () => {
+    set((state) => {
+      if (state.recentConnections.length === 0) {
+        // Empty already — still fire IPC so a stale SQLite row in
+        // another window gets cleared (idempotent backend contract).
+        clearMruRemote();
+        return state;
+      }
+      clearMruRemote();
+      return {
+        recentConnections: [],
+        lastUsedConnectionId: null,
       };
     });
   },

@@ -138,6 +138,83 @@ pub async fn get_setting(
     get_setting_inner(&pool, &key).await
 }
 
+/// Sprint 376 (Phase 6 Q21) — reset a single settings key to default by
+/// removing its row. Strategy doc line 1389: `setting.reset` is the
+/// **row-delete** path — receivers MUST NOT refetch (the row is gone);
+/// they read their frontend `SETTING_DEFAULTS[entityId]` constant
+/// directly. Backend therefore (a) deletes the row, (b) emits
+/// `state-changed { domain:"setting", op:"reset", entityId: key }`.
+///
+/// Idempotent: deleting a non-existent row is a no-op (DELETE returns 0
+/// affected rows) but still emits the event so receivers can converge
+/// even if they were out of sync (e.g. cached a value backend never
+/// stored).
+pub async fn reset_setting_inner(pool: &SqlitePool, key: &str) -> Result<(), AppError> {
+    guard_legacy_import_done(pool).await?;
+
+    let sqlite_result: Result<(), AppError> = if is_force_failure_for_tests() {
+        Err(AppError::Storage("forced failure for tests".into()))
+    } else {
+        sqlx::query("DELETE FROM settings WHERE key = ?")
+            .bind(key)
+            .execute(pool)
+            .await
+            .map(|_| ())
+            .map_err(AppError::from)
+    };
+    // Mirror sibling persist_setting_inner's reconcile bookkeeping —
+    // AppError is not Clone, so re-construct a parallel ok/err signal
+    // for the counter without leaking the original error message.
+    let counter_signal: Result<(), AppError> = match &sqlite_result {
+        Ok(()) => Ok(()),
+        Err(_) => Err(AppError::Storage(
+            "reset_setting sqlite delete failed".into(),
+        )),
+    };
+    record_sqlite_result("settings", counter_signal);
+    sqlite_result
+}
+
+/// `reset_setting` 의 wrapper — SQLite delete 후 `setting.reset` emit.
+/// Strategy doc F.4 line 1306 contract: `op = "reset"`, refetch
+/// 안 함 (receiver 가 frontend default 상수로 set). origin_window 채워
+/// frontend dispatcher 의 self-echo skip 가 동작하게 한다.
+pub async fn reset_setting_with_emit<R: Runtime>(
+    pool: &SqlitePool,
+    registry: &EventVersionRegistry,
+    app: &AppHandle<R>,
+    origin_window: Option<String>,
+    key: String,
+) -> Result<(), AppError> {
+    reset_setting_inner(pool, &key).await?;
+    emit_state_changed(
+        app,
+        registry,
+        EmitArgs {
+            domain: EventDomain::Setting,
+            op: EventOp::Reset,
+            entity_id: Some(key),
+            origin_window,
+            snapshot_version: 0,
+            field: None,
+        },
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reset_setting<R: Runtime>(
+    key: String,
+    _state: State<'_, AppState>,
+    app: AppHandle<R>,
+    registry: State<'_, EventVersionRegistry>,
+    window: tauri::Window<R>,
+) -> Result<(), AppError> {
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    let origin = Some(window.label().to_string());
+    reset_setting_with_emit(&pool, registry.inner(), &app, origin, key).await
+}
+
 #[cfg(test)]
 mod tests {
     //! 작성 2026-05-16 (Phase 1 sprint-358) — inline lib smoke for `--lib`

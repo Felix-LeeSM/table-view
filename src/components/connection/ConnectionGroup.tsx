@@ -5,6 +5,7 @@ import {
   Trash2,
   Pencil,
   Palette,
+  UnfoldVertical,
 } from "lucide-react";
 import { Input } from "@components/ui/input";
 import { Button } from "@components/ui/button";
@@ -19,7 +20,9 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
 } from "@components/ui/context-menu";
+import { logger } from "@lib/logger";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +68,7 @@ export default function ConnectionGroup({
   const [showEditDialog, setShowEditDialog] = useState(false);
   const removeGroup = useConnectionStore((s) => s.removeGroup);
   const updateGroup = useConnectionStore((s) => s.updateGroup);
+  const allGroups = useConnectionStore((s) => s.groups);
   const moveConnectionToGroup = useConnectionStore(
     (s) => s.moveConnectionToGroup,
   );
@@ -92,6 +96,28 @@ export default function ConnectionGroup({
     void setGroupCollapsed({ groupId: group.id, collapsed: next }).catch(() => {
       /* best-effort */
     });
+  };
+
+  // Sprint 376 (Phase 6 Q21 #4) — "Reset collapse states". 모든 group
+  // 을 expanded (collapsed=false) 로 set. per-group IPC 가 idempotent 라
+  // bulk IPC 새로 도입하지 않음 — sprint-369 의 set_group_collapsed 가
+  // group.update emit 을 발사해 cross-window converge.
+  const handleResetAllCollapse = () => {
+    // 현 컴포넌트가 mount 한 group 이 보유한 expanded 시각 상태도 같이
+    // 갱신해 사용자 immediate feedback. 다른 group 의 collapsed UI 는
+    // 각 ConnectionGroup 인스턴스의 자기 state — group.update event
+    // 가 store 변경 → re-render 로 흐른다 (sprint-369 contract).
+    setCollapsed(false);
+    for (const g of allGroups) {
+      void setGroupCollapsed({ groupId: g.id, collapsed: false }).catch(
+        (e: unknown) => {
+          const message = e instanceof Error ? e.message : String(e ?? "");
+          logger.warn(
+            `[ConnectionGroup] set_group_collapsed(${g.id}) failed: ${message}`,
+          );
+        },
+      );
+    }
   };
 
   // Group-wide drop target: any drop within the group's padded visual area
@@ -194,6 +220,14 @@ export default function ConnectionGroup({
             <ContextMenuItem onClick={() => setShowEditDialog(true)}>
               <Palette size={14} /> Change Color
             </ContextMenuItem>
+            <ContextMenuSeparator />
+            {/* Sprint 376 (Phase 6 Q21 #4) — Reset collapse states. 모든
+                group 의 collapsed=false UPDATE. Confirm dialog 없음
+                (Q21 직접 IPC contract). */}
+            <ContextMenuItem onClick={handleResetAllCollapse}>
+              <UnfoldVertical size={14} /> Reset collapse states
+            </ContextMenuItem>
+            <ContextMenuSeparator />
             <ContextMenuItem danger onClick={() => setShowDeleteConfirm(true)}>
               <Trash2 size={14} /> Delete Group
             </ContextMenuItem>

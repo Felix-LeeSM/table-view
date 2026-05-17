@@ -6,10 +6,11 @@
 use crate::commands::connection::AppState;
 use crate::commands::guard::guard_legacy_import_done;
 use crate::error::AppError;
+use crate::events::{emit_state_changed, EmitArgs, EventDomain, EventOp, EventVersionRegistry};
 use crate::storage::reconcile::{is_force_failure_for_tests, record_sqlite_result};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use tauri::State;
+use tauri::{AppHandle, Runtime, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +59,69 @@ pub async fn persist_mru(
 ) -> Result<(), AppError> {
     let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
     persist_mru_inner(&pool, entries).await
+}
+
+/// Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance on Home /
+/// launcher. Deletes every `mru` row + emits `state-changed
+/// { domain:"mru", op:"bulk", entityId:null }` so every window's
+/// `RecentConnections` panel converges to empty without re-fetching the
+/// table.
+///
+/// `Bulk` op is the contract for `mru` domain (strategy doc F.4 line
+/// 1305-1306 + frontend dispatcher `routeNormalHandler` `case "mru"`
+/// which only knows `bulk`).
+pub async fn clear_mru_inner(pool: &SqlitePool) -> Result<(), AppError> {
+    guard_legacy_import_done(pool).await?;
+
+    let sqlite_result: Result<(), AppError> = if is_force_failure_for_tests() {
+        Err(AppError::Storage("forced failure for tests".into()))
+    } else {
+        sqlx::query("DELETE FROM mru")
+            .execute(pool)
+            .await
+            .map(|_| ())
+            .map_err(AppError::from)
+    };
+    let counter_signal: Result<(), AppError> = match &sqlite_result {
+        Ok(()) => Ok(()),
+        Err(_) => Err(AppError::Storage("clear_mru sqlite delete failed".into())),
+    };
+    record_sqlite_result("mru", counter_signal);
+    sqlite_result
+}
+
+pub async fn clear_mru_with_emit<R: Runtime>(
+    pool: &SqlitePool,
+    registry: &EventVersionRegistry,
+    app: &AppHandle<R>,
+    origin_window: Option<String>,
+) -> Result<(), AppError> {
+    clear_mru_inner(pool).await?;
+    emit_state_changed(
+        app,
+        registry,
+        EmitArgs {
+            domain: EventDomain::Mru,
+            op: EventOp::Bulk,
+            entity_id: None,
+            origin_window,
+            snapshot_version: 0,
+            field: None,
+        },
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_mru<R: Runtime>(
+    _state: State<'_, AppState>,
+    app: AppHandle<R>,
+    registry: State<'_, EventVersionRegistry>,
+    window: tauri::Window<R>,
+) -> Result<(), AppError> {
+    let pool = crate::commands::sqlite_pool::get_or_init_pool().await?;
+    let origin = Some(window.label().to_string());
+    clear_mru_with_emit(&pool, registry.inner(), &app, origin).await
 }
 
 #[cfg(test)]

@@ -29,6 +29,11 @@ import GroupDialog from "@components/connection/GroupDialog";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
 import RecentConnections from "@components/connection/RecentConnections";
 import ThemePicker from "@components/theme/ThemePicker";
+import ResetSettingsButton from "@components/settings/ResetSettingsButton";
+import { resetSetting } from "@lib/tauri/settings";
+import { useMruStore } from "@stores/mruStore";
+import { logger } from "@lib/logger";
+import { RotateCcw, Eraser } from "lucide-react";
 
 /**
  * HomePage — paradigm-agnostic connection management screen (sprint 125).
@@ -65,6 +70,7 @@ export default function HomePage() {
   const [showImportExport, setShowImportExport] = useState(false);
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
   const [recentCollapsed, setRecentCollapsed] = useState<boolean>(false);
+  const clearRecentConnections = useMruStore((s) => s.clearRecentConnections);
 
   const toggleRecentCollapsed = useCallback(() => {
     setRecentCollapsed((prev) => {
@@ -77,6 +83,28 @@ export default function HomePage() {
       return next;
     });
   }, []);
+
+  // Sprint 376 (Phase 6 Q21 #2) — Recent collapse reset. Backend deletes
+  // the SQLite row and emits setting.reset; the strategy contract
+  // line 1389 says receivers don't refetch — they apply the frontend
+  // default (false) directly. Local window: collapse to default false
+  // synchronously to mirror the cross-window outcome.
+  const handleResetRecentCollapse = useCallback(() => {
+    setRecentCollapsed(false);
+    void resetSetting("home_recent_collapsed").catch((e: unknown) => {
+      const message = e instanceof Error ? e.message : String(e ?? "");
+      logger.warn(
+        `[HomePage] reset_setting(home_recent_collapsed) failed: ${message}`,
+      );
+    });
+  }, []);
+
+  // Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance. Empties
+  // the local zustand store + fires `clear_mru` IPC. No confirm dialog
+  // (Q21 contract — direct IPC).
+  const handleClearRecent = useCallback(() => {
+    clearRecentConnections();
+  }, [clearRecentConnections]);
 
   const focusedConnId = useConnectionStore((s) => s.focusedConnId);
   const setFocusedConn = useConnectionStore((s) => s.setFocusedConn);
@@ -175,6 +203,17 @@ export default function HomePage() {
             variant="ghost"
             size="icon-xs"
             className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
+            aria-label="Clear recent"
+            title="Clear recent connections"
+            onClick={handleClearRecent}
+            data-testid="home-clear-recent"
+          >
+            <Eraser />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
             aria-label="Import / Export"
             title="Import / Export"
             onClick={() => setShowImportExport(true)}
@@ -217,32 +256,59 @@ export default function HomePage() {
 
       {/* Recent — MRU connection list. Sprint 296: 라벨 헤더가 토글
           버튼 역할을 한다. theme picker 는 별도 footer 영역에 머무르며
-          이 collapse 의 영향을 받지 않는다. */}
+          이 collapse 의 영향을 받지 않는다.
+
+          Sprint 376 (Phase 6 Q21 #2) — 헤더에 "Reset" 버튼 추가. 우클릭
+          context-menu 대신 가시 버튼 — 키보드 사용자가 발견 가능하도록
+          (Q21 직관적 위치 contract). */}
       <div
         className="border-t border-border px-3 py-2"
         data-testid="home-recent"
       >
-        <button
-          type="button"
-          onClick={toggleRecentCollapsed}
-          aria-expanded={!recentCollapsed}
-          aria-controls="home-recent-body"
-          aria-label="Toggle Recent"
-          className="mb-1 flex w-full items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
-        >
-          {recentCollapsed ? (
-            <ChevronRight size={10} />
-          ) : (
-            <ChevronDown size={10} />
-          )}
-          <Clock size={10} />
-          <span>Recent</span>
-        </button>
+        <div className="mb-1 flex w-full items-center gap-1.5">
+          <button
+            type="button"
+            onClick={toggleRecentCollapsed}
+            aria-expanded={!recentCollapsed}
+            aria-controls="home-recent-body"
+            aria-label="Toggle Recent"
+            className="flex flex-1 items-center gap-1.5 text-3xs uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          >
+            {recentCollapsed ? (
+              <ChevronRight size={10} />
+            ) : (
+              <ChevronDown size={10} />
+            )}
+            <Clock size={10} />
+            <span>Recent</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleResetRecentCollapse}
+            aria-label="Reset recent collapse"
+            title="Reset recent collapse to default"
+            className="rounded p-0.5 text-3xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            data-testid="home-recent-reset"
+          >
+            <RotateCcw size={10} />
+          </button>
+        </div>
         {!recentCollapsed && (
           <div id="home-recent-body">
             <RecentConnections onActivate={handleActivate} />
           </div>
         )}
+      </div>
+
+      {/* Sprint 376 (Phase 6 Q21 #1 + #3-b) — Settings strip. Compact
+          two-button surface so the launcher 가 Q21 audit 의 settings
+          panel reset entry point 을 만족. Future SettingsPage 도 같은
+          컴포넌트 재사용 가능. */}
+      <div
+        className="flex flex-wrap items-center gap-1 border-t border-border px-3 py-2"
+        data-testid="home-settings"
+      >
+        <ResetSettingsButton className="flex flex-wrap items-center gap-1" />
       </div>
 
       {/* Theme picker footer — same control as the legacy Sidebar so the

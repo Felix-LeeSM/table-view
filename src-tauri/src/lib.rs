@@ -172,7 +172,15 @@ pub fn run() {
         commands::persist_connections::persist_connection,
         commands::persist_favorites::persist_favorites,
         commands::persist_mru::persist_mru,
+        // Sprint 376 (Phase 6 Q21 #8) — "Clear recent" affordance. Deletes
+        // every MRU row + emits state-changed mru.bulk so every window's
+        // RecentConnections converges to empty.
+        commands::persist_mru::clear_mru,
         commands::persist_settings::persist_setting,
+        // Sprint 376 (Phase 6 Q21) — reset_setting deletes the row + emits
+        // setting.reset. Strategy doc line 1389: receivers DO NOT refetch
+        // (row is gone); they apply frontend SETTING_DEFAULTS[entityId].
+        commands::persist_settings::reset_setting,
         // Sprint 368 (Phase 4 Q12) — single-key settings refetch for the
         // `state-changed` setting domain receiver (strategy F.4 line 1388).
         commands::persist_settings::get_setting,

@@ -58,6 +58,24 @@ export interface HeaderRowProps {
    * `useHiddenColumns` handles state + persist on the caller side.
    */
   onHideColumn?: (columnName: string) => void;
+  /**
+   * Sprint 376 (Phase 6 Q21 #5) — "Reset column widths" affordance.
+   * When provided, the context menu surfaces an item that calls back.
+   * Wire (in DataGridTable.tsx): the callback is
+   * `useColumnWidths.reset`, which fires
+   * `resetDatagridPrefs(field="widths")` — strategy doc line 1395.
+   */
+  onResetColumnWidths?: () => void;
+  /**
+   * Sprint 376 (Phase 6 Q21 #6) — "Show all columns" affordance.
+   * Wire: callback is `useHiddenColumns.clear`, which fires
+   * `setDatagridPrefs({ hiddenColumns: [] })` (functionally equivalent
+   * to `resetDatagridPrefs(field="hiddenColumns")` — both clear the
+   * stored set without touching widths).
+   */
+  onShowAllColumns?: () => void;
+  /** Disables the "Show all columns" menu item when no column is hidden. */
+  anyColumnHidden?: boolean;
 }
 
 export default function HeaderRow({
@@ -72,13 +90,18 @@ export default function HeaderRow({
   onClearColumnSort,
   onClearAllSorts,
   onHideColumn,
+  onResetColumnWidths,
+  onShowAllColumns,
+  anyColumnHidden = false,
 }: HeaderRowProps) {
   const sortMouseStartRef = useRef<{ x: number; y: number } | null>(null);
   const hasContextMenu = !!(
     onSortColumn ||
     onClearColumnSort ||
     onClearAllSorts ||
-    onHideColumn
+    onHideColumn ||
+    onResetColumnWidths ||
+    onShowAllColumns
   );
 
   return (
@@ -214,6 +237,29 @@ export default function HeaderRow({
                     <ContextMenuItem onSelect={() => onHideColumn(col.name)}>
                       Hide column
                     </ContextMenuItem>
+                  </>
+                )}
+                {/* Sprint 376 (Phase 6 Q21 #5 + #6) — reset affordances.
+                    Confirm dialog 없음 (Q21 직접 IPC contract). */}
+                {(onResetColumnWidths || onShowAllColumns) && (
+                  <>
+                    {(onSortColumn ||
+                      onClearColumnSort ||
+                      onClearAllSorts ||
+                      onHideColumn) && <ContextMenuSeparator />}
+                    {onResetColumnWidths && (
+                      <ContextMenuItem onSelect={() => onResetColumnWidths()}>
+                        Reset column widths
+                      </ContextMenuItem>
+                    )}
+                    {onShowAllColumns && (
+                      <ContextMenuItem
+                        disabled={!anyColumnHidden}
+                        onSelect={() => onShowAllColumns()}
+                      >
+                        Show all columns
+                      </ContextMenuItem>
+                    )}
                   </>
                 )}
               </ContextMenuContent>

@@ -98,6 +98,12 @@ export interface DataGridTableProps {
    */
   hiddenColumnNames?: ReadonlySet<string>;
   onHideColumn?: (columnName: string) => void;
+  /**
+   * Sprint 376 (Phase 6 Q21 #6) — "Show all columns" header context-menu
+   * affordance. Parent wires this to `useHiddenColumns.clear` (or the
+   * equivalent backend `resetDatagridPrefs(field="hiddenColumns")`).
+   */
+  onShowAllColumns?: () => void;
   onDeleteRow: () => void;
   onDuplicateRow: () => void;
   onNavigateToFk?: (
@@ -180,6 +186,7 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
       onClearAllSorts,
       hiddenColumnNames,
       onHideColumn,
+      onShowAllColumns,
       onDeleteRow,
       onDuplicateRow,
       onNavigateToFk,
@@ -498,6 +505,13 @@ const DataGridTable = forwardRef<DataGridTableHandle, DataGridTableProps>(
           onClearColumnSort={onClearColumnSort}
           onClearAllSorts={onClearAllSorts}
           onHideColumn={onHideColumn}
+          // Sprint 376 (Phase 6 Q21 #5 + #6) — header context menu reset
+          // affordances. `resetColumnWidths` is already the imperative
+          // handle for the toolbar / shortcut; we also expose it on the
+          // header menu so the user can find it without leaving the grid.
+          onResetColumnWidths={resetColumnWidths}
+          onShowAllColumns={onShowAllColumns}
+          anyColumnHidden={(hiddenColumnNames?.size ?? 0) > 0}
         />
 
         {shouldVirtualize ? (

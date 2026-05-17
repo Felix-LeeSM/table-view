@@ -807,6 +807,11 @@ export default function DocumentDataGrid({
             onClearColumnSort={handleClearColumnSort}
             onClearAllSorts={handleClearAllSorts}
             onHideColumn={hiddenColumns.hide}
+            // Sprint 376 (Phase 6 Q21 #5 + #6) — header context menu
+            // reset affordances. Same wire as the RDB grid.
+            onResetColumnWidths={resetColumnWidths}
+            onShowAllColumns={hiddenColumns.clear}
+            anyColumnHidden={hiddenColumns.hidden.size > 0}
           />
 
           <div role="rowgroup">

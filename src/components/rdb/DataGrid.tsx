@@ -713,6 +713,10 @@ export default function DataGrid({
           onClearAllSorts={handleClearAllSorts}
           hiddenColumnNames={hiddenColumns.hidden}
           onHideColumn={hiddenColumns.hide}
+          // Sprint 376 (Phase 6 Q21 #6) — header context menu "Show all
+          // columns". Wraps useHiddenColumns.clear which fires
+          // setDatagridPrefs({ hiddenColumns: [] }).
+          onShowAllColumns={hiddenColumns.clear}
           columnPrefsPk={{
             connectionId,
             paradigm: "rdb",
