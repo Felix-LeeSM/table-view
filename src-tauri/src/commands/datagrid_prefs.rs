@@ -353,4 +353,249 @@ mod tests {
         assert_eq!(json["hiddenColumns"], serde_json::json!([]));
         assert_eq!(json["updatedAt"], serde_json::Value::Null);
     }
+
+    // ---------------------------------------------------------------------
+    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //
+    // baseline 측정 set 에 `tests/datagrid_prefs_*` 가 포함되지 않아 본 모듈의
+    // _inner 함수가 22% 만 cover. inline 으로 4 happy + 1 reject path 를
+    // cover 한다. 통합 시나리오 (sprint-369 의 AC 매핑) 는 `tests/datagrid_*`
+    // 가 별도 책임 — 본 inline 은 baseline 측정 set 에서 `--lib` 경로로 직접
+    // 도달.
+    // ---------------------------------------------------------------------
+    use crate::storage::local;
+    use crate::storage::meta::{set_legacy_import_state, LegacyImportState};
+    use serial_test::serial;
+    use tempfile::TempDir;
+
+    async fn setup_pool() -> (TempDir, SqlitePool) {
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        let pool = local::open_pool().await.unwrap();
+        set_legacy_import_state(&pool, LegacyImportState::Done)
+            .await
+            .unwrap();
+        (dir, pool)
+    }
+
+    fn cleanup_env() {
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    fn make_pk(table: &str) -> ColumnPrefsPk {
+        ColumnPrefsPk {
+            connection_id: "c".into(),
+            paradigm: "rdb".into(),
+            db_name: "db".into(),
+            namespace: "public".into(),
+            table_name: table.into(),
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn set_inner_inserts_row_with_widths_only() {
+        let (_dir, pool) = setup_pool().await;
+        set_datagrid_prefs_inner(
+            &pool,
+            SetDatagridPrefsRequest {
+                pk: make_pk("t1"),
+                widths: Some(serde_json::json!({ "id": 80 })),
+                hidden_columns: None,
+            },
+        )
+        .await
+        .unwrap();
+        let widths: String = sqlx::query_scalar(
+            "SELECT widths_json FROM datagrid_column_prefs WHERE table_name = 't1'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert!(widths.contains("\"id\""));
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn set_inner_empty_patch_rejects_with_validation() {
+        let (_dir, pool) = setup_pool().await;
+        let err = set_datagrid_prefs_inner(
+            &pool,
+            SetDatagridPrefsRequest {
+                pk: make_pk("t-empty"),
+                widths: None,
+                hidden_columns: None,
+            },
+        )
+        .await
+        .unwrap_err();
+        match err {
+            crate::error::AppError::Validation(msg) => {
+                assert!(msg.contains("widths"));
+                assert!(msg.contains("hiddenColumns"));
+            }
+            other => panic!("Expected Validation, got {other:?}"),
+        }
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_inner_returns_default_when_row_missing() {
+        let (_dir, pool) = setup_pool().await;
+        let resp = get_datagrid_prefs_inner(&pool, make_pk("absent"))
+            .await
+            .unwrap();
+        assert_eq!(resp.widths, serde_json::json!({}));
+        assert!(resp.hidden_columns.is_empty());
+        assert!(resp.updated_at.is_none());
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn get_inner_round_trips_after_set() {
+        let (_dir, pool) = setup_pool().await;
+        set_datagrid_prefs_inner(
+            &pool,
+            SetDatagridPrefsRequest {
+                pk: make_pk("rt"),
+                widths: Some(serde_json::json!({ "a": 100, "b": 200 })),
+                hidden_columns: Some(vec!["secret".into()]),
+            },
+        )
+        .await
+        .unwrap();
+        let resp = get_datagrid_prefs_inner(&pool, make_pk("rt"))
+            .await
+            .unwrap();
+        assert_eq!(resp.widths, serde_json::json!({ "a": 100, "b": 200 }));
+        assert_eq!(resp.hidden_columns, vec!["secret".to_string()]);
+        assert!(resp.updated_at.is_some());
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_inner_widths_only_preserves_hidden() {
+        let (_dir, pool) = setup_pool().await;
+        set_datagrid_prefs_inner(
+            &pool,
+            SetDatagridPrefsRequest {
+                pk: make_pk("rw"),
+                widths: Some(serde_json::json!({ "a": 1 })),
+                hidden_columns: Some(vec!["h".into()]),
+            },
+        )
+        .await
+        .unwrap();
+        reset_datagrid_prefs_inner(
+            &pool,
+            ResetDatagridPrefsRequest {
+                pk: make_pk("rw"),
+                field: ResetField::Widths,
+            },
+        )
+        .await
+        .unwrap();
+        let resp = get_datagrid_prefs_inner(&pool, make_pk("rw"))
+            .await
+            .unwrap();
+        assert_eq!(resp.widths, serde_json::json!({}));
+        assert_eq!(resp.hidden_columns, vec!["h".to_string()]);
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_inner_hidden_only_preserves_widths() {
+        let (_dir, pool) = setup_pool().await;
+        set_datagrid_prefs_inner(
+            &pool,
+            SetDatagridPrefsRequest {
+                pk: make_pk("rh"),
+                widths: Some(serde_json::json!({ "a": 1 })),
+                hidden_columns: Some(vec!["h".into()]),
+            },
+        )
+        .await
+        .unwrap();
+        reset_datagrid_prefs_inner(
+            &pool,
+            ResetDatagridPrefsRequest {
+                pk: make_pk("rh"),
+                field: ResetField::HiddenColumns,
+            },
+        )
+        .await
+        .unwrap();
+        let resp = get_datagrid_prefs_inner(&pool, make_pk("rh"))
+            .await
+            .unwrap();
+        assert_eq!(resp.widths, serde_json::json!({ "a": 1 }));
+        assert!(resp.hidden_columns.is_empty());
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_inner_all_deletes_row() {
+        let (_dir, pool) = setup_pool().await;
+        set_datagrid_prefs_inner(
+            &pool,
+            SetDatagridPrefsRequest {
+                pk: make_pk("ra"),
+                widths: Some(serde_json::json!({})),
+                hidden_columns: Some(vec![]),
+            },
+        )
+        .await
+        .unwrap();
+        reset_datagrid_prefs_inner(
+            &pool,
+            ResetDatagridPrefsRequest {
+                pk: make_pk("ra"),
+                field: ResetField::All,
+            },
+        )
+        .await
+        .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM datagrid_column_prefs WHERE table_name='ra'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 0);
+        cleanup_env();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn set_inner_second_call_for_same_pk_updates_row_in_place() {
+        // SQLite ON CONFLICT(pk) DO UPDATE — the second set must not create
+        // a second row. The widths value must reflect the latest write.
+        let (_dir, pool) = setup_pool().await;
+        for w in [100, 200, 300] {
+            set_datagrid_prefs_inner(
+                &pool,
+                SetDatagridPrefsRequest {
+                    pk: make_pk("u"),
+                    widths: Some(serde_json::json!({ "id": w })),
+                    hidden_columns: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM datagrid_column_prefs WHERE table_name='u'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 1, "ON CONFLICT must update in place");
+        let resp = get_datagrid_prefs_inner(&pool, make_pk("u")).await.unwrap();
+        assert_eq!(resp.widths, serde_json::json!({ "id": 300 }));
+        cleanup_env();
+    }
 }

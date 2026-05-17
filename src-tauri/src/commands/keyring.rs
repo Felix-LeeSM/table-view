@@ -24,3 +24,66 @@ pub async fn set_keyring_fallback_dismissed() -> Result<(), AppError> {
     std::fs::write(&path, b"")?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //!
+    //! `set_keyring_fallback_dismissed` IPC 는 SQLite/AppState 미관여 — 단순
+    //! file sidecar write. Tauri::command attribute 가 wrapping 만 하기에
+    //! `tauri::test::mock_app` 없이 직접 호출 가능.
+    //!
+    //! Test scenarios:
+    //!   - Happy: 빈 dir 에서 sidecar 생성.
+    //!   - 멱등: 두 번째 호출도 정상 (덮어쓰기 OK).
+    //!   - File 내용: 빈 body (위치만 의미 있음).
+    use super::*;
+    use serial_test::serial;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    #[serial]
+    async fn happy_path_creates_sentinel_in_test_data_dir() {
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        set_keyring_fallback_dismissed()
+            .await
+            .expect("must succeed in a writable temp dir");
+        let path = fallback_dismissed_sentinel_path(dir.path());
+        assert!(path.exists(), "sentinel file must be created");
+        let body = std::fs::read(&path).unwrap();
+        assert!(body.is_empty(), "sentinel body is intentionally empty");
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn idempotent_second_call_does_not_error() {
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        set_keyring_fallback_dismissed().await.unwrap();
+        // Second call — already exists, must still return Ok.
+        set_keyring_fallback_dismissed()
+            .await
+            .expect("second call must be idempotent");
+        let path = fallback_dismissed_sentinel_path(dir.path());
+        assert!(path.exists());
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn third_call_in_isolated_dir_does_not_resurface_prior_body() {
+        // 별도 새 TempDir 에서도 정상 — 동일 dir 에서의 idempotency 와 분리.
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        for _ in 0..3 {
+            set_keyring_fallback_dismissed().await.unwrap();
+        }
+        let path = fallback_dismissed_sentinel_path(dir.path());
+        assert!(path.exists());
+        let body = std::fs::read(&path).unwrap();
+        assert!(body.is_empty());
+        std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR");
+    }
+}

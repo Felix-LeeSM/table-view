@@ -742,4 +742,513 @@ mod tests {
         assert_eq!(deleted, 0);
         cleanup();
     }
+
+    // ---------------------------------------------------------------------
+    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //
+    // 기존 inline `boot_vacuum_*` 만 cover. `tests/history_*` 통합 binary 는
+    // baseline 측정 set 에 없어 `add_history_entry_inner` / `list_history_inner`
+    // / `get_history_detail_inner` / `clear_history_inner` 의 line coverage 가
+    // 27% 만. 본 추가 테스트는 4 IPC 의 핵심 path 를 `--lib` 경로에서 lock.
+    //
+    // 8 원칙:
+    //   - Happy: add → list → detail → clear flow 가 한 lock.
+    //   - 빈 입력: list_history with empty filter → 빈 응답.
+    //   - 에러 복구: get_history_detail with absent id → AppError::NotFound.
+    //   - 동시성: clear 후 add 가 새 id 부여 (autoincrement 가 reset 안 됨).
+    //   - 상태 전이: filter union — paradigm only / paradigm+queryMode.
+    //   - try-await reject: list 의 tabId-without-connectionId → Validation.
+    //   - 빈 catch 없음: clear 의 VACUUM 실패 path 는 warn 만 — invariant 가
+    //     row 0 / count 단언으로 lock.
+    // ---------------------------------------------------------------------
+
+    /// Build an empty `ListHistoryRequest` — used in place of `Default::default()`
+    /// to avoid adding `#[derive(Default)]` to the sprint-371 wire struct (boundary
+    /// rule: other-sprint code is import-only).
+    fn empty_list_request() -> ListHistoryRequest {
+        ListHistoryRequest {
+            connection_id: None,
+            tab_id: None,
+            filter: None,
+            cursor: None,
+            limit: None,
+        }
+    }
+
+    async fn insert_one_default(pool: &SqlitePool, sql: &str) -> i64 {
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": sql,
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        add_history_entry_inner(pool, req).await.unwrap().id
+    }
+
+    // ---------------- add_history_entry_inner ----------------
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_returns_monotonic_ids() {
+        let (_dir, pool) = setup().await;
+        let id1 = insert_one_default(&pool, "SELECT 1").await;
+        let id2 = insert_one_default(&pool, "SELECT 2").await;
+        assert!(id2 > id1, "AUTOINCREMENT id must be monotonic");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_redacts_sql_in_response() {
+        let (_dir, pool) = setup().await;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": "SELECT * FROM users WHERE name = 'alice'",
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        let resp = add_history_entry_inner(&pool, req).await.unwrap();
+        // sql_redact replaces quoted literals with `?` — we expect at least
+        // one occurrence in the masked form.
+        assert!(
+            resp.sql_redacted.contains('?'),
+            "sql_redact must mask quoted literal: {}",
+            resp.sql_redacted
+        );
+        // The original SQL is preserved in the row but not the response (the
+        // response is the redacted form; detail IPC returns the original).
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_overrides_drifted_executed_at_with_backend_now() {
+        let (_dir, pool) = setup().await;
+        // Drift the frontend timestamp by 1 day (well past 5min).
+        let drifted = now_ms() - 24 * 60 * 60 * 1000;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": "SELECT 1",
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": drifted,
+        }))
+        .unwrap();
+        let resp = add_history_entry_inner(&pool, req).await.unwrap();
+        assert!(
+            (resp.executed_at - now_ms()).abs() < 5_000,
+            "drifted executed_at must be overridden with backend now"
+        );
+        assert_ne!(resp.executed_at, drifted, "must not echo the drifted value");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_accepts_in_range_executed_at_verbatim() {
+        let (_dir, pool) = setup().await;
+        let within = now_ms() - 60_000; // 1 minute ago — within 5-min threshold.
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "c-1",
+            "paradigm": "rdb",
+            "queryMode": "sql",
+            "source": "raw",
+            "sql": "SELECT 1",
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": within,
+        }))
+        .unwrap();
+        let resp = add_history_entry_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.executed_at, within);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn add_inner_persists_document_paradigm_with_query_mode() {
+        let (_dir, pool) = setup().await;
+        let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "mongo-1",
+            "paradigm": "document",
+            "queryMode": "aggregate",
+            "source": "raw",
+            "sql": "db.users.aggregate([{$match:{a:1}}])",
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        let resp = add_history_entry_inner(&pool, req).await.unwrap();
+        let row: (String, String) =
+            sqlx::query_as("SELECT paradigm, query_mode FROM query_history WHERE id = ?")
+                .bind(resp.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(row.0, "document");
+        assert_eq!(row.1, "aggregate");
+        cleanup();
+    }
+
+    // ---------------- list_history_inner ----------------
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_empty_table_returns_empty_rows_and_no_next_cursor() {
+        let (_dir, pool) = setup().await;
+        let resp = list_history_inner(&pool, empty_list_request())
+            .await
+            .unwrap();
+        assert!(resp.rows.is_empty());
+        assert!(resp.next_cursor.is_none());
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_rejects_tab_id_without_connection_id() {
+        let (_dir, pool) = setup().await;
+        let req = ListHistoryRequest {
+            connection_id: None,
+            tab_id: Some("t1".into()),
+            filter: None,
+            cursor: None,
+            limit: None,
+        };
+        let err = list_history_inner(&pool, req).await.unwrap_err();
+        match err {
+            crate::error::AppError::Validation(msg) => assert!(msg.contains("tabId")),
+            other => panic!("Expected Validation, got {other:?}"),
+        }
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_paradigm_only_filter_returns_matching_rows() {
+        let (_dir, pool) = setup().await;
+        insert_one_default(&pool, "SELECT 1").await;
+        insert_one_default(&pool, "SELECT 2").await;
+        let req = ListHistoryRequest {
+            connection_id: None,
+            tab_id: None,
+            filter: Some(HistoryQueryModeFilter::Rdb { query_mode: None }),
+            cursor: None,
+            limit: None,
+        };
+        let resp = list_history_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.rows.len(), 2);
+        for row in &resp.rows {
+            assert_eq!(row.paradigm, "rdb");
+        }
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_paradigm_and_query_mode_filter_excludes_others() {
+        let (_dir, pool) = setup().await;
+        // 1 RDB row
+        insert_one_default(&pool, "SELECT rdb").await;
+        // 1 document row
+        let doc_req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+            "connectionId": "mongo-1",
+            "paradigm": "document",
+            "queryMode": "find",
+            "source": "raw",
+            "sql": "db.x.find({})",
+            "status": "success",
+            "durationMs": 1,
+            "executedAt": now_ms(),
+        }))
+        .unwrap();
+        add_history_entry_inner(&pool, doc_req).await.unwrap();
+
+        let req = ListHistoryRequest {
+            connection_id: None,
+            tab_id: None,
+            filter: Some(HistoryQueryModeFilter::Document {
+                query_mode: Some(DocumentQueryMode::Find),
+            }),
+            cursor: None,
+            limit: None,
+        };
+        let resp = list_history_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.rows.len(), 1);
+        assert_eq!(resp.rows[0].paradigm, "document");
+        assert_eq!(resp.rows[0].query_mode, "find");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_limit_clamps_to_max() {
+        let (_dir, pool) = setup().await;
+        // Insert 510 rows so MAX_LIMIT (500) clamps.
+        for i in 0..510_i32 {
+            insert_one_default(&pool, &format!("SELECT {i}")).await;
+        }
+        let req = ListHistoryRequest {
+            connection_id: None,
+            tab_id: None,
+            filter: None,
+            cursor: None,
+            limit: Some(1000),
+        };
+        let resp = list_history_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.rows.len(), 500);
+        assert!(resp.next_cursor.is_some(), "page is full at clamp boundary");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_default_limit_is_100() {
+        let (_dir, pool) = setup().await;
+        for i in 0..150_i32 {
+            insert_one_default(&pool, &format!("SELECT {i}")).await;
+        }
+        let req = empty_list_request();
+        let resp = list_history_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.rows.len(), 100);
+        assert!(resp.next_cursor.is_some());
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_negative_limit_falls_back_to_default() {
+        let (_dir, pool) = setup().await;
+        for i in 0..150_i32 {
+            insert_one_default(&pool, &format!("SELECT {i}")).await;
+        }
+        let req = ListHistoryRequest {
+            limit: Some(-5),
+            ..empty_list_request()
+        };
+        let resp = list_history_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.rows.len(), 100, "negative limit must fall back to 100");
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_cursor_paginates_without_overlap() {
+        let (_dir, pool) = setup().await;
+        for i in 0..30_i32 {
+            insert_one_default(&pool, &format!("SELECT {i}")).await;
+        }
+        let page1 = list_history_inner(
+            &pool,
+            ListHistoryRequest {
+                limit: Some(10),
+                ..empty_list_request()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(page1.rows.len(), 10);
+        let cursor = page1.next_cursor.expect("page 1 must yield cursor");
+
+        let page2 = list_history_inner(
+            &pool,
+            ListHistoryRequest {
+                limit: Some(10),
+                cursor: Some(cursor),
+                ..empty_list_request()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(page2.rows.len(), 10);
+        let ids1: Vec<i64> = page1.rows.iter().map(|r| r.id).collect();
+        let ids2: Vec<i64> = page2.rows.iter().map(|r| r.id).collect();
+        for id in &ids2 {
+            assert!(!ids1.contains(id), "pages must not overlap");
+        }
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn list_inner_connection_id_and_tab_id_filter_narrow_rows() {
+        let (_dir, pool) = setup().await;
+        // 2 rows with c-1/tab-A, 1 with c-1/tab-B, 1 with c-2/tab-A.
+        for (cid, tid) in [
+            ("c-1", "tab-A"),
+            ("c-1", "tab-A"),
+            ("c-1", "tab-B"),
+            ("c-2", "tab-A"),
+        ] {
+            let req: AddHistoryEntryRequest = serde_json::from_value(serde_json::json!({
+                "connectionId": cid,
+                "tabId": tid,
+                "paradigm": "rdb",
+                "queryMode": "sql",
+                "source": "raw",
+                "sql": "SELECT 1",
+                "status": "success",
+                "durationMs": 1,
+                "executedAt": now_ms(),
+            }))
+            .unwrap();
+            add_history_entry_inner(&pool, req).await.unwrap();
+        }
+        let req = ListHistoryRequest {
+            connection_id: Some("c-1".into()),
+            tab_id: Some("tab-A".into()),
+            filter: None,
+            cursor: None,
+            limit: None,
+        };
+        let resp = list_history_inner(&pool, req).await.unwrap();
+        assert_eq!(resp.rows.len(), 2);
+        for row in &resp.rows {
+            assert_eq!(row.connection_id, "c-1");
+            assert_eq!(row.tab_id.as_deref(), Some("tab-A"));
+        }
+        cleanup();
+    }
+
+    // ---------------- get_history_detail_inner ----------------
+
+    #[tokio::test]
+    #[serial]
+    async fn detail_inner_returns_original_sql_for_existing_id() {
+        let (_dir, pool) = setup().await;
+        let sql = "SELECT * FROM users WHERE id = 1";
+        let id = insert_one_default(&pool, sql).await;
+        let resp = get_history_detail_inner(&pool, GetHistoryDetailRequest { id })
+            .await
+            .unwrap();
+        assert_eq!(resp.id, id);
+        assert_eq!(resp.sql, sql, "detail IPC returns the unredacted SQL");
+        assert!(!resp.sql_redacted.is_empty());
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn detail_inner_missing_id_returns_not_found() {
+        let (_dir, pool) = setup().await;
+        let err = get_history_detail_inner(&pool, GetHistoryDetailRequest { id: 999_999 })
+            .await
+            .unwrap_err();
+        match err {
+            crate::error::AppError::NotFound(msg) => assert!(msg.contains("999999")),
+            other => panic!("Expected NotFound, got {other:?}"),
+        }
+        cleanup();
+    }
+
+    // ---------------- clear_history_inner ----------------
+
+    #[tokio::test]
+    #[serial]
+    async fn clear_inner_returns_pre_count_and_truncates() {
+        let (_dir, pool) = setup().await;
+        for i in 0..7_i32 {
+            insert_one_default(&pool, &format!("SELECT {i}")).await;
+        }
+        let deleted = clear_history_inner(&pool).await.unwrap();
+        assert_eq!(deleted, 7);
+        let post: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM query_history")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(post, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn clear_inner_on_empty_table_returns_zero() {
+        let (_dir, pool) = setup().await;
+        let deleted = clear_history_inner(&pool).await.unwrap();
+        assert_eq!(deleted, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn clear_inner_then_add_works_and_assigns_new_ids() {
+        let (_dir, pool) = setup().await;
+        insert_one_default(&pool, "SELECT 1").await;
+        clear_history_inner(&pool).await.unwrap();
+        // After VACUUM the table is clean — a new INSERT must succeed.
+        let new_id = insert_one_default(&pool, "SELECT 2").await;
+        assert!(new_id > 0);
+        cleanup();
+    }
+
+    // ---------------- enum serde wire ----------------
+
+    #[test]
+    fn rdb_query_mode_serializes_lowercase() {
+        let m = HistoryQueryMode::Rdb {
+            query_mode: RdbQueryMode::Sql,
+        };
+        let json = serde_json::to_value(&m).unwrap();
+        assert_eq!(json["paradigm"], "rdb");
+        assert_eq!(json["queryMode"], "sql");
+    }
+
+    #[test]
+    fn document_query_mode_serializes_camel_case() {
+        let m = HistoryQueryMode::Document {
+            query_mode: DocumentQueryMode::EstimatedDocumentCount,
+        };
+        let json = serde_json::to_value(&m).unwrap();
+        assert_eq!(json["paradigm"], "document");
+        assert_eq!(json["queryMode"], "estimatedDocumentCount");
+    }
+
+    #[test]
+    fn document_query_mode_round_trip_for_all_variants() {
+        let variants = [
+            DocumentQueryMode::Find,
+            DocumentQueryMode::FindOne,
+            DocumentQueryMode::Aggregate,
+            DocumentQueryMode::Count,
+            DocumentQueryMode::EstimatedDocumentCount,
+            DocumentQueryMode::Distinct,
+            DocumentQueryMode::InsertOne,
+            DocumentQueryMode::InsertMany,
+            DocumentQueryMode::UpdateOne,
+            DocumentQueryMode::UpdateMany,
+            DocumentQueryMode::DeleteOne,
+            DocumentQueryMode::DeleteMany,
+            DocumentQueryMode::BulkWrite,
+        ];
+        for v in variants {
+            let mode = HistoryQueryMode::Document { query_mode: v };
+            let json = serde_json::to_string(&mode).unwrap();
+            let parsed: HistoryQueryMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, mode);
+        }
+    }
+
+    #[test]
+    fn history_query_mode_filter_rejects_paradigm_only_query_mode_pair() {
+        // invalid: paradigm=rdb but queryMode=find. The discriminated union
+        // only accepts RdbQueryMode under "rdb" and DocumentQueryMode under
+        // "document"; cross-paradigm pairs fail serde.
+        let bad = serde_json::json!({ "paradigm": "rdb", "queryMode": "find" });
+        let r = serde_json::from_value::<HistoryQueryMode>(bad);
+        assert!(r.is_err(), "rdb+find must be rejected by serde");
+    }
 }

@@ -178,4 +178,167 @@ mod tests {
         );
         cleanup();
     }
+
+    // ---------------------------------------------------------------------
+    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //
+    // `clear_mru_inner` (sprint-376 Q21 #8) 는 baseline 측정 set 의
+    // `tests/clear_mru.rs` 가 별 binary 라 본 모듈에서 직접 cover 되지 않음.
+    // 또한 `persist_mru_inner` 의 다중 entry / upsert path 도 inline 보강.
+    // ---------------------------------------------------------------------
+
+    #[tokio::test]
+    #[serial]
+    async fn persist_mru_inner_multiple_entries_in_one_tx() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        persist_mru_inner(
+            &pool,
+            vec![
+                PersistMruRequest {
+                    connection_id: "c1".into(),
+                    last_used: 100,
+                },
+                PersistMruRequest {
+                    connection_id: "c2".into(),
+                    last_used: 200,
+                },
+                PersistMruRequest {
+                    connection_id: "c3".into(),
+                    last_used: 300,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 3);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn persist_mru_inner_upsert_overwrites_same_connection_id() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        for ts in [10_i64, 20, 30] {
+            persist_mru_inner(
+                &pool,
+                vec![PersistMruRequest {
+                    connection_id: "c1".into(),
+                    last_used: ts,
+                }],
+            )
+            .await
+            .unwrap();
+        }
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 1, "upsert must not multiply rows");
+        let last_used: i64 =
+            sqlx::query_scalar("SELECT last_used FROM mru WHERE connection_id='c1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(last_used, 30);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn persist_mru_inner_empty_vec_is_noop() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        persist_mru_inner(&pool, vec![]).await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn clear_mru_inner_deletes_every_row() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        persist_mru_inner(
+            &pool,
+            vec![
+                PersistMruRequest {
+                    connection_id: "c1".into(),
+                    last_used: 1,
+                },
+                PersistMruRequest {
+                    connection_id: "c2".into(),
+                    last_used: 2,
+                },
+            ],
+        )
+        .await
+        .unwrap();
+        clear_mru_inner(&pool).await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mru")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn clear_mru_inner_on_empty_table_is_idempotent() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        clear_mru_inner(&pool).await.unwrap();
+        // Second call still Ok.
+        clear_mru_inner(&pool).await.unwrap();
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn clear_mru_inner_rejects_when_legacy_not_done() {
+        cleanup();
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        let pool = local::open_pool().await.unwrap();
+        // leave at Pending — do not transition to Done.
+        let err = clear_mru_inner(&pool).await.unwrap_err();
+        match err {
+            AppError::LegacyImportInProgress => {}
+            other => panic!("Expected LegacyImportInProgress, got {other:?}"),
+        }
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn persist_mru_inner_rejects_when_legacy_not_done() {
+        cleanup();
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        let pool = local::open_pool().await.unwrap();
+        let err = persist_mru_inner(
+            &pool,
+            vec![PersistMruRequest {
+                connection_id: "c1".into(),
+                last_used: 1,
+            }],
+        )
+        .await
+        .unwrap_err();
+        match err {
+            AppError::LegacyImportInProgress => {}
+            other => panic!("Expected LegacyImportInProgress, got {other:?}"),
+        }
+        cleanup();
+    }
 }

@@ -327,4 +327,104 @@ mod tests {
         );
         cleanup();
     }
+
+    // ---------------------------------------------------------------------
+    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //
+    // `reset_setting_inner` (sprint-376) 는 baseline 측정 set 의 `tests/reset_setting.rs`
+    // 가 별 binary 라 본 모듈에서 직접 cover 되지 않음. inline 으로 4 시나리오 lock:
+    //   - Happy: 기존 row 가 DELETE 된다.
+    //   - 멱등: 부재 key 의 reset 도 Ok (no-op).
+    //   - sibling 분리: 다른 key 는 영향 0.
+    //   - guard 분기: legacy_imported != Done 시 LegacyImportInProgress.
+    // ---------------------------------------------------------------------
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_setting_inner_deletes_existing_row() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        persist_setting_inner(
+            &pool,
+            PersistSettingRequest {
+                key: "theme".into(),
+                value_json: r#"{"x":1}"#.into(),
+            },
+        )
+        .await
+        .unwrap();
+        let pre: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings WHERE key='theme'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(pre, 1);
+        reset_setting_inner(&pool, "theme").await.unwrap();
+        let post: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings WHERE key='theme'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(post, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_setting_inner_missing_key_is_idempotent() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        // No persist — directly reset.
+        reset_setting_inner(&pool, "absent").await.unwrap();
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_setting_inner_preserves_sibling_keys() {
+        cleanup();
+        let (_dir, pool) = setup().await;
+        for key in ["theme", "safe_mode", "history_retention_days"] {
+            persist_setting_inner(
+                &pool,
+                PersistSettingRequest {
+                    key: key.into(),
+                    value_json: r#""x""#.into(),
+                },
+            )
+            .await
+            .unwrap();
+        }
+        reset_setting_inner(&pool, "theme").await.unwrap();
+        let remaining: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 2);
+        let theme_left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM settings WHERE key='theme'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(theme_left, 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn reset_setting_inner_rejects_when_legacy_not_done() {
+        cleanup();
+        let dir = TempDir::new().unwrap();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        let pool = local::open_pool().await.unwrap();
+        // setup() above set Done — here we deliberately leave it at Pending.
+        let err = reset_setting_inner(&pool, "theme").await.unwrap_err();
+        match err {
+            AppError::LegacyImportInProgress => {}
+            other => panic!("Expected LegacyImportInProgress, got {other:?}"),
+        }
+        cleanup();
+    }
 }

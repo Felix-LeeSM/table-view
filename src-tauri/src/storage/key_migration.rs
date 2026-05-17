@@ -414,3 +414,512 @@ fn write_sentinel(path: &Path) -> Result<(), AppError> {
     fs::write(path, b"")?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    //! 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //!
+    //! `tests/keyring_*.rs` 통합 binary 가 별도로 존재하지만 본 baseline 의
+    //! coverage 측정 (`--lib --test storage_integration ...`) set 에는 포함되지
+    //! 않아 key_migration.rs 가 0% 로 나옴. inline `#[cfg(test)]` 로 옮겨와
+    //! `--lib` 경로의 cover 를 확보. 시나리오는 통합 binary 와 일부 중복되나
+    //! 더 fine-grained: secure_delete, sentinel, validate_key_len, 그리고 5
+    //! Path 분기 (A, B happy, B fail, B 후속 boot keyring hit, C unavail) 를
+    //! 작은 함수 단위로 lock.
+    //!
+    //! Test scenarios 8 원칙:
+    //!   - Happy: Path A (fresh user), Path B (disk → keyring), Path C (Linux).
+    //!   - 빈 입력: 빈 connections.json (data_has_password_ciphertext = false).
+    //!   - 에러 복구: keyring set 실패 → 디스크 보존 + sentinel.
+    //!   - 동시성: idempotent — 두 번째 boot 가 keyring hit only.
+    //!   - 상태 전이: Generated → FromKeyring → MigratedFromDisk → DiskFallback → Fatal.
+    //!   - try-await reject: read_disk_key with corrupt base64 / wrong length.
+    //!   - 빈 catch 없음 — Path B 실패 분기는 sentinel write 까지 단언.
+    //!
+    //! `InMemoryKeyringBackend` 가 `tests/keyring_*` 와 같은 in-memory 시뮬레이션
+    //! 이라 OS keyring 미접촉.
+    use super::*;
+    use crate::storage::crypto::{encrypt, InMemoryKeyringBackend, KeyringBackend};
+    use tempfile::TempDir;
+
+    fn seed_disk_key(data_dir: &Path, key: &[u8]) {
+        let path = disk_key_path(data_dir);
+        fs::write(&path, BASE64.encode(key)).expect("seed disk key");
+    }
+
+    // ---------------- helper: disk_key_path / sentinel paths ----------------
+
+    #[test]
+    fn disk_key_path_joins_dot_key_filename() {
+        let dir = TempDir::new().unwrap();
+        let path = disk_key_path(dir.path());
+        assert_eq!(path.file_name().and_then(|s| s.to_str()), Some(".key"));
+        assert_eq!(path.parent(), Some(dir.path()));
+    }
+
+    #[test]
+    fn migration_failed_sentinel_path_has_expected_filename() {
+        let dir = TempDir::new().unwrap();
+        let path = migration_failed_sentinel_path(dir.path());
+        assert_eq!(
+            path.file_name().and_then(|s| s.to_str()),
+            Some(".key.migration-failed")
+        );
+    }
+
+    #[test]
+    fn fallback_dismissed_sentinel_path_has_expected_filename() {
+        let dir = TempDir::new().unwrap();
+        let path = fallback_dismissed_sentinel_path(dir.path());
+        assert_eq!(
+            path.file_name().and_then(|s| s.to_str()),
+            Some(".keyring-fallback-dismissed")
+        );
+    }
+
+    // ---------------- helper: validate_key_len ----------------
+
+    #[test]
+    fn validate_key_len_accepts_exactly_32_bytes() {
+        validate_key_len(&[0u8; 32]).expect("32 bytes is valid");
+    }
+
+    #[test]
+    fn validate_key_len_rejects_short_key() {
+        let err = validate_key_len(&[0u8; 16]).unwrap_err();
+        match err {
+            AppError::Encryption(msg) => {
+                assert!(
+                    msg.contains("32"),
+                    "msg should mention expected length: {msg}"
+                );
+                assert!(msg.contains("16"));
+            }
+            other => panic!("Expected Encryption error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_key_len_rejects_empty() {
+        assert!(validate_key_len(&[]).is_err());
+    }
+
+    // ---------------- helper: read_disk_key (try-await reject) ----------------
+
+    #[test]
+    fn read_disk_key_round_trip_with_valid_base64() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &key);
+        let got = read_disk_key(&disk_key_path(dir.path())).unwrap();
+        assert_eq!(got, key);
+    }
+
+    #[test]
+    fn read_disk_key_with_invalid_base64_fails_encryption_error() {
+        let dir = TempDir::new().unwrap();
+        let path = disk_key_path(dir.path());
+        fs::write(&path, "not-valid-base64!!!").unwrap();
+        let err = read_disk_key(&path).unwrap_err();
+        match err {
+            AppError::Encryption(msg) => assert!(msg.contains("decode")),
+            other => panic!("Expected Encryption, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_disk_key_with_wrong_length_fails_validation() {
+        let dir = TempDir::new().unwrap();
+        let path = disk_key_path(dir.path());
+        // base64 of 16 bytes — decodes ok but length check rejects.
+        fs::write(&path, BASE64.encode([0u8; 16])).unwrap();
+        let err = read_disk_key(&path).unwrap_err();
+        assert!(matches!(err, AppError::Encryption(_)));
+    }
+
+    #[test]
+    fn read_disk_key_missing_file_returns_io_error() {
+        let dir = TempDir::new().unwrap();
+        let err = read_disk_key(&disk_key_path(dir.path())).unwrap_err();
+        match err {
+            AppError::Io(_) => {}
+            other => panic!("Expected Io error, got {other:?}"),
+        }
+    }
+
+    // ---------------- helper: write_disk_key ----------------
+
+    #[test]
+    fn write_disk_key_creates_file_and_round_trips() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (5..37u8).collect();
+        let path = disk_key_path(dir.path());
+        write_disk_key(&path, &key).unwrap();
+        assert!(path.exists());
+        let got = read_disk_key(&path).unwrap();
+        assert_eq!(got, key);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_disk_key_sets_mode_0o600() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        let path = disk_key_path(dir.path());
+        write_disk_key(&path, &key).unwrap();
+        let meta = fs::metadata(&path).unwrap();
+        assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+    }
+
+    // ---------------- helper: secure_delete ----------------
+
+    #[test]
+    fn secure_delete_removes_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("to_delete");
+        fs::write(&path, b"sensitive content").unwrap();
+        assert!(path.exists());
+        secure_delete(&path).unwrap();
+        assert!(!path.exists(), "secure_delete must unlink the file");
+    }
+
+    #[test]
+    fn secure_delete_on_missing_file_returns_io_error() {
+        let dir = TempDir::new().unwrap();
+        let err = secure_delete(&dir.path().join("nonexistent")).unwrap_err();
+        match err {
+            AppError::Io(_) => {}
+            other => panic!("Expected Io error for missing path, got {other:?}"),
+        }
+    }
+
+    // ---------------- helper: write_sentinel ----------------
+
+    #[test]
+    fn write_sentinel_creates_empty_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(".sentinel");
+        write_sentinel(&path).unwrap();
+        assert!(path.exists());
+        let body = fs::read(&path).unwrap();
+        assert!(body.is_empty(), "sentinel body is intentionally empty");
+    }
+
+    #[test]
+    fn write_sentinel_creates_parent_directory() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("nested/deeper/.sentinel");
+        write_sentinel(&path).unwrap();
+        assert!(path.exists());
+        assert!(path.parent().unwrap().is_dir());
+    }
+
+    // ---------------- helper: data_has_password_ciphertext ----------------
+
+    #[test]
+    fn data_has_password_ciphertext_returns_false_when_file_missing() {
+        let dir = TempDir::new().unwrap();
+        assert!(!data_has_password_ciphertext(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn data_has_password_ciphertext_returns_false_when_json_corrupt() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("connections.json"), "{ not valid json").unwrap();
+        assert!(!data_has_password_ciphertext(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn data_has_password_ciphertext_returns_false_when_connections_array_missing() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("connections.json"), r#"{"groups":[]}"#).unwrap();
+        assert!(!data_has_password_ciphertext(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn data_has_password_ciphertext_returns_false_when_all_passwords_empty() {
+        let dir = TempDir::new().unwrap();
+        let doc = serde_json::json!({
+            "connections": [
+                { "id": "c1", "password": "" },
+                { "id": "c2", "password": "" },
+            ],
+            "groups": [],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        assert!(!data_has_password_ciphertext(dir.path()).unwrap());
+    }
+
+    #[test]
+    fn data_has_password_ciphertext_returns_true_when_any_password_nonempty() {
+        let dir = TempDir::new().unwrap();
+        let doc = serde_json::json!({
+            "connections": [
+                { "id": "c1", "password": "" },
+                { "id": "c2", "password": "ciphertext-blob" },
+            ],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        assert!(data_has_password_ciphertext(dir.path()).unwrap());
+    }
+
+    // ---------------- helper: validate_ciphertexts_decrypt ----------------
+
+    #[test]
+    fn validate_ciphertexts_decrypt_ok_when_file_missing() {
+        let dir = TempDir::new().unwrap();
+        validate_ciphertexts_decrypt(dir.path(), &[0u8; 32]).unwrap();
+    }
+
+    #[test]
+    fn validate_ciphertexts_decrypt_ok_when_passwords_empty() {
+        let dir = TempDir::new().unwrap();
+        let doc = serde_json::json!({
+            "connections": [
+                { "id": "c1", "password": "" },
+            ],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        validate_ciphertexts_decrypt(dir.path(), &[0u8; 32]).unwrap();
+    }
+
+    #[test]
+    fn validate_ciphertexts_decrypt_succeeds_with_correct_key() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        let enc = encrypt("secret-pw", &key).unwrap();
+        let doc = serde_json::json!({
+            "connections": [
+                { "id": "c1", "password": enc },
+            ],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        validate_ciphertexts_decrypt(dir.path(), &key)
+            .expect("decrypt must succeed under correct key");
+    }
+
+    #[test]
+    fn validate_ciphertexts_decrypt_fails_with_wrong_key() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        let wrong: Vec<u8> = (10..42u8).collect();
+        let enc = encrypt("secret-pw", &key).unwrap();
+        let doc = serde_json::json!({
+            "connections": [
+                { "id": "c1", "password": enc },
+            ],
+        });
+        fs::write(dir.path().join("connections.json"), doc.to_string()).unwrap();
+        let err = validate_ciphertexts_decrypt(dir.path(), &wrong).unwrap_err();
+        assert!(matches!(err, AppError::Encryption(_)));
+    }
+
+    #[test]
+    fn validate_ciphertexts_decrypt_ok_with_corrupt_json() {
+        // Corrupt JSON is handled gracefully (load_storage_raw will quarantine
+        // on the next call). The probe must not block migration.
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("connections.json"), "{ corrupt").unwrap();
+        validate_ciphertexts_decrypt(dir.path(), &[0u8; 32]).unwrap();
+    }
+
+    #[test]
+    fn validate_ciphertexts_decrypt_ok_when_connections_array_missing() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("connections.json"), r#"{"groups":[]}"#).unwrap();
+        validate_ciphertexts_decrypt(dir.path(), &[0u8; 32]).unwrap();
+    }
+
+    // ---------------- main: migrate_or_initialize — 5 path branches ----------------
+
+    /// Path A — fresh user, healthy keyring, no disk key, no ciphertext.
+    #[test]
+    fn migrate_path_a_generates_new_key_and_writes_to_keyring() {
+        let dir = TempDir::new().unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(outcome.source, KeySource::Generated);
+        assert_eq!(outcome.key.len(), 32);
+        assert!(!outcome.fallback_to_disk);
+        assert!(!outcome.is_fatal());
+        // Keyring should have the same key bytes.
+        let stored = backend.get(KEYRING_ENTRY_NAME).unwrap().unwrap();
+        assert_eq!(stored, outcome.key);
+        // No disk key created on Path A.
+        assert!(!disk_key_path(dir.path()).exists());
+    }
+
+    /// Path B happy — disk key migrates into keyring + secure-deleted.
+    #[test]
+    fn migrate_path_b_happy_migrates_and_unlinks_disk_key() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &key);
+        let backend = InMemoryKeyringBackend::new_available();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(outcome.source, KeySource::MigratedFromDisk);
+        assert_eq!(outcome.key, key);
+        assert!(!disk_key_path(dir.path()).exists());
+        assert!(!migration_failed_sentinel_path(dir.path()).exists());
+        // Sentinel from a previous failed migration would be cleaned up on success.
+    }
+
+    /// Path B fail — keyring write throws → sentinel + disk preserved.
+    #[test]
+    fn migrate_path_b_keyring_write_fail_preserves_disk_and_writes_sentinel() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &key);
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set_set_should_fail(true);
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(outcome.source, KeySource::DiskFallback);
+        assert!(outcome.fallback_to_disk);
+        assert!(disk_key_path(dir.path()).exists(), "disk key preserved");
+        assert!(
+            migration_failed_sentinel_path(dir.path()).exists(),
+            "failure sentinel set"
+        );
+    }
+
+    /// Path B 후속 boot — keyring hit only, disk key absent.
+    #[test]
+    fn migrate_second_boot_after_b_reads_keyring_only() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &key);
+        let backend = InMemoryKeyringBackend::new_available();
+
+        let first = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(first.source, KeySource::MigratedFromDisk);
+
+        let second = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(second.source, KeySource::FromKeyring);
+        assert_eq!(second.key, key);
+    }
+
+    /// Keyring hit cleans up stray disk file (Path B partial-failure mop-up).
+    #[test]
+    fn migrate_keyring_hit_cleans_up_stale_disk_file() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &key).unwrap();
+        // Simulate stray disk file (Path B secure-delete failed partway in
+        // a previous boot).
+        seed_disk_key(dir.path(), &key);
+        assert!(disk_key_path(dir.path()).exists());
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(outcome.source, KeySource::FromKeyring);
+        assert!(
+            !disk_key_path(dir.path()).exists(),
+            "stale disk .key should be best-effort cleaned"
+        );
+    }
+
+    /// Keyring hit with wrong-length payload fails (invariant guard).
+    #[test]
+    fn migrate_keyring_hit_with_wrong_length_fails() {
+        let dir = TempDir::new().unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+        backend.set(KEYRING_ENTRY_NAME, &[0u8; 16]).unwrap();
+        let err = migrate_or_initialize(&backend, dir.path()).unwrap_err();
+        assert!(matches!(err, AppError::Encryption(_)));
+    }
+
+    /// Path C — keyring unavailable + existing disk → DiskFallback.
+    #[test]
+    fn migrate_path_c_unavailable_keyring_with_disk_falls_back() {
+        let dir = TempDir::new().unwrap();
+        let key: Vec<u8> = (0..32u8).collect();
+        seed_disk_key(dir.path(), &key);
+        let backend = InMemoryKeyringBackend::new_unavailable();
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(outcome.source, KeySource::DiskFallback);
+        assert!(outcome.fallback_to_disk);
+        assert_eq!(outcome.key, key);
+        assert!(disk_key_path(dir.path()).exists());
+    }
+
+    /// Path C — keyring unavailable + no disk → new disk key generated.
+    #[test]
+    fn migrate_path_c_unavailable_keyring_no_disk_generates_disk_key() {
+        let dir = TempDir::new().unwrap();
+        let backend = InMemoryKeyringBackend::new_unavailable();
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert_eq!(outcome.source, KeySource::DiskFallback);
+        assert!(outcome.fallback_to_disk);
+        assert_eq!(outcome.key.len(), 32);
+        assert!(disk_key_path(dir.path()).exists());
+    }
+
+    /// Fatal — keyring + disk both missing, but ciphertext present.
+    #[test]
+    fn migrate_fatal_when_key_lost_but_ciphertext_present() {
+        let dir = TempDir::new().unwrap();
+        // Seed a non-empty ciphertext (we never persist the key anywhere).
+        let lost_key: Vec<u8> = (0..32u8).rev().collect();
+        let enc = encrypt("secret", &lost_key).unwrap();
+        fs::write(
+            dir.path().join("connections.json"),
+            serde_json::json!({"connections":[{"id":"c1","password":enc}]}).to_string(),
+        )
+        .unwrap();
+        let backend = InMemoryKeyringBackend::new_available();
+
+        let outcome = migrate_or_initialize(&backend, dir.path()).unwrap();
+        assert!(outcome.is_fatal());
+        assert_eq!(outcome.source, KeySource::Fatal);
+        assert!(outcome.key.is_empty(), "fatal must not carry a key");
+        // No new key written to disk or keyring (would orphan ciphertext).
+        assert!(!disk_key_path(dir.path()).exists());
+        assert!(backend.dump().is_empty());
+    }
+
+    // ---------------- KeyOutcome helper ----------------
+
+    #[test]
+    fn key_outcome_is_fatal_matches_fatal_source_only() {
+        let fatal = KeyOutcome {
+            key: Vec::new(),
+            source: KeySource::Fatal,
+            fallback_to_disk: false,
+        };
+        assert!(fatal.is_fatal());
+
+        for src in [
+            KeySource::Generated,
+            KeySource::FromKeyring,
+            KeySource::MigratedFromDisk,
+            KeySource::DiskFallback,
+        ] {
+            let outcome = KeyOutcome {
+                key: vec![0u8; 32],
+                source: src.clone(),
+                fallback_to_disk: false,
+            };
+            assert!(!outcome.is_fatal(), "{:?} should not be fatal", src);
+        }
+    }
+
+    // ---------------- app_data_dir_for_keyring — test env override ----------------
+
+    #[test]
+    fn app_data_dir_for_keyring_honors_test_env() {
+        let dir = TempDir::new().unwrap();
+        // Save any prior value so concurrent tests aren't disturbed.
+        let prior = std::env::var("TABLE_VIEW_TEST_DATA_DIR").ok();
+        std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", dir.path());
+        let resolved = app_data_dir_for_keyring().unwrap();
+        assert_eq!(resolved, dir.path());
+        // Restore.
+        match prior {
+            Some(v) => std::env::set_var("TABLE_VIEW_TEST_DATA_DIR", v),
+            None => std::env::remove_var("TABLE_VIEW_TEST_DATA_DIR"),
+        }
+    }
+}

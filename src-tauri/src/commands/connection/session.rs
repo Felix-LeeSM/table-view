@@ -255,4 +255,60 @@ mod tests {
         assert!(json.contains("\"id\":\"abc\""));
         assert!(json.contains("\"status\""));
     }
+
+    // ---------------------------------------------------------------------
+    // 작성 2026-05-17 — sprint-376 직후 baseline cleanup.
+    //
+    // `get_session_id` 는 keep_alive_loop / emit_status_change 외에 본 모듈에서
+    // cover 가능한 entry point. `emit_status_change` 는 production `Wry` 런타임에
+    // hard-bind 되어 있어 MockRuntime 으로는 호출 불가 (다른 sprint commit 의
+    // 시그니처를 본 cleanup 으로는 generic 화하지 않음 — boundary 룰).
+    //
+    // 8 원칙:
+    //   - Happy: get_session_id state 의 session_id 그대로 echo.
+    //   - 멱등: 두 번째 호출도 같은 값 — FIRST_IPC_INSTANT OnceLock 가 1회만 set.
+    //   - 동시성: 같은 state 를 두 호출이 봐도 racy 변화 0 (immutable session_id).
+    // ---------------------------------------------------------------------
+    use crate::commands::connection::AppState;
+    use tauri::test::{mock_builder, mock_context, noop_assets};
+    use tauri::Manager;
+
+    fn make_mock_app() -> tauri::App<tauri::test::MockRuntime> {
+        mock_builder()
+            .build(mock_context(noop_assets()))
+            .expect("mock app build")
+    }
+
+    #[test]
+    fn get_session_id_returns_state_session_id() {
+        let app = make_mock_app();
+        let app_state = AppState::new();
+        let expected = app_state.session_id.clone();
+        app.handle().manage(app_state);
+
+        // `get_session_id` is an async fn — drive it through the tauri async
+        // runtime (the test cfg picks the tokio backend on tauri's side).
+        let state: tauri::State<'_, AppState> = app.handle().state();
+        let actual = tauri::async_runtime::block_on(get_session_id(state)).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn get_session_id_is_idempotent_across_calls() {
+        let app = make_mock_app();
+        let app_state = AppState::new();
+        let session = app_state.session_id.clone();
+        app.handle().manage(app_state);
+
+        let a = {
+            let s: tauri::State<'_, AppState> = app.handle().state();
+            tauri::async_runtime::block_on(get_session_id(s)).unwrap()
+        };
+        let b = {
+            let s: tauri::State<'_, AppState> = app.handle().state();
+            tauri::async_runtime::block_on(get_session_id(s)).unwrap()
+        };
+        assert_eq!(a, b);
+        assert_eq!(a, session);
+    }
 }
