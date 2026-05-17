@@ -44,8 +44,16 @@ import {
   waitFor,
   act,
   within,
+  configure,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
+// Sprint 385 (2026-05-17) — `waitFor` default timeout 1000ms 가 pre-push 의
+// `pnpm test --coverage` (instrumentation + 4000+ test 병렬 부하) 하에서 본
+// 파일의 AC-229-07 chained Execute happy path 시나리오에 부족 — 5회 push
+// 시도 모두 동일 flake. 본 파일만 5000ms 로 늘려 CI 부하 hidden margin 회복.
+// 다른 test 파일 영향 0 (configure 의 scope = describe 블록 내).
+configure({ asyncUtilTimeout: 5000 });
 
 const {
   mockCreateTable,
