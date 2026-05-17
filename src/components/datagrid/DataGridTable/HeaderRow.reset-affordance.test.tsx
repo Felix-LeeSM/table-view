@@ -112,4 +112,57 @@ describe("HeaderRow reset affordances (Q21 #5 + #6)", () => {
     fireEvent.click(item);
     expect(onShowAllColumns).not.toHaveBeenCalled();
   });
+
+  // 작성 2026-05-17 (sprint-378). 사유: 사용자가 column width drag 후
+  // 기본값 복귀를 위해 호버 시 노출되는 보라색 drag handle 을 더블클릭
+  // 으로 즉시 reset 할 수 있어야 한다 (이미지 #7). column-level 이 아닌
+  // *전체 widths reset* — sprint-376 의 IPC `reset_datagrid_prefs
+  // (field=widths)` 재활용. per-column reset 은 별 sprint.
+  it("AC-378-03: column resize handle 더블클릭 → onResetColumnWidths 1회 호출", () => {
+    const onResetColumnWidths = vi.fn();
+    setup({ onResetColumnWidths });
+    const handles = Array.from(
+      document.querySelectorAll(".cursor-col-resize"),
+    ) as HTMLElement[];
+    expect(handles.length).toBeGreaterThan(0);
+    fireEvent.doubleClick(handles[0]!);
+    expect(onResetColumnWidths).toHaveBeenCalledTimes(1);
+  });
+
+  it("AC-378-04: column resize handle 단일 mousedown (drag-start) → onResetColumnWidths 미호출", () => {
+    const onResetColumnWidths = vi.fn();
+    setup({ onResetColumnWidths });
+    const handle = document.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement | null;
+    expect(handle).toBeTruthy();
+    fireEvent.mouseDown(handle!, { clientX: 100 });
+    fireEvent.mouseUp(handle!, { clientX: 100 });
+    expect(onResetColumnWidths).not.toHaveBeenCalled();
+  });
+
+  it("AC-378-05: column resize handle 더블클릭이 header onSort 로 bubble 되지 않는다", () => {
+    const onResetColumnWidths = vi.fn();
+    const onSort = vi.fn();
+    const data = buildData();
+    render(
+      <HeaderRow
+        data={data}
+        order={[0, 1]}
+        sorts={[]}
+        editingCell={null}
+        onSort={onSort}
+        onSaveCurrentEdit={vi.fn()}
+        onResizeStart={vi.fn()}
+        onResetColumnWidths={onResetColumnWidths}
+      />,
+    );
+    const handle = document.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement | null;
+    expect(handle).toBeTruthy();
+    fireEvent.doubleClick(handle!);
+    expect(onResetColumnWidths).toHaveBeenCalledTimes(1);
+    expect(onSort).not.toHaveBeenCalled();
+  });
 });

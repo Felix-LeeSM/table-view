@@ -277,10 +277,15 @@ export default function Sidebar() {
           </Button>
         </div>
 
-        {/* Resize handle */}
+        {/* Resize handle.
+            Sprint 378 (2026-05-17) — 더블클릭 = width reset. `handleResetSidebarWidth`
+            는 sprint-376 #3-a 의 IPC wrapper (`reset_setting("sidebar_width")`).
+            단일 클릭/drag-start 는 mousedown 만 트리거하므로 reset 과는
+            독립이다. */}
         <div
           className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/90 active:bg-primary/90"
           onMouseDown={handleResizeMouseDown}
+          onDoubleClick={handleResetSidebarWidth}
         />
       </div>
     </>

@@ -170,10 +170,21 @@ export default function HeaderRow({
               >
                 {col.data_type}
               </div>
+              {/* Sprint 378 (2026-05-17) — 더블클릭 = column widths reset.
+                  `onResetColumnWidths` 가 connected 면 (DataGridTable 가 wire
+                  한 `useColumnWidths.reset` → `reset_datagrid_prefs
+                  (field=widths)` IPC) 호출. column-level 이 아닌 *전체*
+                  widths reset 임에 유의 (sprint-378 contract). 단일
+                  mousedown (drag-start) 은 reset 과 독립. e.stopPropagation
+                  으로 header onClick/sort 로의 bubble 차단. */}
               <div
                 className="absolute right-0 top-0 h-full w-3 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
                 onMouseDown={(e) => onResizeStart(e, col.name, visualIdx)}
                 onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onResetColumnWidths?.();
+                }}
               />
             </div>
           );
