@@ -59,9 +59,26 @@ E2E 원칙([e2e-scenarios](../e2e-scenarios/memory.md))과 같은 P-시리즈
   중 하나. 테스트 대신 *코드 구조*를 손본다.
 
 ### P7. 테스트 = 스펙. 작성 이유 + 날짜 코멘트
-- 모든 테스트 파일/블록에 작성 이유와 날짜 (이미 메모리 룰, 2026-04-28 feedback).
+- 모든 테스트 파일/블록에 작성 이유와 날짜 (사용자 명시 2026-04-28).
 - 이름은 `it("does X when Y")` / `test_<fn>_<scenario>_<expected>`.
 - 코드 리뷰 시 "이 테스트가 왜 있는지"를 코멘트만 보고 알 수 있어야 한다.
+
+**형식**:
+- `describe` 블록 상단: `// Purpose: <파일/스코프 전체 목적> — Phase NN sprint <N> (YYYY-MM-DD)`
+- `test` / `it` 블록 상단: `// Reason: <이 테스트 작성 이유> (YYYY-MM-DD)`
+- 버그 회귀 테스트: 버그 보고 출처(사용자 보고 / 이슈 번호 / sprint number) 명시.
+
+```typescript
+// Purpose: connection activation lifecycle 회귀 진단 — Phase 13 sprint 156 (2026-04-28)
+describe('ConnectionActivation', () => {
+  // Reason: 사용자 보고 — connection 더블클릭해도 workspace 미열림 (2026-04-28)
+  it('double-click triggers showWindow → focusWindow → hideWindow chain', () => {
+    // ...
+  });
+});
+```
+
+**Why**: 향후 요구사항 변경이나 리팩토링으로 테스트가 상충할 때, 해당 테스트가 언제/왜 작성되었는지 알아야 폐기·수정 여부를 판단할 수 있다.
 
 ### P8. 테스트 깨지면 production 먼저 의심
 - timeout 늘리기 / `expect` 약화 / `skip` 추가는 *진짜 회귀를 가린다*.
