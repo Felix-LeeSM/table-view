@@ -169,6 +169,7 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
 
   const ctx: SchemaTreeRowsContext = {
     dbType,
+    treeShape,
     toggleCategory: actions.toggleCategory,
     setSelectedNodeId: actions.setSelectedNodeId,
     setTableSearch: actions.setTableSearch,
@@ -197,11 +198,19 @@ export default function SchemaTree({ connectionId }: SchemaTreeProps) {
       {/* sr-only connection name for accessibility */}
       <span className="sr-only">{connectionName || connectionId}</span>
 
-      {/* "Schemas" header label + action buttons (export, refresh) */}
+      {/* "Schemas" header label + action buttons (export, refresh).
+          Sprint 380 — only PG (`with-schema`) shows the "Schemas" header
+          text. MySQL (`no-schema`) and SQLite (`flat`) hide the label
+          because schema == database in their model. Action buttons row
+          stays visible for all RDB shapes. */}
       <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-          Schemas
-        </span>
+        {treeShape === "with-schema" ? (
+          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
+            Schemas
+          </span>
+        ) : (
+          <span />
+        )}
         <div className="flex items-center gap-0.5">
           {/* RDB export Popover — three modes (DDL / DML / Full) ×
               two scopes (single schema / all schemas). MySQL/SQLite
