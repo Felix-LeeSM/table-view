@@ -1,5 +1,6 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #2 + #8).
+ * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #2 + #8;
+ * sprint-377 회귀 가드 #1+#3 추가).
  *
  * 사유: Q21 9 affordance 중
  *   (2) Home "Recent" 헤더 우클릭 "Reset" → reset_setting("home_recent_collapsed") 1회.
@@ -8,6 +9,11 @@
  * 본 spec 은 HomePage 의 사용자 entry point — 우클릭 메뉴 / 액션 바
  * 버튼 — 가 위 IPC 를 정확한 wire shape 으로 발사하는지 lock. Confirm
  * dialog 가 도입되면 test 가 fail 해야 함 (Q21 contract — 직접 IPC).
+ *
+ * sprint-377 (2026-05-17): 사용자 직접 요청으로 settings panel 의
+ * "Reset settings" / "Reset sidebar width" 두 버튼 제거. 본 spec 에
+ * AC-377-01/02 negative-assertion 케이스 추가 — HomePage 트리에서
+ * 두 버튼 부재 회귀 가드.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -129,17 +135,21 @@ describe("HomePage reset affordances (Q21 #2 + #8)", () => {
     expect(firstCall?.[1]).toEqual({ key: "home_recent_collapsed" });
   });
 
-  it("Settings section mounts ResetSettingsButton so audit #1 reaches the user", () => {
-    // 사유: audit invariant — HomePage 가 launcher 의 settings surface.
-    // ResetSettingsButton 이 mount 됐는지 곧 사용자가 4 key reset 을
-    // 실제 발견 가능한지 검사. 컴포넌트 안 contract 는 자체 test 가
-    // 책임 (ResetSettingsButton.reset-affordance.test.tsx).
+  // 작성 2026-05-17 (sprint-377 회귀 가드). 사유: 사용자 직접 요청 —
+  // Settings panel 의 두 reset 버튼 ("Reset settings" / "Reset sidebar
+  // width") 제거. 미래에 누군가 launcher 의 settings strip 에 reset
+  // 버튼을 다시 mount 하면 이 test 가 fail. sidebar handle 우클릭
+  // entry (Sidebar.tsx) 와 home-recent footer 의 작은 reset 버튼은
+  // 별도 affordance 로 유지되므로 본 test 는 *HomePage 트리* 안에서만
+  // 두 버튼 부재를 단언 — sidebar handle 은 별 컴포넌트라 HomePage
+  // 트리에 포함되지 않음.
+  it("AC-377-01/02: Settings panel 'Reset settings' 와 'Reset sidebar width' 버튼이 HomePage 트리에 존재하지 않음", () => {
     render(<HomePage />);
     expect(
-      screen.getByRole("button", { name: /^reset settings$/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^reset settings$/i }),
+    ).toBeNull();
     expect(
-      screen.getByRole("button", { name: /^reset sidebar width$/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^reset sidebar width$/i }),
+    ).toBeNull();
   });
 });

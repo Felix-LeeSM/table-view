@@ -10,27 +10,42 @@ RTL test 파일 → e2e 시나리오 번호.
 본 checklist 는 `scripts/check-reset-affordance-audit.sh` 로 grep
 검증된다 — `^- \[x\]` 9 개 미만이면 exit 1.
 
+## Count contract (sprint-377 갱신)
+
+sprint-377 (2026-05-17) 에서 사용자 직접 요청으로 settings panel UI 가
+제거되어 item #1 의 user-visible entry point 가 *의도적으로 부재*. checklist 의
+9 `[x]` 카운트는 \"audit 추적 행 9 개\" 를 보장하지 시점 별 \"9 user-discoverable
+reset path\" 를 더 이상 보장하지 않는다. 현재 시점 user-discoverable path 는
+8 (item #1 제외) + item #1 의 historical row (sprint-377 회귀 가드로 lock).
+script `scripts/check-reset-affordance-audit.sh` 는 행 카운트 invariant
+용 — semantic 은 본 절을 참조. 향후 item #1 의 entry point 가 재배치되면
+본 절을 제거하고 9/9 user-visible 로 복원.
+
 ## 9 Affordance
 
-- [x] **1. Settings panel "Reset settings" 버튼** — 4 setting key
-  (`theme` / `safe_mode` / `query_history_retention_days` /
-  `query_history_enabled`) `reset_setting` IPC 4회. 구현:
-  `src/components/settings/ResetSettingsButton.tsx`. Test:
-  `src/components/settings/ResetSettingsButton.reset-affordance.test.tsx`.
-  e2e 시나리오 1.
+- [x] **1. Settings panel "Reset settings" 버튼** — sprint-377
+  (2026-05-17) 에서 사용자 직접 요청으로 settings panel UI 제거. IPC
+  `reset_setting` 는 유지 — 4 setting key (`theme` / `safe_mode` /
+  `query_history_retention_days` / `query_history_enabled`) 는 추후
+  command palette / per-section reset 로 재배치 예정. 회귀 가드:
+  `src/pages/HomePage.reset-affordance.test.tsx` AC-377-01 가 settings
+  panel 의 두 reset 버튼 부재를 lock. e2e 시나리오 1 은
+  `e2e/reset-to-default-audit.e2e.ts` 에서 step 본체 제거 + 사유 코멘트로
+  교체 (sprint-377 동행 갱신).
 
 - [x] **2. Home Recent 헤더 우클릭 "Reset"** —
   `reset_setting("home_recent_collapsed")` 1회. 구현:
   `src/pages/HomePage.tsx` 의 home-recent footer wrapper. Test:
   `src/pages/HomePage.reset-affordance.test.tsx`. e2e 시나리오 2.
 
-- [x] **3. Sidebar handle 우클릭 + 설정 패널 Layout 섹션 "Reset
-  sidebar width"** — 같은 IPC `reset_setting("sidebar_width")` 2
-  entry point. 구현: `src/components/layout/Sidebar.tsx` (handle) +
-  `src/components/settings/ResetSettingsButton.tsx` (별 버튼). Test:
-  `src/components/layout/Sidebar.reset-affordance.test.tsx` +
-  `src/components/settings/ResetSettingsButton.reset-affordance.test.tsx`.
-  e2e 시나리오 3.
+- [x] **3. Sidebar handle 우클릭 "Reset sidebar width"** — IPC
+  `reset_setting("sidebar_width")`. sprint-377 (2026-05-17) 에서
+  settings panel 의 두 번째 entry point (`ResetSettingsButton` 의
+  "Reset sidebar width" 버튼) 가 사용자 요청으로 제거되어 현재 entry
+  point 는 sidebar handle 우클릭 1개. 구현:
+  `src/components/layout/Sidebar.tsx`. Test:
+  `src/components/layout/Sidebar.reset-affordance.test.tsx`. e2e 시나리오
+  3.
 
 - [x] **4. Group 헤더 우클릭 "Reset collapse states"** — 모든 group
   의 `collapsed = false` UPDATE. 구현:

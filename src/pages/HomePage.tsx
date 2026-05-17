@@ -29,7 +29,6 @@ import GroupDialog from "@components/connection/GroupDialog";
 import ImportExportDialog from "@components/connection/ImportExportDialog";
 import RecentConnections from "@components/connection/RecentConnections";
 import ThemePicker from "@components/theme/ThemePicker";
-import ResetSettingsButton from "@components/settings/ResetSettingsButton";
 import { resetSetting } from "@lib/tauri/settings";
 import { useMruStore } from "@stores/mruStore";
 import { logger } from "@lib/logger";
@@ -300,16 +299,10 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Sprint 376 (Phase 6 Q21 #1 + #3-b) — Settings strip. Compact
-          two-button surface so the launcher 가 Q21 audit 의 settings
-          panel reset entry point 을 만족. Future SettingsPage 도 같은
-          컴포넌트 재사용 가능. */}
-      <div
-        className="flex flex-wrap items-center gap-1 border-t border-border px-3 py-2"
-        data-testid="home-settings"
-      >
-        <ResetSettingsButton className="flex flex-wrap items-center gap-1" />
-      </div>
+      {/* Sprint 377 (2026-05-17) — sprint-376 의 Settings panel reset
+          버튼 strip 제거. 사용자 직접 요청; Q21 9 affordance contract
+          의 #1 / #3-b 는 sidebar handle 우클릭 (#3-a) + home-recent
+          footer reset (#2) + 다른 7 affordance 로 충분. */}
 
       {/* Theme picker footer — same control as the legacy Sidebar so the
           user can change themes without leaving Home. */}
