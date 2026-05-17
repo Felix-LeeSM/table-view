@@ -39,6 +39,7 @@ import {
   type CategoryKey,
   type VisibleRow,
 } from "./treeRows";
+import type { RdbTreeShape } from "../treeShape";
 
 // Sprint 301 — schema / table 컨텍스트 메뉴의 Export sub-menu 가 사용하는
 // 세 가지 export include 모드. DDL / Data (DML) / Full (DDL + Data).
@@ -66,6 +67,10 @@ const EXPORT_MODES: ReadonlyArray<{
 
 export interface SchemaTreeRowsContext {
   dbType: string | undefined;
+  // Sprint 380 — needed by category/item row renderers to choose a
+  // 3-way indent class (PG `with-schema` → deepest, MySQL `no-schema`
+  // → one step less, SQLite `flat` → root level).
+  treeShape: RdbTreeShape;
   toggleCategory: (schemaName: string, categoryKey: CategoryKey) => void;
   setSelectedNodeId: (id: string | null) => void;
   setTableSearch: Dispatch<SetStateAction<Record<string, string>>>;
@@ -182,7 +187,11 @@ export function renderCategoryRow(
       <button
         type="button"
         className={cn(
-          "flex flex-1 cursor-pointer items-center gap-1.5 py-0.5 pr-1 pl-6 text-2xs font-medium",
+          "flex flex-1 cursor-pointer items-center gap-1.5 py-0.5 pr-1 text-2xs font-medium",
+          // Sprint 380 — MySQL (`no-schema`) drops the schema-level
+          // indent step because there is no schema row above; PG
+          // (`with-schema`) keeps the deeper indent.
+          ctx.treeShape === "no-schema" ? "pl-3" : "pl-6",
           row.isSelected ? "text-foreground" : "text-secondary-foreground",
         )}
         aria-expanded={row.isExpanded}
@@ -306,7 +315,16 @@ export function renderItemRow(
     if (isTableItem) ctx.handleTableDoubleClick(item.name, row.schemaName);
   };
 
-  const indentClass = flat ? "pl-3" : "pl-10";
+  // Sprint 380 — 3-way indent. `flat` (SQLite) is the legacy root-level
+  // path that doesn't go through categories. For the categorical path,
+  // MySQL (`no-schema`) drops one indent step (pl-7 vs PG's pl-10) so
+  // the table list visually nests under the category, not under a
+  // missing schema row.
+  const indentClass = flat
+    ? "pl-3"
+    : ctx.treeShape === "no-schema"
+      ? "pl-7"
+      : "pl-10";
 
   // 2026-05-11 — split the highlight rule by itemKind. Tables and views
   // open as table-type tabs, so their highlight follows `isActive`
