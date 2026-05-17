@@ -64,6 +64,18 @@
             "if": "Edit(memory/decisions/**)|Write(memory/decisions/**)",
             "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/check-memory-adr.sh 2>&1 | head -30 || true",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Edit(*.ts)|Edit(*.tsx)|Edit(*.rs)|Write(*.ts)|Write(*.tsx)|Write(*.rs)",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/scripts/check-god-file.sh 2>&1 | head -10 || true",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Edit(memory/**)|Write(memory/**)",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash scripts/regenerate-indexes.sh 2>&1 | tail -5 || true",
+            "timeout": 15
           }
         ]
       }

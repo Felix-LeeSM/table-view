@@ -179,6 +179,14 @@ export default tseslint.config(
       // logger 는 `import.meta.env.DEV` gate 라 production silent.
       // 예외: logger 본체 + bootInstrumentation 의 구조화 boot summary.
       "no-console": "error",
+      // Sprint 386 (2026-05-17) — god file 500 lines 임계. warn 으로 시작 —
+      // 기존 god file (≥500줄) 이 lint 실패 폭증하지 않도록. 향후 사이트별
+      // 정리 끝나면 error 승격 검토. 룰 본문 + 시퀀스:
+      // memory/conventions/refactoring/god-file/memory.md
+      "max-lines": [
+        "warn",
+        { max: 500, skipBlankLines: true, skipComments: true },
+      ],
     },
   },
   {

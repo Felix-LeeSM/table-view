@@ -47,9 +47,19 @@ paths:
   (b) 후속 커밋에서 회피한 검사를 통과시키는 변경 push, (c) `memory/lessons/`에
   사유 기록.
 
+## 책임 주체 — assistant 직접 실행
+
+TDD / 구현 / 버그 fix 완료 시 **assistant 가 직접 commit + push + PR + review + merge** 자율 실행. 사용자에게 "이제 커밋해 주세요" 안내 금지 (사용자 2026-05-16 lock).
+
+- 자율 범위 / 예외 / agent spawn 패턴: [memory/workflow/delivery/memory.md](../../memory/workflow/delivery/memory.md)
+- 본 정책 (hook 회피 금지) 는 자율 실행의 *조건* — hook 통과 안 되면 commit/push 자체 안 됨. agent 가 hook 실패를 회피 시도 → 본 정책 위반.
+- 예외 (force push / main 직접 push / merge 정책 미명시) 는 사용자 명시 승인 필요.
+
 ## 관련
 
 - ADR 0019 — E2E를 CI에서 제거하고 pre-push로 이동
 - ADR 0020 — pre-push e2e는 host docker로 한정 (tauri-driver macOS 미지원)
 - `.claude/hooks/pre-bash.sh` — 차단 패턴 코드
 - `lefthook.yml` — hook 정의 (pre-push `5_e2e: pnpm test:e2e:docker`)
+- [memory/workflow/delivery/memory.md](../../memory/workflow/delivery/memory.md) — delivery pipeline 자율 룰
+- `.claude/agents/delivery.md` — 본 정책 enforce agent

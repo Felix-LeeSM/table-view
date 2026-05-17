@@ -21,6 +21,12 @@ fi
 violations=0
 
 while IFS= read -r -d '' file; do
+	# Sprint 386 — memory/index/*.md 는 자동 생성 index 라 예외.
+	# scripts/regenerate-indexes.sh 가 by-task.md / by-surface.md 두 파일을
+	# 만든다. memory/ 트리의 룰 source 는 여전히 memory.md 만.
+	case "$file" in
+		memory/index/*.md) continue ;;
+	esac
 	base="$(basename "$file")"
 	if [ "$base" != "memory.md" ]; then
 		echo "⚠️  memory structure: $file — memory/ 트리는 'memory.md'만 허용합니다."
