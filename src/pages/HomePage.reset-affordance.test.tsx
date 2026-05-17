@@ -129,17 +129,21 @@ describe("HomePage reset affordances (Q21 #2 + #8)", () => {
     expect(firstCall?.[1]).toEqual({ key: "home_recent_collapsed" });
   });
 
-  it("Settings section mounts ResetSettingsButton so audit #1 reaches the user", () => {
-    // 사유: audit invariant — HomePage 가 launcher 의 settings surface.
-    // ResetSettingsButton 이 mount 됐는지 곧 사용자가 4 key reset 을
-    // 실제 발견 가능한지 검사. 컴포넌트 안 contract 는 자체 test 가
-    // 책임 (ResetSettingsButton.reset-affordance.test.tsx).
+  // 작성 2026-05-17 (sprint-377 회귀 가드). 사유: 사용자 직접 요청 —
+  // Settings panel 의 두 reset 버튼 ("Reset settings" / "Reset sidebar
+  // width") 제거. 미래에 누군가 launcher 의 settings strip 에 reset
+  // 버튼을 다시 mount 하면 이 test 가 fail. sidebar handle 우클릭
+  // entry (Sidebar.tsx) 와 home-recent footer 의 작은 reset 버튼은
+  // 별도 affordance 로 유지되므로 본 test 는 *HomePage 트리* 안에서만
+  // 두 버튼 부재를 단언 — sidebar handle 은 별 컴포넌트라 HomePage
+  // 트리에 포함되지 않음.
+  it("AC-377-01/02: Settings panel 'Reset settings' 와 'Reset sidebar width' 버튼이 HomePage 트리에 존재하지 않음", () => {
     render(<HomePage />);
     expect(
-      screen.getByRole("button", { name: /^reset settings$/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^reset settings$/i }),
+    ).toBeNull();
     expect(
-      screen.getByRole("button", { name: /^reset sidebar width$/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^reset sidebar width$/i }),
+    ).toBeNull();
   });
 });
