@@ -198,6 +198,73 @@ describe("useQueryExecution — sprint-381 runCommand dispatch", () => {
     });
   });
 
+  // Sprint 381 hardening (2026-05-18) — destructive runCommand 5-keyword
+  // gate. autocomplete (`mongoAutocomplete.ts`) 가 `drop` / `dropDatabase`
+  // / `dropIndexes` / `killOp` / `renameCollection` 를 1-click 추천하므로
+  // dispatch 가 `safeModeGate.decide` 를 통과해야 한다.
+  it("[AC-381-S9] strict mode + non-prod + dropDatabase → confirm (IPC blocked, pendingMongoConfirm set)", async () => {
+    useSafeModeStore.setState({ mode: "strict" });
+    const tab = seedDocTab("db.runCommand({dropDatabase: 1})", {
+      database: "doomed",
+      collection: undefined,
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(runMongoCommandMock).not.toHaveBeenCalled();
+    expect(result.current.pendingMongoConfirm).not.toBeNull();
+    expect(result.current.pendingMongoConfirm!.reason).toMatch(/dropDatabase/);
+  });
+
+  it("[AC-381-S10] production + warn + drop → confirm (IPC blocked, pendingMongoConfirm set)", async () => {
+    useSafeModeStore.setState({ mode: "warn" });
+    const tab = seedDocTab('db.runCommand({drop: "users"})', {
+      database: "myapp",
+      collection: undefined,
+    });
+    useConnectionStore.setState({
+      connections: [
+        makeConn({
+          id: "conn-mongo",
+          db_type: "mongodb",
+          paradigm: "document",
+          environment: "production",
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    expect(runMongoCommandMock).not.toHaveBeenCalled();
+    expect(result.current.pendingMongoConfirm).not.toBeNull();
+    expect(result.current.pendingMongoConfirm!.reason).toMatch(/drop/);
+  });
+
+  it("[AC-381-S11] non-prod + warn + dropDatabase → passthrough (matrix-consistent allow path; dispatch still routes through decide)", async () => {
+    useSafeModeStore.setState({ mode: "warn" });
+    runMongoCommandMock.mockResolvedValueOnce({ ok: 1 });
+    const tab = seedDocTab("db.runCommand({dropDatabase: 1})", {
+      database: "scratch",
+      collection: undefined,
+    });
+    const { result } = renderHook(() => useQueryExecution({ tab }));
+
+    await act(async () => {
+      await result.current.handleExecute();
+    });
+
+    await waitFor(() => {
+      expect(runMongoCommandMock).toHaveBeenCalledTimes(1);
+    });
+    expect(result.current.pendingMongoConfirm).toBeNull();
+  });
+
   // Regression: `db.users.find({})` with empty chip → existing error
   // ("Select a target database…"). runMongoCommand MUST NOT fire.
   it("[AC-381-05 dispatcher] db.users.find({}) without chip → error path; runMongoCommand untouched", async () => {

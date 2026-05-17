@@ -109,3 +109,36 @@
 - AC 13/13 PASS
 - pre-commit / pre-push hooks green
 - PR open + linked to issue
+
+## Hardening — Safe Mode 5-keyword whitelist (2026-05-18)
+
+리뷰에서 *new* `runMongoCommand` dispatch path (`useQueryExecution.ts`) 가
+`safeModeGate.decide` 호출 누락으로 다른 Mongo destructive write 와의
+정책 동등성이 깨진다는 점이 드러났다. autocomplete (`mongoAutocomplete.ts`)
+가 `drop` / `dropDatabase` / `dropIndexes` / `killOp` / `renameCollection`
+를 1-click 추천하는데, dispatch 가 gate 를 거치지 않으면 Safe Mode 가
+어떤 config 든 destructive admin command 가 우회 가능했다. AST 부재가
+원인이 아니라 dispatch path 자체의 *gate 호출 코드 누락* 이라 본 sprint
+의 책임 영역에서 봉합한다 (sprint-382 의 AST 와 무관).
+
+### Added
+
+- `src/lib/mongo/mongoSafety.ts` — `analyzeMongoRunCommand(body)` 함수 +
+  `DESTRUCTIVE_RUN_COMMANDS` 5-key Set. body 의 first key 만 분류 (mongosh
+  runCommand 의 convention: `{<command>: <arg>, ...options}`).
+- `src/components/query/QueryTab/useQueryExecution.ts` — admin-command
+  dispatch path 에 `safeModeGate.decide(analyzeMongoRunCommand(body))`
+  호출 + `block` / `confirm` / `allow` 3-action 처리 (deleteMany /
+  dropCollection / $out path 와 동일 패턴).
+
+### Added — Acceptance Criteria
+
+- AC-381-S1..S8 (8 unit) — classifier 가 5-keyword 만 danger 로 분류,
+  read-only command (`ping` / `serverStatus` / `dbStats` / `currentOp`)
+  은 info 로 통과. `{ping:1, drop:"x"}` 같은 second-key destructive 도
+  info (first-key only convention).
+- AC-381-S9..S11 (3 RTL) — strict + non-prod + `dropDatabase` → confirm
+  (IPC 0, `pendingMongoConfirm` set, reason 포함 "dropDatabase"); warn +
+  production + `drop` → confirm (IPC 0); warn + non-prod + `dropDatabase`
+  → matrix-consistent allow (IPC 호출, no pending). dispatch 가 decide
+  를 *호출* 하는지 lock — matrix 자체의 정책은 ADR 0022 관할.

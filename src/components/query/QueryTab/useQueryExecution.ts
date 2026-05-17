@@ -27,6 +27,7 @@ import { splitSqlStatements } from "@lib/sql/sqlUtils";
 import {
   analyzeMongoPipeline,
   analyzeMongoOperation,
+  analyzeMongoRunCommand,
 } from "@lib/mongo/mongoSafety";
 import { analyzeStatement } from "@lib/sql/sqlSafety";
 import { escalateWarnIfLargeImpact } from "@lib/sql/escalateWarnIfLargeImpact";
@@ -1774,9 +1775,6 @@ export function useQueryExecution({
           });
           return;
         }
-        const queryId = `${tab.id}-${Date.now()}`;
-        const startTime = Date.now();
-        updateQueryState(tab.id, { status: "running", queryId });
         // adminCommand 는 항상 admin DB context — chip 값과 무관하게
         // backend 에 `database = null` 전달. runCommand 는 chip 이 있으면
         // 해당 db, 없으면 admin.
@@ -1786,42 +1784,77 @@ export function useQueryExecution({
           : tab.database && tab.database.length > 0
             ? tab.database
             : null;
-        try {
-          const response = await runMongoCommand(tab.connectionId, dbArg, body);
-          const responseJson = JSON.stringify(response, null, 2);
-          const queryResult: import("@/types/query").QueryResult = {
-            columns: [
-              {
-                name: "response",
-                data_type: "JSON",
-                category: "object",
-              },
-            ],
-            rows: [[responseJson]],
-            total_count: 1,
-            execution_time_ms: Date.now() - startTime,
-            query_type: "select",
-          };
-          completeQuery(tab.id, queryId, queryResult);
-          recordHistory({
-            sql,
-            executedAt: Date.now(),
-            duration: Date.now() - startTime,
-            status: "success",
-          });
-        } catch (err) {
-          failQuery(
-            tab.id,
-            queryId,
-            err instanceof Error ? err.message : String(err),
-          );
-          recordHistory({
-            sql,
-            executedAt: Date.now(),
-            duration: Date.now() - startTime,
+        // Sprint 381 hardening (2026-05-18) — destructive 5-keyword
+        // gate. autocomplete (mongoAutocomplete.ts) 가 `drop` /
+        // `dropDatabase` / `dropIndexes` / `killOp` / `renameCollection`
+        // 를 1-click 추천하므로, `db.runCommand({...})` dispatch 가 다른
+        // Mongo write path (deleteMany / dropCollection / $out 등) 와
+        // 동일하게 `safeModeGate.decide` 를 통과한다. sprint-382 의 AST
+        // 가 promote 한 뒤에도 본 gate 호출 자체는 lock.
+        const adminAnalysis = analyzeMongoRunCommand(body);
+        const adminDecision = safeModeGate.decide(adminAnalysis);
+        if (adminDecision.action === "block") {
+          updateQueryState(tab.id, {
             status: "error",
+            error: adminDecision.reason,
           });
+          return;
         }
+        const queryId = `${tab.id}-${Date.now()}`;
+        const startTime = Date.now();
+        const adminRunner = async () => {
+          updateQueryState(tab.id, { status: "running", queryId });
+          try {
+            const response = await runMongoCommand(
+              tab.connectionId,
+              dbArg,
+              body,
+            );
+            const responseJson = JSON.stringify(response, null, 2);
+            const queryResult: import("@/types/query").QueryResult = {
+              columns: [
+                {
+                  name: "response",
+                  data_type: "JSON",
+                  category: "object",
+                },
+              ],
+              rows: [[responseJson]],
+              total_count: 1,
+              execution_time_ms: Date.now() - startTime,
+              query_type: "select",
+            };
+            completeQuery(tab.id, queryId, queryResult);
+            recordHistory({
+              sql,
+              executedAt: Date.now(),
+              duration: Date.now() - startTime,
+              status: "success",
+            });
+          } catch (err) {
+            failQuery(
+              tab.id,
+              queryId,
+              err instanceof Error ? err.message : String(err),
+            );
+            recordHistory({
+              sql,
+              executedAt: Date.now(),
+              duration: Date.now() - startTime,
+              status: "error",
+            });
+          }
+        };
+        if (adminDecision.action === "confirm") {
+          pendingWriteRunnerRef.current = adminRunner;
+          setPendingMongoConfirm({
+            pipeline: [],
+            reason: adminDecision.reason,
+            previewLines: [sql],
+          });
+          return;
+        }
+        await adminRunner();
         return;
       }
 
