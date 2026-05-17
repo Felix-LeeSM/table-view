@@ -779,6 +779,18 @@ pub(crate) struct StubDocumentAdapter {
 
     // Sprint 340 — override slot for Mongo slow_queries.
     pub slow_queries_fn: Option<FnOne<i64, Vec<crate::models::SlowQueryRow>>>,
+
+    // Sprint 381 — override slot for Mongo `run_command` (admin/diagnostic
+    // command gateway). Closure receives `database` (None ⇒ admin DB) and
+    // the raw command BSON; returns a `serde_json::Value` response.
+    #[allow(clippy::type_complexity)]
+    pub run_command_fn: Option<
+        Box<
+            dyn Fn(Option<&str>, bson::Document) -> Result<serde_json::Value, AppError>
+                + Send
+                + Sync,
+        >,
+    >,
 }
 
 impl Default for StubDocumentAdapter {
@@ -814,6 +826,7 @@ impl Default for StubDocumentAdapter {
             collection_stats_fn: None,
             server_info_fn: None,
             slow_queries_fn: None,
+            run_command_fn: None,
         }
     }
 }
@@ -1234,6 +1247,23 @@ impl DocumentAdapter for StubDocumentAdapter {
             .slow_queries_fn
             .as_ref()
             .map_or_else(|| Ok(Vec::new()), |f| f(&limit));
+        Box::pin(async move { r })
+    }
+
+    // Sprint 381 — `run_command` stub. Default (`None`) responds with
+    // `{ "ok": 1 }` — the canonical "successful no-op" the driver returns
+    // for trivial commands like `{ping: 1}`. Tests that need to assert
+    // routing args (database = None vs Some, command body) install the
+    // override closure on `run_command_fn`.
+    fn run_command<'a>(
+        &'a self,
+        database: Option<&'a str>,
+        command: bson::Document,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        let r = self.run_command_fn.as_ref().map_or_else(
+            || Ok(serde_json::json!({ "ok": 1 })),
+            |f| f(database, command),
+        );
         Box::pin(async move { r })
     }
 }

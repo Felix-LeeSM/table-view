@@ -865,9 +865,12 @@ describe("ConnectionDialog", () => {
       expect(screen.getByLabelText("Enable TLS")).toBeInTheDocument();
     });
 
-    // Sprint 345 (2026-05-15) — Mongo database 가 더 이상 optional 이 아님.
-    // paradigm 별 default 'admin' 으로 prefill, 빈 submit 은 reject.
-    it("renders Database label (required) when MongoDB is selected", async () => {
+    // Sprint 345 (2026-05-15) — Mongo database default 'admin' 으로 prefill.
+    // Sprint 381 (2026-05-17) — Mongo db-contract α: required 가 다시 풀린다.
+    // MongoFormFields 가 "Database (optional)" 으로 노출하고, ConnectionDialog
+    // 의 Save 검증이 isMongo 분기에서 빈 입력을 통과시키는지는 별 테스트
+    // ("AC-381-01") 가 lock — 본 테스트는 label 만 단언한다.
+    it("renders Database label (optional) when MongoDB is selected", async () => {
       const user = userEvent.setup();
       renderDialog();
       const trigger = screen.getByLabelText("Database Type");
@@ -875,8 +878,7 @@ describe("ConnectionDialog", () => {
       await user.click(trigger);
       await user.click(screen.getByRole("option", { name: "MongoDB" }));
 
-      expect(screen.getByLabelText("Database")).toBeInTheDocument();
-      expect(screen.queryByText("Database (optional)")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Database (optional)")).toBeInTheDocument();
     });
 
     it("includes auth_source, replica_set, tls_enabled in the saved draft", async () => {
@@ -916,6 +918,72 @@ describe("ConnectionDialog", () => {
       expect(draft.auth_source).toBe("admin");
       expect(draft.replica_set).toBe("rs0");
       expect(draft.tls_enabled).toBe(true);
+    });
+
+    // Sprint 381 (2026-05-17) — db-contract α: Mongo connection 의
+    // database 필드가 optional 로 풀린다. RDB (postgresql / mysql) 는
+    // required 유지 (regression).
+    //
+    // 작성 이유: 사용자 보고 (#2) — Mongo Query 창의 "(select database)"
+    // chip 강제는 connection 생성 시점부터 database 를 채워야 한다는
+    // 잘못된 가정에서 출발했다. MongoDB 는 connection 단계의 database
+    // 필수 아님 — admin command (`db.runCommand({ping: 1})`) 는 admin
+    // context 에서, collection command 는 chip 으로 per-tab 선택.
+    it("AC-381-01: accepts empty database for MongoDB connection on save", async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: "MongoDB no db" } });
+      });
+
+      // Switch to MongoDB; defaults seed `database = "admin"`. Clear it.
+      const trigger = screen.getByLabelText("Database Type");
+      await user.click(trigger);
+      await user.click(screen.getByRole("option", { name: "MongoDB" }));
+
+      const dbInput = screen.getByLabelText(
+        "Database (optional)",
+      ) as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(dbInput, { target: { value: "" } });
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+
+      // Save should *not* be blocked by an empty database when MongoDB.
+      expect(
+        screen.queryByText("Database is required"),
+      ).not.toBeInTheDocument();
+      expect(mockAddConnection).toHaveBeenCalledTimes(1);
+      const draft = mockAddConnection.mock.calls[0]![0] as ConnectionDraft;
+      expect(draft.db_type).toBe("mongodb");
+      expect(draft.database).toBe("");
+    });
+
+    // AC-381-02: PostgreSQL regression guard — database 빈 입력 시 여전히
+    // "Database is required" 차단되어야 한다. 본 검증은 위쪽 "shows error
+    // when database is empty on save (non-SQLite)" 케이스가 default PG
+    // 시나리오로 이미 lock 하고 있다. 본 sprint 는 회귀 방지를 위해
+    // *명시적*으로 한 번 더 단언 — paradigm 분기 (`!isMongo` && `!isSqlite`)
+    // 가 PG 에서 회귀하지 않는다는 사실을 표제로 남긴다.
+    it("AC-381-02: PostgreSQL connection still rejects empty database (regression guard)", async () => {
+      renderDialog();
+      const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+      const dbInput = screen.getByLabelText("Database") as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: "PG no db" } });
+        fireEvent.change(dbInput, { target: { value: "" } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText("Save"));
+      });
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Database is required",
+      );
+      expect(mockAddConnection).not.toHaveBeenCalled();
     });
   });
 

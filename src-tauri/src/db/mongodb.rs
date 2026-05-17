@@ -450,4 +450,14 @@ impl DocumentAdapter for MongoAdapter {
     ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
         Box::pin(async move { self.slow_queries_impl(limit).await })
     }
+
+    /// Sprint 381 — `db.runCommand({...})` / `db.adminCommand({...})` generic
+    /// gateway. See `run_command_impl` for routing details.
+    fn run_command<'a>(
+        &'a self,
+        database: Option<&'a str>,
+        command: bson::Document,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        Box::pin(async move { self.run_command_impl(database, command).await })
+    }
 }

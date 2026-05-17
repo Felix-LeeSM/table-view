@@ -238,6 +238,202 @@ export const MONGOSH_DB_METHODS: ReadonlyArray<{
 ];
 
 /**
+ * Sprint 381 (2026-05-17) — mongosh top-level helpers that don't belong on
+ * `db.<collection>.`. Surfaced when the user types `db.<prefix>` (no
+ * second dot yet) so `runCommand` / `adminCommand` autocomplete the
+ * generic admin-command path that bypasses the Phase 28 method
+ * whitelist. The Phase 28 collection methods stay on
+ * {@link MONGOSH_DB_METHODS}; this list is the *db-level* method set
+ * (collection-context absent).
+ */
+export const MONGOSH_DB_LEVEL_METHODS: ReadonlyArray<{
+  label: string;
+  type: "function";
+  detail: string;
+  info: string;
+}> = [
+  {
+    label: "runCommand",
+    type: "function",
+    detail: "({<cmd>: <arg>, …})",
+    info: "Send an arbitrary admin/diagnostic command to the bound database. mongosh's universal escape hatch — `serverStatus`, `dbStats`, `collStats`, `ping`, …",
+  },
+  {
+    label: "adminCommand",
+    type: "function",
+    detail: "({<cmd>: <arg>, …})",
+    info: "Send an admin command (always targets the `admin` database regardless of the toolbar chip).",
+  },
+  {
+    label: "getCollection",
+    type: "function",
+    detail: "(name)",
+    info: "Return a collection handle by name. Useful when the collection name is not a valid JS identifier.",
+  },
+  {
+    label: "getCollectionNames",
+    type: "function",
+    detail: "()",
+    info: "List collection names in the current database.",
+  },
+  {
+    label: "getCollectionInfos",
+    type: "function",
+    detail: "()",
+    info: "List collection metadata (name + options) in the current database.",
+  },
+  {
+    label: "getProfilingStatus",
+    type: "function",
+    detail: "()",
+    info: "Return the profiling level and slow-ms threshold for the current database.",
+  },
+  {
+    label: "setProfilingLevel",
+    type: "function",
+    detail: "(level, slowms?)",
+    info: "Enable / disable profiling. `level` ∈ {0=off, 1=slow ops, 2=all ops}.",
+  },
+];
+
+/**
+ * Sprint 381 (2026-05-17) — admin / diagnostic commands the user can drop
+ * inside `db.runCommand({...})` / `db.adminCommand({...})`. mongosh 의
+ * 모든 admin helper 가 본질적으로 `runCommand` wrapper 이므로, 이 dict
+ * 만 갖춰도 가장 흔한 진단 / 메타 시나리오를 cover.
+ *
+ * 각 entry 는 `apply` value 에 `name: 1` 을 박아넣어, 사용자가 한
+ * keystroke 으로 valid command body 를 얻을 수 있게 한다.
+ */
+export const MONGO_ADMIN_COMMANDS: ReadonlyArray<{
+  label: string;
+  apply: string;
+  detail: string;
+  info: string;
+}> = [
+  {
+    label: "ping",
+    apply: "ping: 1",
+    detail: "1",
+    info: "No-op health check. Returns `{ok: 1}` when the server is reachable.",
+  },
+  {
+    label: "serverStatus",
+    apply: "serverStatus: 1",
+    detail: "1",
+    info: "Comprehensive runtime stats (connections / mem / repl / network / …).",
+  },
+  {
+    label: "hostInfo",
+    apply: "hostInfo: 1",
+    detail: "1",
+    info: "OS / CPU / memory information about the host running mongod.",
+  },
+  {
+    label: "buildInfo",
+    apply: "buildInfo: 1",
+    detail: "1",
+    info: "mongod version, git commit, OS, modules, max bson size.",
+  },
+  {
+    label: "listDatabases",
+    apply: "listDatabases: 1",
+    detail: "1",
+    info: "Enumerate every database visible to the connected user (admin-context).",
+  },
+  {
+    label: "listCollections",
+    apply: "listCollections: 1",
+    detail: "1 | {filter, …}",
+    info: "Enumerate collections in the bound database (with optional filter).",
+  },
+  {
+    label: "dbStats",
+    apply: "dbStats: 1",
+    detail: "1 | {scale}",
+    info: "Storage size + index size + collection count for the bound database.",
+  },
+  {
+    label: "collStats",
+    apply: 'collStats: "<collection>"',
+    detail: '"<coll>"',
+    info: "Storage / index stats for a specific collection.",
+  },
+  {
+    label: "currentOp",
+    apply: 'currentOp: 1, "$all": true',
+    detail: "1",
+    info: "List currently running operations (admin-context).",
+  },
+  {
+    label: "killOp",
+    apply: "killOp: 1, op: <opid>",
+    detail: "1, op",
+    info: "Terminate a running operation by id (admin-context).",
+  },
+  {
+    label: "getCmdLineOpts",
+    apply: "getCmdLineOpts: 1",
+    detail: "1",
+    info: "Argv + parsed config the mongod process was started with.",
+  },
+  {
+    label: "setProfilingLevel",
+    apply: "profile: 1, slowms: 100",
+    detail: "0|1|2",
+    info: "Enable / disable the database profiler (0=off, 1=slow ops, 2=all).",
+  },
+  {
+    label: "getProfilingStatus",
+    apply: "profile: -1",
+    detail: "-1",
+    info: "Return current profiling level + slow-ms threshold for the bound database.",
+  },
+  {
+    label: "validate",
+    apply: 'validate: "<collection>"',
+    detail: '"<coll>"',
+    info: "Verify the on-disk integrity of a collection's data + indexes (slow).",
+  },
+  {
+    label: "create",
+    apply: 'create: "<collection>"',
+    detail: '"<coll>"',
+    info: "Create a new collection in the bound database (advanced — for options see MongoDB docs).",
+  },
+  {
+    label: "drop",
+    apply: 'drop: "<collection>"',
+    detail: '"<coll>"',
+    info: "Drop a collection from the bound database.",
+  },
+  {
+    label: "dropDatabase",
+    apply: "dropDatabase: 1",
+    detail: "1",
+    info: "Drop the bound database. **Destructive** — no undo.",
+  },
+  {
+    label: "isMaster",
+    apply: "isMaster: 1",
+    detail: "1",
+    info: "Legacy replica-set status probe (returns `ismaster`, `setName`, `hosts`, …).",
+  },
+  {
+    label: "hello",
+    apply: "hello: 1",
+    detail: "1",
+    info: "Modern replacement for `isMaster` — returns replica-set / sharding topology metadata.",
+  },
+  {
+    label: "replSetGetStatus",
+    apply: "replSetGetStatus: 1",
+    detail: "1",
+    info: "Replica-set member health + oplog progress (admin-context).",
+  },
+];
+
+/**
  * Per-operator metadata for `Completion.detail` (inline signature) and
  * `Completion.info` (right-side help panel). The list is intentionally a
  * lookup map so the per-operator entry is colocated with the trigger
@@ -694,25 +890,43 @@ export function createMongoshDbSource(
       const prefix = collectionMatch[1] ?? "";
       const from = context.pos - prefix.length;
       const collections = opts.collectionNames ?? [];
+      // Sprint 381 (2026-05-17) — always surface the db-level helpers
+      // (`runCommand`, `adminCommand`, …) at this position so the user
+      // who types `db.r` lands directly on `runCommand` without having
+      // to remember the parens trick. Collection names come *after* the
+      // db-level helpers when both apply.
+      const dbLevel: Completion[] = MONGOSH_DB_LEVEL_METHODS.map((cand) => ({
+        label: cand.label,
+        apply: cand.label,
+        type: cand.type,
+        detail: cand.detail,
+        info: cand.info,
+      }));
       const options: Completion[] =
         collections.length > 0
-          ? collections.map((name) => ({
-              label: name,
-              apply: name,
-              type: "class",
-            }))
+          ? [
+              ...dbLevel,
+              ...collections.map((name) => ({
+                label: name,
+                apply: name,
+                type: "class",
+              })),
+            ]
           : // No cached collection list yet — surface the method whitelist
             // anyway so the popup is never empty after `db.`. The user
             // can still type the collection name manually; the popup
             // keeps `find`/`aggregate`/... visible as the muscle-memory
             // affordance the user expects from a mongosh prompt.
-            MONGOSH_DB_METHODS.map((cand) => ({
-              label: cand.label,
-              apply: cand.label,
-              type: cand.type,
-              detail: cand.detail,
-              info: cand.info,
-            }));
+            [
+              ...dbLevel,
+              ...MONGOSH_DB_METHODS.map((cand) => ({
+                label: cand.label,
+                apply: cand.label,
+                type: cand.type,
+                detail: cand.detail,
+                info: cand.info,
+              })),
+            ];
       return {
         from,
         options,
@@ -721,6 +935,49 @@ export function createMongoshDbSource(
     }
 
     return null;
+  };
+}
+
+/**
+ * Sprint 381 (2026-05-17) — `db.runCommand({` / `db.adminCommand({` 다음
+ * 위치에서 admin command literal (`serverStatus`, `dbStats`, `ping`, …) 을
+ * 추천하는 CompletionSource.
+ *
+ * 동작:
+ *   - 정규식 `\b(runCommand|adminCommand)\s*\(\s*\{\s*([A-Za-z_$][A-Za-z0-9_$]*)?$`
+ *     에 매칭되면 admin command 후보를 surface. 첫 키 위치에서만 발동
+ *     — 두번째 key 부터는 BSON-key autocompletion 의 영역이라 noisy 회피.
+ *   - `apply` 는 `<name>: <default>` 형태 (예: `serverStatus: 1`) 라
+ *     사용자가 한 keystroke 으로 valid command body 를 얻는다.
+ *
+ * AST 가 아닌 정규식 기반 — sprint-382 가 AST 로 promote 예정.
+ */
+export function createMongoAdminCommandSource(): CompletionSource {
+  return (context: CompletionContext): CompletionResult | null => {
+    const upTo = context.state.doc.sliceString(0, context.pos);
+    // Match the first key position inside `db.runCommand({` / `db.adminCommand({`.
+    // The key fragment ([2]) may be empty when the cursor just opened the
+    // brace. Subsequent keys (after a comma) are out of scope so the popup
+    // doesn't pollute filter / option bodies.
+    const m =
+      /\b(runCommand|adminCommand)\s*\(\s*\{\s*([A-Za-z_$][A-Za-z0-9_$]*)?$/.exec(
+        upTo,
+      );
+    if (!m) return null;
+    const prefix = m[2] ?? "";
+    const from = context.pos - prefix.length;
+    const options: Completion[] = MONGO_ADMIN_COMMANDS.map((cand) => ({
+      label: cand.label,
+      apply: cand.apply,
+      type: "keyword",
+      detail: cand.detail,
+      info: cand.info,
+    }));
+    return {
+      from,
+      options,
+      validFor: /^[A-Za-z0-9_$]*$/,
+    };
   };
 }
 

@@ -863,6 +863,40 @@ impl MongoAdapter {
 
         Ok(out)
     }
+
+    /// Sprint 381 — `db.runCommand({...})` / `db.adminCommand({...})` gateway.
+    ///
+    /// 작성 이유 (2026-05-17): Phase 28 method whitelist 에 묶이지 않은
+    /// admin / diagnostic command (`serverStatus`, `dbStats`, `currentOp`,
+    /// `ping`, …) 을 frontend 가 한 IPC 로 통과시킬 수 있도록 thin gateway.
+    ///
+    /// - `database = None` → driver 의 `admin` DB context (`adminCommand`
+    ///   semantics) — `listDatabases` / `serverStatus` 등.
+    /// - `database = Some("myapp")` → 해당 db (`dbStats`, `collStats` 등).
+    ///
+    /// 응답 BSON 은 `serde_json::to_value(&Bson::Document(resp))` 로 canonical
+    /// EJSON 직렬화 — frontend JSON viewer 가 paradigm-neutral shape 으로
+    /// 렌더한다.
+    pub(super) async fn run_command_impl(
+        &self,
+        database: Option<&str>,
+        command: bson::Document,
+    ) -> Result<serde_json::Value, AppError> {
+        if command.is_empty() {
+            return Err(AppError::Validation(
+                "runCommand body must not be empty".into(),
+            ));
+        }
+        let client = self.current_client().await?;
+        let db_name = database.unwrap_or("admin");
+        let resp = client
+            .database(db_name)
+            .run_command(command)
+            .await
+            .map_err(|e| AppError::Database(format!("runCommand failed: {e}")))?;
+        serde_json::to_value(Bson::Document(resp))
+            .map_err(|e| AppError::Database(format!("runCommand response decode failed: {e}")))
+    }
 }
 
 /// Sprint 332 — `mongodb::IndexModel` → `crate::models::IndexInfo`.

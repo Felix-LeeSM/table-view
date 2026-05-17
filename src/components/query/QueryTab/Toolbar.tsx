@@ -13,6 +13,10 @@ import FavoritesPanel from "../FavoritesPanel";
 import TabDbChip from "./TabDbChip";
 import type { QueryTab } from "@stores/workspaceStore";
 import type { QueryFavoritesState } from "./useQueryFavorites";
+import {
+  classifyMongoStatement,
+  statementAllowsMissingDatabase,
+} from "@/lib/mongo/runCommandParser";
 
 /**
  * `QueryTab` 의 toolbar 컴포넌트.
@@ -70,6 +74,30 @@ export default function QueryTabToolbar({
     handleLoadFavoriteSql,
   } = favorites;
 
+  // Sprint 381 (2026-05-17) — Mongo db-contract α. The Run button used
+  // to be disabled whenever Mongo's `tab.database` was empty, which
+  // blocked admin commands (`db.runCommand({ping: 1})`) that don't need
+  // a bound database. The new gate splits two axes:
+  //   - statement is *non-empty* (`tab.sql.trim()` — unchanged check)
+  //   - statement is *runnable* — for document paradigm, classify into
+  //     admin-command (DB-less OK) vs collection-command (DB required)
+  //     vs unknown (treat like collection: require DB to avoid silently
+  //     allowing typos through the AST parser).
+  // The actual dispatch gate stays in `useQueryExecution` — Toolbar only
+  // controls the disabled state + tooltip.
+  const isDocumentTab = isDocument;
+  const mongoStatementKind = isDocumentTab
+    ? classifyMongoStatement(tab.sql)
+    : "unknown";
+  const documentNeedsDb =
+    isDocumentTab &&
+    !tab.database &&
+    !statementAllowsMissingDatabase(mongoStatementKind);
+  const runDisabled = !tab.sql.trim() || documentNeedsDb;
+  const runDisabledTooltip = documentNeedsDb
+    ? "Pick a database from the toolbar chip to run collection commands. Admin commands (`db.runCommand({...})`) work without one."
+    : undefined;
+
   return (
     <div className="flex items-center gap-2 border-b border-border bg-secondary px-2 py-1">
       {/* 2026-05-15 — Sprint 329 의 display-only chip 을 interactive
@@ -98,8 +126,9 @@ export default function QueryTabToolbar({
           variant="ghost"
           size="xs"
           onClick={onExecute}
-          disabled={!tab.sql.trim()}
+          disabled={runDisabled}
           aria-label="Run query"
+          title={runDisabledTooltip}
         >
           <Play className="text-success" />
           <span>Run</span>

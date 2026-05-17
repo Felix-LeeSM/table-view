@@ -564,3 +564,29 @@ export async function bulkWriteDocuments(
     operations,
   });
 }
+
+/**
+ * Sprint 381 (2026-05-17) — generic `db.runCommand({...})` /
+ * `db.adminCommand({...})` gateway. mongosh 의 모든 admin/diagnostic
+ * helper 가 본질적으로 runCommand wrapper 이므로 single IPC 로 묶었다.
+ *
+ * `database`:
+ *   - `null` ⇒ backend 가 driver 의 `admin` DB context 에서 실행
+ *     (`adminCommand` / global commands).
+ *   - 그 외 ⇒ 해당 db (`dbStats`, `collStats` 등 db-scoped).
+ *
+ * 결과는 driver 의 raw response 를 canonical EJSON 으로 직렬화한
+ * `unknown` (JSON-compatible). 호출자가 paradigm-neutral JSON viewer 로
+ * 렌더한다.
+ */
+export async function runMongoCommand(
+  connectionId: string,
+  database: string | null,
+  command: Record<string, unknown>,
+): Promise<unknown> {
+  return invoke<unknown>("run_mongo_command", {
+    connectionId,
+    database,
+    command,
+  });
+}

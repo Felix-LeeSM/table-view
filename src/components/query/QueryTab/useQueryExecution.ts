@@ -19,6 +19,7 @@ import {
   deleteDocument,
   deleteMany,
   bulkWriteDocuments,
+  runMongoCommand,
 } from "@lib/tauri";
 import { parseDbMismatch } from "@lib/api/dbMismatch";
 import { syncMismatchedActiveDb } from "@lib/api/syncMismatchedActiveDb";
@@ -39,6 +40,12 @@ import {
   parseMongoshExpression,
   type ParsedMongoshCall,
 } from "@lib/mongo/mongoshParser";
+// Sprint 381 (2026-05-17) — admin command (db.runCommand / db.adminCommand)
+// classifier. naive regex, sprint-382 의 AST 가 본 helper 를 promote.
+import {
+  classifyMongoStatement,
+  extractAdminCommandBody,
+} from "@lib/mongo/runCommandParser";
 import {
   readDocumentContext,
   isRecord,
@@ -1750,11 +1757,79 @@ export function useQueryExecution({
     // stored verbatim — confirm-flow re-dispatch is isolated from any
     // editor mutation that happens between prompt and confirm-click.
     if (tab.paradigm === "document") {
+      // Sprint 381 (2026-05-17) — Mongo db-contract α. Statement-kind
+      // classification *precedes* the database-binding gate so admin
+      // commands (`db.runCommand({...})` / `db.adminCommand({...})`) can
+      // run with no chip selection. Collection commands keep the
+      // existing "(no database)" → error path verbatim. AST 는 sprint-382
+      // 에서 본 분기를 promote.
+      const statementKind = classifyMongoStatement(sql);
+      if (statementKind === "admin-command") {
+        const body = extractAdminCommandBody(sql);
+        if (!body) {
+          updateQueryState(tab.id, {
+            status: "error",
+            error:
+              "Failed to parse the runCommand body — expected a JSON-shaped object like `{ ping: 1 }` (BSON literals are not yet supported).",
+          });
+          return;
+        }
+        const queryId = `${tab.id}-${Date.now()}`;
+        const startTime = Date.now();
+        updateQueryState(tab.id, { status: "running", queryId });
+        // adminCommand 는 항상 admin DB context — chip 값과 무관하게
+        // backend 에 `database = null` 전달. runCommand 는 chip 이 있으면
+        // 해당 db, 없으면 admin.
+        const isAdminCommand = /^\s*db\.adminCommand\s*\(/.test(sql);
+        const dbArg: string | null = isAdminCommand
+          ? null
+          : tab.database && tab.database.length > 0
+            ? tab.database
+            : null;
+        try {
+          const response = await runMongoCommand(tab.connectionId, dbArg, body);
+          const responseJson = JSON.stringify(response, null, 2);
+          const queryResult: import("@/types/query").QueryResult = {
+            columns: [
+              {
+                name: "response",
+                data_type: "JSON",
+                category: "object",
+              },
+            ],
+            rows: [[responseJson]],
+            total_count: 1,
+            execution_time_ms: Date.now() - startTime,
+            query_type: "select",
+          };
+          completeQuery(tab.id, queryId, queryResult);
+          recordHistory({
+            sql,
+            executedAt: Date.now(),
+            duration: Date.now() - startTime,
+            status: "success",
+          });
+        } catch (err) {
+          failQuery(
+            tab.id,
+            queryId,
+            err instanceof Error ? err.message : String(err),
+          );
+          recordHistory({
+            sql,
+            executedAt: Date.now(),
+            duration: Date.now() - startTime,
+            status: "error",
+          });
+        }
+        return;
+      }
+
       if (!tab.database) {
         updateQueryState(tab.id, {
           status: "error",
           error:
-            "Select a target database from the toolbar chip, then type a mongosh expression (e.g. `db.users.find({})`).",
+            "Select a target database from the toolbar chip, then type a mongosh expression (e.g. `db.users.find({})`). Admin commands like `db.runCommand({ping: 1})` run without one.",
         });
         return;
       }

@@ -419,6 +419,45 @@ pub async fn explain_mongo_find(
     .await
 }
 
+// ── Sprint 381 (2026-05-17) — generic runCommand gateway ────────────────
+//
+// 작성 이유: Phase 28 mongosh method whitelist 에 묶이지 않은 admin /
+// diagnostic command (`serverStatus`, `dbStats`, `currentOp`, `ping`, …)
+// 을 frontend 가 한 IPC 로 통과시킬 수 있도록 thin gateway. mongosh 의
+// 모든 admin helper 가 본질적으로 `runCommand` wrapper 라는 점에서, AST
+// 파서 완성을 기다리지 않고 generic dispatch 만 먼저 풀어둔다 — Phase
+// 28 의 statement-level method whitelist 와 동거 가능. database 인자가
+// `None` 이면 driver 가 `admin` DB 에서 실행 (adminCommand semantics),
+// `Some("myapp")` 이면 해당 db (db-scoped command).
+
+async fn run_mongo_command_inner(
+    state: &AppState,
+    connection_id: &str,
+    database: Option<&str>,
+    command: bson::Document,
+) -> Result<serde_json::Value, AppError> {
+    let connections = state.active_connections.lock().await;
+    let active = connections
+        .get(connection_id)
+        .ok_or_else(|| not_connected(connection_id))?;
+    active.as_document()?.run_command(database, command).await
+}
+
+/// Sprint 381 — execute `db.runCommand({...})` / `db.adminCommand({...})`.
+///
+/// `database` 는 frontend 가 `tab.database` 를 그대로 전달 — 비어 있으면
+/// `None`, 그렇지 않으면 `Some(name)`. backend 는 `None` 일 때 driver 의
+/// `admin` DB context 를 사용해 admin command 의미를 유지한다.
+#[tauri::command]
+pub async fn run_mongo_command(
+    state: tauri::State<'_, AppState>,
+    connection_id: String,
+    database: Option<String>,
+    command: bson::Document,
+) -> Result<serde_json::Value, AppError> {
+    run_mongo_command_inner(state.inner(), &connection_id, database.as_deref(), command).await
+}
+
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default)]
 mod tests {
@@ -821,5 +860,98 @@ mod tests {
         .unwrap();
         assert!(called.load(Ordering::SeqCst));
         assert_eq!(r["ok"], serde_json::Value::from(1));
+    }
+
+    // ── Sprint 381 (2026-05-17) — run_mongo_command ─────────────────────
+    //
+    // 작성 이유: generic runCommand gateway 가 (a) 미존재 connection →
+    // NotFound, (b) RDB paradigm → Unsupported, (c) database=None 시
+    // adapter 가 admin context 로 라우팅하는지, (d) database=Some("myapp")
+    // 시 그 이름을 그대로 어댑터에 전달하는지 확인.
+
+    #[tokio::test]
+    async fn run_mongo_command_unknown_connection_returns_notfound() {
+        let state = AppState::new();
+        let mut cmd = bson::Document::new();
+        cmd.insert("ping", 1);
+        match run_mongo_command_inner(&state, "absent", None, cmd).await {
+            Err(AppError::NotFound(msg)) => assert!(msg.contains("absent")),
+            other => panic!("Expected NotFound, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_rdb_paradigm_returns_unsupported() {
+        let state = state_with("rdb", rdb_default()).await;
+        let mut cmd = bson::Document::new();
+        cmd.insert("ping", 1);
+        assert!(matches!(
+            run_mongo_command_inner(&state, "rdb", None, cmd).await,
+            Err(AppError::Unsupported(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_database_none_routes_to_admin_context() {
+        // 작성 이유: adminCommand semantics — frontend 가 chip 미선택 (`tab.database
+        // = undefined`) + `db.runCommand({serverStatus: 1})` 입력 시
+        // backend 는 `database = None` 으로 호출돼야 한다. 어댑터가 받은
+        // 인자 (None) + command body 를 closure 가 캡처해 검증한다.
+        use crate::db::testing::StubDocumentAdapter;
+        use crate::db::ActiveAdapter;
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Option<Option<String>>>> = Arc::new(Mutex::new(None));
+        let captured_for_closure = captured.clone();
+        let mut s = StubDocumentAdapter::default();
+        s.run_command_fn = Some(Box::new(move |database, command| {
+            *captured_for_closure.lock().unwrap() = Some(database.map(|s| s.to_string()));
+            assert!(command.contains_key("serverStatus"));
+            Ok(serde_json::json!({ "ok": 1, "version": "7.0.0" }))
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+
+        let mut cmd = bson::Document::new();
+        cmd.insert("serverStatus", 1);
+        let r = run_mongo_command_inner(&state, "d", None, cmd)
+            .await
+            .expect("should succeed");
+        assert_eq!(r["ok"], serde_json::Value::from(1));
+        assert_eq!(r["version"], serde_json::Value::from("7.0.0"));
+        let captured = captured.lock().unwrap().clone();
+        assert_eq!(captured, Some(None), "expected database=None routing");
+    }
+
+    #[tokio::test]
+    async fn run_mongo_command_database_some_routes_to_named_db() {
+        // 작성 이유: db-scoped command — frontend 가 chip = "myapp" +
+        // `db.runCommand({dbStats: 1})` 입력 시 backend 는 `database =
+        // Some("myapp")` 으로 호출돼야 한다.
+        use crate::db::testing::StubDocumentAdapter;
+        use crate::db::ActiveAdapter;
+        use std::sync::{Arc, Mutex};
+
+        let captured: Arc<Mutex<Option<Option<String>>>> = Arc::new(Mutex::new(None));
+        let captured_for_closure = captured.clone();
+        let mut s = StubDocumentAdapter::default();
+        s.run_command_fn = Some(Box::new(move |database, command| {
+            *captured_for_closure.lock().unwrap() = Some(database.map(|s| s.to_string()));
+            assert!(command.contains_key("dbStats"));
+            Ok(serde_json::json!({ "ok": 1, "db": "myapp" }))
+        }));
+        let state = state_with("d", ActiveAdapter::Document(Box::new(s))).await;
+
+        let mut cmd = bson::Document::new();
+        cmd.insert("dbStats", 1);
+        let r = run_mongo_command_inner(&state, "d", Some("myapp"), cmd)
+            .await
+            .expect("should succeed");
+        assert_eq!(r["db"], serde_json::Value::from("myapp"));
+        let captured = captured.lock().unwrap().clone();
+        assert_eq!(
+            captured,
+            Some(Some("myapp".to_string())),
+            "expected database=Some(\"myapp\") routing"
+        );
     }
 }
