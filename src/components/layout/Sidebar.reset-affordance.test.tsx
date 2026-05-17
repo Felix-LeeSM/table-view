@@ -148,4 +148,41 @@ describe("Sidebar reset affordances (Q21 #3-a + #7)", () => {
     const ws = connWs?.["db1"];
     expect(ws?.sidebar.expanded).toEqual([]);
   });
+
+  // 작성 2026-05-17 (sprint-378). 사유: 사용자가 width drag 후 기본값
+  // 복귀를 위해 컨텍스트/설정 패널을 거치지 않고 호버 시 노출되는 보라색
+  // drag handle 을 더블클릭으로 즉시 reset 할 수 있어야 한다 (이미지 #7).
+  // handle 의 단일 mousedown (drag-start) 은 reset IPC 0 — 더블클릭만이
+  // reset 을 트리거.
+  it("AC-378-01: resize handle 더블클릭 → reset_setting('sidebar_width') 1회", () => {
+    render(<Sidebar />);
+    const handle = document.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement | null;
+    expect(handle).toBeTruthy();
+    fireEvent.doubleClick(handle!);
+
+    const calls = invokeMock.mock.calls.filter(
+      (call) => call[0] === "reset_setting",
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toEqual({ key: "sidebar_width" });
+  });
+
+  it("AC-378-02: resize handle 단일 mousedown (drag-start) → reset IPC 0회", () => {
+    render(<Sidebar />);
+    const handle = document.querySelector(
+      ".cursor-col-resize",
+    ) as HTMLElement | null;
+    expect(handle).toBeTruthy();
+
+    fireEvent.mouseDown(handle!, { clientX: 100 });
+    // mousedown 만으로는 drag 가 시작되더라도 reset 은 일어나지 않아야 한다.
+    fireEvent.mouseUp(handle!, { clientX: 100 });
+
+    const calls = invokeMock.mock.calls.filter(
+      (call) => call[0] === "reset_setting",
+    );
+    expect(calls).toHaveLength(0);
+  });
 });
