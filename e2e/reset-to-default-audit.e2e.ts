@@ -21,11 +21,15 @@
 // 본 spec 은 `pnpm test:e2e:docker` 환경에서 실행. host docker daemon 이
 // PG 컨테이너를 띄우고 있어야 함 (다른 e2e 와 동일 전제).
 //
-// 9 시나리오:
-//   1. Settings panel "Reset settings" 클릭 — 4 setting key 초기화.
+// 9 시나리오 (sprint-377 / 2026-05-17 갱신: settings panel entry 두 개 제거):
+//   1. (sprint-377 제거) Settings panel "Reset settings" — 사용자 직접 요청
+//      으로 settings panel UI 자체 unmount. IPC `reset_setting` 는 유지.
+//      현재 e2e step 0 — audit-checklist item #1 의 \"e2e 시나리오 1 은
+//      sprint-377 follow-up 에서 갱신\" 충족.
 //   2. Home Recent "Reset" 버튼 클릭 — home_recent_collapsed 초기화.
-//   3. Settings panel "Reset sidebar width" + Sidebar handle context-menu
-//      두 entry point 모두 fire — sidebar_width 초기화.
+//   3. (sprint-377 부분 제거) Sidebar handle context-menu 만 — settings
+//      panel entry (#3a) 는 sprint-377 에서 제거. sidebar handle (#3b)
+//      만 fire 해 `sidebar_width` 초기화.
 //   4. Group 우클릭 "Reset collapse states" — 모든 group expanded.
 //   5. DataGrid header 우클릭 "Reset column widths" — widths 만 default.
 //   6. DataGrid header 우클릭 "Show all columns" — hidden 만 default.
@@ -64,18 +68,19 @@ describe("Sprint 376 — Reset-to-default audit (Q21 9 affordance)", () => {
     await waitForLauncher();
     await createPostgresConnection(PG_CONNECTION);
 
-    // ----- 시나리오 1: Settings panel "Reset settings" -----
-    step("#1 Settings panel 'Reset settings' 클릭");
+    // ----- 시나리오 1: (sprint-377 제거) Settings panel "Reset settings" -----
+    // sprint-377 (2026-05-17) 에서 사용자 직접 요청으로 settings panel UI
+    // 제거. e2e step 도 동반 제거 — 회귀 가드는 RTL
+    // (`src/pages/HomePage.reset-affordance.test.tsx` AC-377-01) 가 담당.
     await switchToLauncherWindow();
-    await clickByAriaLabel("Reset settings");
 
     // ----- 시나리오 2: Home Recent "Reset" 버튼 -----
     step("#2 Home Recent 'Reset' 버튼 클릭");
     await clickByAriaLabel("Reset recent collapse");
 
-    // ----- 시나리오 3 (a): Settings panel "Reset sidebar width" -----
-    step("#3a Settings panel 'Reset sidebar width' 클릭");
-    await clickByAriaLabel("Reset sidebar width");
+    // ----- 시나리오 3 (a): (sprint-377 제거) Settings panel "Reset sidebar width" -----
+    // sprint-377 에서 settings panel 의 두 번째 entry point 제거.
+    // sidebar handle 우클릭 entry (#3b) 는 workspace 윈도우에서 fire (아래).
 
     // ----- 시나리오 8: Home "Clear recent" -----
     // (먼저 fire — 시나리오 9 의 favorites 도달 전에 launcher 측 작업)

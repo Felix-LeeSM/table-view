@@ -1,5 +1,6 @@
 /**
- * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #2 + #8).
+ * 작성 2026-05-17 (Phase 6 sprint-376 Q21 affordance #2 + #8;
+ * sprint-377 회귀 가드 #1+#3 추가).
  *
  * 사유: Q21 9 affordance 중
  *   (2) Home "Recent" 헤더 우클릭 "Reset" → reset_setting("home_recent_collapsed") 1회.
@@ -8,6 +9,11 @@
  * 본 spec 은 HomePage 의 사용자 entry point — 우클릭 메뉴 / 액션 바
  * 버튼 — 가 위 IPC 를 정확한 wire shape 으로 발사하는지 lock. Confirm
  * dialog 가 도입되면 test 가 fail 해야 함 (Q21 contract — 직접 IPC).
+ *
+ * sprint-377 (2026-05-17): 사용자 직접 요청으로 settings panel 의
+ * "Reset settings" / "Reset sidebar width" 두 버튼 제거. 본 spec 에
+ * AC-377-01/02 negative-assertion 케이스 추가 — HomePage 트리에서
+ * 두 버튼 부재 회귀 가드.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
