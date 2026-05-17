@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Sun,
   Moon,
@@ -6,7 +6,9 @@ import {
   Plus,
   RotateCcw,
   FoldVertical,
+  UnfoldVertical,
 } from "lucide-react";
+import { getSidebarObjectLabel } from "@lib/dbTypeLabels";
 import { useConnectionStore } from "@stores/connectionStore";
 import { resolveActiveDb, useWorkspaceStore } from "@stores/workspaceStore";
 import { useMruStore } from "@stores/mruStore";
@@ -148,11 +150,48 @@ export default function Sidebar() {
   // active workspace's sidebar.expanded list. The workspace persist
   // pipeline (sprint-360 SQLite write) carries the change to other
   // windows on the same connection_id.
+  //
+  // Sprint 379 — 단일 버튼이 DB type 별 적절한 객체 이름 (schemas /
+  // tables / collections) 을 노출하고 토글된다. 모두 collapsed 상태에서는
+  // "Expand all *" 라벨로 의도를 신호하지만 실제 expand path 는 후속
+  // sprint-381 에서 schema/mongo store 캐시를 walk 하여 구체화한다 — 본
+  // sprint 에서는 click 이 *no-op* 로 안전하게 떨어지도록 한다.
   const handleCollapseAll = useCallback(() => {
     if (!focusedConnId) return;
     const db = resolveActiveDb(focusedConnId);
     setExpanded(focusedConnId, db, []);
   }, [focusedConnId, setExpanded]);
+
+  // Sprint 379 — sidebar.expanded 의 현 상태로 토글 라벨 / 클릭 핸들러를
+  // 분기. 안전한 read path 만 사용 (focusedConnId 없으면 비어 있는 워크
+  // 스페이스로 간주 → "Expand" 라벨 + disabled).
+  const workspacesById = useWorkspaceStore((s) => s.workspaces);
+  const expandedCount = useMemo(() => {
+    if (!focusedConnId) return 0;
+    const db = resolveActiveDb(focusedConnId);
+    return workspacesById[focusedConnId]?.[db]?.sidebar.expanded.length ?? 0;
+  }, [focusedConnId, workspacesById]);
+  const focusedDbType = useMemo(() => {
+    if (!focusedConnId) return null;
+    return connections.find((c) => c.id === focusedConnId)?.db_type ?? null;
+  }, [focusedConnId, connections]);
+  const sidebarObjectPlural = useMemo(() => {
+    if (!focusedDbType) return "schemas";
+    return getSidebarObjectLabel(focusedDbType).plural;
+  }, [focusedDbType]);
+  const isAllCollapsed = expandedCount === 0;
+  const toggleLabel = isAllCollapsed
+    ? `Expand all ${sidebarObjectPlural}`
+    : `Collapse all ${sidebarObjectPlural}`;
+  const ToggleIcon = isAllCollapsed ? UnfoldVertical : FoldVertical;
+  const handleToggleExpansion = useCallback(() => {
+    if (!focusedConnId) return;
+    // Collapse path → empty expanded array. Expand path → no-op for now
+    // (sprint-381 will walk the schema/mongo store caches).
+    if (!isAllCollapsed) {
+      handleCollapseAll();
+    }
+  }, [focusedConnId, isAllCollapsed, handleCollapseAll]);
 
   const activeEntry =
     THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0];
@@ -190,17 +229,21 @@ export default function Sidebar() {
               : "Schemas"}
           </span>
           <div className="flex items-center gap-1">
+            {/* Sprint 379 — DB type 별 객체 이름 + 토글. PG → schemas,
+                MySQL/SQLite → tables, Mongo → collections. expanded 가
+                비어 있으면 동일 버튼이 "Expand all *" 라벨로 전환된다 (실제
+                expand 동작은 sprint-381 에서 schema/mongo store walk). */}
             <Button
               variant="ghost"
               size="icon-xs"
               className="shrink-0 text-muted-foreground hover:text-secondary-foreground"
-              aria-label="Collapse all"
-              title="Collapse all schema tree nodes"
+              aria-label={toggleLabel}
+              title={toggleLabel}
               disabled={!focusedConnId}
-              onClick={handleCollapseAll}
+              onClick={handleToggleExpansion}
               data-testid="sidebar-collapse-all"
             >
-              <FoldVertical />
+              <ToggleIcon />
             </Button>
             <Button
               variant="ghost"
