@@ -96,7 +96,13 @@ export default function TabDbChip({
     [workspaceKey, database, setQueryTabDatabase, tabId],
   );
 
-  const label = database === "" ? "(select database)" : database;
+  // Sprint 381 (2026-05-17) — Mongo db-contract α: chip label reflects
+  // the *binding*, not a CTA. Empty `database` means the tab has no
+  // collection-scope target bound — admin commands (`db.runCommand`,
+  // `db.adminCommand`) can still run; only collection commands require
+  // the user to pick one. "(no database)" makes the absence visible
+  // without nagging the user to select before every admin call.
+  const label = database === "" ? "(no database)" : database;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -106,7 +112,7 @@ export default function TabDbChip({
           aria-label={
             database
               ? `Current database: ${database}. Click to change.`
-              : "No database selected. Click to choose one."
+              : "No database bound. Click to pick one — admin commands run without it."
           }
           aria-haspopup="listbox"
           aria-expanded={open}

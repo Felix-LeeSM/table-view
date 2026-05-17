@@ -284,6 +284,8 @@ pub fn run() {
         commands::document::query::count_documents,
         commands::document::query::estimated_document_count,
         commands::document::query::distinct_documents,
+        // Sprint 381 (2026-05-17) — generic db.runCommand({...}) gateway.
+        commands::document::query::run_mongo_command,
         commands::document::mutate::insert_document,
         commands::document::mutate::update_document,
         commands::document::mutate::delete_document,

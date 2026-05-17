@@ -166,6 +166,54 @@ function analyzeBulkSubOp(sub: BulkWriteOp): StatementAnalysis {
   }
 }
 
+/**
+ * Sprint 381 (2026-05-18) — `db.runCommand({...})` / `db.adminCommand({...})`
+ * destructive 5-keyword classifier. autocomplete (`mongoAutocomplete.ts`)
+ * 가 본 5개를 1-click 추천하므로, admin-command dispatch path 가
+ * `safeModeGate.decide` 를 호출하기 전에 본 함수로 severity 를 추출한다.
+ *
+ * Whitelist (irreversible 또는 cluster-wide 영향):
+ *   - `drop`              — collection 통째 제거
+ *   - `dropDatabase`      — database 통째 제거
+ *   - `dropIndexes`       — index 통째 제거 (`*` 는 모든 index)
+ *   - `killOp`            — 진행 중인 operation 강제 종료
+ *   - `renameCollection`  — collection 이름 변경 (이전 이름 disappear)
+ *
+ * Out of scope (sprint-382 의 AST 가 nested / option-positional 분석을
+ * promote): `createIndex` (additive), `compact` (locks but reversible),
+ * `fsync` (admin op), `shutdown` (cluster ops — production hardening 시
+ * 별 sprint).
+ *
+ * `body` 의 first key 만 검사한다 — mongosh runCommand convention 은
+ * `{ <command>: <arg>, ...options }` 이므로 두 번째 key 부터는 옵션이다.
+ * 즉 `{ ping: 1, drop: "x" }` 같은 false-positive 는 방지된다.
+ */
+const DESTRUCTIVE_RUN_COMMANDS = new Set([
+  "drop",
+  "dropDatabase",
+  "dropIndexes",
+  "killOp",
+  "renameCollection",
+]);
+
+export function analyzeMongoRunCommand(
+  body: Record<string, unknown>,
+): StatementAnalysis {
+  const keys = Object.keys(body);
+  if (keys.length === 0) {
+    return { kind: "mongo-other", severity: "info", reasons: [] };
+  }
+  const command = keys[0]!;
+  if (DESTRUCTIVE_RUN_COMMANDS.has(command)) {
+    return {
+      kind: "mongo-drop",
+      severity: "danger",
+      reasons: [`MongoDB ${command} (irreversible)`],
+    };
+  }
+  return { kind: "mongo-other", severity: "info", reasons: [] };
+}
+
 function severityRank(severity: "info" | "warn" | "danger"): number {
   if (severity === "danger") return 2;
   if (severity === "warn") return 1;

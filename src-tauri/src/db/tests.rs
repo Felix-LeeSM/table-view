@@ -338,6 +338,15 @@ fn active_adapter_as_rdb_rejects_non_rdb_with_unsupported() {
         ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
             Box::pin(async { Ok(Vec::new()) })
         }
+        // Sprint 381 (2026-05-17) — runCommand gateway stub. Default
+        // returns the canonical `{ok: 1}` driver success body.
+        fn run_command<'a>(
+            &'a self,
+            _database: Option<&'a str>,
+            _command: bson::Document,
+        ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+            Box::pin(async { Ok(serde_json::json!({ "ok": 1 })) })
+        }
     }
 
     let active = ActiveAdapter::Document(Box::new(DummyDocument));
@@ -994,6 +1003,14 @@ impl DocumentAdapter for FakeCancellableDocument {
         _limit: i64,
     ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>> {
         Box::pin(async { Ok(Vec::new()) })
+    }
+    // Sprint 381 (2026-05-17) — runCommand gateway stub.
+    fn run_command<'a>(
+        &'a self,
+        _database: Option<&'a str>,
+        _command: bson::Document,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>> {
+        Box::pin(async { Ok(serde_json::json!({ "ok": 1 })) })
     }
 }
 

@@ -5,7 +5,10 @@ import {
   createMongoCompletionSource,
   createMongoOperatorHighlight,
 } from "@/lib/completion/mongo";
-import { createMongoshDbSource } from "@/lib/mongo/mongoAutocomplete";
+import {
+  createMongoshDbSource,
+  createMongoAdminCommandSource,
+} from "@/lib/mongo/mongoAutocomplete";
 
 export interface UseMongoAutocompleteOptions {
   /**
@@ -62,6 +65,14 @@ export function useMongoAutocomplete(
         // JSON-body `$operator` / quoted-key positions. The two patterns
         // don't overlap, so registration order does not matter.
         override: [
+          // Sprint 381 (2026-05-17) — admin command source runs *first*
+          // because its trigger pattern (`db.runCommand({` + first key)
+          // is the narrowest. Falling through to `createMongoshDbSource`
+          // on no-match keeps backward-compat with the Phase 28
+          // `db.<coll>.method` whitelist; `createMongoCompletionSource`
+          // continues to own `$operator` / quoted-key positions inside
+          // JSON bodies.
+          createMongoAdminCommandSource(),
           createMongoshDbSource({ collectionNames }),
           createMongoCompletionSource({ queryMode: "aggregate", fieldNames }),
         ],

@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
   analyzeMongoOperation,
   analyzeMongoPipeline,
+  analyzeMongoRunCommand,
   isInfoMongoOperation,
 } from "./mongoSafety";
 
@@ -282,5 +283,76 @@ describe("isInfoMongoOperation (Sprint 255)", () => {
       patch: { reviewed: true },
     });
     expect(isInfoMongoOperation(a)).toBe(false);
+  });
+});
+
+// Sprint 381 (2026-05-18) — `db.runCommand({...})` / `db.adminCommand({...})`
+// destructive 5-keyword whitelist. autocomplete 가 `drop` / `dropDatabase` /
+// `dropIndexes` / `killOp` / `renameCollection` 를 1-click 추천하므로,
+// admin-command dispatch path 가 `safeModeGate.decide` 를 호출하기 전에
+// classifier 가 정확히 본 5개를 danger 로 분류해야 한다. 다른 command
+// (`ping` / `serverStatus` / `dbStats` 등 read-only / introspection) 은
+// INFO 로 흘려야 false-positive 막음.
+describe("analyzeMongoRunCommand (sprint-381)", () => {
+  it("[AC-381-S1] empty body → info (no command key)", () => {
+    const a = analyzeMongoRunCommand({});
+    expect(a.severity).toBe("info");
+    expect(a.kind).toBe("mongo-other");
+  });
+
+  it("[AC-381-S2] drop → danger", () => {
+    const a = analyzeMongoRunCommand({ drop: "users" });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-drop");
+    expect(a.reasons.join(" ")).toMatch(/drop/i);
+  });
+
+  it("[AC-381-S3] dropDatabase → danger", () => {
+    const a = analyzeMongoRunCommand({ dropDatabase: 1 });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-drop");
+    expect(a.reasons.join(" ")).toMatch(/dropDatabase/);
+  });
+
+  it("[AC-381-S4] dropIndexes → danger", () => {
+    const a = analyzeMongoRunCommand({ dropIndexes: "users", index: "*" });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-drop");
+  });
+
+  it("[AC-381-S5] killOp → danger", () => {
+    const a = analyzeMongoRunCommand({ killOp: 1, op: 12345 });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-drop");
+  });
+
+  it("[AC-381-S6] renameCollection → danger", () => {
+    const a = analyzeMongoRunCommand({
+      renameCollection: "db.from",
+      to: "db.to",
+    });
+    expect(a.severity).toBe("danger");
+    expect(a.kind).toBe("mongo-drop");
+  });
+
+  it("[AC-381-S7] ping / serverStatus / dbStats → info (read-only)", () => {
+    for (const body of [
+      { ping: 1 },
+      { serverStatus: 1 },
+      { dbStats: 1 },
+      { currentOp: 1 },
+    ]) {
+      const a = analyzeMongoRunCommand(body);
+      expect(a.severity).toBe("info");
+      expect(a.kind).toBe("mongo-other");
+    }
+  });
+
+  it("[AC-381-S8] classifier is keyed on the FIRST key only (mongosh convention)", () => {
+    // mongosh: `db.runCommand({ <command>: <arg>, ...options })`. 첫 key 가
+    // command 이름. 본 테스트는 destructive keyword 가 *옵션* 위치에 있어도
+    // false-positive 가 나지 않는지 확인.
+    const a = analyzeMongoRunCommand({ ping: 1, drop: "irrelevant" });
+    expect(a.severity).toBe("info");
   });
 });

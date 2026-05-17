@@ -4,12 +4,16 @@ import { CompletionContext } from "@codemirror/autocomplete";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import {
   MONGO_ACCUMULATORS,
+  MONGO_ADMIN_COMMANDS,
   MONGO_AGGREGATE_STAGES,
   MONGO_ALL_OPERATORS,
   MONGO_QUERY_OPERATORS,
   MONGO_TYPE_TAGS,
+  MONGOSH_DB_LEVEL_METHODS,
+  createMongoAdminCommandSource,
   createMongoCompletionSource,
   createMongoOperatorHighlight,
+  createMongoshDbSource,
   type MongoQueryMode,
 } from "./mongoAutocomplete";
 
@@ -257,5 +261,121 @@ describe("createMongoOperatorHighlight", () => {
     // lazily, so the best assertion available here is "state construction
     // succeeded".
     expect(state.doc.toString()).toBe('{"$match": 1}');
+  });
+});
+
+// Sprint 381 (2026-05-17) — admin command dict + completion sources.
+//
+// 작성 이유: db-contract α 가 `db.runCommand({...})` / `db.adminCommand({...})`
+// 을 자동완성에 노출해야 하므로, MONGO_ADMIN_COMMANDS dict 의 핵심
+// 엔트리 + 두 source (db-level helpers + admin command literal) 가
+// 발동되는 위치를 lock 한다. AST 가 아닌 정규식 기반이라 trigger 패턴
+// 정확도 회귀 가드가 중요.
+
+describe("mongoAutocomplete — sprint-381 admin command catalog", () => {
+  it("MONGOSH_DB_LEVEL_METHODS includes runCommand + adminCommand", () => {
+    const labels = MONGOSH_DB_LEVEL_METHODS.map((m) => m.label);
+    expect(labels).toContain("runCommand");
+    expect(labels).toContain("adminCommand");
+    expect(labels).toContain("getProfilingStatus");
+    expect(labels).toContain("setProfilingLevel");
+  });
+
+  it("MONGO_ADMIN_COMMANDS includes the canonical diagnostic set", () => {
+    const labels = MONGO_ADMIN_COMMANDS.map((c) => c.label);
+    expect(labels).toContain("ping");
+    expect(labels).toContain("serverStatus");
+    expect(labels).toContain("dbStats");
+    expect(labels).toContain("collStats");
+    expect(labels).toContain("currentOp");
+    expect(labels).toContain("listDatabases");
+    expect(labels).toContain("buildInfo");
+    expect(labels).toContain("hostInfo");
+    expect(MONGO_ADMIN_COMMANDS.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("each MONGO_ADMIN_COMMANDS entry carries an apply body shaped like `<key>: …`", () => {
+    for (const cand of MONGO_ADMIN_COMMANDS) {
+      // The apply value must contain a `:` so the rendered completion is
+      // a valid `key: value` BSON literal that the user can chain inside
+      // `{...}`. The literal *key* can differ from the user-facing label
+      // (e.g. `setProfilingLevel` label → `profile: 1` apply) — that's
+      // intentional, mongosh's helper-to-runCommand mapping.
+      expect(cand.apply).toMatch(/^[A-Za-z_$][A-Za-z0-9_$]*\s*:/);
+    }
+  });
+});
+
+describe("createMongoshDbSource — sprint-381 db-level helper exposure", () => {
+  function runDbSource(doc: string, pos: number, collectionNames?: string[]) {
+    const state = EditorState.create({
+      doc,
+      extensions: [jsonLanguage()],
+    });
+    const context = new CompletionContext(state, pos, /* explicit */ true);
+    const source = createMongoshDbSource({ collectionNames });
+    return source(context);
+  }
+
+  it("surfaces `runCommand` when the user types `db.r`", () => {
+    const doc = "db.r";
+    const result = runDbSource(doc, doc.length, []);
+    expect(result).not.toBeNull();
+    if (!result || result instanceof Promise) return;
+    const labels = result.options.map((o) => o.label);
+    expect(labels).toContain("runCommand");
+    expect(labels).toContain("adminCommand");
+  });
+
+  it("surfaces collection names alongside the db-level helpers", () => {
+    const doc = "db.";
+    const result = runDbSource(doc, doc.length, ["users", "orders"]);
+    expect(result).not.toBeNull();
+    if (!result || result instanceof Promise) return;
+    const labels = result.options.map((o) => o.label);
+    // db-level methods come first; collections follow.
+    expect(labels).toContain("runCommand");
+    expect(labels).toContain("users");
+    expect(labels).toContain("orders");
+  });
+});
+
+describe("createMongoAdminCommandSource — sprint-381 admin command literal", () => {
+  function runAdminSource(doc: string, pos: number) {
+    const state = EditorState.create({
+      doc,
+      extensions: [jsonLanguage()],
+    });
+    const context = new CompletionContext(state, pos, /* explicit */ true);
+    const source = createMongoAdminCommandSource();
+    return source(context);
+  }
+
+  it("surfaces admin command literals after `db.runCommand({`", () => {
+    const doc = "db.runCommand({";
+    const result = runAdminSource(doc, doc.length);
+    expect(result).not.toBeNull();
+    if (!result || result instanceof Promise) return;
+    const labels = result.options.map((o) => o.label);
+    expect(labels).toContain("serverStatus");
+    expect(labels).toContain("dbStats");
+    expect(labels).toContain("ping");
+  });
+
+  it("surfaces admin command literals after `db.adminCommand({se`", () => {
+    const doc = "db.adminCommand({se";
+    const result = runAdminSource(doc, doc.length);
+    expect(result).not.toBeNull();
+    if (!result || result instanceof Promise) return;
+    const labels = result.options.map((o) => o.label);
+    // CodeMirror filters by the prefix; we only assert the candidate set
+    // is unrestricted at the *source* level (`serverStatus` is a member).
+    expect(labels).toContain("serverStatus");
+  });
+
+  it("returns null inside an unrelated JSON body", () => {
+    const doc = "db.users.find({";
+    const result = runAdminSource(doc, doc.length);
+    expect(result).toBeNull();
   });
 });

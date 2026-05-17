@@ -131,18 +131,22 @@ export default function MongoFormFields({
         )}
       </div>
 
-      {/* Default Database — Sprint 345 made required (defaults to `admin`).
-          DbSwitcher still swaps the active DB at runtime. */}
+      {/* Default Database — Sprint 345 made it required (defaults to
+          `admin`). Sprint 381 (2026-05-17) reverts that for Mongo only:
+          MongoDB connections do not require a default database. When
+          left blank the toolbar chip surfaces "(no database)" and the
+          user picks per-tab; admin commands (`db.runCommand({ping: 1})`)
+          run against the admin DB regardless of any pre-bound default. */}
       <div>
         <label htmlFor="conn-database" className={labelClass}>
-          Database
+          Database (optional)
         </label>
         <input
           id="conn-database"
           className={inputClass}
           value={draft.database}
           onChange={(e) => onChange({ database: e.target.value })}
-          placeholder="admin"
+          placeholder="leave blank to pick per-tab"
         />
       </div>
 

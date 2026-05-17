@@ -82,12 +82,17 @@ describe("TabDbChip — interactive database selector", () => {
     // produced the exact symptom the user complained about: "데이터베이스
     // 선택도 못 한다." The new contract keeps the affordance visible so
     // the user always has a clickable surface to set a database.
+    //
+    // Sprint 381 (2026-05-17) — Mongo db-contract α: label changes from
+    // "(select database)" → "(no database)" so the chip reflects the
+    // *binding* (none), not a nag-CTA. Admin commands run without one;
+    // collection commands surface a separate error.
     render(<TabDbChip tabId="query-1" database="" connectionId="conn-mongo" />);
     const trigger = screen.getByRole("button", {
-      name: /no database selected/i,
+      name: /no database bound/i,
     });
     expect(trigger).toBeInTheDocument();
-    expect(trigger).toHaveTextContent(/select database/i);
+    expect(trigger).toHaveTextContent(/no database/i);
   });
 
   it("fetches the database list on click and renders the entries", async () => {

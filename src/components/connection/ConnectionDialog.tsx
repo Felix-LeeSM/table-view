@@ -122,6 +122,7 @@ export default function ConnectionDialog({
     isEditing,
     hadPassword,
     isSqlite,
+    isMongo,
     pendingDbTypeChange,
     handleDbTypeChange,
     handleConfirmDbTypeReplace,
@@ -202,7 +203,13 @@ export default function ConnectionDialog({
     // who expected the form's intent to round-trip. The form now seeds
     // a paradigm-appropriate default at draft init, so blank here means
     // the user deleted it on purpose — reject explicitly.
-    if (!isSqlite && !trimmed.database) {
+    //
+    // Sprint 381 (2026-05-17) — Mongo db-contract α: MongoDB connections
+    // do *not* require a default database. The toolbar chip picks the
+    // per-tab database at runtime, and admin commands
+    // (`db.runCommand({...})`) target the admin DB context regardless of
+    // any pre-bound default. RDB connections still require it.
+    if (!isSqlite && !isMongo && !trimmed.database) {
       setError("Database is required");
       return;
     }

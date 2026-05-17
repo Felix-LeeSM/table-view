@@ -1030,6 +1030,28 @@ pub trait DocumentAdapter: DbAdapter {
         &'a self,
         limit: i64,
     ) -> BoxFuture<'a, Result<Vec<crate::models::SlowQueryRow>, AppError>>;
+
+    /// Sprint 381 — generic `db.runCommand({...})` gateway.
+    ///
+    /// 작성 이유 (2026-05-17): mongosh 의 모든 admin/diagnostic helper 는
+    /// 본질적으로 `runCommand` wrapper 다. Phase 28 의 method whitelist 에
+    /// 묶이지 않은 admin command (`serverStatus`, `dbStats`, `currentOp`,
+    /// `ping`, …) 을 frontend 가 한 IPC 로 통과시킬 수 있도록 thin gateway
+    /// 를 추가한다.
+    ///
+    /// - `database = None` 시 `"admin"` 데이터베이스에서 실행
+    ///   (`adminCommand` semantics — `listDatabases` / `serverStatus` 등).
+    /// - `database = Some("myapp")` 시 해당 db 에서 실행 (`dbStats`,
+    ///   `collStats` 등 db-scoped command).
+    ///
+    /// 결과는 driver 가 반환한 BSON 응답을 canonical EJSON 으로 직렬화한
+    /// `serde_json::Value`. 호출자가 grid / Quick Look / JSON viewer 에
+    /// paradigm-agnostic 으로 렌더.
+    fn run_command<'a>(
+        &'a self,
+        database: Option<&'a str>,
+        command: bson::Document,
+    ) -> BoxFuture<'a, Result<serde_json::Value, AppError>>;
 }
 
 // ── SearchAdapter / KvAdapter (Phase 7/8 placeholders) ────────────────────

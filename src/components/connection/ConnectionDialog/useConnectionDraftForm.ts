@@ -46,6 +46,13 @@ export interface UseConnectionDraftFormReturn {
   isEditing: boolean;
   hadPassword: boolean;
   isSqlite: boolean;
+  /**
+   * Sprint 381 (2026-05-17) — true when the draft targets MongoDB.
+   * Mongo's `database` is *optional* (the user can leave it blank and
+   * pick one per-tab from the toolbar chip); RDB types still require a
+   * non-empty database. ConnectionDialog.handleSave branches on this.
+   */
+  isMongo: boolean;
   pendingDbTypeChange: { to: DatabaseType } | null;
   handleDbTypeChange: (newDbType: DatabaseType) => void;
   handleConfirmDbTypeReplace: () => void;
@@ -93,6 +100,10 @@ export function useConnectionDraftForm(
   } | null>(null);
 
   const isSqlite = form.db_type === "sqlite";
+  // Sprint 381 (2026-05-17) — Mongo db-contract α: `database` is optional
+  // on Mongo (default DB landing field, not connection-required) so the
+  // Save validator skips the "Database is required" branch when true.
+  const isMongo = form.db_type === "mongodb";
 
   /**
    * Sprint 138 — when the user changes `db_type`, reset the DBMS-specific
@@ -216,6 +227,7 @@ export function useConnectionDraftForm(
     isEditing,
     hadPassword,
     isSqlite,
+    isMongo,
     pendingDbTypeChange,
     handleDbTypeChange,
     handleConfirmDbTypeReplace,
