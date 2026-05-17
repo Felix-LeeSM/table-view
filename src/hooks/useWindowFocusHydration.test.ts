@@ -9,7 +9,7 @@ import { useWorkspaceStore } from "@stores/workspaceStore";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 import { useWindowFocusHydration } from "./useWindowFocusHydration";
 
-// Mock session-storage so hydrateConnectionSession's readConnectionSession
+// Mock scopedLocalStorage so hydrateConnectionSession's readConnectionSession
 // dependency resolves without a real Tauri runtime.
 const mockReadConnectionSession = vi.fn(
   (): {
@@ -21,7 +21,7 @@ const mockReadConnectionSession = vi.fn(
   }),
 );
 
-vi.mock("@lib/session-storage", () => ({
+vi.mock("@lib/scopedLocalStorage", () => ({
   persistFocusedConnId: vi.fn(),
   persistActiveStatuses: vi.fn(),
   readConnectionSession: () => mockReadConnectionSession(),

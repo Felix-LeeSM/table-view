@@ -4,7 +4,7 @@ import {
   type ConnectionState,
 } from "@stores/connectionStore";
 import type { ConnectionStatus } from "@/types/connection";
-import { readConnectionSession } from "@lib/session-storage";
+import { readConnectionSession } from "@lib/scopedLocalStorage";
 
 /**
  * Sprint 224 (P10 step 3a) — moves the read-only `hydrateFromSession`

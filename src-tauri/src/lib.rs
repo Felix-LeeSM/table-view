@@ -452,6 +452,24 @@ pub fn run() {
             storage::history_retention_boot::boot_history_retention_vacuum().await;
         });
 
+        // Sprint 375 (Phase 6 cleanup) — boot-time `query_history.tab_id`
+        // invariant audit. 5 source 중 sidebar-prefetch 만 NULL tab_id 를
+        // 허용하므로, `tab_id IS NULL AND source != 'sidebar-prefetch'`
+        // 인 row 가 1개 이상이면 frontend caller 가 tab_id 를 elide 한
+        // 회귀가 있다. Q10 zero-telemetry — `tracing::error!` 한 줄만,
+        // 사용자 visible surface 0. detached task.
+        tauri::async_runtime::spawn(async {
+            storage::history_audit::boot_audit_history_tab_id_null().await;
+        });
+
+        // Sprint 375 (Phase 6 cleanup) — boot-time legacy file cleanup.
+        // W4 의 `.legacy.json` 30일 보관 정책 (strategy F.1 line 862) — 30일
+        // 보다 오래된 파일을 silent delete. 사용자 visible 영향 0 (toast 없음).
+        // detached task — first paint 블록 0.
+        tauri::async_runtime::spawn(async {
+            storage::legacy_cleanup::boot_legacy_file_cleanup().await;
+        });
+
         // macOS-only native application menu (2026-05-01).
         //
         // macOS keeps the app process alive after every window has been

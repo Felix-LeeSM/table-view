@@ -110,6 +110,21 @@ export const SYNCED_KEYS: ReadonlyArray<keyof FavoritesState> = [
 
 let favoriteCounter = 0;
 
+/**
+ * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
+ * the module-scope `favoriteCounter`. The counter is intentionally
+ * module-scope (not Zustand state) so the seed walk in
+ * `loadPersistedFavorites` can ratchet it monotonically without going
+ * through a `setState` round-trip; that means `useFavoritesStore.setState(
+ * { favorites: [] })` cannot reset it back to zero for the next test.
+ * Mirrors `__resetCountersForTests` in `workspaceStore.ts` (sprint-354)
+ * and `__resetDocumentStoreForTests` in `documentStore.ts`. Namespaced
+ * `__` to flag intent.
+ */
+export function __resetFavoriteCounterForTests(): void {
+  favoriteCounter = 0;
+}
+
 interface FavoriteRow {
   id: string;
   name: string;

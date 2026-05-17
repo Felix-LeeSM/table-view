@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import AppRouter from "./AppRouter";
 import { bootTheme, reconcileThemeFromBackend } from "@lib/themeBoot";
 import { bootWindowLifecycle } from "@lib/window-lifecycle-boot";
-import { initSession } from "@lib/session-storage";
+import { initSession } from "@lib/scopedLocalStorage";
 import { importLegacyLocalStorage } from "@lib/tauri/legacyImport";
 import { getCurrentWindowLabel } from "@lib/window-label";
 import {

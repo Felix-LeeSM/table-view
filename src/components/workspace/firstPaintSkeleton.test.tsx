@@ -26,7 +26,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-vi.mock("@lib/session-storage", () => ({
+vi.mock("@lib/scopedLocalStorage", () => ({
   persistFocusedConnId: vi.fn(),
   persistActiveStatuses: vi.fn(),
   readConnectionSession: () => ({

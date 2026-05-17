@@ -12,7 +12,7 @@ import { getCurrentWindowLabel } from "@lib/window-label";
 import {
   persistFocusedConnId,
   persistActiveStatuses,
-} from "@lib/session-storage";
+} from "@lib/scopedLocalStorage";
 import { hydrateConnectionSession } from "@hooks/useConnectionSessionHydration";
 
 export interface ConnectionState {

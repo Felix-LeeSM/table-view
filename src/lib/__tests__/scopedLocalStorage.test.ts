@@ -1,9 +1,13 @@
 /**
- * session-storage.ts — session-scoped localStorage tests.
+ * scopedLocalStorage.ts — session-scoped localStorage tests.
  *
  * Reason: verify that session UUID tagging correctly distinguishes current
  * session data from stale data left by a previous app run, and that
  * connection store hydration reads/writes the correct keys. (2026-04-28)
+ *
+ * Sprint 375 (Phase 6 cleanup, 2026-05-17) — file renamed from
+ * `session-storage.ts` to `scopedLocalStorage.ts`. Tests now import via
+ * `@lib/scopedLocalStorage`; describe block label updated.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -23,7 +27,7 @@ vi.mock("@stores/connectionStore", () => ({
   },
 }));
 
-describe("session-storage", () => {
+describe("scopedLocalStorage", () => {
   let store: Map<string, string>;
 
   beforeEach(() => {
@@ -51,7 +55,8 @@ describe("session-storage", () => {
   // sessionSet/sessionGet calls use it. (2026-04-28)
   it("initSession caches the session ID from Rust", async () => {
     mockInvoke.mockResolvedValue("test-uuid-123");
-    const { initSession, getSessionId } = await import("@lib/session-storage");
+    const { initSession, getSessionId } =
+      await import("@lib/scopedLocalStorage");
     await initSession();
     expect(getSessionId()).toBe("test-uuid-123");
   });
@@ -61,7 +66,7 @@ describe("session-storage", () => {
   it("sessionSet then sessionGet returns data for same session", async () => {
     mockInvoke.mockResolvedValue("aaa");
     const { initSession, sessionSet, sessionGet } =
-      await import("@lib/session-storage");
+      await import("@lib/scopedLocalStorage");
     await initSession();
     sessionSet("key1", { connId: "c1" });
     expect(sessionGet("key1")).toEqual({ connId: "c1" });
@@ -73,14 +78,14 @@ describe("session-storage", () => {
   it("sessionGet returns null for stale session data", async () => {
     // First session writes data
     mockInvoke.mockResolvedValue("old-session");
-    const mod1 = await import("@lib/session-storage");
+    const mod1 = await import("@lib/scopedLocalStorage");
     await mod1.initSession();
     mod1.sessionSet("key1", "old-data");
 
     // Simulate new app start: reset modules, new session ID
     vi.resetModules();
     mockInvoke.mockResolvedValue("new-session");
-    const mod2 = await import("@lib/session-storage");
+    const mod2 = await import("@lib/scopedLocalStorage");
     await mod2.initSession();
 
     // The old data should be invisible
@@ -91,7 +96,7 @@ describe("session-storage", () => {
   // gracefully. (2026-04-28)
   it("sessionGet returns null for missing or malformed keys", async () => {
     mockInvoke.mockResolvedValue("sid");
-    const { initSession, sessionGet } = await import("@lib/session-storage");
+    const { initSession, sessionGet } = await import("@lib/scopedLocalStorage");
     await initSession();
     expect(sessionGet("nonexistent")).toBeNull();
     // Manually write garbage
@@ -104,7 +109,7 @@ describe("session-storage", () => {
   it("sessionRemove deletes the key", async () => {
     mockInvoke.mockResolvedValue("sid");
     const { initSession, sessionSet, sessionGet, sessionRemove } =
-      await import("@lib/session-storage");
+      await import("@lib/scopedLocalStorage");
     await initSession();
     sessionSet("k", "v");
     expect(sessionGet("k")).toBe("v");

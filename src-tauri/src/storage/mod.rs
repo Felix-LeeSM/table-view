@@ -1,7 +1,9 @@
 pub mod corrupt_recovery;
 pub mod crypto;
+pub mod history_audit;
 pub mod history_retention_boot;
 pub mod key_migration;
+pub mod legacy_cleanup;
 pub mod local;
 pub mod local_files;
 pub mod meta;

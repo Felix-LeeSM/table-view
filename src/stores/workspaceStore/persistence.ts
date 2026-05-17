@@ -47,6 +47,26 @@ export function dehydrate(state: WorkspaceState): WorkspaceState {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
+ * the module-scope `persistTimer`. The 200ms debounce handle is kept in
+ * a module variable (not Zustand state) so the timer survives across
+ * store mutations without being treated as React-driving state; that means
+ * a test that mounts the store, fires a `debouncePersistWorkspaces` call,
+ * and tears down without awaiting the timeout will leak a pending
+ * `setTimeout` into the next test. The helper drains the handle without
+ * running the callback, so the next test starts from a clean ledger.
+ * Mirrors `__resetCountersForTests` in `workspaceStore.ts` (sprint-354)
+ * and `__resetFavoriteCounterForTests` in `favoritesStore.ts`. Namespaced
+ * `__` to flag intent.
+ */
+export function __resetPersistTimerForTests(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+}
+
 export type WorkspacesShape = Record<string, Record<string, WorkspaceState>>;
 
 function dehydrateAll(workspaces: WorkspacesShape): WorkspacesShape {

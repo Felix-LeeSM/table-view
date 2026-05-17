@@ -11,7 +11,7 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
 }));
 
-// Mock session-storage so we can assert cross-call sequence without a
+// Mock scopedLocalStorage so we can assert cross-call sequence without a
 // real Tauri invoke (the Tauri runtime is unavailable in vitest jsdom).
 // The mock stores arguments for later assertion; the functions themselves
 // are no-ops.
@@ -27,7 +27,7 @@ const mockReadConnectionSession = vi.fn(
   }),
 );
 
-vi.mock("@lib/session-storage", () => ({
+vi.mock("@lib/scopedLocalStorage", () => ({
   persistFocusedConnId: (...args: unknown[]) =>
     mockPersistFocusedConnId(...args),
   persistActiveStatuses: (...args: unknown[]) =>

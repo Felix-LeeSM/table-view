@@ -155,6 +155,22 @@ export const SYNCED_KEYS: ReadonlyArray<keyof ThemeStoreState> = [
  * guarantees exactly one LS write per `themeId`/`mode` transition.
  */
 let lastApplied = `${initial.themeId}|${initial.mode}`;
+
+/**
+ * Sprint 375 (Phase 6 cleanup, 2026-05-17) — test-only escape hatch for
+ * the module-scope `lastApplied` dedup key. The subscriber short-circuits
+ * on `themeId|mode` equality to avoid double LS writes; vitest, however,
+ * runs multiple theme-change cases inside one process and would otherwise
+ * see the first test's last key suppress the second test's first
+ * subscriber pass (no LS write → assertion fails). This helper resets
+ * the key to the initial-state shape so the next test starts from a
+ * clean ledger. Mirrors the `__resetCountersForTests` /
+ * `__resetSessionIdForTests` pattern. Namespaced `__` to flag intent.
+ */
+export function __resetLastAppliedForTests(): void {
+  lastApplied = `${initial.themeId}|${initial.mode}`;
+}
+
 useThemeStore.subscribe((state) => {
   const key = `${state.themeId}|${state.mode}`;
   if (key === lastApplied) return;

@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock pattern follows `useConnectionMutations.test.ts` /
 // `useSchemaTableMutations.test.ts` — `vi.hoisted` + factory mock for
 // `@stores/connectionStore` (exposing `setState` / `getState`) +
-// `@lib/session-storage` (exposing `readConnectionSession`). The store is
+// `@lib/scopedLocalStorage` (exposing `readConnectionSession`). The store is
 // modelled as a plain mutable object so post-call assertions read the
 // final shape directly.
 
@@ -52,7 +52,7 @@ vi.mock("@stores/connectionStore", () => ({
   ),
 }));
 
-vi.mock("@lib/session-storage", () => ({
+vi.mock("@lib/scopedLocalStorage", () => ({
   readConnectionSession: () => mockReadConnectionSession(),
 }));
 

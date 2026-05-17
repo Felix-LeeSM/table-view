@@ -12,6 +12,12 @@ import { autocompleteTooltipTheme } from "./autocompleteTheme";
 // 실제 token 의 light/dark 값은 themes.css 에 있고, 우리는 token 이름이
 // 정확히 들어갔는지만 검사 — JSDOM 은 CSS variable 을 resolve 하지 않아
 // computedStyle 의 var 까지만 본다.
+//
+// ADR 0031 (2026-05-15) — raw `--primary` / `--popover` 는 어디에도 정의돼
+// 있지 않았다. 이 프로젝트의 token surface 는 `--tv-*` (themes.css) 와
+// `--color-*` (index.css Tailwind `@theme inline`) 둘 뿐. autocompleteTheme
+// 이 ADR 0031 시점에 `--tv-*` 로 교정됐고, 본 테스트는 *해당 prefix 가 실제
+// 로 emit 됨* 을 lock 한다. 다시 raw var 로 회귀하면 즉시 실패.
 
 describe("autocompleteTooltipTheme", () => {
   it("emits styles for the popup tooltip wrapper", () => {
@@ -23,8 +29,8 @@ describe("autocompleteTooltipTheme", () => {
     });
     const styleText = collectStyleText();
     expect(styleText).toContain(".cm-tooltip");
-    expect(styleText).toMatch(/var\(--popover\)/);
-    expect(styleText).toMatch(/var\(--popover-foreground\)/);
+    expect(styleText).toMatch(/var\(--tv-popover\)/);
+    expect(styleText).toMatch(/var\(--tv-popover-foreground\)/);
     view.destroy();
   });
 
@@ -37,8 +43,8 @@ describe("autocompleteTooltipTheme", () => {
     });
     const styleText = collectStyleText();
     expect(styleText).toContain("aria-selected");
-    expect(styleText).toMatch(/var\(--primary\)/);
-    expect(styleText).toMatch(/var\(--primary-foreground\)/);
+    expect(styleText).toMatch(/var\(--tv-primary\)/);
+    expect(styleText).toMatch(/var\(--tv-primary-foreground\)/);
     view.destroy();
   });
 

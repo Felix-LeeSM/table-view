@@ -114,31 +114,46 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
     expect((matches ?? []).length).toBeLessThanOrEqual(5);
   });
 
-  // AC-257-01 — derivation 다양성. 144 syntax-keyword 값 중 unique 가
-  // ≥ 20 개여야 한다 (collision 회피 fallback + light/dark 차이 + brand
-  // 다양성으로 자연스럽게 ≥ 30+ 예상). 너무 빈약한 derivation 회귀 가드.
+  // AC-257-01 — derivation 다양성. syntax-keyword unique 색상 수가 너무
+  // 빈약하면 default-palette 회귀 신호.
+  //
+  // ADR 0023 AC-257-01 의 자동 HSL derivation 은 ADR 0031 (2026-05-15) 로
+  // superseded — 72 테마 × 12 토큰 시방서 수동 import. derivation 일관성
+  // 보다 brand identity 우선 정책이라 unique 수가 일부 줄어든다 (≥ 30 →
+  // ≥ 10). 본 가드의 의도는 "단일 default 가 모든 테마를 덮어쓰지 않음"
+  // 으로 유지. 토큰 포맷의 `:` 뒤 공백도 ADR 0031 의 시방서 출력 그대로.
   it("produces a diverse syntax-keyword palette across themes", () => {
-    const re = /--tv-syntax-keyword:(#[0-9a-fA-F]{3,6})/g;
+    const re = /--tv-syntax-keyword:\s*(#[0-9a-fA-F]{3,6})/g;
     const seen = new Set<string>();
     let m: RegExpExecArray | null;
     while ((m = re.exec(themes)) !== null) {
       const hex = m[1];
       if (hex) seen.add(hex.toLowerCase());
     }
-    expect(seen.size).toBeGreaterThanOrEqual(20);
+    expect(seen.size).toBeGreaterThanOrEqual(10);
   });
 
-  // AC-257-01 — derivation 의 정의 covering. 모든 144 syntax-line 이
-  // 정의돼 있어야 한다 (어떤 block 도 syntax 누락 0).
+  // AC-257-01 — derivation 의 정의 covering. 모든 (theme, mode) pair 가
+  // syntax triple 을 갖고 있어야 한다 (어떤 pair 도 syntax 누락 0).
+  //
+  // ADR 0031 (2026-05-15) — 같은 (theme, mode) 가 두 CSS 블록으로 분할됨
+  // (base palette + syntax token 각각). 따라서 block 단위가 아니라
+  // (theme, mode) pair 의 union 으로 triple 존재를 검증한다 (commit msg:
+  // "parseThemes 가 같은 (theme, mode) 다중 블록을 union 으로 merge"). 토큰
+  // 포맷의 `:` 뒤 공백도 ADR 0031 의 시방서 출력 그대로이므로 정규식 추가.
   it("defines a syntax-keyword/string/number triple in every theme block", () => {
     const blockRe =
-      /\[data-theme="[^"]+"\]\[data-mode="(light|dark)"\]\s*\{([^}]+)\}/g;
+      /\[data-theme="([^"]+)"\]\[data-mode="(light|dark)"\]\s*\{([^}]+)\}/g;
+    const bodyByPair = new Map<string, string>();
     let m: RegExpExecArray | null;
-    let blocks = 0;
-    let withTriple = 0;
     while ((m = blockRe.exec(themes)) !== null) {
-      blocks += 1;
-      const body = m[2] ?? "";
+      const key = `${m[1]}|${m[2]}`;
+      const prev = bodyByPair.get(key) ?? "";
+      bodyByPair.set(key, `${prev}${m[3] ?? ""}`);
+    }
+    expect(bodyByPair.size).toBeGreaterThanOrEqual(144);
+    let withTriple = 0;
+    for (const body of bodyByPair.values()) {
       if (
         /--tv-syntax-keyword:\s*#/.test(body) &&
         /--tv-syntax-string:\s*#/.test(body) &&
@@ -147,8 +162,7 @@ describe("themes.css — Sprint 257 syntax palette derivation (AC-257-01..04)", 
         withTriple += 1;
       }
     }
-    expect(blocks).toBeGreaterThanOrEqual(144);
-    expect(withTriple).toBe(blocks);
+    expect(withTriple).toBe(bodyByPair.size);
   });
 
   // 사전 default 값이 레퍼런스용으로만 사용되도록 가드 (regression
