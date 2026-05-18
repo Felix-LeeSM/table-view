@@ -33,11 +33,13 @@
 //! - `LexError` — surfaced verbatim from `lexer::lex`.
 
 use crate::ast::{
-    AlterAction, AlterTableStatement, CascadeBehavior, ColumnRef, Columns, CompareOp,
-    DeleteStatement, DropObjectType, DropStatement, FromItem, InsertSource, InsertStatement,
-    InsertValue, JoinDescriptor, JoinPredicate, LikeCase, LimitClause, NullsPlacement, OnConflict,
-    OrderDirection, OrderingItem, ParseError, ParseErrorKind, ParseResult, SelectExpr,
-    SelectStatement, SqlLiteral, TruncateStatement, UpdateAssignment, UpdateStatement, WhereExpr,
+    AlterAction, AlterTableStatement, CascadeBehavior, CaseWhen, ColumnRef, Columns, CompareOp,
+    CteDefinition, DeleteStatement, DropObjectType, DropStatement, FrameBound, FrameUnit, FromItem,
+    FromSource, InsertSource, InsertStatement, InsertValue, JoinDescriptor, JoinPredicate,
+    LikeCase, LimitClause, NullsPlacement, OnConflict, OrderDirection, OrderingItem, OverClause,
+    ParseError, ParseErrorKind, ParseResult, SelectExpr, SelectListItem, SelectStatement,
+    SetOperationEntry, SetOperator, SqlLiteral, TruncateStatement, UpdateAssignment,
+    UpdateStatement, WindowArgument, WindowFrame, WithInner, WithStatement,
 };
 use crate::lexer::{lex, Spanned, Token};
 
@@ -166,6 +168,10 @@ impl<'a> Parser<'a> {
                 self.advance();
                 Ok(ParseResult::Delete(self.parse_delete()?))
             }
+            Token::With => {
+                self.advance();
+                Ok(ParseResult::With(self.parse_with()?))
+            }
             Token::Ident(name) => {
                 // The lexer keeps any non-keyword as an identifier; if it
                 // looks like a known SQL verb (INSERT / UPDATE / DELETE /
@@ -190,17 +196,87 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `SELECT` body — sprint-393a widened grammar.
+    /// `SELECT` body + optional set-operation chain. Sprint-393a widened
+    /// the SELECT body itself; sprint-393b adds:
+    ///   - chained set operations (`UNION` / `UNION ALL` / `INTERSECT` /
+    ///     `EXCEPT`) at the end of a SELECT body.
     ///
     /// Clause order is the standard SQL order:
     ///   SELECT … FROM … WHERE … GROUP BY … HAVING … ORDER BY … LIMIT …
+    ///   [UNION … SELECT … ]*
     /// Inputs that supply clauses out of order parse to `SyntaxError`.
     ///
     /// HAVING-without-GROUP-BY is rejected (contract §parser): aggregates
-    /// land in sprint-393b, so a standalone HAVING would always reduce to
-    /// a WHERE — the parser refuses the form to keep the AST shape
+    /// land in sprint-393b/c, so a standalone HAVING would always reduce
+    /// to a WHERE — the parser refuses the form to keep the AST shape
     /// unambiguous and the safety classifier straightforward.
     fn parse_select(&mut self) -> Result<SelectStatement, ParseError> {
+        let mut head = self.parse_select_body()?;
+
+        // Sprint-393b — collect set-operation chain. Each entry consumes
+        // the operator keyword and parses one more SELECT body
+        // left-associatively.
+        let mut chain: Vec<SetOperationEntry> = Vec::new();
+        loop {
+            let operator = match self.peek().map(|t| &t.token) {
+                Some(Token::Union) => {
+                    self.advance();
+                    if matches!(self.peek().map(|t| &t.token), Some(Token::All)) {
+                        self.advance();
+                        SetOperator::UnionAll
+                    } else {
+                        SetOperator::Union
+                    }
+                }
+                Some(Token::Intersect) => {
+                    self.advance();
+                    SetOperator::Intersect
+                }
+                Some(Token::Except) => {
+                    self.advance();
+                    SetOperator::Except
+                }
+                _ => break,
+            };
+            // The right-hand side is *another* SELECT body — `SELECT` token
+            // is required and consumed here so the recursive parse can
+            // proceed in `parse_select_body`. A missing `SELECT` is a
+            // syntax error (AC-393b-U07).
+            self.expect_keyword(Token::Select, "expected SELECT after set operator")?;
+            let rhs = self.parse_select_body()?;
+            chain.push(SetOperationEntry {
+                operator,
+                statement: rhs,
+            });
+        }
+
+        // Sprint-393b AC-393b-U06 — when a set-operation chain has a
+        // trailing ORDER BY / LIMIT, those clauses lexically belong to
+        // the rightmost SELECT body (the parser's natural consumption
+        // point), but the contract specifies they record on the *root*
+        // SELECT. Move them up so the outer ORDER BY / LIMIT is
+        // accessible without traversing the chain.
+        if let Some(last) = chain.last_mut() {
+            // Only move when the head doesn't already have its own
+            // ORDER BY / LIMIT (we never overwrite a head-position clause).
+            if head.order_by.is_empty() && !last.statement.order_by.is_empty() {
+                head.order_by = std::mem::take(&mut last.statement.order_by);
+            }
+            if head.limit.is_none() && last.statement.limit.is_some() {
+                head.limit = last.statement.limit.take();
+            }
+        }
+        head.set_operation = chain;
+
+        Ok(head)
+    }
+
+    /// Parse one SELECT body — columns + FROM + WHERE + GROUP/HAVING +
+    /// ORDER + LIMIT. Used both by `parse_select` (top-level) and by
+    /// `parse_select` recursively for set-operation right-hand sides and
+    /// for nested SELECTs in CTE bodies, FROM subqueries, and
+    /// scalar / IN / EXISTS subqueries.
+    fn parse_select_body(&mut self) -> Result<SelectStatement, ParseError> {
         let columns = self.parse_columns()?;
 
         // FROM
@@ -269,6 +345,7 @@ impl<'a> Parser<'a> {
             having,
             order_by,
             limit,
+            set_operation: Vec::new(),
         })
     }
 
@@ -395,6 +472,31 @@ impl<'a> Parser<'a> {
     /// is the JOIN kind already resolved by `parse_from_list` (or the
     /// sentinel `Comma` for non-join attachments).
     fn parse_from_item(&mut self, seeded_join: JoinDescriptor) -> Result<FromItem, ParseError> {
+        // Sprint-393b — `(SELECT ...)` subquery FROM item. Recognized by
+        // a leading `(` token; the inner body must start with `SELECT`.
+        // Subquery FROM items REQUIRE an alias (AC-393b-Q06).
+        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            let at = self.peek().map(|t| t.at);
+            self.advance();
+            self.expect_keyword(Token::Select, "expected SELECT inside FROM subquery")?;
+            let inner = self.parse_select()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            let alias = self.parse_optional_alias()?;
+            if alias.is_none() {
+                return Err(syntax_err(at, "FROM subquery requires an alias"));
+            }
+            let join = self.attach_join_predicate(seeded_join)?;
+            return Ok(FromItem {
+                schema: None,
+                table: String::new(),
+                alias,
+                join,
+                source: FromSource::Subquery {
+                    statement: Box::new(inner),
+                },
+            });
+        }
+
         // schema-qualified or bare table identifier
         let first_tok = self
             .peek()
@@ -440,7 +542,30 @@ impl<'a> Parser<'a> {
         let alias = self.parse_optional_alias()?;
 
         // Resolve the actual join predicate now.
-        let join = match seeded_join {
+        let join = self.attach_join_predicate(seeded_join)?;
+
+        let source = FromSource::Table {
+            schema: schema.clone(),
+            table: table.clone(),
+        };
+        Ok(FromItem {
+            schema,
+            table,
+            alias,
+            join,
+            source,
+        })
+    }
+
+    /// Sprint-393b — second-pass step that fills in the predicate for the
+    /// join kind that the FROM-list dispatcher previously seeded with an
+    /// empty placeholder. Shared between the table-source and the
+    /// subquery-source FROM-item paths.
+    fn attach_join_predicate(
+        &mut self,
+        seeded_join: JoinDescriptor,
+    ) -> Result<JoinDescriptor, ParseError> {
+        Ok(match seeded_join {
             JoinDescriptor::Comma | JoinDescriptor::CrossJoin => seeded_join,
             JoinDescriptor::InnerJoin { .. } => JoinDescriptor::InnerJoin {
                 predicate: self.parse_join_predicate()?,
@@ -454,13 +579,6 @@ impl<'a> Parser<'a> {
             JoinDescriptor::FullJoin { .. } => JoinDescriptor::FullJoin {
                 predicate: self.parse_join_predicate()?,
             },
-        };
-
-        Ok(FromItem {
-            schema,
-            table,
-            alias,
-            join,
         })
     }
 
@@ -707,10 +825,66 @@ impl<'a> Parser<'a> {
     }
 
     /// Primary — column reference followed by a predicate operator
-    /// (comparison / BETWEEN / LIKE / ILIKE / IS NULL), or a parenthesised
-    /// sub-expression.
+    /// (comparison / BETWEEN / LIKE / ILIKE / IS NULL / IN-list / IN-
+    /// subquery), or a parenthesised sub-expression, or a primary opened
+    /// by a leading keyword (`EXISTS (...)`, `NOT EXISTS (...)`, `CASE
+    /// ... END`).
+    ///
+    /// Sprint-393b — new primaries added:
+    /// - `EXISTS (SELECT ...)` / `NOT EXISTS (SELECT ...)`.
+    /// - `CASE [operand] WHEN ... THEN ... [ELSE ...] END`.
+    /// - `col IN (literal, ...)` — literal IN-list (sprint-392 deferral
+    ///   lifted).
+    /// - `col IN (SELECT ...)` — IN-subquery (routed by lookahead on the
+    ///   first token inside the parens).
+    /// - `col NOT IN (...)` — wraps the above in `Not`.
     fn parse_select_expr_primary(&mut self) -> Result<SelectExpr, ParseError> {
+        // Sprint-393b — `EXISTS (SELECT ...)` primary. `NOT EXISTS (...)`
+        // is handled by the outer `parse_select_expr_not` loop wrapping
+        // this primary in `Not`.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Exists)) {
+            self.advance();
+            self.expect_token(Token::LParen, "expected '('")?;
+            self.expect_keyword(Token::Select, "expected SELECT inside EXISTS")?;
+            let inner = self.parse_select()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            return Ok(SelectExpr::Exists {
+                statement: Box::new(inner),
+            });
+        }
+
+        // Sprint-393b — `CASE [operand] WHEN ... THEN ... [ELSE ...] END`.
+        // After CASE, optionally a comparator + value follows (e.g.
+        // `CASE WHEN ... END = 1`); we wrap CASE in `ExpressionComparison`.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Case)) {
+            let case = self.parse_case_expression()?;
+            if let Some(op) = self.peek_compare_op() {
+                self.advance();
+                let value = self.parse_insert_value()?;
+                return Ok(SelectExpr::ExpressionComparison {
+                    left: Box::new(case),
+                    op,
+                    value,
+                });
+            }
+            return Ok(case);
+        }
+
         if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            // Sprint-393b — parenthesized primary disambiguation:
+            //   `(SELECT ...)` → scalar-subquery primary.
+            //   `(<expr>)` → parenthesized sub-expression (existing).
+            // Peek one token past the `(` to decide.
+            let after_paren = self.tokens.get(self.cursor + 1).map(|t| &t.token);
+            if matches!(after_paren, Some(Token::Select)) {
+                self.advance(); // consume `(`
+                self.advance(); // consume `SELECT`
+                let inner = self.parse_select()?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                return Ok(SelectExpr::ScalarSubquery {
+                    statement: Box::new(inner),
+                });
+            }
             self.advance();
             let inner = self.parse_select_expr_or()?;
             self.expect_token(Token::RParen, "expected ')'")?;
@@ -736,27 +910,84 @@ impl<'a> Parser<'a> {
             });
         }
 
-        // `IN ( … )` — deferred to sprint-393b.
-        if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
-            let at = self.peek().map(|t| t.at);
-            return Err(unsupported_expression_err(at, "IN-list unsupported"));
-        }
-
-        // Postfix-`NOT` for BETWEEN / LIKE / ILIKE. The form
+        // Postfix-`NOT` for BETWEEN / LIKE / ILIKE / IN. The form
         // `column NOT BETWEEN low AND high` (and similarly NOT LIKE /
-        // NOT ILIKE) is recognized by peeking for `NOT` followed by one
-        // of those keywords. We synthesize the wrapping `Not { ... }`
-        // here so the caller (parse_select_expr_not) doesn't have to
-        // know about the postfix form. The negated form is *not* a
-        // discrete AST variant — it reuses the existing `Not` primary
+        // NOT ILIKE / NOT IN) is recognized by peeking for `NOT` followed
+        // by one of those keywords. We synthesize the wrapping
+        // `Not { ... }` here so the caller (parse_select_expr_not) doesn't
+        // have to know about the postfix form. The negated form is *not*
+        // a discrete AST variant — it reuses the existing `Not` primary
         // wrapping the unnegated shape (contract §expression widening).
         let postfix_not = matches!(self.peek().map(|t| &t.token), Some(Token::Not))
             && matches!(
                 self.tokens.get(self.cursor + 1).map(|t| &t.token),
-                Some(Token::Between | Token::Like | Token::ILike)
+                Some(Token::Between | Token::Like | Token::ILike | Token::In)
             );
         if postfix_not {
             self.advance(); // consume NOT
+        }
+
+        // Sprint-393b — `IN (...)` (literal list or subquery). Sprint-392
+        // surfaced this as `UnsupportedExpression`; sprint-393b lifts the
+        // deferral. Lookahead one token past the `(` decides:
+        //   first token = SELECT → in-subquery
+        //   anything else → in-list (literal/placeholder values)
+        if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
+            self.advance();
+            self.expect_token(Token::LParen, "expected '(' after IN")?;
+            let first_inside = self.peek().map(|t| &t.token);
+            let inner = if matches!(first_inside, Some(Token::Select)) {
+                self.advance(); // consume SELECT
+                let stmt = self.parse_select()?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                SelectExpr::InSubquery {
+                    column,
+                    statement: Box::new(stmt),
+                }
+            } else {
+                // Literal IN-list. At least one value is required; an
+                // empty list (`IN ()`) is a syntax error (AC-393b-I05).
+                if matches!(first_inside, Some(Token::RParen)) {
+                    let at = self.peek().map(|t| t.at);
+                    return Err(syntax_err(at, "empty IN-list"));
+                }
+                let mut values: Vec<InsertValue> = Vec::new();
+                loop {
+                    values.push(self.parse_insert_value()?);
+                    match self.peek().map(|t| &t.token) {
+                        Some(Token::Comma) => {
+                            self.advance();
+                            // Reject mixed `(1, SELECT ...)` — the contract
+                            // says any non-literal token after a literal in
+                            // the list is a SyntaxError.
+                            if matches!(self.peek().map(|t| &t.token), Some(Token::Select)) {
+                                let at = self.peek().map(|t| t.at);
+                                return Err(syntax_err(
+                                    at,
+                                    "IN-list cannot mix literals and SELECT",
+                                ));
+                            }
+                            continue;
+                        }
+                        Some(Token::RParen) => {
+                            self.advance();
+                            break;
+                        }
+                        _ => {
+                            let at = self.peek().map(|t| t.at);
+                            return Err(syntax_err(at, "expected ',' or ')'"));
+                        }
+                    }
+                }
+                SelectExpr::InList { column, values }
+            };
+            return Ok(if postfix_not {
+                SelectExpr::Not {
+                    inner: Box::new(inner),
+                }
+            } else {
+                inner
+            });
         }
 
         // `BETWEEN low AND high`
@@ -802,14 +1033,15 @@ impl<'a> Parser<'a> {
         }
 
         // If we consumed a postfix `NOT` but the next token wasn't
-        // BETWEEN / LIKE / ILIKE after all, we have a parser bug — the
-        // lookahead should be exhaustive. Defensive guard.
+        // BETWEEN / LIKE / ILIKE / IN after all, we have a parser bug —
+        // the lookahead should be exhaustive. Defensive guard.
         if postfix_not {
             let at = self.peek().map(|t| t.at);
-            return Err(syntax_err(at, "expected BETWEEN/LIKE/ILIKE after NOT"));
+            return Err(syntax_err(at, "expected BETWEEN/LIKE/ILIKE/IN after NOT"));
         }
 
-        // Comparison — `col op (literal | placeholder | column)`.
+        // Comparison — `col op (literal | placeholder | column |
+        // (SELECT ...) scalar-subquery)`.
         let op_tok = self
             .peek()
             .ok_or_else(|| syntax_err(None, "expected comparison op"))?
@@ -826,6 +1058,24 @@ impl<'a> Parser<'a> {
             }
         };
         self.advance();
+
+        // Sprint-393b — RHS scalar subquery: `col op (SELECT ...)`.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen))
+            && matches!(
+                self.tokens.get(self.cursor + 1).map(|t| &t.token),
+                Some(Token::Select)
+            )
+        {
+            self.advance(); // consume `(`
+            self.advance(); // consume `SELECT`
+            let stmt = self.parse_select()?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            return Ok(SelectExpr::ScalarSubqueryComparison {
+                left: column,
+                op,
+                right: Box::new(stmt),
+            });
+        }
 
         // RHS — `Ident` starts a ColumnRef (column-column); everything
         // else parses as InsertValue (literal / placeholder).
@@ -845,6 +1095,229 @@ impl<'a> Parser<'a> {
             left: column,
             op,
             value,
+        })
+    }
+
+    /// Sprint-393b — `CASE [operand] WHEN ... THEN ... [ELSE ...] END`.
+    /// Assumes the `CASE` token has been peeked but NOT yet consumed.
+    ///
+    /// The grammar admits literals/placeholders in operand / condition /
+    /// result / else positions; the simple-CASE form (`CASE x WHEN 1
+    /// THEN 'one'`) uses a literal as the WHEN-condition and the result
+    /// position is always a value-bearing expression. We route both
+    /// through `parse_case_value_expression` so a bare `'pos'` literal
+    /// promotes into a `SelectExpr::Literal` wrapper.
+    fn parse_case_expression(&mut self) -> Result<SelectExpr, ParseError> {
+        self.advance(); // consume CASE
+
+        // Simple-CASE has an operand expression between `CASE` and the
+        // first `WHEN`; searched-CASE goes directly to `WHEN`. We detect
+        // by peeking the next token.
+        let operand = if matches!(self.peek().map(|t| &t.token), Some(Token::When)) {
+            None
+        } else {
+            Some(Box::new(self.parse_case_value_expression()?))
+        };
+
+        let mut when_clauses: Vec<CaseWhen> = Vec::new();
+        loop {
+            if !matches!(self.peek().map(|t| &t.token), Some(Token::When)) {
+                break;
+            }
+            self.advance(); // consume WHEN
+            // For simple CASE the condition is a value compared against
+            // the operand (literal/column/expr); for searched CASE the
+            // condition is a boolean expression. Both flow through the
+            // same value-or-expression parser because the boolean form
+            // is a superset.
+            let condition = if operand.is_some() {
+                self.parse_case_value_expression()?
+            } else {
+                self.parse_select_expr_or()?
+            };
+            self.expect_keyword(Token::Then, "expected THEN")?;
+            let result = self.parse_case_value_expression()?;
+            when_clauses.push(CaseWhen { condition, result });
+        }
+        if when_clauses.is_empty() {
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "CASE requires at least one WHEN clause"));
+        }
+
+        let else_clause = if matches!(self.peek().map(|t| &t.token), Some(Token::Else)) {
+            self.advance();
+            Some(Box::new(self.parse_case_value_expression()?))
+        } else {
+            None
+        };
+
+        self.expect_keyword(Token::End, "expected END")?;
+        Ok(SelectExpr::Case {
+            operand,
+            when_clauses,
+            else_clause,
+        })
+    }
+
+    /// Sprint-393b — value-or-expression parser used inside CASE clauses.
+    /// Accepts bare literals / placeholders (promotes to
+    /// `SelectExpr::Literal`), bare column references (promotes to
+    /// `SelectExpr::ColumnRefExpr` when no comparator follows), or any
+    /// full expression the SELECT WHERE accepts (column ref + operator +
+    /// value / BETWEEN / LIKE / IS NULL / etc.).
+    /// Sprint-393b — peek the next token without advancing; if it is a
+    /// comparison operator, return its semantic `CompareOp`.
+    fn peek_compare_op(&self) -> Option<CompareOp> {
+        match self.peek().map(|t| &t.token) {
+            Some(Token::Eq) => Some(CompareOp::Eq),
+            Some(Token::NotEq | Token::BangEq) => Some(CompareOp::Ne),
+            Some(Token::Lt) => Some(CompareOp::Lt),
+            Some(Token::LtEq) => Some(CompareOp::Le),
+            Some(Token::Gt) => Some(CompareOp::Gt),
+            Some(Token::GtEq) => Some(CompareOp::Ge),
+            _ => None,
+        }
+    }
+
+    fn parse_case_value_expression(&mut self) -> Result<SelectExpr, ParseError> {
+        match self.peek().map(|t| &t.token) {
+            Some(
+                Token::Integer(_)
+                | Token::Float(_)
+                | Token::String(_)
+                | Token::Null
+                | Token::True
+                | Token::False
+                | Token::PlaceholderPositional(_)
+                | Token::PlaceholderAnonymous
+                | Token::PlaceholderNamed(_)
+                | Token::Default,
+            ) => {
+                let value = self.parse_insert_value()?;
+                Ok(SelectExpr::Literal { value })
+            }
+            Some(Token::Ident(_)) => {
+                // Lookahead: parse the column ref greedily; if the next
+                // token after the optional `.<col>` qualifier is a CASE-
+                // position terminator (no comparator follows), return a
+                // bare `ColumnRefExpr`. Otherwise, rewind and let the
+                // normal expression pipeline consume it.
+                let save = self.cursor;
+                let column = self.parse_column_ref()?;
+                if matches!(
+                    self.peek().map(|t| &t.token),
+                    Some(
+                        Token::When
+                            | Token::Then
+                            | Token::End
+                            | Token::Else
+                            | Token::Comma
+                            | Token::From
+                            | Token::RParen
+                    )
+                ) {
+                    return Ok(SelectExpr::ColumnRefExpr { column });
+                }
+                self.cursor = save;
+                self.parse_select_expr_or()
+            }
+            _ => self.parse_select_expr_or(),
+        }
+    }
+
+    // -------------------------------------------------------------
+    // Sprint-393b — CTE / WITH parser.
+    // -------------------------------------------------------------
+
+    /// `WITH [RECURSIVE] <cte> [, <cte>]* <inner-statement>`. Assumes the
+    /// `WITH` token has been consumed. The inner statement is one of
+    /// SELECT / INSERT / UPDATE / DELETE; nested `WITH` is rejected.
+    fn parse_with(&mut self) -> Result<WithStatement, ParseError> {
+        let recursive = if matches!(self.peek().map(|t| &t.token), Some(Token::Recursive)) {
+            self.advance();
+            true
+        } else {
+            false
+        };
+
+        let mut ctes: Vec<CteDefinition> = Vec::new();
+        loop {
+            ctes.push(self.parse_cte_definition()?);
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+
+        // Inner statement — SELECT / INSERT / UPDATE / DELETE. Anything
+        // else (including a second `WITH`) is a SyntaxError.
+        let inner_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected inner statement after CTE list"))?
+            .clone();
+        let inner = match inner_tok.token {
+            Token::Select => {
+                self.advance();
+                WithInner::Select(self.parse_select()?)
+            }
+            Token::Insert => {
+                self.advance();
+                WithInner::Insert(self.parse_insert()?)
+            }
+            Token::Update => {
+                self.advance();
+                WithInner::Update(self.parse_update()?)
+            }
+            Token::Delete => {
+                self.advance();
+                WithInner::Delete(self.parse_delete()?)
+            }
+            Token::With => Err(syntax_err(
+                Some(inner_tok.at),
+                "nested WITH is not supported",
+            ))?,
+            _ => {
+                return Err(syntax_err(
+                    Some(inner_tok.at),
+                    "expected SELECT/INSERT/UPDATE/DELETE after CTE list",
+                ));
+            }
+        };
+
+        Ok(WithStatement {
+            recursive,
+            ctes,
+            inner_statement: Box::new(inner),
+        })
+    }
+
+    /// One `<name> [(col, col, ...)] AS ( SELECT ... )` entry. The CTE
+    /// body must be a parenthesized SELECT (CTE inner DML is out of scope;
+    /// only the outer WITH wraps DML).
+    fn parse_cte_definition(&mut self) -> Result<CteDefinition, ParseError> {
+        let name = self.expect_ident("expected CTE name")?;
+
+        // Optional column-list `(col1, col2, ...)`.
+        let columns = if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            self.advance();
+            let cols = self.parse_ident_list("expected column name")?;
+            self.expect_token(Token::RParen, "expected ')'")?;
+            cols
+        } else {
+            Vec::new()
+        };
+
+        self.expect_keyword(Token::As, "expected AS")?;
+        self.expect_token(Token::LParen, "expected '(' for CTE body")?;
+        self.expect_keyword(Token::Select, "expected SELECT inside CTE body")?;
+        let body = self.parse_select()?;
+        self.expect_token(Token::RParen, "expected ')'")?;
+
+        Ok(CteDefinition {
+            name,
+            columns,
+            body,
         })
     }
 
@@ -1343,148 +1816,17 @@ impl<'a> Parser<'a> {
     }
 
     /// Optional WHERE expression. Returns None when the keyword is absent.
-    fn parse_optional_where_expr(&mut self) -> Result<Option<WhereExpr>, ParseError> {
+    ///
+    /// Sprint-393b — DML WHERE migrates to the unified `SelectExpr` shape
+    /// (was sprint-392's narrow `WhereExpr`). DML now accepts every WHERE
+    /// form SELECT does: BETWEEN / LIKE / column-column / qualified column
+    /// refs / IN-list / IN-subquery / EXISTS / CASE.
+    fn parse_optional_where_expr(&mut self) -> Result<Option<SelectExpr>, ParseError> {
         if !matches!(self.peek().map(|t| &t.token), Some(Token::Where)) {
             return Ok(None);
         }
         self.advance();
-        Ok(Some(self.parse_where_expr_or()?))
-    }
-
-    /// WHERE expression — OR precedence (lowest). `expr OR expr`.
-    fn parse_where_expr_or(&mut self) -> Result<WhereExpr, ParseError> {
-        let mut left = self.parse_where_expr_and()?;
-        while matches!(self.peek().map(|t| &t.token), Some(Token::Or)) {
-            self.advance();
-            let right = self.parse_where_expr_and()?;
-            left = WhereExpr::Or {
-                left: Box::new(left),
-                right: Box::new(right),
-            };
-        }
-        Ok(left)
-    }
-
-    /// `expr AND expr`.
-    fn parse_where_expr_and(&mut self) -> Result<WhereExpr, ParseError> {
-        let mut left = self.parse_where_expr_not()?;
-        while matches!(self.peek().map(|t| &t.token), Some(Token::And)) {
-            self.advance();
-            let right = self.parse_where_expr_not()?;
-            left = WhereExpr::And {
-                left: Box::new(left),
-                right: Box::new(right),
-            };
-        }
-        Ok(left)
-    }
-
-    /// `NOT expr` | primary.
-    fn parse_where_expr_not(&mut self) -> Result<WhereExpr, ParseError> {
-        if matches!(self.peek().map(|t| &t.token), Some(Token::Not)) {
-            self.advance();
-            let inner = self.parse_where_expr_not()?;
-            return Ok(WhereExpr::Not {
-                inner: Box::new(inner),
-            });
-        }
-        self.parse_where_expr_primary()
-    }
-
-    /// Primary expression — either a parenthesised sub-expression or a
-    /// `column op literal` / `column IS [NOT] NULL` predicate.
-    fn parse_where_expr_primary(&mut self) -> Result<WhereExpr, ParseError> {
-        // Parenthesised expression
-        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
-            self.advance();
-            let inner = self.parse_where_expr_or()?;
-            self.expect_token(Token::RParen, "expected ')'")?;
-            return Ok(inner);
-        }
-
-        let col_tok = self
-            .peek()
-            .ok_or_else(|| syntax_err(None, "expected column ident"))?
-            .clone();
-        let column = match col_tok.token {
-            Token::Ident(ref s) => s.clone(),
-            _ => {
-                return Err(syntax_err(Some(col_tok.at), "expected column ident"));
-            }
-        };
-        self.advance();
-
-        // Reject qualified identifiers (`a.b`) — sprint-392 limits WHERE
-        // to single-column comparisons. Cross-table comparison is a
-        // sprint-393 widening.
-        if matches!(self.peek().map(|t| &t.token), Some(Token::Dot)) {
-            let at = self.peek().map(|t| t.at);
-            return Err(unsupported_expression_err(
-                at,
-                "qualified column ref unsupported",
-            ));
-        }
-
-        // `IS NULL` / `IS NOT NULL`
-        if matches!(self.peek().map(|t| &t.token), Some(Token::Is)) {
-            self.advance();
-            let is_not = if matches!(self.peek().map(|t| &t.token), Some(Token::Not)) {
-                self.advance();
-                true
-            } else {
-                false
-            };
-            self.expect_keyword(Token::Null, "expected NULL")?;
-            return Ok(if is_not {
-                WhereExpr::IsNotNull { column }
-            } else {
-                WhereExpr::IsNull { column }
-            });
-        }
-
-        // `IN ( … )` — explicitly unsupported in sprint-392; surface as
-        // UnsupportedExpression so caller can fall back to regex.
-        if matches!(self.peek().map(|t| &t.token), Some(Token::In)) {
-            let at = self.peek().map(|t| t.at);
-            return Err(unsupported_expression_err(at, "IN-list unsupported"));
-        }
-
-        // `col op value`
-        let op_tok = self
-            .peek()
-            .ok_or_else(|| syntax_err(None, "expected comparison op"))?
-            .clone();
-        let op = match op_tok.token {
-            Token::Eq => CompareOp::Eq,
-            Token::NotEq | Token::BangEq => CompareOp::Ne,
-            Token::Lt => CompareOp::Lt,
-            Token::LtEq => CompareOp::Le,
-            Token::Gt => CompareOp::Gt,
-            Token::GtEq => CompareOp::Ge,
-            _ => {
-                return Err(syntax_err(Some(op_tok.at), "expected comparison op"));
-            }
-        };
-        self.advance();
-
-        // Sprint-392 forbids `col = col` (column-to-column). Detect the
-        // first token of the RHS — if it's an identifier (with or without
-        // a following `.`) surface as UnsupportedExpression. Literals /
-        // placeholders / DEFAULT / NULL / TRUE / FALSE are accepted via
-        // `parse_insert_value`.
-        let rhs_tok = self
-            .peek()
-            .ok_or_else(|| syntax_err(None, "expected value"))?;
-        if matches!(rhs_tok.token, Token::Ident(_)) {
-            let at = Some(rhs_tok.at);
-            return Err(unsupported_expression_err(
-                at,
-                "column-to-column compare unsupported",
-            ));
-        }
-        let value = self.parse_insert_value()?;
-
-        Ok(WhereExpr::Comparison { column, op, value })
+        Ok(Some(self.parse_select_expr_or()?))
     }
 
     /// Helper — consume a comma-separated identifier list. Reads at
@@ -1589,28 +1931,416 @@ impl<'a> Parser<'a> {
             return Ok(Columns::Star);
         }
 
-        let mut names: Vec<String> = Vec::new();
+        // Sprint-393b — fast path: pure bare-identifier list (`a, b, c`).
+        // We peek through identifiers + commas; if we hit `FROM` first
+        // *without* encountering any non-Ident expression-start token,
+        // the list is a `Columns::Named`. Otherwise we restart and parse
+        // the list as `Columns::Expressions`.
+        let saved_cursor = self.cursor;
+        let bare_list_ok = self.try_parse_bare_named_list();
+        if let Some(names) = bare_list_ok {
+            return Ok(Columns::Named { names });
+        }
+        self.cursor = saved_cursor;
+
+        // Sprint-393b — at least one item is a non-bare-column expression
+        // (CASE, scalar-subquery, window-function, etc.). Walk the list
+        // and capture each item as a `SelectListItem`.
+        let mut items: Vec<SelectListItem> = Vec::new();
         loop {
-            let tok = self
-                .peek()
-                .ok_or_else(|| syntax_err(None, "expected column ident"))?;
-            match &tok.token {
-                Token::Ident(name) => {
-                    names.push(name.clone());
-                    self.advance();
-                }
-                _ => {
-                    return Err(syntax_err(Some(tok.at), "expected column ident"));
-                }
-            }
-            // Trailing comma → another column. Anything else → end of list.
+            let item = self.parse_select_list_item()?;
+            items.push(item);
             if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
                 self.advance();
-            } else {
+                continue;
+            }
+            break;
+        }
+        Ok(Columns::Expressions { items })
+    }
+
+    /// Sprint-393b — fast path: try to parse a pure `Ident (, Ident)*`
+    /// select-list. Returns `Some(names)` on success (and leaves the
+    /// cursor just before `FROM`), or `None` if any item is not a bare
+    /// identifier (caller restarts the cursor and parses as expressions).
+    fn try_parse_bare_named_list(&mut self) -> Option<Vec<String>> {
+        let mut names: Vec<String> = Vec::new();
+        loop {
+            let tok = self.peek()?;
+            let name = match &tok.token {
+                Token::Ident(s) => s.clone(),
+                _ => return None,
+            };
+            // Peek one further to verify the item is a *bare* identifier
+            // (not the start of a qualified ref `a.b`, a function call
+            // `f(...)`, etc.).
+            let after = self.tokens.get(self.cursor + 1).map(|t| &t.token);
+            match after {
+                Some(Token::Comma) | Some(Token::From) => {
+                    names.push(name);
+                    self.advance();
+                }
+                _ => return None,
+            }
+            if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                self.advance();
+                continue;
+            }
+            break;
+        }
+        Some(names)
+    }
+
+    /// Sprint-393b — parse one item of an expression-form select list.
+    /// Possible shapes:
+    ///   - `*` → `SelectListItem::Star`.
+    ///   - bare or qualified column ref (no following operator) →
+    ///     `SelectListItem::Column`.
+    ///   - bare literal / placeholder → `SelectListItem::Expression`
+    ///     wrapping a `SelectExpr::Literal`.
+    ///   - any other expression form (CASE / EXISTS / scalar-subquery /
+    ///     window function) → `SelectListItem::Expression`.
+    fn parse_select_list_item(&mut self) -> Result<SelectListItem, ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Star)) {
+            self.advance();
+            return Ok(SelectListItem::Star);
+        }
+        // Bare literal / placeholder in select list (e.g. `SELECT 1
+        // FROM x`). Wrap in `SelectExpr::Literal`.
+        if matches!(
+            self.peek().map(|t| &t.token),
+            Some(
+                Token::Integer(_)
+                    | Token::Float(_)
+                    | Token::String(_)
+                    | Token::Null
+                    | Token::True
+                    | Token::False
+                    | Token::PlaceholderPositional(_)
+                    | Token::PlaceholderAnonymous
+                    | Token::PlaceholderNamed(_)
+            )
+        ) {
+            let value = self.parse_insert_value()?;
+            return Ok(SelectListItem::Expression {
+                expression: SelectExpr::Literal { value },
+            });
+        }
+        // CASE / EXISTS / scalar-subquery → expression item.
+        if matches!(
+            self.peek().map(|t| &t.token),
+            Some(Token::Case | Token::Exists | Token::LParen)
+        ) {
+            let expr = self.parse_select_list_expression()?;
+            return Ok(SelectListItem::Expression { expression: expr });
+        }
+        // Identifier — either a bare/qualified column ref or a function
+        // call (window function with OVER). Decide by peeking past the
+        // identifier (and optional `.<col>` qualifier) for `(` or for a
+        // list terminator (`,` / `FROM`).
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
+            let save = self.cursor;
+            // Try to parse a column ref greedily.
+            let column = self.parse_column_ref()?;
+            // If the next token is `(`, the identifier was actually a
+            // function name — rewind and dispatch through expression
+            // parsing (window-function path).
+            if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+                self.cursor = save;
+                let expr = self.parse_select_list_expression()?;
+                return Ok(SelectListItem::Expression { expression: expr });
+            }
+            // Plain column ref (followed by `,` / `FROM` / clause kw).
+            if matches!(
+                self.peek().map(|t| &t.token),
+                Some(Token::Comma | Token::From)
+            ) {
+                return Ok(SelectListItem::Column { reference: column });
+            }
+            // Anything else after the column ref is unexpected at top-
+            // level select-list position (we don't support arithmetic
+            // expressions yet — that's a future sprint).
+            let at = self.peek().map(|t| t.at);
+            return Err(syntax_err(at, "unexpected token in SELECT list"));
+        }
+        let at = self.peek().map(|t| t.at);
+        Err(syntax_err(at, "expected SELECT list item"))
+    }
+
+    /// Sprint-393b — parse one expression that lives in select-list
+    /// position. Distinct from `parse_select_expr_or` because the
+    /// select-list grammar admits a subset (no top-level boolean
+    /// `AND`/`OR` — those are reserved for WHERE/HAVING).
+    fn parse_select_list_expression(&mut self) -> Result<SelectExpr, ParseError> {
+        // CASE / scalar-subquery / window-function — leading tokens.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Case)) {
+            return self.parse_case_expression();
+        }
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Exists)) {
+            // EXISTS in select list is unusual but legal SQL (boolean
+            // expression in SELECT list). Reuse the primary parser.
+            return self.parse_select_expr_primary();
+        }
+        if matches!(self.peek().map(|t| &t.token), Some(Token::LParen)) {
+            // Scalar subquery in SELECT list — `(SELECT ...)`.
+            if matches!(
+                self.tokens.get(self.cursor + 1).map(|t| &t.token),
+                Some(Token::Select)
+            ) {
+                self.advance(); // `(`
+                self.advance(); // `SELECT`
+                let inner = self.parse_select()?;
+                self.expect_token(Token::RParen, "expected ')'")?;
+                return Ok(SelectExpr::ScalarSubquery {
+                    statement: Box::new(inner),
+                });
+            }
+        }
+        // Identifier followed by `(` → function call. Sprint-393b only
+        // accepts a function call when followed by `OVER (...)` (window
+        // function). Otherwise it's UnsupportedExpression.
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Ident(_))) {
+            return self.parse_function_or_window();
+        }
+        let at = self.peek().map(|t| t.at);
+        Err(syntax_err(at, "expected expression in SELECT list"))
+    }
+
+    /// Sprint-393b — `<ident>(args) OVER (...)`. Bare function calls
+    /// without `OVER` continue to surface as `UnsupportedExpression`
+    /// (AC-393b-O08).
+    fn parse_function_or_window(&mut self) -> Result<SelectExpr, ParseError> {
+        let ident_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected function name"))?
+            .clone();
+        let name = match ident_tok.token {
+            Token::Ident(n) => n,
+            _ => return Err(syntax_err(Some(ident_tok.at), "expected function name")),
+        };
+        self.advance();
+        self.expect_token(Token::LParen, "expected '(' after function name")?;
+        let mut arguments: Vec<WindowArgument> = Vec::new();
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::RParen)) {
+            loop {
+                arguments.push(self.parse_window_argument()?);
+                if matches!(self.peek().map(|t| &t.token), Some(Token::Comma)) {
+                    self.advance();
+                    continue;
+                }
                 break;
             }
         }
-        Ok(Columns::Named { names })
+        self.expect_token(Token::RParen, "expected ')'")?;
+
+        // Sprint-393b — function call without `OVER` is UnsupportedExpression.
+        if !matches!(self.peek().map(|t| &t.token), Some(Token::Over)) {
+            let at = ident_tok.at;
+            return Err(unsupported_expression_err(
+                Some(at),
+                "bare function call (no OVER) unsupported",
+            ));
+        }
+        self.advance(); // consume OVER
+        let over = self.parse_over_clause()?;
+        Ok(SelectExpr::WindowFunction {
+            name,
+            arguments,
+            over,
+        })
+    }
+
+    /// Sprint-393b — one window-function argument: `*` / column-ref /
+    /// literal / placeholder. The `Star` variant is a dedicated AST
+    /// shape (AC-393b-O07).
+    fn parse_window_argument(&mut self) -> Result<WindowArgument, ParseError> {
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Star)) {
+            self.advance();
+            return Ok(WindowArgument::Star);
+        }
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected window argument"))?
+            .clone();
+        match tok.token {
+            Token::Integer(v) => {
+                self.advance();
+                Ok(WindowArgument::Literal {
+                    value: SqlLiteral::Integer { value: v },
+                })
+            }
+            Token::Float(v) => {
+                self.advance();
+                Ok(WindowArgument::Literal {
+                    value: SqlLiteral::Float { value: v },
+                })
+            }
+            Token::String(s) => {
+                self.advance();
+                Ok(WindowArgument::Literal {
+                    value: SqlLiteral::String { value: s },
+                })
+            }
+            Token::Null => {
+                self.advance();
+                Ok(WindowArgument::Literal {
+                    value: SqlLiteral::Null,
+                })
+            }
+            Token::True => {
+                self.advance();
+                Ok(WindowArgument::Literal {
+                    value: SqlLiteral::Boolean { value: true },
+                })
+            }
+            Token::False => {
+                self.advance();
+                Ok(WindowArgument::Literal {
+                    value: SqlLiteral::Boolean { value: false },
+                })
+            }
+            Token::PlaceholderPositional(name) => {
+                self.advance();
+                Ok(WindowArgument::Placeholder { name })
+            }
+            Token::PlaceholderAnonymous => {
+                self.advance();
+                Ok(WindowArgument::Placeholder {
+                    name: String::new(),
+                })
+            }
+            Token::PlaceholderNamed(name) => {
+                self.advance();
+                Ok(WindowArgument::Placeholder { name })
+            }
+            Token::Ident(_) => {
+                let reference = self.parse_column_ref()?;
+                Ok(WindowArgument::ColumnRef { reference })
+            }
+            _ => Err(syntax_err(Some(tok.at), "expected window argument")),
+        }
+    }
+
+    /// Sprint-393b — `OVER ( [PARTITION BY ...] [ORDER BY ...] [frame] )`.
+    /// The `OVER` keyword has been consumed by the caller.
+    fn parse_over_clause(&mut self) -> Result<OverClause, ParseError> {
+        self.expect_token(Token::LParen, "expected '(' after OVER")?;
+
+        let partition_by = if matches!(self.peek().map(|t| &t.token), Some(Token::Partition)) {
+            self.advance();
+            self.expect_keyword(Token::By, "expected BY")?;
+            self.parse_column_ref_list()?
+        } else {
+            Vec::new()
+        };
+
+        let order_by = if matches!(self.peek().map(|t| &t.token), Some(Token::Order)) {
+            self.advance();
+            self.expect_keyword(Token::By, "expected BY")?;
+            self.parse_ordering_list()?
+        } else {
+            Vec::new()
+        };
+
+        let frame = if matches!(
+            self.peek().map(|t| &t.token),
+            Some(Token::Rows | Token::Range)
+        ) {
+            Some(self.parse_window_frame()?)
+        } else {
+            None
+        };
+
+        self.expect_token(Token::RParen, "expected ')'")?;
+        Ok(OverClause {
+            partition_by,
+            order_by,
+            frame,
+        })
+    }
+
+    /// Sprint-393b — `(ROWS | RANGE) ( BETWEEN <start> AND <end> | <start> )`.
+    fn parse_window_frame(&mut self) -> Result<WindowFrame, ParseError> {
+        let unit = match self.peek().map(|t| &t.token) {
+            Some(Token::Rows) => {
+                self.advance();
+                FrameUnit::Rows
+            }
+            Some(Token::Range) => {
+                self.advance();
+                FrameUnit::Range
+            }
+            _ => unreachable!("just matched"),
+        };
+        let (start, end) = if matches!(self.peek().map(|t| &t.token), Some(Token::Between)) {
+            self.advance();
+            let start = self.parse_frame_bound()?;
+            self.expect_keyword(Token::And, "expected AND")?;
+            let end = self.parse_frame_bound()?;
+            (start, Some(end))
+        } else {
+            (self.parse_frame_bound()?, None)
+        };
+        Ok(WindowFrame { unit, start, end })
+    }
+
+    fn parse_frame_bound(&mut self) -> Result<FrameBound, ParseError> {
+        // `UNBOUNDED PRECEDING` / `UNBOUNDED FOLLOWING`
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Unbounded)) {
+            self.advance();
+            let tok = self
+                .peek()
+                .ok_or_else(|| syntax_err(None, "expected PRECEDING/FOLLOWING"))?
+                .clone();
+            return match tok.token {
+                Token::Preceding => {
+                    self.advance();
+                    Ok(FrameBound::UnboundedPreceding)
+                }
+                Token::Following => {
+                    self.advance();
+                    Ok(FrameBound::UnboundedFollowing)
+                }
+                _ => Err(syntax_err(
+                    Some(tok.at),
+                    "expected PRECEDING or FOLLOWING after UNBOUNDED",
+                )),
+            };
+        }
+        // `CURRENT ROW`
+        if matches!(self.peek().map(|t| &t.token), Some(Token::Current)) {
+            self.advance();
+            self.expect_keyword(Token::Row, "expected ROW after CURRENT")?;
+            return Ok(FrameBound::CurrentRow);
+        }
+        // `<integer> PRECEDING|FOLLOWING`
+        let tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected frame bound"))?
+            .clone();
+        let offset = match tok.token {
+            Token::Integer(v) => v,
+            _ => return Err(syntax_err(Some(tok.at), "expected integer for frame bound")),
+        };
+        self.advance();
+        let kw_tok = self
+            .peek()
+            .ok_or_else(|| syntax_err(None, "expected PRECEDING/FOLLOWING"))?
+            .clone();
+        match kw_tok.token {
+            Token::Preceding => {
+                self.advance();
+                Ok(FrameBound::Preceding { offset })
+            }
+            Token::Following => {
+                self.advance();
+                Ok(FrameBound::Following { offset })
+            }
+            _ => Err(syntax_err(
+                Some(kw_tok.at),
+                "expected PRECEDING or FOLLOWING",
+            )),
+        }
     }
 }
 
@@ -1684,11 +2414,11 @@ fn is_known_sql_verb(name: &str) -> bool {
 
 /// Sprint-392 — the set of verbs whose grammar this crate actually
 /// implements. Anything in `is_known_sql_verb` but not in here is an
-/// `UnsupportedStatement`.
+/// `UnsupportedStatement`. Sprint-393b adds `WITH` (CTE wrap).
 fn is_supported_sql_verb(name: &str) -> bool {
     matches!(
         name.to_ascii_uppercase().as_str(),
-        "SELECT" | "DROP" | "TRUNCATE" | "ALTER" | "INSERT" | "UPDATE" | "DELETE"
+        "SELECT" | "DROP" | "TRUNCATE" | "ALTER" | "INSERT" | "UPDATE" | "DELETE" | "WITH"
     )
 }
 
@@ -2254,13 +2984,16 @@ mod tests {
     }
 
     #[test]
-    fn ac_393a_c09_in_list_is_unsupported_expression() {
-        let r = parse("SELECT a FROM x WHERE id IN (1, 2, 3)");
-        match r {
-            ParseResult::Error(e) => {
-                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+    fn ac_393a_c09_in_list_now_parses_as_in_list() {
+        // Sprint-393b — AC-393b-I01 lifts the sprint-393a deferral. The
+        // same input now parses successfully as a `SelectExpr::InList`.
+        let s = ok_select("SELECT a FROM x WHERE id IN (1, 2, 3)");
+        match s.where_clause {
+            Some(SelectExpr::InList { column, values }) => {
+                assert_eq!(column.column, "id");
+                assert_eq!(values.len(), 3);
             }
-            other => panic!("expected UnsupportedExpression, got {:?}", other),
+            other => panic!("expected InList, got {:?}", other),
         }
     }
 
@@ -3498,10 +4231,14 @@ mod tests {
 
     #[test]
     fn ac_392_u02_update_with_where_eq() {
+        // Sprint-393b — DML WHERE migrates from `WhereExpr` to `SelectExpr`.
+        // The `Comparison` shape now carries a `ColumnRef` left-hand side
+        // instead of a bare `String` column name.
         let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1");
         match s.where_clause {
-            Some(WhereExpr::Comparison { column, op, value }) => {
-                assert_eq!(column, "id");
+            Some(SelectExpr::Comparison { left, op, value }) => {
+                assert_eq!(left.column, "id");
+                assert_eq!(left.table, None);
                 assert_eq!(op, CompareOp::Eq);
                 assert!(matches!(
                     value,
@@ -3536,7 +4273,7 @@ mod tests {
             InsertValue::Placeholder { name } if name == "1"
         ));
         match s.where_clause {
-            Some(WhereExpr::Comparison { value, .. }) => {
+            Some(SelectExpr::Comparison { value, .. }) => {
                 assert!(matches!(
                     value,
                     InsertValue::Placeholder { name } if name == "2"
@@ -3547,53 +4284,65 @@ mod tests {
     }
 
     #[test]
-    fn ac_392_u06_update_from_cross_table_where_is_unsupported_expression() {
-        // FROM other parses OK; WHERE compares cross-table → UnsupportedExpression.
-        let r = parse("UPDATE users SET name = 'a' FROM other WHERE other.id = users.id");
-        match r {
-            ParseResult::Error(e) => {
-                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+    fn ac_392_u06_update_from_cross_table_where_now_parses_as_column_comparison() {
+        // Sprint-393b — DML WHERE unifies with SELECT WHERE, so the form
+        // `UPDATE ... FROM other WHERE other.id = users.id` (cross-table
+        // column-comparison) now parses successfully. Sprint-392 had
+        // marked this as `UnsupportedExpression`; the deferral is lifted.
+        let s = ok_update("UPDATE users SET name = 'a' FROM other WHERE other.id = users.id");
+        match s.where_clause {
+            Some(SelectExpr::ColumnComparison { left, op, right }) => {
+                assert_eq!(left.table.as_deref(), Some("other"));
+                assert_eq!(left.column, "id");
+                assert_eq!(op, CompareOp::Eq);
+                assert_eq!(right.table.as_deref(), Some("users"));
+                assert_eq!(right.column, "id");
             }
-            other => panic!("expected Error(UnsupportedExpression), got {:?}", other),
+            other => panic!("expected ColumnComparison, got {:?}", other),
         }
     }
 
     #[test]
     fn ac_392_u07_update_where_is_null() {
         let s = ok_update("UPDATE users SET name = 'a' WHERE id IS NULL");
-        assert!(matches!(
-            s.where_clause,
-            Some(WhereExpr::IsNull { column }) if column == "id"
-        ));
+        match s.where_clause {
+            Some(SelectExpr::IsNull { column }) => {
+                assert_eq!(column.column, "id");
+                assert_eq!(column.table, None);
+            }
+            other => panic!("expected IsNull, got {:?}", other),
+        }
     }
 
     #[test]
     fn ac_392_u08_update_where_is_not_null() {
         let s = ok_update("UPDATE users SET name = 'a' WHERE id IS NOT NULL");
-        assert!(matches!(
-            s.where_clause,
-            Some(WhereExpr::IsNotNull { column }) if column == "id"
-        ));
+        match s.where_clause {
+            Some(SelectExpr::IsNotNull { column }) => {
+                assert_eq!(column.column, "id");
+            }
+            other => panic!("expected IsNotNull, got {:?}", other),
+        }
     }
 
     #[test]
     fn ac_392_u09_update_where_and() {
         let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1 AND age > 30");
-        assert!(matches!(s.where_clause, Some(WhereExpr::And { .. })));
+        assert!(matches!(s.where_clause, Some(SelectExpr::And { .. })));
     }
 
     #[test]
     fn ac_392_u10_update_where_or() {
         let s = ok_update("UPDATE users SET name = 'a' WHERE id = 1 OR id = 2");
-        assert!(matches!(s.where_clause, Some(WhereExpr::Or { .. })));
+        assert!(matches!(s.where_clause, Some(SelectExpr::Or { .. })));
     }
 
     #[test]
     fn ac_392_u11_update_where_not_paren() {
         let s = ok_update("UPDATE users SET name = 'a' WHERE NOT (id = 1)");
         match s.where_clause {
-            Some(WhereExpr::Not { inner }) => {
-                assert!(matches!(*inner, WhereExpr::Comparison { .. }));
+            Some(SelectExpr::Not { inner }) => {
+                assert!(matches!(*inner, SelectExpr::Comparison { .. }));
             }
             other => panic!("expected Not(Comparison), got {:?}", other),
         }
@@ -3629,7 +4378,7 @@ mod tests {
         // FROM parses + WHERE with column-op-literal also parses cleanly.
         let s = ok_update("UPDATE users SET name = 'a' FROM other WHERE id = 1");
         assert_eq!(s.from, vec!["other".to_string()]);
-        assert!(matches!(s.where_clause, Some(WhereExpr::Comparison { .. })));
+        assert!(matches!(s.where_clause, Some(SelectExpr::Comparison { .. })));
     }
 
     // ── DELETE — AC-392-D ────────────────────────────────────────────
@@ -3646,43 +4395,50 @@ mod tests {
     #[test]
     fn ac_392_d02_delete_with_where() {
         let s = ok_delete("DELETE FROM users WHERE id = 1");
-        assert!(matches!(s.where_clause, Some(WhereExpr::Comparison { .. })));
+        assert!(matches!(s.where_clause, Some(SelectExpr::Comparison { .. })));
     }
 
     #[test]
     fn ac_392_d03_delete_where_and() {
         let s = ok_delete("DELETE FROM users WHERE id = 1 AND age < 30");
-        assert!(matches!(s.where_clause, Some(WhereExpr::And { .. })));
+        assert!(matches!(s.where_clause, Some(SelectExpr::And { .. })));
     }
 
     #[test]
-    fn ac_392_d04_delete_using_cross_table_where_is_unsupported_expression() {
-        let r = parse("DELETE FROM users USING orders WHERE orders.user_id = users.id");
-        match r {
-            ParseResult::Error(e) => {
-                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
-            }
-            other => panic!("expected UnsupportedExpression, got {:?}", other),
-        }
+    fn ac_392_d04_delete_using_cross_table_where_now_parses() {
+        // Sprint-393b — DML WHERE unifies with SELECT WHERE, so cross-
+        // table column comparisons parse as `ColumnComparison`. Sprint-392
+        // marked this as `UnsupportedExpression`; the deferral is lifted.
+        let s = ok_delete("DELETE FROM users USING orders WHERE orders.user_id = users.id");
+        assert!(matches!(
+            s.where_clause,
+            Some(SelectExpr::ColumnComparison { .. })
+        ));
     }
 
     #[test]
     fn ac_392_d05_delete_where_is_null() {
         let s = ok_delete("DELETE FROM users WHERE name IS NULL");
-        assert!(matches!(
-            s.where_clause,
-            Some(WhereExpr::IsNull { column }) if column == "name"
-        ));
+        match s.where_clause {
+            Some(SelectExpr::IsNull { column }) => {
+                assert_eq!(column.column, "name");
+            }
+            other => panic!("expected IsNull, got {:?}", other),
+        }
     }
 
     #[test]
-    fn ac_392_d06_delete_where_in_list_is_unsupported_expression() {
-        let r = parse("DELETE FROM users WHERE id IN (1, 2, 3)");
-        match r {
-            ParseResult::Error(e) => {
-                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+    fn ac_392_d06_delete_where_in_list_now_parses_as_in_list() {
+        // Sprint-393b — AC-393b-I03 lifts the sprint-392 deferral
+        // (AC-392-D06). `WHERE id IN (1, 2, 3)` now parses successfully
+        // as the new `in-list` primary.
+        let s = ok_delete("DELETE FROM users WHERE id IN (1, 2, 3)");
+        match s.where_clause {
+            Some(SelectExpr::InList { column, values }) => {
+                assert_eq!(column.column, "id");
+                assert_eq!(values.len(), 3);
             }
-            other => panic!("expected UnsupportedExpression, got {:?}", other),
+            other => panic!("expected InList, got {:?}", other),
         }
     }
 
@@ -3748,10 +4504,15 @@ mod tests {
 
     #[test]
     fn ac_392_s04_where_comparison_serializes_with_kind_comparison() {
+        // Sprint-393b — DML WHERE migrates from sprint-392 narrow
+        // `WhereExpr::Comparison { column: String }` to the unified
+        // `SelectExpr::Comparison { left: ColumnRef }`. The `column`
+        // scalar slot is replaced by a `left` object with a `column`
+        // sub-slot.
         let r = parse("DELETE FROM users WHERE id = 1");
         let json = serde_json::to_value(&r).expect("serialize");
         assert_eq!(json["where_clause"]["kind"], "comparison");
-        assert_eq!(json["where_clause"]["column"], "id");
+        assert_eq!(json["where_clause"]["left"]["column"], "id");
         assert_eq!(json["where_clause"]["op"], "eq");
     }
 
@@ -3800,9 +4561,978 @@ mod tests {
 
     #[test]
     fn ac_392_s_unsupported_expression_serializes_with_error_kind() {
-        let r = parse("DELETE FROM users WHERE id IN (1, 2, 3)");
+        // Sprint-393b — the sprint-392 deferral for IN-list / cross-table
+        // comparison is *lifted*. We pick a still-out-of-scope construct
+        // for this serialization test: a function call (arithmetic / bare
+        // function calls remain `UnsupportedExpression` per sprint-393b
+        // §Out of Scope).
+        let r = parse("SELECT sum(a) FROM x");
         let json = serde_json::to_value(&r).expect("serialize");
         assert_eq!(json["kind"], "error");
         assert_eq!(json["error_kind"], "unsupported-expression");
+    }
+
+    // =================================================================
+    // Sprint 393b — SELECT widening 2 (CTE / set ops / subquery / window
+    // / CASE / IN-list).
+    // =================================================================
+
+    // Helpers --------------------------------------------------------
+
+    fn ok_with(input: &str) -> WithStatement {
+        match parse(input) {
+            ParseResult::With(w) => w,
+            other => panic!("expected With, got: {:?}", other),
+        }
+    }
+
+    fn ok_delete_393b(input: &str) -> DeleteStatement {
+        match parse(input) {
+            ParseResult::Delete(d) => d,
+            other => panic!("expected Delete, got: {:?}", other),
+        }
+    }
+
+    // ---- AC-393b-W CTE / WITH ---------------------------------------
+
+    #[test]
+    fn ac_393b_w01_with_simple_select() {
+        let w = ok_with("WITH t AS (SELECT a FROM x) SELECT a FROM t");
+        assert!(!w.recursive);
+        assert_eq!(w.ctes.len(), 1);
+        assert_eq!(w.ctes[0].name, "t");
+        assert!(matches!(*w.inner_statement, WithInner::Select(_)));
+    }
+
+    #[test]
+    fn ac_393b_w02_with_recursive() {
+        let w = ok_with("WITH RECURSIVE t AS (SELECT a FROM x) SELECT a FROM t");
+        assert!(w.recursive);
+    }
+
+    #[test]
+    fn ac_393b_w03_with_column_list() {
+        let w = ok_with("WITH t (a, b) AS (SELECT a FROM x) SELECT a FROM t");
+        assert_eq!(w.ctes[0].columns, vec!["a".to_string(), "b".to_string()]);
+    }
+
+    #[test]
+    fn ac_393b_w04_with_multi_cte() {
+        let w = ok_with("WITH a AS (SELECT x FROM s), b AS (SELECT y FROM t) SELECT a FROM a, b");
+        assert_eq!(w.ctes.len(), 2);
+        assert_eq!(w.ctes[0].name, "a");
+        assert_eq!(w.ctes[1].name, "b");
+    }
+
+    #[test]
+    fn ac_393b_w05_with_insert_inner() {
+        let w = ok_with("WITH t AS (SELECT a FROM x) INSERT INTO y SELECT a FROM t");
+        match *w.inner_statement {
+            WithInner::Insert(_) => {}
+            other => panic!("expected Insert inner, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_w06_with_update_inner_with_in_subquery() {
+        let w = ok_with(
+            "WITH t AS (SELECT id FROM x) UPDATE y SET a = 1 WHERE y.id IN (SELECT id FROM t)",
+        );
+        match *w.inner_statement {
+            WithInner::Update(u) => {
+                assert!(matches!(u.where_clause, Some(SelectExpr::InSubquery { .. })));
+            }
+            other => panic!("expected Update inner, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_w07_with_delete_inner() {
+        let w = ok_with(
+            "WITH t AS (SELECT id FROM x) DELETE FROM y WHERE y.id IN (SELECT id FROM t)",
+        );
+        assert!(matches!(*w.inner_statement, WithInner::Delete(_)));
+    }
+
+    #[test]
+    fn ac_393b_w08_with_without_inner_is_syntax_error() {
+        let e = err("WITH t AS (SELECT 1 FROM x)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_393b_w09_with_unparenthesized_body_is_syntax_error() {
+        let e = err("WITH t AS SELECT 1 FROM x SELECT a FROM t");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_393b_w10_nested_with_is_syntax_error() {
+        let e = err("WITH a AS (SELECT x FROM s) WITH b AS (SELECT y FROM t) SELECT a FROM b");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    // ---- AC-393b-U Set operations -----------------------------------
+
+    #[test]
+    fn ac_393b_u01_union() {
+        let s = ok_select("SELECT a FROM x UNION SELECT a FROM y");
+        assert_eq!(s.set_operation.len(), 1);
+        assert_eq!(s.set_operation[0].operator, SetOperator::Union);
+    }
+
+    #[test]
+    fn ac_393b_u02_union_all() {
+        let s = ok_select("SELECT a FROM x UNION ALL SELECT a FROM y");
+        assert_eq!(s.set_operation[0].operator, SetOperator::UnionAll);
+    }
+
+    #[test]
+    fn ac_393b_u03_intersect() {
+        let s = ok_select("SELECT a FROM x INTERSECT SELECT a FROM y");
+        assert_eq!(s.set_operation[0].operator, SetOperator::Intersect);
+    }
+
+    #[test]
+    fn ac_393b_u04_except() {
+        let s = ok_select("SELECT a FROM x EXCEPT SELECT a FROM y");
+        assert_eq!(s.set_operation[0].operator, SetOperator::Except);
+    }
+
+    #[test]
+    fn ac_393b_u05_chain_left_to_right() {
+        let s = ok_select("SELECT a FROM x UNION SELECT a FROM y UNION ALL SELECT a FROM z");
+        assert_eq!(s.set_operation.len(), 2);
+        assert_eq!(s.set_operation[0].operator, SetOperator::Union);
+        assert_eq!(s.set_operation[1].operator, SetOperator::UnionAll);
+    }
+
+    #[test]
+    fn ac_393b_u06_order_by_on_root_select() {
+        // Per AC-393b-U06, ORDER BY records on the *root* (leftmost)
+        // SELECT after the chain is built. The trailing ORDER BY is
+        // moved up from the rightmost chain entry by the parser.
+        let s = ok_select("SELECT a FROM x UNION SELECT a FROM y ORDER BY a");
+        assert_eq!(s.set_operation.len(), 1);
+        assert_eq!(s.order_by.len(), 1);
+        // Right-hand chain entry's order_by must be empty after the
+        // post-pass move-up.
+        assert!(s.set_operation[0].statement.order_by.is_empty());
+    }
+
+    #[test]
+    fn ac_393b_u07_dangling_union_is_syntax_error() {
+        let e = err("SELECT a FROM x UNION");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    // ---- AC-393b-Q Subqueries ---------------------------------------
+
+    #[test]
+    fn ac_393b_q01_where_in_subquery() {
+        let s = ok_select("SELECT a FROM x WHERE x.id IN (SELECT id FROM y)");
+        match s.where_clause {
+            Some(SelectExpr::InSubquery { column, statement }) => {
+                assert_eq!(column.table.as_deref(), Some("x"));
+                assert_eq!(column.column, "id");
+                assert_eq!(statement.from[0].table, "y");
+            }
+            other => panic!("expected InSubquery, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_q02_where_not_in_subquery() {
+        let s = ok_select("SELECT a FROM x WHERE x.id NOT IN (SELECT id FROM y)");
+        match s.where_clause {
+            Some(SelectExpr::Not { inner }) => {
+                assert!(matches!(*inner, SelectExpr::InSubquery { .. }));
+            }
+            other => panic!("expected Not(InSubquery), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_q03_exists() {
+        let s = ok_select("SELECT a FROM x WHERE EXISTS (SELECT b FROM y WHERE y.x_id = x.id)");
+        assert!(matches!(s.where_clause, Some(SelectExpr::Exists { .. })));
+    }
+
+    #[test]
+    fn ac_393b_q04_not_exists() {
+        let s =
+            ok_select("SELECT a FROM x WHERE NOT EXISTS (SELECT b FROM y WHERE y.x_id = x.id)");
+        match s.where_clause {
+            Some(SelectExpr::Not { inner }) => {
+                assert!(matches!(*inner, SelectExpr::Exists { .. }));
+            }
+            other => panic!("expected Not(Exists), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_q05_from_subquery_with_alias() {
+        let s = ok_select("SELECT a FROM (SELECT a FROM x) AS s");
+        assert_eq!(s.from.len(), 1);
+        assert_eq!(s.from[0].alias.as_deref(), Some("s"));
+        assert!(matches!(s.from[0].source, FromSource::Subquery { .. }));
+    }
+
+    #[test]
+    fn ac_393b_q06_from_subquery_without_alias_is_syntax_error() {
+        let e = err("SELECT a FROM (SELECT a FROM x)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_393b_q07_scalar_subquery_in_where_rhs() {
+        let s = ok_select("SELECT a FROM x WHERE x.a = (SELECT b FROM y LIMIT 1)");
+        assert!(matches!(
+            s.where_clause,
+            Some(SelectExpr::ScalarSubqueryComparison { .. })
+        ));
+    }
+
+    #[test]
+    fn ac_393b_q08_scalar_subquery_in_select_list() {
+        let s = ok_select("SELECT (SELECT a FROM x LIMIT 1) FROM y");
+        match s.columns {
+            Columns::Expressions { items } => {
+                assert_eq!(items.len(), 1);
+                match &items[0] {
+                    SelectListItem::Expression { expression } => {
+                        assert!(matches!(expression, SelectExpr::ScalarSubquery { .. }));
+                    }
+                    other => panic!("expected Expression item, got {:?}", other),
+                }
+            }
+            other => panic!("expected Expressions columns, got {:?}", other),
+        }
+    }
+
+    // ---- AC-393b-O Window functions ---------------------------------
+
+    #[test]
+    fn ac_393b_o01_row_number_empty_over() {
+        let s = ok_select("SELECT row_number() OVER () FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression:
+                        SelectExpr::WindowFunction {
+                            name,
+                            arguments,
+                            over,
+                        },
+                } => {
+                    assert_eq!(name, "row_number");
+                    assert!(arguments.is_empty());
+                    assert!(over.partition_by.is_empty());
+                    assert!(over.order_by.is_empty());
+                    assert!(over.frame.is_none());
+                }
+                other => panic!("expected window-function expression, got {:?}", other),
+            },
+            other => panic!("expected Expressions, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o02_partition_by() {
+        let s = ok_select("SELECT rank() OVER (PARTITION BY a) FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    assert_eq!(over.partition_by.len(), 1);
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o03_order_by_desc() {
+        let s = ok_select("SELECT rank() OVER (ORDER BY a DESC) FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    assert_eq!(over.order_by.len(), 1);
+                    assert_eq!(over.order_by[0].direction, OrderDirection::Desc);
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o04_partition_and_order() {
+        let s = ok_select("SELECT rank() OVER (PARTITION BY a ORDER BY b) FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    assert_eq!(over.partition_by.len(), 1);
+                    assert_eq!(over.order_by.len(), 1);
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o05_frame_rows_between_unbounded_and_current() {
+        let s = ok_select(
+            "SELECT sum(x) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
+        );
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    let frame = over.frame.as_ref().expect("frame");
+                    assert_eq!(frame.unit, FrameUnit::Rows);
+                    assert_eq!(frame.start, FrameBound::UnboundedPreceding);
+                    assert_eq!(frame.end, Some(FrameBound::CurrentRow));
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o06_frame_preceding_only() {
+        let s = ok_select("SELECT sum(x) OVER (ORDER BY a ROWS 5 PRECEDING) FROM t");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    let frame = over.frame.as_ref().expect("frame");
+                    assert_eq!(frame.start, FrameBound::Preceding { offset: 5 });
+                    assert!(frame.end.is_none());
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o07_count_star_dedicated_variant() {
+        let s = ok_select("SELECT count(*) OVER () FROM t");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression:
+                        SelectExpr::WindowFunction {
+                            name, arguments, ..
+                        },
+                } => {
+                    assert_eq!(name, "count");
+                    assert_eq!(arguments.len(), 1);
+                    assert!(matches!(arguments[0], WindowArgument::Star));
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_o08_bare_function_call_is_unsupported_expression() {
+        let r = parse("SELECT sum(x) FROM t");
+        match r {
+            ParseResult::Error(e) => {
+                assert_eq!(e.error_kind, ParseErrorKind::UnsupportedExpression);
+            }
+            other => panic!("expected UnsupportedExpression, got {:?}", other),
+        }
+    }
+
+    // ---- AC-393b-C CASE expression ----------------------------------
+
+    #[test]
+    fn ac_393b_c01_searched_case_with_else() {
+        let s = ok_select("SELECT CASE WHEN x.a > 0 THEN 'pos' ELSE 'neg' END FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression:
+                        SelectExpr::Case {
+                            operand,
+                            when_clauses,
+                            else_clause,
+                        },
+                } => {
+                    assert!(operand.is_none());
+                    assert_eq!(when_clauses.len(), 1);
+                    assert!(else_clause.is_some());
+                }
+                _ => panic!("expected case"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_c02_simple_case_with_operand_no_else() {
+        let s = ok_select("SELECT CASE x.a WHEN 1 THEN 'one' WHEN 2 THEN 'two' END FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression:
+                        SelectExpr::Case {
+                            operand,
+                            when_clauses,
+                            else_clause,
+                        },
+                } => {
+                    assert!(operand.is_some());
+                    assert_eq!(when_clauses.len(), 2);
+                    assert!(else_clause.is_none());
+                }
+                _ => panic!("expected case"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_c03_case_in_where() {
+        // The grammar wraps `CASE ... END = 1` in an
+        // `ExpressionComparison` (the existing `Comparison` variant only
+        // supports a bare `ColumnRef` left). This is contract-faithful —
+        // the left-hand side is a `case` primary.
+        let s = ok_select("SELECT a FROM x WHERE CASE WHEN x.a > 0 THEN 1 ELSE 0 END = 1");
+        match s.where_clause {
+            Some(SelectExpr::ExpressionComparison { left, .. }) => {
+                assert!(matches!(*left, SelectExpr::Case { .. }));
+            }
+            other => panic!("expected ExpressionComparison(Case), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_c04_case_without_when_is_syntax_error() {
+        let e = err("SELECT CASE END FROM x");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_393b_c05_case_missing_end_is_syntax_error() {
+        let e = err("SELECT CASE WHEN x > 0 THEN 'p' ELSE 'n' FROM x");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    // ---- AC-393b-I IN-list ------------------------------------------
+
+    #[test]
+    fn ac_393b_i01_in_list_literal() {
+        let s = ok_select("SELECT a FROM x WHERE x.id IN (1, 2, 3)");
+        match s.where_clause {
+            Some(SelectExpr::InList { column, values }) => {
+                assert_eq!(column.column, "id");
+                assert_eq!(values.len(), 3);
+            }
+            other => panic!("expected InList, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_i02_not_in_list_wraps_in_not() {
+        let s = ok_select("SELECT a FROM x WHERE x.id NOT IN (1, 2, 3)");
+        match s.where_clause {
+            Some(SelectExpr::Not { inner }) => {
+                assert!(matches!(*inner, SelectExpr::InList { .. }));
+            }
+            other => panic!("expected Not(InList), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_i03_in_list_in_delete() {
+        let s = ok_delete_393b("DELETE FROM x WHERE x.id IN (1, 2, 3)");
+        assert!(matches!(s.where_clause, Some(SelectExpr::InList { .. })));
+    }
+
+    #[test]
+    fn ac_393b_i04_in_list_mixed_literal_kinds() {
+        let s = ok_select("SELECT a FROM x WHERE x.id IN (1, 'two', 3)");
+        match s.where_clause {
+            Some(SelectExpr::InList { values, .. }) => {
+                assert_eq!(values.len(), 3);
+                assert!(matches!(
+                    values[1],
+                    InsertValue::Literal {
+                        value: SqlLiteral::String { ref value },
+                    } if value == "two"
+                ));
+            }
+            other => panic!("expected InList, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_i05_empty_in_list_is_syntax_error() {
+        let e = err("SELECT a FROM x WHERE x.id IN ()");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_393b_i06_in_subquery_routes_to_in_subquery_variant() {
+        let s = ok_select("SELECT a FROM x WHERE x.id IN (SELECT id FROM y)");
+        assert!(matches!(
+            s.where_clause,
+            Some(SelectExpr::InSubquery { .. })
+        ));
+    }
+
+    // ---- AC-393b-S Serialization ------------------------------------
+
+    #[test]
+    fn ac_393b_s01_with_serializes_kind_with() {
+        let r = parse("WITH t AS (SELECT a FROM x) SELECT a FROM t");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "with");
+        assert_eq!(json["recursive"], false);
+        assert!(json["ctes"].is_array());
+        assert_eq!(json["inner_statement"]["kind"], "select");
+    }
+
+    #[test]
+    fn ac_393b_s02_set_operation_serializes_kebab_case_operator() {
+        let r = parse("SELECT a FROM x UNION ALL SELECT a FROM y");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["set_operation"][0]["operator"], "union-all");
+    }
+
+    #[test]
+    fn ac_393b_s03_subquery_from_serializes_with_kind_subquery() {
+        let r = parse("SELECT a FROM (SELECT a FROM x) AS s");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["from"][0]["source"]["kind"], "subquery");
+    }
+
+    #[test]
+    fn ac_393b_s04_new_expression_primaries_kebab_case() {
+        // in-list / in-subquery / exists / scalar-subquery / case
+        // (window-function exercised separately).
+        let inputs = [
+            ("SELECT a FROM x WHERE id IN (1, 2)", "in-list"),
+            (
+                "SELECT a FROM x WHERE id IN (SELECT id FROM y)",
+                "in-subquery",
+            ),
+            (
+                "SELECT a FROM x WHERE EXISTS (SELECT id FROM y)",
+                "exists",
+            ),
+        ];
+        for (sql, expected_kind) in inputs {
+            let r = parse(sql);
+            let json = serde_json::to_value(&r).expect("serialize");
+            assert_eq!(json["where"]["kind"], expected_kind, "sql={sql}");
+        }
+    }
+
+    #[test]
+    fn ac_393b_s05_round_trips_through_serde() {
+        let inputs = [
+            "WITH t AS (SELECT a FROM x) SELECT a FROM t",
+            "WITH RECURSIVE t (a, b) AS (SELECT a FROM x) SELECT a FROM t",
+            "SELECT a FROM x UNION SELECT a FROM y",
+            "SELECT a FROM x UNION ALL SELECT a FROM y",
+            "SELECT a FROM x INTERSECT SELECT a FROM y",
+            "SELECT a FROM x EXCEPT SELECT a FROM y",
+            "SELECT a FROM x WHERE x.id IN (1, 2, 3)",
+            "SELECT a FROM x WHERE x.id IN (SELECT id FROM y)",
+            "SELECT a FROM x WHERE EXISTS (SELECT id FROM y WHERE y.x_id = x.id)",
+            "SELECT CASE WHEN x.a > 0 THEN 'p' ELSE 'n' END FROM x",
+            "SELECT count(*) OVER (PARTITION BY a ORDER BY b) FROM x",
+            "SELECT (SELECT b FROM y LIMIT 1) FROM x",
+            "SELECT a FROM (SELECT a FROM x) AS s",
+        ];
+        for sql in inputs {
+            let r = parse(sql);
+            let json = serde_json::to_string(&r).expect("serialize");
+            let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(r, back, "round-trip failed for: {sql}");
+        }
+    }
+
+    // ---- AC-393b-extra additional coverage --------------------------
+
+    #[test]
+    fn ac_393b_extra_cte_dml_wrap_preserves_inner_where() {
+        // CTE wrap of UPDATE with WHERE: inner statement's `where_clause`
+        // is populated; the outer WITH does NOT add a WHERE.
+        let w = ok_with(
+            "WITH t AS (SELECT id FROM x) UPDATE y SET a = 1 WHERE y.id IN (SELECT id FROM t)",
+        );
+        match *w.inner_statement {
+            WithInner::Update(u) => {
+                assert!(u.where_clause.is_some());
+            }
+            _ => panic!("expected Update inner"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_cte_select_inner_no_where_is_fine() {
+        let w = ok_with("WITH t AS (SELECT a FROM x) SELECT a FROM t");
+        match *w.inner_statement {
+            WithInner::Select(s) => {
+                assert!(s.where_clause.is_none());
+            }
+            _ => panic!("expected Select inner"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_mixed_in_list_with_select_is_syntax_error() {
+        let e = err("SELECT a FROM x WHERE id IN (1, SELECT id FROM y)");
+        assert_eq!(e.error_kind, ParseErrorKind::SyntaxError);
+    }
+
+    #[test]
+    fn ac_393b_extra_window_function_in_order_by_select_list_only() {
+        // Window function only valid in SELECT list / ORDER BY position
+        // per contract; we verify SELECT-list position here, ORDER BY is
+        // not exercised because the existing parse_ordering_list expects
+        // a ColumnRef, not an expression. Sprint-393b widens select-list
+        // positions; ORDER BY by-expression is a future refinement.
+        let s = ok_select("SELECT row_number() OVER (PARTITION BY a ORDER BY b) FROM x");
+        assert!(matches!(s.columns, Columns::Expressions { .. }));
+    }
+
+    #[test]
+    fn ac_393b_extra_cte_case_insensitive() {
+        let w = ok_with("with t as (select a from x) select a from t");
+        assert_eq!(w.ctes[0].name, "t");
+        assert!(matches!(*w.inner_statement, WithInner::Select(_)));
+    }
+
+    #[test]
+    fn ac_393b_extra_union_case_insensitive() {
+        let s = ok_select("SELECT a FROM x union all SELECT a FROM y");
+        assert_eq!(s.set_operation[0].operator, SetOperator::UnionAll);
+    }
+
+    #[test]
+    fn ac_393b_extra_intersect_chain_left_to_right_preserved() {
+        // INTERSECT + EXCEPT chain — verify order is preserved verbatim.
+        let s = ok_select(
+            "SELECT a FROM x INTERSECT SELECT a FROM y EXCEPT SELECT a FROM z",
+        );
+        assert_eq!(s.set_operation.len(), 2);
+        assert_eq!(s.set_operation[0].operator, SetOperator::Intersect);
+        assert_eq!(s.set_operation[1].operator, SetOperator::Except);
+    }
+
+    #[test]
+    fn ac_393b_extra_in_list_single_value() {
+        let s = ok_select("SELECT a FROM x WHERE x.id IN (42)");
+        match s.where_clause {
+            Some(SelectExpr::InList { values, .. }) => assert_eq!(values.len(), 1),
+            other => panic!("expected InList, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_in_list_with_placeholders() {
+        let s = ok_select("SELECT a FROM x WHERE x.id IN ($1, $2)");
+        match s.where_clause {
+            Some(SelectExpr::InList { values, .. }) => {
+                assert_eq!(values.len(), 2);
+                assert!(matches!(
+                    &values[0],
+                    InsertValue::Placeholder { name } if name == "1"
+                ));
+            }
+            other => panic!("expected InList placeholders, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_exists_with_complex_inner_where() {
+        let s = ok_select(
+            "SELECT a FROM x WHERE EXISTS (SELECT 1 FROM y WHERE y.x_id = x.id AND y.flag = 1)",
+        );
+        match s.where_clause {
+            Some(SelectExpr::Exists { statement }) => {
+                assert!(statement.where_clause.is_some());
+            }
+            _ => panic!("expected Exists"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_scalar_subquery_comparison_with_qualified_lhs() {
+        let s =
+            ok_select("SELECT a FROM x WHERE x.b = (SELECT max_b FROM y_summary LIMIT 1)");
+        match s.where_clause {
+            Some(SelectExpr::ScalarSubqueryComparison { left, op, .. }) => {
+                assert_eq!(left.table.as_deref(), Some("x"));
+                assert_eq!(left.column, "b");
+                assert_eq!(op, CompareOp::Eq);
+            }
+            other => panic!("expected ScalarSubqueryComparison, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_with_select_in_set_operation() {
+        // CTE-wrap of a SELECT that itself uses UNION.
+        let w = ok_with("WITH t AS (SELECT a FROM x) SELECT a FROM t UNION SELECT a FROM y");
+        match *w.inner_statement {
+            WithInner::Select(s) => {
+                assert_eq!(s.set_operation.len(), 1);
+            }
+            _ => panic!("expected Select inner"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_case_with_qualified_operand() {
+        let s = ok_select("SELECT CASE x.flag WHEN 1 THEN 'on' ELSE 'off' END FROM x");
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression:
+                        SelectExpr::Case {
+                            operand,
+                            when_clauses,
+                            ..
+                        },
+                } => {
+                    assert!(operand.is_some());
+                    assert_eq!(when_clauses.len(), 1);
+                }
+                _ => panic!("expected case"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_window_function_round_trips() {
+        let r = parse("SELECT row_number() OVER (PARTITION BY a ORDER BY b DESC) FROM x");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_393b_extra_window_frame_range_unit() {
+        let s = ok_select(
+            "SELECT sum(x) OVER (ORDER BY a RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t",
+        );
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    let frame = over.frame.as_ref().expect("frame");
+                    assert_eq!(frame.unit, FrameUnit::Range);
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_subquery_in_from_with_chained_join() {
+        let s = ok_select(
+            "SELECT a FROM (SELECT a FROM x) AS s JOIN y ON s.id = y.id",
+        );
+        assert_eq!(s.from.len(), 2);
+        assert!(matches!(s.from[0].source, FromSource::Subquery { .. }));
+        assert!(matches!(s.from[1].join, JoinDescriptor::InnerJoin { .. }));
+    }
+
+    #[test]
+    fn ac_393b_extra_set_operation_chain_round_trips() {
+        let r = parse("SELECT a FROM x UNION SELECT a FROM y INTERSECT SELECT a FROM z");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_393b_extra_update_with_in_list_lifts_392_deferral() {
+        let s = match parse("UPDATE x SET a = 1 WHERE x.id IN (1, 2, 3)") {
+            ParseResult::Update(u) => u,
+            other => panic!("expected Update, got {:?}", other),
+        };
+        assert!(matches!(s.where_clause, Some(SelectExpr::InList { .. })));
+    }
+
+    #[test]
+    fn ac_393b_extra_with_recursive_round_trips() {
+        let r = parse("WITH RECURSIVE t (a) AS (SELECT a FROM x) SELECT a FROM t");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_393b_extra_in_subquery_round_trips() {
+        let r = parse("SELECT a FROM x WHERE x.id IN (SELECT id FROM y)");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_393b_extra_case_with_else_round_trips() {
+        let r = parse("SELECT CASE WHEN x.a > 0 THEN 'p' ELSE 'n' END FROM x");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_393b_extra_cte_dml_delete_no_where_inner_inherits() {
+        // The inner DELETE has no WHERE — that's still a Delete with
+        // `where_clause: None`. The classifier (sqlSafety) is the layer
+        // that decides "WHERE-less DELETE = danger"; the parser only
+        // records the AST shape.
+        let w = ok_with("WITH t AS (SELECT id FROM x) DELETE FROM y");
+        match *w.inner_statement {
+            WithInner::Delete(d) => {
+                assert!(d.where_clause.is_none());
+            }
+            _ => panic!("expected Delete inner"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_cte_select_kind_serialization() {
+        // For a SELECT-wrapped CTE, the inner statement's `kind` is
+        // serialized as `"select"` so the TS facade can branch directly.
+        let r = parse("WITH t AS (SELECT a FROM x) SELECT a FROM t");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["inner_statement"]["kind"], "select");
+    }
+
+    #[test]
+    fn ac_393b_extra_cte_dml_kind_serialization() {
+        // For a DELETE-wrapped CTE, the inner statement's `kind` is
+        // `"delete"`.
+        let r = parse("WITH t AS (SELECT id FROM x) DELETE FROM y WHERE y.id IN (SELECT id FROM t)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["inner_statement"]["kind"], "delete");
+    }
+
+    #[test]
+    fn ac_393b_extra_in_list_kind_serializes_kebab() {
+        let r = parse("SELECT a FROM x WHERE id IN (1, 2)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["where"]["kind"], "in-list");
+    }
+
+    #[test]
+    fn ac_393b_extra_window_function_kind_serializes_kebab() {
+        let r = parse("SELECT count(*) OVER () FROM x");
+        let json = serde_json::to_value(&r).expect("serialize");
+        match &json["columns"]["items"][0] {
+            serde_json::Value::Object(item) => {
+                assert_eq!(item["kind"], "expression");
+                assert_eq!(item["expression"]["kind"], "window-function");
+            }
+            _ => panic!("expected expression item object"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_with_inner_update_kind_serializes_kebab() {
+        let r = parse("WITH t AS (SELECT id FROM x) UPDATE y SET a = 1 WHERE y.id IN (SELECT id FROM t)");
+        let json = serde_json::to_value(&r).expect("serialize");
+        assert_eq!(json["kind"], "with");
+        assert_eq!(json["inner_statement"]["kind"], "update");
+    }
+
+    #[test]
+    fn ac_393b_extra_set_operation_chain_with_intermediate_clauses() {
+        // First SELECT body has WHERE; second has GROUP BY.
+        let s = ok_select(
+            "SELECT a FROM x WHERE x.flag = 1 UNION SELECT a FROM y GROUP BY y.a",
+        );
+        assert!(s.where_clause.is_some());
+        assert_eq!(s.set_operation.len(), 1);
+        assert_eq!(s.set_operation[0].statement.group_by.len(), 1);
+    }
+
+    #[test]
+    fn ac_393b_extra_cte_with_dml_insert_inherits_kind() {
+        let w = ok_with(
+            "WITH t AS (SELECT a FROM x) INSERT INTO y (a) SELECT a FROM t",
+        );
+        match *w.inner_statement {
+            WithInner::Insert(i) => {
+                assert_eq!(i.table, "y");
+            }
+            _ => panic!("expected Insert inner"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_exists_in_dml_where() {
+        // DML WHERE supports EXISTS via the unified `SelectExpr` shape.
+        let s = match parse(
+            "DELETE FROM x WHERE EXISTS (SELECT 1 FROM y WHERE y.x_id = x.id)",
+        ) {
+            ParseResult::Delete(d) => d,
+            other => panic!("expected Delete, got {:?}", other),
+        };
+        assert!(matches!(s.where_clause, Some(SelectExpr::Exists { .. })));
+    }
+
+    #[test]
+    fn ac_393b_extra_window_function_unbounded_following() {
+        let s = ok_select(
+            "SELECT sum(x) OVER (ORDER BY a ROWS BETWEEN 5 PRECEDING AND UNBOUNDED FOLLOWING) FROM t",
+        );
+        match s.columns {
+            Columns::Expressions { items } => match &items[0] {
+                SelectListItem::Expression {
+                    expression: SelectExpr::WindowFunction { over, .. },
+                } => {
+                    let frame = over.frame.as_ref().expect("frame");
+                    assert_eq!(frame.start, FrameBound::Preceding { offset: 5 });
+                    assert_eq!(frame.end, Some(FrameBound::UnboundedFollowing));
+                }
+                _ => panic!("expected window-function"),
+            },
+            _ => panic!("expected Expressions"),
+        }
+    }
+
+    #[test]
+    fn ac_393b_extra_two_cte_round_trips() {
+        let r = parse(
+            "WITH a AS (SELECT x FROM s), b AS (SELECT y FROM t) SELECT a FROM a, b",
+        );
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn ac_393b_extra_subquery_from_round_trips() {
+        let r = parse("SELECT a FROM (SELECT a FROM x) AS s WHERE s.flag = 1");
+        let json = serde_json::to_string(&r).expect("serialize");
+        let back: ParseResult = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(r, back);
     }
 }

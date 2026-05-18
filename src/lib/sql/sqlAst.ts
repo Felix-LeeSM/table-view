@@ -36,7 +36,18 @@
 
 // ---- public types ----------------------------------------------------
 
-export type SqlColumns = { kind: "star" } | { kind: "named"; names: string[] };
+export type SqlColumns =
+  | { kind: "star" }
+  | { kind: "named"; names: string[] }
+  // Sprint-393b — at least one item is a non-bare-column expression
+  // (CASE / window-function / scalar-subquery / literal). The list
+  // preserves input order.
+  | { kind: "expressions"; items: SqlSelectListItem[] };
+
+export type SqlSelectListItem =
+  | { kind: "star" }
+  | { kind: "column"; reference: SqlColumnRef }
+  | { kind: "expression"; expression: SqlSelectExpr };
 
 // ---- sprint-393a SELECT widening types -------------------------------
 
@@ -85,6 +96,12 @@ export type SqlSelectExpr =
       right: SqlColumnRef;
     }
   | {
+      kind: "scalar-subquery-comparison";
+      left: SqlColumnRef;
+      op: SqlCompareOp;
+      right: SqlSelectStatement;
+    }
+  | {
       kind: "between";
       column: SqlColumnRef;
       low: SqlInsertValue;
@@ -100,7 +117,72 @@ export type SqlSelectExpr =
   | { kind: "or"; left: SqlSelectExpr; right: SqlSelectExpr }
   | { kind: "not"; inner: SqlSelectExpr }
   | { kind: "is-null"; column: SqlColumnRef }
-  | { kind: "is-not-null"; column: SqlColumnRef };
+  | { kind: "is-not-null"; column: SqlColumnRef }
+  // Sprint-393b — new primaries.
+  | {
+      kind: "in-list";
+      column: SqlColumnRef;
+      values: SqlInsertValue[];
+    }
+  | {
+      kind: "in-subquery";
+      column: SqlColumnRef;
+      statement: SqlSelectStatement;
+    }
+  | { kind: "exists"; statement: SqlSelectStatement }
+  | { kind: "scalar-subquery"; statement: SqlSelectStatement }
+  | {
+      kind: "window-function";
+      name: string;
+      arguments: SqlWindowArgument[];
+      over: SqlOverClause;
+    }
+  | {
+      kind: "case";
+      operand: SqlSelectExpr | null;
+      when_clauses: SqlCaseWhen[];
+      else_clause: SqlSelectExpr | null;
+    }
+  | { kind: "literal"; value: SqlInsertValue }
+  | { kind: "column-ref-expr"; column: SqlColumnRef }
+  | {
+      kind: "expression-comparison";
+      left: SqlSelectExpr;
+      op: SqlCompareOp;
+      value: SqlInsertValue;
+    };
+
+// Sprint-393b — window-function support types --------------------------
+
+export type SqlWindowArgument =
+  | { kind: "star" }
+  | { kind: "column-ref"; reference: SqlColumnRef }
+  | { kind: "literal"; value: SqlLiteralValue }
+  | { kind: "placeholder"; name: string };
+
+export interface SqlOverClause {
+  partition_by: SqlColumnRef[];
+  order_by: SqlOrderingItem[];
+  frame: SqlWindowFrame | null;
+}
+
+export interface SqlWindowFrame {
+  unit: "rows" | "range";
+  start: SqlFrameBound;
+  end: SqlFrameBound | null;
+}
+
+export type SqlFrameBound =
+  | { kind: "unbounded-preceding" }
+  | { kind: "unbounded-following" }
+  | { kind: "current-row" }
+  | { kind: "preceding"; offset: number }
+  | { kind: "following"; offset: number };
+
+export interface SqlCaseWhen {
+  condition: SqlSelectExpr;
+  result: SqlSelectExpr;
+}
 
 /**
  * A JOIN's `ON <expr>` or `USING (col, …)` predicate. Every JOIN variant
@@ -131,7 +213,18 @@ export interface SqlFromItem {
   /** `AS alias` or bare-identifier alias. `null` when omitted. */
   alias: string | null;
   join: SqlJoinDescriptor;
+  /**
+   * Sprint-393b — discriminated FROM-item source. For a plain table
+   * reference: `kind="table"` with `schema` + `table` (duplicating the
+   * top-level slots). For `FROM (SELECT ...) AS alias`: `kind="subquery"`
+   * with the nested SELECT body.
+   */
+  source: SqlFromSource;
 }
+
+export type SqlFromSource =
+  | { kind: "table"; schema: string | null; table: string }
+  | { kind: "subquery"; statement: SqlSelectStatement };
 
 export type SqlOrderDirection = "asc" | "desc";
 
@@ -157,6 +250,18 @@ export interface SqlSelectStatement {
   having: SqlSelectExpr | null;
   order_by: SqlOrderingItem[];
   limit: SqlLimitClause | null;
+  /**
+   * Sprint-393b — chained set operations (`UNION` / `UNION ALL` /
+   * `INTERSECT` / `EXCEPT`). Empty when the SELECT is not part of a chain.
+   * Entries are in left-to-right input order — implementations must NOT
+   * normalize or reorder.
+   */
+  set_operation: SqlSetOperationEntry[];
+}
+
+export interface SqlSetOperationEntry {
+  operator: "union" | "union-all" | "intersect" | "except";
+  statement: SqlSelectStatement;
 }
 
 export type SqlParseErrorKind =
@@ -259,18 +364,13 @@ export type SqlInsertValue =
 
 export type SqlCompareOp = "eq" | "ne" | "lt" | "le" | "gt" | "ge";
 
-export type SqlWhereExpr =
-  | {
-      kind: "comparison";
-      column: string;
-      op: SqlCompareOp;
-      value: SqlInsertValue;
-    }
-  | { kind: "and"; left: SqlWhereExpr; right: SqlWhereExpr }
-  | { kind: "or"; left: SqlWhereExpr; right: SqlWhereExpr }
-  | { kind: "not"; inner: SqlWhereExpr }
-  | { kind: "is-null"; column: string }
-  | { kind: "is-not-null"; column: string };
+/**
+ * Sprint-393b — DML WHERE migrates to the unified `SqlSelectExpr` shape.
+ * `SqlWhereExpr` is preserved as a type alias for backwards compatibility
+ * (downstream callers may still import the name), but the union expanded
+ * to match the wider `SqlSelectExpr` shape.
+ */
+export type SqlWhereExpr = SqlSelectExpr;
 
 export type SqlInsertSource =
   | { kind: "values"; rows: SqlInsertValue[][] }
@@ -316,6 +416,36 @@ export interface SqlDeleteStatement {
   returning: string[];
 }
 
+/**
+ * Sprint-393b — `WITH [RECURSIVE] cte AS (...) <inner-statement>`. The
+ * inner statement is one of SELECT / INSERT / UPDATE / DELETE (nested
+ * WITH is rejected at parse time, out of scope this sprint).
+ */
+export interface SqlWithStatement {
+  kind: "with";
+  recursive: boolean;
+  ctes: SqlCteDefinition[];
+  inner_statement: SqlWithInner;
+}
+
+/**
+ * Sprint-393b — the four statement variants accepted as the inner body
+ * of a `WITH`. Serialized with a `kind` discriminator matching the Rust
+ * `WithInner` enum.
+ */
+export type SqlWithInner =
+  | SqlSelectStatement
+  | SqlInsertStatement
+  | SqlUpdateStatement
+  | SqlDeleteStatement;
+
+export interface SqlCteDefinition {
+  name: string;
+  /** Empty list when the user did not write `(col, col, ...)`. */
+  columns: string[];
+  body: SqlSelectStatement;
+}
+
 export type SqlParseResult =
   | SqlSelectStatement
   | SqlDropStatement
@@ -324,6 +454,7 @@ export type SqlParseResult =
   | SqlInsertStatement
   | SqlUpdateStatement
   | SqlDeleteStatement
+  | SqlWithStatement
   | SqlParseError;
 
 // ---- WASM bridge -----------------------------------------------------
@@ -448,6 +579,8 @@ const SQL_PARSE_RESULT_KINDS = new Set<string>([
   "insert",
   "update",
   "delete",
+  // Sprint-393b — CTE-wrap top-level.
+  "with",
   "error",
 ]);
 

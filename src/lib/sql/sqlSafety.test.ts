@@ -148,10 +148,12 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           table: "stub",
           assignments: [],
           from: [],
+          // Sprint-393b — DML WHERE uses unified `SqlSelectExpr` shape
+          // (left is a `SqlColumnRef`, not a bare `string`).
           where_clause: hasWhere
             ? {
                 kind: "comparison",
-                column: "id",
+                left: { table: null, column: "id" },
                 op: "eq",
                 value: {
                   kind: "literal",
@@ -171,7 +173,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           where_clause: hasWhere
             ? {
                 kind: "comparison",
-                column: "id",
+                left: { table: null, column: "id" },
                 op: "eq",
                 value: {
                   kind: "literal",
@@ -196,6 +198,7 @@ vi.mock("./wasm/sql_parser_core.js", () => {
               table: "stub",
               alias: null,
               join: { kind: "comma" },
+              source: { kind: "table", schema: null, table: "stub" },
             },
           ],
           where: null,
@@ -203,7 +206,103 @@ vi.mock("./wasm/sql_parser_core.js", () => {
           having: null,
           order_by: [],
           limit: null,
+          set_operation: [],
         };
+      }
+      // Sprint-393b — WITH CTE wrap. The mock detects the inner verb
+      // (SELECT / INSERT / UPDATE / DELETE) by peeking past the CTE list
+      // and produces a `with` parse result with the inner statement
+      // shaped to match the inner verb. The classifier under test is
+      // `statementAnalysisFromAst`'s `with` recursion.
+      if (/^WITH\b/i.test(trimmed)) {
+        // Strip the WITH prefix and re-route the inner statement
+        // through this same mock so we get a real inner-statement shape.
+        // Match: WITH [RECURSIVE]? <ident> AS (...) <inner-tokens>
+        const m = trimmed.match(
+          /^WITH\s+(?:RECURSIVE\s+)?[A-Z_][A-Z0-9_]*\s*(?:\([^)]*\)\s*)?AS\s*\([^)]*\)\s*(.+)$/i,
+        );
+        if (m && m[1]) {
+          const innerSql = m[1].trim();
+          const innerUpper = innerSql.toUpperCase();
+          const innerResult = (() => {
+            if (innerUpper.startsWith("INSERT")) {
+              return {
+                kind: "insert",
+                table: "stub",
+                columns: [],
+                source: { kind: "values", rows: [[]] },
+                on_conflict: null,
+                returning: [],
+              };
+            }
+            if (innerUpper.startsWith("UPDATE")) {
+              const hasWhere = /\bWHERE\b/i.test(innerSql);
+              return {
+                kind: "update",
+                table: "stub",
+                assignments: [],
+                from: [],
+                where_clause: hasWhere
+                  ? {
+                      kind: "comparison",
+                      left: { table: null, column: "id" },
+                      op: "eq",
+                      value: {
+                        kind: "literal",
+                        value: { kind: "integer", value: 1 },
+                      },
+                    }
+                  : null,
+                returning: [],
+              };
+            }
+            if (innerUpper.startsWith("DELETE")) {
+              const hasWhere = /\bWHERE\b/i.test(innerSql);
+              return {
+                kind: "delete",
+                table: "stub",
+                using: [],
+                where_clause: hasWhere
+                  ? {
+                      kind: "comparison",
+                      left: { table: null, column: "id" },
+                      op: "eq",
+                      value: {
+                        kind: "literal",
+                        value: { kind: "integer", value: 1 },
+                      },
+                    }
+                  : null,
+                returning: [],
+              };
+            }
+            return {
+              kind: "select",
+              columns: { kind: "star" },
+              from: [
+                {
+                  schema: null,
+                  table: "stub",
+                  alias: null,
+                  join: { kind: "comma" },
+                  source: { kind: "table", schema: null, table: "stub" },
+                },
+              ],
+              where: null,
+              group_by: [],
+              having: null,
+              order_by: [],
+              limit: null,
+              set_operation: [],
+            };
+          })();
+          return {
+            kind: "with",
+            recursive: false,
+            ctes: [],
+            inner_statement: innerResult,
+          };
+        }
       }
       // Anything else → error variant; sqlSafety's AST callsite then
       // falls through to its legacy regex matcher.
@@ -920,6 +1019,93 @@ describe("sqlSafety.analyzeStatement", () => {
 
     it("[AC-393a-X05] StatementAnalysis return shape unchanged (kind / severity / reasons only)", () => {
       const a = analyzeStatement("SELECT a FROM x JOIN y ON x.id = y.x_id");
+      expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
+      expect(isInfoStatement(a)).toBe(true);
+      expect(isDangerous(a)).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Sprint 393b — AST-based SELECT widening 2 + CTE wrap classifier
+  // (AC-393b-X). The classifier inherits the inner statement's
+  // classification (D1/D2) when the top-level kind is `with`.
+  // -------------------------------------------------------------------------
+  describe("Sprint 393b — AST-based CTE wrap + IN-list classifier (AC-393b-X)", () => {
+    beforeAll(async () => {
+      __resetSqlWasmModuleForTests();
+      await preloadSqlWasm();
+    });
+
+    afterAll(() => {
+      __resetSqlWasmModuleForTests();
+    });
+
+    it("[AC-393b-X01] WITH wrapping SELECT → select / info / []", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) SELECT * FROM t");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393b-X02] WITH wrapping INSERT → insert / warn (inherits inner DML classification)", () => {
+      const a = analyzeStatement(
+        "WITH t AS (SELECT 1) INSERT INTO x SELECT * FROM t",
+      );
+      expect(a.kind).toBe("insert");
+      expect(a.severity).toBe("warn");
+    });
+
+    it("[AC-393b-X03] WITH wrapping UPDATE WHERE → update / warn", () => {
+      const a = analyzeStatement(
+        "WITH t AS (SELECT 1) UPDATE x SET a = 1 WHERE x.id = 1",
+      );
+      expect(a.kind).toBe("update");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393b-X04] WITH wrapping UPDATE without WHERE → update / danger + reason", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) UPDATE x SET a = 1");
+      expect(a.kind).toBe("update");
+      expect(a.severity).toBe("danger");
+      // Per D2, the reasons list is the inner statement's reasons,
+      // unchanged (verbatim). The sprint-392 "UPDATE without WHERE clause"
+      // surfaces.
+      expect(a.reasons).toContain("UPDATE without WHERE clause");
+    });
+
+    it("[AC-393b-X05] WITH wrapping DELETE without WHERE → delete / danger + reason", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) DELETE FROM x");
+      expect(a.kind).toBe("delete");
+      expect(a.severity).toBe("danger");
+      expect(a.reasons).toContain("DELETE without WHERE clause");
+    });
+
+    it("[AC-393b-X06] SELECT with UNION → still select / info / []", () => {
+      const a = analyzeStatement("SELECT a FROM x UNION SELECT a FROM y");
+      expect(a.kind).toBe("select");
+      expect(a.severity).toBe("info");
+    });
+
+    it("[AC-393b-X07] DELETE with IN-list (sprint-392 deferral lifted) → delete / warn / no extra reasons", () => {
+      const a = analyzeStatement("DELETE FROM x WHERE x.id IN (1, 2, 3)");
+      expect(a.kind).toBe("delete");
+      expect(a.severity).toBe("warn");
+      expect(a.reasons).toEqual([]);
+    });
+
+    it("[AC-393b-X08] existing sqlSafety regression — bare SELECT path still info", () => {
+      // The existing classifier behavior for SELECT must be preserved.
+      expect(analyzeStatement("SELECT * FROM users").severity).toBe("info");
+      // The existing classifier behavior for DELETE WHERE → warn must
+      // be preserved.
+      expect(analyzeStatement("DELETE FROM x WHERE id = 1").severity).toBe(
+        "warn",
+      );
+    });
+
+    it("[AC-393b-X09] StatementAnalysis return shape unchanged for the new `with` path", () => {
+      const a = analyzeStatement("WITH t AS (SELECT 1) SELECT * FROM t");
       expect(Object.keys(a).sort()).toEqual(["kind", "reasons", "severity"]);
       expect(isInfoStatement(a)).toBe(true);
       expect(isDangerous(a)).toBe(false);
